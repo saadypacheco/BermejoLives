@@ -13,6 +13,9 @@ services:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
         NEXT_PUBLIC_API_URL: https://api.${DOMAIN}
+        # "1" = sitio en modo captura: solo /bermejo y /admin; el resto muestra "Próximamente".
+        # Para abrir el sitio público: poné "0" y reconstruí el frontend.
+        NEXT_PUBLIC_MODO_CAPTURA: ${MODO_CAPTURA:-1}
     container_name: buscadonde-frontend
     restart: unless-stopped
     networks: [traefik, internal]
