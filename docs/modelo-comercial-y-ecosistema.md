@@ -311,6 +311,46 @@ Reafirma lo del §7: dar gestión de productos con carrito es el **motor de `tie
 suscripción. La cuota base da perfil + ofertas + mapa + contenido; **productos se
 suma después** para los que lo quieran, sin frenar el lanzamiento.
 
+## 10. Posicionamiento: "Páginas Amarillas vivas" + consentimiento + QR Bolivia
+
+**La metáfora rectora:** es la vieja sección de **Páginas Amarillas** de la guía
+telefónica (todos los rubros, todos los negocios) — pero **viva**: en vez de un
+listado estático una vez al año, hay **ofertas en tiempo real, WhatsApp, fotos y
+video**. *"Las páginas amarillas, pero en vivo."* Esto unifica el producto:
+- **La base** = directorio por **rubro** y por **ciudad** (ya tenés rubros + ciudades).
+- **La monetización** = el **mismo modelo que las páginas amarillas**: pagás por
+  estar y por un **aviso destacado** (negrita/color/arriba). Tus tiers
+  (Destacado/Premium) = el "aviso grande". Modelo probado por décadas.
+
+**Consentimiento (obligatorio en la carga de datos):**
+- **Fase 1 (agente):** verbal/papel — ya hay checkbox de consentimiento en `/bermejo`.
+- **Fase 2 (autoregistro):** **formulario de consentimiento digital** (términos +
+  uso de datos + autorización a publicar sus datos, fotos y videos). Guardar
+  registro del consentimiento (tipo, fecha, qué autorizó).
+
+**QR de pago — Bolivia, cuenta boliviana (requisito firme):**
+- El cobro mensual se hace con **QR de Bolivia a una cuenta boliviana** → MercadoPago
+  queda descartado si no opera en BO. Camino: **QR Simple (BCB)** vía banco/fintech
+  con API/webhook, o PSP boliviano. (Ver §9 para la automatización.)
+
+**Contenido que el comercio puede subir (cerrado):**
+- **Foto** (a Storage, ya implementado) · **Video** (link de TikTok — sin hostear) ·
+  **datos de contacto + redes** (WhatsApp, Facebook/Marketplace, TikTok, Instagram,
+  web) · **ubicación** · **ofertas/publicaciones**. Todos los campos ya existen en
+  el modelo; falta el panel "Mi comercio" para que lo gestionen ellos (Fase 2).
+
+**Más opciones sobre la idea Páginas Amarillas (para desarrollar):**
+1. **Buscar por rubro/categoría** (la UX clásica) + **"Cerca de mí"** (geo).
+2. **Urgencias/servicios 24h:** gomero, farmacia de turno, grúa, cerrajero,
+   electricista — las páginas amarillas vivían de esto. Ángulo fuerte en frontera.
+3. **Abierto ahora** (horarios) · **Reseñas/rating** (la confianza que la guía no tenía).
+4. **Aviso destacado pago** = el "recuadro grande" de la guía (tu tier Destacado).
+5. **Cupones/ofertas del día** (la sección de descuentos).
+6. **QR físico / sticker** para el local ("encontranos en buscadonde") = puente
+   offline→online.
+7. **Rubros profesionales y turismo:** médicos, talleres, **hoteles**, transporte,
+   mayoristas — la amplitud real de una guía (encaja con la visión Bolivia).
+
 ## 8. Decisiones abiertas (pendientes de confirmar)
 
 - Nombres de los tiers.
