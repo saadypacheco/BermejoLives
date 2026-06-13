@@ -268,6 +268,49 @@ Revisado el repo `C:\repos\proyectosClaude\tienda`:
 
 ---
 
+## 9. Roadmap: relevamiento manual → autoregistro + suscripción
+
+**Fase 1 (en producción):** carga **manual** por el agente (`/bermejo`) de empresas,
+comercios y todos los rubros, hasta **~500 negocios**. El sitio público está en
+"Próximamente" (modo captura).
+
+**Fase 2:** **autoregistro abierto**. La persona entra y se registra sola; carga
+sus redes (**Facebook/Marketplace, TikTok, Instagram, web**) y todo lo que quiera.
+- Los campos de redes **ya existen** en `comercios` (tiktok/facebook/instagram/web).
+- Hace falta un **panel "Mi comercio"**: ver su info, **modificar**, **alta/baja**.
+- **Reclamar listado:** si su negocio ya fue cargado en Fase 1, que lo **reclame
+  por su teléfono** (no duplicar). Mismo patrón que el "claim" de OSM.
+
+**Monetización:** **todos** pagan una **cuota mensual por QR**. El pago desbloquea:
+subir contenido, generar ofertas, estar en el mapa, (y opcional) subir productos.
+- **Suscripción automática:** paga → datos visibles; **no paga → cuenta
+  desactivada** hasta que vuelva a pagar. Automático.
+
+### ⚠️ Lo único realmente complicado: automatizar el pago QR en Bolivia
+
+- **Desactivar automático = fácil:** un **job nocturno** desactiva (`activo=false`)
+  a quien tenga `paga_hasta < hoy`. Reactivar al pagar es subir esa fecha.
+- **Detectar el pago automático = el problema:** un QR estático (de billetera/banco)
+  **no avisa** a tu sistema cuando alguien paga → habría que conciliar a mano.
+  Para automatizar de verdad necesitás un **proveedor con webhook**.
+  - **MercadoPago** (que ya usa `tienda`) tiene webhook de suscripción, **pero
+    puede no operar en Bolivia** → a verificar.
+  - Alternativas Bolivia: **QR Simple** (estándar interoperable del BCB) vía algún
+    banco/fintech con API, o un PSP local. **A investigar.**
+  - **MVP pragmático:** el comercio paga por QR y manda el **comprobante por
+    WhatsApp** → admin (o un mini-flujo) confirma y el sistema **extiende
+    `paga_hasta` 1 mes**. La **desactivación** ya queda 100% automática. Después se
+    enchufa el webhook del PSP cuando se resuelva el proveedor.
+- **Datos:** `comercios.plan` + `paga_hasta` (fecha) + `estado_pago`; tabla `pagos`
+  (fecha, monto, periodo, método, comprobante).
+
+### Productos ("MercadoLibre sin comisiones") — add-on, NO bloquea
+
+Reafirma lo del §7: dar gestión de productos con carrito es el **motor de `tienda`**
+(deploy-por-cliente hoy). Es un **add-on premium posterior**, no parte del MVP de
+suscripción. La cuota base da perfil + ofertas + mapa + contenido; **productos se
+suma después** para los que lo quieran, sin frenar el lanzamiento.
+
 ## 8. Decisiones abiertas (pendientes de confirmar)
 
 - Nombres de los tiers.
