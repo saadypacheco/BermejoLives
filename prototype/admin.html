@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Panel · Bermejo Live Market</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/styles.css" />
+<link rel="stylesheet" href="css/pages.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🟢</text></svg>" />
+</head>
+<body>
+<div class="admin">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <a class="brand" href="index.html"><b>BER<i>MEJO</i></b><span>ADMIN PANEL</span></a>
+    <div class="side-group">Principal</div>
+    <a class="side-link active" data-view="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg> Dashboard</a>
+    <a class="side-link" data-view="moderacion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 5v6c0 5 3.5 8 8 11 4.5-3 8-6 8-11V5Z"/><path d="m9 12 2 2 4-4"/></svg> Moderación <span class="badge">14</span></a>
+    <div class="side-group">Gestión</div>
+    <a class="side-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/></svg> Comercios</a>
+    <a class="side-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg> Usuarios</a>
+    <a class="side-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9M3 15h18M8 19h8"/></svg> Publicaciones</a>
+    <a class="side-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="18" rx="3"/><path d="m10 8 6 4-6 4Z"/></svg> Videos</a>
+    <div class="side-group">Negocio</div>
+    <a class="side-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 14l4-4 3 3 5-6"/></svg> Estadísticas</a>
+    <a class="side-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 3 7v6c0 5 9 9 9 9s9-4 9-9V7Z"/></svg> Suscripciones</a>
+    <a class="side-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg> Pagos</a>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="admin-main">
+
+    <!-- DASHBOARD VIEW -->
+    <section id="dashboard">
+      <div class="admin-top">
+        <div>
+          <h1>Dashboard</h1>
+          <p>Resumen de la actividad comercial de Bermejo · Hoy, 04 jun 2026</p>
+        </div>
+        <a class="btn btn-primary btn-sm" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Nueva publicación</a>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi glass"><div class="ic" style="background:rgba(57,255,158,.12);color:var(--neon)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/></svg></div><b>1.250</b><span>Comercios activos</span><div class="trend up">▲ 4.2% este mes</div></div>
+        <div class="kpi glass"><div class="ic" style="background:rgba(255,138,61,.14);color:var(--orange)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2c1 3-2 4-2 7a4 4 0 0 0 8 0"/></svg></div><b>2.450</b><span>Ofertas activas</span><div class="trend up">▲ 12% hoy</div></div>
+        <div class="kpi glass"><div class="ic" style="background:rgba(155,92,255,.16);color:var(--purple)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="18" rx="3"/><path d="m10 8 6 4-6 4Z"/></svg></div><b>350</b><span>Videos hoy</span><div class="trend up">▲ 8% hoy</div></div>
+        <div class="kpi glass"><div class="ic" style="background:rgba(46,107,255,.16);color:var(--blue-soft)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><b>12.500</b><span>Usuarios / mes</span><div class="trend up">▲ 18% vs. mayo</div></div>
+      </div>
+
+      <div class="admin-cols">
+        <div class="panel-card glass">
+          <div class="ph"><h3>Publicaciones por día</h3><span class="status ok">+18% semana</span></div>
+          <div class="chart" id="chart"></div>
+        </div>
+        <div class="panel-card glass">
+          <div class="ph"><h3>Suscripciones</h3><a href="#" class="link-more" style="padding:6px 12px">Gestionar →</a></div>
+          <table class="tbl">
+            <tr><td><b>Premium</b><br/><small style="color:var(--txt-3)">340 comercios</small></td><td style="text-align:right"><span class="status ok">Activo</span></td></tr>
+            <tr><td><b>Pro</b><br/><small style="color:var(--txt-3)">580 comercios</small></td><td style="text-align:right"><span class="status ok">Activo</span></td></tr>
+            <tr><td><b>Gratis</b><br/><small style="color:var(--txt-3)">330 comercios</small></td><td style="text-align:right"><span class="status pend">Limitado</span></td></tr>
+            <tr><td><b>Vencidas</b><br/><small style="color:var(--txt-3)">42 comercios</small></td><td style="text-align:right"><span class="status no">Por renovar</span></td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div style="height:20px"></div>
+      <div class="panel-card glass">
+        <div class="ph"><h3>Últimos comercios registrados</h3><a href="#" class="link-more" style="padding:6px 12px">Ver todos →</a></div>
+        <table class="tbl">
+          <thead><tr><th>Comercio</th><th>Zona</th><th>Ofertas</th><th>Plan</th><th>Estado</th></tr></thead>
+          <tbody id="bizTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- MODERATION VIEW -->
+    <section id="moderacion" style="display:none">
+      <div class="admin-top">
+        <div>
+          <h1>Panel de moderación</h1>
+          <p>14 publicaciones esperando revisión · llegadas desde WhatsApp</p>
+        </div>
+        <div style="display:flex;gap:10px">
+          <span class="status pend" style="align-self:center">14 pendientes</span>
+          <a class="btn btn-ghost btn-sm" href="#">Filtrar</a>
+        </div>
+      </div>
+      <div class="panel-card glass">
+        <div class="ph"><h3>Cola de aprobación</h3><span style="color:var(--txt-3);font-size:13px">Aprobá, rechazá o solicitá cambios</span></div>
+        <div id="modQueue"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script src="js/admin.js"></script>
+</body>
+</html>

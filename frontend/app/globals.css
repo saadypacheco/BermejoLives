@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Sistema de diseño dark premium de Bermejo (portado del prototipo) */
+@import "./styles/design.css";
+@import "./styles/pages.css";
+
+/* Extras para la versión Next */
+.adm-input {
+  width: 100%; padding: 12px 14px; border-radius: 11px;
+  background: rgba(255,255,255,.04); border: 1px solid var(--stroke-2);
+  color: var(--txt); font-size: 14px; outline: none;
+}
+.adm-input:focus { border-color: var(--neon); }
+.vid-play-overlay {
+  position: absolute; inset: 0; margin: auto; width: 46px; height: 46px; border-radius: 50%;
+  background: rgba(255,255,255,.16); backdrop-filter: blur(8px); display: grid; place-items: center;
+  border: 1px solid rgba(255,255,255,.3);
+}
+
+/* Chatbot de publicación */
+.chat { border-radius: 18px; overflow: hidden; }
+.chat-body { padding: 20px; display: flex; flex-direction: column; gap: 12px; min-height: 320px; max-height: 56vh; overflow-y: auto; }
+.bubble { max-width: 80%; padding: 11px 15px; border-radius: 16px; font-size: 14.5px; line-height: 1.45; }
+.bubble.bot { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--stroke); border-bottom-left-radius: 5px; }
+.bubble.user { align-self: flex-end; background: linear-gradient(180deg, #4dffae, var(--neon-dim)); color: #05130c; border-bottom-right-radius: 5px; font-weight: 600; }
+.quick { display: flex; flex-wrap: wrap; gap: 9px; align-self: flex-start; }
+.quick button, .quick a { padding: 10px 15px; border-radius: 999px; border: 1px solid var(--stroke-2); background: var(--panel); color: var(--txt); font-size: 13.5px; font-weight: 600; transition: .2s var(--ease); }
+.quick button:hover, .quick a:hover { border-color: var(--neon); color: var(--neon); }
+.confirm-card { align-self: stretch; background: var(--panel); border: 1px solid var(--stroke); border-radius: 14px; padding: 16px; }
+.cc-row { display: flex; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--stroke); font-size: 13.5px; }
+.cc-row:last-of-type { border-bottom: none; }
+.cc-row b { min-width: 64px; color: var(--txt-3); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding-top: 2px; }
+.cc-row .trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 380px; color: var(--blue-soft); }
+.chat-input { display: flex; gap: 10px; padding: 14px 16px; border-top: 1px solid var(--stroke); background: rgba(7,10,20,.4); }
+.chat-input .adm-input { flex: 1; }
+
+/* Item destacado del menú ("Ofertas") */
+.nav-links a.nav-hot {
+  display: inline-flex; align-items: center; gap: 7px;
+  color: #05130c; font-weight: 800;
+  background: linear-gradient(180deg, #4dffae, var(--neon-dim));
+  box-shadow: 0 0 0 1px rgba(57,255,158,.4), 0 8px 22px -8px rgba(57,255,158,.55);
+}
+.nav-links a.nav-hot:hover { color: #05130c; background: linear-gradient(180deg, #5effb6, #25d98a); transform: translateY(-1px); }
+.nav-links a.nav-hot .dot-live { background: #05130c; box-shadow: none; }
+.nav-links a.nav-hot.active::after { display: none; }
+
+/* Link "Ingresar" en la barra superior */
+.nav-login {
+  font-size: 14px; font-weight: 600; color: var(--txt-2); padding: 9px 14px;
+  border-radius: 999px; transition: .2s var(--ease); white-space: nowrap;
+}
+.nav-login:hover { color: var(--txt); background: var(--panel); }
+@media (max-width: 720px) { .nav-login { display: none; } }
+
+/* Auth tabs (login / registro) */
+.auth-tabs { display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--stroke); border-radius: 12px; padding: 4px; margin-bottom: 16px; }
+.auth-tabs button { flex: 1; padding: 9px; border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--txt-2); transition: .2s var(--ease); }
+.auth-tabs button.active { background: rgba(57,255,158,.12); color: var(--neon); }
+
+/* ---------- Mapa de Bolivia (hero) ---------- */
+.bolivia-wrap { position: relative; aspect-ratio: 16/12; border-radius: 24px; overflow: hidden; border: 1px solid var(--stroke); box-shadow: var(--shadow); }
+.bolivia-map { position: absolute; inset: 0; background: #0a0e18; }
+.bolivia-legend { position: absolute; left: 14px; bottom: 12px; z-index: 500; display: flex; gap: 14px; font-size: 11.5px; color: var(--txt-2); background: rgba(7,10,20,.7); backdrop-filter: blur(8px); padding: 7px 12px; border-radius: 999px; border: 1px solid var(--stroke); }
+.bolivia-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.bolivia-legend i { width: 9px; height: 9px; border-radius: 50%; }
+.bolivia-legend .lg-on { background: var(--neon); box-shadow: 0 0 8px var(--neon); }
+.bolivia-legend .lg-off { background: var(--txt-3); }
+/* pines del mapa de Bolivia */
+.bpin { position: relative; width: 10px; height: 10px; border-radius: 50%; background: var(--txt-3); border: 1.5px solid rgba(255,255,255,.3); }
+.bpin.frontera { background: var(--blue-soft); }
+.bpin b { position: absolute; left: 14px; top: -4px; white-space: nowrap; font-size: 11px; font-weight: 700; color: var(--txt-2); text-shadow: 0 1px 3px #000; pointer-events: none; }
+.bpin.activa { width: 16px; height: 16px; left: -3px; top: -3px; background: var(--neon); border: 2px solid #05130c; box-shadow: 0 0 0 4px rgba(57,255,158,.25), 0 0 18px var(--neon); cursor: pointer; animation: pulse 1.8s infinite; }
+.bpin.activa b { left: 20px; top: -2px; color: var(--neon); font-size: 13px; }
+
+/* ---------- Agente de campo (móvil) ---------- */
+.campo-wrap { max-width: 460px; margin: 0 auto; padding: 22px 18px; }
+.campo-lbl { display: block; font-size: 12px; color: var(--txt-3); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 7px; }
+.foto-drop { display: grid; place-items: center; min-height: 150px; border-radius: 14px; border: 1.5px dashed var(--stroke-2); background: var(--panel); cursor: pointer; overflow: hidden; transition: .2s var(--ease); }
+.foto-drop:hover { border-color: var(--neon); }
+.foto-drop span { color: var(--txt-3); font-size: 15px; }
+.foto-drop img { width: 100%; height: 100%; max-height: 240px; object-fit: cover; }
+
+/* ---------- Buscador ---------- */
+.search-bar { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-radius: 16px; }
+.search-bar input { flex: 1; background: transparent; border: none; outline: none; color: var(--txt); font-size: 16px; }
+.search-bar input::placeholder { color: var(--txt-3); }
+.filtros { display: grid; grid-template-columns: 1.2fr 1.2fr 0.8fr 1.6fr; gap: 10px; margin-top: 12px; }
+.fsel { font-size: 14px; }
+.fseg { padding: 4px; }
+.fseg button { font-size: 12.5px; padding: 8px 6px; }
+.result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.rescard { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--stroke); background: var(--bg-2); transition: .3s var(--ease); }
+.rescard:hover { transform: translateY(-4px); border-color: var(--stroke-2); box-shadow: var(--shadow); }
+.rescover { display: block; position: relative; aspect-ratio: 16/9; overflow: hidden; }
+.rescover img { width: 100%; height: 100%; object-fit: cover; }
+.rescover .reslogo { position: absolute; left: 12px; bottom: -18px; width: 48px; height: 48px; border-radius: 12px; border: 2px solid var(--bg-2); aspect-ratio: 1; }
+.resbody { padding: 24px 14px 14px; }
+.resbody h4 { margin: 0 0 8px; font-size: 15px; display: flex; align-items: center; gap: 7px; }
+.resbody h4 .pverif { color: var(--blue-soft); }
+.resmeta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 9px; }
+.resmeta .pill { font-size: 11px; padding: 4px 9px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--stroke); color: var(--txt-2); }
+.resdir { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--txt-3); margin-bottom: 12px; }
+.resact { display: flex; gap: 8px; }
+.map-canvas { height: 540px; border-radius: 18px; overflow: hidden; border: 1px solid var(--stroke-2); }
+.map-pin { width: 26px; height: 26px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: linear-gradient(135deg, #16a36a, #2bd17e); display: grid; place-items: center; color: #04130c; font-weight: 800; box-shadow: 0 6px 16px rgba(0,0,0,.5); border: 2px solid #04130c; }
+.map-pin > * { transform: rotate(45deg); }
+.leaflet-popup-content-wrapper { background: var(--bg-2); color: var(--txt); border: 1px solid var(--stroke-2); border-radius: 12px; }
+.leaflet-popup-tip { background: var(--bg-2); }
+.map-pop b { display: block; font-size: 14px; margin-bottom: 2px; }
+.map-pop span { font-size: 12px; color: var(--txt-3); }
+.map-pop-act { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.map-pop-act a { color: var(--neon); font-weight: 700; font-size: 12.5px; }
+
+@media (max-width: 920px) {
+  .filtros { grid-template-columns: 1fr 1fr; }
+  .result-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 620px) {
+  .filtros { grid-template-columns: 1fr; }
+  .result-grid { grid-template-columns: 1fr; }
+}
+
+/* Segmented control (mayorista/minorista/ambos) */
+.seg { display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--stroke); border-radius: 12px; padding: 4px; }
+.seg button { flex: 1; padding: 9px; border-radius: 9px; font-size: 13.5px; font-weight: 600; color: var(--txt-2); transition: .2s var(--ease); }
+.seg button.active { background: rgba(46,107,255,.16); color: var(--blue-soft); box-shadow: 0 0 0 1px rgba(46,107,255,.35); }
+
+/* Plan picker */
+.plan-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.plan { padding: 13px 10px; border-radius: 12px; border: 1px solid var(--stroke); background: rgba(7,10,20,.5); text-align: left; transition: .2s var(--ease); display: flex; flex-direction: column; gap: 3px; }
+.plan:hover { border-color: var(--stroke-2); }
+.plan.active { border-color: var(--neon); background: rgba(57,255,158,.08); box-shadow: 0 0 0 1px rgba(57,255,158,.3); }
+.plan b { font-size: 14px; }
+.plan .plan-price { font-size: 12px; color: var(--neon); font-weight: 700; }
+.plan small { font-size: 10.5px; color: var(--txt-3); line-height: 1.3; }

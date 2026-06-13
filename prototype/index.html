@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bermejo Live Market — La ciudad comercial, en tiempo real</title>
+<meta name="description" content="Todo lo que se vende en Bermejo, en tiempo real. Ofertas, videos, comercios y promociones publicadas directamente desde WhatsApp." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/styles.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🟢</text></svg>" />
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <b>BER<i>MEJO</i></b>
+      <span>LIVE MARKET</span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html" class="active">Inicio</a>
+      <a href="#mapa">Mapa</a>
+      <a href="#ofertas">Ofertas</a>
+      <a href="#videos">Videos</a>
+      <a href="negocio.html">Negocios</a>
+      <a href="#zonas">Categorías</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" aria-label="Buscar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+      </button>
+      <a class="icon-btn" href="admin.html" aria-label="Ingresar" title="Ingresar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+      </a>
+      <a class="btn btn-primary btn-sm" href="admin.html">
+        Publicá tus ofertas
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+      </a>
+      <button class="icon-btn hamb" id="hamb" aria-label="Menú">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="wrap">
+    <div class="hero-text">
+      <span class="eyebrow"><span class="dot-live"></span> Bermejo · Bolivia · Frontera viva</span>
+      <h1 class="hero-title">Todo lo que se<br/>vende en Bermejo,<br/><span class="green">en tiempo real</span></h1>
+      <p class="hero-sub">Explora ofertas, videos, comercios y promociones publicadas directamente desde WhatsApp.</p>
+      <div class="hero-cta">
+        <a href="#mapa" class="btn btn-primary">
+          Explorar Bermejo
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+        </a>
+        <a href="admin.html" class="btn btn-ghost">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/></svg>
+          Publicar mi negocio
+        </a>
+      </div>
+      <div class="hero-social">
+        <div class="avatars">
+          <img src="https://i.pravatar.cc/80?img=11" alt="" />
+          <img src="https://i.pravatar.cc/80?img=32" alt="" />
+          <img src="https://i.pravatar.cc/80?img=15" alt="" />
+          <img src="https://i.pravatar.cc/80?img=45" alt="" />
+          <img src="https://i.pravatar.cc/80?img=8" alt="" />
+        </div>
+        <div><b data-count="12450">+12.450</b><small>usuarios este mes</small></div>
+      </div>
+    </div>
+
+    <!-- Isometric conceptual city -->
+    <div class="city" id="mapa-hero">
+      <div class="glow-floor"></div>
+      <div class="iso">
+        <div class="iso-grid" id="isoGrid"></div>
+      </div>
+      <!-- floating zone tags -->
+      <button class="tag t-purple" style="left:46%; top:18%;">ZONA IMPORTADORAS<small>23 ofertas activas</small></button>
+      <button class="tag t-blue"   style="left:74%; top:30%;">ZONA MODA<small>35 ofertas activas</small></button>
+      <button class="tag t-orange" style="left:86%; top:50%;">CENTRO COMERCIAL<small>18 ofertas activas</small></button>
+      <button class="tag t-neon"   style="left:40%; top:55%;">MERCADO CAMPESINO<small>12 ofertas activas</small></button>
+      <button class="tag t-pink"   style="left:48%; top:74%;">GALERÍAS<small>42 ofertas activas</small></button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ STATS BAR ============ -->
+<div class="wrap">
+  <div class="stats glass reveal">
+    <div class="stat">
+      <span class="ic g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/></svg></span>
+      <div><b data-count="1250">0</b><span>Comercios</span></div>
+    </div>
+    <div class="stat">
+      <span class="ic o"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2c1 3-2 4-2 7a4 4 0 0 0 8 0c0-1-.5-2-1-3 2 1 4 4 4 8a8 8 0 1 1-16 0c0-5 4-7 7-12Z"/></svg></span>
+      <div><b data-count="2450">0</b><span>Ofertas activas</span></div>
+    </div>
+    <div class="stat">
+      <span class="ic p"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="18" rx="3"/><path d="m10 8 6 4-6 4Z"/></svg></span>
+      <div><b data-count="350">0</b><span>Videos hoy</span></div>
+    </div>
+    <div class="stat">
+      <span class="ic pk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></span>
+      <div><b data-count="780">0</b><span>Publicaciones hoy</span></div>
+    </div>
+    <div class="stat">
+      <span class="live-badge"><span class="dot-live"></span> EN VIVO</span>
+      <span class="ic b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11"/></svg></span>
+      <div><b data-count="1235">0</b><span>Usuarios conectados</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ OFERTAS EN VIVO + VIDEOS ============ -->
+<section class="section" id="ofertas">
+  <div class="wrap">
+    <div class="grid-2col">
+      <!-- left: live offers -->
+      <div class="reveal">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow"><span class="dot-live"></span> En vivo</span>
+            <h2>Ofertas en vivo</h2>
+          </div>
+          <a href="#" class="link-more">Ver todas →</a>
+        </div>
+        <div class="offers-row" id="offersRow"></div>
+      </div>
+
+      <!-- right: trending videos -->
+      <div class="reveal" id="videos">
+        <div class="section-head">
+          <div><h2 style="font-size:22px;">Videos en tendencia</h2></div>
+          <a href="#" class="link-more">Ver todos →</a>
+        </div>
+        <div class="vids" id="vidsRow"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ EXPLORA BERMEJO (zones) ============ -->
+<section class="section" id="zonas" style="padding-top:0;">
+  <div class="wrap">
+    <div class="explore reveal">
+      <div>
+        <span class="eyebrow">Mapa comercial conceptual</span>
+        <h2>Explora Bermejo</h2>
+        <p>Descubre galerías, mercados y todas las zonas comerciales. Pasá el mouse para ver actividad en cada punto.</p>
+        <div class="zone-chips">
+          <div class="zchip"><div class="zi" style="background:rgba(155,92,255,.16);color:var(--purple)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18l-1 13H4ZM8 7a4 4 0 0 1 8 0"/></svg></div><b>Importadoras</b><small>23 ofertas</small></div>
+          <div class="zchip"><div class="zi" style="background:rgba(46,107,255,.16);color:var(--blue-soft)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></div><b>Zona Moda</b><small>35 ofertas</small></div>
+          <div class="zchip"><div class="zi" style="background:rgba(57,255,158,.14);color:var(--neon)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div><b>Tecnología</b><small>18 ofertas</small></div>
+          <div class="zchip"><div class="zi" style="background:rgba(255,77,141,.14);color:var(--pink)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l9-5 9 5v13M9 21v-6h6v6"/></svg></div><b>Galerías</b><small>42 ofertas</small></div>
+          <div class="zchip"><div class="zi" style="background:rgba(255,194,61,.14);color:var(--amber)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1ZM7 11V7a5 5 0 0 1 10 0v4"/></svg></div><b>Gastronomía</b><small>15 ofertas</small></div>
+        </div>
+        <a href="#mapa" class="btn btn-ghost">Ver mapa completo
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      </div>
+      <div class="explore-map">
+        <img src="https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=900&q=70" alt="Vista nocturna" />
+        <span class="pin" style="left:24%;top:30%;background:linear-gradient(135deg,#7c3aed,#9b5cff)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18l-1 13H4Z"/></svg></span>
+        <span class="pin" style="left:55%;top:22%;background:linear-gradient(135deg,#2156e0,#2e6bff)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span>
+        <span class="pin" style="left:70%;top:48%;background:linear-gradient(135deg,#16a36a,#2bd17e)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="13" rx="2"/></svg></span>
+        <span class="pin" style="left:40%;top:62%;background:linear-gradient(135deg,#e0701f,#ff8a3d)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l9-5 9 5v13Z"/></svg></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LIVE FEED + FEATURED ============ -->
+<section class="section" style="padding-top:0;">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <span class="eyebrow"><span class="dot-live"></span> Feed en tiempo real</span>
+        <h2>Lo que se publica ahora en Bermejo</h2>
+        <p>Publicaciones aprobadas por moderadores, llegando directo desde WhatsApp.</p>
+      </div>
+      <a href="#" class="link-more">Ver feed completo →</a>
+    </div>
+    <div class="grid-2col">
+      <div class="feed reveal" id="feed"></div>
+      <div class="reveal">
+        <div class="section-head"><div><h2 style="font-size:20px;">Comercios destacados</h2></div></div>
+        <div class="feed" id="featuredBiz"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ NEGOCIOS DESTACADOS GRID ============ -->
+<section class="section" id="negocios" style="padding-top:0;">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div><h2>Negocios destacados</h2><p>Los comercios con más actividad esta semana.</p></div>
+      <a href="negocio.html" class="link-more">Ver todos →</a>
+    </div>
+    <div class="biz-grid" id="bizGrid"></div>
+  </div>
+</section>
+
+<!-- ============ CTA ============ -->
+<section class="section" style="padding-top:0;">
+  <div class="wrap">
+    <div class="cta reveal">
+      <div>
+        <h2>¿Venís a Bermejo?</h2>
+        <p>Mirá las mejores ofertas antes de cruzar la frontera.</p>
+        <div class="feats">
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2"><path d="M12 2c1 3-2 4-2 7a4 4 0 0 0 8 0c0-3-3-4-2-7"/></svg> Ofertas reales</span>
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="var(--blue-soft)" stroke-width="2"><path d="M12 2 4 5v6c0 5 3.5 8 8 11 4.5-3 8-6 8-11V5Z"/><path d="m9 12 2 2 4-4"/></svg> Negocios verificados</span>
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><path d="M12 8v4l3 2M12 3a9 9 0 1 0 9 9"/></svg> Precios actualizados</span>
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="var(--wa)" stroke-width="2"><path d="M21 11.5a8.5 8.5 0 0 1-12.5 7.5L3 21l2-5.5A8.5 8.5 0 1 1 21 11.5Z"/></svg> Atención por WhatsApp</span>
+        </div>
+      </div>
+      <a href="#ofertas" class="btn btn-primary">Ver ofertas del día
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer class="footer">
+  <div class="wrap">
+    <div class="cols">
+      <div>
+        <a class="brand" href="index.html"><b>BER<i>MEJO</i></b><span>LIVE MARKET</span></a>
+        <p style="color:var(--txt-3);font-size:13.5px;max-width:240px;margin-top:14px;">El ecosistema digital comercial de Bermejo y la frontera Bolivia–Argentina.</p>
+        <div class="socials">
+          <a class="icon-btn" href="#" aria-label="Facebook"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V6h-3c-2 0-3 1-3 3v2H9v3h2v7h3v-7h2.5l.5-3H14V9.5c0-.4.2-.5.6-.5Z"/></svg></a>
+          <a class="icon-btn" href="#" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></a>
+          <a class="icon-btn" href="#" aria-label="TikTok"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 3c.3 2 1.6 3.5 3.5 3.8V10c-1.4 0-2.7-.4-3.8-1.1v6.4A5.3 5.3 0 1 1 10 10v3.2a2.2 2.2 0 1 0 1.6 2.1V3Z"/></svg></a>
+          <a class="icon-btn" href="#" aria-label="YouTube"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 12c0-2.5-.3-3.7-.8-4.3-.5-.6-1.2-.8-3-.9C16 6.5 13 6.5 12 6.5s-4 0-6.2.3c-1.8.1-2.5.3-3 .9C2.3 8.3 2 9.5 2 12s.3 3.7.8 4.3c.5.6 1.2.8 3 .9 2.2.3 5.2.3 6.2.3s4 0 6.2-.3c1.8-.1 2.5-.3 3-.9.5-.6.8-1.8.8-4.3ZM10 15V9l5 3Z"/></svg></a>
+        </div>
+      </div>
+      <div><h5>Explorar</h5><ul><li><a href="#mapa">Mapa</a></li><li><a href="#ofertas">Ofertas</a></li><li><a href="#videos">Videos</a></li><li><a href="#zonas">Categorías</a></li></ul></div>
+      <div><h5>Negocios</h5><ul><li><a href="admin.html">Registrá tu negocio</a></li><li><a href="admin.html">Planes</a></li><li><a href="#">Cómo funciona</a></li></ul></div>
+      <div><h5>Soporte</h5><ul><li><a href="#">Ayuda</a></li><li><a href="#">Contacto</a></li><li><a href="#">Políticas</a></li></ul></div>
+      <div>
+        <h5>Descargá la app</h5>
+        <a class="store-btn" href="#"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 3l16 9-16 9Z"/></svg><div><small>Disponible en</small><b>Google Play</b></div></a>
+        <a class="store-btn" href="#"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 2c.2 1.4-.4 2.7-1.2 3.6-.8 1-2.1 1.7-3.3 1.6-.2-1.3.4-2.7 1.2-3.5C13.5 2.7 14.9 2 16 2ZM20 17c-.5 1.2-.8 1.7-1.5 2.8-1 1.5-2.3 3.3-4 3.3-1.5 0-1.9-1-3.9-1s-2.5 1-3.9 1c-1.7 0-3-1.7-4-3.1-2.6-3.9-2.9-8.5-1.3-11 1.1-1.7 2.9-2.8 4.5-2.8 1.7 0 2.7 1 4.1 1 1.3 0 2.1-1 4.1-1 1.5 0 3 .8 4.1 2.2-3.6 2-3 7.1.7 8.6Z"/></svg><div><small>Descargalo en</small><b>App Store</b></div></a>
+      </div>
+    </div>
+    <div class="copy">
+      <span>© 2026 Bermejo Live Market. Todos los derechos reservados.</span>
+      <span>Hecho con <span class="heart">♥</span> en Bermejo, Bolivia</span>
+    </div>
+  </div>
+</footer>
+
+<script src="js/app.js"></script>
+</body>
+</html>

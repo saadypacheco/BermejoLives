@@ -1,0 +1,46 @@
+# ============================================================
+# Bermejo / buscadonde.com · PRODUCCIÓN (VPS Hostinger + Traefik)
+# Sin puertos publicados: Traefik enruta por dominio vía labels.
+# DB = Supabase Cloud (el VPS no corre Postgres).
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+# ============================================================
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # NEXT_PUBLIC_* se hornean en el bundle (apuntan a Supabase Cloud + api público)
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_API_URL: https://api.${DOMAIN}
+    container_name: buscadonde-frontend
+    restart: unless-stopped
+    networks: [traefik, internal]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik
+      - "traefik.http.routers.buscadonde-fe.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)"
+      - traefik.http.routers.buscadonde-fe.entrypoints=websecure
+      - traefik.http.routers.buscadonde-fe.tls=true
+      - traefik.http.routers.buscadonde-fe.tls.certresolver=letsencrypt
+      - traefik.http.services.buscadonde-fe.loadbalancer.server.port=3003
+
+  backend:
+    build: ./backend
+    container_name: buscadonde-backend
+    restart: unless-stopped
+    env_file: ./backend/.env
+    networks: [traefik, internal]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik
+      - "traefik.http.routers.buscadonde-be.rule=Host(`api.${DOMAIN}`)"
+      - traefik.http.routers.buscadonde-be.entrypoints=websecure
+      - traefik.http.routers.buscadonde-be.tls=true
+      - traefik.http.routers.buscadonde-be.tls.certresolver=letsencrypt
+      - traefik.http.services.buscadonde-be.loadbalancer.server.port=8000
+
+networks:
+  traefik:
+    external: true
+  internal:

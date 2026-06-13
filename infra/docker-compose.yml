@@ -1,0 +1,74 @@
+# ============================================================
+# Bermejo Live Market · stack local en Docker
+#
+# Supabase corre aparte (npx supabase start, en el host, API :54421).
+# Estos contenedores lo alcanzan así:
+#   - backend / SSR del frontend  -> host.docker.internal:54421
+#   - navegador (NEXT_PUBLIC_*)    -> localhost:54421
+#
+# Uso:  cd infra && docker compose up -d --build
+# ============================================================
+services:
+  backend:
+    build: ../backend
+    container_name: bermejo-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file: ../backend/.env
+    environment:
+      # override de la URL para alcanzar el Supabase del host desde el contenedor
+      - SUPABASE_URL=http://host.docker.internal:54421
+      # cómo lo alcanza el NAVEGADOR (para las URLs públicas de fotos en Storage)
+      - SUPABASE_PUBLIC_URL=http://localhost:54421
+      - FRONTEND_URL=http://localhost:3003
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [bermejonet]
+
+  frontend:
+    build:
+      context: ../frontend
+      args:
+        # Se hornean en el bundle del navegador → apuntan al host
+        NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54421"
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+        NEXT_PUBLIC_API_URL: "http://localhost:8000"
+    container_name: bermejo-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3003:3003"
+    environment:
+      # SSR dentro del contenedor → alcanza Supabase del host
+      - SUPABASE_INTERNAL_URL=http://host.docker.internal:54421
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on: [backend]
+    networks: [bermejonet]
+
+  # Bridge de WhatsApp (igual que mentorcomercial). Red privada, webhook firmado.
+  waha:
+    image: devlikeapro/waha:latest
+    container_name: bermejo-waha
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4501:3000"          # SOLO localhost (4501 para no pisar mentorcomercial:4500)
+    environment:
+      - WHATSAPP_API_KEY=${WAHA_API_KEY:-bermejo-dev}
+      - WHATSAPP_DEFAULT_ENGINE=NOWEB
+      - WHATSAPP_HOOK_URL=http://backend:8000/ingest/webhook
+      - WHATSAPP_HOOK_EVENTS=message,message.any,session.status
+      - WHATSAPP_HOOK_HMAC_KEY=${WEBHOOK_SECRET:-}
+      - WHATSAPP_DOWNLOAD_MEDIA=true
+    volumes:
+      - waha_sessions:/app/.sessions
+      - waha_media:/app/.media
+    networks: [bermejonet]
+    profiles: ["whatsapp"]              # opcional: docker compose --profile whatsapp up
+
+volumes:
+  waha_sessions:
+  waha_media:
+
+networks:
+  bermejonet:
