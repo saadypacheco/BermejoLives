@@ -27,7 +27,12 @@ export default function BuscarPage() {
   const [rubros, setRubros] = useState<Rubro[]>([]);
   const [zonas, setZonas] = useState<Zona[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hayMas, setHayMas] = useState(false);
+  const [cargandoMas, setCargandoMas] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout>>();
+  const PAGE = 24;
+
+  const filtros = { q, rubro, modalidad, zona, ciudad, precioMax: precioMax ? Number(precioMax) : undefined };
 
   useEffect(() => {
     getRubros().then(setRubros);
@@ -41,19 +46,22 @@ export default function BuscarPage() {
     clearTimeout(debounce.current);
     setLoading(true);
     debounce.current = setTimeout(async () => {
-      const r = await buscarComercios({
-        q,
-        rubro,
-        modalidad,
-        zona,
-        ciudad,
-        precioMax: precioMax ? Number(precioMax) : undefined,
-      });
+      const r = await buscarComercios(filtros, PAGE, 0);
       setResults(r);
+      setHayMas(r.length === PAGE);
       setLoading(false);
     }, 280);
     return () => clearTimeout(debounce.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, rubro, modalidad, zona, ciudad, precioMax]);
+
+  async function cargarMas() {
+    setCargandoMas(true);
+    const more = await buscarComercios(filtros, PAGE, results.length);
+    setResults((prev) => [...prev, ...more]);
+    setHayMas(more.length === PAGE);
+    setCargandoMas(false);
+  }
 
   return (
     <>
@@ -161,6 +169,15 @@ export default function BuscarPage() {
             ))}
           </div>
         )}
+
+        {vista === "lista" && hayMas && (
+          <div style={{ textAlign: "center", marginTop: 22 }}>
+            <button className="btn btn-ghost" onClick={cargarMas} disabled={cargandoMas}>
+              {cargandoMas ? "Cargando…" : "Cargar más"}
+            </button>
+          </div>
+        )}
+
         <div style={{ height: 50 }} />
       </div>
     </>

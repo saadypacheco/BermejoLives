@@ -1,7 +1,7 @@
 import { supabase, hasSupabase } from "@/lib/supabase";
 import type { Comercio, FeedItem, Producto, Zona, Rubro, Ciudad, ResultadoBusqueda, FiltrosBusqueda } from "@/lib/types";
 
-export async function buscarComercios(f: FiltrosBusqueda): Promise<ResultadoBusqueda[]> {
+export async function buscarComercios(f: FiltrosBusqueda, limit = 24, offset = 0): Promise<ResultadoBusqueda[]> {
   if (!hasSupabase) return [];
   const { data, error } = await supabase.rpc("buscar_comercios", {
     q: f.q || null,
@@ -11,6 +11,8 @@ export async function buscarComercios(f: FiltrosBusqueda): Promise<ResultadoBusq
     p_precio_min: f.precioMin ?? null,
     p_precio_max: f.precioMax ?? null,
     p_ciudad: f.ciudad || null,
+    p_limit: limit,
+    p_offset: offset,
   });
   if (error) {
     console.warn("buscar_comercios error:", error.message);

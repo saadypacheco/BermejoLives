@@ -5,11 +5,14 @@ Responsabilidades (ver ADR 2026-06-04-stack-bermejo):
   - Moderación (aprobar/rechazar/cambios) con service_role.
 El catálogo y el feed los lee el frontend directo de Supabase (anon + RLS).
 """
+import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
 
 from app.api import auth, campo, comercio, health, moderacion, webhook
 from app.core.config import settings
@@ -41,6 +44,32 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate limit simple (en memoria) para login/registro: 20 POST/min por IP.
+_BUCKETS: dict[str, deque] = defaultdict(deque)
+_RL_MAX, _RL_WINDOW = 20, 60
+_RL_PREFIXES = ("/auth/",)
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "?"
+
+
+@app.middleware("http")
+async def rate_limit(request: Request, call_next):
+    if request.method == "POST" and any(request.url.path.startswith(p) for p in _RL_PREFIXES):
+        ip = _client_ip(request)
+        now = time.time()
+        dq = _BUCKETS[ip]
+        while dq and now - dq[0] > _RL_WINDOW:
+            dq.popleft()
+        if len(dq) >= _RL_MAX:
+            return JSONResponse({"detail": "Demasiados intentos, probá en un minuto"}, status_code=429)
+        dq.append(now)
+    return await call_next(request)
 
 app.include_router(health.router, tags=["health"])
 app.include_router(auth.router, tags=["auth"])

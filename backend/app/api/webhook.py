@@ -15,7 +15,8 @@ logger = structlog.get_logger()
 
 def _valid_signature(body: bytes, signature: str | None) -> bool:
     if not settings.webhook_secret:
-        return True  # sin secreto en dev
+        # fail-OPEN solo en dev; en producción se rechaza si no hay secreto configurado
+        return settings.environment != "production"
     if not signature:
         return False
     expected = hmac.new(settings.webhook_secret.encode(), body, hashlib.sha256).hexdigest()
