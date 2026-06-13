@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 // Rutas que SIGUEN funcionando en modo captura (relevamiento de campo + gestión).
-const PERMITIDAS = ["/bermejo", "/admin", "/publicar", "/proximamente"];
+const PERMITIDAS = ["/bermejo", "/admin", "/publicar", "/proximamente", "/software"];
 
 export function middleware(req: NextRequest) {
   // Si el flag no está en "1", el sitio funciona normal.
