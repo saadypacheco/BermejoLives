@@ -351,6 +351,55 @@ video**. *"Las páginas amarillas, pero en vivo."* Esto unifica el producto:
 7. **Rubros profesionales y turismo:** médicos, talleres, **hoteles**, transporte,
    mayoristas — la amplitud real de una guía (encaja con la visión Bolivia).
 
+## 11. Confianza y reputación (calificaciones de dos lados)
+
+**Problema:** generar reputación confiable **sin ser dueño de la transacción** (la
+venta pasa por WhatsApp/en persona). Estrellas abiertas = reseñas falsas → no van.
+
+Las 4 piezas:
+1. **Ancla = confirmación mutua (sin plata):** el comprador contacta (clic
+   registrado) → el **vendedor marca "lo atendí/le vendí"** y el **comprador
+   confirma** → **reseña verificada**. Prueba de interacción sin procesar dinero.
+2. **Dos lados (calificar también al comprador):** el vendedor califica al
+   comprador → reputación del comprador → las reseñas de un **comprador con buen
+   historial pesan más** que las de una cuenta nueva.
+3. **Identidad por teléfono (OTP):** solo califica quien está verificado; **1
+   teléfono = 1 reseña por comercio**. Mata el spam.
+4. **"Mejores vendedores" por score ponderado** (reputación del que califica,
+   contacto real, antigüedad, confirmación mutua), **no promedio crudo**.
+
+**Reward (sin romperlo):** premiar **participación + interacciones verificadas**
+(badges, **cupones**, "comprador verificado", acceso anticipado) — **nunca pagar
+por reseña**. Los **cupones los ponen los vendedores** → se reparten a compradores
+verificados (alinea incentivos, no cuesta a la plataforma).
+
+**Honestidad:** nada es 100% a prueba de falsas sin la transacción; esto da ~80%.
+**No lanzar estrellas abiertas** (hacen más daño que bien).
+
+## 12. Marketing y estrategia de campo (futuro)
+
+**Marketing (promocionar buscadonde):**
+- **El canal de TikTok del sitio** (los videos) = motor de tráfico top-of-funnel.
+- **"Ofertas del día"** por WhatsApp (status/broadcast).
+- **Frontera:** captar compradores de **Salta/Orán/Tucumán** ("mirá las ofertas de
+  Bermejo antes de cruzar").
+- **QR físico / sticker** en cada local ("encontranos en buscadonde") = puente
+  offline→online y prueba de presencia.
+- **Referidos:** comercio que trae comercio = descuento; comprador que trae = cupón.
+- **"Reclamá tu local gratis"** como gancho de adquisición · radio/influencers
+  locales (baratos en frontera) · **eventos "Hot Sale Frontera"** como PR.
+
+**Estrategia de campo (eficiencia con vendedores + confianza del comprador):**
+- **Saturar por densidad:** el agente trabaja **zona por zona / galería por
+  galería**, no disperso.
+- **Combos por galería** (vender una galería entera de una) = eficiencia.
+- **Script estandarizado** (el embudo de 3 pasadas, §1) + cupo diario + la
+  herramienta `/bermejo` (ya construida) = medible.
+- **Agentes locales** (gente de Bermejo) = confianza + conocimiento.
+- **El puente clave campo→confianza:** la **verificación física** del agente
+  (visitó + foto + GPS) es el **primer sello de confianza** para el comprador,
+  ANTES de que existan reseñas → *"Verificado en el lugar por nuestro equipo."*
+
 ## 8. Decisiones abiertas (pendientes de confirmar)
 
 - Nombres de los tiers.
