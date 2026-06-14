@@ -44,11 +44,16 @@ function Login({ onOk }: { onOk: () => void }) {
   );
 }
 
-const EMPTY = { nombre: "", whatsapp: "", rubro_slug: "importadora", modalidad: "mayorista", direccion: "", descripcion: "" };
+const EMPTY = {
+  nombre: "", cel: "", modalidad: "mayorista", direccion: "", descripcion: "",
+  email: "", facebook_url: "", tiktok_url: "", instagram_url: "", sitio_web: "", video_url: "",
+};
 
 function FormCampo({ onLogout }: { onLogout: () => void }) {
   const [f, setF] = useState({ ...EMPTY });
   const set = (k: keyof typeof EMPTY, v: string) => setF((s) => ({ ...s, [k]: v }));
+  const [rubros, setRubros] = useState<string[]>([]); // multi-selección
+  const [mas, setMas] = useState(false);              // datos opcionales desplegados
   const [coords, setCoords] = useState<{ lat: number; lng: number; acc: number } | null>(null);
   const [geoMsg, setGeoMsg] = useState("");
   const [foto, setFoto] = useState<File | null>(null);
@@ -58,6 +63,9 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
   const [done, setDone] = useState<string | null>(null);
   const [count, setCount] = useState(0);
   const [err, setErr] = useState("");
+
+  const toggleRubro = (slug: string) =>
+    setRubros((rs) => (rs.includes(slug) ? rs.filter((s) => s !== slug) : [...rs, slug]));
 
   function ubicar() {
     setGeoMsg("Obteniendo ubicación…");
@@ -81,15 +89,18 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
-    if (!f.nombre.trim() || !f.whatsapp.trim()) { setErr("Faltan nombre y celular."); return; }
+    const cel = f.cel.replace(/\D/g, "");                 // solo dígitos del número local
+    if (!f.nombre.trim() || !cel) { setErr("Faltan nombre y celular."); return; }
+    if (rubros.length === 0) { setErr("Elegí al menos un rubro."); return; }
     setSaving(true);
     const fd = new FormData();
     fd.append("nombre", f.nombre);
-    fd.append("whatsapp", f.whatsapp);
-    fd.append("rubro_slug", f.rubro_slug);
+    fd.append("whatsapp", "591" + cel);                   // código Bolivia fijo
+    rubros.forEach((r) => fd.append("rubro_slugs", r));
     fd.append("modalidad", f.modalidad);
-    if (f.direccion) fd.append("direccion", f.direccion);
-    if (f.descripcion) fd.append("descripcion", f.descripcion);
+    for (const k of ["direccion", "descripcion", "email", "facebook_url", "tiktok_url", "instagram_url", "sitio_web", "video_url"] as const) {
+      if (f[k].trim()) fd.append(k, f[k].trim());
+    }
     if (coords) { fd.append("lat", String(coords.lat)); fd.append("lng", String(coords.lng)); }
     fd.append("consentimiento", String(consent));
     if (foto) fd.append("foto", foto);
@@ -105,7 +116,8 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
   }
 
   function otro() {
-    setF({ ...EMPTY }); setCoords(null); setGeoMsg(""); setFoto(null); setPreview(""); setConsent(true); setDone(null); setErr("");
+    setF({ ...EMPTY }); setRubros([]); setMas(false); setCoords(null); setGeoMsg("");
+    setFoto(null); setPreview(""); setConsent(true); setDone(null); setErr("");
   }
 
   if (done) {
@@ -131,13 +143,25 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
 
       <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <input className="adm-input" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre del local *" />
-        <input className="adm-input" type="tel" inputMode="tel" value={f.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} placeholder="Celular con código país * (ej 5917…)" />
 
         <div>
-          <label className="campo-lbl">Rubro</label>
-          <select className="adm-input" value={f.rubro_slug} onChange={(e) => set("rubro_slug", e.target.value)}>
-            {RUBROS.map((r) => (<option key={r.slug} value={r.slug}>{r.nombre}</option>))}
-          </select>
+          <label className="campo-lbl">WhatsApp del comercio *</label>
+          <div className="cel-wrap">
+            <span className="cel-flag">🇧🇴 +591</span>
+            <input className="adm-input" type="tel" inputMode="numeric" value={f.cel}
+              onChange={(e) => set("cel", e.target.value)} placeholder="7XXXXXXX" />
+          </div>
+        </div>
+
+        <div>
+          <label className="campo-lbl">Rubro(s) — tocá todos los que correspondan *</label>
+          <div className="rubro-chips">
+            {RUBROS.map((r) => (
+              <button type="button" key={r.slug} className={`rchip ${rubros.includes(r.slug) ? "on" : ""}`} onClick={() => toggleRubro(r.slug)}>
+                {r.nombre}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div>
@@ -169,6 +193,21 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
         </div>
 
         <input className="adm-input" value={f.direccion} onChange={(e) => set("direccion", e.target.value)} placeholder="Dirección (opcional): Galería X, Local Y" />
+
+        {/* Datos opcionales */}
+        <button type="button" className="mas-toggle" onClick={() => setMas((v) => !v)}>
+          {mas ? "− Ocultar datos opcionales" : "+ Redes, email y video (opcional)"}
+        </button>
+        {mas && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <input className="adm-input" type="email" value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="Email" />
+            <input className="adm-input" value={f.facebook_url} onChange={(e) => set("facebook_url", e.target.value)} placeholder="Facebook / Marketplace (link)" />
+            <input className="adm-input" value={f.instagram_url} onChange={(e) => set("instagram_url", e.target.value)} placeholder="Instagram (link o @usuario)" />
+            <input className="adm-input" value={f.tiktok_url} onChange={(e) => set("tiktok_url", e.target.value)} placeholder="TikTok (link o @usuario)" />
+            <input className="adm-input" value={f.sitio_web} onChange={(e) => set("sitio_web", e.target.value)} placeholder="Página web" />
+            <input className="adm-input" value={f.video_url} onChange={(e) => set("video_url", e.target.value)} placeholder="Video (link de TikTok)" />
+          </div>
+        )}
 
         <label style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13.5, color: "var(--txt-2)" }}>
           <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />

@@ -22,17 +22,21 @@ def test_alta_campo_crea_comercio_pendiente(client, repo):
         "/campo/comercio",
         headers={"Authorization": f"Bearer {token}"},
         data={"nombre": "Gomería El Rápido", "whatsapp": "59170002222",
-              "rubro_slug": "gomeria", "modalidad": "minorista",
-              "lat": "-22.7361", "lng": "-64.3433"},
+              "rubro_slugs": ["gomeria", "servicios"],
+              "modalidad": "minorista", "lat": "-22.7361", "lng": "-64.3433",
+              "facebook_url": "https://facebook.com/gomeria"},
     )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["comercio"]["slug"] == "gomeria-el-rapido"
     assert body["comercio"]["gps"] is True
+    assert body["comercio"]["rubros"] == 2
     com = repo.comercios[list(repo.comercios)[-1]]
     assert com["modalidad"] == "minorista"
     assert com["verificado"] is False
-    assert com["rubro_id"] == "rub-3"   # gomeria
+    assert com["rubro_id"] == "rub-3"          # gomeria (principal = primero)
+    assert com["rubros"] == ["rub-3", "rub-4"]  # gomeria + servicios
+    assert com["facebook_url"] == "https://facebook.com/gomeria"
     assert com["lat"] == -22.7361
 
 

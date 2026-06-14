@@ -72,10 +72,16 @@ def _subir_foto(slug: str, foto: UploadFile, data: bytes) -> str | None:
 async def alta_campo(
     nombre: str = Form(...),
     whatsapp: str = Form(...),
-    rubro_slug: str = Form(...),
+    rubro_slugs: list[str] = Form(default=[]),   # uno o varios rubros
     modalidad: str = Form("mayorista"),
     direccion: str | None = Form(None),
     descripcion: str | None = Form(None),
+    email: str | None = Form(None),
+    tiktok_url: str | None = Form(None),
+    facebook_url: str | None = Form(None),
+    instagram_url: str | None = Form(None),
+    sitio_web: str | None = Form(None),
+    video_url: str | None = Form(None),
     lat: float | None = Form(None),
     lng: float | None = Form(None),
     consentimiento: bool = Form(True),
@@ -88,6 +94,9 @@ async def alta_campo(
     if not nombre.strip() or not whatsapp.strip():
         raise HTTPException(status_code=400, detail="Faltan nombre y/o celular")
 
+    # rubros: resuelve los slugs a ids; el 1º es el principal
+    rubro_ids = [rid for rid in (repo.get_rubro_id(s) for s in rubro_slugs if s) if rid]
+
     slug = slug_unico(repo, slugify(nombre))
 
     portada_url = None
@@ -96,16 +105,24 @@ async def alta_campo(
         if data:
             portada_url = _subir_foto(slug, foto, data)
 
+    def _none(v: str | None) -> str | None:
+        return v.strip() if v and v.strip() else None
+
     comercio = repo.crear_comercio(
         {
             "slug": slug,
             "nombre": nombre.strip(),
-            "descripcion": descripcion,
+            "descripcion": _none(descripcion),
             "whatsapp": whatsapp.strip(),
-            "rubro_id": repo.get_rubro_id(rubro_slug) if rubro_slug else None,
+            "email": _none(email),
+            "tiktok_url": _none(tiktok_url),
+            "facebook_url": _none(facebook_url),
+            "instagram_url": _none(instagram_url),
+            "sitio_web": _none(sitio_web),
+            "rubro_id": rubro_ids[0] if rubro_ids else None,
             "ciudad_id": repo.get_ciudad_id("bermejo"),  # el recorrido es en Bermejo
             "modalidad": modalidad,
-            "direccion": direccion,
+            "direccion": _none(direccion),
             "lat": lat,
             "lng": lng,
             "portada_url": portada_url,
@@ -114,7 +131,19 @@ async def alta_campo(
             "verificado": False,         # entra pendiente de verificar
         }
     )
-    logger.info("campo.alta", slug=slug, con_foto=bool(portada_url), con_gps=lat is not None,
-                consentimiento=consentimiento)
+    if rubro_ids:
+        repo.set_comercio_rubros(comercio["id"], rubro_ids)
+
+    # video (link TikTok) opcional → publicación pendiente tipo video
+    vurl = _none(video_url)
+    if vurl:
+        repo.insert_publicacion_directa({
+            "comercio_id": comercio["id"], "tipo": "video", "titulo": nombre.strip(),
+            "tiktok_url": vurl, "estado": "pendiente", "origen": "panel",
+        })
+
+    logger.info("campo.alta", slug=slug, rubros=len(rubro_ids), con_foto=bool(portada_url),
+                con_gps=lat is not None, con_video=bool(vurl), consentimiento=consentimiento)
     return {"ok": True, "comercio": {"id": comercio["id"], "nombre": comercio["nombre"], "slug": slug,
-                                     "foto": bool(portada_url), "gps": lat is not None}}
+                                     "rubros": len(rubro_ids), "foto": bool(portada_url),
+                                     "gps": lat is not None, "video": bool(vurl)}}

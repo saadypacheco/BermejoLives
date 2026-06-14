@@ -127,6 +127,9 @@ class FakeRepo:
         self.usuarios[row["email"]] = full
         return full
 
+    def set_comercio_rubros(self, comercio_id, rubro_ids):
+        self.comercios[comercio_id]["rubros"] = list(rubro_ids)
+
     # ---- alta self-service ----
     def slug_existe(self, slug):
         return any(c.get("slug") == slug for c in self.comercios.values())

@@ -28,6 +28,7 @@ class Repo(Protocol):
     def get_ciudad_id(self, slug: str) -> str | None: ...
     def crear_comercio(self, row: dict) -> dict: ...
     def crear_comercio_usuario(self, row: dict) -> dict: ...
+    def set_comercio_rubros(self, comercio_id: str, rubro_ids: list[str]) -> None: ...
 
 
 class SupabaseRepo:
@@ -138,6 +139,11 @@ class SupabaseRepo:
     def crear_comercio_usuario(self, row: dict) -> dict:
         res = self._db.table("comercio_usuarios").insert(row).execute()
         return res.data[0]
+
+    def set_comercio_rubros(self, comercio_id: str, rubro_ids: list[str]) -> None:
+        rows = [{"comercio_id": comercio_id, "rubro_id": rid} for rid in rubro_ids if rid]
+        if rows:
+            self._db.table("comercio_rubros").upsert(rows).execute()
 
     # ---- moderación ----
     def list_publicaciones(self, estado: str | None) -> list[dict]:
