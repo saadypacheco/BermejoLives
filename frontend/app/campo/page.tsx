@@ -274,15 +274,21 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
         <div>
           <label className="campo-lbl">Ciudad *</label>
           <select className="adm-input" value={ciudadSlug} onChange={(e) => setCiudadSlug(e.target.value)}>
-            {bolivianas.length > 0 && (
-              <optgroup label="🇧🇴 Bolivia">
-                {bolivianas.map((c) => <option key={c.slug} value={c.slug}>{c.nombre}</option>)}
-              </optgroup>
-            )}
-            {argentinas.length > 0 && (
-              <optgroup label="🇦🇷 Argentina">
-                {argentinas.map((c) => <option key={c.slug} value={c.slug}>{c.nombre}</option>)}
-              </optgroup>
+            {ciudades.length === 0 ? (
+              <option value="bermejo">Bermejo</option>
+            ) : (
+              <>
+                {bolivianas.length > 0 && (
+                  <optgroup label="🇧🇴 Bolivia">
+                    {bolivianas.map((c) => <option key={c.slug} value={c.slug}>{c.nombre}</option>)}
+                  </optgroup>
+                )}
+                {argentinas.length > 0 && (
+                  <optgroup label="🇦🇷 Argentina">
+                    {argentinas.map((c) => <option key={c.slug} value={c.slug}>{c.nombre}</option>)}
+                  </optgroup>
+                )}
+              </>
             )}
           </select>
         </div>
