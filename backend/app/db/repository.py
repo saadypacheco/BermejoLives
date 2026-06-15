@@ -36,6 +36,8 @@ class Repo(Protocol):
     def registrar_pago(self, comercio_id: str, row: dict) -> dict: ...
     def suspender_comercio(self, comercio_id: str) -> None: ...
     def activar_comercio(self, comercio_id: str) -> None: ...
+    def list_todos_comercios(self, verificado: bool | None, limit: int) -> list[dict]: ...
+    def update_comercio(self, comercio_id: str, patch: dict, rubro_slugs: list[str] | None) -> dict: ...
 
 
 class SupabaseRepo:
@@ -306,6 +308,31 @@ class SupabaseRepo:
 
     def activar_comercio(self, comercio_id: str) -> None:
         self._db.table("comercios").update({"suspendido": False}).eq("id", comercio_id).execute()
+
+    def list_todos_comercios(self, verificado: bool | None = None, limit: int = 300) -> list[dict]:
+        q = (
+            self._db.table("comercios")
+            .select("id, slug, nombre, whatsapp, modalidad, descripcion, direccion, lat, lng, "
+                    "verificado, suspendido, paga_hasta, portada_url, created_at, "
+                    "rubros(nombre, slug), ciudades(nombre, slug)")
+            .eq("activo", True)
+        )
+        if verificado is not None:
+            q = q.eq("verificado", verificado)
+        res = q.order("created_at", desc=True).limit(limit).execute()
+        return res.data or []
+
+    def update_comercio(self, comercio_id: str, patch: dict, rubro_slugs: list[str] | None) -> dict:
+        if patch:
+            self._db.table("comercios").update(patch).eq("id", comercio_id).execute()
+        if rubro_slugs is not None:
+            rubro_ids = [rid for rid in (self.get_rubro_id(s) for s in rubro_slugs if s) if rid]
+            if rubro_ids:
+                # Actualiza rubro principal + tabla N:M
+                self._db.table("comercios").update({"rubro_id": rubro_ids[0]}).eq("id", comercio_id).execute()
+                self._db.table("comercio_rubros").delete().eq("comercio_id", comercio_id).execute()
+                self.set_comercio_rubros(comercio_id, rubro_ids)
+        return self.get_comercio(comercio_id) or {}
 
 
 def get_repo() -> Repo:

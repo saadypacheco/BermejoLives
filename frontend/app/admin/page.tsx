@@ -4,9 +4,13 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   listPendientes, moderar, login, getToken, type PendingPub,
-  listComerciosPorVerificar, verificarComercio, rechazarComercio, type ComercioPorVerificar,
-  listSuscripciones, registrarPago, suspenderComercio, activarComercio, type ComercioSuscripcion, type EstadoSuscripcion,
+  listComerciosPorVerificar, listTodosComercios, verificarComercio, rechazarComercio,
+  editarComercio, type ComercioPorVerificar,
+  listSuscripciones, registrarPago, suspenderComercio, activarComercio,
+  type ComercioSuscripcion, type EstadoSuscripcion,
 } from "@/lib/api";
+import { getRubros } from "@/lib/data";
+import type { Rubro } from "@/lib/types";
 import { precioFmt, MODALIDAD_LABEL, comoLlegarHref } from "@/lib/types";
 import { Check, X, Edit, Pin, WhatsApp, Verified } from "@/components/icons";
 
@@ -15,9 +19,11 @@ export default function AdminPage() {
   const [email, setEmail] = useState("admin@bermejolive.com");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"publicaciones" | "comercios" | "suscripciones">("publicaciones");
+  const [tab, setTab] = useState<"publicaciones" | "comercios" | "suscripciones">("comercios");
   const [items, setItems] = useState<PendingPub[]>([]);
   const [comercios, setComercios] = useState<ComercioPorVerificar[]>([]);
+  const [todosLosComercios, setTodosLosComercios] = useState<ComercioPorVerificar[]>([]);
+  const [rubros, setRubros] = useState<Rubro[]>([]);
   const [suscripciones, setSuscripciones] = useState<ComercioSuscripcion[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -27,6 +33,7 @@ export default function AdminPage() {
       load();
       loadComercios();
       loadSuscripciones();
+      getRubros().then(setRubros);
     }
   }, []);
 
@@ -42,7 +49,10 @@ export default function AdminPage() {
   }
 
   async function loadComercios() {
-    try { setComercios(await listComerciosPorVerificar()); } catch { setComercios([]); }
+    try {
+      setComercios(await listComerciosPorVerificar());
+      setTodosLosComercios(await listTodosComercios());
+    } catch { setComercios([]); }
   }
 
   async function loadSuscripciones() {
@@ -122,46 +132,26 @@ export default function AdminPage() {
       </div>
 
       <div className="auth-tabs" style={{ maxWidth: 640, marginBottom: 18 }}>
+        <button className={tab === "comercios" ? "active" : ""} onClick={() => setTab("comercios")}>
+          Negocios ({todosLosComercios.length}) {comercios.length > 0 && <span style={{ color: "var(--amber)" }}>· {comercios.length} pendientes</span>}
+        </button>
         <button className={tab === "publicaciones" ? "active" : ""} onClick={() => setTab("publicaciones")}>
           Publicaciones {items.length > 0 && `(${items.length})`}
         </button>
-        <button className={tab === "comercios" ? "active" : ""} onClick={() => setTab("comercios")}>
-          Comercios {comercios.length > 0 && `(${comercios.length})`}
-        </button>
         <button className={tab === "suscripciones" ? "active" : ""} onClick={() => { setTab("suscripciones"); loadSuscripciones(); }}>
-          Suscripciones {suscripciones.filter((c) => ["por_vencer","vencido","suspendido"].includes(c.suscripcion_estado)).length > 0 && `⚠️`}
+          Suscripciones {suscripciones.filter((c) => ["por_vencer","vencido","suspendido"].includes(c.suscripcion_estado)).length > 0 && "⚠️"}
         </button>
       </div>
 
       {tab === "comercios" && (
-        <div className="panel-card glass">
-          <div className="ph"><h3>Comercios del recorrido</h3><span style={{ color: "var(--txt-3)", fontSize: 13 }}>Verificá o rechazá las altas del agente de campo</span></div>
-          {comercios.length === 0 && (
-            <div className="mod-item" style={{ justifyContent: "center", color: "var(--txt-3)" }}>
-              No hay comercios pendientes de verificar.
-            </div>
-          )}
-          {comercios.map((c) => (
-            <div className="mod-item" key={c.id}>
-              <img src={c.portada_url ?? "https://picsum.photos/seed/loc/240/168"} alt="" />
-              <div>
-                <h4>{c.nombre} · <span style={{ color: "var(--blue-soft)" }}>{MODALIDAD_LABEL[c.modalidad] ?? c.modalidad}</span></h4>
-                <p>{c.rubros?.nombre ?? "Sin rubro"}{c.direccion ? ` · ${c.direccion}` : ""}</p>
-                <div className="mm">
-                  <span><WhatsApp style={{ width: 13, height: 13, display: "inline", verticalAlign: "-2px" }} /> +{c.whatsapp}</span>
-                  {c.lat != null ? (
-                    <a href={comoLlegarHref(c)} target="_blank" rel="noopener" style={{ color: "var(--neon)" }}><Pin style={{ width: 13, height: 13, display: "inline", verticalAlign: "-2px" }} /> ubicación ✓</a>
-                  ) : <span style={{ color: "var(--amber)" }}>sin GPS</span>}
-                  <span>🕒 {new Date(c.created_at).toLocaleString("es-BO")}</span>
-                </div>
-              </div>
-              <div className="mod-actions">
-                <button className="mbtn approve" title="Verificar" onClick={() => actComercio(c.id, "verificar")}><Verified style={{ width: 18, height: 18 }} /></button>
-                <button className="mbtn reject" title="Rechazar (desactivar)" onClick={() => actComercio(c.id, "rechazar")}><X style={{ width: 18, height: 18 }} /></button>
-              </div>
-            </div>
-          ))}
-        </div>
+        <TabComercios
+          todos={todosLosComercios}
+          pendientes={comercios}
+          rubros={rubros}
+          onVerificar={(id) => actComercio(id, "verificar")}
+          onRechazar={(id) => actComercio(id, "rechazar")}
+          onEdited={loadComercios}
+        />
       )}
 
       {tab === "suscripciones" && (
@@ -306,6 +296,229 @@ function TabSuscripciones({
     </div>
   );
 }
+
+// ── Tab Comercios ─────────────────────────────────────────────────────────────
+
+type FiltroComercio = "todos" | "pendientes" | "verificados";
+
+function TabComercios({
+  todos, pendientes, rubros, onVerificar, onRechazar, onEdited,
+}: {
+  todos: ComercioPorVerificar[];
+  pendientes: ComercioPorVerificar[];
+  rubros: Rubro[];
+  onVerificar: (id: string) => void;
+  onRechazar: (id: string) => void;
+  onEdited: () => void;
+}) {
+  const [filtro, setFiltro] = useState<FiltroComercio>("todos");
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+
+  const visibles = filtro === "todos"
+    ? todos
+    : filtro === "pendientes"
+    ? todos.filter((c) => !c.verificado)
+    : todos.filter((c) => c.verificado);
+
+  const editando = editandoId ? todos.find((c) => c.id === editandoId) ?? null : null;
+
+  return (
+    <div className="panel-card glass">
+      <div className="ph">
+        <h3>Negocios</h3>
+        <span style={{ color: "var(--txt-3)", fontSize: 13 }}>Listado completo · click para editar</span>
+      </div>
+
+      {/* Filtros */}
+      <div style={{ display: "flex", gap: 8, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+        {(["todos", "pendientes", "verificados"] as FiltroComercio[]).map((f) => {
+          const n = f === "todos" ? todos.length : f === "pendientes" ? pendientes.length : todos.filter((c) => c.verificado).length;
+          return (
+            <button key={f} onClick={() => setFiltro(f)}
+              style={{ padding: "5px 14px", borderRadius: 20, border: "1px solid", cursor: "pointer", fontSize: 13,
+                borderColor: filtro === f ? "var(--neon)" : "var(--border)",
+                background: filtro === f ? "var(--neon)22" : "transparent",
+                color: filtro === f ? "var(--neon)" : "var(--txt-2)", fontWeight: filtro === f ? 600 : 400 }}>
+              {f.charAt(0).toUpperCase() + f.slice(1)} ({n})
+            </button>
+          );
+        })}
+      </div>
+
+      {visibles.length === 0 && (
+        <div style={{ padding: 24, textAlign: "center", color: "var(--txt-3)" }}>Sin resultados.</div>
+      )}
+
+      {visibles.map((c) => (
+        <div key={c.id} style={{ display: "flex", gap: 12, padding: "14px 16px", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
+          {/* Foto */}
+          <img
+            src={c.portada_url ?? "https://picsum.photos/seed/" + c.id + "/80/80"}
+            alt=""
+            style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 10, flexShrink: 0 }}
+          />
+
+          {/* Info */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 600, fontSize: 15 }}>{c.nombre}</span>
+              {c.verificado
+                ? <span style={{ fontSize: 11, color: "var(--neon)", background: "var(--neon)22", padding: "2px 8px", borderRadius: 10 }}>✓ verificado</span>
+                : <span style={{ fontSize: 11, color: "var(--amber)", background: "var(--amber)22", padding: "2px 8px", borderRadius: 10 }}>pendiente</span>}
+              {c.suspendido && <span style={{ fontSize: 11, color: "#888", background: "#88888822", padding: "2px 8px", borderRadius: 10 }}>suspendido</span>}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 3 }}>
+              {(c.rubros as { nombre: string } | undefined)?.nombre ?? "Sin rubro"}
+              {(c.ciudades as { nombre: string } | undefined)?.nombre ? ` · ${(c.ciudades as { nombre: string }).nombre}` : ""}
+              {c.modalidad ? ` · ${MODALIDAD_LABEL[c.modalidad] ?? c.modalidad}` : ""}
+            </div>
+            {c.descripcion && (
+              <div style={{ fontSize: 12, color: "var(--txt-2)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 400 }}>
+                {c.descripcion}
+              </div>
+            )}
+          </div>
+
+          {/* Acciones */}
+          <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+            <a
+              href={`https://wa.me/${c.whatsapp}`}
+              target="_blank" rel="noopener"
+              className="mbtn"
+              title={`WhatsApp +${c.whatsapp}`}
+              style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+            >
+              <WhatsApp style={{ width: 16, height: 16 }} />
+            </a>
+            {c.lat != null && (
+              <a
+                href={comoLlegarHref(c)}
+                target="_blank" rel="noopener"
+                className="mbtn"
+                title="Ver en mapa"
+                style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                <Pin style={{ width: 16, height: 16 }} />
+              </a>
+            )}
+            <button className="mbtn edit" title="Editar" onClick={() => setEditandoId(c.id)}>
+              <Edit style={{ width: 16, height: 16 }} />
+            </button>
+            {!c.verificado && (
+              <>
+                <button className="mbtn approve" title="Verificar" onClick={() => onVerificar(c.id)}>
+                  <Verified style={{ width: 16, height: 16 }} />
+                </button>
+                <button className="mbtn reject" title="Rechazar" onClick={() => onRechazar(c.id)}>
+                  <X style={{ width: 16, height: 16 }} />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {editando && (
+        <ModalEditar
+          comercio={editando}
+          rubros={rubros}
+          onClose={() => setEditandoId(null)}
+          onDone={() => { setEditandoId(null); onEdited(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ModalEditar({
+  comercio, rubros, onClose, onDone,
+}: {
+  comercio: ComercioPorVerificar;
+  rubros: Rubro[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [nombre, setNombre] = useState(comercio.nombre);
+  const [whatsapp, setWhatsapp] = useState(comercio.whatsapp);
+  const [descripcion, setDescripcion] = useState(comercio.descripcion ?? "");
+  const [modalidad, setModalidad] = useState(comercio.modalidad ?? "local");
+  const [direccion, setDireccion] = useState(comercio.direccion ?? "");
+  const [horario, setHorario] = useState((comercio as Record<string, unknown>).horario as string ?? "");
+  const [rubroSlug, setRubroSlug] = useState((comercio.rubros as { slug: string } | undefined)?.slug ?? "");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function guardar(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setErr("");
+    try {
+      await editarComercio(comercio.id, {
+        nombre: nombre || undefined,
+        whatsapp: whatsapp || undefined,
+        descripcion: descripcion || undefined,
+        modalidad: modalidad || undefined,
+        direccion: direccion || undefined,
+        horario: horario || undefined,
+        rubro_slugs: rubroSlug ? [rubroSlug] : undefined,
+      });
+      onDone();
+    } catch {
+      setErr("No se pudo guardar. Verificá el backend.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div className="glass" style={{ width: "100%", maxWidth: 480, borderRadius: 16, padding: 24, maxHeight: "90vh", overflowY: "auto" }}>
+        <h3 style={{ marginBottom: 18 }}>Editar negocio</h3>
+        <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Nombre
+            <input className="adm-input" style={{ marginTop: 4 }} value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre del negocio" />
+          </label>
+          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>WhatsApp
+            <input className="adm-input" style={{ marginTop: 4 }} value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="591XXXXXXXX" />
+          </label>
+          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Descripción / reseña
+            <textarea className="adm-input" style={{ marginTop: 4, minHeight: 70, resize: "vertical" }} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Qué vende o qué ofrece…" />
+          </label>
+          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Rubro
+            <select className="adm-input" style={{ marginTop: 4 }} value={rubroSlug} onChange={(e) => setRubroSlug(e.target.value)}>
+              <option value="">— sin cambiar —</option>
+              {rubros.map((r) => <option key={r.slug} value={r.slug}>{r.nombre}</option>)}
+            </select>
+          </label>
+          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Modalidad
+            <select className="adm-input" style={{ marginTop: 4 }} value={modalidad} onChange={(e) => setModalidad(e.target.value)}>
+              <option value="local">Local</option>
+              <option value="mayorista">Mayorista</option>
+              <option value="delivery">Delivery</option>
+              <option value="online">Online</option>
+              <option value="mixto">Mixto</option>
+            </select>
+          </label>
+          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Dirección
+            <input className="adm-input" style={{ marginTop: 4 }} value={direccion} onChange={(e) => setDireccion(e.target.value)} placeholder="Calle, número, referencia" />
+          </label>
+          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Horario
+            <input className="adm-input" style={{ marginTop: 4 }} value={horario} onChange={(e) => setHorario(e.target.value)} placeholder="Lun-Sáb 9-20 · Dom 10-14" />
+          </label>
+          {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
+          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+            <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={onClose}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={saving}>
+              {saving ? "Guardando…" : "Guardar cambios"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal Pago ────────────────────────────────────────────────────────────────
 
 function ModalPago({ comercio, onClose, onDone }: { comercio: ComercioSuscripcion; onClose: () => void; onDone: () => void }) {
   const [monto, setMonto] = useState("100");

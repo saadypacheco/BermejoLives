@@ -71,18 +71,38 @@ export type ComercioPorVerificar = {
   slug: string;
   whatsapp: string;
   modalidad: string;
+  descripcion: string | null;
   direccion: string | null;
   lat: number | null;
   lng: number | null;
   portada_url: string | null;
+  verificado: boolean;
+  suspendido: boolean;
+  paga_hasta: string | null;
   created_at: string;
-  rubros?: { nombre: string };
+  rubros?: { nombre: string; slug: string };
+  ciudades?: { nombre: string; slug: string };
 };
 
 export async function listComerciosPorVerificar(): Promise<ComercioPorVerificar[]> {
   const res = await authFetch(`/moderacion/comercios?verificado=false`);
   const data = await res.json();
   return data.items as ComercioPorVerificar[];
+}
+
+export async function listTodosComercios(): Promise<ComercioPorVerificar[]> {
+  const res = await authFetch(`/moderacion/comercios?todos=true`);
+  const data = await res.json();
+  return data.items as ComercioPorVerificar[];
+}
+
+export async function editarComercio(id: string, patch: Record<string, unknown>) {
+  const res = await authFetch(`/admin/comercio/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  return res.json();
 }
 
 export async function verificarComercio(id: string) {

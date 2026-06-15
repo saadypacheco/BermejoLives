@@ -46,10 +46,14 @@ def moderar(
 @router.get("/moderacion/comercios")
 def listar_comercios(
     verificado: bool | None = Query(default=False),
+    todos: bool = Query(default=False),
     _admin: dict = Depends(require_admin),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    items = repo.list_comercios_admin(verificado)
+    if todos:
+        items = repo.list_todos_comercios(verificado=None)
+    else:
+        items = repo.list_comercios_admin(verificado)
     return {"items": items, "total": len(items)}
 
 
@@ -80,6 +84,41 @@ def rechazar_comercio(
 
 
 # ── Suscripciones ─────────────────────────────────────────────────────────────
+
+class EditarComercioBody(BaseModel):
+    nombre: str | None = None
+    whatsapp: str | None = None
+    descripcion: str | None = None
+    modalidad: str | None = None
+    direccion: str | None = None
+    email: str | None = None
+    facebook_url: str | None = None
+    instagram_url: str | None = None
+    tiktok_url: str | None = None
+    sitio_web: str | None = None
+    horario: str | None = None
+    pedido_minimo: str | None = None
+    tiene_factura: bool | None = None
+    envios_internacionales: bool | None = None
+    tiene_stock: bool | None = None
+    rubro_slugs: list[str] | None = None
+
+
+@router.put("/admin/comercio/{comercio_id}")
+def editar_comercio(
+    comercio_id: str,
+    body: EditarComercioBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Edita campos de un comercio desde el panel admin."""
+    patch = {k: v for k, v in body.model_dump(exclude={"rubro_slugs"}).items() if v is not None}
+    if not patch and not body.rubro_slugs:
+        raise HTTPException(status_code=400, detail="Nada para actualizar")
+    updated = repo.update_comercio(comercio_id, patch, body.rubro_slugs)
+    logger.info("moderacion.comercio_editado", comercio=comercio_id, campos=list(patch.keys()), by=admin["email"])
+    return {"ok": True, "comercio": updated}
+
 
 class PagoBody(BaseModel):
     monto: float
