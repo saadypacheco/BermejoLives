@@ -35,7 +35,7 @@ export async function transcribirAudio(blob: Blob): Promise<string> {
   return (await res.json()).texto as string;
 }
 
-export type AltaCampoResult = { ok: boolean; comercio: { nombre: string; slug: string; foto: boolean; gps: boolean } };
+export type AltaCampoResult = { ok: boolean; comercio: { nombre: string; slug: string; ciudad: string; foto: boolean; gps: boolean } };
 
 export async function altaComercioCampo(form: FormData): Promise<AltaCampoResult> {
   const res = await fetch(`${API}/campo/comercio`, {
@@ -52,4 +52,14 @@ export async function altaComercioCampo(form: FormData): Promise<AltaCampoResult
     throw new Error(d.detail ?? "No se pudo guardar");
   }
   return res.json();
+}
+
+/** Registra un click de contacto (WhatsApp, teléfono, etc.) para un comercio. */
+export async function registrarLead(comercio_id: string, tipo: "whatsapp" | "telefono" | "email" | "web" = "whatsapp"): Promise<void> {
+  // Fire-and-forget: no bloqueamos la navegación del usuario
+  fetch(`${API}/lead`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ comercio_id, tipo }),
+  }).catch(() => undefined);
 }

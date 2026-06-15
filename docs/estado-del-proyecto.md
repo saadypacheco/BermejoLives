@@ -1,6 +1,6 @@
 # Estado del proyecto — Bermejo Live Market / buscadonde.com
 
-> Inventario de **lo implementado** y **lo que falta**. Actualizado 2026-06-15.
+> Inventario de **lo implementado** y **lo que falta**. Actualizado 2026-06-15 (post expansión estratégica).
 > Docs hermanos: `analisis-factibilidad.md` (huecos/prioridades), modelo de negocio
 > `modelo-comercial-y-ecosistema.md`, bitácora técnica `architect-journey.md`.
 
@@ -19,15 +19,18 @@
 
 ## ✅ Implementado y funcionando
 
-### Base de datos (`supabase/migrations/` 0001–0010)
+### Base de datos (`supabase/migrations/` 0001–0011)
 - `comercios` (WhatsApp, teléfono, email, redes, web, ubicación lat/lng, modalidad
   mayorista/minorista/ambos, plan, verificado, rating, ciudad, confiable).
-- `zonas` · `rubros` (11) · `ciudades` (14 de Bolivia, Bermejo activa) ·
-  `comercio_rubros` (N:M, varios rubros por comercio) · `productos` ·
-  `publicaciones` (feed + moderación) · `wa_inbox` · `comercio_usuarios`.
+  **Nuevos campos (0011):** `monedas_aceptadas[]`, `envios_internacionales`,
+  `origen_importacion[]`, `pedido_minimo`, `tiene_factura`, `horario`, `tiene_stock`.
+- `zonas` · `rubros` (**14**: +casa-de-cambio, transporte, hotel) ·
+  `ciudades` (**22**: Bolivia 14 + Argentina 8, columna `pais`) ·
+  `comercio_rubros` (N:M) · `productos` · `publicaciones` · `wa_inbox` ·
+  `comercio_usuarios` · **`leads`** (clicks WA/tel/email por comercio).
 - Bucket Storage `comercios`. RLS + GRANTs explícitos + soft-delete en todo.
 - Búsqueda full-text español + RPC `buscar_comercios` (rubro/modalidad/zona/precio/
-  ciudad, **paginado** limit/offset, matchea cualquier rubro del comercio).
+  ciudad, **paginado**, matchea cualquier rubro; devuelve campos fronterizos).
 
 ### Backend (FastAPI · 37 tests verdes)
 - Auth JWT: admin, agente, comercio (login + registro + publicar).
@@ -46,9 +49,11 @@
   (Leaflet) + **"cargar más"** (paginado) + chip de ciudad fija.
 - **/comercios/[slug]**: perfil (redes, ubicación, productos).
 - **/publicar**: login/registro de comercio + chatbot para publicar.
-- **/bermejo**: agente de campo — nombre · WhatsApp **+591** · **"¿qué vende?" por
-  audio→texto** (rubro fuera del form) · mayor/menor · GPS · foto · opcionales
-  (dirección, redes, email, video) · consentimiento.
+- **/campo** (antes `/bermejo`, redirect activo): agente de campo — selector de
+  **ciudad** (Bolivia + Argentina) · prefijo WA automático (+591/+54) · rubros como
+  chips · **"¿qué vende?" por audio→texto** · mayor/menor · GPS · foto ·
+  **info fronteriza**: monedas, envíos int., origen importación, factura, horario,
+  stock · opcionales (dirección, redes, email, video) · consentimiento.
 - **/admin**: moderación (publicaciones + comercios por verificar).
 - **/software**: landing con planes (Presencia/Activo/Destacado/Premium) y add-ons.
 - **middleware** de modo captura.

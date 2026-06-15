@@ -32,6 +32,15 @@ export type Comercio = {
   destacado: boolean;
   zona_id: string | null;
   rubro_id: string | null;
+  ciudad_id: string | null;
+  // Campos fronterizos (migration 0011)
+  monedas_aceptadas: string[] | null;
+  envios_internacionales: boolean;
+  origen_importacion: string[] | null;
+  pedido_minimo: string | null;
+  tiene_factura: boolean;
+  horario: string | null;
+  tiene_stock: boolean;
 };
 
 export type Rubro = {
@@ -51,6 +60,7 @@ export type Ciudad = {
   es_frontera: boolean;
   activa: boolean;
   orden: number;
+  pais: string;
 };
 
 export type ResultadoBusqueda = {

@@ -11,6 +11,7 @@ from io import BytesIO
 import httpx
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
 
 from app.core import auth
 from app.core.config import settings
@@ -23,6 +24,7 @@ router = APIRouter()
 logger = structlog.get_logger()
 
 _MODALIDADES = {"mayorista", "minorista", "ambos"}
+_TIPOS_LEAD  = {"whatsapp", "telefono", "email", "web"}
 
 
 @router.post("/auth/campo/login")
@@ -115,7 +117,8 @@ def _subir_foto(slug: str, foto: UploadFile, data: bytes) -> str | None:
 async def alta_campo(
     nombre: str = Form(...),
     whatsapp: str = Form(...),
-    rubro_slugs: list[str] = Form(default=[]),   # uno o varios rubros
+    ciudad_slug: str = Form("bermejo"),           # ciudad donde está el negocio
+    rubro_slugs: list[str] = Form(default=[]),    # uno o varios rubros
     modalidad: str = Form("mayorista"),
     direccion: str | None = Form(None),
     descripcion: str | None = Form(None),
@@ -128,6 +131,14 @@ async def alta_campo(
     lat: float | None = Form(None),
     lng: float | None = Form(None),
     consentimiento: bool = Form(True),
+    # Campos del diferencial fronterizo
+    monedas_aceptadas: list[str] = Form(default=[]),
+    envios_internacionales: bool = Form(False),
+    origen_importacion: list[str] = Form(default=[]),
+    pedido_minimo: str | None = Form(None),
+    tiene_factura: bool = Form(False),
+    horario: str | None = Form(None),
+    tiene_stock: bool = Form(True),
     foto: UploadFile | None = File(None),
     _agente: dict = Depends(auth.require_agente),
     repo: Repo = Depends(get_repo),
@@ -136,6 +147,8 @@ async def alta_campo(
         raise HTTPException(status_code=400, detail=f"modalidad inválida: {modalidad}")
     if not nombre.strip() or not whatsapp.strip():
         raise HTTPException(status_code=400, detail="Faltan nombre y/o celular")
+
+    ciudad_id = repo.get_ciudad_id(ciudad_slug) or repo.get_ciudad_id("bermejo")
 
     # rubros: resuelve los slugs a ids; el 1º es el principal
     rubro_ids = [rid for rid in (repo.get_rubro_id(s) for s in rubro_slugs if s) if rid]
@@ -163,7 +176,7 @@ async def alta_campo(
             "instagram_url": _none(instagram_url),
             "sitio_web": _none(sitio_web),
             "rubro_id": rubro_ids[0] if rubro_ids else None,
-            "ciudad_id": repo.get_ciudad_id("bermejo"),  # el recorrido es en Bermejo
+            "ciudad_id": ciudad_id,
             "modalidad": modalidad,
             "direccion": _none(direccion),
             "lat": lat,
@@ -171,7 +184,15 @@ async def alta_campo(
             "portada_url": portada_url,
             "plan": "gratis",
             "confiable": False,
-            "verificado": False,         # entra pendiente de verificar
+            "verificado": False,
+            # Campos fronterizos
+            "monedas_aceptadas": [m for m in monedas_aceptadas if m] or [],
+            "envios_internacionales": envios_internacionales,
+            "origen_importacion": [o for o in origen_importacion if o] or [],
+            "pedido_minimo": _none(pedido_minimo),
+            "tiene_factura": tiene_factura,
+            "horario": _none(horario),
+            "tiene_stock": tiene_stock,
         }
     )
     if rubro_ids:
@@ -185,8 +206,23 @@ async def alta_campo(
             "tiktok_url": vurl, "estado": "pendiente", "origen": "panel",
         })
 
-    logger.info("campo.alta", slug=slug, rubros=len(rubro_ids), con_foto=bool(portada_url),
-                con_gps=lat is not None, con_video=bool(vurl), consentimiento=consentimiento)
+    logger.info("campo.alta", slug=slug, ciudad=ciudad_slug, rubros=len(rubro_ids),
+                con_foto=bool(portada_url), con_gps=lat is not None, con_video=bool(vurl),
+                consentimiento=consentimiento)
     return {"ok": True, "comercio": {"id": comercio["id"], "nombre": comercio["nombre"], "slug": slug,
-                                     "rubros": len(rubro_ids), "foto": bool(portada_url),
-                                     "gps": lat is not None, "video": bool(vurl)}}
+                                     "ciudad": ciudad_slug, "rubros": len(rubro_ids),
+                                     "foto": bool(portada_url), "gps": lat is not None,
+                                     "video": bool(vurl)}}
+
+
+class _LeadIn(BaseModel):
+    comercio_id: str
+    tipo: str = "whatsapp"
+
+
+@router.post("/lead")
+def registrar_lead(body: _LeadIn, repo: Repo = Depends(get_repo)) -> dict:
+    """Registra un click de contacto (WhatsApp, teléfono, email…)."""
+    tipo = body.tipo if body.tipo in _TIPOS_LEAD else "whatsapp"
+    repo.insert_lead({"comercio_id": body.comercio_id, "tipo": tipo})
+    return {"ok": True}

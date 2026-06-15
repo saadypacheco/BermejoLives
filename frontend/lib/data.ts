@@ -30,11 +30,14 @@ export async function getCiudades(): Promise<Ciudad[]> {
 }
 
 const DEMO_CIUDADES: Ciudad[] = [
-  { id: "1", slug: "bermejo", nombre: "Bermejo", departamento: "Tarija", lat: -22.7361, lng: -64.3433, es_frontera: true, activa: true, orden: 1 },
-  { id: "2", slug: "yacuiba", nombre: "Yacuiba", departamento: "Tarija", lat: -22.0146, lng: -63.6775, es_frontera: true, activa: false, orden: 2 },
-  { id: "3", slug: "villazon", nombre: "Villazón", departamento: "Potosí", lat: -22.0866, lng: -65.5942, es_frontera: true, activa: false, orden: 3 },
-  { id: "4", slug: "santa-cruz", nombre: "Santa Cruz", departamento: "Santa Cruz", lat: -17.7833, lng: -63.1821, es_frontera: false, activa: false, orden: 10 },
-  { id: "5", slug: "la-paz", nombre: "La Paz", departamento: "La Paz", lat: -16.5, lng: -68.15, es_frontera: false, activa: false, orden: 11 },
+  { id: "1", slug: "bermejo",     nombre: "Bermejo",    departamento: "Tarija",     lat: -22.7361, lng: -64.3433, es_frontera: true,  activa: true,  orden: 1,  pais: "Bolivia" },
+  { id: "2", slug: "yacuiba",     nombre: "Yacuiba",    departamento: "Tarija",     lat: -22.0146, lng: -63.6775, es_frontera: true,  activa: false, orden: 2,  pais: "Bolivia" },
+  { id: "3", slug: "villazon",    nombre: "Villazón",   departamento: "Potosí",     lat: -22.0866, lng: -65.5942, es_frontera: true,  activa: false, orden: 3,  pais: "Bolivia" },
+  { id: "4", slug: "santa-cruz",  nombre: "Santa Cruz", departamento: "Santa Cruz", lat: -17.7833, lng: -63.1821, es_frontera: false, activa: false, orden: 10, pais: "Bolivia" },
+  { id: "5", slug: "la-paz",      nombre: "La Paz",     departamento: "La Paz",     lat: -16.5,    lng: -68.15,   es_frontera: false, activa: false, orden: 11, pais: "Bolivia" },
+  { id: "6", slug: "la-quiaca",   nombre: "La Quiaca",  departamento: "Jujuy",      lat: -22.1027, lng: -65.5983, es_frontera: true,  activa: false, orden: 20, pais: "Argentina" },
+  { id: "7", slug: "jujuy",       nombre: "Jujuy",      departamento: "Jujuy",      lat: -24.1858, lng: -65.2995, es_frontera: false, activa: false, orden: 22, pais: "Argentina" },
+  { id: "8", slug: "salta",       nombre: "Salta",      departamento: "Salta",      lat: -24.7821, lng: -65.4232, es_frontera: false, activa: false, orden: 23, pais: "Argentina" },
 ];
 
 export async function getRubros(): Promise<Rubro[]> {

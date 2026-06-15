@@ -29,6 +29,9 @@ class Repo(Protocol):
     def crear_comercio(self, row: dict) -> dict: ...
     def crear_comercio_usuario(self, row: dict) -> dict: ...
     def set_comercio_rubros(self, comercio_id: str, rubro_ids: list[str]) -> None: ...
+    def insert_lead(self, row: dict) -> None: ...
+    def list_leads_by_comercio(self, comercio_id: str, dias: int) -> list[dict]: ...
+    def stats_admin(self) -> dict: ...
 
 
 class SupabaseRepo:
@@ -183,6 +186,42 @@ class SupabaseRepo:
     def desactivar_comercio(self, comercio_id: str) -> dict:
         res = self._db.table("comercios").update({"activo": False}).eq("id", comercio_id).execute()
         return res.data[0] if res.data else {}
+
+    # ---- leads ----
+    def insert_lead(self, row: dict) -> None:
+        self._db.table("leads").insert(row).execute()
+
+    def list_leads_by_comercio(self, comercio_id: str, dias: int = 30) -> list[dict]:
+        from datetime import datetime, timezone, timedelta
+        desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+        res = (
+            self._db.table("leads")
+            .select("tipo, created_at")
+            .eq("comercio_id", comercio_id)
+            .gte("created_at", desde)
+            .order("created_at", desc=True)
+            .limit(500)
+            .execute()
+        )
+        return res.data or []
+
+    def stats_admin(self) -> dict:
+        """Totales rápidos para el dashboard admin."""
+        from datetime import datetime, timezone, timedelta
+        hoy = datetime.now(timezone.utc).date().isoformat()
+        ayer = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
+
+        comercios = self._db.table("comercios").select("id", count="exact").eq("activo", True).execute()
+        pendientes = self._db.table("comercios").select("id", count="exact").eq("activo", True).eq("verificado", False).execute()
+        leads_hoy  = self._db.table("leads").select("id", count="exact").gte("created_at", hoy).execute()
+        leads_ayer = self._db.table("leads").select("id", count="exact").gte("created_at", ayer).lt("created_at", hoy).execute()
+
+        return {
+            "comercios_total":    comercios.count or 0,
+            "comercios_pendientes": pendientes.count or 0,
+            "leads_hoy":          leads_hoy.count or 0,
+            "leads_ayer":         leads_ayer.count or 0,
+        }
 
 
 def get_repo() -> Repo:
