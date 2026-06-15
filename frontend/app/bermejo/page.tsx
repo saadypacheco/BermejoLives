@@ -91,7 +91,7 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
     setErr("");
     const cel = f.cel.replace(/\D/g, "");                 // solo dígitos del número local
     if (!f.nombre.trim() || !cel) { setErr("Faltan nombre y celular."); return; }
-    if (rubros.length === 0) { setErr("Elegí al menos un rubro."); return; }
+    if (!f.descripcion.trim()) { setErr("Escribí qué vende (la nota/reseña)."); return; }
     setSaving(true);
     const fd = new FormData();
     fd.append("nombre", f.nombre);
@@ -154,14 +154,9 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
         </div>
 
         <div>
-          <label className="campo-lbl">Rubro(s) — tocá todos los que correspondan *</label>
-          <div className="rubro-chips">
-            {RUBROS.map((r) => (
-              <button type="button" key={r.slug} className={`rchip ${rubros.includes(r.slug) ? "on" : ""}`} onClick={() => toggleRubro(r.slug)}>
-                {r.nombre}
-              </button>
-            ))}
-          </div>
+          <label className="campo-lbl">¿Qué vende? Escribí una nota / reseña corta *</label>
+          <textarea className="adm-input" rows={3} value={f.descripcion} onChange={(e) => set("descripcion", e.target.value)}
+            placeholder="Ej: Gomería y repuestos de moto, también aceite. Atienden rápido, precios de frontera." style={{ resize: "vertical" }} />
         </div>
 
         <div>
@@ -200,6 +195,16 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
         </button>
         {mas && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div>
+              <label className="campo-lbl">Rubros (opcional — si es obvio)</label>
+              <div className="rubro-chips">
+                {RUBROS.map((r) => (
+                  <button type="button" key={r.slug} className={`rchip ${rubros.includes(r.slug) ? "on" : ""}`} onClick={() => toggleRubro(r.slug)}>
+                    {r.nombre}
+                  </button>
+                ))}
+              </div>
+            </div>
             <input className="adm-input" type="email" value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="Email" />
             <input className="adm-input" value={f.facebook_url} onChange={(e) => set("facebook_url", e.target.value)} placeholder="Facebook / Marketplace (link)" />
             <input className="adm-input" value={f.instagram_url} onChange={(e) => set("instagram_url", e.target.value)} placeholder="Instagram (link o @usuario)" />
