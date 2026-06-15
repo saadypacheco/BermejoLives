@@ -238,9 +238,10 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
     setDone(null); setErr("");
   }
 
-  // Agrupa ciudades por país para el selector
-  const bolivianas  = ciudades.filter((c) => c.pais === "Bolivia");
-  const argentinas  = ciudades.filter((c) => c.pais === "Argentina");
+  // Agrupa ciudades por país para el selector.
+  // Si pais es undefined (migration 0011 aún no aplicada en cloud), todo cae a Bolivia.
+  const bolivianas = ciudades.filter((c) => !c.pais || c.pais === "Bolivia");
+  const argentinas = ciudades.filter((c) => c.pais === "Argentina");
 
   if (done) {
     const ciudadActual = ciudades.find((c) => c.slug === ciudadSlug);
