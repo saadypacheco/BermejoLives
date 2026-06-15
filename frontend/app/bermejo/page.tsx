@@ -18,7 +18,7 @@ export default function CampoPage() {
 }
 
 function Login({ onOk }: { onOk: () => void }) {
-  const [email, setEmail] = useState("agente@bermejolive.com");
+  const [email, setEmail] = useState("lobito@lobito.com");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
   async function submit(e: React.FormEvent) {
@@ -37,7 +37,6 @@ function Login({ onOk }: { onOk: () => void }) {
         <input className="adm-input" type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Contraseña" />
         {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
         <button className="btn btn-primary" type="submit">Entrar</button>
-        <small style={{ color: "var(--txt-3)" }}>Demo: agente@bermejolive.com / campo1234</small>
       </form>
     </div>
   );
