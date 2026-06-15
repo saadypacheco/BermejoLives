@@ -94,3 +94,46 @@ export async function rechazarComercio(id: string) {
   const res = await authFetch(`/moderacion/comercios/${id}/rechazar`, { method: "POST" });
   return res.json();
 }
+
+// ── Suscripciones ──────────────────────────────────────────────────────────
+
+export type EstadoSuscripcion = "activo" | "por_vencer" | "vencido" | "suspendido" | "sin_plan";
+
+export type ComercioSuscripcion = {
+  id: string;
+  slug: string;
+  nombre: string;
+  whatsapp: string;
+  verificado: boolean;
+  suspendido: boolean;
+  paga_hasta: string | null;
+  suscripcion_estado: EstadoSuscripcion;
+  created_at: string;
+};
+
+export async function listSuscripciones(): Promise<ComercioSuscripcion[]> {
+  const res = await authFetch("/admin/suscripciones");
+  const data = await res.json();
+  return data.items as ComercioSuscripcion[];
+}
+
+export async function registrarPago(comercioId: string, body: {
+  monto: number; moneda: string; metodo: string; referencia?: string; meses: number; notas?: string;
+}) {
+  const res = await authFetch(`/admin/comercio/${comercioId}/pago`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
+export async function suspenderComercio(id: string) {
+  const res = await authFetch(`/admin/comercio/${id}/suspender`, { method: "POST" });
+  return res.json();
+}
+
+export async function activarComercio(id: string) {
+  const res = await authFetch(`/admin/comercio/${id}/activar`, { method: "POST" });
+  return res.json();
+}

@@ -4,6 +4,7 @@ Escrituras con service_role (backend). Requiere JWT de admin.
 """
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from app.core.auth import require_admin
 from app.db.repository import Repo, get_repo
@@ -76,3 +77,69 @@ def rechazar_comercio(
         raise HTTPException(status_code=404, detail="comercio no encontrado")
     logger.info("moderacion.comercio_rechazado", comercio=comercio_id, by=admin["email"])
     return {"ok": True, "comercio": updated}
+
+
+# ── Suscripciones ─────────────────────────────────────────────────────────────
+
+class PagoBody(BaseModel):
+    monto: float
+    moneda: str = "BOB"
+    metodo: str = "qr-bolivia"
+    referencia: str | None = None
+    meses: int = 1           # cuántos meses cubre este pago
+    notas: str | None = None
+
+
+@router.get("/admin/suscripciones")
+def listar_suscripciones(
+    _admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Lista todos los comercios con su estado de suscripción."""
+    items = repo.list_suscripciones()
+    return {"items": items, "total": len(items)}
+
+
+@router.post("/admin/comercio/{comercio_id}/pago")
+def registrar_pago(
+    comercio_id: str,
+    body: PagoBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Registra un pago y extiende paga_hasta. Reactiva si estaba suspendido."""
+    result = repo.registrar_pago(comercio_id, {
+        "monto": body.monto,
+        "moneda": body.moneda,
+        "metodo": body.metodo,
+        "referencia": body.referencia,
+        "meses": body.meses,
+        "notas": body.notas,
+        "registrado_por": admin["email"],
+    })
+    logger.info("suscripcion.pago", comercio=comercio_id, meses=body.meses, by=admin["email"])
+    return {"ok": True, **result}
+
+
+@router.post("/admin/comercio/{comercio_id}/suspender")
+def suspender_comercio(
+    comercio_id: str,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Suspende un comercio (oculta de búsquedas)."""
+    repo.suspender_comercio(comercio_id)
+    logger.info("suscripcion.suspendido", comercio=comercio_id, by=admin["email"])
+    return {"ok": True}
+
+
+@router.post("/admin/comercio/{comercio_id}/activar")
+def activar_comercio(
+    comercio_id: str,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Reactiva un comercio suspendido."""
+    repo.activar_comercio(comercio_id)
+    logger.info("suscripcion.activado", comercio=comercio_id, by=admin["email"])
+    return {"ok": True}

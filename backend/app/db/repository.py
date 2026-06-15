@@ -32,6 +32,10 @@ class Repo(Protocol):
     def insert_lead(self, row: dict) -> None: ...
     def list_leads_by_comercio(self, comercio_id: str, dias: int) -> list[dict]: ...
     def stats_admin(self) -> dict: ...
+    def list_suscripciones(self) -> list[dict]: ...
+    def registrar_pago(self, comercio_id: str, row: dict) -> dict: ...
+    def suspender_comercio(self, comercio_id: str) -> None: ...
+    def activar_comercio(self, comercio_id: str) -> None: ...
 
 
 class SupabaseRepo:
@@ -222,6 +226,86 @@ class SupabaseRepo:
             "leads_hoy":          leads_hoy.count or 0,
             "leads_ayer":         leads_ayer.count or 0,
         }
+
+
+    # ── suscripciones ────────────────────────────────────────────────────────
+
+    def list_suscripciones(self) -> list[dict]:
+        """Todos los comercios activos con su estado de suscripción."""
+        from datetime import date, timedelta
+        hoy = date.today().isoformat()
+        limite_aviso = (date.today() + timedelta(days=5)).isoformat()
+
+        res = (
+            self._db.table("comercios")
+            .select("id, slug, nombre, whatsapp, verificado, suspendido, paga_hasta, created_at")
+            .eq("activo", True)
+            .order("nombre")
+            .limit(500)
+            .execute()
+        )
+        items = res.data or []
+
+        for c in items:
+            ph = c.get("paga_hasta")
+            if c.get("suspendido"):
+                c["suscripcion_estado"] = "suspendido"
+            elif not ph:
+                c["suscripcion_estado"] = "sin_plan"
+            elif ph < hoy:
+                c["suscripcion_estado"] = "vencido"
+            elif ph <= limite_aviso:
+                c["suscripcion_estado"] = "por_vencer"
+            else:
+                c["suscripcion_estado"] = "activo"
+
+        return items
+
+    def registrar_pago(self, comercio_id: str, row: dict) -> dict:
+        """Registra el pago, extiende paga_hasta y reactiva si estaba suspendido."""
+        from datetime import date
+        from calendar import monthrange
+
+        comercio = self.get_comercio(comercio_id)
+        if not comercio:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="comercio no encontrado")
+
+        meses = int(row.get("meses", 1))
+        hoy = date.today()
+        base = max(hoy, date.fromisoformat(comercio["paga_hasta"])) if comercio.get("paga_hasta") else hoy
+
+        # Sumar meses manualmente (sin dateutil)
+        m = base.month - 1 + meses
+        nueva_fecha = date(base.year + m // 12, m % 12 + 1,
+                           min(base.day, monthrange(base.year + m // 12, m % 12 + 1)[1])).isoformat()
+
+        # Insertar registro de pago
+        self._db.table("pagos").insert({
+            "comercio_id": comercio_id,
+            "monto":        row["monto"],
+            "moneda":       row.get("moneda", "BOB"),
+            "metodo":       row.get("metodo", "qr-bolivia"),
+            "referencia":   row.get("referencia"),
+            "periodo_desde": hoy.isoformat(),
+            "periodo_hasta": nueva_fecha,
+            "registrado_por": row["registrado_por"],
+            "notas":        row.get("notas"),
+        }).execute()
+
+        # Actualizar paga_hasta + desuspender
+        self._db.table("comercios").update({
+            "paga_hasta": nueva_fecha,
+            "suspendido": False,
+        }).eq("id", comercio_id).execute()
+
+        return {"paga_hasta": nueva_fecha}
+
+    def suspender_comercio(self, comercio_id: str) -> None:
+        self._db.table("comercios").update({"suspendido": True}).eq("id", comercio_id).execute()
+
+    def activar_comercio(self, comercio_id: str) -> None:
+        self._db.table("comercios").update({"suspendido": False}).eq("id", comercio_id).execute()
 
 
 def get_repo() -> Repo:
