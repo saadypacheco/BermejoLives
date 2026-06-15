@@ -37,14 +37,25 @@ async def transcribir(
     audio: UploadFile = File(...),
     _agente: dict = Depends(auth.require_agente),
 ) -> dict:
-    """Audio del '¿qué vende?' → texto (Whisper). Devuelve {texto}."""
-    if not settings.openai_api_key:
-        raise HTTPException(status_code=503, detail="Transcripción no configurada (falta OPENAI_API_KEY)")
+    """Audio del '¿qué vende?' → texto. OpenAI si hay key; si no, faster-whisper local."""
     data = await audio.read()
     if not data:
         raise HTTPException(status_code=400, detail="Audio vacío")
     if len(data) > 25 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Audio demasiado largo")
+
+    # Self-hosted (gratis) cuando no hay key de OpenAI
+    if not settings.openai_api_key:
+        from starlette.concurrency import run_in_threadpool
+        from app.services.transcription import transcribir_local
+        try:
+            texto = await run_in_threadpool(transcribir_local, data)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("transcribir.local_error", error=str(exc))
+            raise HTTPException(status_code=502, detail="No se pudo transcribir") from exc
+        return {"texto": texto}
+
+    # OpenAI Whisper API
     files = {"file": (audio.filename or "audio.webm", data, audio.content_type or "audio/webm")}
     form = {"model": "whisper-1", "language": "es"}
     try:

@@ -27,8 +27,12 @@ class Settings(BaseSettings):
     agente_email: str = "agente@bermejolive.com"
     agente_password: str = "campo1234"
 
-    # Transcripción de audio del "¿qué vende?" (OpenAI Whisper). Vacío = se escribe a mano.
+    # Transcripción de audio del "¿qué vende?".
+    #  - Si OPENAI_API_KEY está seteada → usa la API de OpenAI Whisper.
+    #  - Si no → usa faster-whisper SELF-HOSTED (gratis, en el VPS).
     openai_api_key: str = ""
+    whisper_model: str = "small"      # tiny/base/small/medium
+    whisper_device: str = "cpu"       # 'cuda' si hubiera GPU
 
     # Frontend (CORS)
     frontend_url: str = "http://localhost:3000"
