@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     agente_email: str = "agente@bermejolive.com"
     agente_password: str = "campo1234"
 
+    # Transcripción de audio del "¿qué vende?" (OpenAI Whisper). Vacío = se escribe a mano.
+    openai_api_key: str = ""
+
     # Frontend (CORS)
     frontend_url: str = "http://localhost:3000"
 

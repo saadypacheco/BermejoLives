@@ -8,6 +8,7 @@ confirme. La foto va a Supabase Storage (bucket público 'comercios').
 import secrets
 from io import BytesIO
 
+import httpx
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
@@ -29,6 +30,37 @@ def campo_login(body: LoginBody) -> dict:
     if body.email != settings.agente_email or body.password != settings.agente_password:
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     return {"access_token": auth.make_agente_token(body.email), "agente": {"email": body.email}}
+
+
+@router.post("/campo/transcribir")
+async def transcribir(
+    audio: UploadFile = File(...),
+    _agente: dict = Depends(auth.require_agente),
+) -> dict:
+    """Audio del '¿qué vende?' → texto (Whisper). Devuelve {texto}."""
+    if not settings.openai_api_key:
+        raise HTTPException(status_code=503, detail="Transcripción no configurada (falta OPENAI_API_KEY)")
+    data = await audio.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Audio vacío")
+    if len(data) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio demasiado largo")
+    files = {"file": (audio.filename or "audio.webm", data, audio.content_type or "audio/webm")}
+    form = {"model": "whisper-1", "language": "es"}
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.post(
+                "https://api.openai.com/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                data=form, files=files,
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("transcribir.error", error=str(exc))
+        raise HTTPException(status_code=502, detail="No se pudo transcribir") from exc
+    if r.status_code != 200:
+        logger.warning("transcribir.api", status=r.status_code, body=r.text[:200])
+        raise HTTPException(status_code=502, detail="No se pudo transcribir")
+    return {"texto": (r.json().get("text") or "").strip()}
 
 
 _MAX_FOTO_BYTES = 15 * 1024 * 1024  # 15 MB de entrada

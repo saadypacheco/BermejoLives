@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { agenteLogin, getAgenteToken, clearAgente, altaComercioCampo } from "@/lib/campo";
-import { RUBROS } from "@/lib/types";
+import { useEffect, useRef, useState } from "react";
+import { agenteLogin, getAgenteToken, clearAgente, altaComercioCampo, transcribirAudio } from "@/lib/campo";
 import { Pin, WhatsApp, User } from "@/components/icons";
 
 const MODALIDADES = [
@@ -64,8 +63,44 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
   const [count, setCount] = useState(0);
   const [err, setErr] = useState("");
 
-  const toggleRubro = (slug: string) =>
-    setRubros((rs) => (rs.includes(slug) ? rs.filter((s) => s !== slug) : [...rs, slug]));
+  // --- Grabación de audio del "¿qué vende?" → transcripción ---
+  const [grabando, setGrabando] = useState(false);
+  const [transcribiendo, setTranscribiendo] = useState(false);
+  const recRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+
+  async function iniciarGrabacion() {
+    setErr("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => e.data.size > 0 && chunksRef.current.push(e.data);
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+        setTranscribiendo(true);
+        try {
+          const texto = await transcribirAudio(blob);
+          setF((s) => ({ ...s, descripcion: (s.descripcion ? s.descripcion + " " : "") + texto }));
+        } catch (ex) {
+          setErr(ex instanceof Error ? ex.message : "No se pudo transcribir — escribí a mano");
+        } finally {
+          setTranscribiendo(false);
+        }
+      };
+      recRef.current = rec;
+      rec.start();
+      setGrabando(true);
+    } catch {
+      setErr("No se pudo acceder al micrófono (¿permiso/HTTPS?). Escribí a mano.");
+    }
+  }
+
+  function detenerGrabacion() {
+    recRef.current?.stop();
+    setGrabando(false);
+  }
 
   function ubicar() {
     setGeoMsg("Obteniendo ubicación…");
@@ -154,9 +189,19 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
         </div>
 
         <div>
-          <label className="campo-lbl">¿Qué vende? Escribí una nota / reseña corta *</label>
+          <label className="campo-lbl">¿Qué vende? Grabá un audio o escribí *</label>
+          {!grabando ? (
+            <button type="button" className="btn btn-ghost" style={{ width: "100%", marginBottom: 8 }}
+              onClick={iniciarGrabacion} disabled={transcribiendo}>
+              🎤 {transcribiendo ? "Transcribiendo…" : "Grabar qué vende"}
+            </button>
+          ) : (
+            <button type="button" className="btn btn-primary" style={{ width: "100%", marginBottom: 8 }} onClick={detenerGrabacion}>
+              <span className="dot-live" style={{ background: "#05130c" }} /> Detener y transcribir
+            </button>
+          )}
           <textarea className="adm-input" rows={3} value={f.descripcion} onChange={(e) => set("descripcion", e.target.value)}
-            placeholder="Ej: Gomería y repuestos de moto, también aceite. Atienden rápido, precios de frontera." style={{ resize: "vertical" }} />
+            placeholder="Lo que grabes aparece acá (podés editarlo). Ej: Gomería y repuestos de moto, también aceite." style={{ resize: "vertical" }} />
         </div>
 
         <div>
@@ -195,16 +240,6 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
         </button>
         {mas && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div>
-              <label className="campo-lbl">Rubros (opcional — si es obvio)</label>
-              <div className="rubro-chips">
-                {RUBROS.map((r) => (
-                  <button type="button" key={r.slug} className={`rchip ${rubros.includes(r.slug) ? "on" : ""}`} onClick={() => toggleRubro(r.slug)}>
-                    {r.nombre}
-                  </button>
-                ))}
-              </div>
-            </div>
             <input className="adm-input" type="email" value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="Email" />
             <input className="adm-input" value={f.facebook_url} onChange={(e) => set("facebook_url", e.target.value)} placeholder="Facebook / Marketplace (link)" />
             <input className="adm-input" value={f.instagram_url} onChange={(e) => set("instagram_url", e.target.value)} placeholder="Instagram (link o @usuario)" />

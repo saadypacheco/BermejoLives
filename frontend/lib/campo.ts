@@ -20,6 +20,21 @@ export async function agenteLogin(email: string, password: string): Promise<void
   localStorage.setItem(TOKEN_KEY, data.access_token);
 }
 
+export async function transcribirAudio(blob: Blob): Promise<string> {
+  const fd = new FormData();
+  fd.append("audio", blob, "qvende.webm");
+  const res = await fetch(`${API}/campo/transcribir`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` },
+    body: fd,
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail ?? "No se pudo transcribir");
+  }
+  return (await res.json()).texto as string;
+}
+
 export type AltaCampoResult = { ok: boolean; comercio: { nombre: string; slug: string; foto: boolean; gps: boolean } };
 
 export async function altaComercioCampo(form: FormData): Promise<AltaCampoResult> {
