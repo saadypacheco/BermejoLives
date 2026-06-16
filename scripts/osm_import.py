@@ -344,11 +344,10 @@ def element_to_row(
         "activo":      True,
         "fuente":      "osm",
         "cargado_por": ref,
-        "modalidad":   "local",
+        "modalidad":   "minorista",
         "plan":        "gratis",
+        "whatsapp":    phone or "",   # NOT NULL en DB; vacío = sin dato
     }
-    if phone:
-        row["whatsapp"] = phone
     row.update(extract_optional(tags))
     return row
 
