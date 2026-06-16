@@ -217,6 +217,19 @@ def osm_ref(osm_id: int | str) -> str:
     return f"osm:{osm_id}"
 
 
+def ciudad_mas_cercana(lat: float, lng: float, ciudades: list[dict]) -> str | None:
+    """Devuelve el id de la ciudad más cercana (distancia euclídea en grados)."""
+    mejor_id, mejor_dist = None, float("inf")
+    for c in ciudades:
+        if c.get("lat") is None or c.get("lng") is None:
+            continue
+        dist = (c["lat"] - lat) ** 2 + (c["lng"] - lng) ** 2
+        if dist < mejor_dist:
+            mejor_dist = dist
+            mejor_id = c["id"]
+    return mejor_id
+
+
 def extract_rubro(tags: dict) -> str:
     for key in ("shop", "amenity", "tourism", "craft", "office"):
         val = tags.get(key)
@@ -310,6 +323,7 @@ def element_to_row(
     rubro_map: dict[str, str],
     existing_slugs: set[str],
     existing_refs: set[str],
+    ciudades_db: list[dict] | None = None,
 ) -> Optional[dict]:
     tags = el.get("tags", {})
     nombre = tags.get("name") or tags.get("name:es") or tags.get("brand")
@@ -333,10 +347,13 @@ def element_to_row(
     slug = unique_slug(nombre, existing_slugs)
     phone = extract_phone(tags)
 
+    # Asignar ciudad más cercana si hay lista de ciudades disponible
+    cid = ciudad_mas_cercana(lat, lng, ciudades_db) if ciudades_db else ciudad_id
+
     row: dict = {
         "slug":        slug,
         "nombre":      nombre[:120],
-        "ciudad_id":   ciudad_id,
+        "ciudad_id":   cid,
         "lat":         lat,
         "lng":         lng,
         "rubro_id":    rubro_id,
@@ -373,8 +390,13 @@ def main():
     rubro_map = {r["slug"]: r["id"] for r in (res.data or [])}
     print(f"Rubros cargados: {len(rubro_map)}")
 
+    # Ciudades con coordenadas para asignación automática
+    res = db.table("ciudades").select("id, slug, nombre, lat, lng").execute()
+    ciudades_db = [c for c in (res.data or []) if c.get("lat") is not None]
+    print(f"Ciudades con coords: {len(ciudades_db)}")
+
     # Slugs y refs OSM ya existentes
-    res = db.table("comercios").select("slug, cargado_por").eq("activo", True).limit(10000).execute()
+    res = db.table("comercios").select("slug, cargado_por").eq("activo", True).limit(200000).execute()
     existing_slugs: set[str] = {r["slug"] for r in (res.data or [])}
     existing_refs:  set[str] = {r["cargado_por"] for r in (res.data or []) if (r.get("cargado_por") or "").startswith("osm:")}
     print(f"Existentes: {len(existing_slugs)} slugs, {len(existing_refs)} refs OSM ya importadas")
@@ -414,7 +436,7 @@ def main():
     for label, bbox, ciudad_id in chunks:
         elements = query_overpass(label, bbox)
         for el in elements:
-            row = element_to_row(el, ciudad_id, rubro_map, existing_slugs, existing_refs)
+            row = element_to_row(el, ciudad_id, rubro_map, existing_slugs, existing_refs, ciudades_db)
             if row:
                 total_rows.append(row)
                 if args.limit and len(total_rows) >= args.limit:
