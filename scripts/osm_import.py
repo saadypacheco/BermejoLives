@@ -248,33 +248,75 @@ def extract_phone(tags: dict) -> Optional[str]:
 
 def extract_optional(tags: dict) -> dict:
     out: dict = {}
+
+    # Dirección
     street = tags.get("addr:street", "")
     number = tags.get("addr:housenumber", "")
     if street:
         out["direccion"] = f"{street} {number}".strip()[:200]
+
+    # Contacto
     if tags.get("opening_hours") or tags.get("contact:opening_hours"):
         out["horario"] = (tags.get("opening_hours") or tags.get("contact:opening_hours"))[:200]
-    for src, dst in [("website", "sitio_web"), ("contact:website", "sitio_web"),
-                     ("url", "sitio_web")]:
+    for src in ("website", "contact:website", "url"):
         if tags.get(src) and "sitio_web" not in out:
             out["sitio_web"] = tags[src][:300]
-    for src, dst in [("contact:instagram", "instagram_url"), ("instagram", "instagram_url")]:
+    for src in ("email", "contact:email"):
+        if tags.get(src) and "email" not in out:
+            out["email"] = tags[src][:200]
+    for src in ("contact:instagram", "instagram"):
         if tags.get(src) and "instagram_url" not in out:
             v = tags[src]
             out["instagram_url"] = v if v.startswith("http") else f"https://instagram.com/{v.lstrip('@')}"
-    for src, dst in [("contact:facebook", "facebook_url"), ("facebook", "facebook_url")]:
+    for src in ("contact:facebook", "facebook"):
         if tags.get(src) and "facebook_url" not in out:
             v = tags[src]
             out["facebook_url"] = v if v.startswith("http") else f"https://facebook.com/{v}"
-    parts = []
-    if tags.get("description"):
-        parts.append(tags["description"])
-    if tags.get("cuisine"):
-        parts.append(f"Cocina: {tags['cuisine']}")
+
+    # Marca y operador
     if tags.get("brand") and tags.get("brand") != tags.get("name"):
-        parts.append(f"Marca: {tags['brand']}")
-    if parts:
-        out["descripcion"] = " · ".join(parts)[:500]
+        out["marca"] = tags["brand"][:120]
+    if tags.get("branch"):
+        out["sucursal"] = tags["branch"][:120]
+    if tags.get("operator"):
+        out["operador"] = tags["operator"][:120]
+
+    # Cocina (restaurantes)
+    if tags.get("cuisine"):
+        out["tipo_cocina"] = tags["cuisine"][:120]
+
+    # Estrellas (hoteles)
+    stars = tags.get("stars") or tags.get("tourism:stars")
+    if stars:
+        try:
+            out["estrellas"] = int(float(stars))
+        except (ValueError, TypeError):
+            pass
+
+    # ATM
+    if tags.get("atm") == "yes":
+        out["tiene_atm"] = True
+
+    # Combustibles
+    combustibles = [c.replace("fuel:", "") for c in
+                    ("fuel:diesel", "fuel:gasoline", "fuel:cng", "fuel:lpg", "fuel:oil",
+                     "fuel:electricity", "fuel:octane_91", "fuel:octane_95")
+                    if tags.get(c) == "yes"]
+    if combustibles:
+        out["combustibles"] = combustibles
+
+    # Internet
+    if tags.get("internet_access") and tags["internet_access"] != "no":
+        out["internet_access"] = True
+
+    # Especialidad médica
+    if tags.get("healthcare:speciality"):
+        out["especialidad"] = tags["healthcare:speciality"][:120]
+
+    # Descripción (solo descripción libre de OSM)
+    if tags.get("description"):
+        out["descripcion"] = tags["description"][:500]
+
     return out
 
 
