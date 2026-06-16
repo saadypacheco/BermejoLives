@@ -4,18 +4,21 @@ Importa negocios desde OpenStreetMap/Overpass a la base de datos de buscadonde.
 
 Uso:
     python scripts/osm_import.py --ciudad bermejo
-    python scripts/osm_import.py --ciudad yacuiba --dry-run
-    python scripts/osm_import.py --ciudad bermejo --limit 500
+    python scripts/osm_import.py --pais bolivia
+    python scripts/osm_import.py --pais argentina
+    python scripts/osm_import.py --pais bolivia --dry-run
+    python scripts/osm_import.py --ciudad bermejo --limit 200
 
-Requiere en el entorno (o en .env):
+Requiere en el entorno:
     SUPABASE_URL
     SUPABASE_SERVICE_ROLE_KEY
 
-Se puede correr localmente contra Supabase Cloud o dentro del VPS.
+Correr dentro del contenedor backend (ya tiene las deps):
+    docker cp scripts/osm_import.py buscadonde-backend:/tmp/osm_import.py
+    docker exec buscadonde-backend python /tmp/osm_import.py --pais bolivia
 """
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -38,7 +41,9 @@ SUPABASE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
-# Bounding boxes por ciudad_slug: (sur, oeste, norte, este)
+# ── Áreas geográficas ─────────────────────────────────────────────────────────
+# Formato: (sur, oeste, norte, este)
+
 CIUDADES_BBOX: dict[str, tuple[float, float, float, float]] = {
     "bermejo":         (-22.82, -64.46, -22.65, -64.25),
     "yacuiba":         (-22.12, -63.78, -21.90, -63.55),
@@ -54,81 +59,136 @@ CIUDADES_BBOX: dict[str, tuple[float, float, float, float]] = {
     "cobija":          (-11.05, -68.82, -10.99, -68.73),
     "puerto-quijarro": (-17.81, -57.82, -17.76, -57.72),
     "desaguadero":     (-16.59, -69.07, -16.54, -68.99),
-    # Argentina
     "la-quiaca":       (-22.12, -65.64, -22.07, -65.58),
     "jujuy":           (-24.22, -65.34, -24.14, -65.26),
     "salta":           (-24.82, -65.47, -24.74, -65.38),
 }
 
-# Mapeo OSM tag → slug de rubro en nuestra DB
+# Bolivia: 9 departamentos (chunks para no hacer timeout en Overpass)
+BOLIVIA_CHUNKS: list[tuple[str, tuple[float, float, float, float]]] = [
+    ("La Paz",        (-18.30, -70.00, -10.00, -60.50)),
+    ("Cochabamba",    (-18.90, -66.70, -14.50, -63.00)),
+    ("Santa Cruz",    (-22.00, -63.70, -13.50, -57.50)),
+    ("Oruro",         (-21.00, -68.70, -15.50, -65.50)),
+    ("Potosí",        (-23.00, -68.20, -17.50, -64.00)),
+    ("Chuquisaca",    (-21.50, -65.70, -17.50, -62.70)),
+    ("Tarija",        (-22.90, -65.50, -20.50, -62.00)),
+    ("Beni",          (-16.50, -68.50,  -9.50, -60.50)),
+    ("Pando",         (-14.00, -70.50,  -9.50, -65.50)),
+]
+
+# Argentina: provincias clave (frontera + grandes centros)
+ARGENTINA_CHUNKS: list[tuple[str, tuple[float, float, float, float]]] = [
+    ("Jujuy",          (-24.50, -67.50, -21.70, -64.50)),
+    ("Salta",          (-26.50, -68.50, -21.70, -63.00)),
+    ("Tucumán",        (-28.00, -66.50, -25.50, -64.50)),
+    ("Catamarca",      (-29.50, -69.50, -25.00, -65.00)),
+    ("La Rioja",       (-31.00, -69.50, -27.00, -65.50)),
+    ("Santiago Estero",(-29.50, -65.50, -25.00, -61.00)),
+    ("Chaco",          (-27.50, -63.00, -24.00, -59.00)),
+    ("Formosa",        (-26.50, -62.50, -22.00, -57.50)),
+    ("Misiones",       (-28.00, -56.50, -25.50, -53.50)),
+    ("Corrientes",     (-30.50, -60.00, -27.00, -55.50)),
+    ("Entre Ríos",     (-34.50, -60.00, -29.50, -57.50)),
+    ("Córdoba",        (-35.50, -66.50, -28.50, -62.50)),
+    ("Santa Fe",       (-34.50, -62.50, -28.00, -58.50)),
+    ("Buenos Aires",   (-41.00, -63.50, -33.50, -56.50)),
+    ("Mendoza",        (-37.50, -70.50, -31.50, -67.50)),
+    ("San Juan",       (-32.50, -70.00, -28.00, -67.00)),
+    ("San Luis",       (-35.50, -67.50, -31.50, -64.00)),
+    ("La Pampa",       (-40.00, -68.00, -34.00, -63.00)),
+    ("Neuquén",        (-40.50, -71.00, -35.50, -68.50)),
+    ("Río Negro",      (-42.00, -71.00, -37.00, -62.50)),
+    ("Chubut",         (-46.50, -72.00, -40.50, -63.50)),
+    ("Santa Cruz AR",  (-52.00, -73.00, -46.00, -65.00)),
+    ("Tierra del F.",  (-55.50, -68.50, -52.00, -63.00)),
+]
+
+PAISES: dict[str, list[tuple[str, tuple[float, float, float, float]]]] = {
+    "bolivia":   BOLIVIA_CHUNKS,
+    "argentina": ARGENTINA_CHUNKS,
+}
+
+# ── Mapeo OSM → rubro ─────────────────────────────────────────────────────────
+
 OSM_TAG_TO_RUBRO: dict[str, str] = {
     # shop
-    "clothes":       "ropa",
-    "shoes":         "calzado",
-    "supermarket":   "supermercado",
-    "convenience":   "supermercado",
-    "electronics":   "electronica",
-    "mobile_phones": "electronica",
-    "computer":      "electronica",
-    "hardware":      "ferreteria",
-    "car_parts":     "repuestos",
-    "tyres":         "repuestos",
-    "toys":          "jugueteria",
-    "jewelry":       "joyeria",
-    "optician":      "optica",
-    "pharmacy":      "farmacia",
-    "bakery":        "panaderia",
-    "butcher":       "carniceria",
-    "greengrocer":   "verduleria",
-    "alcohol":       "licoreria",
-    "beverages":     "licoreria",
-    "books":         "libreria",
-    "stationery":    "libreria",
-    "sports":        "deportes",
-    "beauty":        "peluqueria",
-    "hairdresser":   "peluqueria",
-    "furniture":     "muebleria",
-    "florist":       "floristeria",
-    "pet":           "veterinaria",
-    "travel_agency": "agencia-viajes",
+    "clothes":            "ropa",
+    "shoes":              "calzado",
+    "supermarket":        "supermercado",
+    "convenience":        "supermercado",
+    "electronics":        "electronica",
+    "mobile_phones":      "electronica",
+    "computer":           "electronica",
+    "hardware":           "ferreteria",
+    "car_parts":          "repuestos",
+    "tyres":              "repuestos",
+    "toys":               "jugueteria",
+    "jewelry":            "joyeria",
+    "optician":           "optica",
+    "pharmacy":           "farmacia",
+    "bakery":             "panaderia",
+    "butcher":            "carniceria",
+    "greengrocer":        "verduleria",
+    "alcohol":            "licoreria",
+    "beverages":          "licoreria",
+    "books":              "libreria",
+    "stationery":         "libreria",
+    "sports":             "deportes",
+    "beauty":             "peluqueria",
+    "hairdresser":        "peluqueria",
+    "furniture":          "muebleria",
+    "florist":            "floristeria",
+    "pet":                "veterinaria",
+    "travel_agency":      "agencia-viajes",
+    "department_store":   "supermercado",
+    "mall":               "supermercado",
+    "variety_store":      "otros",
+    "general":            "otros",
     # amenity
-    "restaurant":    "restaurante",
-    "fast_food":     "restaurante",
-    "cafe":          "restaurante",
-    "bar":           "bar",
-    "pub":           "bar",
-    "hotel":         "hotel",
-    "hostel":        "hotel",
-    "guest_house":   "hotel",
-    "motel":         "hotel",
-    "bank":          "casa-de-cambio",
-    "bureau_de_change": "casa-de-cambio",
-    "pharmacy":      "farmacia",
-    "hospital":      "salud",
-    "clinic":        "salud",
-    "dentist":       "salud",
-    "doctors":       "salud",
-    "fuel":          "combustible",
-    "car_wash":      "taller",
-    "car_repair":    "taller",
-    "taxi":          "transporte",
-    "bus_station":   "transporte",
-    "veterinary":    "veterinaria",
-    "gym":           "deportes",
-    "school":        "educacion",
-    "college":       "educacion",
-    "university":    "educacion",
+    "restaurant":         "restaurante",
+    "fast_food":          "restaurante",
+    "cafe":               "restaurante",
+    "bar":                "bar",
+    "pub":                "bar",
+    "hotel":              "hotel",
+    "hostel":             "hotel",
+    "guest_house":        "hotel",
+    "motel":              "hotel",
+    "bank":               "casa-de-cambio",
+    "bureau_de_change":   "casa-de-cambio",
+    "pharmacy":           "farmacia",
+    "hospital":           "salud",
+    "clinic":             "salud",
+    "dentist":            "salud",
+    "doctors":            "salud",
+    "fuel":               "combustible",
+    "car_wash":           "taller",
+    "car_repair":         "taller",
+    "taxi":               "transporte",
+    "bus_station":        "transporte",
+    "veterinary":         "veterinaria",
+    "gym":                "deportes",
+    "school":             "educacion",
+    "college":            "educacion",
+    "university":         "educacion",
     # tourism
-    "hotel":         "hotel",
-    "hostel":        "hotel",
-    "guest_house":   "hotel",
-    "attraction":    "turismo",
-    "museum":        "turismo",
+    "attraction":         "turismo",
+    "museum":             "turismo",
     # craft
-    "tailor":        "ropa",
-    "shoemaker":     "calzado",
+    "tailor":             "ropa",
+    "shoemaker":          "calzado",
     "electronics_repair": "electronica",
+    "car_repair":         "taller",
 }
+
+# Overpass query base
+_AMENITIES = (
+    "restaurant|fast_food|cafe|bar|hotel|hostel|guest_house|motel|"
+    "bank|bureau_de_change|pharmacy|hospital|clinic|dentist|doctors|"
+    "fuel|car_wash|car_repair|taxi|bus_station|veterinary|gym|school|"
+    "college|university"
+)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -138,8 +198,7 @@ def slugify(text: str) -> str:
     text = text.lower().strip()
     text = re.sub(r"[^\w\s-]", "", text)
     text = re.sub(r"[\s_-]+", "-", text)
-    text = re.sub(r"^-+|-+$", "", text)
-    return text or "negocio"
+    return re.sub(r"^-+|-+$", "", text) or "negocio"
 
 
 def unique_slug(base: str, existing: set[str]) -> str:
@@ -153,11 +212,11 @@ def unique_slug(base: str, existing: set[str]) -> str:
     return candidate
 
 
-def osm_id_to_source(osm_id: int | str) -> str:
+def osm_ref(osm_id: int | str) -> str:
     return f"osm:{osm_id}"
 
 
-def extract_rubro(tags: dict) -> Optional[str]:
+def extract_rubro(tags: dict) -> str:
     for key in ("shop", "amenity", "tourism", "craft", "office"):
         val = tags.get(key)
         if val and val in OSM_TAG_TO_RUBRO:
@@ -165,8 +224,7 @@ def extract_rubro(tags: dict) -> Optional[str]:
     return "otros"
 
 
-def extract_whatsapp(tags: dict) -> Optional[str]:
-    """Intenta sacar número de WA de los tags OSM."""
+def extract_phone(tags: dict) -> Optional[str]:
     for key in ("contact:phone", "phone", "contact:mobile"):
         val = tags.get(key, "").replace(" ", "").replace("-", "").replace("+", "")
         if val and val.isdigit() and len(val) >= 7:
@@ -174,54 +232,68 @@ def extract_whatsapp(tags: dict) -> Optional[str]:
     return None
 
 
-def extract_horario(tags: dict) -> Optional[str]:
-    return tags.get("opening_hours") or tags.get("contact:opening_hours")
-
-
-def extract_web(tags: dict) -> Optional[str]:
-    return tags.get("website") or tags.get("contact:website") or tags.get("url")
-
-
-def extract_instagram(tags: dict) -> Optional[str]:
-    v = tags.get("contact:instagram") or tags.get("instagram")
-    if v and not v.startswith("http"):
-        v = f"https://instagram.com/{v.lstrip('@')}"
-    return v
-
-
-def extract_facebook(tags: dict) -> Optional[str]:
-    v = tags.get("contact:facebook") or tags.get("facebook")
-    if v and not v.startswith("http"):
-        v = f"https://facebook.com/{v}"
-    return v
+def extract_optional(tags: dict) -> dict:
+    out: dict = {}
+    street = tags.get("addr:street", "")
+    number = tags.get("addr:housenumber", "")
+    if street:
+        out["direccion"] = f"{street} {number}".strip()[:200]
+    if tags.get("opening_hours") or tags.get("contact:opening_hours"):
+        out["horario"] = (tags.get("opening_hours") or tags.get("contact:opening_hours"))[:200]
+    for src, dst in [("website", "sitio_web"), ("contact:website", "sitio_web"),
+                     ("url", "sitio_web")]:
+        if tags.get(src) and "sitio_web" not in out:
+            out["sitio_web"] = tags[src][:300]
+    for src, dst in [("contact:instagram", "instagram_url"), ("instagram", "instagram_url")]:
+        if tags.get(src) and "instagram_url" not in out:
+            v = tags[src]
+            out["instagram_url"] = v if v.startswith("http") else f"https://instagram.com/{v.lstrip('@')}"
+    for src, dst in [("contact:facebook", "facebook_url"), ("facebook", "facebook_url")]:
+        if tags.get(src) and "facebook_url" not in out:
+            v = tags[src]
+            out["facebook_url"] = v if v.startswith("http") else f"https://facebook.com/{v}"
+    parts = []
+    if tags.get("description"):
+        parts.append(tags["description"])
+    if tags.get("cuisine"):
+        parts.append(f"Cocina: {tags['cuisine']}")
+    if tags.get("brand") and tags.get("brand") != tags.get("name"):
+        parts.append(f"Marca: {tags['brand']}")
+    if parts:
+        out["descripcion"] = " · ".join(parts)[:500]
+    return out
 
 
 # ── Overpass ──────────────────────────────────────────────────────────────────
 
-def query_overpass(bbox: tuple[float, float, float, float], timeout: int = 60) -> list[dict]:
+def query_overpass(label: str, bbox: tuple[float, float, float, float], retries: int = 3) -> list[dict]:
     s, w, n, e = bbox
     query = f"""
-[out:json][timeout:{timeout}];
+[out:json][timeout:90];
 (
   node["shop"]({s},{w},{n},{e});
-  node["amenity"~"restaurant|fast_food|cafe|bar|hotel|hostel|guest_house|motel|
-    bank|bureau_de_change|pharmacy|hospital|clinic|dentist|doctors|fuel|
-    car_repair|taxi|bus_station|veterinary|gym|school"]({s},{w},{n},{e});
+  node["amenity"~"{_AMENITIES}"]({s},{w},{n},{e});
   node["tourism"~"hotel|hostel|guest_house|attraction|museum"]({s},{w},{n},{e});
   node["craft"]({s},{w},{n},{e});
   way["shop"]({s},{w},{n},{e});
-  way["amenity"~"restaurant|fast_food|cafe|bar|hotel|hostel|bank|pharmacy"]({s},{w},{n},{e});
+  way["amenity"~"restaurant|fast_food|cafe|bar|hotel|hostel|bank|pharmacy|fuel"]({s},{w},{n},{e});
 );
 out center tags;
 """.strip()
 
-    print(f"  Consultando Overpass API para bbox {bbox}...")
-    resp = httpx.post(OVERPASS_URL, data={"data": query}, timeout=90)
-    resp.raise_for_status()
-    data = resp.json()
-    elements = data.get("elements", [])
-    print(f"  → {len(elements)} elementos OSM recibidos")
-    return elements
+    for attempt in range(1, retries + 1):
+        try:
+            print(f"  [{label}] Consultando Overpass (intento {attempt})...")
+            resp = httpx.post(OVERPASS_URL, data={"data": query}, timeout=120)
+            resp.raise_for_status()
+            elements = resp.json().get("elements", [])
+            print(f"  [{label}] → {len(elements)} elementos OSM")
+            return elements
+        except Exception as exc:
+            print(f"  [{label}] ERROR: {exc}")
+            if attempt < retries:
+                time.sleep(10 * attempt)
+    return []
 
 
 # ── Transform ─────────────────────────────────────────────────────────────────
@@ -231,18 +303,17 @@ def element_to_row(
     ciudad_id: str,
     rubro_map: dict[str, str],
     existing_slugs: set[str],
-    existing_sources: set[str],
+    existing_refs: set[str],
 ) -> Optional[dict]:
     tags = el.get("tags", {})
     nombre = tags.get("name") or tags.get("name:es") or tags.get("brand")
     if not nombre:
-        return None  # sin nombre → skip
+        return None
 
-    source = osm_id_to_source(el["id"])  # "osm:123456"
-    if source in existing_sources:
-        return None  # ya importado
+    ref = osm_ref(el["id"])
+    if ref in existing_refs:
+        return None
 
-    # Coordenadas
     if el["type"] == "node":
         lat, lng = el.get("lat"), el.get("lon")
     else:
@@ -253,10 +324,10 @@ def element_to_row(
 
     rubro_slug = extract_rubro(tags)
     rubro_id = rubro_map.get(rubro_slug) or rubro_map.get("otros")
-
     slug = unique_slug(nombre, existing_slugs)
+    phone = extract_phone(tags)
 
-    row = {
+    row: dict = {
         "slug":        slug,
         "nombre":      nombre[:120],
         "ciudad_id":   ciudad_id,
@@ -266,47 +337,13 @@ def element_to_row(
         "verificado":  False,
         "activo":      True,
         "fuente":      "osm",
-        "cargado_por": source,   # osm:<node_id> — permite reidentificar el elemento original
+        "cargado_por": ref,
         "modalidad":   "local",
         "plan":        "gratis",
     }
-
-    # Opcionales
-    direccion = tags.get("addr:street", "")
-    numero    = tags.get("addr:housenumber", "")
-    if direccion:
-        row["direccion"] = f"{direccion} {numero}".strip()
-
-    wa = extract_whatsapp(tags)
-    if wa:
-        row["whatsapp"] = wa
-
-    horario = extract_horario(tags)
-    if horario:
-        row["horario"] = horario[:200]
-
-    web = extract_web(tags)
-    if web:
-        row["sitio_web"] = web[:300]
-
-    ig = extract_instagram(tags)
-    if ig:
-        row["instagram_url"] = ig[:300]
-
-    fb = extract_facebook(tags)
-    if fb:
-        row["facebook_url"] = fb[:300]
-
-    desc_parts = []
-    if tags.get("description"):
-        desc_parts.append(tags["description"])
-    if tags.get("cuisine"):
-        desc_parts.append(f"Cocina: {tags['cuisine']}")
-    if tags.get("brand"):
-        desc_parts.append(f"Marca: {tags['brand']}")
-    if desc_parts:
-        row["descripcion"] = " · ".join(desc_parts)[:500]
-
+    if phone:
+        row["whatsapp"] = phone
+    row.update(extract_optional(tags))
     return row
 
 
@@ -314,84 +351,109 @@ def element_to_row(
 
 def main():
     parser = argparse.ArgumentParser(description="Importa negocios OSM a buscadonde")
-    parser.add_argument("--ciudad", required=True, help="Slug de la ciudad (ej: bermejo)")
-    parser.add_argument("--dry-run", action="store_true", help="No inserta, solo muestra cuántos encontraría")
-    parser.add_argument("--limit", type=int, default=0, help="Limitar cantidad de inserciones (0 = sin límite)")
-    parser.add_argument("--batch", type=int, default=50, help="Tamaño del batch de inserción")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--ciudad", help="Slug de ciudad (ej: bermejo)")
+    group.add_argument("--pais",   help="País completo: bolivia | argentina")
+    parser.add_argument("--dry-run", action="store_true", help="Solo muestra, no inserta")
+    parser.add_argument("--limit",   type=int, default=0,  help="Limitar inserciones (0=sin límite)")
+    parser.add_argument("--batch",   type=int, default=50, help="Tamaño del batch")
+    parser.add_argument("--ciudad-default", default="bermejo",
+                        help="Ciudad que se asigna a negocios sin ciudad DB (default: bermejo)")
     args = parser.parse_args()
-
-    ciudad_slug = args.ciudad
-    if ciudad_slug not in CIUDADES_BBOX:
-        print(f"ERROR: ciudad '{ciudad_slug}' no tiene bbox definido.")
-        print(f"Ciudades disponibles: {', '.join(CIUDADES_BBOX)}")
-        sys.exit(1)
 
     db = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    # Cargar ciudad_id
-    res = db.table("ciudades").select("id").eq("slug", ciudad_slug).limit(1).execute()
-    if not res.data:
-        print(f"ERROR: ciudad '{ciudad_slug}' no encontrada en la DB.")
-        sys.exit(1)
-    ciudad_id = res.data[0]["id"]
-    print(f"Ciudad: {ciudad_slug} → {ciudad_id}")
-
-    # Cargar rubros
+    # Rubros
     res = db.table("rubros").select("id, slug").execute()
     rubro_map = {r["slug"]: r["id"] for r in (res.data or [])}
-    print(f"Rubros disponibles: {len(rubro_map)}")
+    print(f"Rubros cargados: {len(rubro_map)}")
 
-    # Slugs y referencias OSM existentes para evitar duplicados
-    res = db.table("comercios").select("slug, cargado_por").eq("activo", True).execute()
+    # Slugs y refs OSM ya existentes
+    res = db.table("comercios").select("slug, cargado_por").eq("activo", True).limit(10000).execute()
     existing_slugs: set[str] = {r["slug"] for r in (res.data or [])}
-    existing_sources: set[str] = {r["cargado_por"] for r in (res.data or []) if r.get("cargado_por", "").startswith("osm:")}
-    print(f"Comercios existentes: {len(existing_slugs)} (slugs), {len(existing_sources)} ya importados de OSM")
+    existing_refs:  set[str] = {r["cargado_por"] for r in (res.data or []) if (r.get("cargado_por") or "").startswith("osm:")}
+    print(f"Existentes: {len(existing_slugs)} slugs, {len(existing_refs)} refs OSM ya importadas")
 
-    # Query Overpass
-    bbox = CIUDADES_BBOX[ciudad_slug]
-    elements = query_overpass(bbox)
+    # Armar lista de chunks a procesar
+    if args.ciudad:
+        if args.ciudad not in CIUDADES_BBOX:
+            print(f"ERROR: ciudad '{args.ciudad}' no tiene bbox. Disponibles: {', '.join(CIUDADES_BBOX)}")
+            sys.exit(1)
+        # Buscar ciudad_id en DB
+        res = db.table("ciudades").select("id").eq("slug", args.ciudad).limit(1).execute()
+        ciudad_id = res.data[0]["id"] if res.data else None
+        if not ciudad_id:
+            print(f"ERROR: '{args.ciudad}' no encontrada en DB")
+            sys.exit(1)
+        chunks = [(args.ciudad, CIUDADES_BBOX[args.ciudad], ciudad_id)]
 
-    # Transformar
-    rows = []
-    skipped = 0
-    for el in elements:
-        row = element_to_row(el, ciudad_id, rubro_map, existing_slugs, existing_sources)
-        if row:
-            rows.append(row)
-            if args.limit and len(rows) >= args.limit:
-                break
-        else:
-            skipped += 1
+    else:
+        if args.pais not in PAISES:
+            print(f"ERROR: pais debe ser 'bolivia' o 'argentina'")
+            sys.exit(1)
+        # Para país completo usamos ciudad_default para asignar ciudad_id
+        res = db.table("ciudades").select("id, slug, nombre, lat, lng").execute()
+        ciudades_db = res.data or []
+        ciudad_default_id = next((c["id"] for c in ciudades_db if c["slug"] == args.ciudad_default), None)
+        if not ciudad_default_id:
+            print(f"ERROR: ciudad default '{args.ciudad_default}' no encontrada en DB")
+            sys.exit(1)
 
-    print(f"\nResultado: {len(rows)} para insertar, {skipped} descartados (sin nombre / ya existentes / sin coords)")
+        chunks = [
+            (nombre, bbox, ciudad_default_id)
+            for nombre, bbox in PAISES[args.pais]
+        ]
+
+    # Procesar chunks
+    total_rows: list[dict] = []
+    for label, bbox, ciudad_id in chunks:
+        elements = query_overpass(label, bbox)
+        for el in elements:
+            row = element_to_row(el, ciudad_id, rubro_map, existing_slugs, existing_refs)
+            if row:
+                total_rows.append(row)
+                if args.limit and len(total_rows) >= args.limit:
+                    break
+        if args.limit and len(total_rows) >= args.limit:
+            print(f"  Límite de {args.limit} alcanzado")
+            break
+        time.sleep(2)  # respetar rate limit de Overpass entre chunks
+
+    print(f"\n{'='*50}")
+    print(f"Total para insertar: {len(total_rows)}")
 
     if args.dry_run:
-        print("\n[DRY RUN] Primeros 5 registros:")
-        for r in rows[:5]:
-            print(f"  · {r['nombre']} ({r.get('direccion','sin dir')}) rubro={next((k for k,v in rubro_map.items() if v==r.get('rubro_id')),'?')}")
+        from collections import Counter
+        rubros_c = Counter(r.get("rubro_id") for r in total_rows)
+        id_to_slug = {v: k for k, v in rubro_map.items()}
+        print("\nDistribución por rubro:")
+        for rid, n in rubros_c.most_common(20):
+            print(f"  {n:5d}  {id_to_slug.get(rid, '?')}")
+        print("\nMuestra de 10 registros:")
+        for r in total_rows[:10]:
+            print(f"  · {r['nombre'][:40]:40s} | {r.get('direccion','')[:30]:30s} | wa={r.get('whatsapp','')}")
         return
 
-    if not rows:
+    if not total_rows:
         print("Nada para insertar.")
         return
 
     # Insertar en batches
-    inserted = 0
-    errors = 0
-    for i in range(0, len(rows), args.batch):
-        batch = rows[i:i + args.batch]
+    inserted, errors = 0, 0
+    for i in range(0, len(total_rows), args.batch):
+        batch = total_rows[i:i + args.batch]
         try:
             db.table("comercios").insert(batch).execute()
             inserted += len(batch)
-            print(f"  Batch {i//args.batch + 1}: {len(batch)} insertados ({inserted}/{len(rows)})")
+            pct = inserted * 100 // len(total_rows)
+            print(f"  Batch {i//args.batch+1:3d}: {len(batch)} insertados — {inserted}/{len(total_rows)} ({pct}%)")
         except Exception as exc:
             errors += len(batch)
-            print(f"  ERROR batch {i//args.batch + 1}: {exc}")
-        time.sleep(0.3)  # respetar rate limit de Supabase
+            print(f"  ERROR batch {i//args.batch+1}: {exc}")
+        time.sleep(0.3)
 
-    print(f"\n✓ Importación completa: {inserted} insertados, {errors} errores")
-    print(f"  Ciudad: {ciudad_slug} | Fuente: OSM")
-    print(f"  Los negocios quedan con verificado=false — revisarlos en el admin.")
+    print(f"\n✓ Completado: {inserted} insertados, {errors} errores")
+    print(f"  Todos quedan con verificado=false — revisarlos en /admin")
 
 
 if __name__ == "__main__":
