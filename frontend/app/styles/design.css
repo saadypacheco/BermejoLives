@@ -168,7 +168,7 @@ body::after {
    HERO
    ============================================================ */
 .hero { position: relative; padding: 64px 0 40px; }
-.hero .wrap { display: grid; grid-template-columns: 1.05fr 1.25fr; gap: 48px; align-items: center; }
+.hero .wrap { display: grid; grid-template-columns: 1.05fr 1.25fr; gap: 48px; align-items: start; }
 .hero-title {
   font-size: clamp(46px, 7vw, 92px); font-weight: 900; line-height: .92; letter-spacing: -.03em;
   margin: 18px 0 0;
