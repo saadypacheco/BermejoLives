@@ -284,7 +284,8 @@ out center tags;
     for attempt in range(1, retries + 1):
         try:
             print(f"  [{label}] Consultando Overpass (intento {attempt})...")
-            resp = httpx.post(OVERPASS_URL, data={"data": query}, timeout=120)
+            resp = httpx.post(OVERPASS_URL, data={"data": query}, timeout=120,
+                              headers={"Accept": "*/*", "Content-Type": "application/x-www-form-urlencoded"})
             resp.raise_for_status()
             elements = resp.json().get("elements", [])
             print(f"  [{label}] → {len(elements)} elementos OSM")
