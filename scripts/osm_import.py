@@ -27,7 +27,8 @@ import time
 import unicodedata
 from typing import Optional
 
-import httpx
+import urllib.parse
+import urllib.request
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -284,10 +285,14 @@ out center tags;
     for attempt in range(1, retries + 1):
         try:
             print(f"  [{label}] Consultando Overpass (intento {attempt})...")
-            resp = httpx.post(OVERPASS_URL, data={"data": query}, timeout=120,
-                              headers={"Accept": "*/*", "Content-Type": "application/x-www-form-urlencoded"})
-            resp.raise_for_status()
-            elements = resp.json().get("elements", [])
+            payload = urllib.parse.urlencode({"data": query}).encode()
+            req = urllib.request.Request(
+                OVERPASS_URL, data=payload, method="POST",
+                headers={"Content-Type": "application/x-www-form-urlencoded",
+                         "User-Agent": "buscadonde-osm-import/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                elements = json.loads(resp.read()).get("elements", [])
             print(f"  [{label}] → {len(elements)} elementos OSM")
             return elements
         except Exception as exc:
