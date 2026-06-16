@@ -238,7 +238,7 @@ def element_to_row(
     if not nombre:
         return None  # sin nombre → skip
 
-    source = osm_id_to_source(el["id"])
+    source = osm_id_to_source(el["id"])  # "osm:123456"
     if source in existing_sources:
         return None  # ya importado
 
@@ -265,7 +265,8 @@ def element_to_row(
         "rubro_id":    rubro_id,
         "verificado":  False,
         "activo":      True,
-        "fuente":      source,
+        "fuente":      "osm",
+        "cargado_por": source,   # osm:<node_id> — permite reidentificar el elemento original
         "modalidad":   "local",
         "plan":        "gratis",
     }
@@ -340,11 +341,11 @@ def main():
     rubro_map = {r["slug"]: r["id"] for r in (res.data or [])}
     print(f"Rubros disponibles: {len(rubro_map)}")
 
-    # Slugs y fuentes existentes para evitar duplicados
-    res = db.table("comercios").select("slug, fuente").eq("activo", True).execute()
+    # Slugs y referencias OSM existentes para evitar duplicados
+    res = db.table("comercios").select("slug, cargado_por").eq("activo", True).execute()
     existing_slugs: set[str] = {r["slug"] for r in (res.data or [])}
-    existing_sources: set[str] = {r["fuente"] for r in (res.data or []) if r.get("fuente")}
-    print(f"Comercios existentes: {len(existing_slugs)} (slugs), {len(existing_sources)} con fuente OSM")
+    existing_sources: set[str] = {r["cargado_por"] for r in (res.data or []) if r.get("cargado_por", "").startswith("osm:")}
+    print(f"Comercios existentes: {len(existing_slugs)} (slugs), {len(existing_sources)} ya importados de OSM")
 
     # Query Overpass
     bbox = CIUDADES_BBOX[ciudad_slug]

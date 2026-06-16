@@ -140,7 +140,7 @@ async def alta_campo(
     horario: str | None = Form(None),
     tiene_stock: bool = Form(True),
     foto: UploadFile | None = File(None),
-    _agente: dict = Depends(auth.require_agente),
+    agente: dict = Depends(auth.require_agente),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     if modalidad not in _MODALIDADES:
@@ -193,6 +193,8 @@ async def alta_campo(
             "tiene_factura": tiene_factura,
             "horario": _none(horario),
             "tiene_stock": tiene_stock,
+            "fuente": "campo",
+            "cargado_por": agente["email"],
         }
     )
     if rubro_ids:
@@ -208,7 +210,7 @@ async def alta_campo(
 
     logger.info("campo.alta", slug=slug, ciudad=ciudad_slug, rubros=len(rubro_ids),
                 con_foto=bool(portada_url), con_gps=lat is not None, con_video=bool(vurl),
-                consentimiento=consentimiento)
+                consentimiento=consentimiento, cargado_por=agente["email"])
     return {"ok": True, "comercio": {"id": comercio["id"], "nombre": comercio["nombre"], "slug": slug,
                                      "ciudad": ciudad_slug, "rubros": len(rubro_ids),
                                      "foto": bool(portada_url), "gps": lat is not None,
