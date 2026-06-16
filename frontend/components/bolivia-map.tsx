@@ -46,6 +46,9 @@ export function BoliviaMap({ ciudades }: { ciudades: Ciudad[] }) {
 
       for (const c of ciudades) {
         if (c.lat == null || c.lng == null) continue;
+        // En el hero solo mostramos Bermejo (activa) + capitales; ocultamos ciudades fronterizas
+        // no-activas que al zoom 5 se pisan con las capitales departamentales cercanas
+        if (c.es_frontera && !c.activa) continue;
         const activa = c.activa;
         const cls = activa ? "bpin activa" : `bpin${c.es_frontera ? " frontera" : ""}`;
         // Solo la ciudad activa muestra label permanente; el resto muestra tooltip al hover
