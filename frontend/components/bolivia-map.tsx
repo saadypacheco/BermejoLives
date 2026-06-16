@@ -48,9 +48,10 @@ export function BoliviaMap({ ciudades }: { ciudades: Ciudad[] }) {
         if (c.lat == null || c.lng == null) continue;
         const activa = c.activa;
         const cls = activa ? "bpin activa" : `bpin${c.es_frontera ? " frontera" : ""}`;
+        // Solo la ciudad activa muestra label permanente; el resto muestra tooltip al hover
         const icon = L.divIcon({
           className: "",
-          html: `<div class="${cls}"><b>${c.nombre}</b></div>`,
+          html: `<div class="${cls}">${activa ? `<b>${c.nombre}</b>` : ""}</div>`,
           iconSize: [10, 10],
           iconAnchor: [5, 5],
         });
@@ -58,6 +59,12 @@ export function BoliviaMap({ ciudades }: { ciudades: Ciudad[] }) {
         if (activa) {
           m.on("click", () => router.push(`/buscar?ciudad=${c.slug}`));
         } else {
+          m.bindTooltip(c.nombre, {
+            permanent: false,
+            direction: "right",
+            className: "map-tip",
+            offset: [8, 0],
+          });
           m.bindPopup(`<div class="map-pop"><b>${c.nombre}</b><span>${c.departamento}${c.es_frontera ? " · frontera" : ""}</span><div style="color:var(--amber);font-size:12px;margin-top:4px">Próximamente</div></div>`);
         }
       }

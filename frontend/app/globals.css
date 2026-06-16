@@ -85,6 +85,8 @@
 .bpin { position: relative; width: 10px; height: 10px; border-radius: 50%; background: var(--txt-3); border: 1.5px solid rgba(255,255,255,.3); }
 .bpin.frontera { background: var(--blue-soft); }
 .bpin b { position: absolute; left: 14px; top: -4px; white-space: nowrap; font-size: 11px; font-weight: 700; color: var(--txt-2); text-shadow: 0 1px 3px #000; pointer-events: none; }
+.map-tip { background: rgba(7,10,20,.85) !important; border: 1px solid var(--stroke) !important; color: var(--txt-1) !important; font-size: 11px !important; font-weight: 600 !important; padding: 3px 8px !important; border-radius: 6px !important; box-shadow: none !important; }
+.map-tip::before { display: none !important; }
 .bpin.activa { width: 16px; height: 16px; left: -3px; top: -3px; background: var(--neon); border: 2px solid #05130c; box-shadow: 0 0 0 4px rgba(57,255,158,.25), 0 0 18px var(--neon); cursor: pointer; animation: pulse 1.8s infinite; }
 .bpin.activa b { left: 20px; top: -2px; color: var(--neon); font-size: 13px; }
 
