@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Modelo de Negocio — Plataforma Local</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0D0F14;
+    --surface: #151820;
+    --surface2: #1C2030;
+    --border: #252A3A;
+    --accent: #FF6B35;
+    --accent2: #FFB347;
+    --green: #2ECC71;
+    --red: #E74C3C;
+    --text: #E8EAF0;
+    --muted: #7A8099;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+    padding: 40px 20px 80px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  /* HEADER */
+  .header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 32px;
+    margin-bottom: 48px;
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  h1 {
+    font-size: clamp(28px, 5vw, 44px);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+
+  h1 span {
+    color: var(--accent);
+  }
+
+  .subtitle {
+    color: var(--muted);
+    margin-top: 12px;
+    font-size: 16px;
+    font-weight: 300;
+  }
+
+  /* SECTIONS */
+  section {
+    margin-bottom: 56px;
+  }
+
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  /* CARDS */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+
+  /* PROPUESTA DE VALOR */
+  .value-props {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .vp-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    border-left: 3px solid var(--accent);
+  }
+
+  .vp-card .icon {
+    font-size: 24px;
+    margin-bottom: 10px;
+  }
+
+  .vp-card p {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 6px;
+  }
+
+  /* PRICING */
+  .pricing-big {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .pricing-header {
+    background: var(--surface2);
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .pricing-header .label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .pricing-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .pricing-row:last-child { border-bottom: none; }
+
+  .pricing-row .name {
+    font-size: 14px;
+    color: var(--text);
+  }
+
+  .pricing-row .detail {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .price-tag {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--accent2);
+    white-space: nowrap;
+  }
+
+  .price-tag small {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 400;
+  }
+
+  .badge-free {
+    background: #1a2e1a;
+    color: var(--green);
+    border: 1px solid #2a4a2a;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+  }
+
+  /* PROYECCIÓN */
+  .projection-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .proj-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+  }
+
+  .proj-card .num {
+    font-family: var(--mono);
+    font-size: 26px;
+    font-weight: 500;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .proj-card .lbl {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .total-card {
+    background: linear-gradient(135deg, #1a1400 0%, #251c00 100%);
+    border: 1px solid #4a3800;
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .total-card .t-label {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .total-card .t-num {
+    font-family: var(--mono);
+    font-size: 32px;
+    font-weight: 500;
+    color: var(--accent2);
+  }
+
+  .total-card .t-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* FLUJOS */
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .flow-step {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .flow-step:last-child { border-bottom: none; }
+
+  .step-num {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .step-content .step-title {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 2px;
+  }
+
+  .step-content .step-desc {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .step-content .step-tag {
+    display: inline-block;
+    margin-top: 6px;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: #1a1f30;
+    color: var(--accent);
+    border: 1px solid var(--border);
+  }
+
+  .flow-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  /* ACTORES */
+  .actors {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .actor-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .actor-icon {
+    font-size: 28px;
+    margin-bottom: 10px;
+  }
+
+  .actor-card h3 {
+    font-size: 15px;
+    margin-bottom: 8px;
+  }
+
+  .actor-card ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .actor-card ul li {
+    font-size: 12px;
+    color: var(--muted);
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+  }
+
+  .actor-card ul li:last-child { border-bottom: none; }
+
+  .actor-card ul li::before {
+    content: '→';
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  /* RIESGOS */
+  .risks {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .risk-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .risk-level {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+
+  .risk-level.alto { background: #2a1010; color: var(--red); border: 1px solid #4a1a1a; }
+  .risk-level.medio { background: #2a2010; color: var(--accent2); border: 1px solid #4a3810; }
+  .risk-level.bajo { background: #102a10; color: var(--green); border: 1px solid #1a4a1a; }
+
+  .risk-content h4 { font-size: 14px; margin-bottom: 4px; }
+  .risk-content p { font-size: 12px; color: var(--muted); }
+
+  /* LEGAL */
+  .legal-box {
+    background: #0f1520;
+    border: 1px solid #1e2a40;
+    border-radius: 12px;
+    padding: 20px 24px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: #8899bb;
+    line-height: 1.8;
+  }
+
+  .legal-box .highlight {
+    color: var(--accent2);
+    font-weight: 500;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 600px) {
+    .value-props, .flow-grid, .actors, .projection-grid { grid-template-columns: 1fr; }
+    .total-card { flex-direction: column; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="eyebrow">Documento Interno — Modelo de Negocio v2.0</div>
+  <h1>buscadonde — La vidriera de la <span>frontera</span></h1>
+  <p class="subtitle">Directorio + ofertas en vivo + e-commerce local. Empieza en Bermejo (frontera Bolivia–Argentina). Sin comisiones, sin intermediar pagos.</p>
+</div>
+
+<!-- DOS PRODUCTOS -->
+<section>
+  <h2>Dos productos, una suscripción</h2>
+  <div class="value-props">
+    <div class="vp-card">
+      <div class="icon">🗺️</div>
+      <h3>buscadonde · la vidriera</h3>
+      <p>El mapa de la frontera: descubrimiento, ofertas en vivo, contacto directo por WhatsApp. Es lo que trae clientes al comercio. <em>(Este proyecto.)</em></p>
+    </div>
+    <div class="vp-card">
+      <div class="icon">🛍️</div>
+      <h3>La tienda · el catálogo</h3>
+      <p>El sitio donde el comercio sube sus productos y gestiona reservas. Subir es <strong>gratis y sin comisión</strong>. <em>(Sitio aparte — ex-amandaclothing, a renombrar.)</em></p>
+    </div>
+  </div>
+  <div class="legal-box" style="margin-top:16px;">
+    Una sola <span class="highlight">suscripción</span> le da al comercio presencia en los dos.
+    La <span class="highlight">frontera</span> (compradores argentinos que cruzan a comprar) es la cuña: Bermejo primero, y el mismo motor se <span class="highlight">replica</span> a otras ciudades (Buenos Aires, etc.).
+  </div>
+</section>
+
+<!-- ACTORES -->
+<section>
+  <h2>Actores del sistema</h2>
+  <div class="actors">
+    <div class="actor-card">
+      <div class="actor-icon">🏪</div>
+      <h3>Comercio</h3>
+      <ul>
+        <li>Paga suscripción mensual</li>
+        <li>Sube productos a la tienda (gratis)</li>
+        <li>Marca ofertas en el mapa</li>
+        <li>Recibe consultas y reservas</li>
+        <li>Cobra directo al cliente</li>
+      </ul>
+    </div>
+    <div class="actor-card">
+      <div class="actor-icon">📱</div>
+      <h3>Comprador</h3>
+      <ul>
+        <li>Navega el mapa de la frontera</li>
+        <li>Ve ofertas en tiempo real</li>
+        <li>Consulta por WhatsApp</li>
+        <li>Reserva en la tienda (sin pago online)</li>
+        <li>Va al local y paga en persona</li>
+      </ul>
+    </div>
+    <div class="actor-card">
+      <div class="actor-icon">⚙️</div>
+      <h3>Plataforma</h3>
+      <ul>
+        <li>Cobra suscripción fija</li>
+        <li>Cobra por ofertas destacadas</li>
+        <li>No intermedia pagos ni cobra comisión</li>
+        <li>Difunde en sus propios canales</li>
+        <li>Gestiona reputación</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- PROPUESTA DE VALOR -->
+<section>
+  <h2>Propuesta de valor para el comercio</h2>
+  <div class="value-props">
+    <div class="vp-card">
+      <div class="icon">🗺️</div>
+      <h3>Presencia en el mapa</h3>
+      <p>El local aparece con sus datos de contacto, horarios y ubicación exacta en el mapa de la plataforma.</p>
+    </div>
+    <div class="vp-card">
+      <div class="icon">🛍️</div>
+      <h3>Catálogo online gratis</h3>
+      <p>Sube sus productos a la tienda sin costo adicional ni comisión. Tiene su vidriera de productos online.</p>
+    </div>
+    <div class="vp-card">
+      <div class="icon">🔥</div>
+      <h3>Ofertas destacadas</h3>
+      <p>Los productos marcados como oferta aparecen en la portada del mapa con visibilidad máxima.</p>
+    </div>
+    <div class="vp-card">
+      <div class="icon">📣</div>
+      <h3>Difusión en nuestros canales</h3>
+      <p>Las mejores ofertas se publican en las redes de la plataforma + un flyer listo para que el comercio comparta donde quiera.</p>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section>
+  <h2>Estructura de precios</h2>
+  <div class="pricing-big">
+    <div class="pricing-header">
+      <div>
+        <div class="label">Plan único por comercio</div>
+        <div style="font-size:13px; color: var(--muted); margin-top:4px;">Sin contratos, sin comisiones, sin sorpresas</div>
+      </div>
+    </div>
+
+    <div class="pricing-row">
+      <div>
+        <div class="name">Suscripción mensual</div>
+        <div class="detail">Presencia en el mapa + catálogo en la tienda + difusión</div>
+      </div>
+      <div class="price-tag">$30.000 <small>ARS/mes</small></div>
+    </div>
+
+    <div class="pricing-row">
+      <div>
+        <div class="name">Subir productos a la tienda</div>
+        <div class="detail">Catálogo completo, sin límite de productos</div>
+      </div>
+      <span class="badge-free">GRATIS</span>
+    </div>
+
+    <div class="pricing-row">
+      <div>
+        <div class="name">Publicación de oferta destacada</div>
+        <div class="detail">Aparece destacada en el mapa + en nuestros canales · se factura acumulado al mes</div>
+      </div>
+      <div class="price-tag">$1.000 <small>ARS/publicación</small></div>
+    </div>
+
+    <div class="pricing-row">
+      <div>
+        <div class="name">Comisión por venta</div>
+        <div class="detail">La transacción ocurre en el local, no en la plataforma</div>
+      </div>
+      <span class="badge-free">$0</span>
+    </div>
+
+    <div class="pricing-row">
+      <div>
+        <div class="name">Formas de pago</div>
+        <div class="detail">Muchos comercios pagan de contado — se ofrecen 3 vías</div>
+      </div>
+      <div style="font-family:var(--mono); font-size:12px; color:var(--accent2); text-align:right;">QR Argentina · QR Bolivia · Transferencia</div>
+    </div>
+  </div>
+  <div class="legal-box" style="margin-top:16px;">
+    ⚠️ <span class="highlight">Lo legal/fiscal es lo pesado, no el método de pago:</span> ¿qué entidad factura (argentina o boliviana)?, impuestos (AFIP / Bolivia), plata cruzando la frontera. <span class="highlight">Requiere contador/abogado.</span> El agente de campo <span class="highlight">registra</span> el alta; el cobro va por QR/transferencia (no efectivo en mano). La baja por falta de pago es automática (por fecha); la confirmación del pago, manual.
+  </div>
+</section>
+
+<!-- EJEMPLO REAL -->
+<section>
+  <h2>Ejemplo real de facturación</h2>
+  <div class="card">
+    <div style="font-size:13px; color:var(--muted); margin-bottom:16px;">Comercio que publica 15 ofertas en el mes (facturación acumulada)</div>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
+        <span style="font-size:14px;">Suscripción mensual</span>
+        <span style="font-family:var(--mono); color:var(--text);">$30.000</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
+        <span style="font-size:14px;">15 ofertas destacadas × $1.000</span>
+        <span style="font-family:var(--mono); color:var(--text);">$15.000</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:10px 0;">
+        <span style="font-size:15px; font-weight:600;">Total del mes</span>
+        <span style="font-family:var(--mono); font-size:20px; color:var(--accent2);">$45.000</span>
+      </div>
+    </div>
+    <div style="margin-top:16px; padding:12px 16px; background:var(--surface2); border-radius:8px; font-size:12px; color:var(--muted);">
+      💡 <strong style="color:var(--text);">$1.500/día</strong> por vidriera en el mapa, catálogo online, ofertas destacadas y difusión en nuestros canales. Un solo cobro mensual (no micropagos por oferta).
+    </div>
+  </div>
+</section>
+
+<!-- PROYECCIÓN -->
+<section>
+  <h2>Proyección por escenarios (ingreso bruto/mes)</h2>
+  <div style="font-size:13px; color:var(--muted); margin-bottom:16px;">Empezando por Bermejo · promedio 8 ofertas destacadas por comercio/mes</div>
+  <div class="projection-grid">
+    <div class="proj-card">
+      <div class="num">$19M</div>
+      <div class="lbl"><strong>Arranque · 500 comercios</strong><br>500×$30.000 + 500×8×$1.000</div>
+    </div>
+    <div class="proj-card">
+      <div class="num">$76M</div>
+      <div class="lbl"><strong>Crecimiento · 2.000</strong><br>2.000×$30.000 + ofertas</div>
+    </div>
+    <div class="proj-card">
+      <div class="num">$190M</div>
+      <div class="lbl"><strong>Consolidado · 5.000</strong><br>5.000×$30.000 + ofertas</div>
+    </div>
+  </div>
+  <div class="total-card">
+    <div>
+      <div class="t-label">⚠️ La ganancia NETA depende de costos a definir con números reales</div>
+      <div class="t-sub">Restar: agentes de campo (adquisición) · infra + IA · soporte · conciliación de pagos · marketing. No inventar la neta hasta tenerlos.</div>
+    </div>
+    <div style="text-align:right;">
+      <div class="t-num">?</div>
+      <div class="t-sub">bruto − costos reales</div>
+    </div>
+  </div>
+</section>
+
+<!-- DIFUSIÓN EN REDES -->
+<section>
+  <h2>Difusión en redes — qué SÍ se ofrece</h2>
+  <div class="value-props">
+    <div class="vp-card">
+      <div class="icon">📣</div>
+      <h3>Canales propios</h3>
+      <p>Las mejores ofertas del día se postean en el IG / TikTok / Facebook de la plataforma → tráfico orgánico, el comercio aparece ahí.</p>
+    </div>
+    <div class="vp-card">
+      <div class="icon">🖼️</div>
+      <h3>Flyer listo</h3>
+      <p>Se genera una placa de la oferta (foto + precio + logo) que el comercio descarga y comparte él donde quiera. Cero líos de derechos.</p>
+    </div>
+    <div class="vp-card">
+      <div class="icon">📲</div>
+      <h3>Compartir 1 toque</h3>
+      <p>Botón para mandar la oferta al Estado/Historia de WhatsApp del comercio con un toque.</p>
+    </div>
+    <div class="vp-card">
+      <div class="icon">📨</div>
+      <h3>Broadcast de ofertas</h3>
+      <p>"Ofertas del día" por WhatsApp desde el número de la plataforma a los compradores que se suscriben. Automatizable.</p>
+    </div>
+  </div>
+  <div class="legal-box" style="margin-top:16px;">
+    ❌ Lo que <span class="highlight">NO</span> se puede prometer: postear automático en la cuenta propia de cada comercio (Meta/TikTok no lo permiten a escala). El valor real es <span class="highlight">nuestros canales + contenido listo para compartir</span>.
+  </div>
+</section>
+
+<!-- FLUJOS -->
+<section>
+  <h2>Flujos operativos</h2>
+  <div class="flow-grid">
+    <div class="card">
+      <h3 style="margin-bottom:16px; font-size:15px;">🔖 Flujo de Reserva</h3>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Usuario ve oferta en el mapa</div>
+            <div class="step-desc">Navega por la página principal o busca por categoría</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">Entra al producto</div>
+            <div class="step-desc">Ve foto, precio, descripción y local</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">Toca "Reservar"</div>
+            <div class="step-desc">Completa nombre, teléfono y cantidad</div>
+            <span class="step-tag">SIN PAGO ONLINE</span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <div class="step-title">El comercio recibe notificación</div>
+            <div class="step-desc">Por WhatsApp o email. Confirma o rechaza.</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <div class="step-title">Cliente va al local y paga</div>
+            <div class="step-desc">Efectivo, transferencia, POS — lo que el comercio use</div>
+            <span class="step-tag">TRANSACCIÓN EXTERNA</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom:16px; font-size:15px;">💬 Flujo de Consulta</h3>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Usuario ve producto</div>
+            <div class="step-desc">En el e-commerce o en la ficha del local</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">Toca "Consultar"</div>
+            <div class="step-desc">Botón directo en la ficha del producto</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">Se abre WhatsApp del comercio</div>
+            <div class="step-desc">Con mensaje pre-cargado: "Hola, vi [producto] en la plataforma..."</div>
+            <span class="step-tag">DIRECTO AL VENDEDOR</span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <div class="step-title">Negocian directamente</div>
+            <div class="step-desc">La plataforma no interviene más en la conversación</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <div class="step-title">Cierre a criterio del comercio</div>
+            <div class="step-desc">En persona, por delivery propio, o como prefieran</div>
+            <span class="step-tag">SIN COMISIÓN</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- RIESGOS -->
+<section>
+  <h2>Riesgos y mitigaciones</h2>
+  <div class="risks">
+    <div class="risk-item">
+      <span class="risk-level alto">ALTO</span>
+      <div class="risk-content">
+        <h4>Estructura legal/fiscal cross-border</h4>
+        <p>Cobrar a comercios de la frontera (pesos AR, algunos Bs) con plata cruzando. <strong>Mitigación:</strong> definir con contador/abogado qué entidad factura, impuestos y cumplimiento. Es lo primero a resolver, antes de cobrar.</p>
+      </div>
+    </div>
+    <div class="risk-item">
+      <span class="risk-level alto">ALTO</span>
+      <div class="risk-content">
+        <h4>Comercios sin medio de pago digital</h4>
+        <p>Muchos manejan efectivo y no tienen cómo pagar online. <strong>Mitigación:</strong> 3 vías (QR AR, QR BO, transferencia); el agente registra el alta y el cobro va por QR/transfer (no efectivo en mano). Baja automática por fecha si no paga.</p>
+      </div>
+    </div>
+    <div class="risk-item">
+      <span class="risk-level medio">MEDIO</span>
+      <div class="risk-content">
+        <h4>Comercios que no actualizan stock / ofertas</h4>
+        <p>Una oferta vieja frustra al cliente. <strong>Mitigación:</strong> reputación visible + recordatorios. Las reservas y el stock viven en la tienda, no en el mapa.</p>
+      </div>
+    </div>
+    <div class="risk-item">
+      <span class="risk-level bajo">BAJO</span>
+      <div class="risk-content">
+        <h4>Masa crítica de comercios</h4>
+        <p>Antes era el riesgo central; ahora <strong>mitigado</strong>: se siembra el mapa con datos de OpenStreetMap (frontera ya cargada) y se arranca dominando Bermejo antes de replicar.</p>
+      </div>
+    </div>
+    <div class="risk-item">
+      <span class="risk-level bajo">BAJO</span>
+      <div class="risk-content">
+        <h4>Reclamos por estafas</h4>
+        <p>Sin pago online ni intermediación, el riesgo es mínimo. <strong>Mitigación:</strong> aviso legal claro + reputación de dos lados.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LEGAL -->
+<section>
+  <h2>Aviso legal en reserva</h2>
+  <div class="legal-box">
+    <span class="highlight">Texto sugerido para mostrar al usuario al momento de reservar:</span><br><br>
+    "Esta consulta/reserva es una <span class="highlight">notificación al comercio</span>, no implica ningún pago ni compromiso económico de tu parte. El precio, la disponibilidad y las condiciones de venta son <span class="highlight">responsabilidad exclusiva del comercio</span>. buscadonde actúa como directorio digital y no participa en la transacción comercial."
+  </div>
+</section>
+
+<div style="text-align:center; margin-top:60px; padding-top:32px; border-top:1px solid var(--border); font-family:var(--mono); font-size:11px; color:var(--muted); letter-spacing:0.08em;">
+  BUSCADONDE — MODELO DE NEGOCIO v2.0 — CONFIDENCIAL — JUNIO 2026
+</div>
+
+</body>
+</html>
