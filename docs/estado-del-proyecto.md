@@ -86,7 +86,9 @@
 - [ ] **WAHA en prod** (publicar por WhatsApp vivo) + `WEBHOOK_SECRET`.
 - [ ] **Tienda online** (motor `tienda`/amandaclothing) como add-on multi-tenant.
 - [ ] **Multi-ciudad**: prender fronteras (Yacuiba, Villazón…) y ciudades.
-- [ ] Videos: link/embed; canal TikTok del sitio curado/manual.
+- [ ] Videos: link/embed; **canal TikTok del sitio** (vendedor sube → se publica curado).
+- [ ] **Distribución a compradores:** Canal de **WhatsApp** (seguir = suscribirse) +
+      **redes propias** (IG/TikTok/FB) + **Telegram** auto-posteado. PWA por interés = después.
 
 ### Calidad / escala
 - [ ] Tests integración + E2E + carga; CI.
