@@ -1,191 +1,119 @@
 import Link from "next/link";
 import { Nav } from "@/components/nav";
-import { BoliviaMap } from "@/components/bolivia-map";
-import { Counter } from "@/components/counter";
-import { LiveFeed } from "@/components/live-feed";
-import { getFeed, getComercios, getZonas, getCiudades } from "@/lib/data";
-import { WhatsApp, Pin, Store, Arrow, Send } from "@/components/icons";
+import { HomeMap } from "@/components/home-map";
+import { SearchHero } from "@/components/search-hero";
+import { getFeed, getComerciosMapa, getZonas } from "@/lib/data";
+import { RUBROS, precioFmt } from "@/lib/types";
+import { Arrow } from "@/components/icons";
 
-// Feed en vivo: siempre fresco en cada request (no cachear el SSR del home).
 export const dynamic = "force-dynamic";
 
+// 8 categorías del mockup → cada una mapea a un filtro de rubro real.
+const CATS: { label: string; icon: string; rubro: string }[] = [
+  { label: "Alimentos", icon: "🥗", rubro: "mercado" },
+  { label: "Bebidas", icon: "🥤", rubro: "mercado" },
+  { label: "Electrónica", icon: "📱", rubro: "tecnologia" },
+  { label: "Hogar", icon: "🏠", rubro: "hogar" },
+  { label: "Vehículos", icon: "🚗", rubro: "gomeria" },
+  { label: "Salud y belleza", icon: "💊", rubro: "farmacia" },
+  { label: "Construcción", icon: "🚧", rubro: "otros" },
+  { label: "Servicios", icon: "🔧", rubro: "servicios" },
+];
+
 export default async function Home() {
-  const [feed, comercios, zonas, ciudades] = await Promise.all([getFeed(6), getComercios(), getZonas(), getCiudades()]);
+  const [feed, comercios, zonas] = await Promise.all([getFeed(12), getComerciosMapa(), getZonas()]);
+  const premium = feed.slice(0, 8);
+  const destacados = comercios.filter((c) => c.destacado);
+  const auspi = (destacados.length >= 3 ? destacados : comercios).slice(0, 10);
+  const rubroNombre = (slug: string | null) => RUBROS.find((r) => r.slug === slug)?.nombre ?? "Comercio";
 
   return (
     <>
       <Nav active="inicio" />
 
-      {/* HERO */}
-      <section className="hero">
+      {/* HERO — el buscador es el protagonista */}
+      <section className="hero-centro">
         <div className="wrap">
-          <div className="hero-text">
-            <span className="eyebrow"><span className="dot-live" /> Comercio local · Frontera viva</span>
-            <h1 className="hero-title">
-              Todo lo que se<br />vende en tu ciudad,<br /><span className="green">en tiempo real</span>
-            </h1>
-            <p className="hero-sub">
-              <b style={{ color: "var(--txt)" }}>Encontralo en el mapa. Reservalo en la tienda.</b><br />
-              Explora ofertas, videos, comercios y promociones publicadas directamente desde WhatsApp.
-            </p>
-            <div className="hero-cta">
-              <Link href="#mapa" className="btn btn-primary">Explorar el mapa <Pin /></Link>
-              <Link href="/publicar" className="btn btn-ghost"><Store /> Publicar mi negocio</Link>
-            </div>
-            <div className="hero-social">
-              <div className="avatars">
-                {[11, 32, 15, 45, 8].map((n) => (
-                  <img key={n} src={`https://i.pravatar.cc/80?img=${n}`} alt="" />
-                ))}
-              </div>
-              <div><b><Counter to={12450} prefix="+" /></b><small>usuarios este mes</small></div>
-            </div>
-          </div>
-          <BoliviaMap ciudades={ciudades} />
+          <h1 className="hc-title">¿Qué estás buscando?</h1>
+          <p className="hc-sub">Negocios y servicios en el mapa de <span className="green">Bermejo</span>. Productos, en la tienda <b style={{ color: "var(--txt)" }}>Reservalo</b>.</p>
+          <SearchHero rubros={RUBROS} zonas={zonas} />
         </div>
       </section>
 
-      {/* STATS */}
-      <div className="wrap">
-        <div className="stats glass">
-          <div className="stat">
-            <span className="ic g"><Store style={{ width: 22, height: 22 }} /></span>
-            <div><b><Counter to={1250} /></b><span>Comercios</span></div>
-          </div>
-          <div className="stat">
-            <span className="ic o"><WhatsApp style={{ width: 22, height: 22 }} /></span>
-            <div><b><Counter to={2450} /></b><span>Ofertas activas</span></div>
-          </div>
-          <div className="stat">
-            <span className="ic p"><Send style={{ width: 20, height: 20 }} /></span>
-            <div><b><Counter to={350} /></b><span>Videos hoy</span></div>
-          </div>
-          <div className="stat">
-            <span className="ic pk"><Send style={{ width: 20, height: 20 }} /></span>
-            <div><b><Counter to={780} /></b><span>Publicaciones hoy</span></div>
-          </div>
-          <div className="stat">
-            <span className="live-badge"><span className="dot-live" /> EN VIVO</span>
-            <span className="ic b"><Store style={{ width: 20, height: 20 }} /></span>
-            <div><b><Counter to={1235} /></b><span>Usuarios conectados</span></div>
-          </div>
-        </div>
-      </div>
+      {/* MAPA full-width */}
+      <section className="wrap" style={{ marginTop: 16 }}>
+        <HomeMap comercios={comercios} />
+      </section>
 
-      {/* FEED EN VIVO + COMERCIOS */}
-      <section className="section" id="ofertas">
+      {/* OFERTAS PREMIUM */}
+      <section className="section" style={{ paddingTop: 26 }} id="ofertas">
         <div className="wrap">
           <div className="section-head">
-            <div>
-              <span className="eyebrow"><span className="dot-live" /> Feed en tiempo real</span>
-              <h2>Lo que se publica ahora</h2>
-              <p>Publicaciones aprobadas por moderadores, llegando directo desde WhatsApp.</p>
-            </div>
+            <div><h2 style={{ fontSize: 22 }}>👑 Ofertas premium</h2><p>Las mejores ofertas destacadas</p></div>
+            <Link href="/buscar" className="btn btn-ghost btn-sm">Ver todas las ofertas <Arrow /></Link>
           </div>
-          <div className="grid-2col">
-            <LiveFeed initial={feed} />
-            <div>
-              <div className="section-head"><div><h2 style={{ fontSize: 20 }}>Negocios destacados</h2></div></div>
-              <div className="feed">
-                {comercios.slice(0, 4).map((c) => (
-                  <article className="post" key={c.id}>
-                    <div className="phead">
-                      <img src={c.logo_url ?? ""} alt="" />
-                      <div style={{ flex: 1 }}>
-                        <b><Link href={`/comercios/${c.slug}`}>{c.nombre}</Link></b>
-                        <small>{c.direccion}</small>
-                      </div>
-                      <span className="pill" style={{ color: "var(--amber)" }}>★ {c.rating}</span>
-                    </div>
-                    <div className="pbody" style={{ paddingTop: 0 }}>
-                      <div className="pactions">
-                        <a className="btn btn-wa btn-sm" href={`https://wa.me/${c.whatsapp}`} target="_blank" rel="noopener">
-                          <WhatsApp style={{ width: 16, height: 16 }} /> Contactar
-                        </a>
-                        <Link className="btn btn-ghost btn-sm" href={`/comercios/${c.slug}`}>Ver perfil</Link>
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ZONAS */}
-      <section className="section" id="zonas" style={{ paddingTop: 0 }}>
-        <div className="wrap">
-          <div className="explore">
-            <div>
-              <span className="eyebrow">Mapa comercial conceptual</span>
-              <h2>Explora la ciudad</h2>
-              <p>Descubre galerías, mercados y todas las zonas comerciales.</p>
-              <div className="zone-chips">
-                {zonas.map((z) => (
-                  <div className="zchip" key={z.id}>
-                    <div className="zi" style={{ background: `${z.color}22`, color: z.color ?? "var(--neon)" }}>
-                      <Store style={{ width: 21, height: 21 }} />
-                    </div>
-                    <b>{z.nombre.replace("Zona ", "")}</b>
-                    <small>ver</small>
+          {premium.length === 0 ? (
+            <p style={{ color: "var(--txt-3)" }}>Pronto: las ofertas destacadas de los comercios.</p>
+          ) : (
+            <div className="rail">
+              {premium.map((p) => (
+                <Link href={`/comercios/${p.comercio_slug}`} key={p.id} className="premium-card">
+                  <div className="media">
+                    <span className="premium-tag">PREMIUM</span>
+                    {p.imagen_url && <img src={p.imagen_url} alt={p.titulo ?? ""} />}
                   </div>
-                ))}
-              </div>
-              <Link href="#mapa" className="btn btn-ghost">Ver mapa completo <Arrow /></Link>
+                  <div className="pb">
+                    <b style={{ display: "block" }}>{p.titulo ?? "Oferta"}</b>
+                    <small style={{ color: "var(--txt-3)", display: "block", marginBottom: 4 }}>{p.comercio_nombre}</small>
+                    {p.precio != null && <div style={{ color: "var(--neon)", fontWeight: 800 }}>{precioFmt(p.precio, p.moneda)}</div>}
+                  </div>
+                </Link>
+              ))}
             </div>
-            <div className="explore-map">
-              <img src="/bermejociudad.jpg" alt="Bermejo, Bolivia" />
-            </div>
-          </div>
+          )}
         </div>
       </section>
 
-      {/* NEGOCIOS DESTACADOS GRID */}
-      <section className="section" id="negocios" style={{ paddingTop: 0 }}>
+      {/* AUSPICIANTES */}
+      <section className="section" style={{ paddingTop: 0 }}>
         <div className="wrap">
           <div className="section-head">
-            <div><h2>Negocios destacados</h2><p>Los comercios con más actividad esta semana.</p></div>
+            <div><h2 style={{ fontSize: 20 }}>Auspiciantes destacados</h2><p>Empresas que apoyan el comercio local</p></div>
+            <Link href="/buscar" className="btn btn-ghost btn-sm">Ver todos <Arrow /></Link>
           </div>
-          <div className="biz-grid">
-            {comercios.map((c) => (
-              <Link className="bizcard" href={`/comercios/${c.slug}`} key={c.id}>
-                <div className="cover">
-                  <img src={c.portada_url ?? ""} alt={c.nombre} />
-                  <img className="logo" src={c.logo_url ?? ""} alt="" />
+          <div className="rail auspi-rail">
+            {auspi.map((c) => (
+              <Link href={`/comercios/${c.slug}`} key={c.id} className="auspi-card" title={c.nombre}>
+                <div className="auspi-logo-box">
+                  {c.logo_url ? <img src={c.logo_url} alt={c.nombre} /> : <span className="auspi-initial">{c.nombre.charAt(0)}</span>}
                 </div>
-                <div className="body">
-                  <h4>{c.nombre}</h4>
-                  <div className="zone">{c.direccion}</div>
-                  <div className="row">
-                    <span className="pill">★ {c.rating}</span>
-                    <span className="wa-mini" style={{ background: "var(--wa)" }}>
-                      <WhatsApp style={{ width: 17, height: 17, color: "#04240f" }} />
-                    </span>
-                  </div>
-                </div>
+                <b>{c.nombre}</b>
+                <small>{rubroNombre(c.rubro_slug)}</small>
               </Link>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA */}
+      {/* CATEGORÍAS */}
       <section className="section" style={{ paddingTop: 0 }}>
         <div className="wrap">
-          <div className="cta">
-            <div>
-              <h2>¿Tenés un comercio?</h2>
-              <p>Publicá tus ofertas, videos y novedades mandando un mensaje por WhatsApp. Nosotros las mostramos al instante.</p>
-            </div>
-            <a className="btn btn-primary" href="https://wa.me/59170000000?text=Quiero%20publicar%20en%20Encontralo" target="_blank" rel="noopener">
-              <WhatsApp style={{ width: 18, height: 18 }} /> Publicar por WhatsApp
-            </a>
+          <div className="section-head">
+            <div><h2 style={{ fontSize: 20 }}>Explorá por categorías</h2></div>
+            <Link href="/buscar" className="btn btn-ghost btn-sm">Ver todas las categorías <Arrow /></Link>
+          </div>
+          <div className="cat-grid">
+            {CATS.map((c) => (
+              <Link href={`/buscar?rubro=${c.rubro}`} key={c.label} className="cat-item">
+                <span className="emoji">{c.icon}</span>
+                <b style={{ fontSize: 13, textAlign: "center" }}>{c.label}</b>
+              </Link>
+            ))}
           </div>
         </div>
       </section>
 
-      <footer className="footer">
+      <footer className="footer" style={{ marginTop: 30 }}>
         <div className="wrap">
           <div className="copy">
             <span>© 2026 Encontralo. Todos los derechos reservados.</span>

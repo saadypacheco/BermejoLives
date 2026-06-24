@@ -72,6 +72,47 @@ export async function getComercios(): Promise<Comercio[]> {
   return DEMO_COMERCIOS;
 }
 
+export type ComercioMapa = {
+  id: string; slug: string; nombre: string;
+  lat: number | null; lng: number | null;
+  logo_url: string | null; whatsapp: string;
+  verificado: boolean; destacado: boolean; rating: number;
+  direccion: string | null; rubro_slug: string | null;
+};
+
+// Comercios geolocalizados para el mapa de la Home (+ auspiciantes/destacados).
+// Acotado al área de Bermejo (bbox) y SIN join (el embed era lentísimo sobre la
+// tabla con el import OSM masivo). El rubro se resuelve con una query chica aparte.
+export async function getComerciosMapa(): Promise<ComercioMapa[]> {
+  if (hasSupabase) {
+    const [{ data }, { data: rubros }] = await Promise.all([
+      supabase
+        .from("comercios")
+        .select("id, slug, nombre, lat, lng, logo_url, whatsapp, verificado, destacado, rating, direccion, rubro_id")
+        .eq("activo", true)
+        .not("lat", "is", null)
+        .gte("lat", -22.90).lte("lat", -22.58)
+        .gte("lng", -64.52).lte("lng", -64.16)
+        .limit(250),
+      supabase.from("rubros").select("id, slug"),
+    ]);
+    if (data) {
+      const slugById = new Map((rubros ?? []).map((r: any) => [r.id, r.slug]));
+      return (data as any[]).map((c) => ({
+        id: c.id, slug: c.slug, nombre: c.nombre, lat: c.lat, lng: c.lng,
+        logo_url: c.logo_url, whatsapp: c.whatsapp, verificado: c.verificado,
+        destacado: c.destacado, rating: c.rating, direccion: c.direccion,
+        rubro_slug: slugById.get(c.rubro_id) ?? null,
+      }));
+    }
+  }
+  return DEMO_COMERCIOS.map((c) => ({
+    id: c.id, slug: c.slug, nombre: c.nombre, lat: c.lat, lng: c.lng,
+    logo_url: c.logo_url, whatsapp: c.whatsapp, verificado: c.verificado,
+    destacado: c.destacado, rating: c.rating, direccion: c.direccion, rubro_slug: null,
+  }));
+}
+
 export async function getComercioBySlug(slug: string): Promise<Comercio | null> {
   if (hasSupabase) {
     const { data } = await supabase.from("comercios").select("*").eq("slug", slug).limit(1);

@@ -85,3 +85,46 @@
 Instancia nueva del ecommerce (Supabase + dominio `reservalo.com`) + seed +
 `SERVICIO_API_SECRET`. Mientras tanto, buscadonde puede desarrollar contra un
 `TiendaClient` stub.
+
+---
+
+## Búsqueda unificada: producto → comercios en el mapa → Reservalo (decisión del dueño)
+**El mapa de comercios es el diferencial; Reservalo es la capa "reservá lo que viste".**
+Cuando el usuario busca un **producto** en Encontralo, NO se muestran productos sueltos:
+se muestran los **comercios (en el mapa) que tienen ese producto**. Tagline en acción.
+
+**Flujo:**
+1. Producto buscado en Encontralo → consulta la API de búsqueda de Reservalo →
+   agrupa los resultados por `vendedor_id` → pinta esos comercios en el mapa/lista
+   ("tiene N productos que coinciden").
+2. Click en un comercio → `reservalo.store/productos?vendedor={comercio_id}&search={term}`
+   (los productos de ESE local, filtrados por lo buscado).
+3. Botón global "Ver todos los productos que coinciden" →
+   `reservalo.store/productos?search={term}` (en todos los locales).
+
+**Lo que Reservalo (otra sesión) tiene que exponer para esto:**
+- ✅/⚪ `productos.vendedor_id` (= comercio_id) — multi-vendedor (ya en el contrato arriba).
+- ⚪ **API pública de búsqueda**: `GET /api/productos/buscar?search=X` →
+  `[{id, nombre, precio, moneda, imagen_url, vendedor_id, url}]`. La consume Encontralo.
+- ⚪ **Filtro `vendedor`** en el storefront `/productos` (hoy soporta
+  `categoria, talla, precio_min, precio_max, search`; falta `vendedor`).
+
+**Encontralo (esta sesión) construye después:** el modo "Productos" del buscador deja de
+redirigir directo y pasa a: llamar la API → agrupar por vendedor → mostrar comercios en
+el mapa con el contexto del producto + los dos drill-downs a Reservalo.
+
+> Mientras la integración multi-vendedor no esté viva, el modo Productos hace el
+> hand-off simple actual (`/productos?search=`). Es un reemplazo de una línea cuando llegue.
+
+### Navegación entre sitios (decisión: opción C — misma pestaña)
+- **Encontralo → Reservalo**: el click en un comercio (o el modo Productos) navega
+  **same-tab** a `reservalo.store/productos?vendedor={comercio_id}&search={term}&volver={url_busqueda_encontralo}`.
+- **Volver al mapa**: el **botón atrás nativo** ya regresa a la búsqueda (la URL la tiene);
+  además Reservalo muestra una **barra "← Volver al mapa de Encontralo"** usando `volver`.
+- **Reservalo → Encontralo (el "cómo llegar")**: en la ficha de producto / header del local,
+  Reservalo renderiza **"📍 Cómo llegar / Ver el local"** → `https://encontralo.store/comercios/{vendedor.slug}`
+  (esa página ya tiene mapa + cómo llegar + WhatsApp) y **"💬 WhatsApp"** → `wa.me/{vendedor.whatsapp}`.
+  Reservalo arma ambos links con el `slug` y `whatsapp` que ya guarda en `vendedores`.
+
+**Modelo:** Encontralo = el DÓNDE (mapa, cómo llegar, contacto) · Reservalo = el QUÉ
+(productos, reservar). Se cruzan en ambos sentidos.

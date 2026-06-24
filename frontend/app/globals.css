@@ -161,3 +161,86 @@
 
 /* Dashboard Mi comercio: grid responsivo */
 @media (max-width: 900px) { .mc-grid { grid-template-columns: 1fr !important; } }
+
+/* ===================== Home rediseñada (buscador-first) ===================== */
+.home2-hero { padding: 22px 0 6px; }
+.home2-grid { display: grid; grid-template-columns: 1.45fr 1fr; gap: 28px; align-items: start; }
+.home2-left h1 { font-size: clamp(28px, 3.6vw, 44px); line-height: 1.04; letter-spacing: -.02em; margin: 10px 0 8px; }
+.home2-left .sub { color: var(--txt-2); margin-bottom: 16px; max-width: 520px; }
+
+.bigsearch { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--stroke); border-radius: 16px; padding: 8px 8px 8px 16px; transition: border-color .2s; }
+.bigsearch:focus-within { border-color: var(--neon); }
+.bigsearch input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: var(--txt); font-size: 17px; }
+.ejemplos { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.ejemplos button { font-size: 13px; color: var(--txt-3); background: var(--panel); border: 1px solid var(--stroke); border-radius: 999px; padding: 4px 11px; transition: .15s; }
+.ejemplos button:hover { color: var(--neon); border-color: var(--neon); }
+.qfilters { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.qfilters button { font-size: 14px; font-weight: 600; color: var(--txt-2); background: var(--panel); border: 1px solid var(--stroke); border-radius: 10px; padding: 7px 14px; transition: .15s; }
+.qfilters button.active { background: rgba(57,255,158,.12); color: var(--neon); border-color: rgba(57,255,158,.4); }
+.sfilters { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.sfilters > * { flex: 1; min-width: 130px; }
+
+.mapcard { border: 1px solid var(--stroke); border-radius: 18px; overflow: hidden; background: var(--panel); }
+.mapcard .bolivia-wrap { margin: 0; }
+.mapcard .bolivia-map { height: 280px !important; border-radius: 0 !important; }
+.mapcard .bolivia-legend { display: none; }
+.mapbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--stroke); font-size: 14px; color: var(--txt-2); }
+
+.rail { display: flex; gap: 14px; overflow-x: auto; padding: 2px 2px 10px; scroll-snap-type: x mandatory; }
+.rail::-webkit-scrollbar { height: 6px; }
+.rail::-webkit-scrollbar-thumb { background: var(--stroke); border-radius: 999px; }
+.premium-card { flex: 0 0 210px; scroll-snap-align: start; background: var(--panel); border: 1px solid var(--stroke); border-radius: 14px; overflow: hidden; color: inherit; transition: .15s; }
+.premium-card:hover { border-color: var(--neon); transform: translateY(-2px); }
+.premium-card .media { position: relative; height: 128px; background: linear-gradient(135deg,#11161d,#0a0c10); }
+.premium-card .media img { width: 100%; height: 100%; object-fit: cover; }
+.premium-tag { position: absolute; top: 8px; left: 8px; background: var(--amber); color: #1a1200; font-size: 10px; font-weight: 800; letter-spacing: .04em; padding: 2px 8px; border-radius: 999px; }
+.premium-card .pb { padding: 11px 12px 13px; }
+
+.auspi-rail .auspi-logo { flex: 0 0 auto; height: 66px; min-width: 130px; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--stroke); border-radius: 12px; padding: 0 20px; color: var(--txt-2); font-weight: 700; transition: .15s; }
+.auspi-rail .auspi-logo:hover { border-color: var(--neon); color: var(--neon); }
+
+.cat-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 12px; }
+.cat-item { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 8px; background: var(--panel); border: 1px solid var(--stroke); border-radius: 14px; color: var(--txt-2); transition: .15s; }
+.cat-item:hover { border-color: var(--neon); color: var(--neon); transform: translateY(-2px); }
+.cat-item .emoji { font-size: 26px; line-height: 1; }
+
+@media (max-width: 920px) {
+  .home2-grid { grid-template-columns: 1fr; }
+  .cat-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* ===================== Home v2 (mockup: buscador centrado + mapa) ===================== */
+.hero-centro { text-align: center; padding: 26px 0 4px; }
+.hc-title { font-size: clamp(34px, 5vw, 54px); font-weight: 900; letter-spacing: -.03em; margin: 0 0 8px; }
+.hc-sub { color: var(--txt-2); font-size: 17px; margin: 0 auto 20px; max-width: 640px; }
+.search-hero { max-width: 760px; margin: 0 auto; }
+.search-hero .bigsearch { box-shadow: 0 0 0 1px rgba(57,255,158,.30), 0 0 34px rgba(57,255,158,.10); padding: 11px 11px 11px 18px; border-radius: 18px; }
+.search-hero .bigsearch input { font-size: 18px; }
+.bs-wa { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: var(--wa); color: #04240f; flex-shrink: 0; }
+.search-hero .qfilters { justify-content: center; }
+.search-hero .sfilters { justify-content: center; max-width: 620px; margin: 12px auto 0; }
+.search-hero .sfilters > * { flex: 0 1 190px; }
+
+.homemap { position: relative; border: 1px solid var(--stroke); border-radius: 18px; overflow: hidden; }
+.homemap-canvas { height: 380px; width: 100%; }
+.hm-btn { position: absolute; z-index: 600; background: rgba(13,16,21,.92); border: 1px solid var(--stroke); color: var(--txt); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: 10px; backdrop-filter: blur(6px); }
+.hm-list { top: 14px; left: 14px; }
+.hm-full { top: 14px; right: 14px; }
+.hm-count { position: absolute; z-index: 600; bottom: 14px; left: 14px; background: rgba(13,16,21,.92); border: 1px solid var(--stroke); color: var(--txt-2); font-size: 13px; padding: 7px 12px; border-radius: 999px; backdrop-filter: blur(6px); }
+.hmark { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 15px; background: var(--mc, var(--neon)); border: 2px solid rgba(255,255,255,.9); box-shadow: 0 2px 8px rgba(0,0,0,.55); }
+
+.auspi-card { flex: 0 0 152px; scroll-snap-align: start; display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center; background: var(--panel); border: 1px solid var(--stroke); border-radius: 14px; padding: 16px 12px; color: inherit; transition: .15s; }
+.auspi-card:hover { border-color: var(--neon); transform: translateY(-2px); }
+.auspi-logo-box { width: 100%; height: 54px; display: grid; place-items: center; margin-bottom: 2px; }
+.auspi-logo-box img { max-height: 50px; max-width: 128px; object-fit: contain; }
+.auspi-initial { width: 46px; height: 46px; border-radius: 12px; background: rgba(57,255,158,.12); color: var(--neon); display: grid; place-items: center; font-size: 21px; font-weight: 800; }
+.auspi-card b { font-size: 14px; }
+.auspi-card small { color: var(--txt-3); font-size: 12px; }
+
+/* Modo del buscador (Negocios | Productos) */
+.modo-toggle { display: inline-flex; gap: 4px; background: var(--panel); border: 1px solid var(--stroke); border-radius: 12px; padding: 4px; margin-bottom: 12px; }
+.modo-toggle button { display: flex; align-items: center; gap: 7px; padding: 8px 16px; border-radius: 9px; font-size: 14px; font-weight: 700; color: var(--txt-2); transition: .15s; }
+.modo-toggle button small { font-weight: 500; color: var(--txt-3); }
+.modo-toggle button.active { background: rgba(57,255,158,.14); color: var(--neon); }
+.modo-toggle button.active small { color: rgba(57,255,158,.7); }
+.reservalo-banner { margin: 16px auto 0; max-width: 560px; background: rgba(57,255,158,.06); border: 1px solid rgba(57,255,158,.25); border-radius: 14px; padding: 14px 18px; color: var(--txt-2); font-size: 15px; line-height: 1.5; }
