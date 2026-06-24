@@ -32,10 +32,17 @@ app = FastAPI(title="Bermejo Live Market API", version="0.1.0", lifespan=lifespa
 def _cors_origins() -> list[str]:
     if settings.environment == "development":
         return ["*"]
-    fe = settings.frontend_url.rstrip("/")
-    # permitir apex y www
-    alt = fe.replace("https://www.", "https://") if "www." in fe else fe.replace("https://", "https://www.")
-    return list({fe, alt})
+    # FRONTEND_URL puede listar varios dominios separados por coma (ej. durante la
+    # migración: "https://encontralo.store,https://buscadonde.com"). Por cada uno se
+    # permite apex y www.
+    out: set[str] = set()
+    for fe in settings.frontend_url.split(","):
+        fe = fe.strip().rstrip("/")
+        if not fe:
+            continue
+        out.add(fe)
+        out.add(fe.replace("https://www.", "https://") if "www." in fe else fe.replace("https://", "https://www."))
+    return list(out)
 
 
 app.add_middleware(
