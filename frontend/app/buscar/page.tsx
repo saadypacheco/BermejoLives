@@ -157,7 +157,7 @@ export default function BuscarPage() {
                   </div>
                   {r.direccion && <div className="resdir"><Pin style={{ width: 13, height: 13 }} />{r.direccion}</div>}
                   <div className="resact">
-                    <a className="btn btn-wa btn-sm" href={waLink(r.whatsapp, `Hola, te vi en Bermejo Live Market`)} target="_blank" rel="noopener">
+                    <a className="btn btn-wa btn-sm" href={waLink(r.whatsapp, `Hola, te vi en Encontralo`)} target="_blank" rel="noopener">
                       <WhatsApp style={{ width: 15, height: 15 }} /> WhatsApp
                     </a>
                     <a className="btn btn-ghost btn-sm" href={comoLlegarHref(r)} target="_blank" rel="noopener">

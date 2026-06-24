@@ -34,6 +34,17 @@ class Settings(BaseSettings):
     whisper_model: str = "small"      # tiny/base/small/medium
     whisper_device: str = "cpu"       # 'cuda' si hubiera GPU
 
+    # Integración con el ecommerce (marketplace multi-vendedor).
+    #  - tienda_api_url vacío → TiendaClient en modo STUB (dev/tests, sin red).
+    #  - tienda_api_secret = X-API-Key compartido (servicio-a-servicio).
+    tienda_api_url: str = ""
+    tienda_api_secret: str = ""
+
+    # Clasificación de productos por IA (Gemini Flash, solo texto).
+    #  - Si gemini_api_key vacío → fallback gratis (categoría = rubro del comercio).
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
+
     # Frontend (CORS)
     frontend_url: str = "http://localhost:3000"
 

@@ -1,11 +1,11 @@
-# Estado del proyecto — Bermejo Live Market / buscadonde.com
+# Estado del proyecto — Encontralo / encontralo.store
 
 > Inventario de **lo implementado** y **lo que falta**. Actualizado 2026-06-15 (post expansión estratégica).
 > Docs hermanos: `analisis-factibilidad.md` (huecos/prioridades), modelo de negocio
 > `modelo-comercial-y-ecosistema.md`, bitácora técnica `architect-journey.md`.
 
 ## 🌐 Producción (vivo)
-- **App:** https://buscadonde.com · **API:** https://api.buscadonde.com ·
+- **App:** https://encontralo.store · **API:** https://api.encontralo.store ·
   **/software** (planes) · **/bermejo** (agente de campo) · **/admin** (moderación).
 - **VPS Hostinger** KVM2 (2 vCPU, 8 GB RAM, 100 GB), Ubuntu 24.04, Brasil-Campinas,
   IP `76.13.234.191`. Traefik (red `traefik`, resolver `letsencrypt`) + HTTPS auto.

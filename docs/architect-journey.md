@@ -11,7 +11,7 @@ cognitive-mix: mixed
 
 adrs:
   - id: 2026-06-04-stack-bermejo
-    title: Stack para Bermejo Live Market
+    title: Stack para Encontralo
     decision: Next.js 14 + FastAPI 3.12 + Supabase + bridge WhatsApp (WAHA)
     confidence: medium
     file: ../architect-kb/decisions/2026-06-04-stack-bermejo.md
@@ -277,7 +277,7 @@ next-steps:
 
 - Entrevista F0 completada (las 6 dimensiones; las 4 bifurcaciones ambiguas se
   resolvieron con el usuario antes de clasificar).
-- Idea: **Bermejo Live Market** — ecosistema digital comercial de Bermejo (Bolivia,
+- Idea: **Encontralo** — ecosistema digital comercial de Bermejo (Bolivia,
   frontera con Argentina). "Todo lo que se vende en Bermejo, en tiempo real."
 - Producto que debe sentirse como una **ciudad comercial viva**: feed en vivo,
   mapa conceptual, catálogos, videos TikTok, WhatsApp y moderación. Explícitamente
@@ -483,7 +483,7 @@ Escrito `architect-kb/decisions/2026-06-10-modelo-producto-bermejo.md`. Resumen:
   es suscripción por visibilidad, no comisión.
 - **Videos:** solo link/embed; "subir a canal TikTok del sitio" = servicio aparte.
 - **Comprador → vendedor: directo** a su WhatsApp con mensaje de atribución
-  ("vi esto en Bermejo Live Market"). NADA central para atender.
+  ("vi esto en Encontralo"). NADA central para atender.
 - **Número central: solo saliente** (reporte diario automatizable). Un número
   central que *atienda* es inmanejable (depende de info que los vendedores no
   mantienen).

@@ -1,4 +1,4 @@
-# Modelo comercial y ecosistema — Bermejo Live Market
+# Modelo comercial y ecosistema — Encontralo
 
 > Documento vivo. Registra el modelo de negocio (embudo, membresías, add-ons),
 > ideas de crecimiento y el análisis del ecosistema (amandaclothing).
@@ -7,7 +7,7 @@
 
 ## 0. Principio rector (recordatorio)
 
-Bermejo Live Market es una **capa de descubrimiento + conexión**, NO un
+Encontralo es una **capa de descubrimiento + conexión**, NO un
 marketplace. La venta ocurre directo comprador↔vendedor por WhatsApp; la
 plataforma no es dueña de la transacción. **Si algo obliga a la plataforma a ser
 dueña de la transacción, no es para este producto.** (Ver ADR de producto.)
@@ -176,7 +176,7 @@ Si hay **checkout real**, heredás pagos, fraude, devoluciones, disputas, logís
 ## 7. Capa de tienda/ofertas (BermejoOfertas + tiendas por vendedor)
 
 **Jerarquía correcta (aclarada por el dueño):**
-1. **Núcleo:** Bermejo Live Market (descubrimiento + mapa + WhatsApp) — lo construido.
+1. **Núcleo:** Encontralo (descubrimiento + mapa + WhatsApp) — lo construido.
 2. **Como servicio adicional**, una capa de **tienda con carrito**. El dueño la
    piensa en dos formas (no excluyentes):
    - **Opción A — BermejoOfertas:** un sitio **compartido** con los productos en

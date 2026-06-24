@@ -72,7 +72,7 @@ export function LiveFeed({ initial }: { initial: FeedItem[] }) {
             <div className="pactions">
               <a
                 className="btn btn-wa btn-sm"
-                href={waLink(p.comercio_whatsapp, `Hola, vi "${p.titulo ?? "tu publicación"}" en Bermejo Live Market`)}
+                href={waLink(p.comercio_whatsapp, `Hola, vi "${p.titulo ?? "tu publicación"}" en Encontralo`)}
                 target="_blank"
                 rel="noopener"
               >

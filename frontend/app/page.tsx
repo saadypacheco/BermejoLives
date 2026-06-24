@@ -20,15 +20,16 @@ export default async function Home() {
       <section className="hero">
         <div className="wrap">
           <div className="hero-text">
-            <span className="eyebrow"><span className="dot-live" /> Bermejo · Bolivia · Frontera viva</span>
+            <span className="eyebrow"><span className="dot-live" /> Comercio local · Frontera viva</span>
             <h1 className="hero-title">
-              Todo lo que se<br />vende en Bermejo,<br /><span className="green">en tiempo real</span>
+              Todo lo que se<br />vende en tu ciudad,<br /><span className="green">en tiempo real</span>
             </h1>
             <p className="hero-sub">
+              <b style={{ color: "var(--txt)" }}>Encontralo en el mapa. Reservalo en la tienda.</b><br />
               Explora ofertas, videos, comercios y promociones publicadas directamente desde WhatsApp.
             </p>
             <div className="hero-cta">
-              <Link href="#mapa" className="btn btn-primary">Explorar Bermejo <Pin /></Link>
+              <Link href="#mapa" className="btn btn-primary">Explorar el mapa <Pin /></Link>
               <Link href="/publicar" className="btn btn-ghost"><Store /> Publicar mi negocio</Link>
             </div>
             <div className="hero-social">
@@ -77,7 +78,7 @@ export default async function Home() {
           <div className="section-head">
             <div>
               <span className="eyebrow"><span className="dot-live" /> Feed en tiempo real</span>
-              <h2>Lo que se publica ahora en Bermejo</h2>
+              <h2>Lo que se publica ahora</h2>
               <p>Publicaciones aprobadas por moderadores, llegando directo desde WhatsApp.</p>
             </div>
           </div>
@@ -118,7 +119,7 @@ export default async function Home() {
           <div className="explore">
             <div>
               <span className="eyebrow">Mapa comercial conceptual</span>
-              <h2>Explora Bermejo</h2>
+              <h2>Explora la ciudad</h2>
               <p>Descubre galerías, mercados y todas las zonas comerciales.</p>
               <div className="zone-chips">
                 {zonas.map((z) => (
@@ -174,10 +175,10 @@ export default async function Home() {
         <div className="wrap">
           <div className="cta">
             <div>
-              <h2>¿Tenés un comercio en Bermejo?</h2>
+              <h2>¿Tenés un comercio?</h2>
               <p>Publicá tus ofertas, videos y novedades mandando un mensaje por WhatsApp. Nosotros las mostramos al instante.</p>
             </div>
-            <a className="btn btn-primary" href="https://wa.me/59170000000?text=Quiero%20publicar%20en%20Bermejo%20Live%20Market" target="_blank" rel="noopener">
+            <a className="btn btn-primary" href="https://wa.me/59170000000?text=Quiero%20publicar%20en%20Encontralo" target="_blank" rel="noopener">
               <WhatsApp style={{ width: 18, height: 18 }} /> Publicar por WhatsApp
             </a>
           </div>
@@ -187,8 +188,8 @@ export default async function Home() {
       <footer className="footer">
         <div className="wrap">
           <div className="copy">
-            <span>© 2026 Bermejo Live Market. Todos los derechos reservados.</span>
-            <span>Hecho con <span className="heart">♥</span> en Bermejo, Bolivia</span>
+            <span>© 2026 Encontralo. Todos los derechos reservados.</span>
+            <span>Hecho con <span className="heart">♥</span> en la frontera</span>
           </div>
         </div>
       </footer>

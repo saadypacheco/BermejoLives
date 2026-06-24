@@ -1,4 +1,4 @@
-# Preguntas abiertas — Bermejo Live Market
+# Preguntas abiertas — Encontralo
 
 > Generadas en F0 (`/architect-idea`, sesión 1, 2026-06-04). Las 🔴 bloquean
 > decisiones de `/architect-stack`. Resolverlas (o decidir un default explícito)

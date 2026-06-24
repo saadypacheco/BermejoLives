@@ -182,3 +182,54 @@ def activar_comercio(
     repo.activar_comercio(comercio_id)
     logger.info("suscripcion.activado", comercio=comercio_id, by=admin["email"])
     return {"ok": True}
+
+
+# ---- Pagos self-service pendientes de confirmación ----
+class ConfirmarPagoBody(BaseModel):
+    meses: int = 1
+
+
+@router.get("/admin/pagos/pendientes")
+def listar_pagos_pendientes(
+    _admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Pagos QR que los comercios subieron y esperan confirmación."""
+    items = repo.list_pagos_pendientes()
+    return {"items": items, "total": len(items)}
+
+
+@router.post("/admin/pagos/{pago_id}/confirmar")
+def confirmar_pago(
+    pago_id: str,
+    body: ConfirmarPagoBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Confirma un pago pendiente: lo marca confirmado y extiende paga_hasta."""
+    result = repo.confirmar_pago(pago_id, body.meses, admin["email"])
+    logger.info("suscripcion.pago_confirmado", pago=pago_id, meses=body.meses, by=admin["email"])
+    return result
+
+
+# ---- Mensaje del admin a un comercio (notificación) ----
+class MensajeAdminBody(BaseModel):
+    cuerpo: str
+
+
+@router.post("/admin/comercio/{comercio_id}/mensaje")
+def enviar_mensaje_comercio(
+    comercio_id: str,
+    body: MensajeAdminBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """El admin le envía un mensaje/notificación al comercio (aparece en su bandeja)."""
+    if not body.cuerpo.strip():
+        raise HTTPException(status_code=400, detail="Mensaje vacío")
+    repo.crear_mensaje({
+        "comercio_id": comercio_id, "autor": "admin",
+        "nombre": "Encontralo", "cuerpo": body.cuerpo.strip(),
+    })
+    logger.info("admin.mensaje", comercio=comercio_id, by=admin["email"])
+    return {"ok": True}

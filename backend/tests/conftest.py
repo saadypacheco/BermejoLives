@@ -18,6 +18,10 @@ class FakeRepo:
         self.usuarios: dict[str, dict] = {}          # email -> row
         self.publicaciones: list[dict] = []
         self.wa_inbox: dict[str, dict] = {}          # wa_message_id -> row
+        self.leads: list[dict] = []
+        self.producto_refs: dict[str, dict] = {}     # id -> row
+        self.pagos: dict[str, dict] = {}             # id -> row
+        self.mensajes: dict[str, dict] = {}          # id -> row
         self.zonas: dict[str, str] = {"zona-moda": "zona-1"}
         self.rubros: dict[str, str] = {"importadora": "rub-1", "gastronomia": "rub-2", "gomeria": "rub-3", "servicios": "rub-4"}
         self._seq = 0
@@ -142,6 +146,91 @@ class FakeRepo:
 
     def get_ciudad_id(self, slug):
         return {"bermejo": "ciu-1"}.get(slug)
+
+    def update_comercio(self, comercio_id, patch, rubro_slugs=None):
+        c = self.comercios.get(comercio_id)
+        if not c:
+            return {}
+        c.update(patch)
+        if rubro_slugs:
+            c["rubros"] = list(rubro_slugs)
+        return c
+
+    # ---- leads ----
+    def insert_lead(self, row):
+        self.leads.append({"id": self._id("lead"), **row})
+
+    def list_leads_by_comercio(self, comercio_id, dias=30):
+        return [l for l in self.leads if l.get("comercio_id") == comercio_id]
+
+    # ---- producto_ref ----
+    def crear_producto_ref(self, row):
+        rid = self._id("pref")
+        full = {"id": rid, "estado": "publicado", **row}
+        self.producto_refs[rid] = full
+        return full
+
+    def list_producto_refs(self, comercio_id):
+        return [p for p in self.producto_refs.values() if p.get("comercio_id") == comercio_id]
+
+    def get_producto_ref(self, ref_id):
+        return self.producto_refs.get(ref_id)
+
+    def update_producto_ref(self, ref_id, patch):
+        p = self.producto_refs.get(ref_id)
+        if not p:
+            return {}
+        p.update(patch)
+        return p
+
+    def delete_producto_ref(self, ref_id):
+        self.producto_refs.pop(ref_id, None)
+
+    # ---- pagos self-service ----
+    def crear_pago_pendiente(self, comercio_id, row):
+        pid = self._id("pago")
+        full = {"id": pid, "comercio_id": comercio_id, "estado": "pendiente", **row}
+        self.pagos[pid] = full
+        return full
+
+    def list_pagos_pendientes(self):
+        return [p for p in self.pagos.values() if p.get("estado") == "pendiente"]
+
+    def confirmar_pago(self, pago_id, meses, by):
+        from datetime import date, timedelta
+        pago = self.pagos.get(pago_id)
+        if not pago:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="pago no encontrado")
+        c = self.comercios.get(pago["comercio_id"]) or {}
+        nueva = (date.today() + timedelta(days=30 * max(1, int(meses)))).isoformat()
+        pago.update({"estado": "confirmado", "registrado_por": by})
+        c["paga_hasta"] = nueva
+        c["suspendido"] = False
+        self.marcar_destacados_cobrados(pago["comercio_id"])
+        return {"ok": True, "paga_hasta": nueva, "comercio_id": pago["comercio_id"]}
+
+    def marcar_destacados_cobrados(self, comercio_id):
+        for p in self.publicaciones:
+            if p.get("comercio_id") == comercio_id and p.get("costo") and not p.get("cobrado"):
+                p["cobrado"] = True
+
+    # ---- mensajes ----
+    def crear_mensaje(self, row):
+        mid = self._id("msg")
+        full = {"id": mid, "leido": False, **row}
+        self.mensajes[mid] = full
+        return full
+
+    def list_mensajes_de_comercio(self, comercio_id):
+        return [m for m in self.mensajes.values() if m.get("comercio_id") == comercio_id]
+
+    def marcar_mensaje_leido(self, mensaje_id, comercio_id):
+        m = self.mensajes.get(mensaje_id)
+        if m and m.get("comercio_id") == comercio_id:
+            m["leido"] = True
+            return m
+        return {}
 
 
 @pytest.fixture

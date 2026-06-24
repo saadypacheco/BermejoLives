@@ -8,6 +8,8 @@ import {
   editarComercio, type ComercioPorVerificar,
   listSuscripciones, registrarPago, suspenderComercio, activarComercio,
   type ComercioSuscripcion, type EstadoSuscripcion,
+  listPagosPendientes, confirmarPago, type PagoPendiente,
+  enviarMensajeComercio,
 } from "@/lib/api";
 import { getRubros } from "@/lib/data";
 import type { Rubro } from "@/lib/types";
@@ -19,12 +21,13 @@ export default function AdminPage() {
   const [email, setEmail] = useState("admin@bermejolive.com");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"publicaciones" | "comercios" | "suscripciones">("comercios");
+  const [tab, setTab] = useState<"publicaciones" | "comercios" | "suscripciones" | "pagos">("comercios");
   const [items, setItems] = useState<PendingPub[]>([]);
   const [comercios, setComercios] = useState<ComercioPorVerificar[]>([]);
   const [todosLosComercios, setTodosLosComercios] = useState<ComercioPorVerificar[]>([]);
   const [rubros, setRubros] = useState<Rubro[]>([]);
   const [suscripciones, setSuscripciones] = useState<ComercioSuscripcion[]>([]);
+  const [pagosPendientes, setPagosPendientes] = useState<PagoPendiente[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -33,6 +36,7 @@ export default function AdminPage() {
       load();
       loadComercios();
       loadSuscripciones();
+      loadPagos();
       getRubros().then(setRubros);
     }
   }, []);
@@ -57,6 +61,15 @@ export default function AdminPage() {
 
   async function loadSuscripciones() {
     try { setSuscripciones(await listSuscripciones()); } catch { setSuscripciones([]); }
+  }
+
+  async function loadPagos() {
+    try { setPagosPendientes(await listPagosPendientes()); } catch { setPagosPendientes([]); }
+  }
+
+  async function doConfirmarPago(pagoId: string, meses: number) {
+    setPagosPendientes((prev) => prev.filter((p) => p.id !== pagoId)); // optimista
+    try { await confirmarPago(pagoId, meses); loadSuscripciones(); } catch { loadPagos(); }
   }
 
   async function actComercio(id: string, accion: "verificar" | "rechazar") {
@@ -87,6 +100,7 @@ export default function AdminPage() {
       load();
       loadComercios();
       loadSuscripciones();
+      loadPagos();
     } catch {
       setErr("Credenciales incorrectas. ¿Está corriendo el backend?");
     }
@@ -141,6 +155,9 @@ export default function AdminPage() {
         <button className={tab === "suscripciones" ? "active" : ""} onClick={() => { setTab("suscripciones"); loadSuscripciones(); }}>
           Suscripciones {suscripciones.filter((c) => ["por_vencer","vencido","suspendido"].includes(c.suscripcion_estado)).length > 0 && "⚠️"}
         </button>
+        <button className={tab === "pagos" ? "active" : ""} onClick={() => { setTab("pagos"); loadPagos(); }}>
+          Pagos {pagosPendientes.length > 0 && <span style={{ color: "var(--amber)" }}>· {pagosPendientes.length}</span>}
+        </button>
       </div>
 
       {tab === "comercios" && (
@@ -162,6 +179,8 @@ export default function AdminPage() {
           onPago={() => loadSuscripciones()}
         />
       )}
+
+      {tab === "pagos" && <TabPagos items={pagosPendientes} onConfirmar={doConfirmarPago} />}
 
       {tab === "publicaciones" && (
       <div className="panel-card glass">
@@ -206,6 +225,48 @@ const ESTADO_CFG: Record<EstadoSuscripcion, { label: string; color: string }> = 
   suspendido: { label: "Suspendido",   color: "#888" },
   sin_plan:   { label: "Sin plan",     color: "var(--txt-3)" },
 };
+
+function TabPagos({
+  items, onConfirmar,
+}: {
+  items: PagoPendiente[];
+  onConfirmar: (pagoId: string, meses: number) => void;
+}) {
+  const METODO_LABEL: Record<string, string> = {
+    "qr-bolivia": "QR Bolivia", "qr-argentina": "QR Argentina",
+    transferencia: "Transferencia", efectivo: "Efectivo",
+  };
+  return (
+    <div className="panel-card glass">
+      <div className="ph"><h3>Pagos por confirmar</h3><span style={{ color: "var(--txt-3)", fontSize: 13 }}>Comprobantes que subieron los comercios</span></div>
+      {items.length === 0 && (
+        <div className="mod-item" style={{ justifyContent: "center", color: "var(--txt-3)" }}>
+          No hay pagos pendientes de confirmación.
+        </div>
+      )}
+      {items.map((p) => (
+        <div className="mod-item" key={p.id}>
+          {p.comprobante_url
+            ? <a href={p.comprobante_url} target="_blank" rel="noopener"><img src={p.comprobante_url} alt="comprobante" /></a>
+            : <div style={{ width: 120, minWidth: 120, height: 84, display: "grid", placeItems: "center", background: "var(--panel)", borderRadius: 8, color: "var(--txt-3)", fontSize: 12 }}>sin foto</div>}
+          <div>
+            <h4>{p.comercios?.nombre ?? "Comercio"}</h4>
+            <p>
+              <b style={{ color: "var(--neon)" }}>{p.moneda} {Number(p.monto).toLocaleString("es-AR")}</b>
+              {" · "}{METODO_LABEL[p.metodo] ?? p.metodo}
+              {p.referencia && <> · ref: {p.referencia}</>}
+            </p>
+            <div className="mm"><span>🕒 {new Date(p.created_at).toLocaleString("es-AR")}</span></div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginLeft: "auto" }}>
+            <button className="btn btn-primary btn-sm" onClick={() => onConfirmar(p.id, 1)}>Confirmar 1 mes</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => onConfirmar(p.id, 2)}>Confirmar 2 meses</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function TabSuscripciones({
   items, onSuspender, onActivar, onPago,
@@ -268,6 +329,10 @@ function TabSuscripciones({
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <button className="btn btn-ghost btn-sm" title="Enviar mensaje al comercio" onClick={async () => {
+                const cuerpo = prompt(`Mensaje para ${c.nombre}:`);
+                if (cuerpo && cuerpo.trim()) { try { await enviarMensajeComercio(c.id, cuerpo.trim()); alert("Mensaje enviado ✓"); } catch { alert("No se pudo enviar"); } }
+              }}>✉️</button>
               <button className="btn btn-ghost btn-sm" onClick={() => setPagandoId(c.id)}>
                 + Pago
               </button>

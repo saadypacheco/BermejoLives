@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Bermejo Live Market — La ciudad comercial, en tiempo real",
+  title: "Encontralo — Comercios y ofertas en el mapa",
   description:
-    "Todo lo que se vende en Bermejo, en tiempo real. Ofertas, videos, comercios y promociones publicadas directamente desde WhatsApp.",
+    "Encontralo en el mapa. Reservalo en la tienda. Todo lo que se vende en tu ciudad, en tiempo real.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

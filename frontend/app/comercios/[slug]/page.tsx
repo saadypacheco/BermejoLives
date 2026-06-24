@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Nav } from "@/components/nav";
+import { MensajeComercioForm } from "@/components/mensaje-comercio-form";
 import { getComercioBySlug, getProductos } from "@/lib/data";
 import { precioFmt, waLink, MODALIDAD_LABEL } from "@/lib/types";
 import {
@@ -51,7 +52,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
             </div>
           </div>
           <div className="profile-cta">
-            <a className="btn btn-wa" href={waLink(comercio.whatsapp, `Hola ${comercio.nombre}, te contacto desde Bermejo Live Market`)} target="_blank" rel="noopener">
+            <a className="btn btn-wa" href={waLink(comercio.whatsapp, `Hola ${comercio.nombre}, te contacto desde Encontralo`)} target="_blank" rel="noopener">
               <WhatsApp style={{ width: 18, height: 18 }} /> WhatsApp
             </a>
             <a className="btn btn-ghost" href={mapsHref} target="_blank" rel="noopener"><Pin /> Cómo llegar</a>
@@ -88,6 +89,8 @@ export default async function ComercioPage({ params }: { params: { slug: string 
               </a>
             ))}
           </div>
+
+          <MensajeComercioForm comercioId={comercio.id} nombre={comercio.nombre} />
         </div>
 
         {/* PRODUCTOS */}

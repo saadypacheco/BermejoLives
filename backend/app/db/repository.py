@@ -36,8 +36,20 @@ class Repo(Protocol):
     def registrar_pago(self, comercio_id: str, row: dict) -> dict: ...
     def suspender_comercio(self, comercio_id: str) -> None: ...
     def activar_comercio(self, comercio_id: str) -> None: ...
+    def crear_pago_pendiente(self, comercio_id: str, row: dict) -> dict: ...
+    def list_pagos_pendientes(self) -> list[dict]: ...
+    def confirmar_pago(self, pago_id: str, meses: int, by: str) -> dict: ...
+    def marcar_destacados_cobrados(self, comercio_id: str) -> None: ...
+    def crear_mensaje(self, row: dict) -> dict: ...
+    def list_mensajes_de_comercio(self, comercio_id: str) -> list[dict]: ...
+    def marcar_mensaje_leido(self, mensaje_id: str, comercio_id: str) -> dict: ...
     def list_todos_comercios(self, verificado: bool | None, limit: int) -> list[dict]: ...
     def update_comercio(self, comercio_id: str, patch: dict, rubro_slugs: list[str] | None) -> dict: ...
+    def crear_producto_ref(self, row: dict) -> dict: ...
+    def list_producto_refs(self, comercio_id: str) -> list[dict]: ...
+    def get_producto_ref(self, ref_id: str) -> dict | None: ...
+    def update_producto_ref(self, ref_id: str, patch: dict) -> dict: ...
+    def delete_producto_ref(self, ref_id: str) -> None: ...
 
 
 class SupabaseRepo:
@@ -309,6 +321,91 @@ class SupabaseRepo:
     def activar_comercio(self, comercio_id: str) -> None:
         self._db.table("comercios").update({"suspendido": False}).eq("id", comercio_id).execute()
 
+    # ---- pago self-service (comercio sube comprobante → admin confirma) ----
+    def crear_pago_pendiente(self, comercio_id: str, row: dict) -> dict:
+        """El comercio declara un pago con comprobante. Queda 'pendiente' (NO extiende
+        paga_hasta hasta que el admin lo confirme)."""
+        from datetime import date
+        res = self._db.table("pagos").insert({
+            "comercio_id":     comercio_id,
+            "monto":           row["monto"],
+            "moneda":          row.get("moneda", "ARS"),
+            "metodo":          row.get("metodo", "qr-bolivia"),
+            "referencia":      row.get("referencia"),
+            "comprobante_url": row.get("comprobante_url"),
+            "estado":          "pendiente",
+            "periodo_desde":   date.today().isoformat(),
+            "periodo_hasta":   date.today().isoformat(),  # se recalcula al confirmar
+            "registrado_por":  "comercio:self-service",
+            "notas":           row.get("notas"),
+        }).execute()
+        return res.data[0]
+
+    def list_pagos_pendientes(self) -> list[dict]:
+        res = (
+            self._db.table("pagos")
+            .select("*, comercios(nombre, slug)")
+            .eq("estado", "pendiente")
+            .order("created_at", desc=True)
+            .limit(200)
+            .execute()
+        )
+        return res.data or []
+
+    def confirmar_pago(self, pago_id: str, meses: int, by: str) -> dict:
+        """El admin confirma un pago pendiente: lo marca confirmado y extiende paga_hasta."""
+        from datetime import date
+        from calendar import monthrange
+        from fastapi import HTTPException
+
+        res = self._db.table("pagos").select("*").eq("id", pago_id).limit(1).execute()
+        pago = res.data[0] if res.data else None
+        if not pago:
+            raise HTTPException(status_code=404, detail="pago no encontrado")
+        comercio = self.get_comercio(pago["comercio_id"])
+        if not comercio:
+            raise HTTPException(status_code=404, detail="comercio no encontrado")
+
+        meses = max(1, int(meses))
+        hoy = date.today()
+        base = max(hoy, date.fromisoformat(comercio["paga_hasta"])) if comercio.get("paga_hasta") else hoy
+        m = base.month - 1 + meses
+        nueva = date(base.year + m // 12, m % 12 + 1,
+                     min(base.day, monthrange(base.year + m // 12, m % 12 + 1)[1])).isoformat()
+
+        self._db.table("pagos").update({
+            "estado": "confirmado", "periodo_hasta": nueva, "registrado_por": by,
+        }).eq("id", pago_id).execute()
+        self._db.table("comercios").update({
+            "paga_hasta": nueva, "suspendido": False,
+        }).eq("id", pago["comercio_id"]).execute()
+        # Los destacados pendientes quedan saldados con este pago.
+        self.marcar_destacados_cobrados(pago["comercio_id"])
+        return {"ok": True, "paga_hasta": nueva, "comercio_id": pago["comercio_id"]}
+
+    def marcar_destacados_cobrados(self, comercio_id: str) -> None:
+        (self._db.table("publicaciones").update({"cobrado": True})
+         .eq("comercio_id", comercio_id).eq("cobrado", False)
+         .filter("costo", "not.is", "null").execute())
+
+    # ---- mensajes (bandeja del comercio) ----
+    def crear_mensaje(self, row: dict) -> dict:
+        res = self._db.table("mensajes").insert(row).execute()
+        return res.data[0]
+
+    def list_mensajes_de_comercio(self, comercio_id: str) -> list[dict]:
+        res = (
+            self._db.table("mensajes").select("*")
+            .eq("comercio_id", comercio_id).order("created_at", desc=True).limit(200).execute()
+        )
+        return res.data or []
+
+    def marcar_mensaje_leido(self, mensaje_id: str, comercio_id: str) -> dict:
+        (self._db.table("mensajes").update({"leido": True})
+         .eq("id", mensaje_id).eq("comercio_id", comercio_id).execute())
+        res = self._db.table("mensajes").select("*").eq("id", mensaje_id).limit(1).execute()
+        return res.data[0] if res.data else {}
+
     def list_todos_comercios(self, verificado: bool | None = None, limit: int = 300) -> list[dict]:
         q = (
             self._db.table("comercios")
@@ -333,6 +430,29 @@ class SupabaseRepo:
                 self._db.table("comercio_rubros").delete().eq("comercio_id", comercio_id).execute()
                 self.set_comercio_rubros(comercio_id, rubro_ids)
         return self.get_comercio(comercio_id) or {}
+
+    # ---- producto_ref (puente con el ecommerce) ----
+    def crear_producto_ref(self, row: dict) -> dict:
+        res = self._db.table("producto_ref").insert(row).execute()
+        return res.data[0]
+
+    def list_producto_refs(self, comercio_id: str) -> list[dict]:
+        res = (
+            self._db.table("producto_ref").select("*")
+            .eq("comercio_id", comercio_id).order("created_at", desc=True).execute()
+        )
+        return res.data or []
+
+    def get_producto_ref(self, ref_id: str) -> dict | None:
+        res = self._db.table("producto_ref").select("*").eq("id", ref_id).limit(1).execute()
+        return res.data[0] if res.data else None
+
+    def update_producto_ref(self, ref_id: str, patch: dict) -> dict:
+        self._db.table("producto_ref").update(patch).eq("id", ref_id).execute()
+        return self.get_producto_ref(ref_id) or {}
+
+    def delete_producto_ref(self, ref_id: str) -> None:
+        self._db.table("producto_ref").delete().eq("id", ref_id).execute()
 
 
 def get_repo() -> Repo:

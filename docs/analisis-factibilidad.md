@@ -60,7 +60,7 @@ verifica que sea permitido (comercio/oferta)? ¿Cómo se administra?
    credenciales conocidas**. **Acción inmediata:** correr la limpieza
    (`delete from comercio_usuarios; delete from comercios where wa_jid like '%@c.us'`).
 2. **Webhook de WhatsApp sin secreto en prod.** `WEBHOOK_SECRET` vacío →
-   `/ingest/webhook` (público en `api.buscadonde.com`) **acepta cualquier POST** →
+   `/ingest/webhook` (público en `api.encontralo.store`) **acepta cualquier POST** →
    inyecta publicaciones pendientes (spam de cola). Setear `WEBHOOK_SECRET` y/o no
    exponer `/ingest` hasta desplegar WAHA.
 3. **Sin rate limiting** en login, búsqueda, webhook, publicar → brute-force y

@@ -157,3 +157,40 @@ export async function activarComercio(id: string) {
   const res = await authFetch(`/admin/comercio/${id}/activar`, { method: "POST" });
   return res.json();
 }
+
+// ---- Pagos self-service pendientes de confirmación ----
+export type PagoPendiente = {
+  id: string;
+  comercio_id: string;
+  monto: number;
+  moneda: string;
+  metodo: string;
+  referencia: string | null;
+  comprobante_url: string | null;
+  created_at: string;
+  comercios?: { nombre: string; slug: string } | null;
+};
+
+export async function listPagosPendientes(): Promise<PagoPendiente[]> {
+  const res = await authFetch("/admin/pagos/pendientes");
+  const data = await res.json();
+  return data.items as PagoPendiente[];
+}
+
+export async function confirmarPago(pagoId: string, meses: number) {
+  const res = await authFetch(`/admin/pagos/${pagoId}/confirmar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ meses }),
+  });
+  return res.json();
+}
+
+export async function enviarMensajeComercio(comercioId: string, cuerpo: string) {
+  const res = await authFetch(`/admin/comercio/${comercioId}/mensaje`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cuerpo }),
+  });
+  return res.json();
+}

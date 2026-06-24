@@ -139,7 +139,7 @@ export default function SoftwarePage() {
       <footer className="footer">
         <div className="wrap">
           <div className="copy">
-            <span>© 2026 Bermejo Live Market</span>
+            <span>© 2026 Encontralo</span>
             <Link href="/bermejo" style={{ color: "var(--txt-3)" }}>Acceso equipo</Link>
           </div>
         </div>

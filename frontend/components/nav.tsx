@@ -13,8 +13,8 @@ export function Nav({ active }: { active?: string }) {
     <header className="nav">
       <div className="wrap">
         <Link className="brand" href="/">
-          <b>BER<i>MEJO</i></b>
-          <span>LIVE MARKET</span>
+          <b>ENCON<i>TRALO</i></b>
+          <span>EN EL MAPA</span>
         </Link>
         <nav className="nav-links">
           {links.map((l) => (

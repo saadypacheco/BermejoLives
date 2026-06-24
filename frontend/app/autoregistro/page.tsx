@@ -210,7 +210,7 @@ function ChatBot({ sess, onLogout }: { sess: ComercioSession; onLogout: () => vo
     try {
       const res = await publicar(draft);
       if (res.publicado_directo) {
-        say("bot", "🎉 ¡Listo! Tu publicación ya está EN VIVO en Bermejo Live Market. (Tu comercio es confiable, se publicó directo.)");
+        say("bot", "🎉 ¡Listo! Tu publicación ya está EN VIVO en Encontralo. (Tu comercio es confiable, se publicó directo.)");
       } else {
         say("bot", "✅ ¡Recibido! Tu publicación quedó en revisión. Un moderador la aprueba y aparece en el feed en vivo. Te avisamos.");
       }

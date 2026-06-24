@@ -80,3 +80,188 @@ export async function publicar(payload: PublicarPayload): Promise<PublicarResult
   if (!res.ok) throw new Error("No se pudo publicar");
   return res.json();
 }
+
+// ---- Panel "Mi comercio" ----
+async function cFetch(path: string, init?: RequestInit) {
+  const res = await fetch(`${API}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getCToken() ?? ""}`,
+      ...(init?.headers ?? {}),
+    },
+  });
+  if (res.status === 401) {
+    clearComercio();
+    throw new Error("Tu sesión venció, volvé a entrar.");
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail ?? "Error en la solicitud");
+  }
+  return res.json();
+}
+
+export type Perfil = {
+  id: string;
+  slug: string;
+  nombre: string;
+  descripcion?: string | null;
+  whatsapp?: string | null;
+  telefono?: string | null;
+  email?: string | null;
+  facebook_url?: string | null;
+  instagram_url?: string | null;
+  tiktok_url?: string | null;
+  sitio_web?: string | null;
+  logo_url?: string | null;
+  portada_url?: string | null;
+  direccion?: string | null;
+  como_llegar?: string | null;
+  horario?: string | null;
+  pedido_minimo?: string | null;
+  modalidad?: string | null;
+  plan?: string | null;
+  verificado?: boolean;
+  confiable?: boolean;
+};
+
+export type Suscripcion = {
+  plan: string;
+  paga_hasta: string | null;
+  dias_restantes: number | null;
+  suspendido: boolean;
+  estado: "gratis" | "activo" | "por_vencer" | "vencido" | "suspendido" | "sin_pago";
+  cargos_pendientes: { id: string; titulo: string | null; costo: number | null }[];
+  total_cargos: number;
+};
+
+export type Metricas = {
+  contactos_30d: number;
+  contactos_por_tipo: Record<string, number>;
+  publicaciones_total: number;
+  publicaciones_por_estado: Record<string, number>;
+};
+
+export const getPerfil = (): Promise<Perfil> => cFetch("/comercio/perfil");
+export const updatePerfil = (patch: Partial<Perfil>): Promise<Perfil> =>
+  cFetch("/comercio/perfil", { method: "PUT", body: JSON.stringify(patch) });
+export const getSuscripcion = (): Promise<Suscripcion> => cFetch("/comercio/suscripcion");
+export const getMetricas = (): Promise<Metricas> => cFetch("/comercio/metricas");
+
+export async function pagarSuscripcion(
+  fields: { monto: number; moneda: string; metodo: string; referencia?: string },
+  comprobante: File | null,
+): Promise<{ ok: boolean; estado: string; pago_id: string }> {
+  const fd = new FormData();
+  fd.append("monto", String(fields.monto));
+  fd.append("moneda", fields.moneda);
+  fd.append("metodo", fields.metodo);
+  if (fields.referencia) fd.append("referencia", fields.referencia);
+  if (comprobante) fd.append("comprobante", comprobante);
+  const res = await fetch(`${API}/comercio/pago`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${getCToken() ?? ""}` },
+    body: fd,
+  });
+  if (res.status === 401) { clearComercio(); throw new Error("Tu sesión venció, volvé a entrar."); }
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail ?? "No se pudo enviar el pago");
+  }
+  return res.json();
+}
+
+// ---- Productos (marketplace) ----
+export type Categoria = { slug: string; nombre: string };
+export type ProductoDraft = {
+  titulo: string;
+  descripcion: string | null;
+  precio: number | null;
+  moneda: string;
+  categoria_slug: string | null;
+  categoria_nombre: string | null;
+  categorias: Categoria[];
+};
+export type ProductoRef = {
+  id: string;
+  tienda_producto_id?: string | null;
+  url?: string | null;
+  foto_url?: string | null;
+  titulo?: string | null;
+  precio?: number | null;
+  moneda?: string | null;
+  estado: string;
+  destacado_pub_id?: string | null;
+  cargado_por?: string | null;
+  created_at?: string;
+};
+
+export const draftProducto = (b: {
+  titulo: string; descripcion?: string; precio?: number | null; moneda?: string;
+}): Promise<ProductoDraft> =>
+  cFetch("/comercio/productos/draft", { method: "POST", body: JSON.stringify(b) });
+
+export const listProductos = (): Promise<{ items: ProductoRef[]; total: number }> =>
+  cFetch("/comercio/productos");
+
+export const borrarProducto = (refId: string): Promise<{ ok: boolean }> =>
+  cFetch(`/comercio/productos/${refId}`, { method: "DELETE" });
+
+export const destacarProducto = (refId: string): Promise<{ ok: boolean; estado: string; costo: number }> =>
+  cFetch(`/comercio/productos/${refId}/destacar`, { method: "POST" });
+
+// ---- Mensajes ----
+export type Mensaje = {
+  id: string;
+  autor: "admin" | "cliente" | "comercio";
+  nombre: string | null;
+  contacto: string | null;
+  cuerpo: string;
+  leido: boolean;
+  created_at: string;
+};
+
+export const getMensajes = (): Promise<{ items: Mensaje[]; no_leidos: number }> => cFetch("/comercio/mensajes");
+export const marcarLeido = (id: string): Promise<{ ok: boolean }> =>
+  cFetch(`/comercio/mensajes/${id}/leido`, { method: "POST" });
+
+// Público (sin login): un cliente le deja un mensaje al comercio desde su ficha.
+export async function dejarMensaje(b: {
+  comercio_id: string; nombre: string; cuerpo: string; contacto?: string;
+}): Promise<{ ok: boolean }> {
+  const res = await fetch(`${API}/mensaje`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(b),
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail ?? "No se pudo enviar el mensaje");
+  }
+  return res.json();
+}
+
+export async function crearProducto(
+  fields: { titulo: string; precio: number; moneda: string; categoria_slug: string; descripcion?: string },
+  fotos: File[],
+): Promise<{ ok: boolean; url?: string; producto_ref: ProductoRef }> {
+  const fd = new FormData();
+  fd.append("titulo", fields.titulo);
+  fd.append("precio", String(fields.precio));
+  fd.append("moneda", fields.moneda);
+  fd.append("categoria_slug", fields.categoria_slug);
+  if (fields.descripcion) fd.append("descripcion", fields.descripcion);
+  fotos.forEach((f) => fd.append("fotos", f));
+  const res = await fetch(`${API}/comercio/productos`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${getCToken() ?? ""}` },  // sin Content-Type: lo pone FormData
+    body: fd,
+  });
+  if (res.status === 401) { clearComercio(); throw new Error("Tu sesión venció, volvé a entrar."); }
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail ?? "No se pudo publicar el producto");
+  }
+  return res.json();
+}
