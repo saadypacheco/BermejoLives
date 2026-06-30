@@ -104,7 +104,7 @@ export function HomeMap({ comercios, onSelect, selectedId }: {
         const map = mapRef.current;
         const size = map.getSize();
         const pt = map.latLngToContainerPoint([c.lat, c.lng]);
-        const target = map.containerPointToLatLng([pt.x, pt.y + size.y * 0.20]);
+        const target = map.containerPointToLatLng([pt.x, pt.y + size.y * 0.30]); // pin queda ~20% desde arriba
         map.panTo(target, { animate: true, duration: 0.4 });
       });
     }
@@ -123,11 +123,11 @@ export function HomeMap({ comercios, onSelect, selectedId }: {
     svg.setAttribute("width", String(size.x));
     svg.setAttribute("height", String(size.y));
     svg.style.display = "block";
-    // apunta al borde superior de la tarjeta (flota abajo); curva suave con leve panza
-    const x2 = size.x / 2, y2 = size.y * 0.48;
-    const c1x = p.x + 16, c1y = (p.y + y2) / 2;
-    const c2x = x2 + 16, c2y = (p.y + y2) / 2;
-    path.setAttribute("d", `M ${p.x} ${p.y} C ${c1x} ${c1y} ${c2x} ${c2y} ${x2} ${y2}`);
+    // del pin (arriba) hacia el hueco encima de la tarjeta (abajo), curva suave
+    const x2 = size.x / 2, y2 = size.y * 0.52;
+    const c1x = p.x + 14, c1y = p.y + (y2 - p.y) * 0.55;
+    const c2x = x2 + 14, c2y = p.y + (y2 - p.y) * 0.75;
+    path.setAttribute("d", `M ${p.x} ${p.y + 6} C ${c1x} ${c1y} ${c2x} ${c2y} ${x2} ${y2}`);
   }
 
   return (
