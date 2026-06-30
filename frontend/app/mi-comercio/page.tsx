@@ -18,13 +18,15 @@ const Chat = ic("M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.6-.8L3 21l1.9-5.4A
 const Gear = ic("M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 0 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15H4a2 2 0 0 1 0-4h.1A1.7 1.7 0 0 0 6 8.3l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 11 4.6V4a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 .3 1.9 1.7 1.7 0 0 0 1.5 1H20a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z");
 const Ext = ic("M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3");
 const Logout = ic("M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9");
+const Tag = ic("M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01");
 import {
   comercioLogin, getComercioSession, clearComercio,
   getPerfil, updatePerfil, getSuscripcion, getMetricas, pagarSuscripcion,
   draftProducto, listProductos, crearProducto, borrarProducto, destacarProducto,
   getMensajes, marcarLeido,
+  getMisPublicaciones, editarPublicacion, bajaPublicacion,
   type ComercioSession, type Perfil, type Suscripcion, type Metricas,
-  type ProductoDraft, type ProductoRef, type Mensaje,
+  type ProductoDraft, type ProductoRef, type Mensaje, type Publicacion,
 } from "@/lib/comercio";
 
 export default function MiComercioPage() {
@@ -73,15 +75,16 @@ function LoginGate({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
 const Mail = ic("M3 6h18v12H3zM3 7l9 6 9-6");
 const MODA_LABEL: Record<string, string> = { mayorista: "Mayorista", minorista: "Minorista", ambos: "Mayor y menor" };
 
-type Vista = "inicio" | "editar" | "productos" | "contactos" | "estadisticas" | "mensajes" | "suscripcion" | "config";
+type Vista = "inicio" | "editar" | "productos" | "ofertas" | "contactos" | "estadisticas" | "mensajes" | "suscripcion" | "config";
 const TITULOS: Record<Vista, string> = {
   inicio: "Mi comercio", editar: "Editar mi comercio", productos: "Productos / Ofertas",
-  contactos: "Contactos", estadisticas: "Estadísticas", mensajes: "Mensajes",
+  ofertas: "Mis ofertas", contactos: "Contactos", estadisticas: "Estadísticas", mensajes: "Mensajes",
   suscripcion: "Suscripción", config: "Configuración",
 };
 const NAV_ITEMS: { v: Vista; label: string; Icon: any }[] = [
   { v: "inicio", label: "Mi comercio", Icon: Store },
-  { v: "productos", label: "Productos / Ofertas", Icon: Send },
+  { v: "ofertas", label: "Mis ofertas", Icon: Tag },
+  { v: "productos", label: "Productos", Icon: Send },
   { v: "contactos", label: "Contactos", Icon: Phone },
   { v: "estadisticas", label: "Estadísticas", Icon: Chart },
   { v: "mensajes", label: "Mensajes", Icon: Chat },
@@ -324,6 +327,132 @@ function ConfiguracionView() {
   );
 }
 
+/* --------------------------------- Mis ofertas --------------------------------- */
+const PUB_ESTADO: Record<string, { label: string; color: string }> = {
+  aprobado: { label: "En vivo", color: "var(--neon)" },
+  pendiente: { label: "En revisión", color: "var(--amber)" },
+  cambios: { label: "Pide cambios", color: "var(--amber)" },
+  rechazado: { label: "Rechazada", color: "var(--pink)" },
+};
+
+function OfertasTab() {
+  const [items, setItems] = useState<Publicacion[] | null>(null);
+  const [editing, setEditing] = useState<Publicacion | null>(null);
+  const [err, setErr] = useState("");
+
+  const cargar = () => getMisPublicaciones().then((r) => setItems(r.items)).catch((e) => setErr(e.message));
+  useEffect(() => { cargar(); }, []);
+
+  async function eliminar(id: string) {
+    if (!window.confirm("¿Eliminar esta publicación? No se puede deshacer.")) return;
+    try { await bajaPublicacion(id); cargar(); } catch (e) { setErr(e instanceof Error ? e.message : "Error"); }
+  }
+
+  if (editing) return <OfertaEditForm pub={editing} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); cargar(); }} />;
+  if (items === null) return <p style={{ color: "var(--txt-3)" }}>Cargando…</p>;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <p style={{ color: "var(--txt-3)", margin: 0, fontSize: 14 }}>Tus ofertas, videos y novedades. Editá precio, descuento o vencimiento.</p>
+        <Link href="/autoregistro" className="btn btn-primary btn-sm">Nueva oferta <Send /></Link>
+      </div>
+      {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
+      {items.length === 0 && <p style={{ color: "var(--txt-3)" }}>Todavía no publicaste ofertas. Creá una desde “Nueva oferta”.</p>}
+      {items.map((it) => {
+        const e = PUB_ESTADO[it.estado] ?? { label: it.estado, color: "var(--txt-3)" };
+        return (
+          <div key={it.id} className="glass" style={{ padding: 14, borderRadius: 14, display: "flex", gap: 14, alignItems: "center" }}>
+            <div style={{ width: 64, height: 64, borderRadius: 12, overflow: "hidden", background: "var(--panel)", flexShrink: 0, display: "grid", placeItems: "center", position: "relative" }}>
+              {it.imagen_url ? <img src={it.imagen_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 24 }}>🏷️</span>}
+              {it.descuento_pct != null && <span style={{ position: "absolute", top: 4, left: 4, background: "var(--neon)", color: "#04240f", fontSize: 10, fontWeight: 800, padding: "1px 5px", borderRadius: 6 }}>-{it.descuento_pct}%</span>}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.titulo ?? "(sin título)"}</div>
+              <div style={{ fontSize: 13, color: "var(--txt-3)", marginTop: 2 }}>
+                {it.precio != null ? `${it.moneda ?? ""} ${it.precio}` : "Sin precio"}{it.vence_el ? ` · vence ${it.vence_el}` : ""}
+              </div>
+              <span style={{ color: e.color, fontSize: 12, fontWeight: 700 }}>● {e.label}</span>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <button className="btn btn-sm" style={{ border: "1px solid var(--stroke)" }} onClick={() => setEditing(it)}><Edit style={{ width: 14, height: 14 }} /> Editar</button>
+              <button className="btn btn-sm" style={{ border: "1px solid var(--stroke)", color: "var(--pink)" }} onClick={() => eliminar(it.id)}>Eliminar</button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function OfertaEditForm({ pub, onCancel, onSaved }: { pub: Publicacion; onCancel: () => void; onSaved: () => void }) {
+  const [titulo, setTitulo] = useState(pub.titulo ?? "");
+  const [descripcion, setDescripcion] = useState(pub.descripcion ?? "");
+  const [precio, setPrecio] = useState(pub.precio != null ? String(pub.precio) : "");
+  const [moneda, setMoneda] = useState(pub.moneda ?? "BOB");
+  const [descuento, setDescuento] = useState(pub.descuento_pct != null ? String(pub.descuento_pct) : "");
+  const [vence, setVence] = useState(pub.vence_el ?? "");
+  const [imagen, setImagen] = useState(pub.imagen_url ?? "");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const esOferta = pub.tipo === "oferta";
+
+  async function guardar() {
+    setSaving(true); setErr("");
+    try {
+      await editarPublicacion(pub.id, {
+        titulo: titulo.trim() || null,
+        descripcion: descripcion.trim() || null,
+        precio: precio ? Number(precio) : null,
+        moneda,
+        imagen_url: imagen.trim() || null,
+        descuento_pct: esOferta && descuento ? Math.max(1, Math.min(99, Number(descuento))) : null,
+        vence_el: esOferta && vence ? vence : null,
+      });
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error al guardar");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="glass" style={{ padding: 20, borderRadius: 16, maxWidth: 560, display: "flex", flexDirection: "column", gap: 12 }}>
+      <button className="btn btn-sm" onClick={onCancel} style={{ alignSelf: "flex-start", border: "1px solid var(--stroke)" }}><Arrow style={{ width: 14, height: 14, transform: "rotate(180deg)" }} /> Volver</button>
+      <h3 style={{ margin: 0 }}>Editar publicación</h3>
+      <input className="adm-input" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título" />
+      <textarea className="adm-input" rows={3} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Descripción" style={{ resize: "vertical" }} />
+      {esOferta && (
+        <>
+          <div style={{ display: "flex", gap: 10 }}>
+            <input className="adm-input" type="number" inputMode="numeric" value={precio} onChange={(e) => setPrecio(e.target.value)} placeholder="Precio" style={{ flex: 2 }} />
+            <select className="adm-input" value={moneda} onChange={(e) => setMoneda(e.target.value)} style={{ flex: 1 }}>
+              <option value="BOB">Bs</option><option value="USD">USD</option><option value="ARS">$ ARS</option>
+            </select>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <label className="campo-lbl">Descuento %</label>
+              <input className="adm-input" type="number" inputMode="numeric" min={1} max={99} value={descuento} onChange={(e) => setDescuento(e.target.value)} placeholder="ej: 20 (opcional)" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="campo-lbl">Válido hasta</label>
+              <input className="adm-input" type="date" value={vence} onChange={(e) => setVence(e.target.value)} />
+            </div>
+          </div>
+        </>
+      )}
+      <input className="adm-input" value={imagen} onChange={(e) => setImagen(e.target.value)} placeholder="Link de imagen (opcional)" />
+      {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
+      <div style={{ display: "flex", gap: 10 }}>
+        <button className="btn btn-primary" onClick={guardar} disabled={saving}>{saving ? "Guardando…" : "Guardar cambios"}</button>
+        <button className="btn btn-ghost" onClick={onCancel} disabled={saving}>Cancelar</button>
+      </div>
+      <small style={{ color: "var(--txt-3)" }}>Si tu comercio no es confiable, los cambios vuelven a revisión antes de publicarse.</small>
+    </div>
+  );
+}
+
 function Panel({ sess, onLogout }: { sess: ComercioSession; onLogout: () => void }) {
   const [vista, setVista] = useState<Vista>("inicio");
   const [sub, setSub] = useState<Suscripcion | null>(null);
@@ -341,6 +470,7 @@ function Panel({ sess, onLogout }: { sess: ComercioSession; onLogout: () => void
         <div style={{ padding: "24px 26px", maxWidth: 1120 }}>
           {vista === "inicio" && <Overview onEditar={() => setVista("editar")} onProductos={() => setVista("productos")} onPlanes={() => setVista("suscripcion")} />}
           {vista === "editar" && <div style={{ maxWidth: 720 }}><button className="btn" onClick={() => setVista("inicio")} style={{ border: "1px solid var(--stroke)", marginBottom: 14 }}><Arrow style={{ width: 15, height: 15, transform: "rotate(180deg)" }} /> Volver</button><PerfilTab /></div>}
+          {vista === "ofertas" && <div style={{ maxWidth: 780 }}><OfertasTab /></div>}
           {vista === "productos" && <div style={{ maxWidth: 780 }}><ProductosTab /></div>}
           {vista === "contactos" && <div style={{ maxWidth: 720 }}><ContactosView /></div>}
           {vista === "estadisticas" && <div style={{ maxWidth: 720 }}><EstadisticasView /></div>}

@@ -347,3 +347,80 @@ def test_comercio_marca_mensaje_leido(client, repo):
 
 def test_mensajes_sin_token_401(client):
     assert client.get("/comercio/mensajes").status_code == 401
+
+
+# ---------------- Editar / baja de publicaciones ----------------
+def _pub(repo, cid, **kw):
+    return repo.insert_publicacion_directa(
+        {"comercio_id": cid, "tipo": "oferta", "titulo": "T", "estado": "aprobado", **kw}
+    )
+
+
+def test_editar_publicacion_confiable_actualiza_y_clampa(client, repo):
+    repo.seed_comercio(id="com-c", slug="c", nombre="C", whatsapp="591", confiable=True)
+    pub = _pub(repo, "com-c", precio=100)
+    token = comercio_token(comercio_id="com-c")
+    r = client.patch(
+        f"/comercio/publicaciones/{pub['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"precio": 80, "descuento_pct": 200, "vence_el": "2026-08-01"},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["estado"] == "aprobado"
+    assert data["item"]["precio"] == 80
+    assert data["item"]["descuento_pct"] == 99   # clamp 1..99
+    assert data["item"]["vence_el"] == "2026-08-01"
+
+
+def test_editar_publicacion_no_confiable_vuelve_a_pendiente(client, repo):
+    repo.seed_comercio(id="com-n", slug="n", nombre="N", whatsapp="591", confiable=False)
+    pub = _pub(repo, "com-n", precio=100)
+    token = comercio_token(comercio_id="com-n")
+    r = client.patch(
+        f"/comercio/publicaciones/{pub['id']}",
+        headers={"Authorization": f"Bearer {token}"}, json={"descuento_pct": 10},
+    )
+    assert r.status_code == 200
+    assert r.json()["estado"] == "pendiente"
+
+
+def test_editar_publicacion_ajena_404(client, repo):
+    repo.seed_comercio(id="com-a", slug="a", nombre="A", whatsapp="591", confiable=True)
+    repo.seed_comercio(id="com-b", slug="b", nombre="B", whatsapp="591", confiable=True)
+    pub = _pub(repo, "com-a", precio=100)
+    token_b = comercio_token(comercio_id="com-b")
+    r = client.patch(
+        f"/comercio/publicaciones/{pub['id']}",
+        headers={"Authorization": f"Bearer {token_b}"}, json={"precio": 1},
+    )
+    assert r.status_code == 404
+
+
+def test_editar_sin_campos_400(client, repo):
+    repo.seed_comercio(id="com-c", slug="c", nombre="C", whatsapp="591", confiable=True)
+    pub = _pub(repo, "com-c")
+    token = comercio_token(comercio_id="com-c")
+    r = client.patch(
+        f"/comercio/publicaciones/{pub['id']}",
+        headers={"Authorization": f"Bearer {token}"}, json={},
+    )
+    assert r.status_code == 400
+
+
+def test_baja_publicacion_soft_delete(client, repo):
+    repo.seed_comercio(id="com-c", slug="c", nombre="C", whatsapp="591", confiable=True)
+    pub = _pub(repo, "com-c")
+    token = comercio_token(comercio_id="com-c")
+    r = client.delete(f"/comercio/publicaciones/{pub['id']}", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    assert repo.list_publicaciones_de_comercio("com-c") == []
+
+
+def test_baja_publicacion_ajena_404(client, repo):
+    repo.seed_comercio(id="com-a", slug="a", nombre="A", whatsapp="591", confiable=True)
+    repo.seed_comercio(id="com-b", slug="b", nombre="B", whatsapp="591", confiable=True)
+    pub = _pub(repo, "com-a")
+    token_b = comercio_token(comercio_id="com-b")
+    r = client.delete(f"/comercio/publicaciones/{pub['id']}", headers={"Authorization": f"Bearer {token_b}"})
+    assert r.status_code == 404

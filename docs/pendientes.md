@@ -38,11 +38,11 @@ c/u). No escala a cientos de comercios de Bermejo. **A decidir:**
       (arranque: comprobante por WhatsApp → extiende fecha).
 - [ ] **Oferta primeros 100** ("pagás 1 mes, vale 2") + **rail de pago** funcionando.
 - [ ] Panel **"Mi comercio"** (ver/editar/alta-baja) + campo `tienda_url` + **links libres**.
-- [ ] **Inputs de descuento en alta/edición de ofertas** — capturar `descuento_pct`
-      (1..99) y `vence_el` (fecha) al publicar/editar una oferta (panel y/o flujo
-      WhatsApp). El modelo ya existe (migración `0020`, vista `feed_publico` y badges
-      en la UI del home/buscar ya los muestran); falta el formulario de carga. Hoy se
-      setean a mano en la DB.
+- [x] **Descuento en alta/edición de ofertas** — `descuento_pct` (1..99) + `vence_el`
+      en alta (chatbot `/autoregistro`) y en **edición** (panel "Mi comercio" → "Mis
+      ofertas": editar/eliminar). Backend: `PATCH/DELETE /comercio/publicaciones/{id}`
+      (scoped al dueño, re-moderación si no es confiable). Migración `0020` + badges en
+      home/buscar. _Falta:_ subir foto desde el panel (hoy es link de imagen).
 - [ ] **Ficha del vendedor**: botón "Ver productos" (si tiene tienda) + botones a redes/páginas.
 - [ ] Registro de **consentimiento** (hoy es solo checkbox).
 - [ ] **Reclamar listado** ya cargado (por teléfono, sin duplicar).

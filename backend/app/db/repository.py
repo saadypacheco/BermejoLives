@@ -22,6 +22,8 @@ class Repo(Protocol):
     def get_comercio_usuario(self, email: str) -> dict | None: ...
     def get_comercio(self, comercio_id: str) -> dict | None: ...
     def list_publicaciones_de_comercio(self, comercio_id: str) -> list[dict]: ...
+    def update_publicacion_de_comercio(self, pub_id: str, comercio_id: str, patch: dict) -> dict | None: ...
+    def baja_publicacion_de_comercio(self, pub_id: str, comercio_id: str) -> bool: ...
     def slug_existe(self, slug: str) -> bool: ...
     def get_zona_id(self, slug: str) -> str | None: ...
     def get_rubro_id(self, slug: str) -> str | None: ...
@@ -135,6 +137,30 @@ class SupabaseRepo:
             .execute()
         )
         return res.data or []
+
+    def update_publicacion_de_comercio(self, pub_id: str, comercio_id: str, patch: dict) -> dict | None:
+        """Edita una publicación SOLO si pertenece al comercio (y sigue activa)."""
+        res = (
+            self._db.table("publicaciones")
+            .update(patch)
+            .eq("id", pub_id)
+            .eq("comercio_id", comercio_id)
+            .eq("activo", True)
+            .execute()
+        )
+        return res.data[0] if res.data else None
+
+    def baja_publicacion_de_comercio(self, pub_id: str, comercio_id: str) -> bool:
+        """Soft-delete de una publicación propia del comercio."""
+        res = (
+            self._db.table("publicaciones")
+            .update({"activo": False})
+            .eq("id", pub_id)
+            .eq("comercio_id", comercio_id)
+            .eq("activo", True)
+            .execute()
+        )
+        return bool(res.data)
 
     # ---- alta self-service ----
     def slug_existe(self, slug: str) -> bool:

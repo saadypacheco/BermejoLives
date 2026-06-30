@@ -151,6 +151,33 @@ export const updatePerfil = (patch: Partial<Perfil>): Promise<Perfil> =>
 export const getSuscripcion = (): Promise<Suscripcion> => cFetch("/comercio/suscripcion");
 export const getMetricas = (): Promise<Metricas> => cFetch("/comercio/metricas");
 
+// ---- Publicaciones / ofertas del comercio ----
+export type Publicacion = {
+  id: string;
+  tipo: "oferta" | "video" | "novedad";
+  titulo: string | null;
+  descripcion: string | null;
+  precio: number | null;
+  moneda: string | null;
+  imagen_url: string | null;
+  tiktok_url: string | null;
+  descuento_pct: number | null;
+  vence_el: string | null;          // "YYYY-MM-DD"
+  estado: string;                   // pendiente | aprobado | rechazado | cambios
+};
+
+export type PublicacionPatch = Partial<Pick<Publicacion,
+  "titulo" | "descripcion" | "precio" | "moneda" | "imagen_url" | "tiktok_url" | "descuento_pct" | "vence_el">>;
+
+export const getMisPublicaciones = (): Promise<{ items: Publicacion[]; total: number }> =>
+  cFetch("/comercio/mis-publicaciones");
+
+export const editarPublicacion = (id: string, patch: PublicacionPatch): Promise<{ ok: boolean; estado: string; item: Publicacion }> =>
+  cFetch(`/comercio/publicaciones/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+
+export const bajaPublicacion = (id: string): Promise<{ ok: boolean }> =>
+  cFetch(`/comercio/publicaciones/${id}`, { method: "DELETE" });
+
 export async function pagarSuscripcion(
   fields: { monto: number; moneda: string; metodo: string; referencia?: string },
   comprobante: File | null,

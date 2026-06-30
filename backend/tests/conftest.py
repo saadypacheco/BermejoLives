@@ -88,6 +88,20 @@ class FakeRepo:
     def list_publicaciones_de_comercio(self, comercio_id):
         return [p for p in self.publicaciones if p.get("comercio_id") == comercio_id and p.get("activo")]
 
+    def update_publicacion_de_comercio(self, pub_id, comercio_id, patch):
+        for p in self.publicaciones:
+            if p["id"] == pub_id and p.get("comercio_id") == comercio_id and p.get("activo"):
+                p.update(patch)
+                return p
+        return None
+
+    def baja_publicacion_de_comercio(self, pub_id, comercio_id):
+        for p in self.publicaciones:
+            if p["id"] == pub_id and p.get("comercio_id") == comercio_id and p.get("activo"):
+                p["activo"] = False
+                return True
+        return False
+
     def set_estado_publicacion(self, pub_id, estado, motivo, by):
         for p in self.publicaciones:
             if p["id"] == pub_id:

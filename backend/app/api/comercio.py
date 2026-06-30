@@ -122,6 +122,69 @@ def mis_publicaciones(
     return {"items": items, "total": len(items)}
 
 
+_PUB_EDITABLES = {
+    "titulo", "descripcion", "precio", "moneda",
+    "imagen_url", "tiktok_url", "descuento_pct", "vence_el",
+}
+
+
+class PublicacionUpdate(BaseModel):
+    titulo: str | None = None
+    descripcion: str | None = None
+    precio: float | None = None
+    moneda: str | None = None
+    imagen_url: str | None = None
+    tiktok_url: str | None = None
+    descuento_pct: int | None = None
+    vence_el: str | None = None
+
+
+@router.patch("/comercio/publicaciones/{pub_id}")
+def editar_publicacion(
+    pub_id: str,
+    body: PublicacionUpdate,
+    claims: dict = Depends(auth.require_comercio),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    patch = {
+        k: v for k, v in body.model_dump(exclude_unset=True).items()
+        if k in _PUB_EDITABLES
+    }
+    if not patch:
+        raise HTTPException(status_code=400, detail="No hay campos para actualizar")
+    if patch.get("descuento_pct") is not None:
+        patch["descuento_pct"] = max(1, min(99, int(patch["descuento_pct"])))
+
+    comercio = repo.get_comercio(claims["comercio_id"])
+    if not comercio:
+        raise HTTPException(status_code=404, detail="comercio no encontrado")
+
+    # Re-moderación: una edición de un comercio NO confiable vuelve a pendiente.
+    now = datetime.now(timezone.utc).isoformat()
+    if bool(comercio.get("confiable")):
+        patch["estado"], patch["approved_at"] = "aprobado", now
+    else:
+        patch["estado"], patch["approved_at"] = "pendiente", None
+
+    updated = repo.update_publicacion_de_comercio(pub_id, claims["comercio_id"], patch)
+    if not updated:
+        raise HTTPException(status_code=404, detail="publicación no encontrada")
+    logger.info("comercio.publicacion_update", comercio=claims["comercio_id"], pub=pub_id, campos=list(patch))
+    return {"ok": True, "estado": updated.get("estado"), "item": updated}
+
+
+@router.delete("/comercio/publicaciones/{pub_id}")
+def baja_publicacion(
+    pub_id: str,
+    claims: dict = Depends(auth.require_comercio),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    if not repo.baja_publicacion_de_comercio(pub_id, claims["comercio_id"]):
+        raise HTTPException(status_code=404, detail="publicación no encontrada")
+    logger.info("comercio.publicacion_baja", comercio=claims["comercio_id"], pub=pub_id)
+    return {"ok": True}
+
+
 # ---- Panel "Mi comercio": perfil, suscripción, métricas ----
 
 # Campos que el comercio ve de su perfil (subconjunto seguro de la fila completa).
