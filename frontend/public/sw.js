@@ -53,6 +53,7 @@ self.addEventListener("fetch", (e) => {
   // Estáticos de Next, iconos, fuentes, manifest → stale-while-revalidate
   if (
     url.pathname.startsWith("/_next/static/") ||
+    url.pathname.startsWith("/reservalo/_next/static/") ||
     url.pathname.startsWith("/icon") ||
     url.pathname === "/manifest.webmanifest" ||
     /\.(png|jpe?g|svg|webp|ico|woff2?)$/.test(url.pathname)
