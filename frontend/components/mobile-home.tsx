@@ -1,0 +1,138 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { HomeMap } from "@/components/home-map";
+import { WhatsApp, Phone, Send, User, Search } from "@/components/icons";
+import { type ComercioMapa } from "@/lib/data";
+import { type FeedItem, precioFmt, vencimientoFmt } from "@/lib/types";
+
+const CHIPS: { label: string; rubro: string }[] = [
+  { label: "Todos", rubro: "" },
+  { label: "Talleres", rubro: "gomeria" },
+  { label: "Farmacias", rubro: "farmacia" },
+  { label: "Restaurantes", rubro: "gastronomia" },
+  { label: "Mercados", rubro: "mercado" },
+  { label: "Tecnología", rubro: "tecnologia" },
+];
+const wa = (s?: string | null) => (s || "").replace(/\D/g, "");
+
+export function MobileHome({ comercios, feed }: { comercios: ComercioMapa[]; feed: FeedItem[] }) {
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("");
+  const [sel, setSel] = useState<ComercioMapa | null>(null);
+  const router = useRouter();
+  const filtered = cat ? comercios.filter((c) => c.rubro_slug === cat) : comercios;
+  const ofertasNegocio = sel ? feed.filter((f) => f.comercio_slug === sel.slug) : [];
+
+  function buscar(e: React.FormEvent) {
+    e.preventDefault();
+    router.push(`/buscar${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`);
+  }
+
+  return (
+    <div className="mhome">
+      {/* Header claro: marca + avatar + buscador */}
+      <div className="mhead">
+        <div className="mtop">
+          <span className="mbrand">ENCON<i>TRALO</i></span>
+          <Link href="/mi-comercio" className="mavatar" aria-label="Perfil"><User style={{ width: 20, height: 20 }} /></Link>
+        </div>
+        <form onSubmit={buscar} className="msearch">
+          <Search style={{ width: 20, height: 20, color: "#7a8390" }} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar locales o servicios…" aria-label="Buscar" />
+        </form>
+      </div>
+
+      {/* Chips de categoría (texto simple, filtran el mapa) */}
+      <div className="mchips">
+        {CHIPS.map((c) => (
+          <button type="button" key={c.label} className={`mchip ${cat === c.rubro ? "active" : ""}`} onClick={() => { setCat(c.rubro); setSel(null); }}>
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Mapa: crece y llena el espacio disponible */}
+      <div className="mmap">
+        <HomeMap comercios={filtered} onSelect={setSel} selectedId={sel?.id} />
+        <Link href="/buscar" className="mmapbtn">⛶ Ver mapa completo</Link>
+      </div>
+
+      {/* Tarjeta del local seleccionado (panel inferior) */}
+      {sel && (
+        <div className="mcard">
+          <div className="mcard-row">
+            <div className="mcard-img">
+              {sel.portada_url || sel.logo_url ? <img src={(sel.portada_url || sel.logo_url) as string} alt="" /> : <span>🏪</span>}
+            </div>
+            <div className="mcard-info">
+              <div className="mcard-head">
+                <b>{sel.nombre}</b>
+                <button className="mclose" onClick={() => setSel(null)} aria-label="Cerrar">✕</button>
+              </div>
+              {sel.descripcion && <p>{sel.descripcion}</p>}
+              {sel.horario && <div className="mcard-line">🕐 {sel.horario}</div>}
+              <div className="mcard-line star">★ {sel.rating}</div>
+            </div>
+          </div>
+          <div className="mcard-act">
+            <div className="mcard-icons">
+              {wa(sel.whatsapp) && <a className="mab wa" href={`https://wa.me/${wa(sel.whatsapp)}`} target="_blank" rel="noopener" aria-label="WhatsApp"><WhatsApp style={{ width: 20, height: 20 }} /></a>}
+              {sel.telefono && <a className="mab" href={`tel:${sel.telefono}`} aria-label="Llamar"><Phone style={{ width: 18, height: 18 }} /></a>}
+              <a className="mab" href={sel.como_llegar ?? `https://www.google.com/maps/search/?api=1&query=${sel.lat},${sel.lng}`} target="_blank" rel="noopener" aria-label="Cómo llegar"><Send style={{ width: 18, height: 18 }} /></a>
+            </div>
+            <Link className="btn btn-primary mver" href={`/comercios/${sel.slug}`}>Ver tienda</Link>
+          </div>
+
+          {/* Ofertas de este negocio (si tiene) */}
+          {ofertasNegocio.length > 0 && (
+            <div className="mcard-ofertas">
+              <div className="mco-head"><b>Ofertas de este negocio</b></div>
+              <div className="mco-rail">
+                {ofertasNegocio.map((o) => (
+                  <Link key={o.id} href={`/comercios/${o.comercio_slug}`} className="mco">
+                    <div className="mco-img">
+                      {o.descuento_pct != null && <span className="off-badge">-{o.descuento_pct}%</span>}
+                      {o.imagen_url && <img src={o.imagen_url} alt="" />}
+                    </div>
+                    <div className="mco-b">
+                      <b>{o.titulo}</b>
+                      {o.precio != null && <span className="mco-price">{precioFmt(o.precio, o.moneda)}</span>}
+                      {o.vence_el && <span className="off-vence">Válido hasta {vencimientoFmt(o.vence_el)}</span>}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Ofertas cerca tuyo (se oculta cuando hay un local seleccionado) */}
+      {!sel && (
+      <div className="moffers">
+        <div className="moffers-head"><b>Ofertas cerca tuyo</b><Link href="/buscar">Ver todas</Link></div>
+        <div className="moffers-rail">
+          {feed.slice(0, 8).map((p) => (
+            <Link key={p.id} href={`/comercios/${p.comercio_slug}`} className="moffer">
+              <div className="moffer-img">
+                {p.descuento_pct != null && <span className="off-badge">-{p.descuento_pct}%</span>}
+                {p.imagen_url && <img src={p.imagen_url} alt="" />}
+              </div>
+              <div className="moffer-b">
+                <b>{p.titulo}</b>
+                <small>{p.comercio_nombre}</small>
+                {p.precio != null && <div className="moffer-price">{precioFmt(p.precio, p.moneda)}</div>}
+                {p.vence_el && <small className="off-vence">Válido hasta {vencimientoFmt(p.vence_el)}</small>}
+              </div>
+            </Link>
+          ))}
+          {feed.length === 0 && <p style={{ color: "var(--txt-3)", fontSize: 14 }}>Pronto, ofertas de los comercios.</p>}
+        </div>
+      </div>
+      )}
+    </div>
+  );
+}

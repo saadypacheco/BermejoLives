@@ -75,9 +75,10 @@ export async function getComercios(): Promise<Comercio[]> {
 export type ComercioMapa = {
   id: string; slug: string; nombre: string;
   lat: number | null; lng: number | null;
-  logo_url: string | null; whatsapp: string;
-  verificado: boolean; destacado: boolean; rating: number;
-  direccion: string | null; rubro_slug: string | null;
+  logo_url: string | null; portada_url: string | null; whatsapp: string;
+  telefono: string | null; verificado: boolean; destacado: boolean; rating: number;
+  direccion: string | null; descripcion: string | null; horario: string | null;
+  como_llegar: string | null; rubro_slug: string | null;
 };
 
 // Comercios geolocalizados para el mapa de la Home (+ auspiciantes/destacados).
@@ -88,7 +89,7 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
     const [{ data }, { data: rubros }] = await Promise.all([
       supabase
         .from("comercios")
-        .select("id, slug, nombre, lat, lng, logo_url, whatsapp, verificado, destacado, rating, direccion, rubro_id")
+        .select("id, slug, nombre, lat, lng, logo_url, portada_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, rubro_id")
         .eq("activo", true)
         .not("lat", "is", null)
         .gte("lat", -22.90).lte("lat", -22.58)
@@ -100,16 +101,19 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
       const slugById = new Map((rubros ?? []).map((r: any) => [r.id, r.slug]));
       return (data as any[]).map((c) => ({
         id: c.id, slug: c.slug, nombre: c.nombre, lat: c.lat, lng: c.lng,
-        logo_url: c.logo_url, whatsapp: c.whatsapp, verificado: c.verificado,
-        destacado: c.destacado, rating: c.rating, direccion: c.direccion,
+        logo_url: c.logo_url, portada_url: c.portada_url, whatsapp: c.whatsapp, telefono: c.telefono,
+        verificado: c.verificado, destacado: c.destacado, rating: c.rating,
+        direccion: c.direccion, descripcion: c.descripcion, horario: c.horario, como_llegar: c.como_llegar,
         rubro_slug: slugById.get(c.rubro_id) ?? null,
       }));
     }
   }
   return DEMO_COMERCIOS.map((c) => ({
     id: c.id, slug: c.slug, nombre: c.nombre, lat: c.lat, lng: c.lng,
-    logo_url: c.logo_url, whatsapp: c.whatsapp, verificado: c.verificado,
-    destacado: c.destacado, rating: c.rating, direccion: c.direccion, rubro_slug: null,
+    logo_url: c.logo_url, portada_url: c.portada_url, whatsapp: c.whatsapp, telefono: c.telefono,
+    verificado: c.verificado, destacado: c.destacado, rating: c.rating,
+    direccion: c.direccion, descripcion: c.descripcion, horario: c.horario, como_llegar: c.como_llegar,
+    rubro_slug: null,
   }));
 }
 
@@ -166,8 +170,9 @@ export const DEMO_PRODUCTOS: Producto[] = [
 ];
 
 export const DEMO_FEED: FeedItem[] = [
-  { id: "f1", tipo: "oferta", titulo: "iPhone 13 128GB", descripcion: "Sellado, garantía. Precio de frontera.", precio: 499, moneda: "USD", imagen_url: img("iphone13", 700, 440), tiktok_url: null, approved_at: null, created_at: "", comercio_id: "c1", comercio_slug: "importadora-abc", comercio_nombre: "Importadora ABC", comercio_logo: img("abclogo", 80, 80), comercio_whatsapp: "59170000001", comercio_verificado: true, zona_nombre: "Zona Importadoras" },
-  { id: "f2", tipo: "oferta", titulo: "Zapatillas Nike Air", descripcion: "Nuevas, todos los talles.", precio: 120, moneda: "BOB", imagen_url: img("nike", 700, 440), tiktok_url: null, approved_at: null, created_at: "", comercio_id: "c2", comercio_slug: "moda-bermejo", comercio_nombre: "Moda Bermejo", comercio_logo: img("modalogo", 80, 80), comercio_whatsapp: "59170000002", comercio_verificado: true, zona_nombre: "Zona Moda" },
-  { id: "f3", tipo: "video", titulo: "Unboxing Smart TV", descripcion: "Mirá la review completa.", precio: null, moneda: "BOB", imagen_url: img("tvbox", 700, 440), tiktok_url: "https://tiktok.com/@tecnostore/video/123", approved_at: null, created_at: "", comercio_id: "c3", comercio_slug: "tecno-store", comercio_nombre: "Tecno Store", comercio_logo: img("teclogo", 80, 80), comercio_whatsapp: "59170000003", comercio_verificado: false, zona_nombre: "Zona Tecnología" },
-  { id: "f4", tipo: "oferta", titulo: "Perfume 212 VIP", descripcion: "Original importado.", precio: 250, moneda: "BOB", imagen_url: img("perfume", 700, 440), tiktok_url: null, approved_at: null, created_at: "", comercio_id: "c4", comercio_slug: "perfumeria-vip", comercio_nombre: "Perfumería VIP", comercio_logo: img("perflogo", 80, 80), comercio_whatsapp: "59170000004", comercio_verificado: true, zona_nombre: "Centro" },
+  { id: "f1", tipo: "oferta", titulo: "iPhone 13 128GB", descripcion: "Sellado, garantía. Precio de frontera.", precio: 499, moneda: "USD", imagen_url: img("iphone13", 700, 440), tiktok_url: null, approved_at: null, created_at: "", comercio_id: "c1", comercio_slug: "importadora-abc", comercio_nombre: "Importadora ABC", comercio_logo: img("abclogo", 80, 80), comercio_whatsapp: "59170000001", comercio_verificado: true, zona_nombre: "Zona Importadoras", descuento_pct: 20, vence_el: "2026-07-31" },
+  { id: "f1b", tipo: "oferta", titulo: 'Smart TV 55" 4K', descripcion: "Última generación.", precio: 399, moneda: "USD", imagen_url: img("tv55", 700, 440), tiktok_url: null, approved_at: null, created_at: "", comercio_id: "c1", comercio_slug: "importadora-abc", comercio_nombre: "Importadora ABC", comercio_logo: img("abclogo", 80, 80), comercio_whatsapp: "59170000001", comercio_verificado: true, zona_nombre: "Zona Importadoras", descuento_pct: 15, vence_el: "2026-07-15" },
+  { id: "f2", tipo: "oferta", titulo: "Zapatillas Nike Air", descripcion: "Nuevas, todos los talles.", precio: 120, moneda: "BOB", imagen_url: img("nike", 700, 440), tiktok_url: null, approved_at: null, created_at: "", comercio_id: "c2", comercio_slug: "moda-bermejo", comercio_nombre: "Moda Bermejo", comercio_logo: img("modalogo", 80, 80), comercio_whatsapp: "59170000002", comercio_verificado: true, zona_nombre: "Zona Moda", descuento_pct: 10, vence_el: "2026-07-20" },
+  { id: "f3", tipo: "video", titulo: "Unboxing Smart TV", descripcion: "Mirá la review completa.", precio: null, moneda: "BOB", imagen_url: img("tvbox", 700, 440), tiktok_url: "https://tiktok.com/@tecnostore/video/123", approved_at: null, created_at: "", comercio_id: "c3", comercio_slug: "tecno-store", comercio_nombre: "Tecno Store", comercio_logo: img("teclogo", 80, 80), comercio_whatsapp: "59170000003", comercio_verificado: false, zona_nombre: "Zona Tecnología", descuento_pct: null, vence_el: null },
+  { id: "f4", tipo: "oferta", titulo: "Perfume 212 VIP", descripcion: "Original importado.", precio: 250, moneda: "BOB", imagen_url: img("perfume", 700, 440), tiktok_url: null, approved_at: null, created_at: "", comercio_id: "c4", comercio_slug: "perfumeria-vip", comercio_nombre: "Perfumería VIP", comercio_logo: img("perflogo", 80, 80), comercio_whatsapp: "59170000004", comercio_verificado: true, zona_nombre: "Centro", descuento_pct: null, vence_el: null },
 ];

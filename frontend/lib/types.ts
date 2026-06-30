@@ -153,7 +153,16 @@ export type FeedItem = {
   comercio_whatsapp: string;
   comercio_verificado: boolean;
   zona_nombre: string | null;
+  descuento_pct: number | null;
+  vence_el: string | null;
 };
+
+/** "2026-07-31" → "31/07". Devuelve "" si no hay fecha válida. */
+export function vencimientoFmt(vence: string | null | undefined): string {
+  if (!vence) return "";
+  const [, m, d] = vence.split("-");
+  return d && m ? `${d}/${m}` : "";
+}
 
 export const MONEDA_LABEL: Record<string, string> = { BOB: "Bs", USD: "USD", ARS: "$" };
 

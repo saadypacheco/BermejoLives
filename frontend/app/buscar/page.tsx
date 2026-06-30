@@ -2,18 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Nav } from "@/components/nav";
 import { MapResults } from "@/components/map-results";
+import { BottomNav } from "@/components/bottom-nav";
 import { buscarComercios, getRubros, getZonas } from "@/lib/data";
 import { type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD_LABEL, comoLlegarHref, waLink } from "@/lib/types";
-import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
+import { WhatsApp, Pin, Search, Verified, User } from "@/components/icons";
+import { FilterChip, OptionList } from "@/components/filter-chips";
 
-const MODALIDADES = [
-  { key: "", label: "Todos" },
-  { key: "mayorista", label: "Mayorista" },
-  { key: "minorista", label: "Minorista" },
-  { key: "ambos", label: "Ambos" },
-];
+const RESERVALO_URL = "https://reservalo.store";
 
 export default function BuscarPage() {
   const [q, setQ] = useState("");
@@ -22,6 +18,7 @@ export default function BuscarPage() {
   const [zona, setZona] = useState("");
   const [precioMax, setPrecioMax] = useState("");
   const [ciudad, setCiudad] = useState("");
+  const [soloOfertas, setSoloOfertas] = useState(false);
   const [vista, setVista] = useState<"lista" | "mapa">("lista");
   const [results, setResults] = useState<ResultadoBusqueda[]>([]);
   const [rubros, setRubros] = useState<Rubro[]>([]);
@@ -30,18 +27,21 @@ export default function BuscarPage() {
   const [hayMas, setHayMas] = useState(false);
   const [cargandoMas, setCargandoMas] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout>>();
-  const PAGE = 24;
+  const PAGE = 30;
 
   const filtros = { q, rubro, modalidad, zona, ciudad, precioMax: precioMax ? Number(precioMax) : undefined };
 
   useEffect(() => {
     getRubros().then(setRubros);
     getZonas().then(setZonas);
-    const c = new URLSearchParams(window.location.search).get("ciudad");
-    if (c) setCiudad(c);
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("ciudad")) setCiudad(sp.get("ciudad")!);
+    if (sp.get("q")) setQ(sp.get("q")!);
+    if (sp.get("rubro")) setRubro(sp.get("rubro")!);
+    if (sp.get("zona")) setZona(sp.get("zona")!);
+    if (sp.get("precio_max")) setPrecioMax(sp.get("precio_max")!);
   }, []);
 
-  // Buscar con debounce ante cualquier cambio de filtro / texto
   useEffect(() => {
     clearTimeout(debounce.current);
     setLoading(true);
@@ -63,83 +63,77 @@ export default function BuscarPage() {
     setCargandoMas(false);
   }
 
+  const zonaNom = zonas.find((z) => z.slug === zona)?.nombre;
+  const shown = soloOfertas ? results.filter((r) => r.ofertas > 0) : results;
+
+  const catChips = [{ slug: "", nombre: "Todos" }, ...rubros];
+
   return (
-    <>
-      <Nav active="buscar" />
-      <div className="wrap" style={{ paddingTop: 28 }}>
-        <span className="eyebrow"><Search style={{ width: 14, height: 14 }} /> Buscador de Bermejo</span>
-        <h1 style={{ fontSize: 30, margin: "8px 0 4px" }}>¿Qué estás buscando?</h1>
-        <p style={{ color: "var(--txt-2)", margin: "0 0 18px" }}>
-          Buscá por producto, comercio o rubro. Resultados con WhatsApp y cómo llegar.
-        </p>
-
-        {/* Barra de búsqueda */}
-        <div className="search-bar glass">
-          <Search style={{ width: 20, height: 20, color: "var(--txt-3)" }} />
-          <input
-            autoFocus
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Ej: zapatillas, iphone, perfume, gomería, restaurante…"
-          />
+    <div className="bpage">
+      {/* Header claro estilo home: marca (vuelve al inicio) + avatar + buscador */}
+      <div className="mhead">
+        <div className="mtop">
+          <Link href="/" className="mbrand">ENCON<i>TRALO</i></Link>
+          <Link href="/mi-comercio" className="mavatar" aria-label="Perfil"><User style={{ width: 20, height: 20 }} /></Link>
         </div>
+        <form className="msearch" onSubmit={(e) => e.preventDefault()}>
+          <Search style={{ width: 20, height: 20, color: "#7a8390" }} />
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar locales o servicios…" aria-label="Buscar" />
+        </form>
+      </div>
 
-        {/* Ciudad fija (viene del mapa de Bolivia) */}
-        {ciudad && (
-          <div style={{ marginTop: 12 }}>
-            <span className="pill" style={{ background: "rgba(57,255,158,.12)", border: "1px solid rgba(57,255,158,.3)", color: "var(--neon)", fontWeight: 700, padding: "7px 13px", borderRadius: 999, display: "inline-flex", alignItems: "center", gap: 7 }}>
-              <Pin style={{ width: 14, height: 14 }} /> {ciudad.charAt(0).toUpperCase() + ciudad.slice(1)} · ciudad fija
-            </span>
-          </div>
-        )}
+      {/* Chips de categoría (texto simple, estilo home) */}
+      <div className="mchips">
+        {catChips.map((c) => (
+          <button type="button" key={c.slug || "todos"} className={`mchip ${rubro === c.slug ? "active" : ""}`} onClick={() => setRubro(c.slug)}>
+            {c.nombre}
+          </button>
+        ))}
+      </div>
 
-        {/* Filtros */}
-        <div className="filtros">
-          <select className="adm-input fsel" value={rubro} onChange={(e) => setRubro(e.target.value)}>
-            <option value="">Todos los rubros</option>
-            {rubros.map((r) => (<option key={r.slug} value={r.slug}>{r.nombre}</option>))}
-          </select>
-          <select className="adm-input fsel" value={zona} onChange={(e) => setZona(e.target.value)}>
-            <option value="">Todas las zonas</option>
-            {zonas.map((z) => (<option key={z.slug} value={z.slug}>{z.nombre}</option>))}
-          </select>
-          <input
-            className="adm-input fsel"
-            type="number"
-            inputMode="numeric"
-            value={precioMax}
-            onChange={(e) => setPrecioMax(e.target.value)}
-            placeholder="Precio máx."
-          />
-          <div className="seg fseg">
-            {MODALIDADES.map((m) => (
-              <button key={m.key} className={modalidad === m.key ? "active" : ""} onClick={() => setModalidad(m.key)}>{m.label}</button>
-            ))}
-          </div>
+      {/* Filtros avanzados + accesos, fila compacta */}
+      <div className="bfilters">
+        <FilterChip icon="📍" label="Zona" value={zonaNom} active={!!zona}>
+          {(close) => <OptionList items={[{ slug: "", nombre: "Todas las zonas" }, ...zonas]} sel={zona} onPick={(v) => { setZona(v); close(); }} />}
+        </FilterChip>
+
+        <FilterChip icon="💰" label="Precio" value={precioMax ? `hasta ${precioMax}` : undefined} active={!!precioMax}>
+          {(close) => (
+            <div style={{ padding: 12, minWidth: 200 }}>
+              <input className="adm-input" type="number" inputMode="numeric" value={precioMax} onChange={(e) => setPrecioMax(e.target.value)} placeholder="Precio máximo" />
+              <button className="btn btn-primary btn-sm" style={{ marginTop: 8, width: "100%" }} onClick={close}>Aplicar</button>
+              {precioMax && <button className="btn btn-sm" style={{ marginTop: 6, width: "100%", border: "1px solid var(--stroke)" }} onClick={() => { setPrecioMax(""); close(); }}>Quitar</button>}
+            </div>
+          )}
+        </FilterChip>
+
+        <FilterChip icon="🏪" label="Tipo" value={modalidad ? MODALIDAD_LABEL[modalidad] : undefined} active={!!modalidad}>
+          {(close) => <OptionList items={[{ slug: "", nombre: "Todos" }, { slug: "mayorista", nombre: "Mayorista" }, { slug: "minorista", nombre: "Minorista" }, { slug: "ambos", nombre: "Ambos" }]} sel={modalidad} onPick={(v) => { setModalidad(v); close(); }} />}
+        </FilterChip>
+
+        <button type="button" className={`mchip ${soloOfertas ? "active" : ""}`} onClick={() => setSoloOfertas((v) => !v)}>Ofertas</button>
+        <a className="mchip" href={`${RESERVALO_URL}/productos${q ? `?search=${encodeURIComponent(q)}` : ""}`}>Productos ↗</a>
+      </div>
+
+      {/* Cantidad + vista */}
+      <div className="resbar">
+        <b>{loading ? "Buscando…" : `${shown.length} comercio${shown.length === 1 ? "" : "s"}`}</b>
+        <div className="seg" style={{ maxWidth: 200 }}>
+          <button className={vista === "lista" ? "active" : ""} onClick={() => setVista("lista")}>Lista</button>
+          <button className={vista === "mapa" ? "active" : ""} onClick={() => setVista("mapa")}>Mapa</button>
         </div>
+      </div>
 
-        {/* Header de resultados + toggle vista */}
-        <div className="section-head" style={{ marginTop: 22, marginBottom: 16 }}>
-          <div>
-            <h2 style={{ fontSize: 18 }}>
-              {loading ? "Buscando…" : `${results.length} comercio${results.length === 1 ? "" : "s"}`}
-            </h2>
-          </div>
-          <div className="seg" style={{ maxWidth: 220 }}>
-            <button className={vista === "lista" ? "active" : ""} onClick={() => setVista("lista")}>Lista</button>
-            <button className={vista === "mapa" ? "active" : ""} onClick={() => setVista("mapa")}>Mapa</button>
-          </div>
-        </div>
-
-        {/* Resultados */}
+      {/* Resultados */}
+      <div className="bresults">
         {vista === "mapa" ? (
-          <MapResults results={results} />
+          <MapResults results={shown} />
         ) : (
           <div className="result-grid">
-            {!loading && results.length === 0 && (
+            {!loading && shown.length === 0 && (
               <p style={{ color: "var(--txt-3)" }}>No encontramos comercios con esos filtros. Probá con otra palabra o quitá filtros.</p>
             )}
-            {results.map((r) => (
+            {shown.map((r) => (
               <article className="rescard" key={r.id}>
                 <Link href={`/comercios/${r.slug}`} className="rescover">
                   <img src={r.portada_url ?? r.logo_url ?? "https://picsum.photos/seed/x/400/240"} alt={r.nombre} />
@@ -170,16 +164,16 @@ export default function BuscarPage() {
           </div>
         )}
 
-        {vista === "lista" && hayMas && (
+        {vista === "lista" && hayMas && !soloOfertas && (
           <div style={{ textAlign: "center", marginTop: 22 }}>
             <button className="btn btn-ghost" onClick={cargarMas} disabled={cargandoMas}>
               {cargandoMas ? "Cargando…" : "Cargar más"}
             </button>
           </div>
         )}
-
-        <div style={{ height: 50 }} />
       </div>
-    </>
+
+      <BottomNav active="Mapa" />
+    </div>
   );
 }
