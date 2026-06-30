@@ -50,12 +50,15 @@ export function HomeMap({ comercios, onSelect, selectedId }: {
       LRef.current = L;
       const map = L.map(elRef.current, { zoomControl: false, attributionControl: false, scrollWheelZoom: false }).setView(BERMEJO, 15);
       mapRef.current = map;
-      L.control.zoom({ position: "bottomright" }).addTo(map);
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom: 19 }).addTo(map);
+      L.control.zoom({ position: "topleft" }).addTo(map);
+      // updateWhenIdle/keepBuffer: menos descargas de tiles (clave con internet malo)
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        maxZoom: 19, updateWhenIdle: true, updateWhenZooming: false, keepBuffer: 2, crossOrigin: true,
+      }).addTo(map);
       layerRef.current = L.layerGroup().addTo(map);
       pintar();
       // el conector pin→tarjeta se redibuja al mover/zoomear el mapa
-      map.on("move zoom", drawConnector);
+      map.on("move zoom moveend", drawConnector);
       // reajustar al tamaño real del contenedor flex y ante cambios de viewport
       setTimeout(() => { map.invalidateSize(); drawConnector(); }, 150);
       const onResize = () => { map.invalidateSize(); drawConnector(); };
@@ -95,7 +98,15 @@ export function HomeMap({ comercios, onSelect, selectedId }: {
         iconSize: isSel ? [34, 45] : [28, 37], iconAnchor: isSel ? [17, 45] : [14, 37],
       });
       const m = L.marker([c.lat, c.lng], { icon, zIndexOffset: isSel ? 800 : 0 }).addTo(layer);
-      m.on("click", () => { onSelRef.current?.(c); mapRef.current.panTo([c.lat, c.lng]); });
+      m.on("click", () => {
+        onSelRef.current?.(c);
+        // mover el pin a la zona alta del mapa para que la tarjeta (abajo) no lo tape
+        const map = mapRef.current;
+        const size = map.getSize();
+        const pt = map.latLngToContainerPoint([c.lat, c.lng]);
+        const target = map.containerPointToLatLng([pt.x, pt.y + size.y * 0.20]);
+        map.panTo(target, { animate: true, duration: 0.4 });
+      });
     }
     selCoordRef.current = selCoords;
     drawConnector();
@@ -112,9 +123,11 @@ export function HomeMap({ comercios, onSelect, selectedId }: {
     svg.setAttribute("width", String(size.x));
     svg.setAttribute("height", String(size.y));
     svg.style.display = "block";
-    const x2 = size.x / 2, y2 = size.y - 4;            // hacia la tarjeta (abajo-centro)
-    const my = (p.y + y2) / 2;
-    path.setAttribute("d", `M ${p.x} ${p.y} Q ${p.x} ${my} ${x2} ${y2}`);
+    // apunta al borde superior de la tarjeta (flota abajo); curva suave con leve panza
+    const x2 = size.x / 2, y2 = size.y * 0.48;
+    const c1x = p.x + 16, c1y = (p.y + y2) / 2;
+    const c2x = x2 + 16, c2y = (p.y + y2) / 2;
+    path.setAttribute("d", `M ${p.x} ${p.y} C ${c1x} ${c1y} ${c2x} ${c2y} ${x2} ${y2}`);
   }
 
   return (
@@ -122,11 +135,11 @@ export function HomeMap({ comercios, onSelect, selectedId }: {
       <div ref={elRef} className="homemap-canvas" />
       <svg ref={svgRef} className="hm-connector" style={{ display: "none" }} aria-hidden>
         <defs>
-          <marker id="hmArrow" markerWidth="9" markerHeight="9" refX="4.5" refY="4.5" orient="auto">
-            <path d="M0,0 L9,4.5 L0,9 Z" fill="#39ff9e" />
+          <marker id="hmArrow" markerUnits="userSpaceOnUse" markerWidth="13" markerHeight="13" refX="9" refY="6" orient="auto">
+            <path d="M1,1 L11,6 L1,11 Z" fill="#39ff9e" />
           </marker>
         </defs>
-        <path ref={pathRef} fill="none" stroke="#39ff9e" strokeWidth="2.2" strokeDasharray="5 7" markerEnd="url(#hmArrow)" />
+        <path ref={pathRef} fill="none" stroke="#39ff9e" strokeWidth="2" strokeDasharray="4 6" strokeLinecap="round" markerEnd="url(#hmArrow)" />
       </svg>
       <Link href="/buscar" className="hm-btn hm-full">⛶ Ver mapa completo</Link>
     </div>

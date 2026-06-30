@@ -74,14 +74,13 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
       <div className="mmap">
         <HomeMap comercios={filtered} onSelect={setSel} selectedId={sel?.id} />
         <Link href="/buscar" className="mmapbtn">⛶ Ver mapa completo</Link>
-      </div>
 
-      {/* Tarjeta del local seleccionado (panel inferior) */}
+      {/* Tarjeta flotante sobre el mapa, conectada al pin por la flecha */}
       {sel && (
         <div className="mcard">
           <div className="mcard-row">
             <div className="mcard-img">
-              {sel.portada_url || sel.logo_url ? <img src={(sel.portada_url || sel.logo_url) as string} alt="" /> : <span>🏪</span>}
+              {sel.portada_url || sel.logo_url ? <img src={(sel.portada_url || sel.logo_url) as string} alt="" loading="lazy" decoding="async" /> : <span>🏪</span>}
             </div>
             <div className="mcard-info">
               <div className="mcard-head">
@@ -111,7 +110,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
                   <Link key={o.id} href={`/comercios/${o.comercio_slug}`} className="mco">
                     <div className="mco-img">
                       {o.descuento_pct != null && <span className="off-badge">-{o.descuento_pct}%</span>}
-                      {o.imagen_url && <img src={o.imagen_url} alt="" />}
+                      {o.imagen_url && <img src={o.imagen_url} alt="" loading="lazy" decoding="async" />}
                     </div>
                     <div className="mco-b">
                       <b>{o.titulo}</b>
@@ -125,6 +124,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
           )}
         </div>
       )}
+      </div>
 
       {/* Ofertas cerca tuyo (se oculta cuando hay un local seleccionado) */}
       {!sel && (
@@ -135,7 +135,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
             <Link key={p.id} href={`/comercios/${p.comercio_slug}`} className="moffer">
               <div className="moffer-img">
                 {p.descuento_pct != null && <span className="off-badge">-{p.descuento_pct}%</span>}
-                {p.imagen_url && <img src={p.imagen_url} alt="" />}
+                {p.imagen_url && <img src={p.imagen_url} alt="" loading="lazy" decoding="async" />}
               </div>
               <div className="moffer-b">
                 <b>{p.titulo}</b>
