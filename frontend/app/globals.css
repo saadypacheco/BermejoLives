@@ -372,8 +372,15 @@
 
 /* Barra inferior */
 .bottomnav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; display: flex; background: rgba(11,13,17,.92); backdrop-filter: blur(12px); border-top: 1px solid var(--stroke); padding: 8px 6px calc(8px + env(safe-area-inset-bottom)); z-index: 50; }
-.bn-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--txt-3); font-size: 11px; font-weight: 600; }
+.bn-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--txt-3); font-size: 11px; font-weight: 600; background: none; border: none; cursor: pointer; }
 .bn-item.active { color: var(--neon); }
+
+/* Flecha punteada del pin seleccionado hacia la tarjeta */
+.hm-connector { position: absolute; inset: 0; pointer-events: none; z-index: 500; }
+
+/* Aviso cuando el mapa está filtrado por ofertas */
+.mfilter-note { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 16px 4px; padding: 8px 12px; background: rgba(57,255,158,.08); border: 1px solid rgba(57,255,158,.3); border-radius: 10px; font-size: 12.5px; color: var(--neon); }
+.mfilter-note a { color: var(--txt-2); font-weight: 700; white-space: nowrap; }
 
 /* Inputs extra de oferta (descuento / vencimiento) en la confirmación */
 .cc-extra { display: flex; gap: 10px; margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--stroke); }

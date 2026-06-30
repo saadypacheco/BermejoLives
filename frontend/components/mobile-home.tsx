@@ -18,12 +18,15 @@ const CHIPS: { label: string; rubro: string }[] = [
 ];
 const wa = (s?: string | null) => (s || "").replace(/\D/g, "");
 
-export function MobileHome({ comercios, feed }: { comercios: ComercioMapa[]; feed: FeedItem[] }) {
+export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios: ComercioMapa[]; feed: FeedItem[]; soloOfertas?: boolean }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
   const [sel, setSel] = useState<ComercioMapa | null>(null);
   const router = useRouter();
-  const filtered = cat ? comercios.filter((c) => c.rubro_slug === cat) : comercios;
+  // Negocios que tienen al menos una oferta en el feed
+  const offerSlugs = new Set(feed.map((f) => f.comercio_slug));
+  let filtered = cat ? comercios.filter((c) => c.rubro_slug === cat) : comercios;
+  if (soloOfertas) filtered = filtered.filter((c) => offerSlugs.has(c.slug));
   const ofertasNegocio = sel ? feed.filter((f) => f.comercio_slug === sel.slug) : [];
 
   function buscar(e: React.FormEvent) {
@@ -59,6 +62,13 @@ export function MobileHome({ comercios, feed }: { comercios: ComercioMapa[]; fee
           </button>
         ))}
       </div>
+
+      {soloOfertas && (
+        <div className="mfilter-note">
+          <span>🔥 Mostrando solo negocios con ofertas</span>
+          <Link href="/">Ver todos ✕</Link>
+        </div>
+      )}
 
       {/* Mapa: crece y llena el espacio disponible */}
       <div className="mmap">

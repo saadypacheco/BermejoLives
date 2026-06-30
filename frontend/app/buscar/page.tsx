@@ -173,7 +173,7 @@ export default function BuscarPage() {
         )}
       </div>
 
-      <BottomNav active="Mapa" />
+      <BottomNav active="" />
     </div>
   );
 }

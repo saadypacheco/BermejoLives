@@ -36,6 +36,9 @@ export function HomeMap({ comercios, onSelect, selectedId }: {
   const layerRef = useRef<any>(null);
   const LRef = useRef<any>(null);
   const meRef = useRef<[number, number] | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const pathRef = useRef<SVGPathElement>(null);
+  const selCoordRef = useRef<[number, number] | null>(null);
   const onSelRef = useRef(onSelect);
   onSelRef.current = onSelect;
 
@@ -51,9 +54,11 @@ export function HomeMap({ comercios, onSelect, selectedId }: {
       L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom: 19 }).addTo(map);
       layerRef.current = L.layerGroup().addTo(map);
       pintar();
+      // el conector pin→tarjeta se redibuja al mover/zoomear el mapa
+      map.on("move zoom", drawConnector);
       // reajustar al tamaño real del contenedor flex y ante cambios de viewport
-      setTimeout(() => map.invalidateSize(), 150);
-      const onResize = () => map.invalidateSize();
+      setTimeout(() => { map.invalidateSize(); drawConnector(); }, 150);
+      const onResize = () => { map.invalidateSize(); drawConnector(); };
       window.addEventListener("resize", onResize);
       (map as any)._onResize = onResize;
       if (navigator.geolocation) {
@@ -92,15 +97,37 @@ export function HomeMap({ comercios, onSelect, selectedId }: {
       const m = L.marker([c.lat, c.lng], { icon, zIndexOffset: isSel ? 800 : 0 }).addTo(layer);
       m.on("click", () => { onSelRef.current?.(c); mapRef.current.panTo([c.lat, c.lng]); });
     }
-    // línea punteada desde "estás acá" hasta el local seleccionado
-    if (selCoords && meRef.current) {
-      L.polyline([meRef.current, selCoords], { color: "#39ff9e", weight: 2, opacity: .85, dashArray: "5 8" }).addTo(layer);
-    }
+    selCoordRef.current = selCoords;
+    drawConnector();
+  }
+
+  // Dibuja la flecha punteada desde el pin seleccionado hacia la tarjeta (abajo).
+  function drawConnector() {
+    const map = mapRef.current, svg = svgRef.current, path = pathRef.current;
+    if (!map || !svg || !path) return;
+    const sc = selCoordRef.current;
+    if (!sc) { svg.style.display = "none"; return; }
+    const size = map.getSize();
+    const p = map.latLngToContainerPoint(sc);
+    svg.setAttribute("width", String(size.x));
+    svg.setAttribute("height", String(size.y));
+    svg.style.display = "block";
+    const x2 = size.x / 2, y2 = size.y - 4;            // hacia la tarjeta (abajo-centro)
+    const my = (p.y + y2) / 2;
+    path.setAttribute("d", `M ${p.x} ${p.y} Q ${p.x} ${my} ${x2} ${y2}`);
   }
 
   return (
     <div className="homemap">
       <div ref={elRef} className="homemap-canvas" />
+      <svg ref={svgRef} className="hm-connector" style={{ display: "none" }} aria-hidden>
+        <defs>
+          <marker id="hmArrow" markerWidth="9" markerHeight="9" refX="4.5" refY="4.5" orient="auto">
+            <path d="M0,0 L9,4.5 L0,9 Z" fill="#39ff9e" />
+          </marker>
+        </defs>
+        <path ref={pathRef} fill="none" stroke="#39ff9e" strokeWidth="2.2" strokeDasharray="5 7" markerEnd="url(#hmArrow)" />
+      </svg>
       <Link href="/buscar" className="hm-btn hm-full">⛶ Ver mapa completo</Link>
     </div>
   );
