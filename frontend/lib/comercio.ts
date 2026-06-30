@@ -67,6 +67,8 @@ export type PublicarPayload = {
   moneda?: "BOB" | "USD" | "ARS";
   imagen_url?: string;
   tiktok_url?: string;
+  descuento_pct?: number | null;
+  vence_el?: string | null;        // "YYYY-MM-DD"
 };
 
 export type PublicarResult = { ok: boolean; estado: string; publicado_directo: boolean };

@@ -277,6 +277,11 @@ def publicar(
 
     confiable = bool(comercio.get("confiable"))
     now = datetime.now(timezone.utc).isoformat()
+    # Descuento/vencimiento solo aplican a ofertas; el % se acota a 1..99.
+    descuento = None
+    if body.tipo == "oferta" and body.descuento_pct is not None:
+        descuento = max(1, min(99, int(body.descuento_pct)))
+    vence = body.vence_el if (body.tipo == "oferta" and body.vence_el) else None
     row = {
         "comercio_id": comercio["id"],
         "tipo": body.tipo,
@@ -286,6 +291,8 @@ def publicar(
         "moneda": body.moneda,
         "imagen_url": body.imagen_url,
         "tiktok_url": body.tiktok_url,
+        "descuento_pct": descuento,
+        "vence_el": vence,
         "origen": "panel",
         "estado": "aprobado" if confiable else "pendiente",
         "approved_at": now if confiable else None,

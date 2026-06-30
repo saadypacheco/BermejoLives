@@ -33,11 +33,17 @@ export function MobileHome({ comercios, feed }: { comercios: ComercioMapa[]; fee
 
   return (
     <div className="mhome">
-      {/* Header claro: marca + avatar + buscador */}
+      {/* Header oscuro: marca + tagline + acciones + buscador */}
       <div className="mhead">
         <div className="mtop">
-          <span className="mbrand">ENCON<i>TRALO</i></span>
-          <Link href="/mi-comercio" className="mavatar" aria-label="Perfil"><User style={{ width: 20, height: 20 }} /></Link>
+          <Link href="/" className="mbrand">
+            <span className="mbrand-name">ENCON<i>TRALO</i></span>
+            <span className="mtag">EN EL MAPA</span>
+          </Link>
+          <div className="mtop-right">
+            <Link href="/mi-comercio" className="mavatar" aria-label="Perfil"><User style={{ width: 20, height: 20 }} /></Link>
+            <Link href="/autoregistro" className="mpublica">Publicá tu negocio <span aria-hidden>↗</span></Link>
+          </div>
         </div>
         <form onSubmit={buscar} className="msearch">
           <Search style={{ width: 20, height: 20, color: "#7a8390" }} />

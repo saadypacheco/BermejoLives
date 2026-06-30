@@ -272,15 +272,22 @@
 .mhome { display: flex; flex-direction: column; max-width: 480px; margin: 0 auto; height: 100dvh; overflow: hidden; background: var(--bg); padding-bottom: 56px; }
 .mhead, .mchips, .moffers, .mcard { flex: 0 0 auto; }
 
-/* Header claro (blanco puro, sin esquinas redondeadas para que no asome el fondo) */
-.mhead { position: relative; z-index: 3; background: #ffffff; padding: 14px 16px 14px; box-shadow: 0 1px 0 rgba(0,0,0,.04); }
-.mtop { display: flex; align-items: center; justify-content: center; position: relative; margin-bottom: 12px; }
-.mbrand { font-weight: 900; font-size: 22px; letter-spacing: .04em; color: #0a8f5f; }
-.mbrand i { color: #0a8f5f; font-style: normal; }
-.mavatar { position: absolute; right: 0; width: 38px; height: 38px; border-radius: 50%; background: #11151b; color: #fff; display: grid; place-items: center; }
-.msearch { display: flex; align-items: center; gap: 10px; background: #f1f3f5; border: 1px solid #e6e9ec; border-radius: 14px; padding: 11px 14px; }
-.msearch input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: #1a1f25; font-size: 15px; }
-.msearch input::placeholder { color: #8a929b; }
+/* Header oscuro (como la imagen): degradé sutil + marca con tagline + acciones */
+.mhead { position: relative; z-index: 3; background: linear-gradient(120deg, #1b1530 0%, #0e1118 58%); padding: 14px 16px 14px; border-bottom: 1px solid var(--stroke); }
+.mtop { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.mbrand { display: flex; flex-direction: column; line-height: 1; }
+.mbrand-name { font-weight: 900; font-size: 21px; letter-spacing: .04em; color: #fff; }
+.mbrand-name i { color: var(--neon); font-style: normal; }
+.mtag { margin-top: 3px; font-size: 9.5px; letter-spacing: .22em; color: var(--txt-3); font-weight: 700; }
+.mtop-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.mavatar { width: 38px; height: 38px; border-radius: 50%; background: transparent; border: 1px solid var(--stroke-2); color: var(--txt); display: grid; place-items: center; flex-shrink: 0; }
+.mpublica { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; background: linear-gradient(180deg,#4dffae,var(--neon-dim)); color: #05130c; font-size: 12.5px; font-weight: 800; padding: 9px 13px; border-radius: 999px; }
+.mpublica span { font-size: 12px; }
+.msearch { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,.05); border: 1px solid var(--stroke-2); border-radius: 14px; padding: 12px 14px; }
+.msearch input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: var(--txt); font-size: 15px; }
+.msearch input::placeholder { color: var(--txt-3); }
+/* En pantallas angostas, el botón muestra solo "Publicá" para no apretar */
+@media (max-width: 430px) { .mpublica { font-size: 0; padding: 9px 12px; } .mpublica::before { content: "Publicá"; font-size: 12.5px; } .mpublica span { font-size: 12px; } }
 
 /* Chips de categoría: texto simple y compacto */
 .mchips { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px 8px; scrollbar-width: none; }
@@ -367,3 +374,8 @@
 .bottomnav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; display: flex; background: rgba(11,13,17,.92); backdrop-filter: blur(12px); border-top: 1px solid var(--stroke); padding: 8px 6px calc(8px + env(safe-area-inset-bottom)); z-index: 50; }
 .bn-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--txt-3); font-size: 11px; font-weight: 600; }
 .bn-item.active { color: var(--neon); }
+
+/* Inputs extra de oferta (descuento / vencimiento) en la confirmación */
+.cc-extra { display: flex; gap: 10px; margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--stroke); }
+.cc-extra-f { flex: 1; min-width: 0; }
+.cc-extra-f .campo-lbl { margin-bottom: 6px; }

@@ -268,6 +268,23 @@ function ChatBot({ sess, onLogout }: { sess: ComercioSession; onLogout: () => vo
                 {draft.descripcion && <div className="cc-row"><b>Detalle</b><span>{draft.descripcion}</span></div>}
                 {draft.tiktok_url && <div className="cc-row"><b>TikTok</b><span className="trunc">{draft.tiktok_url}</span></div>}
                 {draft.imagen_url && <div className="cc-row"><b>Imagen</b><span className="trunc">{draft.imagen_url}</span></div>}
+
+                {draft.tipo === "oferta" && (
+                  <div className="cc-extra">
+                    <div className="cc-extra-f">
+                      <label className="campo-lbl">Descuento %</label>
+                      <input className="adm-input" type="number" inputMode="numeric" min={1} max={99}
+                        value={draft.descuento_pct ?? ""} placeholder="ej: 20 (opcional)"
+                        onChange={(e) => setDraft((d) => ({ ...d, descuento_pct: e.target.value ? Math.max(1, Math.min(99, Number(e.target.value))) : null }))} />
+                    </div>
+                    <div className="cc-extra-f">
+                      <label className="campo-lbl">Válido hasta</label>
+                      <input className="adm-input" type="date" value={draft.vence_el ?? ""}
+                        onChange={(e) => setDraft((d) => ({ ...d, vence_el: e.target.value || null }))} />
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
                   <button className="btn btn-primary btn-sm" disabled={sending} onClick={confirmPublish}>
                     {sending ? "Publicando…" : sess.confiable ? "Publicar en vivo" : "Enviar a moderación"}

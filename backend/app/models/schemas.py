@@ -34,3 +34,5 @@ class PublicarBody(BaseModel):
     moneda: str = "BOB"
     imagen_url: str | None = None
     tiktok_url: str | None = None
+    descuento_pct: int | None = None      # 1..99, para el badge "-20%"
+    vence_el: str | None = None           # "YYYY-MM-DD"
