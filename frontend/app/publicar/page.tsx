@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { agenteLogin, getAgenteToken, clearAgente, altaComercioCampo, transcribirAudio } from "@/lib/campo";
+import { agenteLogin, getAgenteToken, clearAgente, altaComercioCampo, transcribirAudio, sugerirRubros } from "@/lib/campo";
 import { getCiudades, getRubros } from "@/lib/data";
 import type { Ciudad, Rubro } from "@/lib/types";
 import { Pin, User } from "@/components/icons";
@@ -15,19 +15,7 @@ const MODALIDADES = [
   { key: "ambos",     label: "Ambos" },
 ];
 
-const MONEDAS = [
-  { key: "bolivianos", label: "Bs" },
-  { key: "pesos-arg",  label: "$ ARG" },
-  { key: "dolares",    label: "USD" },
-  { key: "reales",     label: "R$" },
-];
-
-const ORIGENES = [
-  { key: "china",     label: "China" },
-  { key: "brasil",    label: "Brasil" },
-  { key: "argentina", label: "Argentina" },
-  { key: "chile",     label: "Chile" },
-];
+const MAX_INTENTOS_AUDIO = 2;
 
 // ─────────────────────────────────────────────
 export default function CampoPage() {
@@ -66,11 +54,7 @@ function Login({ onOk }: { onOk: () => void }) {
 }
 
 // ─────────────────────────────────────────────
-const EMPTY = {
-  nombre: "", cel: "", modalidad: "mayorista", direccion: "", descripcion: "",
-  email: "", facebook_url: "", tiktok_url: "", instagram_url: "", sitio_web: "", video_url: "",
-  pedido_minimo: "", horario: "",
-};
+const EMPTY = { nombre: "", cel: "", modalidad: "mayorista", direccion: "", descripcion: "" };
 
 function toggle<T>(arr: T[], val: T): T[] {
   return arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val];
@@ -94,6 +78,19 @@ function ChipToggle({ label, active, onClick }: { label: string; active: boolean
   );
 }
 
+// Ciudad más cercana a un punto GPS (distancia euclidiana simple, alcanza para elegir entre pocas ciudades).
+function ciudadMasCercana(ciudades: Ciudad[], lat: number, lng: number): Ciudad | null {
+  const conCoords = ciudades.filter((c) => c.lat != null && c.lng != null);
+  if (conCoords.length === 0) return null;
+  let mejor = conCoords[0];
+  let mejorDist = Infinity;
+  for (const c of conCoords) {
+    const d = (c.lat! - lat) ** 2 + (c.lng! - lng) ** 2;
+    if (d < mejorDist) { mejorDist = d; mejor = c; }
+  }
+  return mejor;
+}
+
 function FormCampo({ onLogout }: { onLogout: () => void }) {
   const [ciudades, setCiudades] = useState<Ciudad[]>([]);
   const [rubros,   setRubros]   = useState<Rubro[]>([]);
@@ -104,14 +101,8 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
   const [ciudadSlug,  setCiudadSlug]  = useState("bermejo");
   const [prefijo,     setPrefijo]     = useState("591");
   const [rubroSlugs,  setRubroSlugs]  = useState<string[]>([]);
-  const [monedas,     setMonedas]     = useState<string[]>([]);
-  const [origenes,    setOrigenes]    = useState<string[]>([]);
-  const [enviosInt,   setEnviosInt]   = useState(false);
-  const [factura,     setFactura]     = useState(false);
-  const [tieneStock,  setTieneStock]  = useState(true);
+  const [sugiriendo,  setSugiriendo]  = useState(false);
 
-  const [mas,         setMas]         = useState(false);
-  const [masFrontera, setMasFrontera] = useState(false);
   const [coords,      setCoords]      = useState<{ lat: number; lng: number; acc: number } | null>(null);
   const [geoMsg,      setGeoMsg]      = useState("");
   const [foto,        setFoto]        = useState<File | null>(null);
@@ -122,9 +113,10 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
   const [count,       setCount]       = useState(0);
   const [err,         setErr]         = useState("");
 
-  // Audio
+  // Audio: hasta 2 intentos de grabación; al llegar al límite, solo queda escribir a mano.
   const [grabando,      setGrabando]      = useState(false);
   const [transcribiendo,setTranscribiendo]= useState(false);
+  const [intentosAudio, setIntentosAudio] = useState(0);
   const recRef   = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -133,11 +125,16 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
     getRubros().then(setRubros);
   }, []);
 
-  // Actualiza el prefijo automáticamente según la ciudad seleccionada
-  useEffect(() => {
-    const c = ciudades.find((c) => c.slug === ciudadSlug);
-    if (c) setPrefijo(PREFIJO[c.pais] ?? "591");
-  }, [ciudadSlug, ciudades]);
+  async function sugerirDesdeDescripcion(descripcion: string) {
+    if (!descripcion.trim() || rubros.length === 0) return;
+    setSugiriendo(true);
+    try {
+      const sugeridos = await sugerirRubros(descripcion, rubros);
+      setRubroSlugs(sugeridos.length > 0 ? sugeridos : ["otros"]);
+    } finally {
+      setSugiriendo(false);
+    }
+  }
 
   async function iniciarGrabacion() {
     setErr("");
@@ -152,9 +149,13 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
         setTranscribiendo(true);
         try {
           const texto = await transcribirAudio(blob);
-          setF((s) => ({ ...s, descripcion: (s.descripcion ? s.descripcion + " " : "") + texto }));
+          const nueva = (f.descripcion ? f.descripcion + " " : "") + texto;
+          setF((s) => ({ ...s, descripcion: nueva }));
+          setIntentosAudio((n) => n + 1);
+          await sugerirDesdeDescripcion(nueva);
         } catch (ex) {
           setErr(ex instanceof Error ? ex.message : "No se pudo transcribir — escribí a mano");
+          setIntentosAudio((n) => n + 1);
         } finally {
           setTranscribiendo(false);
         }
@@ -174,8 +175,14 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
     if (!navigator.geolocation) { setGeoMsg("Este dispositivo no tiene GPS disponible."); return; }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy) });
+        const lat = pos.coords.latitude, lng = pos.coords.longitude;
+        setCoords({ lat, lng, acc: Math.round(pos.coords.accuracy) });
         setGeoMsg("");
+        const cercana = ciudadMasCercana(ciudades, lat, lng);
+        if (cercana) {
+          setCiudadSlug(cercana.slug);
+          setPrefijo(PREFIJO[cercana.pais] ?? "591");
+        }
       },
       (e) => setGeoMsg(e.code === 1 ? "Permiso denegado. Activá la ubicación." : "No se pudo obtener la ubicación."),
       { enableHighAccuracy: true, timeout: 10000 },
@@ -193,31 +200,23 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
     setErr("");
     const cel = f.cel.replace(/\D/g, "");
     if (!f.nombre.trim() || !cel) { setErr("Faltan nombre y celular."); return; }
-    if (!f.descripcion.trim()) { setErr("Escribí qué vende / descripción del negocio."); return; }
+    if (!f.descripcion.trim()) { setErr("Falta qué vende (grabá un audio o escribí)."); return; }
+    if (!coords) { setErr("Falta la ubicación — tocá \"Usar mi ubicación actual\"."); return; }
+    if (!foto) { setErr("Falta la foto del negocio."); return; }
 
     setSaving(true);
     const fd = new FormData();
     fd.append("nombre",      f.nombre);
     fd.append("whatsapp",    prefijo + cel);
     fd.append("ciudad_slug", ciudadSlug);
-    rubroSlugs.forEach((r) => fd.append("rubro_slugs", r));
+    (rubroSlugs.length > 0 ? rubroSlugs : ["otros"]).forEach((r) => fd.append("rubro_slugs", r));
     fd.append("modalidad",   f.modalidad);
-
-    // Campos fronterizos
-    monedas.forEach((m)  => fd.append("monedas_aceptadas",  m));
-    origenes.forEach((o) => fd.append("origen_importacion", o));
-    fd.append("envios_internacionales", String(enviosInt));
-    fd.append("tiene_factura",          String(factura));
-    fd.append("tiene_stock",            String(tieneStock));
-    if (f.pedido_minimo.trim()) fd.append("pedido_minimo", f.pedido_minimo.trim());
-    if (f.horario.trim())       fd.append("horario",       f.horario.trim());
-
-    for (const k of ["direccion", "descripcion", "email", "facebook_url", "tiktok_url", "instagram_url", "sitio_web", "video_url"] as const) {
-      if (f[k].trim()) fd.append(k, f[k].trim());
-    }
-    if (coords) { fd.append("lat", String(coords.lat)); fd.append("lng", String(coords.lng)); }
+    fd.append("descripcion", f.descripcion.trim());
+    if (f.direccion.trim()) fd.append("direccion", f.direccion.trim());
+    fd.append("lat", String(coords.lat));
+    fd.append("lng", String(coords.lng));
     fd.append("consentimiento", String(consent));
-    if (foto) fd.append("foto", foto);
+    fd.append("foto", foto);
 
     try {
       const r = await altaComercioCampo(fd);
@@ -231,17 +230,10 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
   }
 
   function otro() {
-    setF({ ...EMPTY }); setRubroSlugs([]); setMonedas([]); setOrigenes([]);
-    setEnviosInt(false); setFactura(false); setTieneStock(true);
-    setMas(false); setMasFrontera(false);
+    setF({ ...EMPTY }); setRubroSlugs([]); setIntentosAudio(0);
     setCoords(null); setGeoMsg(""); setFoto(null); setPreview(""); setConsent(true);
     setDone(null); setErr("");
   }
-
-  // Agrupa ciudades por país para el selector.
-  // Si pais es undefined (migration 0011 aún no aplicada en cloud), todo cae a Bolivia.
-  const bolivianas = ciudades.filter((c) => !c.pais || c.pais === "Bolivia");
-  const argentinas = ciudades.filter((c) => c.pais === "Argentina");
 
   if (done) {
     const ciudadActual = ciudades.find((c) => c.slug === ciudadSlug);
@@ -258,6 +250,8 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
     );
   }
 
+  const puedeGrabar = intentosAudio < MAX_INTENTOS_AUDIO;
+
   return (
     <div className="campo-wrap">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -270,29 +264,6 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
 
       <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
-        {/* ── Ciudad ── */}
-        <div>
-          <label className="campo-lbl">Ciudad *</label>
-          <select className="adm-input" value={ciudadSlug} onChange={(e) => setCiudadSlug(e.target.value)}>
-            {ciudades.length === 0 ? (
-              <option value="bermejo">Bermejo</option>
-            ) : (
-              <>
-                {bolivianas.length > 0 && (
-                  <optgroup label="🇧🇴 Bolivia">
-                    {bolivianas.map((c) => <option key={c.slug} value={c.slug}>{c.nombre}</option>)}
-                  </optgroup>
-                )}
-                {argentinas.length > 0 && (
-                  <optgroup label="🇦🇷 Argentina">
-                    {argentinas.map((c) => <option key={c.slug} value={c.slug}>{c.nombre}</option>)}
-                  </optgroup>
-                )}
-              </>
-            )}
-          </select>
-        </div>
-
         {/* ── Nombre ── */}
         <input className="adm-input" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre del negocio *" />
 
@@ -303,17 +274,6 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
             <span className="cel-flag">{prefijo === "54" ? "🇦🇷" : "🇧🇴"} +{prefijo}</span>
             <input className="adm-input" type="tel" inputMode="numeric" value={f.cel}
               onChange={(e) => set("cel", e.target.value)} placeholder={prefijo === "54" ? "3514XXXXXX" : "7XXXXXXX"} />
-          </div>
-        </div>
-
-        {/* ── Rubros ── */}
-        <div>
-          <label className="campo-lbl">Categorías (podés elegir más de una)</label>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-            {rubros.map((r) => (
-              <ChipToggle key={r.slug} label={r.nombre} active={rubroSlugs.includes(r.slug)}
-                onClick={() => setRubroSlugs((prev) => toggle(prev, r.slug))} />
-            ))}
           </div>
         </div>
 
@@ -329,74 +289,47 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
 
         {/* ── Descripción / audio ── */}
         <div>
-          <label className="campo-lbl">¿Qué vende? Grabá un audio o escribí *</label>
-          {!grabando ? (
-            <button type="button" className="btn btn-ghost" style={{ width: "100%", marginBottom: 8 }}
-              onClick={iniciarGrabacion} disabled={transcribiendo}>
-              🎤 {transcribiendo ? "Transcribiendo…" : "Grabar descripción"}
-            </button>
+          <label className="campo-lbl">¿Qué vende? Grabá un audio *</label>
+          {puedeGrabar ? (
+            !grabando ? (
+              <button type="button" className="btn btn-ghost" style={{ width: "100%", marginBottom: 8 }}
+                onClick={iniciarGrabacion} disabled={transcribiendo}>
+                🎤 {transcribiendo ? "Transcribiendo…" : `Grabar descripción${intentosAudio > 0 ? ` (intento ${intentosAudio + 1}/${MAX_INTENTOS_AUDIO})` : ""}`}
+              </button>
+            ) : (
+              <button type="button" className="btn btn-primary" style={{ width: "100%", marginBottom: 8 }} onClick={detenerGrabacion}>
+                <span className="dot-live" style={{ background: "#05130c" }} /> Detener y transcribir
+              </button>
+            )
           ) : (
-            <button type="button" className="btn btn-primary" style={{ width: "100%", marginBottom: 8 }} onClick={detenerGrabacion}>
-              <span className="dot-live" style={{ background: "#05130c" }} /> Detener y transcribir
-            </button>
+            <p style={{ fontSize: 12.5, color: "var(--amber)", marginBottom: 8 }}>
+              Ya grabaste {MAX_INTENTOS_AUDIO} veces — completá o corregí el texto a mano abajo.
+            </p>
           )}
-          <textarea className="adm-input" rows={3} value={f.descripcion} onChange={(e) => set("descripcion", e.target.value)}
-            placeholder="Ej: Gomería y repuestos de moto. Importa desde China. Pedido mínimo 1 caja." style={{ resize: "vertical" }} />
+          {(intentosAudio > 0 || !puedeGrabar) && (
+            <textarea className="adm-input" rows={3} value={f.descripcion}
+              onChange={(e) => set("descripcion", e.target.value)}
+              onBlur={() => sugerirDesdeDescripcion(f.descripcion)}
+              placeholder="Ej: Gomería y repuestos de moto. Importa desde China. Pedido mínimo 1 caja." style={{ resize: "vertical" }} />
+          )}
         </div>
 
-        {/* ── Info fronteriza (diferencial) ── */}
-        <button type="button" className="mas-toggle" onClick={() => setMasFrontera((v) => !v)}>
-          {masFrontera ? "− Ocultar info comercial" : "+ Info comercial (monedas, envíos, importación…)"}
-        </button>
-        {masFrontera && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "12px 0" }}>
-
-            <div>
-              <label className="campo-lbl">Monedas que acepta</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-                {MONEDAS.map((m) => (
-                  <ChipToggle key={m.key} label={m.label} active={monedas.includes(m.key)}
-                    onClick={() => setMonedas((prev) => toggle(prev, m.key))} />
-                ))}
-              </div>
+        {/* ── Categorías: las sugiere la IA a partir de la descripción, el agente puede corregir ── */}
+        {(rubroSlugs.length > 0 || sugiriendo) && (
+          <div>
+            <label className="campo-lbl">Categoría{sugiriendo && " (sugiriendo…)"}</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+              {rubros.map((r) => (
+                <ChipToggle key={r.slug} label={r.nombre} active={rubroSlugs.includes(r.slug)}
+                  onClick={() => setRubroSlugs((prev) => toggle(prev, r.slug))} />
+              ))}
             </div>
-
-            <label style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13.5, color: "var(--txt-2)" }}>
-              <input type="checkbox" checked={enviosInt} onChange={(e) => setEnviosInt(e.target.checked)} />
-              Hace envíos internacionales
-            </label>
-
-            <label style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13.5, color: "var(--txt-2)" }}>
-              <input type="checkbox" checked={factura} onChange={(e) => setFactura(e.target.checked)} />
-              Entrega factura / comprobante oficial
-            </label>
-
-            <label style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13.5, color: "var(--txt-2)" }}>
-              <input type="checkbox" checked={tieneStock} onChange={(e) => setTieneStock(e.target.checked)} />
-              Tiene stock disponible hoy
-            </label>
-
-            <div>
-              <label className="campo-lbl">Importa desde (si aplica)</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-                {ORIGENES.map((o) => (
-                  <ChipToggle key={o.key} label={o.label} active={origenes.includes(o.key)}
-                    onClick={() => setOrigenes((prev) => toggle(prev, o.key))} />
-                ))}
-              </div>
-            </div>
-
-            <input className="adm-input" value={f.pedido_minimo} onChange={(e) => set("pedido_minimo", e.target.value)}
-              placeholder="Pedido mínimo (ej: 1 caja, $500, 12 unidades)" />
-
-            <input className="adm-input" value={f.horario} onChange={(e) => set("horario", e.target.value)}
-              placeholder="Horario (ej: Lun–Sab 8–20hs)" />
           </div>
         )}
 
         {/* ── GPS ── */}
         <div>
-          <label className="campo-lbl">Ubicación (parado en la puerta)</label>
+          <label className="campo-lbl">Ubicación (parado en la puerta) *</label>
           <button type="button" className={`btn ${coords ? "btn-ghost" : "btn-primary"}`} style={{ width: "100%" }} onClick={ubicar}>
             <Pin style={{ width: 17, height: 17 }} /> {coords ? "Ubicación tomada ✓ — tomar de nuevo" : "Usar mi ubicación actual"}
           </button>
@@ -406,29 +339,15 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
 
         {/* ── Foto ── */}
         <div>
-          <label className="campo-lbl">Foto del negocio</label>
+          <label className="campo-lbl">Foto del negocio *</label>
           <label className="foto-drop">
             {preview ? <img src={preview} alt="" /> : <span>📷 Sacar foto / elegir</span>}
             <input type="file" accept="image/*" capture="environment" onChange={onFoto} hidden />
           </label>
         </div>
 
-        <input className="adm-input" value={f.direccion} onChange={(e) => set("direccion", e.target.value)} placeholder="Dirección (Galería X, Local Y, calle…)" />
-
-        {/* ── Opcionales (redes) ── */}
-        <button type="button" className="mas-toggle" onClick={() => setMas((v) => !v)}>
-          {mas ? "− Ocultar datos opcionales" : "+ Redes, email y video (opcional)"}
-        </button>
-        {mas && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <input className="adm-input" type="email" value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="Email" />
-            <input className="adm-input" value={f.facebook_url} onChange={(e) => set("facebook_url", e.target.value)} placeholder="Facebook / Marketplace (link)" />
-            <input className="adm-input" value={f.instagram_url} onChange={(e) => set("instagram_url", e.target.value)} placeholder="Instagram (link o @usuario)" />
-            <input className="adm-input" value={f.tiktok_url} onChange={(e) => set("tiktok_url", e.target.value)} placeholder="TikTok (link o @usuario)" />
-            <input className="adm-input" value={f.sitio_web} onChange={(e) => set("sitio_web", e.target.value)} placeholder="Página web" />
-            <input className="adm-input" value={f.video_url} onChange={(e) => set("video_url", e.target.value)} placeholder="Video (link de TikTok)" />
-          </div>
-        )}
+        <input className="adm-input" value={f.direccion} onChange={(e) => set("direccion", e.target.value)}
+          placeholder="Punto de referencia (ej: frente a la plaza, al lado de la farmacia)" />
 
         <label style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13.5, color: "var(--txt-2)" }}>
           <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />

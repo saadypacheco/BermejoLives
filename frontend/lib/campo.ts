@@ -35,6 +35,16 @@ export async function transcribirAudio(blob: Blob): Promise<string> {
   return (await res.json()).texto as string;
 }
 
+export async function sugerirRubros(descripcion: string, rubros: { slug: string; nombre: string }[]): Promise<string[]> {
+  const res = await fetch(`${API}/campo/sugerir-rubros`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAgenteToken() ?? ""}` },
+    body: JSON.stringify({ descripcion, rubros }),
+  });
+  if (!res.ok) return [];
+  return (await res.json()).rubro_slugs as string[];
+}
+
 export type AltaCampoResult = { ok: boolean; comercio: { nombre: string; slug: string; ciudad: string; foto: boolean; gps: boolean } };
 
 export async function altaComercioCampo(form: FormData): Promise<AltaCampoResult> {

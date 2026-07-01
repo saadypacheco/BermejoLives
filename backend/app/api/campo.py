@@ -19,6 +19,7 @@ from app.core.text import slug_unico, slugify
 from app.db.repository import Repo, get_repo
 from app.db.session import get_supabase
 from app.models.schemas import LoginBody
+from app.services.clasificador import sugerir_rubros
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -74,6 +75,18 @@ async def transcribir(
         logger.warning("transcribir.api", status=r.status_code, body=r.text[:200])
         raise HTTPException(status_code=502, detail="No se pudo transcribir")
     return {"texto": (r.json().get("text") or "").strip()}
+
+
+class SugerirRubrosBody(BaseModel):
+    descripcion: str
+    rubros: list[dict]
+
+
+@router.post("/campo/sugerir-rubros")
+def campo_sugerir_rubros(body: SugerirRubrosBody, _agente: dict = Depends(auth.require_agente)) -> dict:
+    """A partir del audio transcripto (o texto escrito), sugiere rubros para
+    que el agente no tenga que elegirlos a mano."""
+    return {"rubro_slugs": sugerir_rubros(body.descripcion, body.rubros)}
 
 
 _MAX_FOTO_BYTES = 15 * 1024 * 1024  # 15 MB de entrada
@@ -139,7 +152,7 @@ async def alta_campo(
     tiene_factura: bool = Form(False),
     horario: str | None = Form(None),
     tiene_stock: bool = Form(True),
-    foto: UploadFile | None = File(None),
+    foto: UploadFile = File(...),
     agente: dict = Depends(auth.require_agente),
     repo: Repo = Depends(get_repo),
 ) -> dict:
@@ -147,6 +160,10 @@ async def alta_campo(
         raise HTTPException(status_code=400, detail=f"modalidad inválida: {modalidad}")
     if not nombre.strip() or not whatsapp.strip():
         raise HTTPException(status_code=400, detail="Faltan nombre y/o celular")
+    if not descripcion or not descripcion.strip():
+        raise HTTPException(status_code=400, detail="Falta la descripción (audio o texto) de qué vende")
+    if lat is None or lng is None:
+        raise HTTPException(status_code=400, detail="Falta la ubicación")
 
     ciudad_id = repo.get_ciudad_id(ciudad_slug) or repo.get_ciudad_id("bermejo")
 

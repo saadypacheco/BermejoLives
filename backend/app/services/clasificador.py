@@ -85,3 +85,39 @@ def generar_texto_comercio(nombre: str, que_vende: str, rubros: list[dict]) -> d
     if not descripcion:
         return None
     return {"descripcion": descripcion, "rubro_slug": rubro_slug if rubro_slug in slugs else None}
+
+
+def sugerir_rubros(descripcion: str, rubros: list[dict]) -> list[str]:
+    """De una descripción libre (ej. transcripción de audio del agente de campo),
+    sugiere 1-3 rubros. [] si no hay GEMINI_API_KEY o falla (el caller cae a un
+    fallback, ej. 'otros', para no bloquear el alta)."""
+    slugs = [r["slug"] for r in rubros if r.get("slug")]
+    if not slugs or not settings.gemini_api_key or not descripcion.strip():
+        return []
+
+    lista = "\n".join(f"- {r['slug']}: {r.get('nombre', r['slug'])}" for r in rubros if r.get("slug"))
+    prompt = (
+        "A partir de esta descripción de un negocio, elegí entre 1 y 3 rubros de "
+        "la lista que mejor apliquen (los más específicos primero).\n\n"
+        f"Descripción: {descripcion}\n\n"
+        f"Rubros disponibles:\n{lista}\n\n"
+        'Devolvé SOLO un JSON (sin markdown): {"rubro_slugs": ["slug1", "slug2"]}'
+    )
+    try:
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
+        )
+        r = httpx.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=20)
+        r.raise_for_status()
+        texto = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+        texto = texto.strip("`")
+        if texto.lower().startswith("json"):
+            texto = texto[4:].strip()
+        data = json.loads(texto)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("sugerir_rubros.error", error=str(exc))
+        return []
+
+    candidatos = data.get("rubro_slugs") or []
+    return [s for s in candidatos if s in slugs][:3]
