@@ -311,3 +311,42 @@ def enviar_mensaje_comercio(
     })
     logger.info("admin.mensaje", comercio=comercio_id, by=admin["email"])
     return {"ok": True}
+
+
+# ---- Solicitudes de cambio de número (cuenta sin email/pass, perdió el celu) ----
+
+@router.get("/admin/solicitudes-cambio-numero")
+def listar_solicitudes_cambio_numero(
+    estado: str | None = Query(default="pendiente"),
+    _admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    items = repo.list_solicitudes_cambio_numero(estado)
+    return {"items": items, "total": len(items)}
+
+
+@router.post("/admin/solicitudes-cambio-numero/{solicitud_id}/aprobar")
+def aprobar_solicitud_cambio_numero(
+    solicitud_id: str,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Actualiza el WhatsApp del comercio al número nuevo. Siempre manual."""
+    updated = repo.aprobar_solicitud_cambio_numero(solicitud_id, admin["email"])
+    if not updated:
+        raise HTTPException(status_code=404, detail="solicitud no encontrada")
+    logger.info("solicitud_cambio_numero.aprobada", solicitud=solicitud_id, by=admin["email"])
+    return {"ok": True, "solicitud": updated}
+
+
+@router.post("/admin/solicitudes-cambio-numero/{solicitud_id}/rechazar")
+def rechazar_solicitud_cambio_numero(
+    solicitud_id: str,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    updated = repo.rechazar_solicitud_cambio_numero(solicitud_id, admin["email"])
+    if not updated:
+        raise HTTPException(status_code=404, detail="solicitud no encontrada")
+    logger.info("solicitud_cambio_numero.rechazada", solicitud=solicitud_id, by=admin["email"])
+    return {"ok": True, "solicitud": updated}

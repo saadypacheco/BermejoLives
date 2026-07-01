@@ -182,6 +182,35 @@ export async function responderReclamo(id: string, respuesta: string) {
   return res.json();
 }
 
+// ---- Solicitudes de cambio de número (cuenta sin email/pass, perdió el celu) ----
+export type SolicitudCambioNumero = {
+  id: string;
+  comercio_id: string;
+  whatsapp_nuevo: string;
+  foto_url: string | null;
+  mensaje: string | null;
+  similitud_estimada: "alta" | "media" | "baja" | null;
+  estado: "pendiente" | "aprobada" | "rechazada";
+  created_at: string;
+  comercios?: { nombre: string; slug: string; portada_url: string | null; whatsapp: string } | null;
+};
+
+export async function listSolicitudesCambioNumero(estado?: string): Promise<SolicitudCambioNumero[]> {
+  const res = await authFetch(`/admin/solicitudes-cambio-numero${estado ? `?estado=${estado}` : ""}`);
+  const data = await res.json();
+  return data.items as SolicitudCambioNumero[];
+}
+
+export async function aprobarSolicitudCambioNumero(id: string) {
+  const res = await authFetch(`/admin/solicitudes-cambio-numero/${id}/aprobar`, { method: "POST" });
+  return res.json();
+}
+
+export async function rechazarSolicitudCambioNumero(id: string) {
+  const res = await authFetch(`/admin/solicitudes-cambio-numero/${id}/rechazar`, { method: "POST" });
+  return res.json();
+}
+
 // ---- Datos de Reservalo (proxy vía /api/admin-sync) ----
 export type ReservaloResumen = {
   clientes_nuevos_7d?: number;

@@ -14,6 +14,7 @@ import {
   listReclamos, responderReclamo, type Reclamo,
   getReservaloResumen, type ReservaloResumen,
   getReservaloConsultas, responderReservaloConsulta, type ConsultaReservalo,
+  listSolicitudesCambioNumero, aprobarSolicitudCambioNumero, rechazarSolicitudCambioNumero, type SolicitudCambioNumero,
 } from "@/lib/api";
 import { getRubros } from "@/lib/data";
 import type { Rubro } from "@/lib/types";
@@ -25,7 +26,7 @@ export default function AdminPage() {
   const [email, setEmail] = useState("admin@bermejolive.com");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"publicaciones" | "comercios" | "suscripciones" | "pagos" | "monitoreo" | "reclamos">("comercios");
+  const [tab, setTab] = useState<"publicaciones" | "comercios" | "suscripciones" | "pagos" | "monitoreo" | "reclamos" | "cambio-numero">("comercios");
   const [items, setItems] = useState<PendingPub[]>([]);
   const [comercios, setComercios] = useState<ComercioPorVerificar[]>([]);
   const [todosLosComercios, setTodosLosComercios] = useState<ComercioPorVerificar[]>([]);
@@ -36,6 +37,7 @@ export default function AdminPage() {
   const [reservaloResumen, setReservaloResumen] = useState<ReservaloResumen | null>(null);
   const [reclamos, setReclamos] = useState<Reclamo[]>([]);
   const [consultasReservalo, setConsultasReservalo] = useState<ConsultaReservalo[]>([]);
+  const [solicitudesCambioNumero, setSolicitudesCambioNumero] = useState<SolicitudCambioNumero[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -47,6 +49,7 @@ export default function AdminPage() {
       loadPagos();
       loadEstadisticas();
       loadReclamos();
+      loadSolicitudesCambioNumero();
       getRubros().then(setRubros);
     }
   }, []);
@@ -96,6 +99,18 @@ export default function AdminPage() {
     try { await responderReclamo(id, respuesta); loadReclamos(); } catch { alert("No se pudo responder"); }
   }
 
+  async function loadSolicitudesCambioNumero() {
+    try { setSolicitudesCambioNumero(await listSolicitudesCambioNumero()); } catch { setSolicitudesCambioNumero([]); }
+  }
+
+  async function doAprobarSolicitud(id: string) {
+    try { await aprobarSolicitudCambioNumero(id); loadSolicitudesCambioNumero(); } catch { alert("No se pudo aprobar"); }
+  }
+
+  async function doRechazarSolicitud(id: string) {
+    try { await rechazarSolicitudCambioNumero(id); loadSolicitudesCambioNumero(); } catch { alert("No se pudo rechazar"); }
+  }
+
   async function doResponderConsultaReservalo(id: number, respuesta: string) {
     try { await responderReservaloConsulta(id, respuesta); loadReclamos(); } catch { alert("No se pudo responder"); }
   }
@@ -131,6 +146,7 @@ export default function AdminPage() {
       loadPagos();
       loadEstadisticas();
       loadReclamos();
+      loadSolicitudesCambioNumero();
     } catch {
       setErr("Credenciales incorrectas. ¿Está corriendo el backend?");
     }
@@ -199,6 +215,9 @@ export default function AdminPage() {
             return n > 0 && <span style={{ color: "var(--amber)" }}>· {n}</span>;
           })()}
         </button>
+        <button className={tab === "cambio-numero" ? "active" : ""} onClick={() => { setTab("cambio-numero"); loadSolicitudesCambioNumero(); }}>
+          Cambios de número {solicitudesCambioNumero.length > 0 && <span style={{ color: "var(--amber)" }}>· {solicitudesCambioNumero.length}</span>}
+        </button>
       </div>
 
       {tab === "comercios" && (
@@ -232,6 +251,10 @@ export default function AdminPage() {
           onResponderReclamo={doResponderReclamo}
           onResponderConsulta={doResponderConsultaReservalo}
         />
+      )}
+
+      {tab === "cambio-numero" && (
+        <TabCambioNumero items={solicitudesCambioNumero} onAprobar={doAprobarSolicitud} onRechazar={doRechazarSolicitud} />
       )}
 
       {tab === "publicaciones" && (
@@ -352,6 +375,75 @@ function TabReclamos({
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── Tab Cambio de número ──────────────────────────────────────────────────────
+
+const SIMILITUD_CFG: Record<string, { label: string; color: string }> = {
+  alta: { label: "Similitud alta", color: "var(--neon)" },
+  media: { label: "Similitud media", color: "var(--amber)" },
+  baja: { label: "Similitud baja", color: "var(--pink)" },
+};
+
+function TabCambioNumero({
+  items, onAprobar, onRechazar,
+}: {
+  items: SolicitudCambioNumero[];
+  onAprobar: (id: string) => void;
+  onRechazar: (id: string) => void;
+}) {
+  return (
+    <div className="panel-card glass">
+      <div className="ph">
+        <h3>Cambios de número</h3>
+        <span style={{ color: "var(--txt-3)", fontSize: 13 }}>El dueño perdió su celu viejo — nunca se aprueba solo, siempre revisá vos</span>
+      </div>
+      {items.length === 0 && <div style={{ padding: 20, textAlign: "center", color: "var(--txt-3)" }}>Sin solicitudes pendientes.</div>}
+      {items.map((s) => {
+        const sim = s.similitud_estimada ? SIMILITUD_CFG[s.similitud_estimada] : null;
+        return (
+          <div key={s.id} style={{ padding: 16, borderBottom: "1px solid var(--border)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+              <div>
+                <b>{s.comercios?.nombre ?? "Comercio"}</b>
+                <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 2 }}>
+                  Número actual: +{s.comercios?.whatsapp} → nuevo: +{s.whatsapp_nuevo}
+                </div>
+                {s.mensaje && <p style={{ fontSize: 13, color: "var(--txt-2)", marginTop: 6 }}>{s.mensaje}</p>}
+              </div>
+              {sim && <span style={{ fontSize: 11, color: sim.color, whiteSpace: "nowrap" }}>{sim.label}</span>}
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: "var(--txt-3)", marginBottom: 4 }}>Foto registrada</div>
+                {s.comercios?.portada_url
+                  ? <img src={s.comercios.portada_url} alt="" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }} />
+                  : <div style={{ height: 120, background: "var(--panel)", borderRadius: 8, display: "grid", placeItems: "center", color: "var(--txt-3)", fontSize: 12 }}>sin foto</div>}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: "var(--txt-3)", marginBottom: 4 }}>Foto nueva</div>
+                {s.foto_url
+                  ? <img src={s.foto_url} alt="" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }} />
+                  : <div style={{ height: 120, background: "var(--panel)", borderRadius: 8, display: "grid", placeItems: "center", color: "var(--txt-3)", fontSize: 12 }}>sin foto</div>}
+              </div>
+            </div>
+
+            {s.estado === "pendiente" ? (
+              <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                <button className="btn btn-primary btn-sm" onClick={() => onAprobar(s.id)}>Aprobar</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => onRechazar(s.id)}>Rechazar</button>
+              </div>
+            ) : (
+              <div style={{ marginTop: 10, fontSize: 12, color: s.estado === "aprobada" ? "var(--neon)" : "var(--pink)" }}>
+                {s.estado === "aprobada" ? "✓ Aprobada" : "✗ Rechazada"}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

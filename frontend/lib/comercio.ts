@@ -64,6 +64,26 @@ export async function comercioRecuperarConfirmar(whatsapp: string, codigo: strin
   return data.comercio as ComercioSession;
 }
 
+export type ComercioBusqueda = { id: string; slug: string; nombre: string; portada_url: string | null; direccion: string | null };
+
+export async function buscarComercioPorNombre(q: string): Promise<ComercioBusqueda[]> {
+  const res = await fetch(`${API}/comercio/buscar?q=${encodeURIComponent(q)}`);
+  if (!res.ok) return [];
+  return (await res.json()).items as ComercioBusqueda[];
+}
+
+export async function solicitarCambioNumero(comercioId: string, whatsappNuevo: string, mensaje: string | undefined, foto: File): Promise<void> {
+  const fd = new FormData();
+  fd.append("whatsapp_nuevo", whatsappNuevo);
+  if (mensaje) fd.append("mensaje", mensaje);
+  fd.append("foto", foto);
+  const res = await fetch(`${API}/comercio/${comercioId}/solicitar-cambio-numero`, { method: "POST", body: fd });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail ?? "No se pudo enviar la solicitud");
+  }
+}
+
 export type RegistroPayload = {
   nombre: string;
   whatsapp: string;

@@ -59,6 +59,11 @@ class Repo(Protocol):
     def crear_reclamo(self, row: dict) -> dict: ...
     def list_reclamos(self, estado: str | None) -> list[dict]: ...
     def responder_reclamo(self, reclamo_id: str, respuesta: str, by: str) -> dict | None: ...
+    def buscar_comercios_por_nombre(self, q: str) -> list[dict]: ...
+    def crear_solicitud_cambio_numero(self, row: dict) -> dict: ...
+    def list_solicitudes_cambio_numero(self, estado: str | None) -> list[dict]: ...
+    def aprobar_solicitud_cambio_numero(self, solicitud_id: str, by: str) -> dict | None: ...
+    def rechazar_solicitud_cambio_numero(self, solicitud_id: str, by: str) -> dict | None: ...
 
 
 class SupabaseRepo:
@@ -608,6 +613,58 @@ class SupabaseRepo:
                 "respondido_en": datetime.now(timezone.utc).isoformat(),
             })
             .eq("id", reclamo_id)
+            .execute()
+        )
+        return res.data[0] if res.data else None
+
+    # ---- solicitudes de cambio de número (cuenta sin email/pass, se cambió de celular) ----
+    def buscar_comercios_por_nombre(self, q: str) -> list[dict]:
+        res = (
+            self._db.table("comercios")
+            .select("id, slug, nombre, portada_url, direccion")
+            .eq("activo", True)
+            .ilike("nombre", f"%{q}%")
+            .limit(10)
+            .execute()
+        )
+        return res.data or []
+
+    def crear_solicitud_cambio_numero(self, row: dict) -> dict:
+        res = self._db.table("solicitudes_cambio_numero").insert(row).execute()
+        return res.data[0]
+
+    def list_solicitudes_cambio_numero(self, estado: str | None) -> list[dict]:
+        q = (
+            self._db.table("solicitudes_cambio_numero")
+            .select("*, comercios(nombre, slug, portada_url, whatsapp)")
+            .order("created_at", desc=True)
+            .limit(200)
+        )
+        if estado:
+            q = q.eq("estado", estado)
+        return q.execute().data or []
+
+    def aprobar_solicitud_cambio_numero(self, solicitud_id: str, by: str) -> dict | None:
+        from datetime import datetime, timezone
+        sol_res = self._db.table("solicitudes_cambio_numero").select("*").eq("id", solicitud_id).limit(1).execute()
+        if not sol_res.data:
+            return None
+        sol = sol_res.data[0]
+        self._db.table("comercios").update({"whatsapp": sol["whatsapp_nuevo"]}).eq("id", sol["comercio_id"]).execute()
+        res = (
+            self._db.table("solicitudes_cambio_numero")
+            .update({"estado": "aprobada", "revisada_por": by, "revisada_en": datetime.now(timezone.utc).isoformat()})
+            .eq("id", solicitud_id)
+            .execute()
+        )
+        return res.data[0] if res.data else None
+
+    def rechazar_solicitud_cambio_numero(self, solicitud_id: str, by: str) -> dict | None:
+        from datetime import datetime, timezone
+        res = (
+            self._db.table("solicitudes_cambio_numero")
+            .update({"estado": "rechazada", "revisada_por": by, "revisada_en": datetime.now(timezone.utc).isoformat()})
+            .eq("id", solicitud_id)
             .execute()
         )
         return res.data[0] if res.data else None

@@ -155,6 +155,9 @@ function IngresarConWhatsapp({ onUsarEmail, onLogged }: { onUsarEmail: () => voi
         <button type="button" onClick={onUsarEmail} style={{ background: "none", border: "none", color: "var(--txt-3)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}>
           ¿Tenés email y contraseña? Entrá así
         </button>
+        <Link href="/recuperar-negocio" style={{ color: "var(--txt-3)", fontSize: 13 }}>
+          ¿Cambiaste de número de WhatsApp?
+        </Link>
       </form>
     );
   }
