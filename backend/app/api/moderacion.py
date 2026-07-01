@@ -139,6 +139,15 @@ def listar_suscripciones(
     return {"items": items, "total": len(items)}
 
 
+@router.get("/admin/estadisticas")
+def estadisticas(
+    _admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Monitoreo: usuarios nuevos, alertas de baja, ofertas y contactos."""
+    return repo.estadisticas_admin()
+
+
 @router.post("/admin/comercio/{comercio_id}/pago")
 def registrar_pago(
     comercio_id: str,

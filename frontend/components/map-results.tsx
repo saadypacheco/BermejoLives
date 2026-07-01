@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { type ResultadoBusqueda, comoLlegarHref, waLink, MODALIDAD_LABEL } from "@/lib/types";
+import { registrarLead } from "@/lib/campo";
 
 // Carga Leaflet desde CDN una sola vez (evita sumar dependencia npm / rebuild).
 let leafletPromise: Promise<any> | null = null;
@@ -49,6 +50,19 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results]);
 
+  // Los popups son HTML crudo (fuera de React): tracking de leads por delegación.
+  useEffect(() => {
+    const el = elRef.current;
+    if (!el) return;
+    function onClick(e: MouseEvent) {
+      const target = (e.target as HTMLElement)?.closest("[data-lead-comercio]");
+      const comercioId = target?.getAttribute("data-lead-comercio");
+      if (comercioId) registrarLead(comercioId);
+    }
+    el.addEventListener("click", onClick);
+    return () => el.removeEventListener("click", onClick);
+  }, []);
+
   function renderPins(L: any) {
     const layer = layerRef.current;
     if (!layer) return;
@@ -67,7 +81,7 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
           <b>${r.nombre}</b>
           <span>${MODALIDAD_LABEL[r.modalidad] ?? r.modalidad}${r.rubro_nombre ? " · " + r.rubro_nombre : ""}</span>
           <div class="map-pop-act">
-            <a href="${waLink(r.whatsapp, "Hola, te vi en Encontralo")}" target="_blank" rel="noopener">WhatsApp</a>
+            <a href="${waLink(r.whatsapp, "Hola, te vi en Encontralo")}" target="_blank" rel="noopener" data-lead-comercio="${r.id}">WhatsApp</a>
             <a href="${comoLlegarHref(r)}" target="_blank" rel="noopener">Cómo llegar</a>
             <a href="/comercios/${r.slug}">Ver comercio</a>
           </div>

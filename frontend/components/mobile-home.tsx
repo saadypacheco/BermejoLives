@@ -7,6 +7,7 @@ import { HomeMap } from "@/components/home-map";
 import { WhatsApp, Phone, Send, User, Search } from "@/components/icons";
 import { type ComercioMapa } from "@/lib/data";
 import { type FeedItem, precioFmt, vencimientoFmt } from "@/lib/types";
+import { registrarLead } from "@/lib/campo";
 
 const CHIPS: { label: string; rubro: string }[] = [
   { label: "Todos", rubro: "" },
@@ -94,8 +95,8 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
           </div>
           <div className="mcard-act">
             <div className="mcard-icons">
-              {wa(sel.whatsapp) && <a className="mab wa" href={`https://wa.me/${wa(sel.whatsapp)}`} target="_blank" rel="noopener" aria-label="WhatsApp"><WhatsApp style={{ width: 20, height: 20 }} /></a>}
-              {sel.telefono && <a className="mab" href={`tel:${sel.telefono}`} aria-label="Llamar"><Phone style={{ width: 18, height: 18 }} /></a>}
+              {wa(sel.whatsapp) && <a className="mab wa" href={`https://wa.me/${wa(sel.whatsapp)}`} target="_blank" rel="noopener" aria-label="WhatsApp" onClick={() => registrarLead(sel.id)}><WhatsApp style={{ width: 20, height: 20 }} /></a>}
+              {sel.telefono && <a className="mab" href={`tel:${sel.telefono}`} aria-label="Llamar" onClick={() => registrarLead(sel.id, "telefono")}><Phone style={{ width: 18, height: 18 }} /></a>}
               <a className="mab" href={sel.como_llegar ?? `https://www.google.com/maps/search/?api=1&query=${sel.lat},${sel.lng}`} target="_blank" rel="noopener" aria-label="Cómo llegar"><Send style={{ width: 18, height: 18 }} /></a>
             </div>
             <Link className="btn btn-primary mver" href={`/comercios/${sel.slug}`}>Ver tienda</Link>

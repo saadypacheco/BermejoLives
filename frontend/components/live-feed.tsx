@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { supabase, hasSupabase } from "@/lib/supabase";
 import { type FeedItem, precioFmt, waLink } from "@/lib/types";
 import { WhatsApp, Verified, Pin, Play } from "@/components/icons";
+import { registrarLead } from "@/lib/campo";
 
 /**
  * Feed en vivo. Render inicial server-side (props), y se suscribe a Supabase
@@ -75,6 +76,7 @@ export function LiveFeed({ initial }: { initial: FeedItem[] }) {
                 href={waLink(p.comercio_whatsapp, `Hola, vi "${p.titulo ?? "tu publicación"}" en Encontralo`)}
                 target="_blank"
                 rel="noopener"
+                onClick={() => registrarLead(p.comercio_id)}
               >
                 <WhatsApp style={{ width: 16, height: 16 }} /> WhatsApp
               </a>

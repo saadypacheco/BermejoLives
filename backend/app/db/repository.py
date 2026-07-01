@@ -34,6 +34,7 @@ class Repo(Protocol):
     def insert_lead(self, row: dict) -> None: ...
     def list_leads_by_comercio(self, comercio_id: str, dias: int) -> list[dict]: ...
     def stats_admin(self) -> dict: ...
+    def estadisticas_admin(self) -> dict: ...
     def list_suscripciones(self) -> list[dict]: ...
     def registrar_pago(self, comercio_id: str, row: dict) -> dict: ...
     def suspender_comercio(self, comercio_id: str) -> None: ...
@@ -265,6 +266,79 @@ class SupabaseRepo:
             "comercios_pendientes": pendientes.count or 0,
             "leads_hoy":          leads_hoy.count or 0,
             "leads_ayer":         leads_ayer.count or 0,
+        }
+
+    def estadisticas_admin(self) -> dict:
+        """Monitoreo: usuarios/comercios nuevos, alertas de baja, ofertas y contactos."""
+        from datetime import datetime, timezone, timedelta
+        hoy_dt = datetime.now(timezone.utc)
+        hace_7d = (hoy_dt - timedelta(days=7)).isoformat()
+        hace_30d = (hoy_dt - timedelta(days=30)).isoformat()
+        hoy = hoy_dt.date().isoformat()
+        limite_aviso = (hoy_dt.date() + timedelta(days=5)).isoformat()
+
+        comercios = (
+            self._db.table("comercios")
+            .select("id, nombre, created_at, suspendido, paga_hasta")
+            .eq("activo", True)
+            .limit(2000)
+            .execute()
+        ).data or []
+
+        nuevos_7d = sum(1 for c in comercios if c["created_at"] >= hace_7d)
+        nuevos_30d = sum(1 for c in comercios if c["created_at"] >= hace_30d)
+
+        alertas = {"vencido": 0, "suspendido": 0, "por_vencer": 0}
+        for c in comercios:
+            ph = c.get("paga_hasta")
+            if c.get("suspendido"):
+                alertas["suspendido"] += 1
+            elif ph and ph < hoy:
+                alertas["vencido"] += 1
+            elif ph and ph <= limite_aviso:
+                alertas["por_vencer"] += 1
+
+        nombre_por_id = {c["id"]: c["nombre"] for c in comercios}
+
+        ofertas = (
+            self._db.table("publicaciones")
+            .select("comercio_id")
+            .not_.is_("descuento_pct", "null")
+            .eq("activo", True)
+            .limit(5000)
+            .execute()
+        ).data or []
+        conteo_ofertas: dict[str, int] = {}
+        for o in ofertas:
+            conteo_ofertas[o["comercio_id"]] = conteo_ofertas.get(o["comercio_id"], 0) + 1
+        top_ofertas = sorted(
+            ({"comercio_id": cid, "nombre": nombre_por_id.get(cid, "?"), "count": n} for cid, n in conteo_ofertas.items()),
+            key=lambda x: -x["count"],
+        )[:10]
+
+        leads = (
+            self._db.table("leads")
+            .select("comercio_id, created_at")
+            .gte("created_at", hace_30d)
+            .limit(5000)
+            .execute()
+        ).data or []
+        conteo_leads: dict[str, int] = {}
+        for l in leads:
+            conteo_leads[l["comercio_id"]] = conteo_leads.get(l["comercio_id"], 0) + 1
+        top_leads = sorted(
+            ({"comercio_id": cid, "nombre": nombre_por_id.get(cid, "?"), "count": n} for cid, n in conteo_leads.items()),
+            key=lambda x: -x["count"],
+        )[:10]
+
+        return {
+            "comercios_nuevos_7d": nuevos_7d,
+            "comercios_nuevos_30d": nuevos_30d,
+            "alertas": alertas,
+            "ofertas_total": len(ofertas),
+            "ofertas_top_comercios": top_ofertas,
+            "contactos_30d": len(leads),
+            "contactos_top_comercios": top_leads,
         }
 
 

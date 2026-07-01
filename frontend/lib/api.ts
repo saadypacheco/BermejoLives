@@ -137,6 +137,21 @@ export async function listSuscripciones(): Promise<ComercioSuscripcion[]> {
   return data.items as ComercioSuscripcion[];
 }
 
+export type EstadisticasAdmin = {
+  comercios_nuevos_7d: number;
+  comercios_nuevos_30d: number;
+  alertas: { vencido: number; suspendido: number; por_vencer: number };
+  ofertas_total: number;
+  ofertas_top_comercios: { comercio_id: string; nombre: string; count: number }[];
+  contactos_30d: number;
+  contactos_top_comercios: { comercio_id: string; nombre: string; count: number }[];
+};
+
+export async function getEstadisticas(): Promise<EstadisticasAdmin> {
+  const res = await authFetch("/admin/estadisticas");
+  return res.json();
+}
+
 export async function registrarPago(comercioId: string, body: {
   monto: number; moneda: string; metodo: string; referencia?: string; meses: number; notas?: string;
 }) {

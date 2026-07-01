@@ -10,6 +10,7 @@ import {
   type ComercioSuscripcion, type EstadoSuscripcion,
   listPagosPendientes, confirmarPago, type PagoPendiente,
   enviarMensajeComercio,
+  getEstadisticas, type EstadisticasAdmin,
 } from "@/lib/api";
 import { getRubros } from "@/lib/data";
 import type { Rubro } from "@/lib/types";
@@ -21,13 +22,14 @@ export default function AdminPage() {
   const [email, setEmail] = useState("admin@bermejolive.com");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"publicaciones" | "comercios" | "suscripciones" | "pagos">("comercios");
+  const [tab, setTab] = useState<"publicaciones" | "comercios" | "suscripciones" | "pagos" | "monitoreo">("comercios");
   const [items, setItems] = useState<PendingPub[]>([]);
   const [comercios, setComercios] = useState<ComercioPorVerificar[]>([]);
   const [todosLosComercios, setTodosLosComercios] = useState<ComercioPorVerificar[]>([]);
   const [rubros, setRubros] = useState<Rubro[]>([]);
   const [suscripciones, setSuscripciones] = useState<ComercioSuscripcion[]>([]);
   const [pagosPendientes, setPagosPendientes] = useState<PagoPendiente[]>([]);
+  const [estadisticas, setEstadisticas] = useState<EstadisticasAdmin | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -37,6 +39,7 @@ export default function AdminPage() {
       loadComercios();
       loadSuscripciones();
       loadPagos();
+      loadEstadisticas();
       getRubros().then(setRubros);
     }
   }, []);
@@ -65,6 +68,10 @@ export default function AdminPage() {
 
   async function loadPagos() {
     try { setPagosPendientes(await listPagosPendientes()); } catch { setPagosPendientes([]); }
+  }
+
+  async function loadEstadisticas() {
+    try { setEstadisticas(await getEstadisticas()); } catch { setEstadisticas(null); }
   }
 
   async function doConfirmarPago(pagoId: string, meses: number) {
@@ -101,6 +108,7 @@ export default function AdminPage() {
       loadComercios();
       loadSuscripciones();
       loadPagos();
+      loadEstadisticas();
     } catch {
       setErr("Credenciales incorrectas. ¿Está corriendo el backend?");
     }
@@ -158,6 +166,11 @@ export default function AdminPage() {
         <button className={tab === "pagos" ? "active" : ""} onClick={() => { setTab("pagos"); loadPagos(); }}>
           Pagos {pagosPendientes.length > 0 && <span style={{ color: "var(--amber)" }}>· {pagosPendientes.length}</span>}
         </button>
+        <button className={tab === "monitoreo" ? "active" : ""} onClick={() => { setTab("monitoreo"); loadEstadisticas(); }}>
+          Monitoreo {estadisticas && (estadisticas.alertas.vencido + estadisticas.alertas.suspendido) > 0 && (
+            <span style={{ color: "var(--pink)" }}>⚠️ {estadisticas.alertas.vencido + estadisticas.alertas.suspendido}</span>
+          )}
+        </button>
       </div>
 
       {tab === "comercios" && (
@@ -181,6 +194,8 @@ export default function AdminPage() {
       )}
 
       {tab === "pagos" && <TabPagos items={pagosPendientes} onConfirmar={doConfirmarPago} />}
+
+      {tab === "monitoreo" && <TabMonitoreo data={estadisticas} />}
 
       {tab === "publicaciones" && (
       <div className="panel-card glass">
@@ -264,6 +279,72 @@ function TabPagos({
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function TabMonitoreo({ data }: { data: EstadisticasAdmin | null }) {
+  if (!data) return <div className="panel-card glass" style={{ padding: 24, textAlign: "center", color: "var(--txt-3)" }}>Cargando…</div>;
+
+  const totalAlertas = data.alertas.vencido + data.alertas.suspendido;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* KPIs */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
+        <div className="panel-card glass" style={{ padding: 16, borderLeft: "3px solid var(--neon)" }}>
+          <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Negocios nuevos (7d)</div>
+          <div style={{ fontSize: 26, fontWeight: 700 }}>{data.comercios_nuevos_7d}</div>
+          <div style={{ fontSize: 11, color: "var(--txt-3)" }}>{data.comercios_nuevos_30d} en 30 días</div>
+        </div>
+        <div className="panel-card glass" style={{ padding: 16, borderLeft: "3px solid var(--amber)" }}>
+          <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Ofertas activas</div>
+          <div style={{ fontSize: 26, fontWeight: 700 }}>{data.ofertas_total}</div>
+        </div>
+        <div className="panel-card glass" style={{ padding: 16, borderLeft: "3px solid var(--blue-soft)" }}>
+          <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Contactos (30d)</div>
+          <div style={{ fontSize: 26, fontWeight: 700 }}>{data.contactos_30d}</div>
+        </div>
+        <div className="panel-card glass" style={{ padding: 16, borderLeft: `3px solid ${totalAlertas > 0 ? "var(--pink)" : "var(--neon)"}` }}>
+          <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Bajas / vencidos</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: totalAlertas > 0 ? "var(--pink)" : undefined }}>{totalAlertas}</div>
+          <div style={{ fontSize: 11, color: "var(--txt-3)" }}>{data.alertas.por_vencer} por vencer en 5 días</div>
+        </div>
+      </div>
+
+      {totalAlertas > 0 && (
+        <div className="panel-card glass" style={{ padding: "12px 16px", border: "1px solid var(--pink)", color: "var(--pink)", fontSize: 13 }}>
+          ⚠️ {data.alertas.vencido} comercio(s) vencido(s) y {data.alertas.suspendido} suspendido(s). Revisá la pestaña "Suscripciones".
+        </div>
+      )}
+
+      {/* Top ofertas */}
+      <div className="panel-card glass">
+        <div className="ph"><h3>Comercios con más ofertas</h3></div>
+        {data.ofertas_top_comercios.length === 0 && (
+          <div style={{ padding: 20, textAlign: "center", color: "var(--txt-3)" }}>Sin ofertas cargadas todavía.</div>
+        )}
+        {data.ofertas_top_comercios.map((c) => (
+          <div key={c.comercio_id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid var(--border)" }}>
+            <span>{c.nombre}</span>
+            <b style={{ color: "var(--neon)" }}>{c.count}</b>
+          </div>
+        ))}
+      </div>
+
+      {/* Top contactos */}
+      <div className="panel-card glass">
+        <div className="ph"><h3>Comercios más contactados</h3><span style={{ color: "var(--txt-3)", fontSize: 13 }}>Últimos 30 días</span></div>
+        {data.contactos_top_comercios.length === 0 && (
+          <div style={{ padding: 20, textAlign: "center", color: "var(--txt-3)" }}>Todavía no hay contactos registrados.</div>
+        )}
+        {data.contactos_top_comercios.map((c) => (
+          <div key={c.comercio_id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid var(--border)" }}>
+            <span>{c.nombre}</span>
+            <b style={{ color: "var(--blue-soft)" }}>{c.count}</b>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

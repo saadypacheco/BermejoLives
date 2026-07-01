@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { MensajeComercioForm } from "@/components/mensaje-comercio-form";
+import { WaLeadLink } from "@/components/wa-lead-link";
 import { getComercioBySlug, getProductos } from "@/lib/data";
-import { precioFmt, waLink, MODALIDAD_LABEL } from "@/lib/types";
+import { precioFmt, MODALIDAD_LABEL } from "@/lib/types";
 import {
   WhatsApp, Verified, Pin, Phone, Globe, Instagram, Facebook, TikTok, Arrow,
 } from "@/components/icons";
@@ -52,9 +53,9 @@ export default async function ComercioPage({ params }: { params: { slug: string 
             </div>
           </div>
           <div className="profile-cta">
-            <a className="btn btn-wa" href={waLink(comercio.whatsapp, `Hola ${comercio.nombre}, te contacto desde Encontralo`)} target="_blank" rel="noopener">
+            <WaLeadLink className="btn btn-wa" comercioId={comercio.id} whatsapp={comercio.whatsapp} mensaje={`Hola ${comercio.nombre}, te contacto desde Encontralo`}>
               <WhatsApp style={{ width: 18, height: 18 }} /> WhatsApp
-            </a>
+            </WaLeadLink>
             <a className="btn btn-ghost" href={mapsHref} target="_blank" rel="noopener"><Pin /> Cómo llegar</a>
           </div>
         </div>
@@ -106,9 +107,9 @@ export default async function ComercioPage({ params }: { params: { slug: string 
                 {p.precio != null && <div className="price">{precioFmt(p.precio, p.moneda)}</div>}
                 <div className="foot">
                   <span className="biz">{comercio.nombre}</span>
-                  <a className="wa-mini" href={waLink(comercio.whatsapp, `Hola, me interesa ${p.nombre}`)} target="_blank" rel="noopener">
+                  <WaLeadLink className="wa-mini" comercioId={comercio.id} whatsapp={comercio.whatsapp} mensaje={`Hola, me interesa ${p.nombre}`}>
                     <WhatsApp style={{ width: 17, height: 17, color: "#04240f" }} />
-                  </a>
+                  </WaLeadLink>
                 </div>
               </div>
             </article>
