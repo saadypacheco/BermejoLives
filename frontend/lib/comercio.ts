@@ -72,9 +72,11 @@ export async function buscarComercioPorNombre(q: string): Promise<ComercioBusque
   return (await res.json()).items as ComercioBusqueda[];
 }
 
-export async function solicitarCambioNumero(comercioId: string, whatsappNuevo: string, mensaje: string | undefined, foto: File): Promise<void> {
+export async function solicitarCambioNumero(comercioId: string, whatsappNuevo: string, lat: number, lng: number, mensaje: string | undefined, foto: File): Promise<void> {
   const fd = new FormData();
   fd.append("whatsapp_nuevo", whatsappNuevo);
+  fd.append("lat", String(lat));
+  fd.append("lng", String(lng));
   if (mensaje) fd.append("mensaje", mensaje);
   fd.append("foto", foto);
   const res = await fetch(`${API}/comercio/${comercioId}/solicitar-cambio-numero`, { method: "POST", body: fd });

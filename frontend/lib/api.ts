@@ -188,8 +188,9 @@ export type SolicitudCambioNumero = {
   comercio_id: string;
   whatsapp_nuevo: string;
   foto_url: string | null;
+  lat: number | null;
+  lng: number | null;
   mensaje: string | null;
-  similitud_estimada: "alta" | "media" | "baja" | null;
   estado: "pendiente" | "aprobada" | "rechazada";
   created_at: string;
   comercios?: { nombre: string; slug: string; portada_url: string | null; whatsapp: string } | null;

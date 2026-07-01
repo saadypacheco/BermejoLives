@@ -85,6 +85,8 @@ function SolicitudForm({ comercio, onEnviado, onVolver }: { comercio: ComercioBu
   const [foto, setFoto] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
   const [comprimiendo, setComprimiendo] = useState(false);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [geoMsg, setGeoMsg] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [err, setErr] = useState("");
 
@@ -98,14 +100,25 @@ function SolicitudForm({ comercio, onEnviado, onVolver }: { comercio: ComercioBu
     setFoto(comprimida);
   }
 
+  function ubicar() {
+    setGeoMsg("Obteniendo ubicación…");
+    if (!navigator.geolocation) { setGeoMsg("Este dispositivo no tiene GPS disponible."); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGeoMsg(""); },
+      (e) => setGeoMsg(e.code === 1 ? "Permiso denegado. Activá la ubicación." : "No se pudo obtener la ubicación."),
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
     if (!whatsapp.trim()) { setErr("Ingresá tu WhatsApp nuevo"); return; }
+    if (!coords) { setErr("Falta la ubicación — tocá \"Usar mi ubicación actual\"."); return; }
     if (!foto) { setErr("Falta una foto actual del local"); return; }
     setEnviando(true);
     try {
-      await solicitarCambioNumero(comercio.id, whatsapp.trim(), mensaje.trim() || undefined, foto);
+      await solicitarCambioNumero(comercio.id, whatsapp.trim(), coords.lat, coords.lng, mensaje.trim() || undefined, foto);
       onEnviado();
     } catch (ex) { setErr(ex instanceof Error ? ex.message : "No se pudo enviar"); }
     finally { setEnviando(false); }
@@ -119,6 +132,14 @@ function SolicitudForm({ comercio, onEnviado, onVolver }: { comercio: ComercioBu
       </div>
 
       <input className="adm-input" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="Tu WhatsApp nuevo (ej: 59170000000)" />
+
+      <div>
+        <label className="campo-lbl">Ubicación *</label>
+        <button type="button" className={`btn ${coords ? "btn-ghost" : "btn-primary"}`} style={{ width: "100%" }} onClick={ubicar}>
+          {coords ? "Ubicación tomada ✓ — tomar de nuevo" : "📍 Usar mi ubicación actual"}
+        </button>
+        {geoMsg && <div style={{ fontSize: 12.5, color: "var(--amber)", marginTop: 6 }}>{geoMsg}</div>}
+      </div>
 
       <div>
         <label className="campo-lbl">Foto actual del local *</label>

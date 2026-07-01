@@ -381,12 +381,6 @@ function TabReclamos({
 
 // ── Tab Cambio de número ──────────────────────────────────────────────────────
 
-const SIMILITUD_CFG: Record<string, { label: string; color: string }> = {
-  alta: { label: "Similitud alta", color: "var(--neon)" },
-  media: { label: "Similitud media", color: "var(--amber)" },
-  baja: { label: "Similitud baja", color: "var(--pink)" },
-};
-
 function TabCambioNumero({
   items, onAprobar, onRechazar,
 }: {
@@ -402,7 +396,6 @@ function TabCambioNumero({
       </div>
       {items.length === 0 && <div style={{ padding: 20, textAlign: "center", color: "var(--txt-3)" }}>Sin solicitudes pendientes.</div>}
       {items.map((s) => {
-        const sim = s.similitud_estimada ? SIMILITUD_CFG[s.similitud_estimada] : null;
         return (
           <div key={s.id} style={{ padding: 16, borderBottom: "1px solid var(--border)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
@@ -411,9 +404,13 @@ function TabCambioNumero({
                 <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 2 }}>
                   Número actual: +{s.comercios?.whatsapp} → nuevo: +{s.whatsapp_nuevo}
                 </div>
+                {s.lat != null && s.lng != null && (
+                  <a href={`https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`} target="_blank" rel="noopener" style={{ fontSize: 12, color: "var(--blue-soft)" }}>
+                    📍 Ver ubicación enviada
+                  </a>
+                )}
                 {s.mensaje && <p style={{ fontSize: 13, color: "var(--txt-2)", marginTop: 6 }}>{s.mensaje}</p>}
               </div>
-              {sim && <span style={{ fontSize: 11, color: sim.color, whiteSpace: "nowrap" }}>{sim.label}</span>}
             </div>
 
             <div style={{ display: "flex", gap: 10, marginTop: 10 }}>

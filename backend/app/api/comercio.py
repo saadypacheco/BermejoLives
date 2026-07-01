@@ -7,7 +7,6 @@ Regla de negocio clave:
 import secrets
 from datetime import date, datetime, timedelta, timezone
 
-import httpx
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
@@ -19,7 +18,7 @@ from app.core.text import slug_unico, slugify
 from app.db.repository import Repo, get_repo
 from app.db.session import get_supabase
 from app.models.schemas import LoginBody, PublicarBody
-from app.services.clasificador import clasificar, comparar_fotos, generar_texto_comercio, sugerir_rubros
+from app.services.clasificador import clasificar, generar_texto_comercio, sugerir_rubros
 from app.services.imagenes import procesar_imagen, subir_foto_comercio
 from app.services.tienda_client import get_tienda_client
 from app.services.whatsapp_client import enviar_texto
@@ -156,14 +155,15 @@ def comercio_buscar(q: str = Query(..., min_length=2), repo: Repo = Depends(get_
 async def solicitar_cambio_numero(
     comercio_id: str,
     whatsapp_nuevo: str = Form(...),
+    lat: float = Form(...),
+    lng: float = Form(...),
     mensaje: str | None = Form(None),
     foto: UploadFile = File(...),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """El dueño perdió acceso a su número viejo: pide el cambio con una foto
-    actual del local. SIEMPRE queda pendiente de un admin — la foto de un
-    local es pública, cualquiera puede sacarla, así que la IA solo da una
-    pista de similitud, nunca aprueba sola."""
+    actual del local + su ubicación. SIEMPRE queda pendiente de un admin —
+    nadie lo aprueba automático, la decisión es manual."""
     comercio = repo.get_comercio(comercio_id)
     if not comercio:
         raise HTTPException(status_code=404, detail="Comercio no encontrado")
@@ -178,24 +178,15 @@ async def solicitar_cambio_numero(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    similitud = None
-    if comercio.get("portada_url"):
-        try:
-            async with httpx.AsyncClient(timeout=15) as client:
-                r = await client.get(comercio["portada_url"])
-            if r.status_code == 200:
-                similitud = await run_in_threadpool(comparar_fotos, r.content, data)
-        except Exception:  # noqa: BLE001
-            similitud = None
-
     repo.crear_solicitud_cambio_numero({
         "comercio_id": comercio_id,
         "whatsapp_nuevo": whatsapp_nuevo.strip(),
         "foto_url": foto_url,
+        "lat": lat,
+        "lng": lng,
         "mensaje": mensaje.strip() if mensaje and mensaje.strip() else None,
-        "similitud_estimada": similitud,
     })
-    logger.info("comercio.solicitud_cambio_numero", comercio=comercio["slug"], similitud=similitud)
+    logger.info("comercio.solicitud_cambio_numero", comercio=comercio["slug"])
     return {"ok": True}
 
 
