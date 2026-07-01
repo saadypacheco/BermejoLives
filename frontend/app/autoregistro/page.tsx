@@ -59,7 +59,7 @@ function AuthView({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
   }, []);
   return (
     <>
-      <Nav />
+      <Nav mapOnly />
       <div className="wrap" style={{ maxWidth: 480, paddingTop: 56 }}>
         <span className="eyebrow"><span className="dot-live" /> Panel del comercio</span>
         <h1 style={{ fontSize: 30, margin: "10px 0 6px" }}>Publicá tus ofertas</h1>
@@ -344,7 +344,7 @@ function ChatBot({ sess, onLogout }: { sess: ComercioSession; onLogout: () => vo
 
   return (
     <>
-      <Nav />
+      <Nav mapOnly />
       <div className="wrap" style={{ maxWidth: 680, paddingTop: 28 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div>
