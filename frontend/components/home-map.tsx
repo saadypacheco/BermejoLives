@@ -6,8 +6,21 @@ import type { ComercioMapa } from "@/lib/data";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 
-const GOLDPIN = `<div class="goldpin"><svg viewBox="0 0 24 32" width="28" height="37"><path d="M12 0C5.37 0 0 5.37 0 12c0 8.4 12 20 12 20s12-11.6 12-20C24 5.37 18.63 0 12 0z" fill="#FFB020"/><circle cx="12" cy="12" r="5" fill="#3a2600"/></svg></div>`;
-const GOLDPIN_SEL = `<div class="goldpin sel"><svg viewBox="0 0 24 32" width="34" height="45"><path d="M12 0C5.37 0 0 5.37 0 12c0 8.4 12 20 12 20s12-11.6 12-20C24 5.37 18.63 0 12 0z" fill="#39ff9e" stroke="#04240f" stroke-width="0"/><circle cx="12" cy="12" r="5" fill="#04240f"/></svg></div>`;
+// Ícono + color por rubro (coincide con los slugs de los chips de categoría).
+const CATEGORY_STYLE: Record<string, { emoji: string; color: string }> = {
+  gomeria: { emoji: "🔧", color: "#14b8a6" },
+  farmacia: { emoji: "➕", color: "#ef4444" },
+  gastronomia: { emoji: "🍴", color: "#f97316" },
+  mercado: { emoji: "🛒", color: "#8b5cf6" },
+  tecnologia: { emoji: "📱", color: "#3b82f6" },
+};
+const DEFAULT_STYLE = { emoji: "📍", color: "#FFB020" };
+
+function pinHtml(rubroSlug: string | null, pct: number | null | undefined, selected: boolean): string {
+  const style = (rubroSlug && CATEGORY_STYLE[rubroSlug]) || DEFAULT_STYLE;
+  const badge = pct ? `<b class="catpin-badge">-${pct}%</b>` : "";
+  return `<div class="catpin${selected ? " sel" : ""}" style="background:${style.color}">${badge}<span>${style.emoji}</span></div>`;
+}
 
 let leafletPromise: Promise<any> | null = null;
 function loadLeaflet(): Promise<any> {
@@ -28,8 +41,9 @@ function loadLeaflet(): Promise<any> {
   return leafletPromise;
 }
 
-export function HomeMap({ comercios, onSelect, selectedId }: {
+export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId }: {
   comercios: ComercioMapa[]; onSelect?: (c: ComercioMapa) => void; selectedId?: string | null;
+  descuentoPorId?: Record<string, number>;
 }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -82,7 +96,7 @@ export function HomeMap({ comercios, onSelect, selectedId }: {
   }, []);
 
   // repintar marcadores cuando cambian comercios o el seleccionado
-  useEffect(() => { pintar(); /* eslint-disable-next-line */ }, [comercios, selectedId]);
+  useEffect(() => { pintar(); /* eslint-disable-next-line */ }, [comercios, selectedId, descuentoPorId]);
 
   function pintar() {
     const L = LRef.current, layer = layerRef.current;
@@ -93,9 +107,11 @@ export function HomeMap({ comercios, onSelect, selectedId }: {
       if (c.lat == null || c.lng == null) continue;
       const isSel = c.id === selectedId;
       if (isSel) selCoords = [c.lat, c.lng];
+      const pct = descuentoPorId?.[c.id];
+      const size = isSel ? 40 : 32;
       const icon = L.divIcon({
-        className: "", html: isSel ? GOLDPIN_SEL : GOLDPIN,
-        iconSize: isSel ? [34, 45] : [28, 37], iconAnchor: isSel ? [17, 45] : [14, 37],
+        className: "", html: pinHtml(c.rubro_slug, pct, isSel),
+        iconSize: [size, size], iconAnchor: [size / 2, size / 2],
       });
       const m = L.marker([c.lat, c.lng], { icon, zIndexOffset: isSel ? 800 : 0 }).addTo(layer);
       m.on("click", () => {
@@ -123,11 +139,16 @@ export function HomeMap({ comercios, onSelect, selectedId }: {
     svg.setAttribute("width", String(size.x));
     svg.setAttribute("height", String(size.y));
     svg.style.display = "block";
-    // del pin (arriba) hacia el hueco encima de la tarjeta (abajo), curva suave
-    const x2 = size.x / 2, y2 = size.y * 0.52;
+    // del pin (arriba) hacia el borde superior real de la tarjeta (si está montada)
+    const cardEl = elRef.current?.closest(".mmap")?.querySelector<HTMLElement>(".mcard");
+    const mapTop = elRef.current!.getBoundingClientRect().top;
+    const x2 = size.x / 2;
+    const y2 = cardEl ? cardEl.getBoundingClientRect().top - mapTop - 8 : size.y * 0.52;
     const c1x = p.x + 14, c1y = p.y + (y2 - p.y) * 0.55;
     const c2x = x2 + 14, c2y = p.y + (y2 - p.y) * 0.75;
-    path.setAttribute("d", `M ${p.x} ${p.y + 6} C ${c1x} ${c1y} ${c2x} ${c2y} ${x2} ${y2}`);
+    // el pin seleccionado es un círculo de 40px anclado en su centro: arrancar
+    // la línea desde su borde inferior (radio 20), no desde el centro.
+    path.setAttribute("d", `M ${p.x} ${p.y + 20} C ${c1x} ${c1y} ${c2x} ${c2y} ${x2} ${y2}`);
   }
 
   return (

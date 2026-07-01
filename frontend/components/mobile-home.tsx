@@ -30,6 +30,15 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
   if (soloOfertas) filtered = filtered.filter((c) => offerSlugs.has(c.slug));
   const ofertasNegocio = sel ? feed.filter((f) => f.comercio_slug === sel.slug) : [];
 
+  // Mayor % de descuento activo por comercio, para el badge del pin en el mapa
+  const descuentoPorId: Record<string, number> = {};
+  for (const f of feed) {
+    if (!f.descuento_pct) continue;
+    const c = comercios.find((c) => c.slug === f.comercio_slug);
+    if (!c) continue;
+    if (!descuentoPorId[c.id] || f.descuento_pct > descuentoPorId[c.id]) descuentoPorId[c.id] = f.descuento_pct;
+  }
+
   function buscar(e: React.FormEvent) {
     e.preventDefault();
     router.push(`/buscar${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`);
@@ -73,7 +82,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
 
       {/* Mapa: crece y llena el espacio disponible */}
       <div className="mmap">
-        <HomeMap comercios={filtered} onSelect={setSel} selectedId={sel?.id} />
+        <HomeMap comercios={filtered} onSelect={setSel} selectedId={sel?.id} descuentoPorId={descuentoPorId} />
         <Link href="/buscar" className="mmapbtn">⛶ Ver mapa completo</Link>
 
       {/* Tarjeta flotante sobre el mapa, conectada al pin por la flecha */}
@@ -81,7 +90,15 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
         <div className="mcard">
           <div className="mcard-row">
             <div className="mcard-img">
-              {sel.portada_url || sel.logo_url ? <img src={(sel.portada_url || sel.logo_url) as string} alt="" loading="lazy" decoding="async" /> : <span>🏪</span>}
+              {(sel.portada_url || sel.logo_url) && (
+                <img
+                  key={sel.id}
+                  src={(sel.portada_url || sel.logo_url) as string}
+                  alt="" loading="lazy" decoding="async"
+                  onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.removeAttribute("hidden"); }}
+                />
+              )}
+              <span hidden={!!(sel.portada_url || sel.logo_url)}>🏪</span>
             </div>
             <div className="mcard-info">
               <div className="mcard-head">
