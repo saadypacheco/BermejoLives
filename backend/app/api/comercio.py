@@ -5,7 +5,7 @@ Regla de negocio clave:
   - comercio.confiable = False -> la publicación va a la cola de moderación.
 """
 import secrets
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -18,9 +18,10 @@ from app.core.text import slug_unico, slugify
 from app.db.repository import Repo, get_repo
 from app.db.session import get_supabase
 from app.models.schemas import LoginBody, PublicarBody, RegistroBody
-from app.services.clasificador import clasificar
+from app.services.clasificador import clasificar, generar_texto_comercio
 from app.services.imagenes import procesar_imagen
 from app.services.tienda_client import get_tienda_client
+from app.services.whatsapp_client import enviar_texto
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -103,6 +104,73 @@ def comercio_login(body: LoginBody, repo: Repo = Depends(get_repo)) -> dict:
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     comercio = repo.get_comercio(user["comercio_id"])
     token = auth.make_comercio_token(user["comercio_id"], body.email)
+    return {
+        "access_token": token,
+        "comercio": {
+            "id": comercio["id"],
+            "nombre": comercio["nombre"],
+            "slug": comercio["slug"],
+            "confiable": comercio.get("confiable", False),
+        },
+    }
+
+
+class GenerarDescripcionBody(BaseModel):
+    nombre: str
+    que_vende: str
+    rubros: list[dict]
+
+
+@router.post("/comercio/generar-descripcion")
+def comercio_generar_descripcion(body: GenerarDescripcionBody) -> dict:
+    """Genera descripción + rubro sugerido a partir de texto libre (usado en el
+    registro). Si no hay GEMINI_API_KEY o falla, devuelve el texto tal cual y
+    sin rubro sugerido (el frontend deja elegir manualmente)."""
+    resultado = generar_texto_comercio(body.nombre, body.que_vende, body.rubros)
+    if resultado:
+        return resultado
+    return {"descripcion": body.que_vende, "rubro_slug": None}
+
+
+class RecuperarBody(BaseModel):
+    whatsapp: str
+
+
+@router.post("/auth/comercio/recuperar")
+def comercio_recuperar(body: RecuperarBody, repo: Repo = Depends(get_repo)) -> dict:
+    """Genera un código de 6 dígitos y lo manda por WhatsApp al número registrado.
+    Respuesta siempre igual (no revela si el número existe, evita enumeración)."""
+    user = repo.get_comercio_usuario_por_whatsapp(body.whatsapp)
+    if user:
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        expira = (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()
+        repo.set_reset_code(user["id"], code, expira)
+        enviado = enviar_texto(body.whatsapp, f"Tu código para recuperar el acceso a Encontralo: {code}\nVence en 15 minutos.")
+        logger.info("comercio.recuperar.solicitado", whatsapp=body.whatsapp, enviado=enviado)
+    return {"ok": True}
+
+
+class RecuperarConfirmarBody(BaseModel):
+    whatsapp: str
+    codigo: str
+    nueva_password: str
+
+
+@router.post("/auth/comercio/recuperar/confirmar")
+def comercio_recuperar_confirmar(body: RecuperarConfirmarBody, repo: Repo = Depends(get_repo)) -> dict:
+    if len(body.nueva_password) < 6:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
+    user = repo.get_comercio_usuario_por_whatsapp(body.whatsapp)
+    if not user or not user.get("reset_code") or user["reset_code"] != body.codigo:
+        raise HTTPException(status_code=400, detail="Código incorrecto")
+    expira = user.get("reset_code_expira")
+    if not expira or datetime.fromisoformat(expira) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="El código venció, pedí uno nuevo")
+    repo.set_password(user["id"], auth.hash_password(body.nueva_password))
+    logger.info("comercio.recuperar.confirmado", whatsapp=body.whatsapp)
+
+    comercio = repo.get_comercio(user["comercio_id"])
+    token = auth.make_comercio_token(user["comercio_id"], user["email"])
     return {
         "access_token": token,
         "comercio": {

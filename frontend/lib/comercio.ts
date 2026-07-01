@@ -31,6 +31,39 @@ export async function comercioLogin(email: string, password: string): Promise<Co
   return data.comercio as ComercioSession;
 }
 
+export async function generarDescripcion(nombre: string, que_vende: string, rubros: { slug: string; nombre: string }[]): Promise<{ descripcion: string; rubro_slug: string | null }> {
+  const res = await fetch(`${API}/comercio/generar-descripcion`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nombre, que_vende, rubros }),
+  });
+  return res.json();
+}
+
+export async function comercioRecuperar(whatsapp: string): Promise<void> {
+  await fetch(`${API}/auth/comercio/recuperar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ whatsapp }),
+  });
+}
+
+export async function comercioRecuperarConfirmar(whatsapp: string, codigo: string, nueva_password: string): Promise<ComercioSession> {
+  const res = await fetch(`${API}/auth/comercio/recuperar/confirmar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ whatsapp, codigo, nueva_password }),
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail ?? "No se pudo cambiar la contraseña");
+  }
+  const data = await res.json();
+  localStorage.setItem(TOKEN_KEY, data.access_token);
+  localStorage.setItem(COMERCIO_KEY, JSON.stringify(data.comercio));
+  return data.comercio as ComercioSession;
+}
+
 export type RegistroPayload = {
   nombre: string;
   email: string;

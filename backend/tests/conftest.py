@@ -134,6 +134,25 @@ class FakeRepo:
         u = self.usuarios.get(email)
         return u if (u and u.get("activo", True)) else None
 
+    def get_comercio_usuario_por_whatsapp(self, whatsapp):
+        digitos = "".join(c for c in whatsapp if c.isdigit())
+        for u in self.usuarios.values():
+            c = self.comercios.get(u["comercio_id"])
+            if c and c.get("whatsapp") == digitos and u.get("activo", True):
+                return u
+        return None
+
+    def set_reset_code(self, user_id, code, expira):
+        for u in self.usuarios.values():
+            if u["id"] == user_id:
+                u["reset_code"], u["reset_code_expira"] = code, expira
+
+    def set_password(self, user_id, password_hash):
+        for u in self.usuarios.values():
+            if u["id"] == user_id:
+                u["password_hash"] = password_hash
+                u["reset_code"] = u["reset_code_expira"] = None
+
     def crear_comercio(self, row):
         cid = self._id("com")
         full = {"id": cid, **row}

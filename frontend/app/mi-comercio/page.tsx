@@ -52,7 +52,7 @@ function LoginGate({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
   }
   return (
     <>
-      <Nav />
+      <Nav mapOnly />
       <div className="wrap" style={{ maxWidth: 420, paddingTop: 56 }}>
         <span className="eyebrow"><span className="dot-live" /> Mi comercio</span>
         <h1 style={{ fontSize: 28, margin: "10px 0 6px" }}>Entrá a tu panel</h1>

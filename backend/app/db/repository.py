@@ -20,6 +20,9 @@ class Repo(Protocol):
     def set_comercio_verificado(self, comercio_id: str, valor: bool) -> dict: ...
     def desactivar_comercio(self, comercio_id: str) -> dict: ...
     def get_comercio_usuario(self, email: str) -> dict | None: ...
+    def get_comercio_usuario_por_whatsapp(self, whatsapp: str) -> dict | None: ...
+    def set_reset_code(self, user_id: str, code: str | None, expira: str | None) -> None: ...
+    def set_password(self, user_id: str, password_hash: str) -> None: ...
     def get_comercio(self, comercio_id: str) -> dict | None: ...
     def list_publicaciones_de_comercio(self, comercio_id: str) -> list[dict]: ...
     def update_publicacion_de_comercio(self, pub_id: str, comercio_id: str, patch: dict) -> dict | None: ...
@@ -129,6 +132,27 @@ class SupabaseRepo:
     def get_comercio(self, comercio_id: str) -> dict | None:
         res = self._db.table("comercios").select("*").eq("id", comercio_id).limit(1).execute()
         return res.data[0] if res.data else None
+
+    def get_comercio_usuario_por_whatsapp(self, whatsapp: str) -> dict | None:
+        digitos = "".join(c for c in whatsapp if c.isdigit())
+        com = (
+            self._db.table("comercios").select("id").eq("whatsapp", digitos).eq("activo", True).limit(1).execute()
+        )
+        if not com.data:
+            return None
+        res = (
+            self._db.table("comercio_usuarios")
+            .select("*").eq("comercio_id", com.data[0]["id"]).eq("activo", True).limit(1).execute()
+        )
+        return res.data[0] if res.data else None
+
+    def set_reset_code(self, user_id: str, code: str | None, expira: str | None) -> None:
+        self._db.table("comercio_usuarios").update({"reset_code": code, "reset_code_expira": expira}).eq("id", user_id).execute()
+
+    def set_password(self, user_id: str, password_hash: str) -> None:
+        self._db.table("comercio_usuarios").update(
+            {"password_hash": password_hash, "reset_code": None, "reset_code_expira": None}
+        ).eq("id", user_id).execute()
 
     def list_publicaciones_de_comercio(self, comercio_id: str) -> list[dict]:
         res = (
