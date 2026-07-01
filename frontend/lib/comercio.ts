@@ -31,7 +31,7 @@ export async function comercioLogin(email: string, password: string): Promise<Co
   return data.comercio as ComercioSession;
 }
 
-export async function generarDescripcion(nombre: string, que_vende: string, rubros: { slug: string; nombre: string }[]): Promise<{ descripcion: string; rubro_slug: string | null }> {
+export async function generarDescripcion(nombre: string, que_vende: string, rubros: { slug: string; nombre: string }[]): Promise<{ descripcion: string; rubro_slugs: string[] }> {
   const res = await fetch(`${API}/comercio/generar-descripcion`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -66,22 +66,29 @@ export async function comercioRecuperarConfirmar(whatsapp: string, codigo: strin
 
 export type RegistroPayload = {
   nombre: string;
-  email: string;
-  password: string;
   whatsapp: string;
-  plan: "gratis" | "pro" | "premium";
   modalidad: "mayorista" | "minorista" | "ambos";
-  rubro_slug?: string;
-  zona_slug?: string;
+  rubro_slugs?: string[];
   descripcion?: string;
+  direccion?: string;
+  lat: number;
+  lng: number;
+  foto: File;
 };
 
-export async function comercioRegistro(payload: RegistroPayload): Promise<ComercioSession & { pago_pendiente?: boolean }> {
-  const res = await fetch(`${API}/auth/comercio/registro`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+export async function comercioRegistro(payload: RegistroPayload): Promise<ComercioSession> {
+  const fd = new FormData();
+  fd.append("nombre", payload.nombre);
+  fd.append("whatsapp", payload.whatsapp);
+  fd.append("modalidad", payload.modalidad);
+  (payload.rubro_slugs ?? []).forEach((r) => fd.append("rubro_slugs", r));
+  if (payload.descripcion) fd.append("descripcion", payload.descripcion);
+  if (payload.direccion) fd.append("direccion", payload.direccion);
+  fd.append("lat", String(payload.lat));
+  fd.append("lng", String(payload.lng));
+  fd.append("foto", payload.foto);
+
+  const res = await fetch(`${API}/auth/comercio/registro`, { method: "POST", body: fd });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail ?? "No se pudo crear la cuenta");
@@ -89,7 +96,7 @@ export async function comercioRegistro(payload: RegistroPayload): Promise<Comerc
   const data = await res.json();
   localStorage.setItem(TOKEN_KEY, data.access_token);
   localStorage.setItem(COMERCIO_KEY, JSON.stringify(data.comercio));
-  return { ...data.comercio, pago_pendiente: data.pago_pendiente };
+  return data.comercio as ComercioSession;
 }
 
 export type PublicarPayload = {

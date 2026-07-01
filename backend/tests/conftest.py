@@ -131,8 +131,10 @@ class FakeRepo:
 
     # ---- cuentas ----
     def get_comercio_usuario(self, email):
-        u = self.usuarios.get(email)
-        return u if (u and u.get("activo", True)) else None
+        for u in self.usuarios.values():
+            if u.get("email") == email and u.get("activo", True):
+                return u
+        return None
 
     def get_comercio_usuario_por_whatsapp(self, whatsapp):
         digitos = "".join(c for c in whatsapp if c.isdigit())
@@ -160,8 +162,8 @@ class FakeRepo:
         return full
 
     def crear_comercio_usuario(self, row):
-        full = {"id": self._id("usr"), "activo": True, **row}
-        self.usuarios[row["email"]] = full
+        full = {"id": self._id("usr"), "activo": True, "email": None, "password_hash": None, **row}
+        self.usuarios[full["id"]] = full
         return full
 
     def set_comercio_rubros(self, comercio_id, rubro_ids):

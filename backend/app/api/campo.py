@@ -5,9 +5,6 @@ modalidad, comparte el GPS y saca una foto del local. El comercio entra
 'pendiente de verificar' (verificado=false), listo para que un moderador lo
 confirme. La foto va a Supabase Storage (bucket público 'comercios').
 """
-import secrets
-from io import BytesIO
-
 import httpx
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -17,9 +14,9 @@ from app.core import auth
 from app.core.config import settings
 from app.core.text import slug_unico, slugify
 from app.db.repository import Repo, get_repo
-from app.db.session import get_supabase
 from app.models.schemas import LoginBody
 from app.services.clasificador import sugerir_rubros
+from app.services.imagenes import subir_foto_comercio
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -92,38 +89,13 @@ def campo_sugerir_rubros(body: SugerirRubrosBody, _agente: dict = Depends(auth.r
 _MAX_FOTO_BYTES = 15 * 1024 * 1024  # 15 MB de entrada
 
 
-def _procesar_imagen(data: bytes) -> bytes:
-    """Valida que sea imagen, la reorienta, redimensiona a 1600px y recomprime
-    a JPEG 70 (lección KB fotos-resize). Lanza ValueError si no es imagen."""
-    from PIL import Image, ImageOps
-
-    img = Image.open(BytesIO(data))
-    img.verify()                       # valida que sea una imagen real
-    img = Image.open(BytesIO(data))    # reabrir tras verify()
-    img = ImageOps.exif_transpose(img).convert("RGB")
-    img.thumbnail((1600, 1600))
-    out = BytesIO()
-    img.save(out, format="JPEG", quality=70, optimize=True)
-    return out.getvalue()
-
-
 def _subir_foto(slug: str, foto: UploadFile, data: bytes) -> str | None:
-    """Procesa y sube la foto al bucket público. No bloquea el alta si falla."""
     if len(data) > _MAX_FOTO_BYTES:
         raise HTTPException(status_code=413, detail="La foto supera los 15 MB")
     try:
-        procesada = _procesar_imagen(data)
-    except Exception:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail="El archivo no es una imagen válida")
-    try:
-        path = f"{slug}/{secrets.token_hex(8)}.jpg"
-        get_supabase().storage.from_(settings.comercios_bucket).upload(
-            path, procesada, {"content-type": "image/jpeg", "upsert": "true"}
-        )
-        return settings.public_photo_url(path)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("campo.foto_error", error=str(exc))
-        return None
+        return subir_foto_comercio(slug, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/campo/comercio")

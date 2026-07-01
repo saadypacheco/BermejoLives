@@ -23,14 +23,8 @@ export default function PublicarPage() {
 }
 
 /* ----------------------------- AUTH (login / registro) ----------------------------- */
-// Los "key" (gratis/pro/premium) son el identificador interno en la base — no se
-// tocan para no romper el check constraint de comercios.plan. Nombre/precio son
-// el plan real que se cobra.
-const PLANES: { key: RegistroPayload["plan"]; nombre: string; precio: string; bullets: string }[] = [
-  { key: "gratis", nombre: "Básico", precio: "Bs 200", bullets: "Tu negocio en el mapa, con tus datos visibles (dirección, WhatsApp, horario)" },
-  { key: "pro", nombre: "PRO", precio: "Bs 300", bullets: "Todo lo de Básico + publicamos en nuestras redes (Instagram/TikTok/Facebook) y en el feed de Encontralo" },
-  { key: "premium", nombre: "Premium", precio: "Bs 400", bullets: "Todo lo de PRO + ofertas ilimitadas" },
-];
+// El plan (Básico/PRO/Premium, Bs 200/300/400) ya no se elige en el alta —
+// arranca en "gratis" (= Básico) y se cambia después desde Mi Comercio → Suscripción.
 
 function QueOfrecemos() {
   return (
@@ -84,11 +78,20 @@ function AuthView({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
   );
 }
 
+// Login: WhatsApp + código es el camino principal (el alta ya no pide
+// email/contraseña). Email+contraseña queda como alternativa para cuentas
+// viejas que sí lo tienen cargado.
 function LoginForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
+  const [modoEmail, setModoEmail] = useState(false);
+
+  if (modoEmail) return <LoginConEmail onVolver={() => setModoEmail(false)} onLogged={onLogged} />;
+  return <IngresarConWhatsapp onUsarEmail={() => setModoEmail(true)} onLogged={onLogged} />;
+}
+
+function LoginConEmail({ onVolver, onLogged }: { onVolver: () => void; onLogged: (s: ComercioSession) => void }) {
   const [email, setEmail] = useState("abc@bermejolive.com");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  const [recuperar, setRecuperar] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -97,16 +100,14 @@ function LoginForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
     catch { setErr("Credenciales incorrectas. ¿Está corriendo el backend?"); }
   }
 
-  if (recuperar) return <RecuperarForm onDone={() => setRecuperar(false)} onLogged={onLogged} />;
-
   return (
     <form onSubmit={submit} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
       <input className="adm-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
       <input className="adm-input" type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Contraseña" />
       {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
       <button className="btn btn-primary" type="submit">Entrar</button>
-      <button type="button" onClick={() => setRecuperar(true)} style={{ background: "none", border: "none", color: "var(--txt-3)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}>
-        ¿Olvidaste tu contraseña?
+      <button type="button" onClick={onVolver} style={{ background: "none", border: "none", color: "var(--txt-3)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}>
+        ← Entrar con WhatsApp en cambio
       </button>
       <small style={{ color: "var(--txt-3)" }}>
         Demo: abc@bermejolive.com (confiable) · moda@bermejolive.com (moderación) · clave: comercio1234
@@ -115,7 +116,7 @@ function LoginForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
   );
 }
 
-function RecuperarForm({ onDone, onLogged }: { onDone: () => void; onLogged: (s: ComercioSession) => void }) {
+function IngresarConWhatsapp({ onUsarEmail, onLogged }: { onUsarEmail: () => void; onLogged: (s: ComercioSession) => void }) {
   const [whatsapp, setWhatsapp] = useState("");
   const [codigo, setCodigo] = useState("");
   const [nueva, setNueva] = useState("");
@@ -145,12 +146,14 @@ function RecuperarForm({ onDone, onLogged }: { onDone: () => void; onLogged: (s:
     return (
       <form onSubmit={pedirCodigo} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
         <p style={{ color: "var(--txt-3)", fontSize: 13, marginTop: -4 }}>
-          Te mandamos un código de 6 dígitos por WhatsApp al número con el que te registraste.
+          Te mandamos un código de 6 dígitos por WhatsApp al número con el que registraste tu negocio.
         </p>
         <input className="adm-input" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="WhatsApp registrado (ej: 59170000000)" />
         {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
         <button className="btn btn-primary" type="submit" disabled={loading}>{loading ? "Enviando…" : "Enviar código"}</button>
-        <button type="button" onClick={onDone} style={{ background: "none", border: "none", color: "var(--txt-3)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}>← Volver a ingresar</button>
+        <button type="button" onClick={onUsarEmail} style={{ background: "none", border: "none", color: "var(--txt-3)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}>
+          ¿Tenés email y contraseña? Entrá así
+        </button>
       </form>
     );
   }
@@ -158,13 +161,13 @@ function RecuperarForm({ onDone, onLogged }: { onDone: () => void; onLogged: (s:
   return (
     <form onSubmit={confirmar} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
       <p style={{ color: "var(--txt-3)", fontSize: 13, marginTop: -4 }}>
-        Si el número está registrado, te llegó un código por WhatsApp. Ingresalo junto con tu nueva contraseña.
+        Te llegó un código por WhatsApp. Ingresalo junto con una contraseña (te va a servir para la próxima vez).
       </p>
       <input className="adm-input" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="Código de 6 dígitos" inputMode="numeric" />
-      <input className="adm-input" type="password" value={nueva} onChange={(e) => setNueva(e.target.value)} placeholder="Nueva contraseña (mín. 6)" />
+      <input className="adm-input" type="password" value={nueva} onChange={(e) => setNueva(e.target.value)} placeholder="Contraseña (mín. 6)" />
       {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
-      <button className="btn btn-primary" type="submit" disabled={loading}>{loading ? "Confirmando…" : "Cambiar contraseña"}</button>
-      <button type="button" onClick={onDone} style={{ background: "none", border: "none", color: "var(--txt-3)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}>← Volver a ingresar</button>
+      <button className="btn btn-primary" type="submit" disabled={loading}>{loading ? "Confirmando…" : "Ingresar"}</button>
+      <button type="button" onClick={() => setPaso("pedir")} style={{ background: "none", border: "none", color: "var(--txt-3)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}>← Volver</button>
     </form>
   );
 }
@@ -175,34 +178,83 @@ const MODALIDADES: { key: RegistroPayload["modalidad"]; label: string }[] = [
   { key: "ambos", label: "Ambos" },
 ];
 
+type RegistroFormState = { nombre: string; whatsapp: string; modalidad: "mayorista" | "minorista" | "ambos"; direccion: string };
+
+function ChipToggleReg({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      padding: "6px 12px", borderRadius: 20, fontSize: 13, border: "1px solid",
+      borderColor: active ? "var(--neon)" : "var(--border)",
+      background: active ? "rgba(0,255,130,0.12)" : "transparent",
+      color: active ? "var(--neon)" : "var(--txt-2)", cursor: "pointer",
+    }}>
+      {label}
+    </button>
+  );
+}
+
 function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
-  const [f, setF] = useState<RegistroPayload>({ nombre: "", email: "", password: "", whatsapp: "", plan: "gratis", modalidad: "mayorista" });
+  const [f, setF] = useState<RegistroFormState>({ nombre: "", whatsapp: "", modalidad: "mayorista", direccion: "" });
+  const set = (k: keyof RegistroFormState, v: string) => setF((s) => ({ ...s, [k]: v }));
+
   const [queVende, setQueVende] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [rubroSlugs, setRubroSlugs] = useState<string[]>([]);
   const [generando, setGenerando] = useState(false);
-  const [generado, setGenerado] = useState(false);
+
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [geoMsg, setGeoMsg] = useState("");
+  const [foto, setFoto] = useState<File | null>(null);
+  const [preview, setPreview] = useState("");
+
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
-  const set = (k: keyof RegistroPayload, v: string) => setF((s) => ({ ...s, [k]: v }));
 
   async function generarConIA() {
     if (!queVende.trim()) { setErr("Contanos primero qué vendés"); return; }
-    setGenerando(true); setErr(""); setGenerado(false);
+    setGenerando(true); setErr("");
     try {
-      const { descripcion, rubro_slug } = await generarDescripcion(f.nombre || "Mi negocio", queVende.trim(), RUBROS);
-      setF((s) => ({ ...s, descripcion, rubro_slug: rubro_slug ?? s.rubro_slug }));
-      setGenerado(true);
+      const r = await generarDescripcion(f.nombre || "Mi negocio", queVende.trim(), RUBROS);
+      setDescripcion(r.descripcion);
+      setRubroSlugs(r.rubro_slugs.length > 0 ? r.rubro_slugs : ["otros"]);
     } catch { setErr("No se pudo generar la descripción, probá de nuevo"); }
     finally { setGenerando(false); }
+  }
+
+  function ubicar() {
+    setGeoMsg("Obteniendo ubicación…");
+    if (!navigator.geolocation) { setGeoMsg("Este dispositivo no tiene GPS disponible."); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGeoMsg(""); },
+      (e) => setGeoMsg(e.code === 1 ? "Permiso denegado. Activá la ubicación." : "No se pudo obtener la ubicación."),
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }
+
+  function onFoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    setFoto(file);
+    setPreview(file ? URL.createObjectURL(file) : "");
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
-    if (!f.nombre || !f.email || !f.password || !f.whatsapp) { setErr("Completá nombre, email, contraseña y WhatsApp."); return; }
+    if (!f.nombre.trim() || !f.whatsapp.trim()) { setErr("Completá nombre y WhatsApp."); return; }
+    const desc = descripcion || queVende.trim();
+    if (!desc) { setErr("Contanos qué vendés."); return; }
+    if (!coords) { setErr("Falta la ubicación — tocá \"Usar mi ubicación actual\"."); return; }
+    if (!foto) { setErr("Falta la foto del negocio."); return; }
+
     setLoading(true);
-    const payload = f.descripcion ? f : { ...f, descripcion: queVende.trim() || undefined };
-    try { onLogged(await comercioRegistro(payload)); }
-    catch (ex) { setErr(ex instanceof Error ? ex.message : "No se pudo crear la cuenta"); }
+    try {
+      onLogged(await comercioRegistro({
+        nombre: f.nombre.trim(), whatsapp: f.whatsapp.trim(), modalidad: f.modalidad,
+        rubro_slugs: rubroSlugs.length > 0 ? rubroSlugs : ["otros"],
+        descripcion: desc, direccion: f.direccion.trim() || undefined,
+        lat: coords.lat, lng: coords.lng, foto,
+      }));
+    } catch (ex) { setErr(ex instanceof Error ? ex.message : "No se pudo crear la cuenta"); }
     finally { setLoading(false); }
   }
 
@@ -210,8 +262,6 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
     <form onSubmit={submit} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
       <input className="adm-input" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre del comercio" />
       <input className="adm-input" value={f.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} placeholder="WhatsApp (ej: 59170000000)" />
-      <input className="adm-input" type="email" value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="Email" />
-      <input className="adm-input" type="password" value={f.password} onChange={(e) => set("password", e.target.value)} placeholder="Contraseña (mín. 6)" />
 
       <div style={{ fontSize: 12, color: "var(--txt-3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", marginTop: 4 }}>¿Vendés por mayor o menor?</div>
       <div className="seg">
@@ -224,37 +274,51 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
       <textarea
         className="adm-input" rows={2}
         value={queVende}
-        onChange={(e) => { setQueVende(e.target.value); setGenerado(false); }}
+        onChange={(e) => { setQueVende(e.target.value); setDescripcion(""); setRubroSlugs([]); }}
         placeholder="Contanos con tus palabras: ej. 'ropa y calzado para toda la familia' o 'repuestos y gomería'"
       />
       <button type="button" className="btn btn-ghost btn-sm" onClick={generarConIA} disabled={generando} style={{ alignSelf: "flex-start" }}>
         {generando ? "Generando…" : "✨ Generar descripción con IA"}
       </button>
-      {generado && f.descripcion && (
+      {descripcion && (
         <div style={{ background: "var(--panel)", border: "1px solid var(--stroke)", borderRadius: 10, padding: 10, fontSize: 13, color: "var(--txt-2)" }}>
-          {f.descripcion}
-          {f.rubro_slug && <div style={{ marginTop: 4, color: "var(--neon)", fontSize: 12 }}>Rubro sugerido: {RUBROS.find((r) => r.slug === f.rubro_slug)?.nombre ?? f.rubro_slug}</div>}
+          {descripcion}
+        </div>
+      )}
+      {rubroSlugs.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {RUBROS.map((r) => (
+            <ChipToggleReg key={r.slug} label={r.nombre} active={rubroSlugs.includes(r.slug)}
+              onClick={() => setRubroSlugs((prev) => prev.includes(r.slug) ? prev.filter((s) => s !== r.slug) : [...prev, r.slug])} />
+          ))}
         </div>
       )}
 
-      <div style={{ fontSize: 12, color: "var(--txt-3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", marginTop: 4 }}>Elegí tu plan</div>
-      <div className="plan-grid">
-        {PLANES.map((p) => (
-          <button type="button" key={p.key} className={`plan ${f.plan === p.key ? "active" : ""}`} onClick={() => set("plan", p.key)}>
-            <b>{p.nombre}</b>
-            <span className="plan-price">{p.precio}</span>
-            <small>{p.bullets}</small>
-          </button>
-        ))}
+      <div>
+        <label className="campo-lbl">Ubicación *</label>
+        <button type="button" className={`btn ${coords ? "btn-ghost" : "btn-primary"}`} style={{ width: "100%" }} onClick={ubicar}>
+          {coords ? "Ubicación tomada ✓ — tomar de nuevo" : "📍 Usar mi ubicación actual"}
+        </button>
+        {geoMsg && <div style={{ fontSize: 12.5, color: "var(--amber)", marginTop: 6 }}>{geoMsg}</div>}
       </div>
+
+      <div>
+        <label className="campo-lbl">Foto del negocio *</label>
+        <label className="foto-drop">
+          {preview ? <img src={preview} alt="" /> : <span>📷 Sacar foto / elegir</span>}
+          <input type="file" accept="image/*" capture="environment" onChange={onFoto} hidden />
+        </label>
+      </div>
+
+      <input className="adm-input" value={f.direccion} onChange={(e) => set("direccion", e.target.value)}
+        placeholder="Punto de referencia (ej: frente a la plaza, al lado de la farmacia)" />
 
       {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
       <button className="btn btn-primary" type="submit" disabled={loading}>
         {loading ? "Creando…" : "Crear cuenta y publicar"}
       </button>
       <small style={{ color: "var(--txt-3)" }}>
-        📍 Tu ubicación es opcional acá: la compartís fácil mandando tu ubicación por WhatsApp y la cargamos sola.
-        Los planes pagos (Pro/Premium) quedan registrados; la activación del pago llega pronto.
+        Después, desde "Mi comercio" podés sumar redes sociales, cambiar de plan y completar el resto.
       </small>
     </form>
   );

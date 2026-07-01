@@ -17,9 +17,9 @@ from app.core.config import settings
 from app.core.text import slug_unico, slugify
 from app.db.repository import Repo, get_repo
 from app.db.session import get_supabase
-from app.models.schemas import LoginBody, PublicarBody, RegistroBody
-from app.services.clasificador import clasificar, generar_texto_comercio
-from app.services.imagenes import procesar_imagen
+from app.models.schemas import LoginBody, PublicarBody
+from app.services.clasificador import clasificar, generar_texto_comercio, sugerir_rubros
+from app.services.imagenes import procesar_imagen, subir_foto_comercio
 from app.services.tienda_client import get_tienda_client
 from app.services.whatsapp_client import enviar_texto
 
@@ -41,48 +41,62 @@ _CAMPOS_EDITABLES = {
 
 
 @router.post("/auth/comercio/registro")
-def comercio_registro(body: RegistroBody, repo: Repo = Depends(get_repo)) -> dict:
-    """Alta self-service: crea comercio + cuenta y devuelve sesión (auto-login)."""
-    if body.plan not in _PLANES:
-        raise HTTPException(status_code=400, detail=f"plan inválido: {body.plan}")
-    if body.modalidad not in _MODALIDADES:
-        raise HTTPException(status_code=400, detail=f"modalidad inválida: {body.modalidad}")
-    if len(body.password) < 6:
-        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
+async def comercio_registro(
+    nombre: str = Form(...),
+    whatsapp: str = Form(...),
+    modalidad: str = Form("mayorista"),
+    rubro_slugs: list[str] = Form(default=[]),
+    descripcion: str | None = Form(None),
+    direccion: str | None = Form(None),
+    lat: float = Form(...),
+    lng: float = Form(...),
+    foto: UploadFile = File(...),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Alta self-service: el dueño se registra a sí mismo. Sin email/contraseña —
+    el comercio queda identificado por WhatsApp; para volver a entrar pide un
+    código por WhatsApp (mismo mecanismo que /auth/comercio/recuperar)."""
+    if modalidad not in _MODALIDADES:
+        raise HTTPException(status_code=400, detail=f"modalidad inválida: {modalidad}")
+    if not nombre.strip() or not whatsapp.strip():
+        raise HTTPException(status_code=400, detail="Faltan nombre y/o WhatsApp")
 
-    if repo.get_comercio_usuario(body.email):
-        raise HTTPException(status_code=409, detail="Ya existe una cuenta con ese email")
+    rubro_ids = [rid for rid in (repo.get_rubro_id(s) for s in rubro_slugs if s) if rid]
+    slug = slug_unico(repo, slugify(nombre))
 
-    zona_id = repo.get_zona_id(body.zona_slug) if body.zona_slug else None
-    rubro_id = repo.get_rubro_id(body.rubro_slug) if body.rubro_slug else None
-    slug = slug_unico(repo, slugify(body.nombre))
+    data = await foto.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Falta la foto del negocio")
+    try:
+        portada_url = subir_foto_comercio(slug, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     comercio = repo.crear_comercio(
         {
             "slug": slug,
-            "nombre": body.nombre,
-            "descripcion": body.descripcion,
-            "whatsapp": body.whatsapp,
-            "zona_id": zona_id,
-            "rubro_id": rubro_id,
+            "nombre": nombre.strip(),
+            "descripcion": descripcion.strip() if descripcion and descripcion.strip() else None,
+            "whatsapp": whatsapp.strip(),
+            "direccion": direccion.strip() if direccion and direccion.strip() else None,
+            "lat": lat,
+            "lng": lng,
+            "portada_url": portada_url,
+            "rubro_id": rubro_ids[0] if rubro_ids else None,
             "ciudad_id": repo.get_ciudad_id("bermejo"),
-            "modalidad": body.modalidad,
-            "plan": body.plan,
+            "modalidad": modalidad,
+            "plan": "gratis",
             "confiable": False,            # nuevo comercio NO publica directo hasta ser verificado
             "verificado": False,
         }
     )
-    repo.crear_comercio_usuario(
-        {
-            "comercio_id": comercio["id"],
-            "email": body.email,
-            "password_hash": auth.hash_password(body.password),
-            "nombre": body.nombre,
-        }
-    )
+    if rubro_ids:
+        repo.set_comercio_rubros(comercio["id"], rubro_ids)
 
-    token = auth.make_comercio_token(comercio["id"], body.email)
-    logger.info("comercio.registro", slug=slug, plan=body.plan)
+    repo.crear_comercio_usuario({"comercio_id": comercio["id"], "nombre": nombre.strip()})
+
+    token = auth.make_comercio_token(comercio["id"], whatsapp.strip())
+    logger.info("comercio.registro", slug=slug, con_gps=True, con_foto=bool(portada_url))
     return {
         "access_token": token,
         "comercio": {
@@ -90,10 +104,7 @@ def comercio_registro(body: RegistroBody, repo: Repo = Depends(get_repo)) -> dic
             "nombre": comercio["nombre"],
             "slug": comercio["slug"],
             "confiable": False,
-            "plan": body.plan,
         },
-        # pro/premium quedan registrados pero el cobro real es F-007 (pagos).
-        "pago_pendiente": body.plan != "gratis",
     }
 
 
@@ -123,13 +134,14 @@ class GenerarDescripcionBody(BaseModel):
 
 @router.post("/comercio/generar-descripcion")
 def comercio_generar_descripcion(body: GenerarDescripcionBody) -> dict:
-    """Genera descripción + rubro sugerido a partir de texto libre (usado en el
-    registro). Si no hay GEMINI_API_KEY o falla, devuelve el texto tal cual y
-    sin rubro sugerido (el frontend deja elegir manualmente)."""
+    """Genera descripción + rubros sugeridos (1-3) a partir de texto libre,
+    usado en el registro — misma lógica de categorías que /publicar. Si no hay
+    GEMINI_API_KEY o falla, devuelve el texto tal cual y sin rubros (el
+    frontend deja elegir manualmente)."""
     resultado = generar_texto_comercio(body.nombre, body.que_vende, body.rubros)
-    if resultado:
-        return resultado
-    return {"descripcion": body.que_vende, "rubro_slug": None}
+    descripcion = resultado["descripcion"] if resultado else body.que_vende
+    rubro_slugs = sugerir_rubros(descripcion, body.rubros)
+    return {"descripcion": descripcion, "rubro_slugs": rubro_slugs}
 
 
 class RecuperarBody(BaseModel):

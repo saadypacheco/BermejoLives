@@ -1,64 +1,67 @@
 """Registro self-service, login y publicación por chatbot."""
+from io import BytesIO
+
+from PIL import Image
+
 from tests.conftest import comercio_token
 
 
 # ---------------- Registro ----------------
+def _foto_test():
+    buf = BytesIO()
+    Image.new("RGB", (10, 10), color="blue").save(buf, format="JPEG")
+    buf.seek(0)
+    return {"foto": ("test.jpg", buf, "image/jpeg")}
+
+
 def _registro(**kw):
-    base = {"nombre": "Mi Tienda", "email": "nuevo@x.com", "password": "secreto1", "whatsapp": "59170001111", "plan": "gratis"}
+    base = {"nombre": "Mi Tienda", "whatsapp": "59170001111", "lat": "-22.7361", "lng": "-64.3433"}
     base.update(kw)
     return base
 
 
 def test_registro_crea_comercio_y_loguea(client, repo):
-    r = client.post("/auth/comercio/registro", json=_registro())
-    assert r.status_code == 200
+    r = client.post("/auth/comercio/registro", data=_registro(), files=_foto_test())
+    assert r.status_code == 200, r.text
     data = r.json()
     assert data["access_token"]
     assert data["comercio"]["slug"] == "mi-tienda"
     assert data["comercio"]["confiable"] is False  # nace NO confiable
     assert len(repo.comercios) == 1
-    assert "nuevo@x.com" in repo.usuarios
+    assert len(repo.usuarios) == 1
+
+
+def test_registro_sin_foto_400(client):
+    r = client.post("/auth/comercio/registro", data=_registro())
+    assert r.status_code == 422  # foto es requerida (File(...))
 
 
 def test_registro_slug_unico_ante_colision(client, repo):
     repo.seed_comercio(slug="mi-tienda", nombre="otra")
-    r = client.post("/auth/comercio/registro", json=_registro())
+    r = client.post("/auth/comercio/registro", data=_registro(), files=_foto_test())
     assert r.json()["comercio"]["slug"] == "mi-tienda-2"
 
 
-def test_registro_email_duplicado_409(client, repo):
-    client.post("/auth/comercio/registro", json=_registro())
-    r = client.post("/auth/comercio/registro", json=_registro(nombre="Otra"))
-    assert r.status_code == 409
-
-
-def test_registro_password_corta_400(client):
-    r = client.post("/auth/comercio/registro", json=_registro(password="123"))
-    assert r.status_code == 400
-
-
-def test_registro_plan_pago_marca_pendiente(client):
-    r = client.post("/auth/comercio/registro", json=_registro(email="pro@x.com", plan="premium"))
-    assert r.json()["pago_pendiente"] is True
-
-
 def test_registro_guarda_modalidad_y_rubro(client, repo):
-    r = client.post("/auth/comercio/registro", json=_registro(
-        email="resto@x.com", nombre="Resto Bermejo", modalidad="minorista", rubro_slug="gastronomia"))
-    assert r.status_code == 200
+    r = client.post(
+        "/auth/comercio/registro",
+        data=_registro(nombre="Resto Bermejo", modalidad="minorista", rubro_slugs=["gastronomia"]),
+        files=_foto_test(),
+    )
+    assert r.status_code == 200, r.text
     com = next(c for c in repo.comercios.values() if c.get("slug") == "resto-bermejo")
     assert com["modalidad"] == "minorista"
     assert com["rubro_id"] == "rub-2"   # gastronomia
 
 
 def test_registro_modalidad_invalida_400(client):
-    r = client.post("/auth/comercio/registro", json=_registro(email="z@x.com", modalidad="revendedor"))
+    r = client.post("/auth/comercio/registro", data=_registro(modalidad="revendedor"), files=_foto_test())
     assert r.status_code == 400
 
 
 # ---------------- Login + publicar ----------------
 def test_login_y_publicar_no_confiable_va_a_moderacion(client, repo):
-    reg = client.post("/auth/comercio/registro", json=_registro(email="m@x.com")).json()
+    reg = client.post("/auth/comercio/registro", data=_registro(), files=_foto_test()).json()
     token = reg["access_token"]
     r = client.post(
         "/comercio/publicar",
