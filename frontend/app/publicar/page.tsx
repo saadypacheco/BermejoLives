@@ -5,6 +5,7 @@ import { agenteLogin, getAgenteToken, clearAgente, altaComercioCampo, transcribi
 import { getCiudades, getRubros } from "@/lib/data";
 import type { Ciudad, Rubro } from "@/lib/types";
 import { Pin, User } from "@/components/icons";
+import { comprimirImagen } from "@/lib/imagen";
 
 // Prefijo telefónico según país
 const PREFIJO: Record<string, string> = { Bolivia: "591", Argentina: "54" };
@@ -107,6 +108,7 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
   const [geoMsg,      setGeoMsg]      = useState("");
   const [foto,        setFoto]        = useState<File | null>(null);
   const [preview,     setPreview]     = useState("");
+  const [comprimiendo,setComprimiendo]= useState(false);
   const [consent,     setConsent]     = useState(true);
   const [saving,      setSaving]      = useState(false);
   const [done,        setDone]        = useState<string | null>(null);
@@ -189,10 +191,14 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
     );
   }
 
-  function onFoto(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
-    setFoto(file);
-    setPreview(file ? URL.createObjectURL(file) : "");
+    if (!file) { setFoto(null); setPreview(""); return; }
+    setPreview(URL.createObjectURL(file)); // vista previa inmediata, sin esperar la compresión
+    setComprimiendo(true);
+    const comprimida = await comprimirImagen(file);
+    setComprimiendo(false);
+    setFoto(comprimida);
   }
 
   async function guardar(e: React.FormEvent) {
@@ -202,6 +208,7 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
     if (!f.nombre.trim() || !cel) { setErr("Faltan nombre y celular."); return; }
     if (!f.descripcion.trim()) { setErr("Falta qué vende (grabá un audio o escribí)."); return; }
     if (!coords) { setErr("Falta la ubicación — tocá \"Usar mi ubicación actual\"."); return; }
+    if (comprimiendo) { setErr("Esperá a que termine de comprimir la foto."); return; }
     if (!foto) { setErr("Falta la foto del negocio."); return; }
 
     setSaving(true);
@@ -344,6 +351,8 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
             {preview ? <img src={preview} alt="" /> : <span>📷 Sacar foto / elegir</span>}
             <input type="file" accept="image/*" capture="environment" onChange={onFoto} hidden />
           </label>
+          {comprimiendo && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>Comprimiendo foto…</div>}
+          {!comprimiendo && foto && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>{(foto.size / 1024).toFixed(0)} KB</div>}
         </div>
 
         <input className="adm-input" value={f.direccion} onChange={(e) => set("direccion", e.target.value)}

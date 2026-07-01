@@ -10,6 +10,7 @@ import {
   type ComercioSession, type PublicarPayload, type RegistroPayload,
 } from "@/lib/comercio";
 import { RUBROS } from "@/lib/types";
+import { comprimirImagen } from "@/lib/imagen";
 
 type Msg = { from: "bot" | "user"; text: string };
 type Step = "tipo" | "titulo" | "precio" | "descripcion" | "tiktok" | "imagen" | "confirm" | "done";
@@ -206,6 +207,7 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
   const [geoMsg, setGeoMsg] = useState("");
   const [foto, setFoto] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
+  const [comprimiendo, setComprimiendo] = useState(false);
 
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
@@ -231,10 +233,14 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
     );
   }
 
-  function onFoto(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
-    setFoto(file);
-    setPreview(file ? URL.createObjectURL(file) : "");
+    if (!file) { setFoto(null); setPreview(""); return; }
+    setPreview(URL.createObjectURL(file));
+    setComprimiendo(true);
+    const comprimida = await comprimirImagen(file);
+    setComprimiendo(false);
+    setFoto(comprimida);
   }
 
   async function submit(e: React.FormEvent) {
@@ -244,6 +250,7 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
     const desc = descripcion || queVende.trim();
     if (!desc) { setErr("Contanos qué vendés."); return; }
     if (!coords) { setErr("Falta la ubicación — tocá \"Usar mi ubicación actual\"."); return; }
+    if (comprimiendo) { setErr("Esperá a que termine de comprimir la foto."); return; }
     if (!foto) { setErr("Falta la foto del negocio."); return; }
 
     setLoading(true);
@@ -308,6 +315,8 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
           {preview ? <img src={preview} alt="" /> : <span>📷 Sacar foto / elegir</span>}
           <input type="file" accept="image/*" capture="environment" onChange={onFoto} hidden />
         </label>
+        {comprimiendo && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>Comprimiendo foto…</div>}
+        {!comprimiendo && foto && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>{(foto.size / 1024).toFixed(0)} KB</div>}
       </div>
 
       <input className="adm-input" value={f.direccion} onChange={(e) => set("direccion", e.target.value)}
