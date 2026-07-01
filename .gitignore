@@ -32,3 +32,6 @@ build/
 # supabase cli
 supabase/.temp/
 supabase/.branches/
+
+# memoria de sesiones de Claude (puede contener credenciales, nunca commitear)
+memory/

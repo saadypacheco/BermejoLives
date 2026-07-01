@@ -53,6 +53,9 @@ class Repo(Protocol):
     def get_producto_ref(self, ref_id: str) -> dict | None: ...
     def update_producto_ref(self, ref_id: str, patch: dict) -> dict: ...
     def delete_producto_ref(self, ref_id: str) -> None: ...
+    def crear_reclamo(self, row: dict) -> dict: ...
+    def list_reclamos(self, estado: str | None) -> list[dict]: ...
+    def responder_reclamo(self, reclamo_id: str, respuesta: str, by: str) -> dict | None: ...
 
 
 class SupabaseRepo:
@@ -553,6 +556,37 @@ class SupabaseRepo:
 
     def delete_producto_ref(self, ref_id: str) -> None:
         self._db.table("producto_ref").delete().eq("id", ref_id).execute()
+
+    # ---- reclamos ----
+    def crear_reclamo(self, row: dict) -> dict:
+        res = self._db.table("reclamos").insert(row).execute()
+        return res.data[0]
+
+    def list_reclamos(self, estado: str | None) -> list[dict]:
+        q = (
+            self._db.table("reclamos")
+            .select("*, comercios(nombre, slug)")
+            .order("created_at", desc=True)
+            .limit(500)
+        )
+        if estado:
+            q = q.eq("estado", estado)
+        return q.execute().data or []
+
+    def responder_reclamo(self, reclamo_id: str, respuesta: str, by: str) -> dict | None:
+        from datetime import datetime, timezone
+        res = (
+            self._db.table("reclamos")
+            .update({
+                "estado": "respondido",
+                "respuesta": respuesta,
+                "respondido_por": by,
+                "respondido_en": datetime.now(timezone.utc).isoformat(),
+            })
+            .eq("id", reclamo_id)
+            .execute()
+        )
+        return res.data[0] if res.data else None
 
 
 def get_repo() -> Repo:

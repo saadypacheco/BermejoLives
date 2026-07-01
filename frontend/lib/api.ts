@@ -152,6 +152,78 @@ export async function getEstadisticas(): Promise<EstadisticasAdmin> {
   return res.json();
 }
 
+// ---- Reclamos (Encontralo) ----
+export type Reclamo = {
+  id: string;
+  nombre: string | null;
+  contacto: string | null;
+  comercio_id: string | null;
+  mensaje: string;
+  estado: "pendiente" | "respondido";
+  respuesta: string | null;
+  respondido_por: string | null;
+  respondido_en: string | null;
+  created_at: string;
+  comercios?: { nombre: string; slug: string } | null;
+};
+
+export async function listReclamos(estado?: string): Promise<Reclamo[]> {
+  const res = await authFetch(`/admin/reclamos${estado ? `?estado=${estado}` : ""}`);
+  const data = await res.json();
+  return data.items as Reclamo[];
+}
+
+export async function responderReclamo(id: string, respuesta: string) {
+  const res = await authFetch(`/admin/reclamos/${id}/responder`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ respuesta }),
+  });
+  return res.json();
+}
+
+// ---- Datos de Reservalo (proxy vía /api/admin-sync) ----
+export type ReservaloResumen = {
+  clientes_nuevos_7d?: number;
+  clientes_nuevos_30d?: number;
+  reservas_30d_total?: number;
+  reservas_30d_por_vendedor?: { vendedor_id: string; count: number }[];
+  top_productos_consultados?: { producto_id: number; nombre: string; count: number }[];
+};
+
+export async function getReservaloResumen(): Promise<ReservaloResumen> {
+  const res = await authFetch("/admin/reservalo/resumen");
+  return res.json();
+}
+
+export type ConsultaReservalo = {
+  id: number;
+  nombre: string | null;
+  email: string | null;
+  tipo: string;
+  mensaje: string;
+  estado: "pendiente" | "respondida";
+  respuesta: string | null;
+  respondida_por: string | null;
+  respondida_en: string | null;
+  created_at: string;
+};
+
+export async function getReservaloConsultas(estado?: string): Promise<ConsultaReservalo[]> {
+  const res = await authFetch(`/admin/reservalo/consultas${estado ? `?estado=${estado}` : ""}`);
+  const data = await res.json();
+  return data.items as ConsultaReservalo[];
+}
+
+export async function responderReservaloConsulta(id: number, respuesta: string) {
+  const res = await authFetch(`/admin/reservalo/consultas/${id}/responder`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ respuesta }),
+  });
+  return res.json();
+}
+
 export async function registrarPago(comercioId: string, body: {
   monto: number; moneda: string; metodo: string; referencia?: string; meses: number; notas?: string;
 }) {

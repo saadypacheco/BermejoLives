@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from app.core.auth import require_admin
 from app.db.repository import Repo, get_repo
 from app.models.schemas import ModerarBody
+from app.services.reservalo_sync import ReservaloSyncClient, get_reservalo_sync_client
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -146,6 +147,74 @@ def estadisticas(
 ) -> dict:
     """Monitoreo: usuarios nuevos, alertas de baja, ofertas y contactos."""
     return repo.estadisticas_admin()
+
+
+class ResponderReclamoBody(BaseModel):
+    respuesta: str
+
+
+@router.get("/admin/reclamos")
+def listar_reclamos(
+    estado: str | None = Query(default=None),
+    _admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    items = repo.list_reclamos(estado)
+    return {"items": items, "total": len(items)}
+
+
+@router.post("/admin/reclamos/{reclamo_id}/responder")
+def responder_reclamo(
+    reclamo_id: str,
+    body: ResponderReclamoBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    updated = repo.responder_reclamo(reclamo_id, body.respuesta, admin["email"])
+    if not updated:
+        raise HTTPException(status_code=404, detail="reclamo no encontrado")
+    logger.info("reclamo.respondido", reclamo=reclamo_id, by=admin["email"])
+    return {"ok": True, "reclamo": updated}
+
+
+# ---- Datos de Reservalo (proxy vía /api/admin-sync/*, dashboard unificado) ----
+
+@router.get("/admin/reservalo/resumen")
+def reservalo_resumen(
+    _admin: dict = Depends(require_admin),
+    cliente: ReservaloSyncClient = Depends(get_reservalo_sync_client),
+) -> dict:
+    return cliente.resumen() or {}
+
+
+@router.get("/admin/reservalo/consultas")
+def reservalo_consultas(
+    estado: str | None = Query(default=None),
+    _admin: dict = Depends(require_admin),
+    cliente: ReservaloSyncClient = Depends(get_reservalo_sync_client),
+) -> dict:
+    items = cliente.list_consultas(estado)
+    return {"items": items, "total": len(items)}
+
+
+class ResponderConsultaReservaloBody(BaseModel):
+    respuesta: str
+
+
+@router.post("/admin/reservalo/consultas/{consulta_id}/responder")
+def reservalo_responder_consulta(
+    consulta_id: int,
+    body: ResponderConsultaReservaloBody,
+    admin: dict = Depends(require_admin),
+    cliente: ReservaloSyncClient = Depends(get_reservalo_sync_client),
+) -> dict:
+    try:
+        updated = cliente.responder_consulta(consulta_id, body.respuesta, admin["email"])
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"No se pudo responder en Reservalo: {exc}")
+    if not updated:
+        raise HTTPException(status_code=502, detail="Reservalo no está configurado (admin_sync_secret / tienda_api_url)")
+    return {"ok": True, "consulta": updated}
 
 
 @router.post("/admin/comercio/{comercio_id}/pago")

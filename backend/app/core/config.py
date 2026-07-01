@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     tienda_api_url: str = ""
     tienda_api_secret: str = ""
 
+    # Dashboard admin unificado: lee resumen/consultas de Reservalo (mismo
+    # tienda_api_url, secret propio del endpoint /api/admin-sync/*).
+    admin_sync_secret: str = ""
+
     # Clasificación de productos por IA (Gemini Flash, solo texto).
     #  - Si gemini_api_key vacío → fallback gratis (categoría = rubro del comercio).
     gemini_api_key: str = ""

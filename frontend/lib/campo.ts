@@ -63,3 +63,13 @@ export async function registrarLead(comercio_id: string, tipo: "whatsapp" | "tel
     body: JSON.stringify({ comercio_id, tipo }),
   }).catch(() => undefined);
 }
+
+/** Deja un reclamo público (sobre un comercio, o sobre la plataforma si comercio_id es undefined). */
+export async function crearReclamo(body: { nombre?: string; contacto?: string; comercio_id?: string; mensaje: string }): Promise<void> {
+  const res = await fetch(`${API}/reclamos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error("No se pudo enviar el reclamo");
+}

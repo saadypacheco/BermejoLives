@@ -228,3 +228,22 @@ def registrar_lead(body: _LeadIn, repo: Repo = Depends(get_repo)) -> dict:
     tipo = body.tipo if body.tipo in _TIPOS_LEAD else "whatsapp"
     repo.insert_lead({"comercio_id": body.comercio_id, "tipo": tipo})
     return {"ok": True}
+
+
+class _ReclamoIn(BaseModel):
+    nombre: str | None = None
+    contacto: str | None = None
+    comercio_id: str | None = None
+    mensaje: str
+
+
+@router.post("/reclamos")
+def crear_reclamo(body: _ReclamoIn, repo: Repo = Depends(get_repo)) -> dict:
+    """Deja un reclamo público (sobre un comercio o la plataforma en general)."""
+    repo.crear_reclamo({
+        "nombre": body.nombre,
+        "contacto": body.contacto,
+        "comercio_id": body.comercio_id,
+        "mensaje": body.mensaje,
+    })
+    return {"ok": True}

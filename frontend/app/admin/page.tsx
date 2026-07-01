@@ -11,6 +11,9 @@ import {
   listPagosPendientes, confirmarPago, type PagoPendiente,
   enviarMensajeComercio,
   getEstadisticas, type EstadisticasAdmin,
+  listReclamos, responderReclamo, type Reclamo,
+  getReservaloResumen, type ReservaloResumen,
+  getReservaloConsultas, responderReservaloConsulta, type ConsultaReservalo,
 } from "@/lib/api";
 import { getRubros } from "@/lib/data";
 import type { Rubro } from "@/lib/types";
@@ -22,7 +25,7 @@ export default function AdminPage() {
   const [email, setEmail] = useState("admin@bermejolive.com");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"publicaciones" | "comercios" | "suscripciones" | "pagos" | "monitoreo">("comercios");
+  const [tab, setTab] = useState<"publicaciones" | "comercios" | "suscripciones" | "pagos" | "monitoreo" | "reclamos">("comercios");
   const [items, setItems] = useState<PendingPub[]>([]);
   const [comercios, setComercios] = useState<ComercioPorVerificar[]>([]);
   const [todosLosComercios, setTodosLosComercios] = useState<ComercioPorVerificar[]>([]);
@@ -30,6 +33,9 @@ export default function AdminPage() {
   const [suscripciones, setSuscripciones] = useState<ComercioSuscripcion[]>([]);
   const [pagosPendientes, setPagosPendientes] = useState<PagoPendiente[]>([]);
   const [estadisticas, setEstadisticas] = useState<EstadisticasAdmin | null>(null);
+  const [reservaloResumen, setReservaloResumen] = useState<ReservaloResumen | null>(null);
+  const [reclamos, setReclamos] = useState<Reclamo[]>([]);
+  const [consultasReservalo, setConsultasReservalo] = useState<ConsultaReservalo[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -40,6 +46,7 @@ export default function AdminPage() {
       loadSuscripciones();
       loadPagos();
       loadEstadisticas();
+      loadReclamos();
       getRubros().then(setRubros);
     }
   }, []);
@@ -72,11 +79,25 @@ export default function AdminPage() {
 
   async function loadEstadisticas() {
     try { setEstadisticas(await getEstadisticas()); } catch { setEstadisticas(null); }
+    try { setReservaloResumen(await getReservaloResumen()); } catch { setReservaloResumen(null); }
+  }
+
+  async function loadReclamos() {
+    try { setReclamos(await listReclamos()); } catch { setReclamos([]); }
+    try { setConsultasReservalo(await getReservaloConsultas()); } catch { setConsultasReservalo([]); }
   }
 
   async function doConfirmarPago(pagoId: string, meses: number) {
     setPagosPendientes((prev) => prev.filter((p) => p.id !== pagoId)); // optimista
     try { await confirmarPago(pagoId, meses); loadSuscripciones(); } catch { loadPagos(); }
+  }
+
+  async function doResponderReclamo(id: string, respuesta: string) {
+    try { await responderReclamo(id, respuesta); loadReclamos(); } catch { alert("No se pudo responder"); }
+  }
+
+  async function doResponderConsultaReservalo(id: number, respuesta: string) {
+    try { await responderReservaloConsulta(id, respuesta); loadReclamos(); } catch { alert("No se pudo responder"); }
   }
 
   async function actComercio(id: string, accion: "verificar" | "rechazar") {
@@ -109,6 +130,7 @@ export default function AdminPage() {
       loadSuscripciones();
       loadPagos();
       loadEstadisticas();
+      loadReclamos();
     } catch {
       setErr("Credenciales incorrectas. ¿Está corriendo el backend?");
     }
@@ -171,6 +193,12 @@ export default function AdminPage() {
             <span style={{ color: "var(--pink)" }}>⚠️ {estadisticas.alertas.vencido + estadisticas.alertas.suspendido}</span>
           )}
         </button>
+        <button className={tab === "reclamos" ? "active" : ""} onClick={() => { setTab("reclamos"); loadReclamos(); }}>
+          Reclamos {(() => {
+            const n = reclamos.filter((r) => r.estado === "pendiente").length + consultasReservalo.filter((c) => c.estado === "pendiente").length;
+            return n > 0 && <span style={{ color: "var(--amber)" }}>· {n}</span>;
+          })()}
+        </button>
       </div>
 
       {tab === "comercios" && (
@@ -195,7 +223,16 @@ export default function AdminPage() {
 
       {tab === "pagos" && <TabPagos items={pagosPendientes} onConfirmar={doConfirmarPago} />}
 
-      {tab === "monitoreo" && <TabMonitoreo data={estadisticas} />}
+      {tab === "monitoreo" && <TabMonitoreo data={estadisticas} reservalo={reservaloResumen} comercios={todosLosComercios} />}
+
+      {tab === "reclamos" && (
+        <TabReclamos
+          reclamos={reclamos}
+          consultasReservalo={consultasReservalo}
+          onResponderReclamo={doResponderReclamo}
+          onResponderConsulta={doResponderConsultaReservalo}
+        />
+      )}
 
       {tab === "publicaciones" && (
       <div className="panel-card glass">
@@ -227,6 +264,94 @@ export default function AdminPage() {
         ))}
       </div>
       )}
+    </div>
+  );
+}
+
+// ── Tab Reclamos ──────────────────────────────────────────────────────────────
+
+function ReclamoRow({ nombre, contacto, sub, mensaje, estado, respuesta, onResponder }: {
+  nombre: string; contacto: string | null; sub?: string; mensaje: string;
+  estado: string; respuesta: string | null; onResponder: (respuesta: string) => void;
+}) {
+  const [respondiendo, setRespondiendo] = useState(false);
+  const [texto, setTexto] = useState("");
+
+  return (
+    <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+        <div>
+          <b>{nombre}</b>{sub && <span style={{ color: "var(--txt-3)", fontSize: 12 }}> · {sub}</span>}
+          {contacto && <div style={{ fontSize: 12, color: "var(--txt-3)" }}>{contacto}</div>}
+        </div>
+        <span style={{ fontSize: 11, color: estado === "pendiente" ? "var(--amber)" : "var(--neon)" }}>
+          {estado === "respondido" || estado === "respondida" ? "✓ respondido" : "pendiente"}
+        </span>
+      </div>
+      <p style={{ marginTop: 6, fontSize: 14 }}>{mensaje}</p>
+      {respuesta && (
+        <div style={{ marginTop: 8, padding: 10, background: "var(--panel)", borderRadius: 8, fontSize: 13 }}>
+          <b style={{ color: "var(--neon)" }}>Respuesta:</b> {respuesta}
+        </div>
+      )}
+      {!respuesta && (
+        respondiendo ? (
+          <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+            <input className="adm-input" style={{ flex: 1 }} value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Tu respuesta…" />
+            <button className="btn btn-primary btn-sm" onClick={() => { if (texto.trim()) { onResponder(texto.trim()); setRespondiendo(false); setTexto(""); } }}>Enviar</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setRespondiendo(false)}>Cancelar</button>
+          </div>
+        ) : (
+          <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={() => setRespondiendo(true)}>Responder</button>
+        )
+      )}
+    </div>
+  );
+}
+
+function TabReclamos({
+  reclamos, consultasReservalo, onResponderReclamo, onResponderConsulta,
+}: {
+  reclamos: Reclamo[];
+  consultasReservalo: ConsultaReservalo[];
+  onResponderReclamo: (id: string, respuesta: string) => void;
+  onResponderConsulta: (id: number, respuesta: string) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="panel-card glass">
+        <div className="ph"><h3>Reclamos (Encontralo)</h3><span style={{ color: "var(--txt-3)", fontSize: 13 }}>Sobre negocios o la plataforma</span></div>
+        {reclamos.length === 0 && <div style={{ padding: 20, textAlign: "center", color: "var(--txt-3)" }}>Sin reclamos.</div>}
+        {reclamos.map((r) => (
+          <ReclamoRow
+            key={r.id}
+            nombre={r.nombre ?? "Anónimo"}
+            contacto={r.contacto}
+            sub={r.comercios?.nombre}
+            mensaje={r.mensaje}
+            estado={r.estado}
+            respuesta={r.respuesta}
+            onResponder={(resp) => onResponderReclamo(r.id, resp)}
+          />
+        ))}
+      </div>
+
+      <div className="panel-card glass">
+        <div className="ph"><h3>Consultas y reclamos (Reservalo)</h3><span style={{ color: "var(--txt-3)", fontSize: 13 }}>Formulario de contacto de la tienda</span></div>
+        {consultasReservalo.length === 0 && <div style={{ padding: 20, textAlign: "center", color: "var(--txt-3)" }}>Sin consultas.</div>}
+        {consultasReservalo.map((c) => (
+          <ReclamoRow
+            key={c.id}
+            nombre={c.nombre ?? "Anónimo"}
+            contacto={c.email}
+            sub={c.tipo}
+            mensaje={c.mensaje}
+            estado={c.estado}
+            respuesta={c.respuesta}
+            onResponder={(resp) => onResponderConsulta(c.id, resp)}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -283,10 +408,17 @@ function TabPagos({
   );
 }
 
-function TabMonitoreo({ data }: { data: EstadisticasAdmin | null }) {
+function TabMonitoreo({
+  data, reservalo, comercios,
+}: {
+  data: EstadisticasAdmin | null;
+  reservalo: ReservaloResumen | null;
+  comercios: ComercioPorVerificar[];
+}) {
   if (!data) return <div className="panel-card glass" style={{ padding: 24, textAlign: "center", color: "var(--txt-3)" }}>Cargando…</div>;
 
   const totalAlertas = data.alertas.vencido + data.alertas.suspendido;
+  const nombrePorId = (id: string) => comercios.find((c) => c.id === id)?.nombre ?? "?";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -345,6 +477,49 @@ function TabMonitoreo({ data }: { data: EstadisticasAdmin | null }) {
           </div>
         ))}
       </div>
+
+      {/* Reservalo */}
+      {reservalo && (reservalo.reservas_30d_total != null) && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
+            <div className="panel-card glass" style={{ padding: 16, borderLeft: "3px solid var(--neon)" }}>
+              <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Clientes nuevos (Reservalo, 7d)</div>
+              <div style={{ fontSize: 26, fontWeight: 700 }}>{reservalo.clientes_nuevos_7d ?? 0}</div>
+              <div style={{ fontSize: 11, color: "var(--txt-3)" }}>{reservalo.clientes_nuevos_30d ?? 0} en 30 días</div>
+            </div>
+            <div className="panel-card glass" style={{ padding: 16, borderLeft: "3px solid var(--blue-soft)" }}>
+              <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Reservas (30d)</div>
+              <div style={{ fontSize: 26, fontWeight: 700 }}>{reservalo.reservas_30d_total ?? 0}</div>
+            </div>
+          </div>
+
+          <div className="panel-card glass">
+            <div className="ph"><h3>Reservas por negocio</h3><span style={{ color: "var(--txt-3)", fontSize: 13 }}>Últimos 30 días · Reservalo</span></div>
+            {(reservalo.reservas_30d_por_vendedor ?? []).length === 0 && (
+              <div style={{ padding: 20, textAlign: "center", color: "var(--txt-3)" }}>Sin reservas todavía.</div>
+            )}
+            {(reservalo.reservas_30d_por_vendedor ?? []).map((v) => (
+              <div key={v.vendedor_id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid var(--border)" }}>
+                <span>{nombrePorId(v.vendedor_id)}</span>
+                <b style={{ color: "var(--neon)" }}>{v.count}</b>
+              </div>
+            ))}
+          </div>
+
+          <div className="panel-card glass">
+            <div className="ph"><h3>Productos más consultados</h3><span style={{ color: "var(--txt-3)", fontSize: 13 }}>Por cantidad de chats · Reservalo</span></div>
+            {(reservalo.top_productos_consultados ?? []).length === 0 && (
+              <div style={{ padding: 20, textAlign: "center", color: "var(--txt-3)" }}>Sin consultas todavía.</div>
+            )}
+            {(reservalo.top_productos_consultados ?? []).map((p) => (
+              <div key={p.producto_id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid var(--border)" }}>
+                <span>{p.nombre}</span>
+                <b style={{ color: "var(--blue-soft)" }}>{p.count}</b>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
