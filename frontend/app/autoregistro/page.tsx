@@ -35,23 +35,20 @@ const PLANES: { key: RegistroPayload["plan"]; nombre: string; precio: string; bu
 function QueOfrecemos() {
   return (
     <div className="glass" style={{ padding: 20, borderRadius: 16, marginBottom: 18 }}>
-      <h2 style={{ fontSize: 18, marginBottom: 10 }}>¿Qué ofrece Encontralo?</h2>
-      <ul style={{ display: "flex", flexDirection: "column", gap: 8, color: "var(--txt-2)", fontSize: 14, paddingLeft: 18 }}>
-        <li>Publicá tus productos u ofertas <b style={{ color: "var(--txt)" }}>gratis</b>, sin límite de publicaciones en el plan Premium</li>
-        <li>Tu negocio y sus datos quedan visibles en el <b style={{ color: "var(--txt)" }}>mapa</b> para que te encuentren cerca tuyo</li>
-        <li>Con el plan PRO o Premium, publicamos en las <b style={{ color: "var(--txt)" }}>redes de Encontralo</b> (anuncios, TikTok, Instagram, Facebook)</li>
-        <li>Tus productos y servicios quedan visibles para <b style={{ color: "var(--txt)" }}>toda Argentina</b></li>
-        <li>Si tu negocio se verifica, te ofrecemos tu <b style={{ color: "var(--txt)" }}>propia tienda online</b>, con compra y envío directo desde la página</li>
+      <h2 style={{ fontSize: 18, marginBottom: 10 }}>¿Por qué unirte a Encontralo?</h2>
+      <ul style={{ display: "flex", flexDirection: "column", gap: 8, color: "var(--txt-2)", fontSize: 14, paddingLeft: 18, listStyle: "none" }}>
+        <li>📍 Tu negocio aparece en el mapa.</li>
+        <li>📢 Publicá ofertas y productos fácilmente.</li>
+        <li>🛒 Accedé a tu propia tienda online.</li>
+        <li>🚀 Llegá a más clientes con nuestros planes de promoción.</li>
+        <li>💰 Sin comisiones por venta.</li>
       </ul>
-      <p style={{ color: "var(--txt-3)", fontSize: 12.5, marginTop: 10 }}>
-        No cobramos comisión por tus ventas — solo pagás el plan mensual que elijas.
-      </p>
     </div>
   );
 }
 
 function AuthView({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
-  const [mode, setMode] = useState<"login" | "registro">("login");
+  const [mode, setMode] = useState<"login" | "registro">("registro");
   // Abre la pestaña según ?modo=login|registro (sin useSearchParams para no exigir Suspense)
   useEffect(() => {
     const modo = new URLSearchParams(window.location.search).get("modo");
@@ -63,17 +60,20 @@ function AuthView({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
       <div className="wrap" style={{ maxWidth: 480, paddingTop: 56 }}>
         <span className="eyebrow"><span className="dot-live" /> Panel del comercio</span>
         <h1 style={{ fontSize: 30, margin: "10px 0 6px" }}>Publicá tus ofertas</h1>
-        <p style={{ color: "var(--txt-3)", marginBottom: 20 }}>
-          Creá tu cuenta o ingresá; nuestro asistente te ayuda a publicar en segundos.
+        <p style={{ color: "var(--txt-3)", marginBottom: 12 }}>
+          {mode === "registro" ? "Creá tu cuenta; nuestro asistente te ayuda a publicar en segundos." : "Ingresá a tu cuenta."}
         </p>
-
-        <div className="auth-tabs">
-          <button className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>Ingresar</button>
-          <button className={mode === "registro" ? "active" : ""} onClick={() => setMode("registro")}>Crear cuenta</button>
-        </div>
 
         {mode === "registro" && <QueOfrecemos />}
         {mode === "login" ? <LoginForm onLogged={onLogged} /> : <RegistroForm onLogged={onLogged} />}
+
+        <button
+          type="button"
+          onClick={() => setMode(mode === "registro" ? "login" : "registro")}
+          style={{ background: "none", border: "none", color: "var(--neon)", fontSize: 13, padding: 0, marginTop: 14, cursor: "pointer" }}
+        >
+          {mode === "registro" ? "¿Ya tenés cuenta? Ingresá acá" : "¿No tenés cuenta? Creala acá"}
+        </button>
 
         <p style={{ color: "var(--txt-3)", fontSize: 13, marginTop: 18 }}>
           También podés publicar por{" "}

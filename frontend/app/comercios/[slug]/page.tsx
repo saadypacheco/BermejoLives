@@ -100,16 +100,19 @@ export default async function ComercioPage({ params }: { params: { slug: string 
           </div>
         </div>
 
-        {/* PRODUCTOS */}
+        {/* PRODUCTOS (reales, viven en Reservalo — cada uno linkea directo a su ficha) */}
+        {productos.length > 0 && (
+        <>
         <div className="section-head" style={{ marginTop: 40 }}>
           <div><h2 style={{ fontSize: 24 }}>Productos</h2></div>
         </div>
         <div className="product-grid">
           {productos.map((p) => (
             <article className="offer" key={p.id}>
-              {p.foto_url && <div className="media"><img src={p.foto_url} alt={p.nombre} /></div>}
               <div className="body">
-                <h4>{p.nombre}</h4>
+                <a href={p.url ?? undefined} target="_blank" rel="noopener" style={{ color: "inherit" }}>
+                  <h4>{p.nombre}</h4>
+                </a>
                 {p.precio != null && <div className="price">{precioFmt(p.precio, p.moneda)}</div>}
                 <div className="foot">
                   <span className="biz">{comercio.nombre}</span>
@@ -121,6 +124,8 @@ export default async function ComercioPage({ params }: { params: { slug: string 
             </article>
           ))}
         </div>
+        </>
+        )}
 
         <Link className="back-link" href="/" style={{ display: "inline-flex", marginTop: 24 }}>
           <Arrow style={{ transform: "rotate(180deg)" }} /> Volver al inicio

@@ -123,16 +123,16 @@ export const RUBROS: { slug: string; nombre: string }[] = [
   { slug: "otros", nombre: "Otros" },
 ];
 
+// Producto real: vive en Reservalo. Encontralo solo guarda la referencia
+// (producto_ref, migración 0015) — título/precio son caché de display, `url`
+// es el link directo a la ficha en Reservalo.
 export type Producto = {
   id: string;
   comercio_id: string;
   nombre: string;
-  descripcion: string | null;
   precio: number | null;
   moneda: "BOB" | "USD" | "ARS";
-  foto_url: string | null;
-  tiktok_url: string | null;
-  destacado: boolean;
+  url: string | null;
 };
 
 export type FeedItem = {

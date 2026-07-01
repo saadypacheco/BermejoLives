@@ -55,7 +55,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
           </Link>
           <div className="mtop-right">
             <Link href="/mi-comercio" className="mavatar" aria-label="Perfil"><User style={{ width: 20, height: 20 }} /></Link>
-            <Link href="/autoregistro" className="mpublica">Publicá tu negocio <span aria-hidden>↗</span></Link>
+            <Link href="/autoregistro?modo=registro" className="mpublica">Publicá tu negocio <span aria-hidden>↗</span></Link>
           </div>
         </div>
         <form onSubmit={buscar} className="msearch">
@@ -144,8 +144,8 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
       )}
       </div>
 
-      {/* Ofertas cerca tuyo (se oculta cuando hay un local seleccionado) */}
-      {!sel && (
+      {/* Ofertas cerca tuyo: se oculta si hay un local seleccionado, o si ningún comercio tiene ofertas todavía */}
+      {!sel && feed.length > 0 && (
       <div className="moffers">
         <div className="moffers-head"><b>Ofertas cerca tuyo</b><Link href="/buscar">Ver todas</Link></div>
         <div className="moffers-rail">
@@ -163,7 +163,6 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
               </div>
             </Link>
           ))}
-          {feed.length === 0 && <p style={{ color: "var(--txt-3)", fontSize: 14 }}>Pronto, ofertas de los comercios.</p>}
         </div>
       </div>
       )}

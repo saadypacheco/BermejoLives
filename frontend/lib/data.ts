@@ -125,12 +125,19 @@ export async function getComercioBySlug(slug: string): Promise<Comercio | null> 
   return DEMO_COMERCIOS.find((c) => c.slug === slug) ?? DEMO_COMERCIOS[0];
 }
 
+// Productos reales del comercio: viven en Reservalo. Acá leemos la referencia
+// (producto_ref, migración 0015) — solo lo publicado y con link a Reservalo.
 export async function getProductos(comercioId: string): Promise<Producto[]> {
   if (hasSupabase) {
-    const { data } = await supabase.from("productos").select("*").eq("comercio_id", comercioId);
-    if (data) return data as Producto[];
+    const { data } = await supabase
+      .from("producto_ref")
+      .select("id, comercio_id, titulo, precio, moneda, url")
+      .eq("comercio_id", comercioId)
+      .eq("estado", "publicado")
+      .not("url", "is", null);
+    if (data) return data.map((d) => ({ id: d.id, comercio_id: d.comercio_id, nombre: d.titulo, precio: d.precio, moneda: d.moneda, url: d.url })) as Producto[];
   }
-  return DEMO_PRODUCTOS;
+  return [];
 }
 
 export async function getZonas(): Promise<Zona[]> {
@@ -160,13 +167,6 @@ export const DEMO_COMERCIOS: Comercio[] = [
   { ..._demoCampos, id: "c3", slug: "tecno-store", nombre: "Tecno Store", descripcion: "Computadoras, celulares y accesorios.", logo_url: img("teclogo", 200, 200), portada_url: "/comercios4.png", whatsapp: "59170000003", telefono: null, email: null, tiktok_url: null, facebook_url: "https://facebook.com/tecnostore", instagram_url: "https://instagram.com/tecnostore", sitio_web: null, direccion: "Galería Tecnológica, Local 8 · Bermejo", lat: null, lng: null, como_llegar: null, plan: "pro", modalidad: "minorista", rubro_id: null, verificado: false, rating: 4.7, destacado: true, zona_id: "3" },
   { ..._demoCampos, id: "c4", slug: "perfumeria-vip", nombre: "Perfumería VIP", descripcion: "Perfumes importados originales.", logo_url: img("perflogo", 200, 200), portada_url: "/comercios6.png", whatsapp: "59170000004", telefono: null, email: null, tiktok_url: "https://tiktok.com/@perfumeria.vip", facebook_url: null, instagram_url: "https://instagram.com/perfumeria.vip", sitio_web: null, direccion: "Centro Comercial, Local 3 · Bermejo", lat: null, lng: null, como_llegar: null, plan: "premium", modalidad: "minorista", rubro_id: null, verificado: true, rating: 4.9, destacado: true, zona_id: "4" },
   { ..._demoCampos, id: "c5", slug: "calzados-top", nombre: "Calzados Top", descripcion: "Calzado de cuero legítimo.", logo_url: img("calzlogo", 200, 200), portada_url: "/comercio5.png", whatsapp: "59170000005", telefono: null, email: null, tiktok_url: null, facebook_url: "https://facebook.com/calzadostop", instagram_url: null, sitio_web: null, direccion: "Galería Norte, Local 22 · Bermejo", lat: null, lng: null, como_llegar: null, plan: "gratis", modalidad: "ambos", rubro_id: null, verificado: false, rating: 4.6, destacado: true, zona_id: "2" },
-];
-
-export const DEMO_PRODUCTOS: Producto[] = [
-  { id: "p1", comercio_id: "c1", nombre: "iPhone 13 128GB", descripcion: "Sellado, garantía 6 meses", precio: 499, moneda: "USD", foto_url: img("iphone13", 400, 400), tiktok_url: null, destacado: true },
-  { id: "p2", comercio_id: "c1", nombre: 'Smart TV 55" 4K', descripcion: "Última generación", precio: 399, moneda: "USD", foto_url: img("tv55", 400, 400), tiktok_url: null, destacado: true },
-  { id: "p3", comercio_id: "c1", nombre: "Notebook Gamer", descripcion: "Stock limitado", precio: 650, moneda: "USD", foto_url: img("laptop", 400, 400), tiktok_url: null, destacado: false },
-  { id: "p4", comercio_id: "c1", nombre: "AirPods Pro", descripcion: "Originales", precio: 120, moneda: "USD", foto_url: img("airpods", 400, 400), tiktok_url: null, destacado: false },
 ];
 
 export const DEMO_FEED: FeedItem[] = [
