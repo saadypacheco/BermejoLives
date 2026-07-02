@@ -73,8 +73,14 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId }: {
       pintar();
       // el conector pin→tarjeta se redibuja al mover/zoomear el mapa
       map.on("move zoom moveend", drawConnector);
-      // reajustar al tamaño real del contenedor flex y ante cambios de viewport
-      setTimeout(() => { map.invalidateSize(); drawConnector(); }, 150);
+      // El contenedor flex puede terminar de asentar su alto real después del
+      // primer render (chips, fuentes, hidratación) sin que dispare un evento
+      // "resize" de la ventana — sin este observer, map.getSize() queda con un
+      // tamaño viejo y el pin calculado por latLngToContainerPoint (y por lo
+      // tanto la flecha) queda desalineado respecto al DOM real.
+      const ro = new ResizeObserver(() => { map.invalidateSize(); drawConnector(); });
+      ro.observe(elRef.current);
+      (map as any)._ro = ro;
       const onResize = () => { map.invalidateSize(); drawConnector(); };
       window.addEventListener("resize", onResize);
       (map as any)._onResize = onResize;
@@ -91,6 +97,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId }: {
     return () => {
       cancelled = true;
       if (mapRef.current?._onResize) window.removeEventListener("resize", mapRef.current._onResize);
+      mapRef.current?._ro?.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -169,6 +169,11 @@ class FakeRepo:
     def set_comercio_rubros(self, comercio_id, rubro_ids):
         self.comercios[comercio_id]["rubros"] = list(rubro_ids)
 
+    def get_comercio_rubros(self, comercio_id):
+        id_to_slug = {v: k for k, v in self.rubros.items()}
+        crudos = self.comercios.get(comercio_id, {}).get("rubros") or []
+        return [id_to_slug.get(r, r) for r in crudos]
+
     # ---- alta self-service ----
     def slug_existe(self, slug):
         return any(c.get("slug") == slug for c in self.comercios.values())

@@ -37,6 +37,7 @@ _CAMPOS_EDITABLES = {
     "nombre", "descripcion", "whatsapp", "telefono", "email",
     "facebook_url", "instagram_url", "tiktok_url", "sitio_web", "logo_url",
     "direccion", "como_llegar", "horario", "pedido_minimo", "modalidad",
+    "lat", "lng",
 }
 
 
@@ -319,7 +320,14 @@ _CAMPOS_PERFIL = (
     "facebook_url", "instagram_url", "tiktok_url", "sitio_web", "logo_url",
     "portada_url", "direccion", "como_llegar", "horario", "pedido_minimo",
     "modalidad", "monedas_aceptadas", "plan", "verificado", "confiable",
+    "lat", "lng",
 )
+
+
+def _perfil_dict(repo: Repo, comercio: dict) -> dict:
+    out = {k: comercio.get(k) for k in _CAMPOS_PERFIL}
+    out["rubro_slugs"] = repo.get_comercio_rubros(comercio["id"])
+    return out
 
 
 class PerfilUpdate(BaseModel):
@@ -338,6 +346,9 @@ class PerfilUpdate(BaseModel):
     horario: str | None = None
     pedido_minimo: str | None = None
     modalidad: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+    rubro_slugs: list[str] | None = None
 
 
 @router.get("/comercio/perfil")
@@ -347,7 +358,7 @@ def get_perfil(
     comercio = repo.get_comercio(claims["comercio_id"])
     if not comercio:
         raise HTTPException(status_code=404, detail="comercio no encontrado")
-    return {k: comercio.get(k) for k in _CAMPOS_PERFIL}
+    return _perfil_dict(repo, comercio)
 
 
 @router.put("/comercio/perfil")
@@ -356,18 +367,39 @@ def update_perfil(
     claims: dict = Depends(auth.require_comercio),
     repo: Repo = Depends(get_repo),
 ) -> dict:
+    campos = body.model_dump(exclude_unset=True, exclude={"rubro_slugs"})
     # Solo los campos efectivamente enviados, y solo los de la whitelist.
-    patch = {
-        k: v for k, v in body.model_dump(exclude_unset=True).items()
-        if k in _CAMPOS_EDITABLES
-    }
+    patch = {k: v for k, v in campos.items() if k in _CAMPOS_EDITABLES}
     if "modalidad" in patch and patch["modalidad"] not in _MODALIDADES:
         raise HTTPException(status_code=400, detail=f"modalidad inválida: {patch['modalidad']}")
-    if not patch:
+    if not patch and body.rubro_slugs is None:
         raise HTTPException(status_code=400, detail="No hay campos para actualizar")
-    comercio = repo.update_comercio(claims["comercio_id"], patch, None)
+    comercio = repo.update_comercio(claims["comercio_id"], patch, body.rubro_slugs)
     logger.info("comercio.perfil_update", comercio=claims["comercio_id"], campos=list(patch))
-    return {k: comercio.get(k) for k in _CAMPOS_PERFIL}
+    return _perfil_dict(repo, comercio)
+
+
+@router.put("/comercio/perfil/foto")
+async def update_perfil_foto(
+    foto: UploadFile = File(...),
+    claims: dict = Depends(auth.require_comercio),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    comercio = repo.get_comercio(claims["comercio_id"])
+    if not comercio:
+        raise HTTPException(status_code=404, detail="comercio no encontrado")
+    data = await foto.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Falta la foto")
+    try:
+        portada_url = subir_foto_comercio(comercio["slug"], data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not portada_url:
+        raise HTTPException(status_code=502, detail="No se pudo subir la foto, probá de nuevo")
+    updated = repo.update_comercio(claims["comercio_id"], {"portada_url": portada_url}, None)
+    logger.info("comercio.perfil_foto_update", comercio=claims["comercio_id"])
+    return _perfil_dict(repo, updated)
 
 
 def _estado_suscripcion(comercio: dict) -> dict:
@@ -593,6 +625,7 @@ async def crear_producto(
     await run_in_threadpool(client.upsert_vendedor, comercio["id"], {
         "nombre": comercio["nombre"], "slug": comercio["slug"],
         "whatsapp": comercio.get("whatsapp"), "activo": True,
+        "lat": comercio.get("lat"), "lng": comercio.get("lng"),
     })
     res = await run_in_threadpool(client.crear_producto, comercio["id"], {
         "nombre": titulo.strip(), "precio": precio, "moneda": moneda,

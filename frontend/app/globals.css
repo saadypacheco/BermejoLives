@@ -322,6 +322,7 @@
 .mcard-info p { color: var(--txt-3); font-size: 13.5px; margin: 3px 0 6px; }
 .mcard-line { font-size: 13.5px; color: var(--txt-2); margin-top: 2px; }
 .mcard-line.star { color: var(--amber); font-weight: 700; }
+.mcard-dist { color: var(--txt-3); font-weight: 500; margin-left: 4px; }
 .mcard-act { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
 .mcard-icons { display: flex; gap: 8px; }
 .mab { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--bg); border: 1px solid var(--stroke); color: var(--txt); }

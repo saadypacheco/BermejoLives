@@ -188,6 +188,9 @@ export type Perfil = {
   plan?: string | null;
   verificado?: boolean;
   confiable?: boolean;
+  lat?: number | null;
+  lng?: number | null;
+  rubro_slugs?: string[];
 };
 
 export type Suscripcion = {
@@ -210,6 +213,19 @@ export type Metricas = {
 export const getPerfil = (): Promise<Perfil> => cFetch("/comercio/perfil");
 export const updatePerfil = (patch: Partial<Perfil>): Promise<Perfil> =>
   cFetch("/comercio/perfil", { method: "PUT", body: JSON.stringify(patch) });
+
+export async function subirFotoPerfil(foto: File): Promise<Perfil> {
+  const fd = new FormData();
+  fd.append("foto", foto);
+  const res = await fetch(`${API}/comercio/perfil/foto`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${getCToken() ?? ""}` },
+    body: fd,
+  });
+  if (res.status === 401) { clearComercio(); throw new Error("Tu sesión venció, volvé a entrar."); }
+  if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.detail ?? "No se pudo subir la foto"); }
+  return res.json();
+}
 export const getSuscripcion = (): Promise<Suscripcion> => cFetch("/comercio/suscripcion");
 export const getMetricas = (): Promise<Metricas> => cFetch("/comercio/metricas");
 

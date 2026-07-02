@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { HomeMap } from "@/components/home-map";
@@ -8,6 +8,7 @@ import { WhatsApp, Phone, Send, User, Search } from "@/components/icons";
 import { type ComercioMapa } from "@/lib/data";
 import { type FeedItem, precioFmt, vencimientoFmt } from "@/lib/types";
 import { registrarLead } from "@/lib/campo";
+import { distanciaMetros, formatDistancia } from "@/lib/distancia";
 
 const CHIPS: { label: string; rubro: string }[] = [
   { label: "Todos", rubro: "" },
@@ -23,7 +24,21 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
   const [sel, setSel] = useState<ComercioMapa | null>(null);
+  const [miUbicacion, setMiUbicacion] = useState<{ lat: number; lng: number } | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setMiUbicacion({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {},
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
+    );
+  }, []);
+
+  const distanciaSel = sel && miUbicacion && sel.lat != null && sel.lng != null
+    ? distanciaMetros(miUbicacion.lat, miUbicacion.lng, sel.lat, sel.lng)
+    : null;
   // Negocios que tienen al menos una oferta en el feed
   const offerSlugs = new Set(feed.map((f) => f.comercio_slug));
   let filtered = cat ? comercios.filter((c) => c.rubro_slug === cat) : comercios;
@@ -107,7 +122,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
               </div>
               {sel.descripcion && <p>{sel.descripcion}</p>}
               {sel.horario && <div className="mcard-line">🕐 {sel.horario}</div>}
-              <div className="mcard-line star">★ {sel.rating}</div>
+              <div className="mcard-line star">★ {sel.rating}{distanciaSel != null && <span className="mcard-dist">· 📍 {formatDistancia(distanciaSel)}</span>}</div>
             </div>
           </div>
           <div className="mcard-act">
@@ -128,7 +143,12 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
                   <Link key={o.id} href={`/comercios/${o.comercio_slug}`} className="mco">
                     <div className="mco-img">
                       {o.descuento_pct != null && <span className="off-badge">-{o.descuento_pct}%</span>}
-                      {o.imagen_url && <img src={o.imagen_url} alt="" loading="lazy" decoding="async" />}
+                      {o.imagen_url && (
+                        <img
+                          src={o.imagen_url} alt="" loading="lazy" decoding="async"
+                          onError={(e) => { e.currentTarget.style.display = "none"; }}
+                        />
+                      )}
                     </div>
                     <div className="mco-b">
                       <b>{o.titulo}</b>

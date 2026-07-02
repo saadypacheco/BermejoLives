@@ -21,13 +21,15 @@ const Logout = ic("M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9
 const Tag = ic("M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01");
 import {
   comercioLogin, getComercioSession, clearComercio,
-  getPerfil, updatePerfil, getSuscripcion, getMetricas, pagarSuscripcion,
+  getPerfil, updatePerfil, subirFotoPerfil, getSuscripcion, getMetricas, pagarSuscripcion,
   draftProducto, listProductos, crearProducto, borrarProducto, destacarProducto,
   getMensajes, marcarLeido,
   getMisPublicaciones, editarPublicacion, bajaPublicacion,
   type ComercioSession, type Perfil, type Suscripcion, type Metricas,
   type ProductoDraft, type ProductoRef, type Mensaje, type Publicacion,
 } from "@/lib/comercio";
+import { comprimirImagen } from "@/lib/imagen";
+import { RUBROS } from "@/lib/types";
 
 export default function MiComercioPage() {
   const [sess, setSess] = useState<ComercioSession | null>(null);
@@ -208,7 +210,10 @@ function Overview({ onEditar, onProductos, onPlanes }: { onEditar: () => void; o
               <h2 style={{ fontSize: 26, margin: "8px 0 6px" }}>{p.nombre}</h2>
               <span style={{ background: "rgba(91,157,255,.12)", color: "var(--blue-soft)", fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 999 }}>{MODA_LABEL[p.modalidad ?? "mayorista"]}</span>
             </div>
-            <button className="btn" onClick={onEditar} style={{ border: "1px solid var(--stroke)", alignSelf: "flex-start", whiteSpace: "nowrap" }}><Edit style={{ width: 15, height: 15 }} /> Editar información</button>
+            <div style={{ display: "flex", gap: 8, alignSelf: "flex-start" }}>
+              <button className="btn" onClick={onEditar} style={{ border: "1px solid var(--stroke)", whiteSpace: "nowrap" }}><Edit style={{ width: 15, height: 15 }} /> Editar información</button>
+              <Link href="/autoregistro" className="btn btn-primary" style={{ whiteSpace: "nowrap" }}><Send style={{ width: 15, height: 15 }} /> Publicar servicio/oferta</Link>
+            </div>
           </div>
           <p style={{ color: "var(--txt-2)", margin: "12px 0", maxWidth: 560 }}>{p.descripcion}</p>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -505,6 +510,19 @@ const MODALIDAD_OPT: { v: string; t: string }[] = [
   { v: "mayorista", t: "Mayorista" }, { v: "minorista", t: "Minorista" }, { v: "ambos", t: "Mayor y menor" },
 ];
 
+function ChipToggle({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      padding: "6px 12px", borderRadius: 20, fontSize: 13, border: "1px solid",
+      borderColor: active ? "var(--neon)" : "var(--stroke)",
+      background: active ? "rgba(57,255,158,.12)" : "transparent",
+      color: active ? "var(--neon)" : "var(--txt-2)", cursor: "pointer",
+    }}>
+      {label}
+    </button>
+  );
+}
+
 // Fila editable estilo lista (no caja de formulario)
 function CampoRow({ label, value, onChange, ph }: {
   label: string; value: string; onChange: (v: string) => void; ph: string;
@@ -520,28 +538,77 @@ function CampoRow({ label, value, onChange, ph }: {
 
 function PerfilTab() {
   const [perfil, setPerfil] = useState<Perfil | null>(null);
+  const [rubroSlugs, setRubroSlugs] = useState<string[]>([]);
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { getPerfil().then(setPerfil).catch((e) => setErr(e.message)); }, []);
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+  const [fotoErr, setFotoErr] = useState("");
+
+  const [geoMsg, setGeoMsg] = useState("");
+  const [ubicando, setUbicando] = useState(false);
+
+  useEffect(() => {
+    getPerfil().then((p) => { setPerfil(p); setRubroSlugs(p.rubro_slugs ?? []); }).catch((e) => setErr(e.message));
+  }, []);
   const set = (k: keyof Perfil, v: string) => setPerfil((p) => (p ? { ...p, [k]: v } : p));
+
+  // Lo que falta completar (todo opcional, pero se lo mostramos como pendiente).
+  const faltantes = perfil ? [
+    !perfil.portada_url && "Foto del negocio",
+    !(perfil.lat && perfil.lng) && "Ubicación",
+    rubroSlugs.length === 0 && "Categoría",
+    !perfil.email && "Email",
+    !perfil.direccion && "Dirección",
+    !perfil.horario && "Horario",
+    ![perfil.instagram_url, perfil.facebook_url, perfil.tiktok_url, perfil.sitio_web].some(Boolean) && "Redes sociales",
+  ].filter(Boolean) as string[] : [];
 
   async function guardar() {
     if (!perfil) return;
     setSaving(true); setErr(""); setMsg("");
     try {
-      const patch = Object.fromEntries(EDITABLES.map((k) => [k, perfil[k] ?? ""]));
+      const patch: Record<string, unknown> = Object.fromEntries(EDITABLES.map((k) => [k, perfil[k] ?? ""]));
+      if (perfil.lat != null) patch.lat = perfil.lat;
+      if (perfil.lng != null) patch.lng = perfil.lng;
+      patch.rubro_slugs = rubroSlugs;
       const upd = await updatePerfil(patch);
-      setPerfil(upd); setMsg("Guardado ✓");
+      setPerfil(upd); setRubroSlugs(upd.rubro_slugs ?? rubroSlugs); setMsg("Guardado ✓");
       setTimeout(() => setMsg(""), 2500);
     } catch (e) { setErr(e instanceof Error ? e.message : "No se pudo guardar"); }
     finally { setSaving(false); }
   }
 
+  async function onFoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    if (!file) return;
+    setFotoErr(""); setSubiendoFoto(true);
+    try {
+      const comprimida = await comprimirImagen(file);
+      const upd = await subirFotoPerfil(comprimida);
+      setPerfil(upd);
+    } catch (ex) { setFotoErr(ex instanceof Error ? ex.message : "No se pudo subir la foto"); }
+    finally { setSubiendoFoto(false); }
+  }
+
+  function ubicar() {
+    setGeoMsg(""); setUbicando(true);
+    if (!navigator.geolocation) { setGeoMsg("Este dispositivo no tiene GPS disponible."); setUbicando(false); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setPerfil((p) => (p ? { ...p, lat: pos.coords.latitude, lng: pos.coords.longitude } : p));
+        setUbicando(false);
+      },
+      (e) => { setGeoMsg(e.code === 1 ? "Permiso denegado. Activá la ubicación." : "No se pudo obtener la ubicación."); setUbicando(false); },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }
+
   if (err && !perfil) return <p style={{ color: "var(--pink)" }}>{err}</p>;
   if (!perfil) return <p style={{ color: "var(--txt-3)" }}>Cargando…</p>;
   const inicial = (perfil.nombre || "?").trim().charAt(0).toUpperCase();
+  const foto = perfil.portada_url || perfil.logo_url;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -550,14 +617,27 @@ function PerfilTab() {
           Tu comercio está <b>pendiente de verificación</b>. Mientras tanto tus ofertas pasan por moderación.
         </div>
       )}
+      {faltantes.length > 0 && (
+        <div style={{ fontSize: 13, color: "var(--blue-soft)", background: "rgba(91,157,255,.08)", padding: "10px 12px", borderRadius: 10 }}>
+          Te falta completar (opcional, pero ayuda a que te encuentren más): <b>{faltantes.join(" · ")}</b>
+        </div>
+      )}
 
       {/* VIDRIERA — preview vivo, editás acá mismo */}
       <div>
         <div className="glass" style={{ padding: 20, borderRadius: 18, background: "linear-gradient(160deg, rgba(57,255,158,.06), transparent 60%)" }}>
           <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-            {perfil.logo_url
-              ? <img src={perfil.logo_url} alt="" style={{ width: 58, height: 58, borderRadius: 16, objectFit: "cover", flexShrink: 0 }} />
-              : <div style={{ width: 58, height: 58, borderRadius: 16, flexShrink: 0, display: "grid", placeItems: "center", background: "rgba(57,255,158,.14)", color: "var(--neon)", fontSize: 26, fontWeight: 800 }}>{inicial}</div>}
+            <label style={{ position: "relative", width: 58, height: 58, flexShrink: 0, cursor: "pointer" }}>
+              {foto
+                ? <img src={foto} alt="" style={{ width: 58, height: 58, borderRadius: 16, objectFit: "cover" }} />
+                : <div style={{ width: 58, height: 58, borderRadius: 16, display: "grid", placeItems: "center", background: "rgba(57,255,158,.14)", color: "var(--neon)", fontSize: 26, fontWeight: 800 }}>{inicial}</div>}
+              <div style={{ position: "absolute", inset: 0, borderRadius: 16, background: "rgba(0,0,0,.45)", display: "grid", placeItems: "center", opacity: subiendoFoto ? 1 : 0, transition: "opacity .15s" }}
+                onMouseEnter={(e) => { if (!subiendoFoto) e.currentTarget.style.opacity = "1"; }}
+                onMouseLeave={(e) => { if (!subiendoFoto) e.currentTarget.style.opacity = "0"; }}>
+                <Edit style={{ width: 16, height: 16, color: "#fff" }} />
+              </div>
+              <input type="file" accept="image/*" hidden onChange={onFoto} disabled={subiendoFoto} />
+            </label>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <input value={perfil.nombre ?? ""} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre de tu comercio"
@@ -570,6 +650,8 @@ function PerfilTab() {
               </select>
             </div>
           </div>
+          {subiendoFoto && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 8 }}>Subiendo foto…</div>}
+          {fotoErr && <div style={{ fontSize: 12, color: "var(--pink)", marginTop: 8 }}>{fotoErr}</div>}
           <textarea value={perfil.descripcion ?? ""} onChange={(e) => set("descripcion", e.target.value)} rows={2}
             placeholder="Contá qué vendés, en una línea o dos…"
             style={{ width: "100%", marginTop: 12, background: "transparent", border: "none", outline: "none", resize: "none", color: "var(--txt-2)", fontSize: 15, lineHeight: 1.5 }} />
@@ -578,7 +660,34 @@ function PerfilTab() {
             <span style={{ background: "var(--panel)", color: "var(--txt-2)", padding: "6px 12px", borderRadius: 10, fontSize: 13, fontWeight: 700 }}>📍 Cómo llegar</span>
           </div>
         </div>
-        <div style={{ fontSize: 12, color: "var(--txt-3)", textAlign: "center", marginTop: 8 }}>✎ Así te ven tus clientes — editá tocando arriba</div>
+        <div style={{ fontSize: 12, color: "var(--txt-3)", textAlign: "center", marginTop: 8 }}>✎ Así te ven tus clientes — tocá la foto o el texto para editar</div>
+      </div>
+
+      {/* CATEGORÍA */}
+      <div className="glass" style={{ padding: "14px 18px", borderRadius: 16 }}>
+        <div style={{ fontSize: 12, color: "var(--txt-3)", fontWeight: 700, marginBottom: 10 }}>CATEGORÍA</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {RUBROS.map((r) => (
+            <ChipToggle key={r.slug} label={r.nombre} active={rubroSlugs.includes(r.slug)}
+              onClick={() => setRubroSlugs((s) => s.includes(r.slug) ? s.filter((x) => x !== r.slug) : [...s, r.slug])} />
+          ))}
+        </div>
+      </div>
+
+      {/* UBICACIÓN */}
+      <div className="glass" style={{ padding: "14px 18px", borderRadius: 16 }}>
+        <div style={{ fontSize: 12, color: "var(--txt-3)", fontWeight: 700, marginBottom: 10 }}>UBICACIÓN</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button type="button" className="btn btn-sm" style={{ border: "1px solid var(--stroke)" }} onClick={ubicar} disabled={ubicando}>
+            {ubicando ? "Obteniendo…" : perfil.lat && perfil.lng ? "📍 Ubicación cargada — actualizar" : "📍 Usar mi ubicación actual"}
+          </button>
+          {perfil.lat && perfil.lng && (
+            <a href={`https://www.google.com/maps/search/?api=1&query=${perfil.lat},${perfil.lng}`} target="_blank" rel="noopener" style={{ fontSize: 13, color: "var(--blue-soft)" }}>
+              Ver en el mapa
+            </a>
+          )}
+        </div>
+        {geoMsg && <div style={{ fontSize: 12.5, color: "var(--amber)", marginTop: 6 }}>{geoMsg}</div>}
       </div>
 
       {/* CONTACTO */}
@@ -599,6 +708,7 @@ function PerfilTab() {
 
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button className="btn btn-primary" onClick={guardar} disabled={saving}>{saving ? "Guardando…" : "Guardar cambios"}</button>
+        <Link href="/autoregistro" className="btn" style={{ border: "1px solid var(--stroke)" }}><Send style={{ width: 15, height: 15 }} /> Publicar servicio/oferta</Link>
         {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
         {msg && <span style={{ color: "var(--neon)", fontSize: 13 }}>{msg}</span>}
       </div>

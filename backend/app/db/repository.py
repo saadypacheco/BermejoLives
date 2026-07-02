@@ -34,6 +34,7 @@ class Repo(Protocol):
     def crear_comercio(self, row: dict) -> dict: ...
     def crear_comercio_usuario(self, row: dict) -> dict: ...
     def set_comercio_rubros(self, comercio_id: str, rubro_ids: list[str]) -> None: ...
+    def get_comercio_rubros(self, comercio_id: str) -> list[str]: ...
     def insert_lead(self, row: dict) -> None: ...
     def list_leads_by_comercio(self, comercio_id: str, dias: int) -> list[dict]: ...
     def stats_admin(self) -> dict: ...
@@ -224,6 +225,15 @@ class SupabaseRepo:
         rows = [{"comercio_id": comercio_id, "rubro_id": rid} for rid in rubro_ids if rid]
         if rows:
             self._db.table("comercio_rubros").upsert(rows).execute()
+
+    def get_comercio_rubros(self, comercio_id: str) -> list[str]:
+        res = (
+            self._db.table("comercio_rubros")
+            .select("rubros(slug)")
+            .eq("comercio_id", comercio_id)
+            .execute()
+        )
+        return [row["rubros"]["slug"] for row in (res.data or []) if row.get("rubros")]
 
     # ---- moderación ----
     def list_publicaciones(self, estado: str | None) -> list[dict]:
