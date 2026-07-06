@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { agenteLogin, getAgenteToken, clearAgente, altaComercioCampo, transcribirAudio, sugerirRubros } from "@/lib/campo";
+import { agenteLogin, getAgenteToken, clearAgente, altaComercioCampo, transcribirAudio, sugerirRubros, misComercios, type ComercioAgente } from "@/lib/campo";
 import { getCiudades, getRubros } from "@/lib/data";
 import type { Ciudad, Rubro } from "@/lib/types";
 import { Pin, User } from "@/components/icons";
 import { comprimirImagen } from "@/lib/imagen";
+import { geoErrorMsg } from "@/lib/geo";
 
 // Prefijo telefónico según país
 const PREFIJO: Record<string, string> = { Bolivia: "591", Argentina: "54" };
@@ -21,9 +22,59 @@ const MAX_INTENTOS_AUDIO = 2;
 // ─────────────────────────────────────────────
 export default function CampoPage() {
   const [authed, setAuthed] = useState(false);
+  const [vista, setVista] = useState<"form" | "lista">("form");
   useEffect(() => setAuthed(Boolean(getAgenteToken())), []);
   if (!authed) return <Login onOk={() => setAuthed(true)} />;
-  return <FormCampo onLogout={() => { clearAgente(); setAuthed(false); }} />;
+  const onLogout = () => { clearAgente(); setAuthed(false); };
+  if (vista === "lista") return <MisComercios onVolver={() => setVista("form")} onLogout={onLogout} />;
+  return <FormCampo onLogout={onLogout} onVerMisComercios={() => setVista("lista")} />;
+}
+
+// ─────────────────────────────────────────────
+function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: () => void }) {
+  const [items, setItems] = useState<ComercioAgente[] | null>(null);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    misComercios().then(setItems).catch((e) => setErr(e instanceof Error ? e.message : "Error"));
+  }, []);
+
+  return (
+    <div className="campo-wrap">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div>
+          <span className="eyebrow"><Pin style={{ width: 13, height: 13 }} /> Mis negocios cargados</span>
+          {items && <div style={{ fontSize: 12, color: "var(--neon)" }}>{items.length} en total</div>}
+        </div>
+        <button className="link-more" onClick={onLogout} style={{ padding: "6px 12px" }}>Salir</button>
+      </div>
+
+      <button className="btn btn-ghost" style={{ width: "100%", marginBottom: 14 }} onClick={onVolver}>
+        + Cargar otro negocio
+      </button>
+
+      {err && <p style={{ color: "var(--pink)", fontSize: 13 }}>{err}</p>}
+      {!items && !err && <p style={{ color: "var(--txt-3)" }}>Cargando…</p>}
+      {items && items.length === 0 && <p style={{ color: "var(--txt-3)" }}>Todavía no cargaste ningún negocio.</p>}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {items?.map((c) => (
+          <div key={c.id} className="glass" style={{ padding: 14, borderRadius: 14, display: "flex", gap: 12, alignItems: "center" }}>
+            <div style={{ width: 48, height: 48, borderRadius: 10, overflow: "hidden", background: "var(--panel)", flexShrink: 0, display: "grid", placeItems: "center", fontSize: 20 }}>
+              {c.portada_url ? <img src={c.portada_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "🏪"}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nombre}</div>
+              <div style={{ fontSize: 12.5, color: "var(--txt-3)" }}>{c.rubros?.nombre ?? "Sin rubro"}{c.direccion ? ` · ${c.direccion}` : ""}</div>
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: c.verificado ? "var(--neon)" : "var(--amber)", background: c.verificado ? "rgba(57,255,158,.12)" : "rgba(255,176,32,.12)" }}>
+              {c.verificado ? "Verificado" : "Pendiente"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────
@@ -92,7 +143,7 @@ function ciudadMasCercana(ciudades: Ciudad[], lat: number, lng: number): Ciudad 
   return mejor;
 }
 
-function FormCampo({ onLogout }: { onLogout: () => void }) {
+function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVerMisComercios: () => void }) {
   const [ciudades, setCiudades] = useState<Ciudad[]>([]);
   const [rubros,   setRubros]   = useState<Rubro[]>([]);
 
@@ -186,7 +237,7 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
           setPrefijo(PREFIJO[cercana.pais] ?? "591");
         }
       },
-      (e) => setGeoMsg(e.code === 1 ? "Permiso denegado. Activá la ubicación." : "No se pudo obtener la ubicación."),
+      (e) => setGeoMsg(geoErrorMsg(e)),
       { enableHighAccuracy: true, timeout: 10000 },
     );
   }
@@ -252,7 +303,8 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
           {ciudadActual ? `${ciudadActual.nombre} · ` : ""}Pendiente de verificar.
         </p>
         <p style={{ color: "var(--txt-3)", marginBottom: 22 }}>Llevás {count} en este recorrido.</p>
-        <button className="btn btn-primary" style={{ width: "100%" }} onClick={otro}>Cargar otro negocio</button>
+        <button className="btn btn-primary" style={{ width: "100%", marginBottom: 10 }} onClick={otro}>Cargar otro negocio</button>
+        <button className="link-more" onClick={onVerMisComercios}>Ver mis negocios cargados</button>
       </div>
     );
   }
@@ -266,7 +318,10 @@ function FormCampo({ onLogout }: { onLogout: () => void }) {
           <span className="eyebrow"><Pin style={{ width: 13, height: 13 }} /> Carga de negocios</span>
           {count > 0 && <div style={{ fontSize: 12, color: "var(--neon)" }}>{count} cargados hoy</div>}
         </div>
-        <button className="link-more" onClick={onLogout} style={{ padding: "6px 12px" }}>Salir</button>
+        <div style={{ display: "flex", gap: 4 }}>
+          <button className="link-more" onClick={onVerMisComercios} style={{ padding: "6px 12px" }}>Mis negocios</button>
+          <button className="link-more" onClick={onLogout} style={{ padding: "6px 12px" }}>Salir</button>
+        </div>
       </div>
 
       <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 14 }}>

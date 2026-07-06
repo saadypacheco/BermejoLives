@@ -64,6 +64,25 @@ export async function altaComercioCampo(form: FormData): Promise<AltaCampoResult
   return res.json();
 }
 
+export type ComercioAgente = {
+  id: string; slug: string; nombre: string; whatsapp: string; modalidad: string | null;
+  direccion: string | null; portada_url: string | null; verificado: boolean; created_at: string;
+  rubros?: { nombre: string; slug: string } | null;
+};
+
+/** Comercios que este agente dio de alta, para que vea su propio recorrido. */
+export async function misComercios(): Promise<ComercioAgente[]> {
+  const res = await fetch(`${API}/campo/mis-comercios`, {
+    headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` },
+  });
+  if (res.status === 401) {
+    clearAgente();
+    throw new Error("Sesión vencida, volvé a entrar");
+  }
+  if (!res.ok) throw new Error("No se pudo cargar el listado");
+  return (await res.json()).items as ComercioAgente[];
+}
+
 /** Registra un click de contacto (WhatsApp, teléfono, etc.) para un comercio. */
 export async function registrarLead(comercio_id: string, tipo: "whatsapp" | "telefono" | "email" | "web" = "whatsapp"): Promise<void> {
   // Fire-and-forget: no bloqueamos la navegación del usuario

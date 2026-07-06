@@ -53,6 +53,31 @@ def test_alta_campo_crea_comercio_pendiente(client, repo):
     assert com["lat"] == -22.7361
 
 
+def test_mis_comercios_lista_solo_los_del_agente(client, repo):
+    token = _agente_token(client)
+    client.post(
+        "/campo/comercio",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"nombre": "Gomería El Rápido", "whatsapp": "59170002222",
+              "modalidad": "minorista", "lat": "-22.7361", "lng": "-64.3433",
+              "descripcion": "Gomería y venta de repuestos de moto"},
+        files=_foto_test(),
+    )
+    # Un comercio de otro origen (no cargado por este agente) no debe aparecer
+    repo.crear_comercio({"nombre": "Otro", "slug": "otro", "cargado_por": "otro@x.com"})
+
+    r = client.get("/campo/mis-comercios", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200, r.text
+    items = r.json()["items"]
+    assert len(items) == 1
+    assert items[0]["nombre"] == "Gomería El Rápido"
+
+
+def test_mis_comercios_sin_token_401(client):
+    r = client.get("/campo/mis-comercios")
+    assert r.status_code == 401
+
+
 def test_alta_campo_sin_token_401(client):
     r = client.post("/campo/comercio", data={"nombre": "X", "whatsapp": "1", "rubro_slug": "otros"})
     assert r.status_code == 401

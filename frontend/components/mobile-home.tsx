@@ -131,7 +131,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
               {sel.telefono && <a className="mab" href={`tel:${sel.telefono}`} aria-label="Llamar" onClick={() => registrarLead(sel.id, "telefono")}><Phone style={{ width: 18, height: 18 }} /></a>}
               <a className="mab" href={sel.como_llegar ?? `https://www.google.com/maps/search/?api=1&query=${sel.lat},${sel.lng}`} target="_blank" rel="noopener" aria-label="Cómo llegar"><Send style={{ width: 18, height: 18 }} /></a>
             </div>
-            <Link className="btn btn-primary mver" href={`/comercios/${sel.slug}`}>Ver tienda</Link>
+            <Link className="btn btn-primary mver" href={`/comercios/${sel.slug}`}>Ver información</Link>
           </div>
 
           {/* Ofertas de este negocio (si tiene) */}

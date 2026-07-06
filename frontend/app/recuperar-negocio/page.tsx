@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { buscarComercioPorNombre, solicitarCambioNumero, type ComercioBusqueda } from "@/lib/comercio";
 import { comprimirImagen } from "@/lib/imagen";
+import { geoErrorMsg } from "@/lib/geo";
 
 export default function RecuperarNegocioPage() {
   const [comercio, setComercio] = useState<ComercioBusqueda | null>(null);
@@ -105,7 +106,7 @@ function SolicitudForm({ comercio, onEnviado, onVolver }: { comercio: ComercioBu
     if (!navigator.geolocation) { setGeoMsg("Este dispositivo no tiene GPS disponible."); return; }
     navigator.geolocation.getCurrentPosition(
       (pos) => { setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGeoMsg(""); },
-      (e) => setGeoMsg(e.code === 1 ? "Permiso denegado. Activá la ubicación." : "No se pudo obtener la ubicación."),
+      (e) => setGeoMsg(geoErrorMsg(e)),
       { enableHighAccuracy: true, timeout: 10000 },
     );
   }

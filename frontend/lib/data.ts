@@ -120,7 +120,15 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
 export async function getComercioBySlug(slug: string): Promise<Comercio | null> {
   if (hasSupabase) {
     const { data } = await supabase.from("comercios").select("*").eq("slug", slug).limit(1);
-    if (data && data[0]) return data[0] as Comercio;
+    const comercio = data?.[0] as Comercio | undefined;
+    if (!comercio) return null;
+    // Query chica aparte (no embed) — mismo motivo que getComerciosMapa: el
+    // embed sobre "comercios" es lento por el import OSM masivo de esa tabla.
+    if (comercio.rubro_id) {
+      const { data: rubro } = await supabase.from("rubros").select("slug, nombre").eq("id", comercio.rubro_id).limit(1);
+      if (rubro?.[0]) { comercio.rubro_slug = rubro[0].slug; comercio.rubro_nombre = rubro[0].nombre; }
+    }
+    return comercio;
   }
   return DEMO_COMERCIOS.find((c) => c.slug === slug) ?? DEMO_COMERCIOS[0];
 }

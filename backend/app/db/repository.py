@@ -61,6 +61,7 @@ class Repo(Protocol):
     def list_reclamos(self, estado: str | None) -> list[dict]: ...
     def responder_reclamo(self, reclamo_id: str, respuesta: str, by: str) -> dict | None: ...
     def buscar_comercios_por_nombre(self, q: str) -> list[dict]: ...
+    def list_comercios_por_agente(self, email: str, limit: int) -> list[dict]: ...
     def crear_solicitud_cambio_numero(self, row: dict) -> dict: ...
     def list_solicitudes_cambio_numero(self, estado: str | None) -> list[dict]: ...
     def aprobar_solicitud_cambio_numero(self, solicitud_id: str, by: str) -> dict | None: ...
@@ -260,7 +261,7 @@ class SupabaseRepo:
 
     # ---- moderación de comercios (alta de campo) ----
     def list_comercios_admin(self, verificado: bool | None) -> list[dict]:
-        q = self._db.table("comercios").select("*, rubros(nombre)").eq("activo", True)
+        q = self._db.table("comercios").select("*, rubros!comercios_rubro_id_fkey(nombre)").eq("activo", True)
         if verificado is not None:
             q = q.eq("verificado", verificado)
         res = q.order("created_at", desc=True).limit(200).execute()
@@ -553,12 +554,26 @@ class SupabaseRepo:
             self._db.table("comercios")
             .select("id, slug, nombre, whatsapp, modalidad, descripcion, direccion, lat, lng, "
                     "verificado, suspendido, paga_hasta, portada_url, created_at, "
-                    "rubros(nombre, slug), ciudades(nombre, slug)")
+                    "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug)")
             .eq("activo", True)
         )
         if verificado is not None:
             q = q.eq("verificado", verificado)
         res = q.order("created_at", desc=True).limit(limit).execute()
+        return res.data or []
+
+    def list_comercios_por_agente(self, email: str, limit: int = 200) -> list[dict]:
+        """Comercios que este agente de campo dio de alta (para que vea su propio recorrido)."""
+        res = (
+            self._db.table("comercios")
+            .select("id, slug, nombre, whatsapp, modalidad, direccion, portada_url, "
+                    "verificado, created_at, rubros!comercios_rubro_id_fkey(nombre, slug)")
+            .eq("cargado_por", email)
+            .eq("activo", True)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
         return res.data or []
 
     def update_comercio(self, comercio_id: str, patch: dict, rubro_slugs: list[str] | None) -> dict:

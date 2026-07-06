@@ -30,6 +30,7 @@ import {
 } from "@/lib/comercio";
 import { comprimirImagen } from "@/lib/imagen";
 import { RUBROS } from "@/lib/types";
+import { geoErrorMsg } from "@/lib/geo";
 
 export default function MiComercioPage() {
   const [sess, setSess] = useState<ComercioSession | null>(null);
@@ -600,7 +601,7 @@ function PerfilTab() {
         setPerfil((p) => (p ? { ...p, lat: pos.coords.latitude, lng: pos.coords.longitude } : p));
         setUbicando(false);
       },
-      (e) => { setGeoMsg(e.code === 1 ? "Permiso denegado. Activá la ubicación." : "No se pudo obtener la ubicación."); setUbicando(false); },
+      (e) => { setGeoMsg(geoErrorMsg(e)); setUbicando(false); },
       { enableHighAccuracy: true, timeout: 10000 },
     );
   }

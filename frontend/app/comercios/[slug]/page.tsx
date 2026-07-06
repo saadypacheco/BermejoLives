@@ -45,6 +45,9 @@ export default async function ComercioPage({ params }: { params: { slug: string 
               {comercio.verificado && <span className="pverif" title="Negocio verificado"><Verified /></span>}
             </h1>
             <div className="meta">
+              {comercio.rubro_nombre && (
+                <span className="pill" style={{ color: "var(--neon)" }}>{comercio.rubro_nombre}</span>
+              )}
               {comercio.direccion && <span><Pin />{comercio.direccion}</span>}
               <span style={{ color: "var(--amber)" }}>★ {comercio.rating}</span>
               {comercio.modalidad && (
@@ -94,9 +97,9 @@ export default async function ComercioPage({ params }: { params: { slug: string 
           <MensajeComercioForm comercioId={comercio.id} nombre={comercio.nombre} />
 
           <div className="info-card glass" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <h3>¿Problema con este negocio?</h3>
-            <p style={{ color: "var(--txt-3)", fontSize: 13 }}>Si tuviste un inconveniente, contanos y lo revisamos.</p>
-            <Link className="btn btn-ghost btn-sm" href={`/reclamos?comercio_id=${comercio.id}&nombre_comercio=${encodeURIComponent(comercio.nombre)}`}>Dejar un reclamo</Link>
+            <h3>Comentarios y sugerencias</h3>
+            <p style={{ color: "var(--txt-3)", fontSize: 13 }}>¿Tuviste un inconveniente o querés dejar algún comentario sobre este negocio? Contanos.</p>
+            <Link className="btn btn-ghost btn-sm" href={`/reclamos?comercio_id=${comercio.id}&nombre_comercio=${encodeURIComponent(comercio.nombre)}`}>Dejar un comentario</Link>
           </div>
         </div>
 

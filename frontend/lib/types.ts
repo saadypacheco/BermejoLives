@@ -32,6 +32,8 @@ export type Comercio = {
   destacado: boolean;
   zona_id: string | null;
   rubro_id: string | null;
+  rubro_slug?: string | null;
+  rubro_nombre?: string | null;
   ciudad_id: string | null;
   // Campos fronterizos (migration 0011)
   monedas_aceptadas: string[] | null;

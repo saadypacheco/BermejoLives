@@ -161,6 +161,10 @@ class FakeRepo:
         self.comercios[cid] = full
         return full
 
+    def list_comercios_por_agente(self, email, limit=200):
+        items = [c for c in self.comercios.values() if c.get("cargado_por") == email]
+        return items[:limit]
+
     def crear_comercio_usuario(self, row):
         full = {"id": self._id("usr"), "activo": True, "email": None, "password_hash": None, **row}
         self.usuarios[full["id"]] = full

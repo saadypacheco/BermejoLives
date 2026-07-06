@@ -11,6 +11,7 @@ import {
 } from "@/lib/comercio";
 import { RUBROS } from "@/lib/types";
 import { comprimirImagen } from "@/lib/imagen";
+import { geoErrorMsg } from "@/lib/geo";
 
 type Msg = { from: "bot" | "user"; text: string };
 type Step = "tipo" | "titulo" | "precio" | "descripcion" | "tiktok" | "imagen" | "confirm" | "done";
@@ -231,7 +232,7 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
     if (!navigator.geolocation) { setGeoMsg("Este dispositivo no tiene GPS disponible."); return; }
     navigator.geolocation.getCurrentPosition(
       (pos) => { setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGeoMsg(""); },
-      (e) => setGeoMsg(e.code === 1 ? "Permiso denegado. Activá la ubicación." : "No se pudo obtener la ubicación."),
+      (e) => setGeoMsg(geoErrorMsg(e)),
       { enableHighAccuracy: true, timeout: 10000 },
     );
   }

@@ -206,6 +206,13 @@ async def alta_campo(
                                      "video": bool(vurl)}}
 
 
+@router.get("/campo/mis-comercios")
+def mis_comercios(agente: dict = Depends(auth.require_agente), repo: Repo = Depends(get_repo)) -> dict:
+    """Comercios que este agente dio de alta, para que vea su propio recorrido."""
+    items = repo.list_comercios_por_agente(agente["email"])
+    return {"items": items}
+
+
 class _LeadIn(BaseModel):
     comercio_id: str
     tipo: str = "whatsapp"
