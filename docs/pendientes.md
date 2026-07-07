@@ -1,66 +1,122 @@
-# Pendientes — ecosistema buscadonde + tienda
+# Pendientes — ecosistema Encontralo + Reservalo + tienda
 
-> Backlog maestro de los **dos productos**. Actualizado 2026-06-21.
-> - **buscadonde** (este repo): mapa/descubrimiento, en producción (modo captura).
+> Backlog maestro. Actualizado 2026-07-07 (antes: 2026-06-21 — mucho de lo que
+> decía "pendiente" ya se hizo; ver sección 2bis para el detalle de lo nuevo).
+> - **Encontralo** (este repo, ex-buscadonde): mapa/descubrimiento, en producción.
+> - **Reservalo** (`C:\repos\proyectosClaude\reservalo`): catálogo multi-vendor
+>   + reservas, vive bajo `encontralo.store/reservalo`, en producción.
 > - **tienda** (`C:\repos\proyectosClaude\tienda`, ex-amandaclothing): motor de
->   e-commerce white-label, ~95% funcional, deploy-por-cliente.
+>   e-commerce white-label, ~95% funcional, deploy-por-cliente. *(No tocado en
+>   la sesión del 2026-07-07 — su estado abajo puede estar desactualizado.)*
 
 ---
 
-## 🔴 0. CRÍTICO / Seguridad — hacer YA (los dos repos)
+## 🔴 0. CRÍTICO / Seguridad — hacer YA
+- [ ] **Encontralo:** WAHA (bridge de WhatsApp) **no está desplegado en
+      producción** — no aparece en `docker-compose.prod.yml`. Sin esto, ningún
+      código de verificación por WhatsApp llega a destino: ni el login de
+      comprador (celular+código, nuevo) ni la recuperación de cuenta de
+      comercio. Ver `backend/app/services/whatsapp_client.py`.
+- [ ] **Encontralo:** VPS `.env` tiene `ADMIN_EMAIL`/`ADMIN_PASSWORD`
+      duplicados y contradictorios (entrada vieja de `buscadonde.com` +
+      entrada nueva de `bermejolive.com`) — limpiar la vieja.
+- [ ] **Encontralo:** **rotar** `service_role` + password de la DB (estuvieron
+      expuestos en git en algún momento; se sacó el archivo del repo pero la
+      clave en sí nunca se rotó).
+- [ ] **Encontralo:** confirmar `WEBHOOK_SECRET` seteado en prod (webhook fail-closed).
 - [ ] **tienda:** sacar `backend/.env` del repo (está **commiteado** con
       `SERVICE_ROLE_KEY` + `TELEGRAM_BOT_TOKEN` reales) → mover a `.env.example`,
       agregar a `.gitignore`, **rotar** esos secretos.
 - [ ] **tienda:** validar **rol admin** en 4 endpoints de productos
       (`productos.py` 313/343/382/410) — hoy cualquier usuario logueado
       crea/edita/borra productos.
-- [ ] **buscadonde:** **rotar** `service_role` + password de la DB (pasaron por chat).
-- [ ] **buscadonde:** confirmar `WEBHOOK_SECRET` seteado en prod (webhook fail-closed).
 
 ---
 
-## 🧩 1. DECISIÓN ESTRATÉGICA — cómo se conectan los dos productos
-La tienda es **deploy-por-cliente** (repo + Supabase + dominio por comercio, ~1-2 días
-c/u). No escala a cientos de comercios de Bermejo. **A decidir:**
-- **Opción A:** tienda = **add-on premium** (pocos comercios, tipo Amanda) +
-  buscadonde tiene un **catálogo propio liviano** para la masa.
-- **Opción B:** rehacer la tienda **multi-tenant** (una base, muchas tiendas).
-- El botón **"Ver productos"** en la ficha de buscadonde depende de esto. Integración
-  mínima ya posible: la tienda expone `GET /productos` público → buscadonde linkea
-  con un campo **`tienda_url`** en el comercio.
+## ✅ 2bis. Hecho en la sesión del 2026-07-01 al 2026-07-07 (no estaba anotado)
+- **Cuenta de comprador (celular + código WhatsApp, sin contraseña)**: tabla
+  `usuarios`/`favoritos`, guardar comercios favoritos, páginas `/guardados` y
+  `/perfil`. Esto era justo lo que pedía "Auth unificada + OTP" más abajo,
+  aunque solo del lado Encontralo — Reservalo sigue con su propio login
+  separado (Supabase Auth), no unificado.
+- **Agente de campo**: listado de "mis comercios" registrados + editar/dar de
+  baja (lógica) los propios, mensaje de geolocalización con instrucciones
+  específicas de iOS.
+- **Mi Comercio**: ahora muestra y permite editar foto, ubicación (GPS) y
+  categoría — antes faltaban los tres.
+- **Reservalo**: rediseño de `/productos` (distancia real al vendedor, botón
+  de WhatsApp/cómo llegar en cada producto), categorías con conteo real (se
+  ocultan las que no tienen productos).
+- **Bug del mapa**: la flecha pin→tarjeta se desalineaba porque Leaflet
+  cacheaba un tamaño de contenedor viejo — arreglado con `ResizeObserver`.
+- Bottom nav: "Inicio" → "Mapa"; "Guardados"/"Perfil" apuntaban por error al
+  login de comercio, ahora van a las páginas de comprador.
 
 ---
 
-## 2. buscadonde — Fase 2 (autoregistro + cobro)
+## 🧩 1. DECISIÓN ESTRATÉGICA — cómo se conectan los productos
+*Parcialmente resuelto:* **Reservalo** (repo separado, deployado bajo
+`encontralo.store/reservalo`) terminó siendo el catálogo multi-vendor
+compartido — parece construido sobre el motor de "tienda"/Amanda Clothing
+(su frontend todavía tiene clases `amanda-*` sin renombrar del todo), pero
+ahora es multi-tenant (`vendedores`, no un deploy por cliente) y ya está
+integrado con Encontralo vía `producto_ref` (Encontralo linkea directo a la
+ficha del producto en Reservalo). No confirmado si esto reemplaza del todo
+la necesidad de "tienda" como add-on premium aparte — revisar si sigue
+teniendo sentido mantener los dos.
+- El botón **"Ver productos"** en la ficha de Encontralo ya funciona así (no
+  quedó como `tienda_url` genérico, quedó atado específicamente a Reservalo).
+
+---
+
+## 2. Encontralo — Fase 2 (autoregistro + cobro)
 *Esto es lo que habilita el modelo de negocio.*
-- [ ] **Auth unificada + OTP por teléfono** (comercios/compradores/staff). *Desbloquea todo.*
+- [x] **Auth + OTP por teléfono para compradores** (celular + código
+      WhatsApp, sin contraseña) — hecho 2026-07-07, solo del lado Encontralo.
+      Reservalo sigue con su propio login separado (Supabase Auth) — no están
+      unificados entre sí.
 - [ ] **Suscripción:** `paga_hasta` + **baja automática** (job) + **QR Bolivia**
       (arranque: comprobante por WhatsApp → extiende fecha).
 - [ ] **Oferta primeros 100** ("pagás 1 mes, vale 2") + **rail de pago** funcionando.
-- [ ] Panel **"Mi comercio"** (ver/editar/alta-baja) + campo `tienda_url` + **links libres**.
+- [x] Panel **"Mi comercio"** (ver/editar) — foto, ubicación (GPS) y
+      categoría ahora editables (antes faltaban). *Falta:* alta/baja del
+      comercio desde el propio panel (hoy la baja es solo por admin), y
+      "links libres" sin especificar qué son.
 - [x] **Descuento en alta/edición de ofertas** — `descuento_pct` (1..99) + `vence_el`
       en alta (chatbot `/autoregistro`) y en **edición** (panel "Mi comercio" → "Mis
       ofertas": editar/eliminar). Backend: `PATCH/DELETE /comercio/publicaciones/{id}`
       (scoped al dueño, re-moderación si no es confiable). Migración `0020` + badges en
       home/buscar. _Falta:_ subir foto desde el panel (hoy es link de imagen).
-- [ ] **Ficha del vendedor**: botón "Ver productos" (si tiene tienda) + botones a redes/páginas.
-- [ ] Registro de **consentimiento** (hoy es solo checkbox).
-- [ ] **Reclamar listado** ya cargado (por teléfono, sin duplicar).
+- [x] **Ficha del vendedor**: botón "Ver productos" — hecho vía integración
+      con Reservalo (`producto_ref`), no vía `tienda_url` genérico como
+      estaba planteado. *Falta:* botones a redes/páginas propias del comercio
+      en esa misma ficha (hoy están en la sección "Redes y web" de Mi Comercio,
+      no confirmado si se muestran en la ficha pública).
+- [ ] Registro de **consentimiento** (hoy es solo checkbox) — la cuenta de
+      comprador nueva sí guarda `consentimiento_ofertas`, pero el checkbox de
+      alta de comercio (agente de campo / autoregistro) sigue siendo solo eso.
+- [ ] **Reclamar listado** ya cargado (por teléfono, sin duplicar) — no
+      confundir con "Comentarios y sugerencias" (ex-reclamos) de la ficha del
+      comercio, que es otra cosa (feedback/soporte, no reclamar un negocio
+      importado de OSM sin dueño).
 - [ ] Confirmar nombre del rol **"Promotor"** (ex agente de campo).
-- [ ] **Bug transcripción** "no se puede transcribir" → revisar `docker logs buscadonde-backend`.
-- [ ] Clasificador IA de rubros sobre la nota "¿qué vende?".
+- [ ] **Bug transcripción** "no se puede transcribir" → revisar `docker logs bermejo-backend`.
+- [x] Clasificador IA de rubros sobre la nota "¿qué vende?" — `sugerir_rubros`,
+      usado en `/publicar` y `/autoregistro`.
 
-## 3. buscadonde — Diferenciador / producto
+## 3. Encontralo — Diferenciador / producto
 - [ ] **Chat comprador** ("Preguntále a Bermejo", búsqueda en lenguaje natural).
 - [ ] Asistente vendedor (redactar ofertas/captions con IA).
 - [ ] **Reputación de dos lados** (cliente y comercio).
-- [ ] **WAHA en prod** (publicar/recibir por WhatsApp vivo).
+- [ ] **WAHA en prod** — ver sección 0 (🔴 crítico, bloquea el login de
+      comprador y la recuperación de cuentas de comercio, no es solo un
+      "diferenciador").
 - [ ] **Distribución a compradores:** Canal de **WhatsApp** + redes propias + Telegram.
 - [ ] **Multi-ciudad**: prender fronteras (Yacuiba, Villazón…).
 - [ ] Videos vendedor → **canal TikTok** del sitio (curado).
 - [ ] Abrir el público (sacar `MODO_CAPTURA`) cuando haya masa crítica.
 
-## 4. buscadonde — Calidad / escala
+## 4. Encontralo — Calidad / escala
 - [ ] Tests integración + E2E + carga; CI. Observabilidad (Sentry, métricas).
 - [ ] Cache/ISR/CDN; reemplazar contadores falsos.
 - [ ] Supabase Pro (no pausar) + swap en el VPS.
@@ -68,15 +124,26 @@ c/u). No escala a cientos de comercios de Bermejo. **A decidir:**
 ---
 
 ## 5. tienda — para producción
+> ⚠️ **Sospecha sin confirmar (2026-07-07):** esta sección puede describir un
+> estado anterior de lo que hoy es **Reservalo** (su frontend todavía tiene
+> clases `amanda-*` sin renombrar, y tiene motor de recomendaciones + carrito
+> + `.github/workflows/deploy.yml` con **CI/CD automático ya funcionando** —
+> lo vi correr esta sesión). Si "tienda" y "Reservalo" son el mismo código en
+> distintos momentos, la línea de "Deploy backend CI/CD (hoy es manual)" de
+> abajo ya está resuelta. No confirmé el resto de esta lista (MercadoPago,
+> Gemini key, cron, carrito) contra el Reservalo actual — revisar antes de
+> asumir que sigue pendiente tal cual.
 - [ ] **MercadoPago:** token + webhook reales (o decidir que en Bermejo va **QR/WhatsApp**
       en vez de MP).
 - [ ] **Gemini API key** real (hoy cae a FAQ hardcodeada).
 - [ ] **Cron 02:00** de pre-cálculo de recomendaciones en el VPS.
 - [ ] **Carrito sincronizado** para usuarios logueados (hoy solo localStorage).
-- [ ] **Deploy backend CI/CD** al VPS (hoy es manual).
+- [x] **Deploy backend CI/CD** al VPS — si esto es Reservalo, ya está: push a
+      `main` dispara build + push de imágenes + deploy por SSH automático.
 - [ ] Paginación de catálogo (>50 productos), SEO dinámico por producto.
 - [ ] Renombrar/parametrizar lo que queda atado a "amandaclothing" (WA y pricing en
-      `/software`, `.env` de ejemplo).
+      `/software`, `.env` de ejemplo) — confirmado que sigue así en Reservalo
+      (clases `amanda-*` en el CSS, tema por defecto "Amanda Clothing").
 
 ## 6. tienda — ya resuelto (no tocar)
 B2C minorista + **B2B mayorista completo** (cuenta corriente, listas de precio,
@@ -86,7 +153,9 @@ white-label (`tienda_config` + wizard onboarding + `crear-tienda.sh`), 8 monedas
 ---
 
 ## Orden sugerido para atacar
-1. **Seguridad** (sección 0) — los dos repos, hoy.
-2. **Decisión estratégica** (sección 1) — define el resto.
-3. **buscadonde Fase 2** (sección 2) — habilita cobrar.
-4. **tienda producción** (sección 5) — para el primer cliente real (Amanda).
+1. **WAHA en prod** (sección 0) — sin esto, el login de comprador y la
+   recuperación de cuentas de comercio que ya están deployadas no sirven.
+2. **Seguridad** (sección 0, resto) — rotar credenciales, limpiar `.env` del VPS.
+3. **Confirmar la sospecha de la sección 5** (¿"tienda" == Reservalo?) antes
+   de seguir tratándolas como dos backlogs separados.
+4. **Encontralo Fase 2** (sección 2) — lo que queda: suscripción/cobro.
