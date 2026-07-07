@@ -63,6 +63,18 @@ def make_comercio_token(comercio_id: str, email: str) -> str:
     return pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 
+def make_usuario_token(usuario_id: str, whatsapp: str) -> str:
+    """Token del comprador/visitante — solo celular verificado, sin contraseña."""
+    payload = {
+        "sub": usuario_id,
+        "whatsapp": whatsapp,
+        "rol": "usuario",
+        "usuario_id": usuario_id,
+        "exp": int(time.time()) + 30 * 24 * 3600,  # sesión larga (30 días): no hay re-login por contraseña
+    }
+    return pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+
+
 def _decode(token: str) -> dict:
     return pyjwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
 
@@ -103,4 +115,17 @@ def require_comercio(creds: HTTPAuthorizationCredentials | None = Depends(_beare
         raise HTTPException(status_code=401, detail="Token inválido o expirado") from exc
     if claims.get("rol") != "comercio" or not claims.get("comercio_id"):
         raise HTTPException(status_code=403, detail="Requiere cuenta de comercio")
+    return claims
+
+
+def require_usuario(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
+    """Exige Bearer de un comprador/visitante verificado (celular + código)."""
+    if not creds:
+        raise HTTPException(status_code=401, detail="No autenticado")
+    try:
+        claims = _decode(creds.credentials)
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Token inválido o expirado") from exc
+    if claims.get("rol") != "usuario" or not claims.get("usuario_id"):
+        raise HTTPException(status_code=403, detail="Requiere cuenta de usuario")
     return claims

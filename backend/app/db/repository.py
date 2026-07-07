@@ -66,6 +66,13 @@ class Repo(Protocol):
     def list_solicitudes_cambio_numero(self, estado: str | None) -> list[dict]: ...
     def aprobar_solicitud_cambio_numero(self, solicitud_id: str, by: str) -> dict | None: ...
     def rechazar_solicitud_cambio_numero(self, solicitud_id: str, by: str) -> dict | None: ...
+    def get_usuario_por_whatsapp(self, whatsapp: str) -> dict | None: ...
+    def crear_usuario(self, whatsapp: str) -> dict: ...
+    def set_reset_code_usuario(self, usuario_id: str, code: str | None, expira: str | None) -> None: ...
+    def get_usuario(self, usuario_id: str) -> dict | None: ...
+    def agregar_favorito(self, usuario_id: str, comercio_id: str) -> None: ...
+    def quitar_favorito(self, usuario_id: str, comercio_id: str) -> None: ...
+    def list_favoritos(self, usuario_id: str) -> list[dict]: ...
 
 
 class SupabaseRepo:
@@ -139,6 +146,42 @@ class SupabaseRepo:
     def get_comercio(self, comercio_id: str) -> dict | None:
         res = self._db.table("comercios").select("*").eq("id", comercio_id).limit(1).execute()
         return res.data[0] if res.data else None
+
+    # ---- comprador/visitante (celular + código, sin contraseña) ----
+    def get_usuario_por_whatsapp(self, whatsapp: str) -> dict | None:
+        digitos = "".join(c for c in whatsapp if c.isdigit())
+        res = self._db.table("usuarios").select("*").eq("whatsapp", digitos).eq("activo", True).limit(1).execute()
+        return res.data[0] if res.data else None
+
+    def crear_usuario(self, whatsapp: str) -> dict:
+        digitos = "".join(c for c in whatsapp if c.isdigit())
+        res = self._db.table("usuarios").insert({"whatsapp": digitos}).execute()
+        return res.data[0]
+
+    def set_reset_code_usuario(self, usuario_id: str, code: str | None, expira: str | None) -> None:
+        self._db.table("usuarios").update({"reset_code": code, "reset_code_expira": expira}).eq("id", usuario_id).execute()
+
+    def get_usuario(self, usuario_id: str) -> dict | None:
+        res = self._db.table("usuarios").select("*").eq("id", usuario_id).limit(1).execute()
+        return res.data[0] if res.data else None
+
+    def agregar_favorito(self, usuario_id: str, comercio_id: str) -> None:
+        self._db.table("favoritos").upsert(
+            {"usuario_id": usuario_id, "comercio_id": comercio_id}, on_conflict="usuario_id,comercio_id"
+        ).execute()
+
+    def quitar_favorito(self, usuario_id: str, comercio_id: str) -> None:
+        self._db.table("favoritos").delete().eq("usuario_id", usuario_id).eq("comercio_id", comercio_id).execute()
+
+    def list_favoritos(self, usuario_id: str) -> list[dict]:
+        res = (
+            self._db.table("favoritos")
+            .select("comercio_id, created_at, comercios(id, slug, nombre, logo_url, portada_url, direccion, rating, whatsapp, verificado)")
+            .eq("usuario_id", usuario_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return res.data or []
 
     def get_comercio_usuario_por_whatsapp(self, whatsapp: str) -> dict | None:
         digitos = "".join(c for c in whatsapp if c.isdigit())

@@ -10,7 +10,7 @@ export default async function Home({ searchParams }: { searchParams?: { of?: str
   return (
     <>
       <MobileHome comercios={comercios} feed={feed} soloOfertas={soloOfertas} />
-      <BottomNav active={soloOfertas ? "Ofertas" : "Inicio"} />
+      <BottomNav active={soloOfertas ? "Ofertas" : "Mapa"} />
     </>
   );
 }

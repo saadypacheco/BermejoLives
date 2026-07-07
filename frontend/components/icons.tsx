@@ -63,3 +63,11 @@ export const Edit = (p: SVGProps<SVGSVGElement>) => (
 export const User = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>
 );
+export const Bookmark = (p: SVGProps<SVGSVGElement> & { filled?: boolean }) => {
+  const { filled, ...rest } = p;
+  return (
+    <svg {...base(rest)} fill={filled ? "currentColor" : "none"}>
+      <path d="M6 3h12v18l-6-4-6 4V3z" />
+    </svg>
+  );
+};

@@ -7,7 +7,16 @@ from fastapi.testclient import TestClient
 
 from app.core import auth
 from app.db.repository import get_repo
-from app.main import app
+from app.main import _BUCKETS, app
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limit():
+    """El rate-limit de /auth/* es un dict en memoria a nivel módulo — sin esto,
+    los tests de distintos archivos comparten el contador y algunos empiezan a
+    devolver 429 según el orden en que corre la suite completa."""
+    _BUCKETS.clear()
+    yield
 
 
 class FakeRepo:
@@ -16,6 +25,8 @@ class FakeRepo:
     def __init__(self):
         self.comercios: dict[str, dict] = {}
         self.usuarios: dict[str, dict] = {}          # email -> row
+        self.compradores: dict[str, dict] = {}       # id -> row (usuarios/favoritos: comprador, no comercio)
+        self.favoritos: list[dict] = []               # {usuario_id, comercio_id}
         self.publicaciones: list[dict] = []
         self.wa_inbox: dict[str, dict] = {}          # wa_message_id -> row
         self.leads: list[dict] = []
@@ -167,6 +178,42 @@ class FakeRepo:
             if c.get("cargado_por") == email and c.get("activo", True)
         ]
         return items[:limit]
+
+    # ---- comprador/visitante ----
+    def get_usuario_por_whatsapp(self, whatsapp):
+        digitos = "".join(c for c in whatsapp if c.isdigit())
+        for u in self.compradores.values():
+            if u["whatsapp"] == digitos and u.get("activo", True):
+                return u
+        return None
+
+    def crear_usuario(self, whatsapp):
+        digitos = "".join(c for c in whatsapp if c.isdigit())
+        full = {"id": self._id("comprador"), "whatsapp": digitos, "activo": True,
+                "reset_code": None, "reset_code_expira": None, "consentimiento_ofertas": True}
+        self.compradores[full["id"]] = full
+        return full
+
+    def set_reset_code_usuario(self, usuario_id, code, expira):
+        u = self.compradores.get(usuario_id)
+        if u:
+            u["reset_code"], u["reset_code_expira"] = code, expira
+
+    def get_usuario(self, usuario_id):
+        return self.compradores.get(usuario_id)
+
+    def agregar_favorito(self, usuario_id, comercio_id):
+        if not any(f["usuario_id"] == usuario_id and f["comercio_id"] == comercio_id for f in self.favoritos):
+            self.favoritos.append({"usuario_id": usuario_id, "comercio_id": comercio_id})
+
+    def quitar_favorito(self, usuario_id, comercio_id):
+        self.favoritos = [f for f in self.favoritos if not (f["usuario_id"] == usuario_id and f["comercio_id"] == comercio_id)]
+
+    def list_favoritos(self, usuario_id):
+        return [
+            {"comercio_id": f["comercio_id"], "comercios": self.comercios.get(f["comercio_id"], {})}
+            for f in self.favoritos if f["usuario_id"] == usuario_id
+        ]
 
     def crear_comercio_usuario(self, row):
         full = {"id": self._id("usr"), "activo": True, "email": None, "password_hash": None, **row}

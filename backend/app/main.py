@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 
-from app.api import auth, campo, comercio, health, moderacion, webhook
+from app.api import auth, campo, comercio, health, moderacion, usuario, webhook
 from app.core.config import settings
 
 logger = structlog.get_logger()
@@ -84,3 +84,4 @@ app.include_router(comercio.router, tags=["comercio"])
 app.include_router(campo.router, tags=["campo"])
 app.include_router(webhook.router, prefix="/ingest", tags=["ingesta"])
 app.include_router(moderacion.router, tags=["moderacion"])
+app.include_router(usuario.router, tags=["usuario"])

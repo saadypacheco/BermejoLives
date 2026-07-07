@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { MensajeComercioForm } from "@/components/mensaje-comercio-form";
 import { WaLeadLink } from "@/components/wa-lead-link";
+import { GuardarBoton } from "@/components/guardar-boton";
 import { getComercioBySlug, getProductos } from "@/lib/data";
 import { precioFmt, MODALIDAD_LABEL } from "@/lib/types";
 import {
@@ -60,6 +61,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
               <WhatsApp style={{ width: 18, height: 18 }} /> WhatsApp
             </WaLeadLink>
             <a className="btn btn-ghost" href={mapsHref} target="_blank" rel="noopener"><Pin /> Cómo llegar</a>
+            <GuardarBoton comercioId={comercio.id} className="btn btn-ghost" />
           </div>
         </div>
 

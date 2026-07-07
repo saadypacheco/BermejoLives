@@ -9,6 +9,7 @@ import { type ComercioMapa } from "@/lib/data";
 import { type FeedItem, precioFmt, vencimientoFmt } from "@/lib/types";
 import { registrarLead } from "@/lib/campo";
 import { distanciaMetros, formatDistancia } from "@/lib/distancia";
+import { GuardarBoton } from "@/components/guardar-boton";
 
 const CHIPS: { label: string; rubro: string }[] = [
   { label: "Todos", rubro: "" },
@@ -69,7 +70,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
             <span className="mtag">EN EL MAPA</span>
           </Link>
           <div className="mtop-right">
-            <Link href="/mi-comercio" className="mavatar" aria-label="Perfil"><User style={{ width: 20, height: 20 }} /></Link>
+            <Link href="/mi-comercio" className="mavatar" aria-label="Ingresá tu negocio" title="¿Tenés un negocio? Ingresá acá"><User style={{ width: 20, height: 20 }} /></Link>
             <Link href="/autoregistro?modo=registro" className="mpublica">Publicá tu negocio <span aria-hidden>↗</span></Link>
           </div>
         </div>
@@ -118,7 +119,10 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
             <div className="mcard-info">
               <div className="mcard-head">
                 <b>{sel.nombre}</b>
-                <button className="mclose" onClick={() => setSel(null)} aria-label="Cerrar">✕</button>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <GuardarBoton comercioId={sel.id} className="mclose" />
+                  <button className="mclose" onClick={() => setSel(null)} aria-label="Cerrar">✕</button>
+                </div>
               </div>
               {sel.descripcion && <p>{sel.descripcion}</p>}
               {sel.horario && <div className="mcard-line">🕐 {sel.horario}</div>}
