@@ -78,6 +78,69 @@ def test_mis_comercios_sin_token_401(client):
     assert r.status_code == 401
 
 
+def _crear_comercio_propio(client, token):
+    r = client.post(
+        "/campo/comercio",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"nombre": "Gomería El Rápido", "whatsapp": "59170002222",
+              "modalidad": "minorista", "lat": "-22.7361", "lng": "-64.3433",
+              "descripcion": "Gomería y venta de repuestos de moto"},
+        files=_foto_test(),
+    )
+    return r.json()["comercio"]["id"]
+
+
+def test_editar_mi_comercio_ok(client, repo):
+    token = _agente_token(client)
+    # crear_comercio no devuelve el id real usado internamente en /campo/comercio,
+    # así que lo tomamos del repo (único comercio creado hasta acá)
+    _crear_comercio_propio(client, token)
+    comercio_id = list(repo.comercios)[-1]
+
+    r = client.patch(
+        f"/campo/mis-comercios/{comercio_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"nombre": "Gomería El Rápido (editado)", "rubro_slugs": ["servicios"]},
+    )
+    assert r.status_code == 200, r.text
+    assert repo.comercios[comercio_id]["nombre"] == "Gomería El Rápido (editado)"
+    assert repo.comercios[comercio_id]["rubros"] == ["servicios"]
+
+
+def test_editar_comercio_ajeno_404(client, repo):
+    token = _agente_token(client)
+    otro = repo.crear_comercio({"nombre": "Otro", "slug": "otro", "cargado_por": "otro@x.com"})
+    r = client.patch(
+        f"/campo/mis-comercios/{otro['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"nombre": "Hackeado"},
+    )
+    assert r.status_code == 404
+
+
+def test_eliminar_mi_comercio_es_baja_logica(client, repo):
+    token = _agente_token(client)
+    _crear_comercio_propio(client, token)
+    comercio_id = list(repo.comercios)[-1]
+
+    r = client.delete(f"/campo/mis-comercios/{comercio_id}", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200, r.text
+    # Sigue existiendo el registro (baja lógica, no DELETE real)
+    assert comercio_id in repo.comercios
+    assert repo.comercios[comercio_id]["activo"] is False
+    # Y ya no aparece en el listado del agente
+    r2 = client.get("/campo/mis-comercios", headers={"Authorization": f"Bearer {token}"})
+    assert all(i["id"] != comercio_id for i in r2.json()["items"])
+
+
+def test_eliminar_comercio_ajeno_404(client, repo):
+    token = _agente_token(client)
+    otro = repo.crear_comercio({"nombre": "Otro", "slug": "otro", "cargado_por": "otro@x.com"})
+    r = client.delete(f"/campo/mis-comercios/{otro['id']}", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 404
+    assert repo.comercios[otro["id"]].get("activo", True) is True
+
+
 def test_alta_campo_sin_token_401(client):
     r = client.post("/campo/comercio", data={"nombre": "X", "whatsapp": "1", "rubro_slug": "otros"})
     assert r.status_code == 401

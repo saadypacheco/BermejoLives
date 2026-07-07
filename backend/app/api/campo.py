@@ -213,6 +213,52 @@ def mis_comercios(agente: dict = Depends(auth.require_agente), repo: Repo = Depe
     return {"items": items}
 
 
+def _propio_o_404(repo: Repo, comercio_id: str, agente: dict) -> dict:
+    comercio = repo.get_comercio(comercio_id)
+    if not comercio or comercio.get("cargado_por") != agente["email"]:
+        raise HTTPException(status_code=404, detail="Comercio no encontrado")
+    return comercio
+
+
+class _EditarComercioBody(BaseModel):
+    nombre: str | None = None
+    whatsapp: str | None = None
+    modalidad: str | None = None
+    direccion: str | None = None
+    descripcion: str | None = None
+    rubro_slugs: list[str] | None = None
+
+
+@router.patch("/campo/mis-comercios/{comercio_id}")
+def editar_mi_comercio(
+    comercio_id: str,
+    body: _EditarComercioBody,
+    agente: dict = Depends(auth.require_agente),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """El agente edita un comercio que él mismo cargó (no puede tocar otros)."""
+    _propio_o_404(repo, comercio_id, agente)
+    if body.modalidad is not None and body.modalidad not in _MODALIDADES:
+        raise HTTPException(status_code=400, detail=f"modalidad inválida: {body.modalidad}")
+    patch = body.model_dump(exclude_unset=True, exclude={"rubro_slugs"})
+    if not patch and body.rubro_slugs is None:
+        raise HTTPException(status_code=400, detail="No hay campos para actualizar")
+    comercio = repo.update_comercio(comercio_id, patch, body.rubro_slugs)
+    return {"ok": True, "comercio": comercio}
+
+
+@router.delete("/campo/mis-comercios/{comercio_id}")
+def eliminar_mi_comercio(
+    comercio_id: str,
+    agente: dict = Depends(auth.require_agente),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Baja lógica (activo=false) — nunca se borra el registro."""
+    _propio_o_404(repo, comercio_id, agente)
+    repo.desactivar_comercio(comercio_id)
+    return {"ok": True}
+
+
 class _LeadIn(BaseModel):
     comercio_id: str
     tipo: str = "whatsapp"

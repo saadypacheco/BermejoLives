@@ -83,6 +83,34 @@ export async function misComercios(): Promise<ComercioAgente[]> {
   return (await res.json()).items as ComercioAgente[];
 }
 
+export type EditarComercioBody = {
+  nombre?: string; whatsapp?: string; modalidad?: string; direccion?: string; rubro_slugs?: string[];
+};
+
+/** Edita un comercio que este agente cargó (no puede tocar los de otro agente). */
+export async function editarComercioAgente(id: string, body: EditarComercioBody): Promise<void> {
+  const res = await fetch(`${API}/campo/mis-comercios/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAgenteToken() ?? ""}` },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401) { clearAgente(); throw new Error("Sesión vencida, volvé a entrar"); }
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail ?? "No se pudo guardar");
+  }
+}
+
+/** Baja lógica (activo=false) — nunca se borra el registro real. */
+export async function eliminarComercioAgente(id: string): Promise<void> {
+  const res = await fetch(`${API}/campo/mis-comercios/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` },
+  });
+  if (res.status === 401) { clearAgente(); throw new Error("Sesión vencida, volvé a entrar"); }
+  if (!res.ok) throw new Error("No se pudo eliminar");
+}
+
 /** Registra un click de contacto (WhatsApp, teléfono, etc.) para un comercio. */
 export async function registrarLead(comercio_id: string, tipo: "whatsapp" | "telefono" | "email" | "web" = "whatsapp"): Promise<void> {
   // Fire-and-forget: no bloqueamos la navegación del usuario

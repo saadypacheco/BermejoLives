@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { agenteLogin, getAgenteToken, clearAgente, altaComercioCampo, transcribirAudio, sugerirRubros, misComercios, type ComercioAgente } from "@/lib/campo";
+import {
+  agenteLogin, getAgenteToken, clearAgente, altaComercioCampo, transcribirAudio, sugerirRubros,
+  misComercios, editarComercioAgente, eliminarComercioAgente, type ComercioAgente,
+} from "@/lib/campo";
 import { getCiudades, getRubros } from "@/lib/data";
 import type { Ciudad, Rubro } from "@/lib/types";
-import { Pin, User } from "@/components/icons";
+import { Pin, User, Arrow, Edit } from "@/components/icons";
 import { comprimirImagen } from "@/lib/imagen";
 import { geoErrorMsg } from "@/lib/geo";
 
@@ -33,45 +36,127 @@ export default function CampoPage() {
 // ─────────────────────────────────────────────
 function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: () => void }) {
   const [items, setItems] = useState<ComercioAgente[] | null>(null);
+  const [rubros, setRubros] = useState<Rubro[]>([]);
   const [err, setErr] = useState("");
+  const [editando, setEditando] = useState<ComercioAgente | null>(null);
+  const [borrando, setBorrando] = useState<string | null>(null);
 
-  useEffect(() => {
-    misComercios().then(setItems).catch((e) => setErr(e instanceof Error ? e.message : "Error"));
-  }, []);
+  const cargar = () => misComercios().then(setItems).catch((e) => setErr(e instanceof Error ? e.message : "Error"));
+  useEffect(() => { cargar(); getRubros().then(setRubros); }, []);
+
+  async function eliminar(c: ComercioAgente) {
+    if (!window.confirm(`¿Dar de baja "${c.nombre}"? Deja de aparecer en Encontralo, pero el registro no se borra.`)) return;
+    setBorrando(c.id);
+    try { await eliminarComercioAgente(c.id); setItems((prev) => prev?.filter((x) => x.id !== c.id) ?? prev); }
+    catch (e) { setErr(e instanceof Error ? e.message : "No se pudo eliminar"); }
+    finally { setBorrando(null); }
+  }
 
   return (
     <div className="campo-wrap">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <div>
-          <span className="eyebrow"><Pin style={{ width: 13, height: 13 }} /> Mis negocios cargados</span>
+          <span className="eyebrow"><Pin style={{ width: 13, height: 13 }} /> Mis comercios cargados</span>
           {items && <div style={{ fontSize: 12, color: "var(--neon)" }}>{items.length} en total</div>}
         </div>
         <button className="link-more" onClick={onLogout} style={{ padding: "6px 12px" }}>Salir</button>
       </div>
 
-      <button className="btn btn-ghost" style={{ width: "100%", marginBottom: 14 }} onClick={onVolver}>
-        + Cargar otro negocio
-      </button>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        <button className="link-more" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={onVolver}>
+          <Arrow style={{ width: 15, height: 15, transform: "rotate(180deg)" }} /> Volver
+        </button>
+        <button className="btn btn-ghost" style={{ flex: 1 }} onClick={onVolver}>+ Cargar otro comercio</button>
+      </div>
 
       {err && <p style={{ color: "var(--pink)", fontSize: 13 }}>{err}</p>}
       {!items && !err && <p style={{ color: "var(--txt-3)" }}>Cargando…</p>}
-      {items && items.length === 0 && <p style={{ color: "var(--txt-3)" }}>Todavía no cargaste ningún negocio.</p>}
+      {items && items.length === 0 && <p style={{ color: "var(--txt-3)" }}>Todavía no cargaste ningún comercio.</p>}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {items?.map((c) => (
-          <div key={c.id} className="glass" style={{ padding: 14, borderRadius: 14, display: "flex", gap: 12, alignItems: "center" }}>
-            <div style={{ width: 48, height: 48, borderRadius: 10, overflow: "hidden", background: "var(--panel)", flexShrink: 0, display: "grid", placeItems: "center", fontSize: 20 }}>
-              {c.portada_url ? <img src={c.portada_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "🏪"}
+          <div key={c.id} className="glass" style={{ padding: 14, borderRadius: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <div style={{ width: 48, height: 48, borderRadius: 10, overflow: "hidden", background: "var(--panel)", flexShrink: 0, display: "grid", placeItems: "center", fontSize: 20 }}>
+                {c.portada_url ? <img src={c.portada_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "🏪"}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nombre}</div>
+                <div style={{ fontSize: 12.5, color: "var(--txt-3)" }}>{c.rubros?.nombre ?? "Sin rubro"}{c.direccion ? ` · ${c.direccion}` : ""}</div>
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: c.verificado ? "var(--neon)" : "var(--amber)", background: c.verificado ? "rgba(57,255,158,.12)" : "rgba(255,176,32,.12)" }}>
+                {c.verificado ? "Verificado" : "Pendiente"}
+              </span>
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nombre}</div>
-              <div style={{ fontSize: 12.5, color: "var(--txt-3)" }}>{c.rubros?.nombre ?? "Sin rubro"}{c.direccion ? ` · ${c.direccion}` : ""}</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn btn-sm" style={{ flex: 1, border: "1px solid var(--stroke)" }} onClick={() => setEditando(editando?.id === c.id ? null : c)}>
+                <Edit style={{ width: 14, height: 14 }} /> Editar
+              </button>
+              <button className="btn btn-sm" style={{ flex: 1, border: "1px solid var(--stroke)", color: "var(--pink)" }} disabled={borrando === c.id} onClick={() => eliminar(c)}>
+                {borrando === c.id ? "Eliminando…" : "Eliminar"}
+              </button>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: c.verificado ? "var(--neon)" : "var(--amber)", background: c.verificado ? "rgba(57,255,158,.12)" : "rgba(255,176,32,.12)" }}>
-              {c.verificado ? "Verificado" : "Pendiente"}
-            </span>
+            {editando?.id === c.id && (
+              <EditarComercioForm
+                comercio={c} rubros={rubros}
+                onCancel={() => setEditando(null)}
+                onGuardado={(actualizado) => { setItems((prev) => prev?.map((x) => (x.id === c.id ? { ...x, ...actualizado } : x)) ?? prev); setEditando(null); }}
+              />
+            )}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+function EditarComercioForm({ comercio, rubros, onCancel, onGuardado }: {
+  comercio: ComercioAgente; rubros: Rubro[]; onCancel: () => void; onGuardado: (patch: Partial<ComercioAgente>) => void;
+}) {
+  const [nombre, setNombre] = useState(comercio.nombre);
+  const [whatsapp, setWhatsapp] = useState(comercio.whatsapp);
+  const [direccion, setDireccion] = useState(comercio.direccion ?? "");
+  const [modalidad, setModalidad] = useState(comercio.modalidad ?? "mayorista");
+  const [rubroSlugs, setRubroSlugs] = useState<string[]>(comercio.rubros ? [comercio.rubros.slug] : []);
+  const [guardando, setGuardando] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function guardar() {
+    if (!nombre.trim() || !whatsapp.trim()) { setErr("Nombre y WhatsApp son obligatorios"); return; }
+    setGuardando(true); setErr("");
+    try {
+      await editarComercioAgente(comercio.id, {
+        nombre: nombre.trim(), whatsapp: whatsapp.trim(), modalidad,
+        direccion: direccion.trim() || undefined, rubro_slugs: rubroSlugs,
+      });
+      onGuardado({
+        nombre: nombre.trim(), whatsapp: whatsapp.trim(), modalidad, direccion: direccion.trim() || null,
+        rubros: rubros.find((r) => r.slug === rubroSlugs[0]) ?? comercio.rubros,
+      });
+    } catch (e) { setErr(e instanceof Error ? e.message : "No se pudo guardar"); }
+    finally { setGuardando(false); }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, borderTop: "1px solid var(--stroke)", paddingTop: 10 }}>
+      <input className="adm-input" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre" />
+      <input className="adm-input" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="WhatsApp" />
+      <input className="adm-input" value={direccion} onChange={(e) => setDireccion(e.target.value)} placeholder="Punto de referencia" />
+      <div className="seg">
+        {MODALIDADES.map((m) => (
+          <button type="button" key={m.key} className={modalidad === m.key ? "active" : ""} onClick={() => setModalidad(m.key)}>{m.label}</button>
+        ))}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {rubros.map((r) => (
+          <ChipToggle key={r.slug} label={r.nombre} active={rubroSlugs.includes(r.slug)} onClick={() => setRubroSlugs((s) => toggle(s, r.slug))} />
+        ))}
+      </div>
+      {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button className="btn btn-primary" style={{ flex: 1 }} disabled={guardando} onClick={guardar}>{guardando ? "Guardando…" : "Guardar cambios"}</button>
+        <button className="btn btn-ghost" onClick={onCancel}>Cancelar</button>
       </div>
     </div>
   );
@@ -93,7 +178,7 @@ function Login({ onOk }: { onOk: () => void }) {
   return (
     <div className="campo-wrap">
       <span className="eyebrow"><User style={{ width: 14, height: 14 }} /> Agente de campo</span>
-      <h1 style={{ fontSize: 26, margin: "8px 0 4px" }}>Carga de negocios</h1>
+      <h1 style={{ fontSize: 26, margin: "8px 0 4px" }}>Carga de comercios</h1>
       <p style={{ color: "var(--txt-3)", marginBottom: 20, fontSize: 14 }}>Ingresá para registrar comercios, hoteles, casas de cambio y más.</p>
       <form onSubmit={submit} className="glass" style={{ padding: 20, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
         <input className="adm-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
@@ -260,7 +345,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     if (!f.descripcion.trim()) { setErr("Falta qué vende (grabá un audio o escribí)."); return; }
     if (!coords) { setErr("Falta la ubicación — tocá \"Usar mi ubicación actual\"."); return; }
     if (comprimiendo) { setErr("Esperá a que termine de comprimir la foto."); return; }
-    if (!foto) { setErr("Falta la foto del negocio."); return; }
+    if (!foto) { setErr("Falta la foto del comercio."); return; }
 
     setSaving(true);
     const fd = new FormData();
@@ -303,8 +388,8 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           {ciudadActual ? `${ciudadActual.nombre} · ` : ""}Pendiente de verificar.
         </p>
         <p style={{ color: "var(--txt-3)", marginBottom: 22 }}>Llevás {count} en este recorrido.</p>
-        <button className="btn btn-primary" style={{ width: "100%", marginBottom: 10 }} onClick={otro}>Cargar otro negocio</button>
-        <button className="link-more" onClick={onVerMisComercios}>Ver mis negocios cargados</button>
+        <button className="btn btn-primary" style={{ width: "100%", marginBottom: 10 }} onClick={otro}>Cargar otro comercio</button>
+        <button className="link-more" onClick={onVerMisComercios}>Ver mis comercios cargados</button>
       </div>
     );
   }
@@ -315,11 +400,11 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     <div className="campo-wrap">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <div>
-          <span className="eyebrow"><Pin style={{ width: 13, height: 13 }} /> Carga de negocios</span>
+          <span className="eyebrow"><Pin style={{ width: 13, height: 13 }} /> Carga de comercios</span>
           {count > 0 && <div style={{ fontSize: 12, color: "var(--neon)" }}>{count} cargados hoy</div>}
         </div>
         <div style={{ display: "flex", gap: 4 }}>
-          <button className="link-more" onClick={onVerMisComercios} style={{ padding: "6px 12px" }}>Mis negocios</button>
+          <button className="link-more" onClick={onVerMisComercios} style={{ padding: "6px 12px" }}>Mis comercios</button>
           <button className="link-more" onClick={onLogout} style={{ padding: "6px 12px" }}>Salir</button>
         </div>
       </div>
@@ -327,11 +412,11 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
         {/* ── Nombre ── */}
-        <input className="adm-input" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre del negocio *" />
+        <input className="adm-input" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre del comercio *" />
 
         {/* ── WhatsApp ── */}
         <div>
-          <label className="campo-lbl">WhatsApp del negocio *</label>
+          <label className="campo-lbl">WhatsApp del comercio *</label>
           <div className="cel-wrap">
             <span className="cel-flag">{prefijo === "54" ? "🇦🇷" : "🇧🇴"} +{prefijo}</span>
             <input className="adm-input" type="tel" inputMode="numeric" value={f.cel}
@@ -401,7 +486,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
 
         {/* ── Foto ── */}
         <div>
-          <label className="campo-lbl">Foto del negocio *</label>
+          <label className="campo-lbl">Foto del comercio *</label>
           <label className="foto-drop">
             {preview ? <img src={preview} alt="" /> : <span>📷 Sacar foto / elegir</span>}
             <input type="file" accept="image/*" capture="environment" onChange={onFoto} hidden />
@@ -420,7 +505,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
 
         {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
         <button className="btn btn-primary" type="submit" disabled={saving} style={{ width: "100%", padding: 16 }}>
-          {saving ? "Guardando…" : "Guardar negocio"}
+          {saving ? "Guardando…" : "Guardar comercio"}
         </button>
       </form>
       <div style={{ height: 40 }} />
