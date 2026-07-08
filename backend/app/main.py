@@ -6,16 +6,19 @@ Responsabilidades (ver ADR 2026-06-04-stack-bermejo):
 El catálogo y el feed los lee el frontend directo de Supabase (anon + RLS).
 """
 import time
+import traceback
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
-from app.api import auth, campo, comercio, health, moderacion, usuario, webhook
+from app.api import auth, campo, comercio, health, moderacion, observabilidad, usuario, webhook
 from app.core.config import settings
+from app.services.observabilidad import registrar_error, registrar_perf
 
 logger = structlog.get_logger()
 
@@ -52,10 +55,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Rate limit simple (en memoria) para login/registro: 20 POST/min por IP.
+# Rate limit simple (en memoria) por prefijo de ruta + IP.
 _BUCKETS: dict[str, deque] = defaultdict(deque)
-_RL_MAX, _RL_WINDOW = 20, 60
-_RL_PREFIXES = ("/auth/",)
+_RL_WINDOW = 60
+_RL_RULES: dict[str, int] = {
+    "/auth/": 20,
+    "/errores": 60,
+    "/metricas": 120,
+}
 
 
 def _client_ip(request: Request) -> str:
@@ -67,16 +74,48 @@ def _client_ip(request: Request) -> str:
 
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):
-    if request.method == "POST" and any(request.url.path.startswith(p) for p in _RL_PREFIXES):
-        ip = _client_ip(request)
-        now = time.time()
-        dq = _BUCKETS[ip]
-        while dq and now - dq[0] > _RL_WINDOW:
-            dq.popleft()
-        if len(dq) >= _RL_MAX:
-            return JSONResponse({"detail": "Demasiados intentos, probá en un minuto"}, status_code=429)
-        dq.append(now)
+    if request.method == "POST":
+        for prefix, limite in _RL_RULES.items():
+            if not request.url.path.startswith(prefix):
+                continue
+            ip = _client_ip(request)
+            now = time.time()
+            dq = _BUCKETS[f"{prefix}:{ip}"]
+            while dq and now - dq[0] > _RL_WINDOW:
+                dq.popleft()
+            if len(dq) >= limite:
+                return JSONResponse({"detail": "Demasiados intentos, probá en un minuto"}, status_code=429)
+            dq.append(now)
+            break
     return await call_next(request)
+
+
+_UMBRAL_LENTO_BACKEND_MS = 1000
+
+
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    inicio = time.perf_counter()
+    response = await call_next(request)
+    duracion_ms = (time.perf_counter() - inicio) * 1000
+    if duracion_ms > _UMBRAL_LENTO_BACKEND_MS:
+        await run_in_threadpool(registrar_perf, "backend", request.url.path, "duracion", duracion_ms)
+    return response
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.error("api.unhandled_exception", path=request.url.path, error=str(exc))
+    await run_in_threadpool(
+        registrar_error,
+        "backend",
+        str(exc) or exc.__class__.__name__,
+        "".join(traceback.format_exception(exc)),
+        request.url.path,
+        500,
+    )
+    return JSONResponse({"detail": "Error interno"}, status_code=500)
+
 
 app.include_router(health.router, tags=["health"])
 app.include_router(auth.router, tags=["auth"])
@@ -85,3 +124,4 @@ app.include_router(campo.router, tags=["campo"])
 app.include_router(webhook.router, prefix="/ingest", tags=["ingesta"])
 app.include_router(moderacion.router, tags=["moderacion"])
 app.include_router(usuario.router, tags=["usuario"])
+app.include_router(observabilidad.router, tags=["observabilidad"])

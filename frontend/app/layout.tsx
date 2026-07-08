@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { SwRegister } from "@/components/sw-register";
+import { InstallPrompt } from "@/components/install-prompt";
+import { ErrorListener } from "@/components/error-listener";
+import { WebVitalsReporter } from "@/components/web-vitals-reporter";
 
 export const metadata: Metadata = {
   title: "Encontralo — Comercios y ofertas en el mapa",
@@ -32,6 +35,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
+        <ErrorListener />
+        <WebVitalsReporter />
+        <InstallPrompt />
         {children}
         <SwRegister />
       </body>
