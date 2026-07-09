@@ -16,10 +16,9 @@ from app.core import auth
 from app.core.config import settings
 from app.core.text import slug_unico, slugify
 from app.db.repository import Repo, get_repo
-from app.db.session import get_supabase
 from app.models.schemas import LoginBody, PublicarBody
 from app.services.clasificador import clasificar, generar_texto_comercio, sugerir_rubros
-from app.services.imagenes import procesar_imagen, subir_foto_comercio
+from app.services.imagenes import guardar_foto_local, procesar_imagen, subir_foto_comercio
 from app.services.tienda_client import get_tienda_client
 from app.services.whatsapp_client import enviar_texto
 
@@ -716,15 +715,8 @@ def _subir_comprobante(comercio_id: str, data: bytes) -> str | None:
         procesada = procesar_imagen(data)
     except Exception:  # noqa: BLE001
         raise HTTPException(status_code=400, detail="El comprobante no es una imagen válida")
-    try:
-        path = f"comprobantes/{comercio_id}/{secrets.token_hex(8)}.jpg"
-        get_supabase().storage.from_(settings.comercios_bucket).upload(
-            path, procesada, {"content-type": "image/jpeg", "upsert": "true"}
-        )
-        return settings.public_photo_url(path)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("comercio.comprobante_error", error=str(exc))
-        return None
+    path = f"comprobantes/{comercio_id}/{secrets.token_hex(8)}.jpg"
+    return guardar_foto_local(path, procesada)
 
 
 @router.post("/comercio/pago")

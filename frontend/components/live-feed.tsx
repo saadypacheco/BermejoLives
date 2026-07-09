@@ -1,42 +1,36 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { supabase, hasSupabase } from "@/lib/supabase";
+import { useEffect, useRef, useState } from "react";
+import { hasSupabase } from "@/lib/supabase";
+import { getFeed } from "@/lib/data";
 import { type FeedItem, precioFmt, waLink } from "@/lib/types";
 import { WhatsApp, Verified, Pin, Play } from "@/components/icons";
 import { registrarLead } from "@/lib/campo";
 
+const POLL_MS = 25_000;
+
 /**
- * Feed en vivo. Render inicial server-side (props), y se suscribe a Supabase
- * Realtime DIRECTO (lesson KB): cuando una publicación pasa a 'aprobado',
- * aparece arriba sin recargar. RLS asegura que solo lleguen filas aprobadas.
+ * Feed en vivo. Render inicial server-side (props), y refresca por polling
+ * cada 25s (antes usaba Supabase Realtime/WebSocket — con self-host y
+ * usuarios con señal inestable, polling es más robusto: si se corta un
+ * request se reintenta solo en el próximo ciclo, sin quedar "colgado" como
+ * puede pasar con una conexión WebSocket en un celular con mala señal).
  */
 export function LiveFeed({ initial }: { initial: FeedItem[] }) {
   const [items, setItems] = useState<FeedItem[]>(initial);
+  const idsConocidos = useRef(new Set(initial.map((i) => i.id)));
 
   useEffect(() => {
     if (!hasSupabase) return;
-    const channel = supabase
-      .channel("feed-publicaciones")
-      .on(
-        // INSERT (confiables que publican directo) + UPDATE (aprobadas en moderación)
-        "postgres_changes",
-        { event: "*", schema: "public", table: "publicaciones", filter: "estado=eq.aprobado" },
-        async (payload) => {
-          const row = payload.new as { id: string };
-          if (!row?.id) return;
-          // Traemos la fila enriquecida desde la vista feed_publico
-          const { data } = await supabase.from("feed_publico").select("*").eq("id", row.id).limit(1);
-          if (data && data[0]) {
-            setItems((prev) => [data[0] as FeedItem, ...prev.filter((p) => p.id !== row.id)]);
-          }
-        }
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    const intervalo = setInterval(async () => {
+      const frescos = await getFeed(20);
+      const nuevos = frescos.filter((f) => !idsConocidos.current.has(f.id));
+      if (nuevos.length === 0) return;
+      nuevos.forEach((n) => idsConocidos.current.add(n.id));
+      setItems((prev) => [...nuevos, ...prev]);
+    }, POLL_MS);
+    return () => clearInterval(intervalo);
   }, []);
 
   return (

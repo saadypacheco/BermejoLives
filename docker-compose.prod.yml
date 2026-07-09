@@ -1,7 +1,7 @@
 # ============================================================
 # Encontralo · PRODUCCIÓN (VPS Hostinger + Traefik)
 # Sin puertos publicados: Traefik enruta por dominio vía labels.
-# DB = Supabase Cloud (el VPS no corre Postgres).
+# DB = Postgres + PostgREST self-hosted, EN ESTE MISMO VPS (ver selfhost/).
 #   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
 #
 # DOMINIO: DOMAIN = dominio canónico (ej. encontralo.store).
@@ -9,11 +9,50 @@
 #   migración (ej. buscadonde.com). Si no se setea, cae a DOMAIN (sin efecto).
 # ============================================================
 services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: buscadonde-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - AUTHENTICATOR_PASSWORD=${AUTHENTICATOR_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./selfhost/postgres-init:/docker-entrypoint-initdb.d:ro
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgrest:
+    image: postgrest/postgrest:v12.2.3
+    container_name: buscadonde-postgrest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - PGRST_DB_URI=postgres://authenticator:${AUTHENTICATOR_PASSWORD}@postgres:5432/postgres
+      - PGRST_DB_SCHEMA=public
+      - PGRST_DB_ANON_ROLE=anon
+      - PGRST_JWT_SECRET=${PGRST_JWT_SECRET}
+      - PGRST_DB_MAX_ROWS=1000
+    networks: [traefik, internal]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik
+      - "traefik.http.routers.buscadonde-db.rule=Host(`db.${DOMAIN}`)"
+      - traefik.http.routers.buscadonde-db.entrypoints=websecure
+      - traefik.http.routers.buscadonde-db.tls=true
+      - traefik.http.routers.buscadonde-db.tls.certresolver=letsencrypt
+      - traefik.http.services.buscadonde-db.loadbalancer.server.port=3000
   frontend:
     build:
       context: ./frontend
       args:
-        # NEXT_PUBLIC_* se hornean en el bundle (apuntan a Supabase Cloud + api público)
+        # NEXT_PUBLIC_* se hornean en el bundle (apuntan a PostgREST self-hosted, https://db.$DOMAIN)
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
         NEXT_PUBLIC_API_URL: https://api.${DOMAIN}
@@ -37,8 +76,17 @@ services:
     container_name: buscadonde-backend
     restart: unless-stopped
     env_file: ./backend/.env
+    depends_on:
+      postgrest:
+        condition: service_started
+    environment:
+      # Backend -> postgrest por red interna de Docker (evita el salto por
+      # Traefik/HTTPS que sí necesita el navegador). El .env trae el resto.
+      - SUPABASE_URL=http://postgrest:3000
+      - FOTOS_PUBLIC_BASE_URL=https://api.${DOMAIN}/fotos
     volumes:
       - whisper_models:/models      # cache del modelo de transcripción (persiste entre rebuilds)
+      - comercio_fotos:/data/fotos  # fotos de comercio (reemplaza a Supabase Storage)
     networks: [traefik, internal]
     labels:
       - traefik.enable=true
@@ -51,6 +99,8 @@ services:
 
 volumes:
   whisper_models:
+  postgres_data:
+  comercio_fotos:
 
 networks:
   traefik:

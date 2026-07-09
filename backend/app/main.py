@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
@@ -125,3 +126,10 @@ app.include_router(webhook.router, prefix="/ingest", tags=["ingesta"])
 app.include_router(moderacion.router, tags=["moderacion"])
 app.include_router(usuario.router, tags=["usuario"])
 app.include_router(observabilidad.router, tags=["observabilidad"])
+
+# Fotos de comercio: servidas por el propio backend (reemplaza a Supabase
+# Storage en el self-host — ver services/imagenes.py).
+import pathlib  # noqa: E402
+
+pathlib.Path(settings.fotos_dir).mkdir(parents=True, exist_ok=True)
+app.mount("/fotos", StaticFiles(directory=settings.fotos_dir), name="fotos")

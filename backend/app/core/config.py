@@ -55,9 +55,14 @@ class Settings(BaseSettings):
     storage_bucket: str = "publicaciones"
     comercios_bucket: str = "comercios"
 
+    # Fotos de comercio: se guardan en disco (volumen Docker) y las sirve el
+    # propio backend por /fotos/... — reemplaza a Supabase Storage en el
+    # self-host (ver services/imagenes.py).
+    fotos_dir: str = "/data/fotos"
+    fotos_public_base_url: str = "http://localhost:8000/fotos"  # cómo lo alcanza el navegador
+
     def public_photo_url(self, path: str) -> str:
-        base = (self.supabase_public_url or self.supabase_url).rstrip("/")
-        return f"{base}/storage/v1/object/public/{self.comercios_bucket}/{path}"
+        return f"{self.fotos_public_base_url.rstrip('/')}/{path}"
 
 
 settings = Settings()
