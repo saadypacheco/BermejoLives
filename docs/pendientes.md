@@ -192,7 +192,8 @@ teniendo sentido mantener los dos.
 ## 3. Encontralo — Diferenciador / producto
 - [ ] **Chat comprador** ("Preguntále a Bermejo", búsqueda en lenguaje natural).
 - [ ] Asistente vendedor (redactar ofertas/captions con IA).
-- [ ] **Reputación de dos lados** (cliente y comercio).
+- [ ] **Reputación de dos lados** (cliente y comercio) — ver desglose completo
+      abajo, "Rediseño de ficha de comercio", incluye el sistema de reseñas.
 - [ ] **WAHA en prod** — ver sección 0 (🔴 crítico, bloquea el login de
       comprador y la recuperación de cuentas de comercio, no es solo un
       "diferenciador").
@@ -200,6 +201,59 @@ teniendo sentido mantener los dos.
 - [ ] **Multi-ciudad**: prender fronteras (Yacuiba, Villazón…).
 - [ ] Videos vendedor → **canal TikTok** del sitio (curado).
 - [ ] Abrir el público (sacar `MODO_CAPTURA`) cuando haya masa crítica.
+
+### Rediseño de ficha de comercio (2026-07-10)
+El usuario compartió un mockup de referencia con una ficha mucho más rica
+que la actual. No es un ajuste de CSS — son 5-6 features nuevas, cada una
+con su propia decisión de datos. Se prioriza en la próxima sesión; orden
+sugerido (mayor impacto / menor esfuerzo primero):
+1. **Galería multi-foto** — hoy el comercio tiene UNA sola `portada_url`.
+   Necesita: tabla nueva (mismo patrón que `producto_imagenes` de
+   Reservalo), UI de carga múltiple, orden, límite de cantidad.
+2. **Mapa embebido en la ficha** (hoy es solo un link "Cómo llegar" que
+   saca de la página) — bajo esfuerzo, ya se tiene lat/lng.
+3. **"Abierto ahora"** — parsear `horario` (hoy texto libre, ej. "Lunes a
+   Viernes: 8:00-18:00") contra la hora actual. Requiere decidir un
+   formato estructurado para `horario` (no va a andar con texto libre
+   arbitrario) — posible migración de datos para los comercios ya cargados.
+4. **Sección de destacados** (ej. "Más de 50 años", "Trabajos a medida") —
+   campos nuevos, editables desde "Mi comercio"/alta del agente.
+5. **"Galería de trabajos"** separada de "Productos y servicios" — definir
+   qué la diferencia conceptualmente antes de modelarla.
+6. **Sistema de reseñas** — el más grande de los seis. Tabla de reviews,
+   quién puede dejar una (¿comprador con cuenta verificada, para evitar
+   reseñas falsas?), moderación, cálculo de `rating` real en vez del campo
+   fijo actual. Se recomienda ir último — depende de tener volumen real de
+   compradores con cuenta para que las reseñas sean confiables.
+
+### Publicidad / monetización — a quién ofrecer primero (2026-07-10)
+Ya existe base para esto: `comercios.plan` (`gratis`/`pro`/`premium`) y
+`comercios.destacado`, más la suscripción pendiente en sección 2. Ideas de
+priorización y venta:
+- **A quién ofrecerle primero:** importadoras (rubro ancla de Bermejo,
+  comercio fronterizo — más beneficio de visibilidad cross-border) y
+  gastronomía/hospedaje (turismo de frontera, alta intención de compra
+  inmediata). A los ya cargados: ofrecer "destacado" como upsell después
+  de mostrarles sus propias métricas de contacto (ver abajo), no en frío.
+- **Panel de métricas para el comercio** — ya existe `leads`/
+  `registrarLead` (clicks de WhatsApp registrados) pero no se le muestra
+  nada de eso al dueño. Un mini panel "esta semana tuviste N contactos por
+  WhatsApp" es el argumento de venta más fuerte que hay: dato real, no
+  promesa. Construir esto ANTES de salir a vender destacados.
+- **QR físico para el local** — el agente deja un sticker con QR a la
+  ficha en la misma visita de alta. Barato, tangible, refuerza "ya estás
+  publicado, aprovechalo". Requiere: generar el QR (librería simple,
+  server-side) + decidir quién lo imprime.
+- **Reseñas como costo de cambio** — una vez que un comercio acumula
+  reseñas en la plataforma, el costo de irse a otra sube mucho (ver
+  "Rediseño de ficha de comercio" arriba).
+- **"Primero en tu rubro"** — mensaje de venta para el agente en el
+  recorrido: gratis por ahora, pero sé el primero de tu categoría en la
+  zona.
+- **Intereses del comprador + WAHA** (ya en sección 2 y sección 0) — una
+  vez en producción, se convierte en "te avisamos directo a los
+  compradores que buscan justo lo tuyo" — el gancho más fuerte para un
+  comercio chico que no tiene presupuesto de marketing.
 
 ## 4. Encontralo — Calidad / escala
 - [ ] Tests integración + E2E + carga; CI. Observabilidad (Sentry, métricas).
