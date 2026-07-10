@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   agenteLogin, getAgenteToken, clearAgente, altaComercioCampo, transcribirAudio, sugerirRubros,
-  misComercios, editarComercioAgente, eliminarComercioAgente, type ComercioAgente,
+  misComercios, editarComercioAgente, eliminarComercioAgente, actualizarFotoComercioAgente, type ComercioAgente,
 } from "@/lib/campo";
 import { getCiudades, getRubros } from "@/lib/data";
 import type { Ciudad, Rubro } from "@/lib/types";
@@ -119,13 +119,21 @@ function EditarComercioForm({ comercio, rubros, onCancel, onGuardado }: {
   const [direccion, setDireccion] = useState(comercio.direccion ?? "");
   const [modalidad, setModalidad] = useState(comercio.modalidad ?? "mayorista");
   const [rubroSlugs, setRubroSlugs] = useState<string[]>(comercio.rubros ? [comercio.rubros.slug] : []);
+  const [foto, setFoto] = useState<File | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
   const [err, setErr] = useState("");
 
   async function guardar() {
     if (!nombre.trim() || !whatsapp.trim()) { setErr("Nombre y WhatsApp son obligatorios"); return; }
     setGuardando(true); setErr("");
     try {
+      let portada_url: string | null | undefined;
+      if (foto) {
+        setSubiendoFoto(true);
+        portada_url = await actualizarFotoComercioAgente(comercio.id, foto);
+        setSubiendoFoto(false);
+      }
       await editarComercioAgente(comercio.id, {
         nombre: nombre.trim(), whatsapp: whatsapp.trim(), modalidad,
         direccion: direccion.trim() || undefined, rubro_slugs: rubroSlugs,
@@ -133,9 +141,10 @@ function EditarComercioForm({ comercio, rubros, onCancel, onGuardado }: {
       onGuardado({
         nombre: nombre.trim(), whatsapp: whatsapp.trim(), modalidad, direccion: direccion.trim() || null,
         rubros: rubros.find((r) => r.slug === rubroSlugs[0]) ?? comercio.rubros,
+        ...(portada_url !== undefined ? { portada_url } : {}),
       });
     } catch (e) { setErr(e instanceof Error ? e.message : "No se pudo guardar"); }
-    finally { setGuardando(false); }
+    finally { setGuardando(false); setSubiendoFoto(false); }
   }
 
   return (
@@ -143,6 +152,10 @@ function EditarComercioForm({ comercio, rubros, onCancel, onGuardado }: {
       <input className="adm-input" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre" />
       <input className="adm-input" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="WhatsApp" />
       <input className="adm-input" value={direccion} onChange={(e) => setDireccion(e.target.value)} placeholder="Punto de referencia" />
+      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, color: "var(--txt-3)" }}>
+        Cambiar foto {subiendoFoto && "(subiendo…)"}
+        <input type="file" accept="image/*" onChange={(e) => setFoto(e.target.files?.[0] ?? null)} />
+      </label>
       <div className="seg">
         {MODALIDADES.map((m) => (
           <button type="button" key={m.key} className={modalidad === m.key ? "active" : ""} onClick={() => setModalidad(m.key)}>{m.label}</button>

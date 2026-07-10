@@ -118,6 +118,32 @@ def test_editar_comercio_ajeno_404(client, repo):
     assert r.status_code == 404
 
 
+def test_actualizar_foto_mi_comercio_ok(client, repo):
+    token = _agente_token(client)
+    _crear_comercio_propio(client, token)
+    comercio_id = list(repo.comercios)[-1]
+    url_original = repo.comercios[comercio_id]["portada_url"]
+
+    r = client.post(
+        f"/campo/mis-comercios/{comercio_id}/foto",
+        headers={"Authorization": f"Bearer {token}"},
+        files=_foto_test(),
+    )
+    assert r.status_code == 200, r.text
+    assert repo.comercios[comercio_id]["portada_url"] != url_original
+
+
+def test_actualizar_foto_comercio_ajeno_404(client, repo):
+    token = _agente_token(client)
+    otro = repo.crear_comercio({"nombre": "Otro", "slug": "otro", "cargado_por": "otro@x.com"})
+    r = client.post(
+        f"/campo/mis-comercios/{otro['id']}/foto",
+        headers={"Authorization": f"Bearer {token}"},
+        files=_foto_test(),
+    )
+    assert r.status_code == 404
+
+
 def test_eliminar_mi_comercio_es_baja_logica(client, repo):
     token = _agente_token(client)
     _crear_comercio_propio(client, token)

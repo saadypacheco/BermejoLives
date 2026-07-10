@@ -101,6 +101,24 @@ export async function editarComercioAgente(id: string, body: EditarComercioBody)
   }
 }
 
+/** Re-sube la foto de un comercio que este agente cargó. Devuelve la nueva URL. */
+export async function actualizarFotoComercioAgente(id: string, foto: File): Promise<string | null> {
+  const form = new FormData();
+  form.append("foto", foto);
+  const res = await fetch(`${API}/campo/mis-comercios/${id}/foto`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` },
+    body: form,
+  });
+  if (res.status === 401) { clearAgente(); throw new Error("Sesión vencida, volvé a entrar"); }
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail ?? "No se pudo actualizar la foto");
+  }
+  const data = await res.json();
+  return data.comercio?.portada_url ?? null;
+}
+
 /** Baja lógica (activo=false) — nunca se borra el registro real. */
 export async function eliminarComercioAgente(id: string): Promise<void> {
   const res = await fetch(`${API}/campo/mis-comercios/${id}`, {

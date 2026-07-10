@@ -247,6 +247,26 @@ def editar_mi_comercio(
     return {"ok": True, "comercio": comercio}
 
 
+@router.post("/campo/mis-comercios/{comercio_id}/foto")
+async def actualizar_foto_mi_comercio(
+    comercio_id: str,
+    foto: UploadFile = File(...),
+    agente: dict = Depends(auth.require_agente),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """El agente re-sube la foto de un comercio que él mismo cargó."""
+    comercio = _propio_o_404(repo, comercio_id, agente)
+    data = await foto.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Falta la foto")
+    portada_url = _subir_foto(comercio["slug"], foto, data)
+    if not portada_url:
+        raise HTTPException(status_code=502, detail="No se pudo subir la foto, probá de nuevo")
+    updated = repo.update_comercio(comercio_id, {"portada_url": portada_url}, None)
+    logger.info("campo.foto_update", comercio=comercio_id, agente=agente["email"])
+    return {"ok": True, "comercio": updated}
+
+
 @router.delete("/campo/mis-comercios/{comercio_id}")
 def eliminar_mi_comercio(
     comercio_id: str,
