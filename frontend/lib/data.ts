@@ -1,6 +1,24 @@
 import { supabase, hasSupabase } from "@/lib/supabase";
 import type { Comercio, FeedItem, Producto, Zona, Rubro, Ciudad, ResultadoBusqueda, FiltrosBusqueda } from "@/lib/types";
 
+// Diagnóstico temporal (self-host, 2026-07-10): supabase-js a veces no
+// tira un PostgrestError normal (message/code/details) sino una excepción
+// de red cruda con otra forma — volcamos todo lo que tenga para no seguir
+// a ciegas.
+function logSupaError(tag: string, error: unknown) {
+  const e = error as any;
+  console.warn(
+    `${tag}:`,
+    "name=", e?.name,
+    "message=", e?.message,
+    "code=", e?.code,
+    "details=", e?.details,
+    "cause=", e?.cause,
+    "str=", String(error),
+    "json=", (() => { try { return JSON.stringify(error); } catch { return "[no serializable]"; } })(),
+  );
+}
+
 export async function buscarComercios(f: FiltrosBusqueda, limit = 24, offset = 0): Promise<ResultadoBusqueda[]> {
   if (!hasSupabase) return [];
   const { data, error } = await supabase.rpc("buscar_comercios", {
@@ -59,7 +77,7 @@ export async function getFeed(limit = 8): Promise<FeedItem[]> {
       .from("feed_publico")
       .select("*")
       .limit(limit);
-    if (error) console.warn("getFeed error:", error.message, error.code, error.details);
+    if (error) logSupaError("getFeed", error);
     if (!error && data) return data as FeedItem[];
   } else {
     console.warn("getFeed: hasSupabase=false — faltan NEXT_PUBLIC_SUPABASE_URL/ANON_KEY");
@@ -70,7 +88,7 @@ export async function getFeed(limit = 8): Promise<FeedItem[]> {
 export async function getComercios(): Promise<Comercio[]> {
   if (hasSupabase) {
     const { data, error } = await supabase.from("comercios").select("*").eq("destacado", true).limit(10);
-    if (error) console.warn("getComercios error:", error.message, error.code, error.details);
+    if (error) logSupaError("getComercios", error);
     if (data) return data as Comercio[];
   } else {
     console.warn("getComercios: hasSupabase=false — faltan NEXT_PUBLIC_SUPABASE_URL/ANON_KEY");
@@ -103,8 +121,8 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
         .limit(250),
       supabase.from("rubros").select("id, slug"),
     ]);
-    if (error) console.warn("getComerciosMapa error (comercios):", error.message, error.code, error.details);
-    if (errorRubros) console.warn("getComerciosMapa error (rubros):", errorRubros.message, errorRubros.code);
+    if (error) logSupaError("getComerciosMapa (comercios)", error);
+    if (errorRubros) logSupaError("getComerciosMapa (rubros)", errorRubros);
     if (data) {
       const slugById = new Map((rubros ?? []).map((r: any) => [r.id, r.slug]));
       return (data as any[]).map((c) => ({
