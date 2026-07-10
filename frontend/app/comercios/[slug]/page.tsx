@@ -38,6 +38,9 @@ export default async function ComercioPage({ params }: { params: { slug: string 
       </div>
 
       <div className="wrap">
+        <Link className="back-link" href="/" style={{ display: "inline-flex", margin: "16px 0 0" }}>
+          <Arrow style={{ transform: "rotate(180deg)" }} /> Volver
+        </Link>
         <div className="profile-head">
           {comercio.logo_url && <img className="profile-logo" src={comercio.logo_url} alt="Logo" />}
           <div className="profile-info">
@@ -85,16 +88,17 @@ export default async function ComercioPage({ params }: { params: { slug: string 
             )}
           </div>
 
-          <div className="info-card glass">
-            <h3>Redes y web</h3>
-            {redes.length === 0 && <p style={{ color: "var(--txt-3)", fontSize: 13 }}>Este comercio aún no cargó redes.</p>}
-            {redes.map((r) => (
-              <a className="info-row" key={r.label} href={r.href} target="_blank" rel="noopener" style={{ color: "inherit" }}>
-                <span className="ic"><r.Icon style={{ width: 17, height: 17 }} /></span>
-                <div><b>{r.label}</b>{r.href.replace(/^https?:\/\//, "")}</div>
-              </a>
-            ))}
-          </div>
+          {redes.length > 0 && (
+            <div className="info-card glass">
+              <h3>Redes y web</h3>
+              {redes.map((r) => (
+                <a className="info-row" key={r.label} href={r.href} target="_blank" rel="noopener" style={{ color: "inherit" }}>
+                  <span className="ic"><r.Icon style={{ width: 17, height: 17 }} /></span>
+                  <div><b>{r.label}</b>{r.href.replace(/^https?:\/\//, "")}</div>
+                </a>
+              ))}
+            </div>
+          )}
 
           <MensajeComercioForm comercioId={comercio.id} nombre={comercio.nombre} />
 

@@ -17,14 +17,13 @@
       código de verificación por WhatsApp llega a destino: ni el login de
       comprador (celular+código, nuevo) ni la recuperación de cuenta de
       comercio. Ver `backend/app/services/whatsapp_client.py`.
-- [ ] **Encontralo:** VPS `.env`/`backend/.env` tienen `ADMIN_EMAIL`/
-      `ADMIN_PASSWORD`/`JWT_SECRET` **duplicados** varias veces (entradas
-      viejas de `buscadonde.com`/valores por defecto del código, mezcladas
-      con entradas "nuevas"). Riesgo real: si el parser toma la última
-      ocurrencia, el admin podría estar corriendo con la contraseña débil
-      por defecto (`bermejo1234`) en vez de la que se creyó cambiar. Limpiar
-      dejando UNA sola entrada por variable, y poner una contraseña de admin
-      nueva (no reusar ninguna de las que ya se vieron en pantalla/chat).
+- [x] **Encontralo:** VPS `.env`/`backend/.env` tenían `ADMIN_EMAIL`/
+      `ADMIN_PASSWORD`/`JWT_SECRET` duplicados — limpiado 2026-07-10 (self-host):
+      `.env` raíz solo tiene lo que usa `docker-compose.prod.yml`
+      (DOMAIN/DOMAIN_ALT/POSTGRES_PASSWORD/AUTHENTICATOR_PASSWORD/
+      PGRST_JWT_SECRET/NEXT_PUBLIC_SUPABASE_*), y `ADMIN_EMAIL`/
+      `ADMIN_PASSWORD`/`AGENTE_EMAIL`/`AGENTE_PASSWORD`/`JWT_SECRET` viven
+      solo en `backend/.env` (único archivo que el backend realmente lee).
 - [x] **Encontralo:** migró la base a Postgres+PostgREST self-hosted en el
       VPS (2026-07-09) — ya no depende de Supabase Cloud (Oregon). Pendiente
       **rotar** el `service_role`/password de la DB **vieja** de Supabase
@@ -104,6 +103,21 @@ teniendo sentido mantener los dos.
       todo lo demás: atribución instalación→agente, tabla de pagos/comisiones,
       el check-in de "7 días después", y el panel para que el agente vea lo
       que le corresponde cobrar.
+- [ ] **Subir video del comercio** (2026-07-10): un dueño de negocio real
+      (Vidriería Pacheco, primer comercio cargado en producción) tenía un
+      video del local y no había dónde subirlo — hoy solo se puede linkear
+      un video YA alojado afuera (`tiktok_url`/`video_url` como link
+      externo), no subir un archivo propio. Alcance: guardar el archivo
+      (mismo patrón que las fotos — disco + servido por el backend, pero
+      los videos pesan más, hay que pensar límite de tamaño/duración y si
+      conviene comprimir server-side), UI de subida en el alta/edición del
+      agente, y reproductor en la ficha del comercio.
+- [ ] **Revisar el menú de navegación desktop** (2026-07-10) — el usuario lo
+      marcó como "raro" sin precisar qué exactamente; falta volver con
+      detalle (¿qué opciones sobran/faltan del nav "Inicio · Ofertas · Mapa ·
+      Negocios · Categorías"?). Ver también: la página de detalle de
+      comercio no tenía botón "volver" cerca del encabezado (solo al final
+      de todo el scroll) — corregido 2026-07-10, agregado uno arriba también.
 - [ ] **Pasar agentes de campo de 1 cuenta hardcodeada a una tabla** —
       se van a sumar ~10 agentes más. Hoy `AGENTE_EMAIL`/`AGENTE_PASSWORD`
       en `.env` es una sola cuenta compartida; necesita ser una tabla
