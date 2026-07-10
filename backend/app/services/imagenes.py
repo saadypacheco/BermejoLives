@@ -1,6 +1,8 @@
 """Procesamiento de imágenes subidas (validar + reorientar + resize + recomprimir).
 
-Lección KB fotos-resize: reorientar por EXIF, limitar a 1600px y JPEG 70.
+Lección KB fotos-resize: reorientar por EXIF, limitar a 1600px y JPEG 82
+(70 se veía borroso en las miniaturas chicas de la tarjeta del mapa — 82 es
+el punto donde deja de notarse sin engordar mucho el archivo).
 Lanza ValueError si el archivo no es una imagen válida.
 """
 import secrets
@@ -20,7 +22,7 @@ def procesar_imagen(data: bytes) -> bytes:
     img = ImageOps.exif_transpose(img).convert("RGB")
     img.thumbnail((1600, 1600))
     out = BytesIO()
-    img.save(out, format="JPEG", quality=70, optimize=True)
+    img.save(out, format="JPEG", quality=82, optimize=True)
     return out.getvalue()
 
 

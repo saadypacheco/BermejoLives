@@ -10,6 +10,7 @@ import { type FeedItem, precioFmt, vencimientoFmt } from "@/lib/types";
 import { registrarLead } from "@/lib/campo";
 import { distanciaMetros, formatDistancia } from "@/lib/distancia";
 import { GuardarBoton } from "@/components/guardar-boton";
+import { ImageLightbox } from "@/components/image-lightbox";
 
 const CHIPS: { label: string; rubro: string }[] = [
   { label: "Todos", rubro: "" },
@@ -25,6 +26,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
   const [sel, setSel] = useState<ComercioMapa | null>(null);
+  const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
   const [miUbicacion, setMiUbicacion] = useState<{ lat: number; lng: number } | null>(null);
   const router = useRouter();
 
@@ -111,6 +113,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
                   key={sel.id}
                   src={(sel.portada_url || sel.logo_url) as string}
                   alt="" loading="lazy" decoding="async"
+                  onClick={() => setFotoAmpliada((sel.portada_url || sel.logo_url) as string)}
                   onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.removeAttribute("hidden"); }}
                 />
               )}
@@ -189,6 +192,9 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
           ))}
         </div>
       </div>
+      )}
+      {fotoAmpliada && (
+        <ImageLightbox src={fotoAmpliada} alt={sel?.nombre} onClose={() => setFotoAmpliada(null)} />
       )}
     </div>
   );
