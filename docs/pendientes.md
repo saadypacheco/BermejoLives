@@ -17,13 +17,25 @@
       código de verificación por WhatsApp llega a destino: ni el login de
       comprador (celular+código, nuevo) ni la recuperación de cuenta de
       comercio. Ver `backend/app/services/whatsapp_client.py`.
-- [ ] **Encontralo:** VPS `.env` tiene `ADMIN_EMAIL`/`ADMIN_PASSWORD`
-      duplicados y contradictorios (entrada vieja de `buscadonde.com` +
-      entrada nueva de `bermejolive.com`) — limpiar la vieja.
-- [ ] **Encontralo:** **rotar** `service_role` + password de la DB (estuvieron
-      expuestos en git en algún momento; se sacó el archivo del repo pero la
-      clave en sí nunca se rotó).
+- [ ] **Encontralo:** VPS `.env`/`backend/.env` tienen `ADMIN_EMAIL`/
+      `ADMIN_PASSWORD`/`JWT_SECRET` **duplicados** varias veces (entradas
+      viejas de `buscadonde.com`/valores por defecto del código, mezcladas
+      con entradas "nuevas"). Riesgo real: si el parser toma la última
+      ocurrencia, el admin podría estar corriendo con la contraseña débil
+      por defecto (`bermejo1234`) en vez de la que se creyó cambiar. Limpiar
+      dejando UNA sola entrada por variable, y poner una contraseña de admin
+      nueva (no reusar ninguna de las que ya se vieron en pantalla/chat).
+- [x] **Encontralo:** migró la base a Postgres+PostgREST self-hosted en el
+      VPS (2026-07-09) — ya no depende de Supabase Cloud (Oregon). Pendiente
+      **rotar** el `service_role`/password de la DB **vieja** de Supabase
+      Cloud (ya no se usa, pero la clave real quedó expuesta en pantalla
+      compartida en esta sesión — rotarla en el dashboard aunque no se use más).
 - [ ] **Encontralo:** confirmar `WEBHOOK_SECRET` seteado en prod (webhook fail-closed).
+- [ ] **Encontralo:** `OPENAI_API_KEY` en `backend/.env` tiene un valor
+      placeholder (`sk-...`, no una key real) — revisar si el código cae bien
+      a faster-whisper self-hosted con esto, o si intenta pegarle a la API de
+      OpenAI y falla (podría ser la causa del "bug transcripción" ya anotado
+      en la sección 2).
 - [ ] **tienda:** sacar `backend/.env` del repo (está **commiteado** con
       `SERVICE_ROLE_KEY` + `TELEGRAM_BOT_TOKEN` reales) → mover a `.env.example`,
       agregar a `.gitignore`, **rotar** esos secretos.
@@ -71,6 +83,52 @@ teniendo sentido mantener los dos.
 
 ## 2. Encontralo — Fase 2 (autoregistro + cobro)
 *Esto es lo que habilita el modelo de negocio.*
+- [ ] **🔴 Urgente — Agentes de captación de usuarios + incentivo por instalación.**
+      Hoy solo existe un agente de campo hardcodeado (`AGENTE_EMAIL`/
+      `AGENTE_PASSWORD` en `.env`) para cargar *comercios*. Se necesita un rol
+      distinto (o el mismo, a definir) para gente que sale a conseguir que
+      **usuarios finales instalen la PWA**, con pago:
+        - **200 (moneda a definir)** por cada instalación conseguida.
+        - **+500** si ese usuario sigue teniendo la app instalada 1 semana
+          después (requiere algún check-in / reapertura pasados 7 días, no
+          solo el evento de instalación).
+        - **Anti-fraude:** un mismo número de celular no puede contarse dos
+          veces (ni para el mismo agente ni entre agentes) si ya se había
+          instalado antes — hay que decidir qué identifica "la misma
+          instalación" (¿número de WhatsApp verificado vía el login de
+          comprador ya existente? ¿algo del dispositivo?).
+      Piezas que ya existen y sirven de base: el evento `appinstalled` del
+      `InstallPrompt` (frontend/components/install-prompt.tsx, agregado
+      2026-07-07) y la cuenta de comprador por celular+OTP (sirve para atar
+      la instalación a un número real, no a un dispositivo anónimo). Falta
+      todo lo demás: atribución instalación→agente, tabla de pagos/comisiones,
+      el check-in de "7 días después", y el panel para que el agente vea lo
+      que le corresponde cobrar.
+- [ ] **Pasar agentes de campo de 1 cuenta hardcodeada a una tabla** —
+      se van a sumar ~10 agentes más. Hoy `AGENTE_EMAIL`/`AGENTE_PASSWORD`
+      en `.env` es una sola cuenta compartida; necesita ser una tabla
+      `agentes` con alta/baja individual (mismo patrón que ya existe para
+      `comercio_usuarios`). Bloquea al punto anterior (no se puede atribuir
+      "qué agente consiguió qué instalación" con una cuenta compartida).
+- [ ] **Configuración dinámica desde el panel admin** (2026-07-09, todavía sin
+      diseñar): sacar de `.env` y pasar a una tabla editable desde el
+      dashboard — arrancando por `OPENAI_API_KEY`/`GEMINI_API_KEY`, con la
+      idea de poder **cambiar de proveedor** (ej. Whisper vs. otro STT,
+      Gemini vs. otro LLM) sin redeploy. Alcance real, no es solo "mover a
+      una tabla":
+        - Las keys no pueden guardarse en texto plano en la base — encriptar
+          en reposo (o como mínimo, mismo nivel de protección que hoy en
+          `.env`, que ya tuvo una fuga por git en el pasado, ver sección 0).
+        - El código que llama a estos servicios (`services/clasificador.py`,
+          la transcripción de audio) hoy asume un proveedor fijo — para que
+          "cambiar de proveedor" sea real, necesita una capa de abstracción,
+          no solo leer la key de otro lado.
+        - Mismo criterio aplicaría a `ADMIN_EMAIL`/`ADMIN_PASSWORD` — pasar
+          de credencial única en `.env` a cuentas admin en tabla (posible
+          mismo esfuerzo que la tabla de agentes de arriba, evaluar si
+          conviene unificarlos en un solo trabajo).
+      **No bloquea el lanzamiento** — para el deploy del self-host (2026-07-09)
+      estas 4 variables se quedan en `backend/.env` tal cual, funcionando.
 - [x] **Auth + OTP por teléfono para compradores** (celular + código
       WhatsApp, sin contraseña) — hecho 2026-07-07, solo del lado Encontralo.
       Reservalo sigue con su propio login separado (Supabase Auth) — no están
