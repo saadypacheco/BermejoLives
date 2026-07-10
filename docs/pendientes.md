@@ -133,6 +133,19 @@ teniendo sentido mantener los dos.
       WhatsApp, sin contraseña) — hecho 2026-07-07, solo del lado Encontralo.
       Reservalo sigue con su propio login separado (Supabase Auth) — no están
       unificados entre sí.
+- [ ] **Intereses del comprador, para avisar solo lo que le sirve**
+      (2026-07-10): al registrarse, UNA sola pregunta corta ("¿qué te
+      interesa que te avisemos?"), texto libre — tiene que ser rápido, no
+      cansar al comprador con un formulario. Guardar **los dos** valores:
+        - el texto tal cual lo escribió la persona (`interes_texto`), y
+        - las categorías/rubros que la IA deriva de ese texto
+          (`interes_rubros`, mismo patrón que `sugerir_rubros` ya usa para
+          clasificar comercios).
+      El texto crudo se guarda igual aunque la IA falle/no esté disponible
+      (fallback gratis, mismo criterio que el resto del clasificador). Sirve
+      para, cuando entra una oferta nueva, decidir a qué compradores
+      avisarle — depende de WAHA en prod (sección 0) para que el aviso
+      llegue de verdad.
 - [ ] **Suscripción:** `paga_hasta` + **baja automática** (job) + **QR Bolivia**
       (arranque: comprobante por WhatsApp → extiende fecha).
 - [ ] **Oferta primeros 100** ("pagás 1 mes, vale 2") + **rail de pago** funcionando.
