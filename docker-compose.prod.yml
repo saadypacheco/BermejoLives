@@ -61,6 +61,16 @@ services:
         NEXT_PUBLIC_MODO_CAPTURA: ${MODO_CAPTURA:-1}
     container_name: buscadonde-frontend
     restart: unless-stopped
+    depends_on:
+      postgrest:
+        condition: service_started
+    environment:
+      # Server Components (SSR) corren DENTRO del contenedor: usan la red
+      # interna de Docker en vez de salir a internet y volver a pegarle a
+      # la IP pública del propio VPS (hairpin NAT — falla silencioso en
+      # varios proveedores). El navegador sigue usando NEXT_PUBLIC_SUPABASE_URL
+      # (horneado en el bundle), que sí necesita ser la URL pública.
+      - SUPABASE_INTERNAL_URL=http://postgrest:3000
     networks: [traefik, internal]
     labels:
       - traefik.enable=true
