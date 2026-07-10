@@ -48,6 +48,11 @@ services:
       - traefik.http.routers.buscadonde-db.tls=true
       - traefik.http.routers.buscadonde-db.tls.certresolver=letsencrypt
       - traefik.http.services.buscadonde-db.loadbalancer.server.port=3000
+      # supabase-js/supabase-py agregan /rest/v1 solos (asumen el Kong de
+      # Supabase Cloud) — PostgREST bare sirve las tablas en la raíz, así
+      # que se lo sacamos acá antes de reenviar.
+      - traefik.http.routers.buscadonde-db.middlewares=buscadonde-db-stripprefix
+      - "traefik.http.middlewares.buscadonde-db-stripprefix.stripprefix.prefixes=/rest/v1"
   frontend:
     build:
       context: ./frontend
@@ -64,13 +69,6 @@ services:
     depends_on:
       postgrest:
         condition: service_started
-    environment:
-      # Server Components (SSR) corren DENTRO del contenedor: usan la red
-      # interna de Docker en vez de salir a internet y volver a pegarle a
-      # la IP pública del propio VPS (hairpin NAT — falla silencioso en
-      # varios proveedores). El navegador sigue usando NEXT_PUBLIC_SUPABASE_URL
-      # (horneado en el bundle), que sí necesita ser la URL pública.
-      - SUPABASE_INTERNAL_URL=http://postgrest:3000
     networks: [traefik, internal]
     labels:
       - traefik.enable=true
@@ -90,9 +88,10 @@ services:
       postgrest:
         condition: service_started
     environment:
-      # Backend -> postgrest por red interna de Docker (evita el salto por
-      # Traefik/HTTPS que sí necesita el navegador). El .env trae el resto.
-      - SUPABASE_URL=http://postgrest:3000
+      # supabase-py agrega /rest/v1 solo (asume el Kong de Supabase Cloud) —
+      # por eso va por la URL pública con el stripprefix de Traefik, en vez
+      # de pegarle directo a postgrest:3000 (que no tiene ese prefijo).
+      - SUPABASE_URL=https://db.${DOMAIN}
       - FOTOS_PUBLIC_BASE_URL=https://api.${DOMAIN}/fotos
     volumes:
       - whisper_models:/models      # cache del modelo de transcripción (persiste entre rebuilds)
