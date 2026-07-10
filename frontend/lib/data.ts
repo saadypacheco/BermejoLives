@@ -59,15 +59,21 @@ export async function getFeed(limit = 8): Promise<FeedItem[]> {
       .from("feed_publico")
       .select("*")
       .limit(limit);
+    if (error) console.warn("getFeed error:", error.message, error.code, error.details);
     if (!error && data) return data as FeedItem[];
+  } else {
+    console.warn("getFeed: hasSupabase=false — faltan NEXT_PUBLIC_SUPABASE_URL/ANON_KEY");
   }
   return DEMO_FEED.slice(0, limit);
 }
 
 export async function getComercios(): Promise<Comercio[]> {
   if (hasSupabase) {
-    const { data } = await supabase.from("comercios").select("*").eq("destacado", true).limit(10);
+    const { data, error } = await supabase.from("comercios").select("*").eq("destacado", true).limit(10);
+    if (error) console.warn("getComercios error:", error.message, error.code, error.details);
     if (data) return data as Comercio[];
+  } else {
+    console.warn("getComercios: hasSupabase=false — faltan NEXT_PUBLIC_SUPABASE_URL/ANON_KEY");
   }
   return DEMO_COMERCIOS;
 }
@@ -86,7 +92,7 @@ export type ComercioMapa = {
 // tabla con el import OSM masivo). El rubro se resuelve con una query chica aparte.
 export async function getComerciosMapa(): Promise<ComercioMapa[]> {
   if (hasSupabase) {
-    const [{ data }, { data: rubros }] = await Promise.all([
+    const [{ data, error }, { data: rubros, error: errorRubros }] = await Promise.all([
       supabase
         .from("comercios")
         .select("id, slug, nombre, lat, lng, logo_url, portada_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, rubro_id")
@@ -97,6 +103,8 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
         .limit(250),
       supabase.from("rubros").select("id, slug"),
     ]);
+    if (error) console.warn("getComerciosMapa error (comercios):", error.message, error.code, error.details);
+    if (errorRubros) console.warn("getComerciosMapa error (rubros):", errorRubros.message, errorRubros.code);
     if (data) {
       const slugById = new Map((rubros ?? []).map((r: any) => [r.id, r.slug]));
       return (data as any[]).map((c) => ({
@@ -107,6 +115,8 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
         rubro_slug: slugById.get(c.rubro_id) ?? null,
       }));
     }
+  } else {
+    console.warn("getComerciosMapa: hasSupabase=false — faltan NEXT_PUBLIC_SUPABASE_URL/ANON_KEY");
   }
   return DEMO_COMERCIOS.map((c) => ({
     id: c.id, slug: c.slug, nombre: c.nombre, lat: c.lat, lng: c.lng,
