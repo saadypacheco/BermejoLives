@@ -53,6 +53,35 @@ services:
       # que se lo sacamos acá antes de reenviar.
       - traefik.http.routers.buscadonde-db.middlewares=buscadonde-db-stripprefix
       - "traefik.http.middlewares.buscadonde-db-stripprefix.stripprefix.prefixes=/rest/v1"
+  waha:
+    image: devlikeapro/waha:latest
+    container_name: buscadonde-waha
+    restart: unless-stopped
+    environment:
+      - WHATSAPP_API_KEY=${WAHA_API_KEY}
+      - WHATSAPP_DEFAULT_ENGINE=NOWEB
+      - WHATSAPP_HOOK_URL=http://backend:8000/ingest/webhook
+      - WHATSAPP_HOOK_EVENTS=message,message.any,session.status
+      - WHATSAPP_HOOK_HMAC_KEY=${WEBHOOK_SECRET}
+      - WHATSAPP_DOWNLOAD_MEDIA=true
+      # Protege el dashboard (ahí se escanea el QR para vincular el
+      # número) — sin esto quedaría público, cualquiera podría re-vincular
+      # la sesión a su propio celular.
+      - WAHA_DASHBOARD_USERNAME=${WAHA_DASHBOARD_USER}
+      - WAHA_DASHBOARD_PASSWORD=${WAHA_DASHBOARD_PASSWORD}
+    volumes:
+      - waha_sessions:/app/.sessions
+      - waha_media:/app/.media
+    networks: [traefik, internal]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik
+      - "traefik.http.routers.buscadonde-waha.rule=Host(`waha.${DOMAIN}`)"
+      - traefik.http.routers.buscadonde-waha.entrypoints=websecure
+      - traefik.http.routers.buscadonde-waha.tls=true
+      - traefik.http.routers.buscadonde-waha.tls.certresolver=letsencrypt
+      - traefik.http.services.buscadonde-waha.loadbalancer.server.port=3000
+
   frontend:
     build:
       context: ./frontend
@@ -87,6 +116,8 @@ services:
     depends_on:
       postgrest:
         condition: service_started
+      waha:
+        condition: service_started
     environment:
       # supabase-py agrega /rest/v1 solo (asume el Kong de Supabase Cloud) —
       # por eso va por la URL pública con el stripprefix de Traefik, en vez
@@ -110,6 +141,8 @@ volumes:
   whisper_models:
   postgres_data:
   comercio_fotos:
+  waha_sessions:
+  waha_media:
 
 networks:
   traefik:
