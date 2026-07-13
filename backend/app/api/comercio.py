@@ -20,7 +20,7 @@ from app.models.schemas import LoginBody, PublicarBody
 from app.services.clasificador import clasificar, generar_texto_comercio, sugerir_rubros
 from app.services.imagenes import guardar_foto_local, procesar_imagen, subir_foto_comercio
 from app.services.tienda_client import get_tienda_client
-from app.services.whatsapp_client import enviar_texto
+from app.services.whatsapp_client import enviar_codigo_otp
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -203,7 +203,7 @@ def comercio_recuperar(body: RecuperarBody, repo: Repo = Depends(get_repo)) -> d
         code = f"{secrets.randbelow(1_000_000):06d}"
         expira = (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()
         repo.set_reset_code(user["id"], code, expira)
-        enviado = enviar_texto(body.whatsapp, f"Tu código para recuperar el acceso a Encontralo: {code}\nVence en 15 minutos.")
+        enviado = enviar_codigo_otp(body.whatsapp, code, contexto="recuperar_comercio")
         logger.info("comercio.recuperar.solicitado", whatsapp=body.whatsapp, enviado=enviado)
     return {"ok": True}
 

@@ -12,10 +12,19 @@ class Settings(BaseSettings):
     supabase_public_url: str = ""          # cómo lo alcanza el navegador (localhost) — para URLs de fotos
     supabase_service_role_key: str = ""
 
+    # Envío de OTP por WhatsApp — proveedor intercambiable (ver services/whatsapp_client.py)
+    whatsapp_provider: str = "waha"     # "waha" | "cloud_api"
+
     # Bridge WhatsApp (WAHA) — red privada
     waha_base_url: str = "http://waha:3000"
     waha_api_key: str = ""
     webhook_secret: str = ""            # HMAC del webhook
+
+    # WhatsApp Business Platform (Cloud API oficial) — requiere plantilla de
+    # "Authentication" ya aprobada en el Meta Business Manager.
+    whatsapp_cloud_phone_id: str = ""
+    whatsapp_cloud_token: str = ""
+    whatsapp_cloud_template_otp: str = "otp_login"
 
     # Auth del panel (JWT self-contained, igual patrón que mentorcomercial)
     jwt_secret: str = "bermejo-dev-secret-change-in-prod"

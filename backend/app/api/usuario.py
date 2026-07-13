@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from app.core import auth
 from app.db.repository import Repo, get_repo
-from app.services.whatsapp_client import enviar_texto
+from app.services.whatsapp_client import enviar_codigo_otp
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -31,7 +31,7 @@ def solicitar_codigo(body: SolicitarCodigoBody, repo: Repo = Depends(get_repo)) 
     code = f"{secrets.randbelow(1_000_000):06d}"
     expira = (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()
     repo.set_reset_code_usuario(usuario["id"], code, expira)
-    enviado = enviar_texto(body.whatsapp, f"Tu código de Encontralo: {code}\nVence en 15 minutos.")
+    enviado = enviar_codigo_otp(body.whatsapp, code, contexto="login")
     logger.info("usuario.solicitar_codigo", whatsapp=body.whatsapp, enviado=enviado)
     return {"ok": True}
 
