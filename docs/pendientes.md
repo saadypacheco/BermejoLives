@@ -17,6 +17,37 @@
       código de verificación por WhatsApp llega a destino: ni el login de
       comprador (celular+código, nuevo) ni la recuperación de cuenta de
       comercio. Ver `backend/app/services/whatsapp_client.py`.
+      **Análisis 2026-07-13 (preocupación: fiabilidad/riesgo de ban de WAHA
+      al ser una API no oficial):**
+        - [x] Capa de proveedor intercambiable ya implementada
+          (`WHATSAPP_PROVIDER=waha|cloud_api`, `services/whatsapp_client.py`)
+          — cambiar a la API oficial de Meta (WhatsApp Business Platform) el
+          día de mañana es un cambio de config, no de código. `CloudAPIProvider`
+          ya está escrito, falta verificar el número en Meta Business Manager
+          + aprobar una plantilla de "Authentication" para poder usarla.
+        - [ ] **Rediseño del flujo de login/recuperación: mensaje ENTRANTE, no
+          saliente.** En vez de que el bot mande el código (patrón de envío
+          automatizado masivo = lo que Meta detecta como spam), el usuario
+          manda un WhatsApp AL sistema para confirmar su número — cero riesgo
+          de ban, porque nunca hay envío saliente automatizado en este flujo:
+            1. Botón "Confirmar por WhatsApp" → abre `wa.me/<numero>?text=CONFIRMAR-XYZ123`
+               (mensaje pre-armado, el usuario solo toca "Enviar").
+            2. El webhook de entrada ya existente (`ingest.py`, hoy solo
+               procesa publicaciones) tiene que reconocer estos mensajes de
+               confirmación y validar el código contra la sesión pendiente.
+            3. El frontend necesita esperar la confirmación al volver de
+               WhatsApp (polling corto, o alguna señal).
+            4. Fallback para el caso raro sin WhatsApp instalado: SMS o email.
+          Sirve igual para recuperación de cuenta de comercio (mismo mecanismo).
+          Con esto, WAHA queda seguro de usar para login/recuperación — el
+          riesgo de ban solo seguiría existiendo para mensajería SALIENTE
+          masiva (ver ítem de abajo, ya resuelto: eso no va a ir por WhatsApp).
+        - [x] **Decisión: nada de mensajería/alertas salientes por WhatsApp
+          por ahora** (avisos de ofertas, notificaciones a compradores en
+          general) — todo eso va como notificación **dentro de la PWA** en
+          vez de WhatsApp (ver sección 2, "Intereses del comprador"). WhatsApp
+          se reserva únicamente para verificar identidad (login/recuperación),
+          que con el rediseño de arriba deja de tener riesgo de ban.
 - [x] **Encontralo:** VPS `.env`/`backend/.env` tenían `ADMIN_EMAIL`/
       `ADMIN_PASSWORD`/`JWT_SECRET` duplicados — limpiado 2026-07-10 (self-host):
       `.env` raíz solo tiene lo que usa `docker-compose.prod.yml`
@@ -157,9 +188,18 @@ teniendo sentido mantener los dos.
           clasificar comercios).
       El texto crudo se guarda igual aunque la IA falle/no esté disponible
       (fallback gratis, mismo criterio que el resto del clasificador). Sirve
-      para, cuando entra una oferta nueva, decidir a qué compradores
-      avisarle — depende de WAHA en prod (sección 0) para que el aviso
-      llegue de verdad.
+      para, cuando entra una oferta nueva, decidir a qué compradores avisarle.
+      **Decisión 2026-07-13: el aviso NO va por WhatsApp** — el usuario
+      prefiere evitar depender de WhatsApp para mensajería/alertas en
+      general (solo se usa WhatsApp para verificar identidad — login/
+      recuperación —, no para avisos). El aviso va como **notificación
+      dentro de la PWA**, en dos niveles:
+        1. Centro de notificaciones in-app (tabla + pantalla "Notificaciones"
+           — el comprador la ve la próxima vez que abre la app). Arrancar por acá.
+        2. Web Push real más adelante (llega con la PWA cerrada — usa el
+           Service Worker ya registrado, requiere claves VAPID + gestión de
+           suscripciones; en iOS solo funciona con la PWA instalada a
+           pantalla de inicio, que es el flujo que ya existe).
 - [ ] **Suscripción:** `paga_hasta` + **baja automática** (job) + **QR Bolivia**
       (arranque: comprobante por WhatsApp → extiende fecha).
 - [ ] **Oferta primeros 100** ("pagás 1 mes, vale 2") + **rail de pago** funcionando.
