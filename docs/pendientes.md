@@ -25,20 +25,21 @@
           día de mañana es un cambio de config, no de código. `CloudAPIProvider`
           ya está escrito, falta verificar el número en Meta Business Manager
           + aprobar una plantilla de "Authentication" para poder usarla.
-        - [ ] **Rediseño del flujo de login/recuperación: mensaje ENTRANTE, no
-          saliente.** En vez de que el bot mande el código (patrón de envío
-          automatizado masivo = lo que Meta detecta como spam), el usuario
-          manda un WhatsApp AL sistema para confirmar su número — cero riesgo
-          de ban, porque nunca hay envío saliente automatizado en este flujo:
-            1. Botón "Confirmar por WhatsApp" → abre `wa.me/<numero>?text=CONFIRMAR-XYZ123`
-               (mensaje pre-armado, el usuario solo toca "Enviar").
-            2. El webhook de entrada ya existente (`ingest.py`, hoy solo
-               procesa publicaciones) tiene que reconocer estos mensajes de
-               confirmación y validar el código contra la sesión pendiente.
-            3. El frontend necesita esperar la confirmación al volver de
-               WhatsApp (polling corto, o alguna señal).
-            4. Fallback para el caso raro sin WhatsApp instalado: SMS o email.
-          Sirve igual para recuperación de cuenta de comercio (mismo mecanismo).
+        - [x] **Rediseño del flujo de login/recuperación: mensaje ENTRANTE, no
+          saliente** — implementado 2026-07-13 (migración `0029`, backend +
+          frontend, 10 tests nuevos). El usuario manda "CONFIRMAR-XXXXXX" por
+          WhatsApp al sistema en vez de que el bot le mande un código — cero
+          riesgo de ban, porque nunca hay envío saliente automatizado. Sirve
+          para login de comprador y recuperación de comercio (mismo
+          mecanismo). **Falta para que ande en producción:**
+            - Aplicar la migración `0029` (columna `reset_code_confirmado_at`
+              en `usuarios` y `comercio_usuarios`).
+            - Setear `BOT_WHATSAPP_NUMERO` en `backend/.env` (el número de la
+              sesión de WAHA, sin el cual `wa_link_confirmar()` arma un link roto).
+            - Y por supuesto, WAHA desplegado de verdad (ítem de arriba) — sin
+              eso el webhook nunca recibe el "CONFIRMAR-XXXXXX" y esto no sirve.
+          Fallback para el caso raro sin WhatsApp instalado: todavía no
+          implementado (SMS o email).
           Con esto, WAHA queda seguro de usar para login/recuperación — el
           riesgo de ban solo seguiría existiendo para mensajería SALIENTE
           masiva (ver ítem de abajo, ya resuelto: eso no va a ir por WhatsApp).
