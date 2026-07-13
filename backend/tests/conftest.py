@@ -159,6 +159,19 @@ class FakeRepo:
         for u in self.usuarios.values():
             if u["id"] == user_id:
                 u["reset_code"], u["reset_code_expira"] = code, expira
+                u["reset_code_confirmado_at"] = None
+
+    def confirmar_reset_code_comercio(self, whatsapp, codigo):
+        from datetime import datetime, timezone
+
+        user = self.get_comercio_usuario_por_whatsapp(whatsapp)
+        if not user or not user.get("reset_code") or user["reset_code"] != codigo:
+            return False
+        expira = user.get("reset_code_expira")
+        if not expira or datetime.fromisoformat(expira) < datetime.now(timezone.utc):
+            return False
+        user["reset_code_confirmado_at"] = datetime.now(timezone.utc).isoformat()
+        return True
 
     def set_password(self, user_id, password_hash):
         for u in self.usuarios.values():
@@ -198,6 +211,19 @@ class FakeRepo:
         u = self.compradores.get(usuario_id)
         if u:
             u["reset_code"], u["reset_code_expira"] = code, expira
+            u["reset_code_confirmado_at"] = None
+
+    def confirmar_reset_code_usuario(self, whatsapp, codigo):
+        from datetime import datetime, timezone
+
+        usuario = self.get_usuario_por_whatsapp(whatsapp)
+        if not usuario or not usuario.get("reset_code") or usuario["reset_code"] != codigo:
+            return False
+        expira = usuario.get("reset_code_expira")
+        if not expira or datetime.fromisoformat(expira) < datetime.now(timezone.utc):
+            return False
+        usuario["reset_code_confirmado_at"] = datetime.now(timezone.utc).isoformat()
+        return True
 
     def get_usuario(self, usuario_id):
         return self.compradores.get(usuario_id)

@@ -22,6 +22,7 @@ class Repo(Protocol):
     def get_comercio_usuario(self, email: str) -> dict | None: ...
     def get_comercio_usuario_por_whatsapp(self, whatsapp: str) -> dict | None: ...
     def set_reset_code(self, user_id: str, code: str | None, expira: str | None) -> None: ...
+    def confirmar_reset_code_comercio(self, whatsapp: str, codigo: str) -> bool: ...
     def set_password(self, user_id: str, password_hash: str) -> None: ...
     def get_comercio(self, comercio_id: str) -> dict | None: ...
     def list_publicaciones_de_comercio(self, comercio_id: str) -> list[dict]: ...
@@ -69,6 +70,7 @@ class Repo(Protocol):
     def get_usuario_por_whatsapp(self, whatsapp: str) -> dict | None: ...
     def crear_usuario(self, whatsapp: str) -> dict: ...
     def set_reset_code_usuario(self, usuario_id: str, code: str | None, expira: str | None) -> None: ...
+    def confirmar_reset_code_usuario(self, whatsapp: str, codigo: str) -> bool: ...
     def get_usuario(self, usuario_id: str) -> dict | None: ...
     def agregar_favorito(self, usuario_id: str, comercio_id: str) -> None: ...
     def quitar_favorito(self, usuario_id: str, comercio_id: str) -> None: ...
@@ -159,7 +161,27 @@ class SupabaseRepo:
         return res.data[0]
 
     def set_reset_code_usuario(self, usuario_id: str, code: str | None, expira: str | None) -> None:
-        self._db.table("usuarios").update({"reset_code": code, "reset_code_expira": expira}).eq("id", usuario_id).execute()
+        self._db.table("usuarios").update(
+            {"reset_code": code, "reset_code_expira": expira, "reset_code_confirmado_at": None}
+        ).eq("id", usuario_id).execute()
+
+    def confirmar_reset_code_usuario(self, whatsapp: str, codigo: str) -> bool:
+        """Llamado desde el webhook: alguien mandó 'CONFIRMAR-XXXXXX' por
+        WhatsApp. Confirma solo si el código coincide, no venció, Y el
+        remitente es el mismo número que lo pidió (evita que otra persona
+        confirme un código ajeno)."""
+        from datetime import datetime, timezone
+
+        usuario = self.get_usuario_por_whatsapp(whatsapp)
+        if not usuario or not usuario.get("reset_code") or usuario["reset_code"] != codigo:
+            return False
+        expira = usuario.get("reset_code_expira")
+        if not expira or datetime.fromisoformat(expira) < datetime.now(timezone.utc):
+            return False
+        self._db.table("usuarios").update(
+            {"reset_code_confirmado_at": datetime.now(timezone.utc).isoformat()}
+        ).eq("id", usuario["id"]).execute()
+        return True
 
     def get_usuario(self, usuario_id: str) -> dict | None:
         res = self._db.table("usuarios").select("*").eq("id", usuario_id).limit(1).execute()
@@ -197,7 +219,25 @@ class SupabaseRepo:
         return res.data[0] if res.data else None
 
     def set_reset_code(self, user_id: str, code: str | None, expira: str | None) -> None:
-        self._db.table("comercio_usuarios").update({"reset_code": code, "reset_code_expira": expira}).eq("id", user_id).execute()
+        self._db.table("comercio_usuarios").update(
+            {"reset_code": code, "reset_code_expira": expira, "reset_code_confirmado_at": None}
+        ).eq("id", user_id).execute()
+
+    def confirmar_reset_code_comercio(self, whatsapp: str, codigo: str) -> bool:
+        """Llamado desde el webhook: alguien mandó 'CONFIRMAR-XXXXXX' por
+        WhatsApp. Mismo criterio que confirmar_reset_code_usuario."""
+        from datetime import datetime, timezone
+
+        user = self.get_comercio_usuario_por_whatsapp(whatsapp)
+        if not user or not user.get("reset_code") or user["reset_code"] != codigo:
+            return False
+        expira = user.get("reset_code_expira")
+        if not expira or datetime.fromisoformat(expira) < datetime.now(timezone.utc):
+            return False
+        self._db.table("comercio_usuarios").update(
+            {"reset_code_confirmado_at": datetime.now(timezone.utc).isoformat()}
+        ).eq("id", user["id"]).execute()
+        return True
 
     def set_password(self, user_id: str, password_hash: str) -> None:
         self._db.table("comercio_usuarios").update(

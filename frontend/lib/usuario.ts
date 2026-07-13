@@ -21,25 +21,31 @@ export function clearUsuario() {
   localStorage.removeItem(SESSION_KEY);
 }
 
-export async function solicitarCodigoUsuario(whatsapp: string): Promise<void> {
+export type SolicitudCodigo = { codigo: string; wa_link: string };
+
+/** Ya no manda nada por WhatsApp — devuelve el código y el link wa.me para
+ * que el usuario mande "CONFIRMAR-XXXXXX" él mismo (login por mensaje
+ * entrante, sin riesgo de ban por envío saliente automatizado). */
+export async function solicitarCodigoUsuario(whatsapp: string): Promise<SolicitudCodigo> {
   const res = await fetch(`${API}/auth/usuario/solicitar-codigo`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ whatsapp }),
   });
-  if (!res.ok) throw new Error("No se pudo enviar el código");
+  if (!res.ok) throw new Error("No se pudo generar el código");
+  const data = await res.json();
+  return { codigo: data.codigo, wa_link: data.wa_link };
 }
 
-export async function verificarCodigoUsuario(whatsapp: string, codigo: string): Promise<UsuarioSession> {
+/** Puede devolver null (todavía no se confirmó por WhatsApp) en vez de
+ * tirar excepción — pensado para pollear sin llenar la consola de errores. */
+export async function verificarCodigoUsuario(whatsapp: string, codigo: string): Promise<UsuarioSession | null> {
   const res = await fetch(`${API}/auth/usuario/verificar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ whatsapp, codigo }),
   });
-  if (!res.ok) {
-    const d = await res.json().catch(() => ({}));
-    throw new Error(d.detail ?? "Código incorrecto");
-  }
+  if (!res.ok) return null;
   const data = await res.json();
   localStorage.setItem(TOKEN_KEY, data.access_token);
   localStorage.setItem(SESSION_KEY, JSON.stringify(data.usuario));

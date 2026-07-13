@@ -20,7 +20,6 @@ from app.models.schemas import LoginBody, PublicarBody
 from app.services.clasificador import clasificar, generar_texto_comercio, sugerir_rubros
 from app.services.imagenes import guardar_foto_local, procesar_imagen, subir_foto_comercio
 from app.services.tienda_client import get_tienda_client
-from app.services.whatsapp_client import enviar_codigo_otp
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -196,16 +195,26 @@ class RecuperarBody(BaseModel):
 
 @router.post("/auth/comercio/recuperar")
 def comercio_recuperar(body: RecuperarBody, repo: Repo = Depends(get_repo)) -> dict:
-    """Genera un código de 6 dígitos y lo manda por WhatsApp al número registrado.
-    Respuesta siempre igual (no revela si el número existe, evita enumeración)."""
+    """Genera un código para confirmar por WhatsApp entrante (no lo mandamos
+    nosotros — ver docs/pendientes.md sección 0). Respuesta siempre con la
+    misma forma exista o no el número (evita enumeración): si no existe, el
+    código nunca va a poder confirmarse, pero el link se ve igual."""
+    code = f"{secrets.randbelow(1_000_000):06d}"
     user = repo.get_comercio_usuario_por_whatsapp(body.whatsapp)
     if user:
-        code = f"{secrets.randbelow(1_000_000):06d}"
         expira = (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()
         repo.set_reset_code(user["id"], code, expira)
-        enviado = enviar_codigo_otp(body.whatsapp, code, contexto="recuperar_comercio")
-        logger.info("comercio.recuperar.solicitado", whatsapp=body.whatsapp, enviado=enviado)
-    return {"ok": True}
+        logger.info("comercio.recuperar.solicitado", whatsapp=body.whatsapp)
+    return {"ok": True, "codigo": code, "wa_link": settings.wa_link_confirmar(code)}
+
+
+@router.get("/auth/comercio/recuperar/estado")
+def comercio_recuperar_estado(whatsapp: str, codigo: str, repo: Repo = Depends(get_repo)) -> dict:
+    """Polling: el frontend consulta esto después de mostrar el botón
+    "Confirmar por WhatsApp", antes de pedir la contraseña nueva."""
+    user = repo.get_comercio_usuario_por_whatsapp(whatsapp)
+    confirmado = bool(user and user.get("reset_code") == codigo and user.get("reset_code_confirmado_at"))
+    return {"confirmado": confirmado}
 
 
 class RecuperarConfirmarBody(BaseModel):
@@ -224,6 +233,8 @@ def comercio_recuperar_confirmar(body: RecuperarConfirmarBody, repo: Repo = Depe
     expira = user.get("reset_code_expira")
     if not expira or datetime.fromisoformat(expira) < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="El código venció, pedí uno nuevo")
+    if not user.get("reset_code_confirmado_at"):
+        raise HTTPException(status_code=400, detail="Todavía no confirmaste por WhatsApp")
     repo.set_password(user["id"], auth.hash_password(body.nueva_password))
     logger.info("comercio.recuperar.confirmado", whatsapp=body.whatsapp)
 

@@ -8,7 +8,14 @@ Flujo (el corazón del producto):
     -> asociamos/creamos el comercio por su número
     -> creamos publicacion estado='pendiente'
     -> el moderador aprueba -> aparece en el feed en vivo
+
+Excepción a ese flujo: mensajes "CONFIRMAR-XXXXXX" (login/recuperación de
+cuenta por WhatsApp entrante, ver docs/pendientes.md sección 0) — se
+interceptan ANTES de la lógica de arriba, si no quedarían creando
+comercios/publicaciones fantasma a partir de un mensaje que no es una oferta.
 """
+import re
+
 import structlog
 
 from app.db.repository import Repo, get_repo
@@ -17,6 +24,7 @@ from app.models.whatsapp import WahaEvent, WahaMessagePayload
 logger = structlog.get_logger()
 
 _MESSAGE_EVENTS = {"message", "message.any"}
+_RE_CONFIRMAR = re.compile(r"^\s*CONFIRMAR-(\d{6})\s*$", re.IGNORECASE)
 
 # Heurística simple para clasificar el tipo de publicación a partir del texto.
 _VIDEO_HINTS = ("tiktok.com", "video", "reel")
@@ -58,6 +66,18 @@ def _extract_location(raw: dict) -> tuple[float, float, str | None] | None:
         return None
 
 
+def _handle_confirmacion(payload: WahaMessagePayload, codigo: str, repo: Repo) -> dict:
+    """Alguien mandó 'CONFIRMAR-XXXXXX' — probar contra usuarios (comprador)
+    y comercio_usuarios (dueño de comercio). Solo uno de los dos va a
+    matchear, si alguno; no hay ambigüedad real entre ambos flujos."""
+    ok_usuario = repo.confirmar_reset_code_usuario(payload.phone, codigo)
+    ok_comercio = False if ok_usuario else repo.confirmar_reset_code_comercio(payload.phone, codigo)
+    confirmado = ok_usuario or ok_comercio
+    logger.info("ingest.confirmacion", phone=payload.phone, confirmado=confirmado,
+                tipo="usuario" if ok_usuario else ("comercio" if ok_comercio else None))
+    return {"captured": True, "confirmacion": True, "confirmado": confirmado}
+
+
 def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     repo = repo or get_repo()
     event = WahaEvent.model_validate(event_dict)
@@ -70,6 +90,10 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         raise IngestError("payload sin 'id' (no se puede deduplicar)")
     if payload.from_me:
         return {"captured": False, "reason": "mensaje saliente"}
+
+    match_confirmacion = _RE_CONFIRMAR.match(payload.body or "")
+    if match_confirmacion:
+        return _handle_confirmacion(payload, match_confirmacion.group(1), repo)
 
     # 1) Bitácora cruda (idempotente)
     inserted_inbox = repo.insert_wa_inbox(

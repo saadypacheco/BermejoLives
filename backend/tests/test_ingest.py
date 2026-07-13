@@ -43,6 +43,42 @@ def test_clasificacion_video_por_link_tiktok(repo):
     assert repo.publicaciones[0]["tiktok_url"] == "https://tiktok.com/@x/video/9"
 
 
+# ---------------- Confirmación de login/recuperación por WhatsApp entrante ----------------
+def test_confirmar_no_crea_publicacion_ni_comercio(repo):
+    """El mensaje 'CONFIRMAR-XXXXXX' no es una oferta — no debe caer en el
+    flujo normal de ingesta (nada de comercio fantasma ni publicación)."""
+    res = ingest.handle_message(_evento(wamid="wa-c1", body="CONFIRMAR-123456", jid="59170000001@c.us"), repo)
+    assert res == {"captured": True, "confirmacion": True, "confirmado": False}
+    assert len(repo.publicaciones) == 0
+    assert len(repo.comercios) == 0
+
+
+def test_confirmar_valida_codigo_de_comprador(repo):
+    usuario = repo.crear_usuario("59170000001")
+    repo.set_reset_code_usuario(usuario["id"], "654321", "2099-01-01T00:00:00+00:00")
+
+    res = ingest.handle_message(_evento(wamid="wa-c2", body="CONFIRMAR-654321", jid="59170000001@c.us"), repo)
+    assert res["confirmado"] is True
+    assert repo.compradores[usuario["id"]]["reset_code_confirmado_at"] is not None
+
+
+def test_confirmar_codigo_no_coincide(repo):
+    usuario = repo.crear_usuario("59170000001")
+    repo.set_reset_code_usuario(usuario["id"], "654321", "2099-01-01T00:00:00+00:00")
+
+    res = ingest.handle_message(_evento(wamid="wa-c3", body="CONFIRMAR-000000", jid="59170000001@c.us"), repo)
+    assert res["confirmado"] is False
+    assert repo.compradores[usuario["id"]]["reset_code_confirmado_at"] is None
+
+
+def test_confirmar_ignora_mayusculas_y_espacios(repo):
+    usuario = repo.crear_usuario("59170000001")
+    repo.set_reset_code_usuario(usuario["id"], "654321", "2099-01-01T00:00:00+00:00")
+
+    res = ingest.handle_message(_evento(wamid="wa-c4", body="  confirmar-654321  ", jid="59170000001@c.us"), repo)
+    assert res["confirmado"] is True
+
+
 def test_ubicacion_por_whatsapp_actualiza_comercio(repo):
     """El vendedor comparte su ubicación por WhatsApp -> se guardan lat/lng."""
     repo.seed_comercio(id="com-loc", slug="loc", nombre="Loc", whatsapp="59170000008",

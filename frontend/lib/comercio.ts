@@ -40,12 +40,26 @@ export async function generarDescripcion(nombre: string, que_vende: string, rubr
   return res.json();
 }
 
-export async function comercioRecuperar(whatsapp: string): Promise<void> {
-  await fetch(`${API}/auth/comercio/recuperar`, {
+export type SolicitudRecuperar = { codigo: string; wa_link: string };
+
+/** Ya no manda nada por WhatsApp — devuelve el código y el link wa.me para
+ * que el dueño mande "CONFIRMAR-XXXXXX" él mismo (sin riesgo de ban por
+ * envío saliente automatizado). */
+export async function comercioRecuperar(whatsapp: string): Promise<SolicitudRecuperar> {
+  const res = await fetch(`${API}/auth/comercio/recuperar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ whatsapp }),
   });
+  const data = await res.json().catch(() => ({}));
+  return { codigo: data.codigo ?? "", wa_link: data.wa_link ?? "" };
+}
+
+/** Para pollear mientras se espera que llegue el mensaje de confirmación. */
+export async function comercioRecuperarEstado(whatsapp: string, codigo: string): Promise<boolean> {
+  const res = await fetch(`${API}/auth/comercio/recuperar/estado?whatsapp=${encodeURIComponent(whatsapp)}&codigo=${encodeURIComponent(codigo)}`);
+  if (!res.ok) return false;
+  return (await res.json()).confirmado === true;
 }
 
 export async function comercioRecuperarConfirmar(whatsapp: string, codigo: string, nueva_password: string): Promise<ComercioSession> {

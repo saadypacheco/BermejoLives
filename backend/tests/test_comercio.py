@@ -59,6 +59,57 @@ def test_registro_modalidad_invalida_400(client):
     assert r.status_code == 400
 
 
+# ---------------- Recuperar acceso (login por WhatsApp entrante, 2026-07-13) ----------------
+def test_recuperar_devuelve_codigo_y_link_si_existe(client):
+    client.post("/auth/comercio/registro", data=_registro(), files=_foto_test())
+    r = client.post("/auth/comercio/recuperar", json={"whatsapp": "59170001111"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["codigo"]
+    assert f"CONFIRMAR-{body['codigo']}" in body["wa_link"]
+
+
+def test_recuperar_numero_inexistente_misma_forma_de_respuesta(client):
+    """Anti-enumeración: la respuesta no debe delatar si el número existe."""
+    r = client.post("/auth/comercio/recuperar", json={"whatsapp": "59179999999"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["codigo"]
+    assert body["wa_link"]
+
+
+def test_recuperar_estado_false_sin_confirmar(client):
+    client.post("/auth/comercio/registro", data=_registro(), files=_foto_test())
+    codigo = client.post("/auth/comercio/recuperar", json={"whatsapp": "59170001111"}).json()["codigo"]
+    r = client.get("/auth/comercio/recuperar/estado", params={"whatsapp": "59170001111", "codigo": codigo})
+    assert r.json() == {"confirmado": False}
+
+
+def test_recuperar_confirmar_sin_confirmar_por_whatsapp_400(client):
+    client.post("/auth/comercio/registro", data=_registro(), files=_foto_test())
+    codigo = client.post("/auth/comercio/recuperar", json={"whatsapp": "59170001111"}).json()["codigo"]
+    r = client.post("/auth/comercio/recuperar/confirmar", json={
+        "whatsapp": "59170001111", "codigo": codigo, "nueva_password": "nuevaClave123",
+    })
+    assert r.status_code == 400
+    assert "confirmaste" in r.json()["detail"].lower()
+
+
+def test_recuperar_confirmar_ok_tras_confirmacion_whatsapp(client, repo):
+    client.post("/auth/comercio/registro", data=_registro(), files=_foto_test())
+    codigo = client.post("/auth/comercio/recuperar", json={"whatsapp": "59170001111"}).json()["codigo"]
+    assert repo.confirmar_reset_code_comercio("59170001111", codigo) is True
+
+    r = client.get("/auth/comercio/recuperar/estado", params={"whatsapp": "59170001111", "codigo": codigo})
+    assert r.json() == {"confirmado": True}
+
+    r2 = client.post("/auth/comercio/recuperar/confirmar", json={
+        "whatsapp": "59170001111", "codigo": codigo, "nueva_password": "nuevaClave123",
+    })
+    assert r2.status_code == 200, r2.text
+    assert r2.json()["access_token"]
+
+
 # ---------------- Login + publicar ----------------
 def test_login_y_publicar_no_confiable_va_a_moderacion(client, repo):
     reg = client.post("/auth/comercio/registro", data=_registro(), files=_foto_test()).json()

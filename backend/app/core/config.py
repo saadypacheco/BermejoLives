@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     whatsapp_cloud_token: str = ""
     whatsapp_cloud_template_otp: str = "otp_login"
 
+    # Número al que el usuario le manda "CONFIRMAR-XXXXXX" para probar que
+    # el celular es suyo (login/recuperación por mensaje entrante, sin
+    # riesgo de ban — ver services/whatsapp_client.py). Mismo número de la
+    # sesión de WAHA.
+    bot_whatsapp_numero: str = ""
+
+    def wa_link_confirmar(self, codigo: str) -> str:
+        return f"https://wa.me/{self.bot_whatsapp_numero}?text=CONFIRMAR-{codigo}"
+
     # Auth del panel (JWT self-contained, igual patrón que mentorcomercial)
     jwt_secret: str = "bermejo-dev-secret-change-in-prod"
     jwt_ttl_hours: int = 168           # 7 días

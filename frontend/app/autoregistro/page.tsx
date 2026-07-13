@@ -6,7 +6,7 @@ import { Nav } from "@/components/nav";
 import { Send, WhatsApp } from "@/components/icons";
 import {
   comercioLogin, comercioRegistro, getComercioSession, clearComercio, publicar,
-  comercioRecuperar, comercioRecuperarConfirmar, generarDescripcion,
+  comercioRecuperar, comercioRecuperarEstado, comercioRecuperarConfirmar, generarDescripcion,
   type ComercioSession, type PublicarPayload, type RegistroPayload,
 } from "@/lib/comercio";
 import { RUBROS } from "@/lib/types";
@@ -118,41 +118,61 @@ function LoginConEmail({ onVolver, onLogged }: { onVolver: () => void; onLogged:
   );
 }
 
+const POLL_RECUPERAR_MS = 2500;
+
 function IngresarConWhatsapp({ onUsarEmail, onLogged }: { onUsarEmail: () => void; onLogged: (s: ComercioSession) => void }) {
   const [whatsapp, setWhatsapp] = useState("");
   const [codigo, setCodigo] = useState("");
+  const [waLink, setWaLink] = useState("");
   const [nueva, setNueva] = useState("");
-  const [paso, setPaso] = useState<"pedir" | "confirmar">("pedir");
+  const [paso, setPaso] = useState<"pedir" | "esperando" | "password">("pedir");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+  const intervaloRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => () => { if (intervaloRef.current) clearInterval(intervaloRef.current); }, []);
 
   async function pedirCodigo(e: React.FormEvent) {
     e.preventDefault();
     if (!whatsapp.trim()) { setErr("Ingresá tu WhatsApp registrado"); return; }
     setLoading(true); setErr("");
-    try { await comercioRecuperar(whatsapp.trim()); setPaso("confirmar"); }
+    try {
+      const { codigo: c, wa_link } = await comercioRecuperar(whatsapp.trim());
+      setCodigo(c); setWaLink(wa_link); setPaso("esperando");
+      intervaloRef.current = setInterval(async () => {
+        const confirmado = await comercioRecuperarEstado(whatsapp.trim(), c);
+        if (confirmado) {
+          if (intervaloRef.current) clearInterval(intervaloRef.current);
+          setPaso("password");
+        }
+      }, POLL_RECUPERAR_MS);
+    } finally { setLoading(false); }
+  }
+
+  async function confirmarPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (nueva.length < 6) { setErr("La contraseña necesita al menos 6 caracteres"); return; }
+    setLoading(true); setErr("");
+    try {
+      onLogged(await comercioRecuperarConfirmar(whatsapp.trim(), codigo, nueva));
+    } catch (ex) { setErr(ex instanceof Error ? ex.message : "No se pudo confirmar"); }
     finally { setLoading(false); }
   }
 
-  async function confirmar(e: React.FormEvent) {
-    e.preventDefault();
-    if (!codigo.trim() || nueva.length < 6) { setErr("Completá el código y una contraseña de al menos 6 caracteres"); return; }
-    setLoading(true); setErr("");
-    try {
-      onLogged(await comercioRecuperarConfirmar(whatsapp.trim(), codigo.trim(), nueva));
-    } catch (ex) { setErr(ex instanceof Error ? ex.message : "No se pudo confirmar"); }
-    finally { setLoading(false); }
+  function volver() {
+    if (intervaloRef.current) clearInterval(intervaloRef.current);
+    setPaso("pedir"); setErr("");
   }
 
   if (paso === "pedir") {
     return (
       <form onSubmit={pedirCodigo} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
         <p style={{ color: "var(--txt-3)", fontSize: 13, marginTop: -4 }}>
-          Te mandamos un código de 6 dígitos por WhatsApp al número con el que registraste tu negocio.
+          Confirmás con tu propio WhatsApp, al número con el que registraste tu negocio.
         </p>
         <input className="adm-input" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="WhatsApp registrado (ej: 59170000000)" />
         {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
-        <button className="btn btn-primary" type="submit" disabled={loading}>{loading ? "Enviando…" : "Enviar código"}</button>
+        <button className="btn btn-primary" type="submit" disabled={loading}>{loading ? "Generando…" : "Continuar"}</button>
         <button type="button" onClick={onUsarEmail} style={{ background: "none", border: "none", color: "var(--txt-3)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}>
           ¿Tenés email y contraseña? Entrá así
         </button>
@@ -163,16 +183,34 @@ function IngresarConWhatsapp({ onUsarEmail, onLogged }: { onUsarEmail: () => voi
     );
   }
 
+  if (paso === "esperando") {
+    return (
+      <div className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+        <a
+          className="btn btn-primary"
+          href={waLink}
+          target="_blank"
+          rel="noopener"
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+        >
+          <WhatsApp style={{ width: 18, height: 18 }} /> Confirmar por WhatsApp
+        </a>
+        <p style={{ color: "var(--txt-3)", fontSize: 12.5, margin: 0, textAlign: "center" }}>
+          Se abre WhatsApp con un mensaje ya escrito — solo tocá enviar y volvé acá.
+        </p>
+        <button type="button" onClick={volver} style={{ background: "none", border: "none", color: "var(--txt-3)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}>← Volver</button>
+      </div>
+    );
+  }
+
   return (
-    <form onSubmit={confirmar} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+    <form onSubmit={confirmarPassword} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
       <p style={{ color: "var(--txt-3)", fontSize: 13, marginTop: -4 }}>
-        Te llegó un código por WhatsApp. Ingresalo junto con una contraseña (te va a servir para la próxima vez).
+        Listo, confirmamos tu WhatsApp. Poné una contraseña nueva (te va a servir para la próxima vez).
       </p>
-      <input className="adm-input" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="Código de 6 dígitos" inputMode="numeric" />
-      <input className="adm-input" type="password" value={nueva} onChange={(e) => setNueva(e.target.value)} placeholder="Contraseña (mín. 6)" />
+      <input className="adm-input" type="password" value={nueva} onChange={(e) => setNueva(e.target.value)} placeholder="Contraseña (mín. 6)" autoFocus />
       {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
-      <button className="btn btn-primary" type="submit" disabled={loading}>{loading ? "Confirmando…" : "Ingresar"}</button>
-      <button type="button" onClick={() => setPaso("pedir")} style={{ background: "none", border: "none", color: "var(--txt-3)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}>← Volver</button>
+      <button className="btn btn-primary" type="submit" disabled={loading}>{loading ? "Guardando…" : "Ingresar"}</button>
     </form>
   );
 }
