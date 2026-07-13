@@ -223,6 +223,7 @@ def _propio_o_404(repo: Repo, comercio_id: str, agente: dict) -> dict:
 class _EditarComercioBody(BaseModel):
     nombre: str | None = None
     whatsapp: str | None = None
+    email: str | None = None
     modalidad: str | None = None
     direccion: str | None = None
     descripcion: str | None = None

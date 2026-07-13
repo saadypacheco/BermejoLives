@@ -107,6 +107,20 @@ def test_editar_mi_comercio_ok(client, repo):
     assert repo.comercios[comercio_id]["rubros"] == ["servicios"]
 
 
+def test_editar_mi_comercio_actualiza_email(client, repo):
+    token = _agente_token(client)
+    _crear_comercio_propio(client, token)
+    comercio_id = list(repo.comercios)[-1]
+
+    r = client.patch(
+        f"/campo/mis-comercios/{comercio_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"email": "contacto@negocio.com"},
+    )
+    assert r.status_code == 200, r.text
+    assert repo.comercios[comercio_id]["email"] == "contacto@negocio.com"
+
+
 def test_editar_comercio_ajeno_404(client, repo):
     token = _agente_token(client)
     otro = repo.crear_comercio({"nombre": "Otro", "slug": "otro", "cargado_por": "otro@x.com"})
