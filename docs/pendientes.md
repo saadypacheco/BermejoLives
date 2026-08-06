@@ -114,6 +114,18 @@ teniendo sentido mantener los dos.
 
 ## 2. Encontralo — Fase 2 (autoregistro + cobro)
 *Esto es lo que habilita el modelo de negocio.*
+
+> 🎯 **Prioridad actual (2026-06-30): cerrar la página del agente de campo**
+> para empezar a llenar el mapa. Plan completo en
+> `docs/estrategia-captacion-contenido.md` (foto/perf, subida de video,
+> contenido con IA, flywheel, dominio). Ítems clave:
+> - [ ] **🔴 Foto: compresión client-side antes de subir** (`<canvas>`, ~1600px/
+>   JPEG 0.8). Hoy el navegador sube full-res (hasta 15 MB) y comprime recién el
+>   backend → subir con internet malo es lentísimo. Es el arreglo de mayor
+>   impacto para el agente. Aplica a `/publicar`, `/campo/mis-comercios/{id}/foto`
+>   y foto de "Mi comercio". Además: thumbnail ~400px para tarjetas/mapa + cache.
+> - [ ] **Dominio final ANTES de la campaña de instalaciones** — la PWA se
+>   instala por origen; ver §4 del doc de estrategia (`.com.bo`/`.com.ar`).
 - [ ] **🔴 Urgente — Agentes de captación de usuarios + incentivo por instalación.**
       Hoy solo existe un agente de campo hardcodeado (`AGENTE_EMAIL`/
       `AGENTE_PASSWORD` en `.env`) para cargar *comercios*. Se necesita un rol
