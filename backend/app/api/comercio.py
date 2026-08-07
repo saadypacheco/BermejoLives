@@ -70,7 +70,7 @@ async def comercio_registro(
     if not data:
         raise HTTPException(status_code=400, detail="Falta la foto del negocio")
     try:
-        portada_url = subir_foto_comercio(slug, data)
+        portada_url, portada_thumb = subir_foto_galeria(slug, data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -84,6 +84,7 @@ async def comercio_registro(
             "lat": lat,
             "lng": lng,
             "portada_url": portada_url,
+            "portada_thumb_url": portada_thumb,
             "rubro_id": rubro_ids[0] if rubro_ids else None,
             "ciudad_id": repo.get_ciudad_id("bermejo"),
             "modalidad": modalidad,
@@ -405,12 +406,12 @@ async def update_perfil_foto(
     if not data:
         raise HTTPException(status_code=400, detail="Falta la foto")
     try:
-        portada_url = subir_foto_comercio(comercio["slug"], data)
+        portada_url, portada_thumb = subir_foto_galeria(comercio["slug"], data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not portada_url:
         raise HTTPException(status_code=502, detail="No se pudo subir la foto, probá de nuevo")
-    updated = repo.update_comercio(claims["comercio_id"], {"portada_url": portada_url}, None)
+    updated = repo.update_comercio(claims["comercio_id"], {"portada_url": portada_url, "portada_thumb_url": portada_thumb}, None)
     logger.info("comercio.perfil_foto_update", comercio=claims["comercio_id"])
     return _perfil_dict(repo, updated)
 

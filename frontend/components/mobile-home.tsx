@@ -111,7 +111,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
               {(sel.portada_url || sel.logo_url) && (
                 <img
                   key={sel.id}
-                  src={(sel.portada_url || sel.logo_url) as string}
+                  src={(sel.portada_thumb_url || sel.portada_url || sel.logo_url) as string}
                   alt="" loading="lazy" decoding="async"
                   onClick={() => setFotoAmpliada((sel.portada_url || sel.logo_url) as string)}
                   onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.removeAttribute("hidden"); }}

@@ -99,7 +99,7 @@ export async function getComercios(): Promise<Comercio[]> {
 export type ComercioMapa = {
   id: string; slug: string; nombre: string;
   lat: number | null; lng: number | null;
-  logo_url: string | null; portada_url: string | null; whatsapp: string;
+  logo_url: string | null; portada_url: string | null; portada_thumb_url: string | null; whatsapp: string;
   telefono: string | null; verificado: boolean; destacado: boolean; rating: number;
   direccion: string | null; descripcion: string | null; horario: string | null;
   como_llegar: string | null; rubro_slug: string | null;
@@ -113,7 +113,7 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
     const [{ data, error }, { data: rubros, error: errorRubros }] = await Promise.all([
       supabase
         .from("comercios")
-        .select("id, slug, nombre, lat, lng, logo_url, portada_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, rubro_id")
+        .select("id, slug, nombre, lat, lng, logo_url, portada_url, portada_thumb_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, rubro_id")
         .eq("activo", true)
         .not("lat", "is", null)
         .gte("lat", -22.90).lte("lat", -22.58)
@@ -127,7 +127,7 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
       const slugById = new Map((rubros ?? []).map((r: any) => [r.id, r.slug]));
       return (data as any[]).map((c) => ({
         id: c.id, slug: c.slug, nombre: c.nombre, lat: c.lat, lng: c.lng,
-        logo_url: c.logo_url, portada_url: c.portada_url, whatsapp: c.whatsapp, telefono: c.telefono,
+        logo_url: c.logo_url, portada_url: c.portada_url, portada_thumb_url: c.portada_thumb_url ?? null, whatsapp: c.whatsapp, telefono: c.telefono,
         verificado: c.verificado, destacado: c.destacado, rating: c.rating,
         direccion: c.direccion, descripcion: c.descripcion, horario: c.horario, como_llegar: c.como_llegar,
         rubro_slug: slugById.get(c.rubro_id) ?? null,
@@ -138,7 +138,7 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
   }
   return DEMO_COMERCIOS.map((c) => ({
     id: c.id, slug: c.slug, nombre: c.nombre, lat: c.lat, lng: c.lng,
-    logo_url: c.logo_url, portada_url: c.portada_url, whatsapp: c.whatsapp, telefono: c.telefono,
+    logo_url: c.logo_url, portada_url: c.portada_url, portada_thumb_url: null, whatsapp: c.whatsapp, telefono: c.telefono,
     verificado: c.verificado, destacado: c.destacado, rating: c.rating,
     direccion: c.direccion, descripcion: c.descripcion, horario: c.horario, como_llegar: c.como_llegar,
     rubro_slug: null,

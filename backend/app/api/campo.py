@@ -89,11 +89,12 @@ def campo_sugerir_rubros(body: SugerirRubrosBody, _agente: dict = Depends(auth.r
 _MAX_FOTO_BYTES = 15 * 1024 * 1024  # 15 MB de entrada
 
 
-def _subir_foto(slug: str, foto: UploadFile, data: bytes) -> str | None:
+def _subir_foto(slug: str, foto: UploadFile, data: bytes) -> tuple[str | None, str | None]:
+    """Sube la portada y devuelve (url_grande, url_thumb)."""
     if len(data) > _MAX_FOTO_BYTES:
         raise HTTPException(status_code=413, detail="La foto supera los 15 MB")
     try:
-        return subir_foto_comercio(slug, data)
+        return subir_foto_galeria(slug, data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -144,11 +145,11 @@ async def alta_campo(
 
     slug = slug_unico(repo, slugify(nombre))
 
-    portada_url = None
+    portada_url, portada_thumb = None, None
     if foto is not None:
         data = await foto.read()
         if data:
-            portada_url = _subir_foto(slug, foto, data)
+            portada_url, portada_thumb = _subir_foto(slug, foto, data)
 
     def _none(v: str | None) -> str | None:
         return v.strip() if v and v.strip() else None
@@ -171,6 +172,7 @@ async def alta_campo(
             "lat": lat,
             "lng": lng,
             "portada_url": portada_url,
+            "portada_thumb_url": portada_thumb,
             "plan": "gratis",
             "confiable": False,
             "verificado": False,
@@ -260,10 +262,10 @@ async def actualizar_foto_mi_comercio(
     data = await foto.read()
     if not data:
         raise HTTPException(status_code=400, detail="Falta la foto")
-    portada_url = _subir_foto(comercio["slug"], foto, data)
+    portada_url, portada_thumb = _subir_foto(comercio["slug"], foto, data)
     if not portada_url:
         raise HTTPException(status_code=502, detail="No se pudo subir la foto, probá de nuevo")
-    updated = repo.update_comercio(comercio_id, {"portada_url": portada_url}, None)
+    updated = repo.update_comercio(comercio_id, {"portada_url": portada_url, "portada_thumb_url": portada_thumb}, None)
     logger.info("campo.foto_update", comercio=comercio_id, agente=agente["email"])
     return {"ok": True, "comercio": updated}
 
