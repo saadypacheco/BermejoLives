@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   agenteLogin, getAgenteToken, clearAgente, altaComercioCampo, transcribirAudio, sugerirRubros,
   misComercios, editarComercioAgente, eliminarComercioAgente, actualizarFotoComercioAgente, type ComercioAgente,
+  listarFotosCampo, listarVideosCampo, subirFotoCampo, subirVideoCampo, borrarFotoCampo, borrarVideoCampo,
 } from "@/lib/campo";
 import { getCiudades, getRubros } from "@/lib/data";
 import type { Ciudad, Rubro } from "@/lib/types";
 import { Pin, User, Arrow, Edit } from "@/components/icons";
 import { comprimirImagen } from "@/lib/imagen";
+import { GaleriaUploader } from "@/components/galeria-uploader";
 import { geoErrorMsg } from "@/lib/geo";
 
 // Prefijo telefónico según país
@@ -261,6 +263,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   const [consent,     setConsent]     = useState(true);
   const [saving,      setSaving]      = useState(false);
   const [done,        setDone]        = useState<string | null>(null);
+  const [altaId,      setAltaId]      = useState<string | null>(null);
   const [count,       setCount]       = useState(0);
   const [err,         setErr]         = useState("");
 
@@ -377,6 +380,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     try {
       const r = await altaComercioCampo(fd);
       setDone(r.comercio.nombre);
+      setAltaId(r.comercio.id);
       setCount((c) => c + 1);
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : "Error al guardar");
@@ -388,7 +392,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   function otro() {
     setF({ ...EMPTY }); setRubroSlugs([]); setIntentosAudio(0);
     setCoords(null); setGeoMsg(""); setFoto(null); setPreview(""); setConsent(true);
-    setDone(null); setErr("");
+    setDone(null); setAltaId(null); setErr("");
   }
 
   if (done) {
@@ -400,7 +404,22 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
         <p style={{ color: "var(--txt-3)", marginBottom: 6 }}>
           {ciudadActual ? `${ciudadActual.nombre} · ` : ""}Pendiente de verificar.
         </p>
-        <p style={{ color: "var(--txt-3)", marginBottom: 22 }}>Llevás {count} en este recorrido.</p>
+        <p style={{ color: "var(--txt-3)", marginBottom: 18 }}>Llevás {count} en este recorrido.</p>
+
+        {altaId && (
+          <div style={{ textAlign: "left", marginBottom: 18, padding: 14, borderRadius: 14, background: "var(--panel)", border: "1px solid var(--stroke)" }}>
+            <p style={{ color: "var(--txt-2)", fontSize: 13.5, marginBottom: 12 }}>📸 Sumá fotos y videos del local (mejora la ficha y sirve de material para redes):</p>
+            <GaleriaUploader api={{
+              cargarFotos: () => listarFotosCampo(altaId),
+              subirFoto: (f, onP) => subirFotoCampo(altaId, f, onP),
+              borrarFoto: (id) => borrarFotoCampo(altaId, id),
+              cargarVideos: () => listarVideosCampo(altaId),
+              subirVideo: (f, dur, onP) => subirVideoCampo(altaId, f, dur, onP),
+              borrarVideo: (id) => borrarVideoCampo(altaId, id),
+            }} />
+          </div>
+        )}
+
         <button className="btn btn-primary" style={{ width: "100%", marginBottom: 10 }} onClick={otro}>Cargar otro comercio</button>
         <button className="link-more" onClick={onVerMisComercios}>Ver mis comercios cargados</button>
       </div>

@@ -1,4 +1,5 @@
 // Cliente del "modo agente de campo" (alta rápida de comercios).
+import { subirConProgreso } from "@/lib/upload";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_agente_token";
 
@@ -45,7 +46,25 @@ export async function sugerirRubros(descripcion: string, rubros: { slug: string;
   return (await res.json()).rubro_slugs as string[];
 }
 
-export type AltaCampoResult = { ok: boolean; comercio: { nombre: string; slug: string; ciudad: string; foto: boolean; gps: boolean } };
+export type AltaCampoResult = { ok: boolean; comercio: { id: string; nombre: string; slug: string; ciudad: string; foto: boolean; gps: boolean } };
+
+// ---- Galería (fotos/videos) del comercio, lado agente ----
+export type FotoGaleria = { id: string; url: string; thumb_url: string | null; orden?: number };
+export type VideoGaleria = { id: string; url: string; duracion_seg: number | null; orden?: number };
+
+const galH = () => ({ Authorization: `Bearer ${getAgenteToken() ?? ""}` });
+export const listarFotosCampo = (cid: string): Promise<FotoGaleria[]> =>
+  fetch(`${API}/campo/mis-comercios/${cid}/fotos`, { headers: galH() }).then((r) => r.json()).then((d) => d.items ?? []);
+export const listarVideosCampo = (cid: string): Promise<VideoGaleria[]> =>
+  fetch(`${API}/campo/mis-comercios/${cid}/videos`, { headers: galH() }).then((r) => r.json()).then((d) => d.items ?? []);
+export const borrarFotoCampo = (cid: string, id: string): Promise<void> =>
+  fetch(`${API}/campo/mis-comercios/${cid}/fotos/${id}`, { method: "DELETE", headers: galH() }).then(() => undefined);
+export const borrarVideoCampo = (cid: string, id: string): Promise<void> =>
+  fetch(`${API}/campo/mis-comercios/${cid}/videos/${id}`, { method: "DELETE", headers: galH() }).then(() => undefined);
+export const subirFotoCampo = (cid: string, file: File, onP?: (p: number) => void): Promise<FotoGaleria> =>
+  subirConProgreso<{ foto: FotoGaleria }>(`${API}/campo/mis-comercios/${cid}/fotos`, "foto", file, getAgenteToken(), {}, onP).then((d) => d.foto);
+export const subirVideoCampo = (cid: string, file: File, dur: number | null, onP?: (p: number) => void): Promise<VideoGaleria> =>
+  subirConProgreso<{ video: VideoGaleria }>(`${API}/campo/mis-comercios/${cid}/videos`, "video", file, getAgenteToken(), dur != null ? { duracion_seg: String(dur) } : {}, onP).then((d) => d.video);
 
 export async function altaComercioCampo(form: FormData): Promise<AltaCampoResult> {
   const res = await fetch(`${API}/campo/comercio`, {

@@ -19,15 +19,18 @@ const Gear = ic("M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.
 const Ext = ic("M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3");
 const Logout = ic("M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9");
 const Tag = ic("M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01");
+const ImageIcon = ic("M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5zM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM21 15l-5-5L5 21");
 import {
   comercioLogin, getComercioSession, clearComercio,
   getPerfil, updatePerfil, subirFotoPerfil, getSuscripcion, getMetricas, pagarSuscripcion,
   draftProducto, listProductos, crearProducto, borrarProducto, destacarProducto,
   getMensajes, marcarLeido,
   getMisPublicaciones, editarPublicacion, bajaPublicacion,
+  listarFotosComercio, listarVideosComercio, subirFotoGaleriaComercio, subirVideoGaleriaComercio, borrarFotoComercio, borrarVideoComercio,
   type ComercioSession, type Perfil, type Suscripcion, type Metricas,
   type ProductoDraft, type ProductoRef, type Mensaje, type Publicacion,
 } from "@/lib/comercio";
+import { GaleriaUploader } from "@/components/galeria-uploader";
 import { comprimirImagen } from "@/lib/imagen";
 import { RUBROS } from "@/lib/types";
 import { geoErrorMsg } from "@/lib/geo";
@@ -78,14 +81,15 @@ function LoginGate({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
 const Mail = ic("M3 6h18v12H3zM3 7l9 6 9-6");
 const MODA_LABEL: Record<string, string> = { mayorista: "Mayorista", minorista: "Minorista", ambos: "Mayor y menor" };
 
-type Vista = "inicio" | "editar" | "productos" | "ofertas" | "contactos" | "estadisticas" | "mensajes" | "suscripcion" | "config";
+type Vista = "inicio" | "editar" | "productos" | "ofertas" | "galeria" | "contactos" | "estadisticas" | "mensajes" | "suscripcion" | "config";
 const TITULOS: Record<Vista, string> = {
   inicio: "Mi comercio", editar: "Editar mi comercio", productos: "Productos / Ofertas",
-  ofertas: "Mis ofertas", contactos: "Contactos", estadisticas: "Estadísticas", mensajes: "Mensajes",
+  ofertas: "Mis ofertas", galeria: "Fotos y videos", contactos: "Contactos", estadisticas: "Estadísticas", mensajes: "Mensajes",
   suscripcion: "Suscripción", config: "Configuración",
 };
 const NAV_ITEMS: { v: Vista; label: string; Icon: any }[] = [
   { v: "inicio", label: "Mi comercio", Icon: Store },
+  { v: "galeria", label: "Fotos y videos", Icon: ImageIcon },
   { v: "ofertas", label: "Mis ofertas", Icon: Tag },
   { v: "productos", label: "Productos", Icon: Send },
   { v: "contactos", label: "Contactos", Icon: Phone },
@@ -459,6 +463,24 @@ function OfertaEditForm({ pub, onCancel, onSaved }: { pub: Publicacion; onCancel
   );
 }
 
+function GaleriaTab() {
+  return (
+    <div className="glass" style={{ padding: 20, borderRadius: 16 }}>
+      <p style={{ color: "var(--txt-3)", fontSize: 14, marginTop: 0, marginBottom: 14 }}>
+        Cargá hasta 10 fotos y 5 videos (≤60s) de tu local. Se muestran en tu ficha.
+      </p>
+      <GaleriaUploader api={{
+        cargarFotos: listarFotosComercio,
+        subirFoto: subirFotoGaleriaComercio,
+        borrarFoto: borrarFotoComercio,
+        cargarVideos: listarVideosComercio,
+        subirVideo: subirVideoGaleriaComercio,
+        borrarVideo: borrarVideoComercio,
+      }} />
+    </div>
+  );
+}
+
 function Panel({ sess, onLogout }: { sess: ComercioSession; onLogout: () => void }) {
   const [vista, setVista] = useState<Vista>("inicio");
   const [sub, setSub] = useState<Suscripcion | null>(null);
@@ -477,6 +499,7 @@ function Panel({ sess, onLogout }: { sess: ComercioSession; onLogout: () => void
           {vista === "inicio" && <Overview onEditar={() => setVista("editar")} onProductos={() => setVista("productos")} onPlanes={() => setVista("suscripcion")} />}
           {vista === "editar" && <div style={{ maxWidth: 720 }}><button className="btn" onClick={() => setVista("inicio")} style={{ border: "1px solid var(--stroke)", marginBottom: 14 }}><Arrow style={{ width: 15, height: 15, transform: "rotate(180deg)" }} /> Volver</button><PerfilTab /></div>}
           {vista === "ofertas" && <div style={{ maxWidth: 780 }}><OfertasTab /></div>}
+          {vista === "galeria" && <div style={{ maxWidth: 780 }}><GaleriaTab /></div>}
           {vista === "productos" && <div style={{ maxWidth: 780 }}><ProductosTab /></div>}
           {vista === "contactos" && <div style={{ maxWidth: 720 }}><ContactosView /></div>}
           {vista === "estadisticas" && <div style={{ maxWidth: 720 }}><EstadisticasView /></div>}

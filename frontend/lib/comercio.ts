@@ -1,4 +1,5 @@
 // Cliente del panel del COMERCIO logueado (login + chatbot de publicación).
+import { subirConProgreso } from "@/lib/upload";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_comercio_token";
 const COMERCIO_KEY = "bermejo_comercio";
@@ -269,6 +270,19 @@ export const editarPublicacion = (id: string, patch: PublicacionPatch): Promise<
 
 export const bajaPublicacion = (id: string): Promise<{ ok: boolean }> =>
   cFetch(`/comercio/publicaciones/${id}`, { method: "DELETE" });
+
+// ---- Galería (fotos/videos) del comercio logueado ----
+export type FotoGaleria = { id: string; url: string; thumb_url: string | null };
+export type VideoGaleria = { id: string; url: string; duracion_seg: number | null };
+
+export const listarFotosComercio = (): Promise<FotoGaleria[]> => cFetch("/comercio/fotos").then((d) => d.items ?? []);
+export const listarVideosComercio = (): Promise<VideoGaleria[]> => cFetch("/comercio/videos").then((d) => d.items ?? []);
+export const borrarFotoComercio = (id: string): Promise<void> => cFetch(`/comercio/fotos/${id}`, { method: "DELETE" }).then(() => undefined);
+export const borrarVideoComercio = (id: string): Promise<void> => cFetch(`/comercio/videos/${id}`, { method: "DELETE" }).then(() => undefined);
+export const subirFotoGaleriaComercio = (file: File, onP?: (p: number) => void): Promise<FotoGaleria> =>
+  subirConProgreso<{ foto: FotoGaleria }>(`${API}/comercio/fotos`, "foto", file, getCToken(), {}, onP).then((d) => d.foto);
+export const subirVideoGaleriaComercio = (file: File, dur: number | null, onP?: (p: number) => void): Promise<VideoGaleria> =>
+  subirConProgreso<{ video: VideoGaleria }>(`${API}/comercio/videos`, "video", file, getCToken(), dur != null ? { duracion_seg: String(dur) } : {}, onP).then((d) => d.video);
 
 export async function pagarSuscripcion(
   fields: { monto: number; moneda: string; metodo: string; referencia?: string },
