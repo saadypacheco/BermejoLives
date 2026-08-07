@@ -161,6 +161,19 @@ export async function getComercioBySlug(slug: string): Promise<Comercio | null> 
   return DEMO_COMERCIOS.find((c) => c.slug === slug) ?? DEMO_COMERCIOS[0];
 }
 
+// Galería del comercio (migración 0030): fotos con thumb + videos. Lectura
+// pública (anon) — las tarjetas usan el thumb, la ficha amplía a la grande.
+export type GaleriaFoto = { id: string; url: string; thumb_url: string | null };
+export type GaleriaVideo = { id: string; url: string; duracion_seg: number | null };
+export async function getGaleriaComercio(comercioId: string): Promise<{ fotos: GaleriaFoto[]; videos: GaleriaVideo[] }> {
+  if (!hasSupabase) return { fotos: [], videos: [] };
+  const [{ data: fotos }, { data: videos }] = await Promise.all([
+    supabase.from("comercio_fotos").select("id, url, thumb_url").eq("comercio_id", comercioId).order("orden"),
+    supabase.from("comercio_videos").select("id, url, duracion_seg").eq("comercio_id", comercioId).order("orden"),
+  ]);
+  return { fotos: (fotos as GaleriaFoto[]) ?? [], videos: (videos as GaleriaVideo[]) ?? [] };
+}
+
 // Productos reales del comercio: viven en Reservalo. Acá leemos la referencia
 // (producto_ref, migración 0015) — solo lo publicado y con link a Reservalo.
 export async function getProductos(comercioId: string): Promise<Producto[]> {

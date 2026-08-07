@@ -3,7 +3,8 @@ import { Nav } from "@/components/nav";
 import { MensajeComercioForm } from "@/components/mensaje-comercio-form";
 import { WaLeadLink } from "@/components/wa-lead-link";
 import { GuardarBoton } from "@/components/guardar-boton";
-import { getComercioBySlug, getProductos } from "@/lib/data";
+import { getComercioBySlug, getProductos, getGaleriaComercio } from "@/lib/data";
+import { GaleriaFicha } from "@/components/galeria-ficha";
 import { precioFmt, MODALIDAD_LABEL } from "@/lib/types";
 import {
   WhatsApp, Verified, Pin, Phone, Globe, Instagram, Facebook, TikTok, Arrow,
@@ -14,7 +15,7 @@ export const revalidate = 60; // SSG + ISR para catálogo (lesson KB)
 export default async function ComercioPage({ params }: { params: { slug: string } }) {
   const comercio = await getComercioBySlug(params.slug);
   if (!comercio) return <div className="wrap" style={{ padding: 80 }}>Comercio no encontrado.</div>;
-  const productos = await getProductos(comercio.id);
+  const [productos, galeria] = await Promise.all([getProductos(comercio.id), getGaleriaComercio(comercio.id)]);
 
   const redes = [
     comercio.tiktok_url && { label: "TikTok", href: comercio.tiktok_url, Icon: TikTok },
@@ -71,6 +72,8 @@ export default async function ComercioPage({ params }: { params: { slug: string 
         {comercio.descripcion && (
           <p style={{ color: "var(--txt-2)", maxWidth: 640, margin: "18px 0 0" }}>{comercio.descripcion}</p>
         )}
+
+        <GaleriaFicha fotos={galeria.fotos} videos={galeria.videos} />
 
         {/* INFO: todos los datos del vendedor */}
         <div className="info-grid" style={{ marginTop: 30 }}>

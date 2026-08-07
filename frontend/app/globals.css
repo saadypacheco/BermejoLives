@@ -436,3 +436,14 @@
 .galup-bar { position: absolute; inset: 0 auto 0 0; background: rgba(57,255,158,.25); transition: width .15s; }
 .galup-prog span { position: relative; font-size: 12px; font-weight: 600; color: var(--txt); }
 .galup-err { margin-top: 8px; color: var(--pink); font-size: 13px; }
+
+/* ===== Galería en la ficha del comercio ===== */
+.gf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-top: 14px; }
+.gf-item { aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: var(--panel); border: 1px solid var(--stroke); cursor: zoom-in; padding: 0; }
+.gf-item img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s var(--ease); }
+.gf-item:hover img { transform: scale(1.05); }
+.gf-videos { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 12px; }
+.gf-video { width: 100%; border-radius: 12px; background: #000; border: 1px solid var(--stroke); aspect-ratio: 16/9; object-fit: cover; }
+.gf-lightbox { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.9); display: grid; place-items: center; padding: 20px; cursor: zoom-out; }
+.gf-lightbox img { max-width: 96vw; max-height: 90vh; border-radius: 8px; object-fit: contain; }
+.gf-close { position: fixed; top: 16px; right: 18px; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.14); color: #fff; font-size: 18px; display: grid; place-items: center; }
