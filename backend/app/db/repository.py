@@ -75,6 +75,15 @@ class Repo(Protocol):
     def agregar_favorito(self, usuario_id: str, comercio_id: str) -> None: ...
     def quitar_favorito(self, usuario_id: str, comercio_id: str) -> None: ...
     def list_favoritos(self, usuario_id: str) -> list[dict]: ...
+    # galería (fotos/videos por comercio)
+    def list_fotos_comercio(self, comercio_id: str) -> list[dict]: ...
+    def add_foto_comercio(self, row: dict) -> dict: ...
+    def delete_foto_comercio(self, foto_id: str, comercio_id: str) -> bool: ...
+    def count_fotos_comercio(self, comercio_id: str) -> int: ...
+    def list_videos_comercio(self, comercio_id: str) -> list[dict]: ...
+    def add_video_comercio(self, row: dict) -> dict: ...
+    def delete_video_comercio(self, video_id: str, comercio_id: str) -> bool: ...
+    def count_videos_comercio(self, comercio_id: str) -> int: ...
 
 
 class SupabaseRepo:
@@ -776,6 +785,37 @@ class SupabaseRepo:
             .execute()
         )
         return res.data[0] if res.data else None
+
+    # ---- galería (fotos/videos por comercio) ----
+    def list_fotos_comercio(self, comercio_id: str) -> list[dict]:
+        res = self._db.table("comercio_fotos").select("*").eq("comercio_id", comercio_id).order("orden").execute()
+        return res.data or []
+
+    def add_foto_comercio(self, row: dict) -> dict:
+        res = self._db.table("comercio_fotos").insert(row).execute()
+        return res.data[0] if res.data else {}
+
+    def delete_foto_comercio(self, foto_id: str, comercio_id: str) -> bool:
+        res = self._db.table("comercio_fotos").delete().eq("id", foto_id).eq("comercio_id", comercio_id).execute()
+        return bool(res.data)
+
+    def count_fotos_comercio(self, comercio_id: str) -> int:
+        return len(self.list_fotos_comercio(comercio_id))
+
+    def list_videos_comercio(self, comercio_id: str) -> list[dict]:
+        res = self._db.table("comercio_videos").select("*").eq("comercio_id", comercio_id).order("orden").execute()
+        return res.data or []
+
+    def add_video_comercio(self, row: dict) -> dict:
+        res = self._db.table("comercio_videos").insert(row).execute()
+        return res.data[0] if res.data else {}
+
+    def delete_video_comercio(self, video_id: str, comercio_id: str) -> bool:
+        res = self._db.table("comercio_videos").delete().eq("id", video_id).eq("comercio_id", comercio_id).execute()
+        return bool(res.data)
+
+    def count_videos_comercio(self, comercio_id: str) -> int:
+        return len(self.list_videos_comercio(comercio_id))
 
 
 def get_repo() -> Repo:

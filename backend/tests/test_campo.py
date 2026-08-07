@@ -195,3 +195,71 @@ def test_alta_campo_modalidad_invalida_400(client):
         files=_foto_test(),
     )
     assert r.status_code == 400
+
+
+# ---------------- Galería (fotos / videos) ----------------
+def _video_file():
+    return {"video": ("clip.mp4", BytesIO(b"\x00\x00\x00\x18ftypmp42" + b"0" * 64), "video/mp4")}
+
+
+def test_agregar_y_listar_foto(client, repo):
+    token = _agente_token(client)
+    cid = _crear_comercio_propio(client, token)
+    h = {"Authorization": f"Bearer {token}"}
+    r = client.post(f"/campo/mis-comercios/{cid}/fotos", headers=h, files=_foto_test())
+    assert r.status_code == 200
+    assert r.json()["foto"]["comercio_id"] == cid
+    assert r.json()["foto"]["thumb_url"]
+    assert len(client.get(f"/campo/mis-comercios/{cid}/fotos", headers=h).json()["items"]) == 1
+
+
+def test_borrar_foto(client, repo):
+    token = _agente_token(client)
+    cid = _crear_comercio_propio(client, token)
+    h = {"Authorization": f"Bearer {token}"}
+    fid = client.post(f"/campo/mis-comercios/{cid}/fotos", headers=h, files=_foto_test()).json()["foto"]["id"]
+    assert client.delete(f"/campo/mis-comercios/{cid}/fotos/{fid}", headers=h).status_code == 200
+    assert client.get(f"/campo/mis-comercios/{cid}/fotos", headers=h).json()["items"] == []
+
+
+def test_limite_10_fotos(client, repo):
+    token = _agente_token(client)
+    cid = _crear_comercio_propio(client, token)
+    h = {"Authorization": f"Bearer {token}"}
+    for _ in range(10):
+        assert client.post(f"/campo/mis-comercios/{cid}/fotos", headers=h, files=_foto_test()).status_code == 200
+    assert client.post(f"/campo/mis-comercios/{cid}/fotos", headers=h, files=_foto_test()).status_code == 409
+
+
+def test_foto_comercio_ajeno_404(client, repo):
+    token = _agente_token(client)
+    otro = repo.crear_comercio({"nombre": "Otro", "slug": "otro-gal", "cargado_por": "otro@x.com"})
+    r = client.post(f"/campo/mis-comercios/{otro['id']}/fotos", headers={"Authorization": f"Bearer {token}"}, files=_foto_test())
+    assert r.status_code == 404
+
+
+def test_agregar_video_ok(client, repo):
+    token = _agente_token(client)
+    cid = _crear_comercio_propio(client, token)
+    h = {"Authorization": f"Bearer {token}"}
+    r = client.post(f"/campo/mis-comercios/{cid}/videos", headers=h, files=_video_file(), data={"duracion_seg": "45"})
+    assert r.status_code == 200
+    assert r.json()["video"]["duracion_seg"] == 45
+    assert len(client.get(f"/campo/mis-comercios/{cid}/videos", headers=h).json()["items"]) == 1
+
+
+def test_video_no_es_video_400(client, repo):
+    token = _agente_token(client)
+    cid = _crear_comercio_propio(client, token)
+    r = client.post(f"/campo/mis-comercios/{cid}/videos", headers={"Authorization": f"Bearer {token}"},
+                    files={"video": ("x.jpg", BytesIO(b"nope"), "image/jpeg")})
+    assert r.status_code == 400
+
+
+def test_limite_5_videos(client, repo):
+    token = _agente_token(client)
+    cid = _crear_comercio_propio(client, token)
+    h = {"Authorization": f"Bearer {token}"}
+    for _ in range(5):
+        assert client.post(f"/campo/mis-comercios/{cid}/videos", headers=h, files=_video_file()).status_code == 200
+    assert client.post(f"/campo/mis-comercios/{cid}/videos", headers=h, files=_video_file()).status_code == 409

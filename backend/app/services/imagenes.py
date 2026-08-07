@@ -13,16 +13,16 @@ import structlog
 logger = structlog.get_logger()
 
 
-def procesar_imagen(data: bytes) -> bytes:
+def procesar_imagen(data: bytes, max_side: int = 1600, quality: int = 82) -> bytes:
     from PIL import Image, ImageOps
 
     img = Image.open(BytesIO(data))
     img.verify()                       # valida que sea una imagen real
     img = Image.open(BytesIO(data))    # reabrir tras verify()
     img = ImageOps.exif_transpose(img).convert("RGB")
-    img.thumbnail((1600, 1600))
+    img.thumbnail((max_side, max_side))
     out = BytesIO()
-    img.save(out, format="JPEG", quality=82, optimize=True)
+    img.save(out, format="JPEG", quality=quality, optimize=True)
     return out.getvalue()
 
 
@@ -58,3 +58,29 @@ def subir_foto_comercio(slug: str, data: bytes) -> str | None:
         raise ValueError("El archivo no es una imagen válida") from exc
     path = f"{slug}/{secrets.token_hex(8)}.jpg"
     return guardar_foto_local(path, procesada)
+
+
+def subir_foto_galeria(slug: str, data: bytes) -> tuple[str | None, str | None]:
+    """Procesa una foto de galería: guarda la grande (1600px) y una miniatura
+    (400px) para las tarjetas/mapa. Devuelve (url, thumb_url).
+    Lanza ValueError si el archivo no es una imagen válida."""
+    try:
+        grande = procesar_imagen(data, 1600, 82)
+        chica = procesar_imagen(data, 400, 80)
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError("El archivo no es una imagen válida") from exc
+    token = secrets.token_hex(8)
+    url = guardar_foto_local(f"{slug}/{token}.jpg", grande)
+    thumb = guardar_foto_local(f"{slug}/{token}_t.jpg", chica)
+    return url, thumb
+
+
+# Videos: se guardan tal cual (sin procesar) en el mismo volumen, servidos por
+# /fotos/... — son material crudo para redes, no se reproducen en la ficha aún.
+_VIDEO_EXT = {"video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov", "video/3gpp": "3gp"}
+
+
+def subir_video_comercio(slug: str, data: bytes, content_type: str | None) -> str | None:
+    ext = _VIDEO_EXT.get((content_type or "").lower(), "mp4")
+    path = f"{slug}/videos/{secrets.token_hex(8)}.{ext}"
+    return guardar_foto_local(path, data)

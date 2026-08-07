@@ -16,7 +16,7 @@ from app.core.text import slug_unico, slugify
 from app.db.repository import Repo, get_repo
 from app.models.schemas import LoginBody
 from app.services.clasificador import sugerir_rubros
-from app.services.imagenes import subir_foto_comercio
+from app.services.imagenes import subir_foto_comercio, subir_foto_galeria, subir_video_comercio
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -309,4 +309,95 @@ def crear_reclamo(body: _ReclamoIn, repo: Repo = Depends(get_repo)) -> dict:
         "comercio_id": body.comercio_id,
         "mensaje": body.mensaje,
     })
+    return {"ok": True}
+
+
+# ============================================================
+# Galería del comercio: hasta 10 fotos + 5 videos (<=60s c/u).
+# Los archivos van al disco del backend; la base guarda la referencia.
+# Todos scoped al agente dueño del comercio (_propio_o_404).
+# ============================================================
+_MAX_FOTOS = 10
+_MAX_VIDEOS = 5
+_MAX_VIDEO_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+@router.get("/campo/mis-comercios/{comercio_id}/fotos")
+async def listar_fotos(comercio_id: str, agente: dict = Depends(auth.require_agente), repo: Repo = Depends(get_repo)) -> dict:
+    _propio_o_404(repo, comercio_id, agente)
+    return {"items": repo.list_fotos_comercio(comercio_id)}
+
+
+@router.post("/campo/mis-comercios/{comercio_id}/fotos")
+async def agregar_foto(comercio_id: str, foto: UploadFile = File(...), agente: dict = Depends(auth.require_agente), repo: Repo = Depends(get_repo)) -> dict:
+    comercio = _propio_o_404(repo, comercio_id, agente)
+    if repo.count_fotos_comercio(comercio_id) >= _MAX_FOTOS:
+        raise HTTPException(status_code=409, detail=f"Máximo {_MAX_FOTOS} fotos por comercio")
+    data = await foto.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Falta la foto")
+    if len(data) > _MAX_FOTO_BYTES:
+        raise HTTPException(status_code=413, detail="La foto supera los 15 MB")
+    try:
+        url, thumb = subir_foto_galeria(comercio["slug"], data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not url:
+        raise HTTPException(status_code=502, detail="No se pudo subir la foto, probá de nuevo")
+    row = repo.add_foto_comercio({
+        "comercio_id": comercio_id, "url": url, "thumb_url": thumb,
+        "orden": repo.count_fotos_comercio(comercio_id),
+    })
+    logger.info("campo.foto_add", comercio=comercio_id, agente=agente["email"])
+    return {"ok": True, "foto": row}
+
+
+@router.delete("/campo/mis-comercios/{comercio_id}/fotos/{foto_id}")
+async def borrar_foto(comercio_id: str, foto_id: str, agente: dict = Depends(auth.require_agente), repo: Repo = Depends(get_repo)) -> dict:
+    _propio_o_404(repo, comercio_id, agente)
+    if not repo.delete_foto_comercio(foto_id, comercio_id):
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+    return {"ok": True}
+
+
+@router.get("/campo/mis-comercios/{comercio_id}/videos")
+async def listar_videos(comercio_id: str, agente: dict = Depends(auth.require_agente), repo: Repo = Depends(get_repo)) -> dict:
+    _propio_o_404(repo, comercio_id, agente)
+    return {"items": repo.list_videos_comercio(comercio_id)}
+
+
+@router.post("/campo/mis-comercios/{comercio_id}/videos")
+async def agregar_video(
+    comercio_id: str,
+    video: UploadFile = File(...),
+    duracion_seg: int | None = Form(None),
+    agente: dict = Depends(auth.require_agente),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    comercio = _propio_o_404(repo, comercio_id, agente)
+    if repo.count_videos_comercio(comercio_id) >= _MAX_VIDEOS:
+        raise HTTPException(status_code=409, detail=f"Máximo {_MAX_VIDEOS} videos por comercio")
+    if not (video.content_type or "").lower().startswith("video/"):
+        raise HTTPException(status_code=400, detail="El archivo no es un video")
+    data = await video.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Falta el video")
+    if len(data) > _MAX_VIDEO_BYTES:
+        raise HTTPException(status_code=413, detail="El video supera los 50 MB")
+    url = subir_video_comercio(comercio["slug"], data, video.content_type)
+    if not url:
+        raise HTTPException(status_code=502, detail="No se pudo subir el video, probá de nuevo")
+    row = repo.add_video_comercio({
+        "comercio_id": comercio_id, "url": url, "duracion_seg": duracion_seg,
+        "orden": repo.count_videos_comercio(comercio_id),
+    })
+    logger.info("campo.video_add", comercio=comercio_id, agente=agente["email"])
+    return {"ok": True, "video": row}
+
+
+@router.delete("/campo/mis-comercios/{comercio_id}/videos/{video_id}")
+async def borrar_video(comercio_id: str, video_id: str, agente: dict = Depends(auth.require_agente), repo: Repo = Depends(get_repo)) -> dict:
+    _propio_o_404(repo, comercio_id, agente)
+    if not repo.delete_video_comercio(video_id, comercio_id):
+        raise HTTPException(status_code=404, detail="Video no encontrado")
     return {"ok": True}

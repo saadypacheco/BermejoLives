@@ -19,6 +19,15 @@ def _reset_rate_limit():
     yield
 
 
+@pytest.fixture(autouse=True)
+def _tmp_fotos_dir(tmp_path, monkeypatch):
+    """Apunta el volumen de fotos a un tmp escribible: así las subidas de
+    foto/video no fallan por no poder escribir en /data/fotos."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "fotos_dir", str(tmp_path / "fotos"))
+    yield
+
+
 class FakeRepo:
     """Implementación en memoria del Protocol Repo."""
 
@@ -33,6 +42,8 @@ class FakeRepo:
         self.producto_refs: dict[str, dict] = {}     # id -> row
         self.pagos: dict[str, dict] = {}             # id -> row
         self.mensajes: dict[str, dict] = {}          # id -> row
+        self.comercio_fotos: list[dict] = []          # galería
+        self.comercio_videos: list[dict] = []
         self.zonas: dict[str, str] = {"zona-moda": "zona-1"}
         self.rubros: dict[str, str] = {"importadora": "rub-1", "gastronomia": "rub-2", "gomeria": "rub-3", "servicios": "rub-4"}
         self._seq = 0
@@ -240,6 +251,39 @@ class FakeRepo:
             {"comercio_id": f["comercio_id"], "comercios": self.comercios.get(f["comercio_id"], {})}
             for f in self.favoritos if f["usuario_id"] == usuario_id
         ]
+
+    # galería
+    def list_fotos_comercio(self, comercio_id):
+        return sorted([f for f in self.comercio_fotos if f["comercio_id"] == comercio_id], key=lambda x: x.get("orden", 0))
+
+    def add_foto_comercio(self, row):
+        full = {"id": self._id("foto"), **row}
+        self.comercio_fotos.append(full)
+        return full
+
+    def delete_foto_comercio(self, foto_id, comercio_id):
+        antes = len(self.comercio_fotos)
+        self.comercio_fotos = [f for f in self.comercio_fotos if not (f["id"] == foto_id and f["comercio_id"] == comercio_id)]
+        return len(self.comercio_fotos) < antes
+
+    def count_fotos_comercio(self, comercio_id):
+        return len(self.list_fotos_comercio(comercio_id))
+
+    def list_videos_comercio(self, comercio_id):
+        return sorted([v for v in self.comercio_videos if v["comercio_id"] == comercio_id], key=lambda x: x.get("orden", 0))
+
+    def add_video_comercio(self, row):
+        full = {"id": self._id("vid"), **row}
+        self.comercio_videos.append(full)
+        return full
+
+    def delete_video_comercio(self, video_id, comercio_id):
+        antes = len(self.comercio_videos)
+        self.comercio_videos = [v for v in self.comercio_videos if not (v["id"] == video_id and v["comercio_id"] == comercio_id)]
+        return len(self.comercio_videos) < antes
+
+    def count_videos_comercio(self, comercio_id):
+        return len(self.list_videos_comercio(comercio_id))
 
     def crear_comercio_usuario(self, row):
         full = {"id": self._id("usr"), "activo": True, "email": None, "password_hash": None, **row}
