@@ -478,3 +478,29 @@ def test_baja_publicacion_ajena_404(client, repo):
     token_b = comercio_token(comercio_id="com-b")
     r = client.delete(f"/comercio/publicaciones/{pub['id']}", headers={"Authorization": f"Bearer {token_b}"})
     assert r.status_code == 404
+
+
+# ---------------- Galería (Mi comercio, lado dueño) ----------------
+from io import BytesIO as _BytesIO
+from PIL import Image as _Image
+
+
+def _foto_upload():
+    buf = _BytesIO(); _Image.new("RGB", (10, 10), "blue").save(buf, format="JPEG"); buf.seek(0)
+    return {"foto": ("f.jpg", buf, "image/jpeg")}
+
+
+def test_mi_comercio_agregar_y_listar_foto(client, repo):
+    repo.seed_comercio(id="com-g", slug="galeria", nombre="G", whatsapp="591", confiable=True)
+    h = {"Authorization": f"Bearer {comercio_token(comercio_id='com-g')}"}
+    r = client.post("/comercio/fotos", headers=h, files=_foto_upload())
+    assert r.status_code == 200
+    assert r.json()["foto"]["thumb_url"]
+    assert len(client.get("/comercio/fotos", headers=h).json()["items"]) == 1
+
+
+def test_mi_comercio_video_no_es_video_400(client, repo):
+    repo.seed_comercio(id="com-g", slug="galeria", nombre="G", whatsapp="591", confiable=True)
+    r = client.post("/comercio/videos", headers={"Authorization": f"Bearer {comercio_token(comercio_id='com-g')}"},
+                    files={"video": ("x.jpg", _BytesIO(b"no"), "image/jpeg")})
+    assert r.status_code == 400
