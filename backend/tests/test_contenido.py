@@ -60,3 +60,13 @@ def test_admin_tambien_publica(client):
     tok = auth.make_token("admin@bermejolive.com", rol="admin")
     r = client.put("/contenido/cotizaciones/usd_bob", headers={"Authorization": f"Bearer {tok}"}, json={"valor": 14})
     assert r.status_code == 200
+
+
+def test_editar_red(client, repo):
+    r = client.put("/contenido/redes/tiktok", headers=_h(), json={"url": "https://tiktok.com/@encontralo"})
+    assert r.status_code == 200
+    assert r.json()["red"]["url"].endswith("encontralo")
+
+
+def test_red_inexistente_404(client):
+    assert client.put("/contenido/redes/nope", headers=_h(), json={"url": "x"}).status_code == 404

@@ -44,3 +44,6 @@ export const subirVideoPromo = (file: File, titulo: string, onP?: (p: number) =>
   subirConProgreso<{ video: VideoPromoItem }>(`${API}/contenido/videos-promo`, "video", file, getPubToken(), titulo ? { titulo } : {}, onP).then((d) => d.video);
 export const borrarVideoPromo = (id: string) =>
   pFetch(`/contenido/videos-promo/${id}`, { method: "DELETE" });
+
+export const editarRed = (clave: string, url: string) =>
+  pFetch(`/contenido/redes/${clave}`, { method: "PUT", body: JSON.stringify({ url }) });

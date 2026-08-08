@@ -514,3 +514,9 @@
 .ini-negocio b { display: block; font-size: 15px; }
 .ini-negocio span { color: var(--txt-3); font-size: 12.5px; }
 .ini-negocio-cta { color: var(--neon) !important; font-weight: 700; font-size: 13px; white-space: nowrap; }
+
+/* Seguinos (redes) en la home */
+.ini-redes { display: flex; gap: 8px; flex-wrap: wrap; }
+.ini-red { display: inline-flex; align-items: center; gap: 6px; padding: 9px 13px; border-radius: 999px; background: var(--panel); border: 1px solid var(--stroke); color: var(--txt-2); font-size: 13px; font-weight: 600; }
+.ini-red:hover { border-color: var(--neon); color: var(--neon); }
+.ini-red-ic { font-size: 16px; }

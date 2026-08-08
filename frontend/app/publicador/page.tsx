@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getCotizaciones, getClima, type Cotizacion, type Clima } from "@/lib/data";
+import { getCotizaciones, getClima, getRedes, type Cotizacion, type Clima, type Red } from "@/lib/data";
 import {
   publicadorLogin, hayPub, clearPub, editarCotizacion, overrideClima, refrescarClima,
-  listarVideosPromo, subirVideoPromo, borrarVideoPromo, type VideoPromoItem,
+  listarVideosPromo, subirVideoPromo, borrarVideoPromo, editarRed, type VideoPromoItem,
 } from "@/lib/publicador";
 
 export default function PublicadorPage() {
@@ -44,13 +44,19 @@ function Panel({ onLogout }: { onLogout: () => void }) {
   const [msg, setMsg] = useState(""); const [err, setErr] = useState("");
   const [ct, setCt] = useState(""); const [cd, setCd] = useState(""); const [ch, setCh] = useState("12");
   const [titulo, setTitulo] = useState(""); const [prog, setProg] = useState<number | null>(null);
+  const [redes, setRedes] = useState<Red[]>([]);
+  const [redVals, setRedVals] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getCotizaciones().then((c) => { setCotiz(c); setVals(Object.fromEntries(c.map((x) => [x.clave, x.valor != null ? String(x.valor) : ""]))); });
     getClima().then(setClima);
     listarVideosPromo().then(setVideos).catch(() => {});
+    getRedes().then((r) => { setRedes(r); setRedVals(Object.fromEntries(r.map((x) => [x.clave, x.url ?? ""]))); });
   }, []);
+  async function guardarRed(clave: string) {
+    try { await editarRed(clave, redVals[clave] || ""); flash("Red guardada ✓"); } catch (e) { fail(e); }
+  }
   const flash = (m: string) => { setMsg(m); setErr(""); setTimeout(() => setMsg(""), 2500); };
   const fail = (e: unknown) => setErr(e instanceof Error ? e.message : "Error");
 
@@ -134,6 +140,18 @@ function Panel({ onLogout }: { onLogout: () => void }) {
           ))}
         </div>
         {videos.length === 0 && <p style={{ color: "var(--txt-3)", fontSize: 13 }}>Todavía no subiste videos.</p>}
+      </div>
+
+      {/* Redes sociales */}
+      <div className="glass" style={box}>
+        <h3 style={{ marginTop: 0 }}>🔗 Redes sociales</h3>
+        {redes.map((r) => (
+          <div key={r.clave} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+            <span style={{ width: 130, fontSize: 13, fontWeight: 600 }}>{r.etiqueta}</span>
+            <input className="adm-input" style={{ flex: 1 }} placeholder="https://…" value={redVals[r.clave] ?? ""} onChange={(e) => setRedVals((s) => ({ ...s, [r.clave]: e.target.value }))} />
+            <button className="btn btn-primary btn-sm" onClick={() => guardarRed(r.clave)}>Guardar</button>
+          </div>
+        ))}
       </div>
     </div>
   );

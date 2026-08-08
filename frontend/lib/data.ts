@@ -126,14 +126,15 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
     if (errorRubros) logSupaError("getComerciosMapa (rubros)", errorRubros);
     if (data) {
       const slugById = new Map((rubros ?? []).map((r: any) => [r.id, r.slug]));
-      const hoy = new Date().toISOString().slice(0, 10);
+      // Gracia de 10 días: tras vencer el pago, la ficha sigue 10 días antes de pasar a "solo mapa".
+      const graceISO = new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10);
       return (data as any[]).map((c) => ({
         id: c.id, slug: c.slug, nombre: c.nombre, lat: c.lat, lng: c.lng,
         logo_url: c.logo_url, portada_url: c.portada_url, portada_thumb_url: c.portada_thumb_url ?? null, whatsapp: c.whatsapp, telefono: c.telefono,
         verificado: c.verificado, destacado: c.destacado, rating: c.rating,
         direccion: c.direccion, descripcion: c.descripcion, horario: c.horario, como_llegar: c.como_llegar,
         rubro_slug: slugById.get(c.rubro_id) ?? null, plan: c.plan ?? null,
-        ficha_activa: !c.suspendido && !!c.paga_hasta && String(c.paga_hasta).slice(0, 10) >= hoy,
+        ficha_activa: !c.suspendido && !!c.paga_hasta && String(c.paga_hasta).slice(0, 10) >= graceISO,
       }));
     }
   } else {
@@ -179,6 +180,13 @@ export async function getClima(): Promise<Clima | null> {
   const { data } = await supabase.from("clima").select("temp_c, descripcion, icono").eq("id", 1).limit(1);
   return (data?.[0] as Clima) ?? null;
 }
+export type Red = { clave: string; etiqueta: string; url: string | null };
+export async function getRedes(): Promise<Red[]> {
+  if (!hasSupabase) return [];
+  const { data } = await supabase.from("redes_sociales").select("clave, etiqueta, url, orden").order("orden");
+  return (data as Red[]) ?? [];
+}
+
 export async function getVideosPromo(limit = 8): Promise<VideoPromo[]> {
   if (!hasSupabase) return [];
   const { data } = await supabase.from("videos_promocionales").select("id, titulo, url, orden").eq("activo", true).order("orden").limit(limit);

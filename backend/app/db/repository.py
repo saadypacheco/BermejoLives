@@ -92,6 +92,8 @@ class Repo(Protocol):
     def list_videos_promo(self, solo_activos: bool = False) -> list[dict]: ...
     def add_video_promo(self, row: dict) -> dict: ...
     def delete_video_promo(self, video_id: str) -> bool: ...
+    def list_redes(self) -> list[dict]: ...
+    def update_red(self, clave: str, url: str | None) -> dict | None: ...
 
 
 class SupabaseRepo:
@@ -866,6 +868,14 @@ class SupabaseRepo:
     def delete_video_promo(self, video_id: str) -> bool:
         res = self._db.table("videos_promocionales").delete().eq("id", video_id).execute()
         return bool(res.data)
+
+    def list_redes(self) -> list[dict]:
+        res = self._db.table("redes_sociales").select("*").order("orden").execute()
+        return res.data or []
+
+    def update_red(self, clave: str, url: str | None) -> dict | None:
+        res = self._db.table("redes_sociales").update({"url": url}).eq("clave", clave).execute()
+        return res.data[0] if res.data else None
 
 
 def get_repo() -> Repo:

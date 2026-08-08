@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BottomNav } from "@/components/bottom-nav";
-import { getFeed, getCotizaciones, getClima, getVideosPromo } from "@/lib/data";
+import { getFeed, getCotizaciones, getClima, getVideosPromo, getRedes } from "@/lib/data";
 import { precioFmt } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -17,11 +17,17 @@ const CATS = [
 const money = (v: number | null | undefined) =>
   v && v > 0 ? v.toLocaleString("es-AR", { maximumFractionDigits: 2 }) : "s/d";
 
+const RED_ICON: Record<string, string> = {
+  tiktok: "🎵", instagram: "📷", facebook: "📘", youtube: "▶️", whatsapp_canal: "💬",
+};
+
 export default async function InicioPage() {
-  const [feed, cotizaciones, clima, videos] = await Promise.all([
-    getFeed(10), getCotizaciones(), getClima(), getVideosPromo(8),
+  const [feed, cotizaciones, clima, videos, redes] = await Promise.all([
+    getFeed(10), getCotizaciones(), getClima(), getVideosPromo(8), getRedes(),
   ]);
   const ofertas = feed.filter((f) => f.tipo !== "video");
+  const canalWa = redes.find((r) => r.clave === "whatsapp_canal")?.url;
+  const seguinos = redes.filter((r) => r.url && r.clave !== "whatsapp_canal");
 
   return (
     <div className="ini">
@@ -106,12 +112,28 @@ export default async function InicioPage() {
         </section>
       )}
 
+      {/* SEGUINOS (redes que cargó el admin) */}
+      {seguinos.length > 0 && (
+        <section className="ini-sec">
+          <div className="ini-head"><h2>Seguinos</h2></div>
+          <div className="ini-redes">
+            {seguinos.map((r) => (
+              <a key={r.clave} href={r.url as string} target="_blank" rel="noopener" className="ini-red">
+                <span className="ini-red-ic">{RED_ICON[r.clave] ?? "🔗"}</span>{r.etiqueta}
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* CANAL + PUBLICÁ */}
       <section className="ini-sec">
+        {canalWa && (
         <div className="ini-canal">
           <div><h3>📢 Canal de novedades</h3><p>Ofertas diarias, nuevos comercios y eventos de Bermejo.</p></div>
-          <a className="btn btn-wa" href="https://wa.me/59170000000" target="_blank" rel="noopener">Unirme al canal</a>
+          <a className="btn btn-wa" href={canalWa} target="_blank" rel="noopener">Unirme al canal</a>
         </div>
+        )}
         <Link href="/autoregistro" className="ini-negocio">
           <div><b>¿Tenés un comercio?</b><span>Publicalo gratis y aparecé en el mapa.</span></div>
           <span className="ini-negocio-cta">Publicá tu negocio ↗</span>

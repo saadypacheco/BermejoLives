@@ -99,3 +99,16 @@ def borrar_video_promo(video_id: str, _pub: dict = Depends(auth.require_publicad
     if not repo.delete_video_promo(video_id):
         raise HTTPException(status_code=404, detail="Video no encontrado")
     return {"ok": True}
+
+
+# ---- Redes sociales ----
+class RedUpdate(BaseModel):
+    url: str | None = None
+
+
+@router.put("/contenido/redes/{clave}")
+def editar_red(clave: str, body: RedUpdate, _pub: dict = Depends(auth.require_publicador), repo: Repo = Depends(get_repo)) -> dict:
+    row = repo.update_red(clave, (body.url or "").strip() or None)
+    if not row:
+        raise HTTPException(status_code=404, detail="Red no encontrada")
+    return {"ok": True, "red": row}

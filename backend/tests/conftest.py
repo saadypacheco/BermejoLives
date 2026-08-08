@@ -53,6 +53,10 @@ class FakeRepo:
         ]
         self.clima: dict = {"id": 1, "temp_c": None, "descripcion": None, "override_hasta": None}
         self.videos_promo: list[dict] = []
+        self.redes: list[dict] = [
+            {"clave": "tiktok", "etiqueta": "TikTok", "url": None, "orden": 1},
+            {"clave": "instagram", "etiqueta": "Instagram", "url": None, "orden": 2},
+        ]
         self.zonas: dict[str, str] = {"zona-moda": "zona-1"}
         self.rubros: dict[str, str] = {"importadora": "rub-1", "gastronomia": "rub-2", "gomeria": "rub-3", "servicios": "rub-4"}
         self._seq = 0
@@ -325,6 +329,16 @@ class FakeRepo:
         antes = len(self.videos_promo)
         self.videos_promo = [v for v in self.videos_promo if v["id"] != video_id]
         return len(self.videos_promo) < antes
+
+    def list_redes(self):
+        return sorted(self.redes, key=lambda x: x.get("orden", 0))
+
+    def update_red(self, clave, url):
+        for r in self.redes:
+            if r["clave"] == clave:
+                r["url"] = url
+                return r
+        return None
 
     def crear_comercio_usuario(self, row):
         full = {"id": self._id("usr"), "activo": True, "email": None, "password_hash": None, **row}
