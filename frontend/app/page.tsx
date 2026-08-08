@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BottomNav } from "@/components/bottom-nav";
-import { getFeed, getVideosRecientes } from "@/lib/data";
+import { getFeed, getCotizaciones, getClima, getVideosPromo } from "@/lib/data";
 import { precioFmt } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -14,37 +14,59 @@ const CATS = [
   { label: "Servicios", emoji: "🧰", q: "servicio" },
 ];
 
+const money = (v: number | null | undefined) =>
+  v && v > 0 ? v.toLocaleString("es-AR", { maximumFractionDigits: 2 }) : "s/d";
+
 export default async function InicioPage() {
-  const [feed, videos] = await Promise.all([getFeed(10), getVideosRecientes(8)]);
+  const [feed, cotizaciones, clima, videos] = await Promise.all([
+    getFeed(10), getCotizaciones(), getClima(), getVideosPromo(8),
+  ]);
   const ofertas = feed.filter((f) => f.tipo !== "video");
 
   return (
     <div className="ini">
-      {/* HERO */}
+      {/* HERO con foto de Bermejo */}
       <header className="ini-hero">
-        <div className="ini-brand">ENCON<i>TRALO</i> <span>BERMEJO</span></div>
-        <h1>El mapa de comercios de Bermejo</h1>
-        <p>Encontrá, compará y elegí lo mejor de tu ciudad.</p>
-        <form className="ini-search" action="/buscar" method="get">
-          <span aria-hidden>🔍</span>
-          <input name="q" placeholder="¿Qué estás buscando?" aria-label="Buscar" />
-          <button type="submit">Buscar</button>
-        </form>
-        <Link href="/mapa" className="ini-cta">Explorá el mapa →</Link>
+        <div className="ini-hero-in">
+          <div className="ini-brand">ENCON<i>TRALO</i> <span>BERMEJO</span></div>
+          <h1>El mapa de comercios de Bermejo</h1>
+          <p>Encontrá, reservá y elegí lo mejor de tu ciudad.</p>
+          <form className="ini-search" action="/buscar" method="get">
+            <span aria-hidden>🔍</span>
+            <input name="q" placeholder="¿Qué estás buscando?" aria-label="Buscar" />
+            <button type="submit">Buscar</button>
+          </form>
+          <Link href="/mapa" className="ini-cta">Explorá el mapa →</Link>
+        </div>
       </header>
+
+      {/* COTIZACIÓN + CLIMA (los ganchos diarios) */}
+      <section className="ini-sec">
+        <div className="ini-widgets">
+          {cotizaciones.map((c) => (
+            <div key={c.clave} className="ini-w">
+              <span className="ini-w-lbl">{c.etiqueta}</span>
+              <span className="ini-w-val">{money(c.valor)} <small>{c.unidad}</small></span>
+              {c.detalle && <span className="ini-w-sub">{c.detalle}</span>}
+            </div>
+          ))}
+          <div className="ini-w ini-w-clima">
+            <span className="ini-w-lbl">Clima · Bermejo</span>
+            <span className="ini-w-val">{clima?.icono ?? "🌡️"} {clima?.temp_c != null ? `${Math.round(clima.temp_c)}°` : "—"}</span>
+            {clima?.descripcion && <span className="ini-w-sub">{clima.descripcion}</span>}
+          </div>
+        </div>
+      </section>
 
       {/* CATEGORÍAS */}
       <section className="ini-sec">
         <div className="ini-cats">
           {CATS.map((c) => (
             <Link key={c.label} href={`/buscar?q=${c.q}`} className="ini-cat">
-              <span className="ini-cat-ic">{c.emoji}</span>
-              <span>{c.label}</span>
+              <span className="ini-cat-ic">{c.emoji}</span><span>{c.label}</span>
             </Link>
           ))}
-          <Link href="/buscar" className="ini-cat">
-            <span className="ini-cat-ic">•••</span><span>Ver más</span>
-          </Link>
+          <Link href="/buscar" className="ini-cat"><span className="ini-cat-ic">•••</span><span>Ver más</span></Link>
         </div>
       </section>
 
@@ -60,8 +82,7 @@ export default async function InicioPage() {
                   {o.imagen_url && <img src={o.imagen_url} alt="" loading="lazy" decoding="async" />}
                 </div>
                 <div className="ini-off-b">
-                  <b>{o.titulo}</b>
-                  <small>{o.comercio_nombre}</small>
+                  <b>{o.titulo}</b><small>{o.comercio_nombre}</small>
                   {o.precio != null && <div className="ini-off-price">{precioFmt(o.precio, o.moneda)}</div>}
                 </div>
               </Link>
@@ -70,7 +91,7 @@ export default async function InicioPage() {
         </section>
       )}
 
-      {/* RECORRIMOS BERMEJO (videos) */}
+      {/* RECORRIMOS BERMEJO (videos promocionales de zonas) */}
       {videos.length > 0 && (
         <section className="ini-sec">
           <div className="ini-head"><h2>🎬 Recorrimos Bermejo</h2></div>
@@ -78,20 +99,17 @@ export default async function InicioPage() {
             {videos.map((v) => (
               <div key={v.id} className="ini-vid">
                 <video src={v.url} controls preload="metadata" playsInline />
-                <Link href={`/comercios/${v.comercio_slug}`} className="ini-vid-b">{v.comercio_nombre}</Link>
+                {v.titulo && <span className="ini-vid-b">{v.titulo}</span>}
               </div>
             ))}
           </div>
         </section>
       )}
 
-      {/* CTA COMERCIOS + CANAL */}
+      {/* CANAL + PUBLICÁ */}
       <section className="ini-sec">
         <div className="ini-canal">
-          <div>
-            <h3>📢 Canal de novedades</h3>
-            <p>Ofertas diarias, nuevos comercios y eventos de Bermejo.</p>
-          </div>
+          <div><h3>📢 Canal de novedades</h3><p>Ofertas diarias, nuevos comercios y eventos de Bermejo.</p></div>
           <a className="btn btn-wa" href="https://wa.me/59170000000" target="_blank" rel="noopener">Unirme al canal</a>
         </div>
         <Link href="/autoregistro" className="ini-negocio">

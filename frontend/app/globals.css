@@ -452,8 +452,19 @@
 .ini { max-width: 480px; margin: 0 auto; min-height: 100dvh; background: var(--bg); padding-bottom: 78px; }
 
 /* Hero con foto de Bermejo + overlay */
-.ini-hero { position: relative; padding: 26px 18px 22px; color: #fff; overflow: hidden;
-  background: linear-gradient(180deg, rgba(7,10,20,.72), rgba(7,10,20,.92)), url("/bermejo-ciudad.png") center/cover no-repeat; }
+.ini-hero { position: relative; padding: 26px 18px 24px; color: #fff; overflow: hidden;
+  background: linear-gradient(180deg, rgba(7,10,20,.55), rgba(7,10,20,.9)), url("/bermejo-ciudad4.png") center/cover no-repeat; }
+.ini-hero-in { position: relative; z-index: 1; }
+
+/* Widgets: cotización + clima (los ganchos diarios) */
+.ini-widgets { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; }
+.ini-widgets::-webkit-scrollbar { display: none; }
+.ini-w { flex: 0 0 auto; min-width: 108px; display: flex; flex-direction: column; gap: 2px; padding: 11px 13px; border-radius: 14px; background: var(--panel); border: 1px solid var(--stroke); }
+.ini-w-lbl { font-size: 11px; color: var(--txt-3); font-weight: 600; }
+.ini-w-val { font-size: 19px; font-weight: 800; color: var(--txt); }
+.ini-w-val small { font-size: 12px; color: var(--txt-2); font-weight: 600; }
+.ini-w-sub { font-size: 10.5px; color: var(--txt-3); }
+.ini-w-clima { background: linear-gradient(135deg, rgba(57,132,255,.14), var(--panel)); }
 .ini-brand { font-weight: 900; font-size: 22px; letter-spacing: .04em; }
 .ini-brand i { color: var(--neon); font-style: normal; }
 .ini-brand span { font-size: 11px; font-weight: 700; letter-spacing: .22em; color: var(--txt-3); margin-left: 2px; }

@@ -161,6 +161,27 @@ export async function getComercioBySlug(slug: string): Promise<Comercio | null> 
   return DEMO_COMERCIOS.find((c) => c.slug === slug) ?? DEMO_COMERCIOS[0];
 }
 
+// Contenido de la home Inicio (migración 0032): cotizaciones, clima, videos promo.
+export type Cotizacion = { clave: string; etiqueta: string; detalle: string | null; valor: number | null; unidad: string | null };
+export type Clima = { temp_c: number | null; descripcion: string | null; icono: string | null };
+export type VideoPromo = { id: string; titulo: string | null; url: string };
+
+export async function getCotizaciones(): Promise<Cotizacion[]> {
+  if (!hasSupabase) return [];
+  const { data } = await supabase.from("cotizaciones").select("clave, etiqueta, detalle, valor, unidad, orden").order("orden");
+  return (data as Cotizacion[]) ?? [];
+}
+export async function getClima(): Promise<Clima | null> {
+  if (!hasSupabase) return null;
+  const { data } = await supabase.from("clima").select("temp_c, descripcion, icono").eq("id", 1).limit(1);
+  return (data?.[0] as Clima) ?? null;
+}
+export async function getVideosPromo(limit = 8): Promise<VideoPromo[]> {
+  if (!hasSupabase) return [];
+  const { data } = await supabase.from("videos_promocionales").select("id, titulo, url, orden").eq("activo", true).order("orden").limit(limit);
+  return (data as VideoPromo[]) ?? [];
+}
+
 // Videos recientes de comercios ("Recorrimos Bermejo" en la home Inicio).
 export type VideoRecap = { id: string; url: string; comercio_slug: string; comercio_nombre: string; portada_thumb_url: string | null };
 export async function getVideosRecientes(limit = 8): Promise<VideoRecap[]> {
