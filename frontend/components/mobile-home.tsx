@@ -94,7 +94,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
       {soloOfertas && (
         <div className="mfilter-note">
           <span>🔥 Mostrando solo negocios con ofertas</span>
-          <Link href="/">Ver todos ✕</Link>
+          <Link href="/mapa">Ver todos ✕</Link>
         </div>
       )}
 
