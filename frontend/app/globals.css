@@ -447,3 +447,59 @@
 .gf-lightbox { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.9); display: grid; place-items: center; padding: 20px; cursor: zoom-out; }
 .gf-lightbox img { max-width: 96vw; max-height: 90vh; border-radius: 8px; object-fit: contain; }
 .gf-close { position: fixed; top: 16px; right: 18px; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.14); color: #fff; font-size: 18px; display: grid; place-items: center; }
+
+/* ============================ Home "Inicio" (landing comprador) ============================ */
+.ini { max-width: 480px; margin: 0 auto; min-height: 100dvh; background: var(--bg); padding-bottom: 78px; }
+
+/* Hero con foto de Bermejo + overlay */
+.ini-hero { position: relative; padding: 26px 18px 22px; color: #fff; overflow: hidden;
+  background: linear-gradient(180deg, rgba(7,10,20,.72), rgba(7,10,20,.92)), url("/bermejo-ciudad.png") center/cover no-repeat; }
+.ini-brand { font-weight: 900; font-size: 22px; letter-spacing: .04em; }
+.ini-brand i { color: var(--neon); font-style: normal; }
+.ini-brand span { font-size: 11px; font-weight: 700; letter-spacing: .22em; color: var(--txt-3); margin-left: 2px; }
+.ini-hero h1 { font-size: 25px; line-height: 1.15; margin: 16px 0 6px; }
+.ini-hero p { color: rgba(255,255,255,.8); font-size: 14.5px; margin: 0 0 16px; }
+.ini-search { display: flex; align-items: center; gap: 8px; background: #fff; border-radius: 14px; padding: 6px 6px 6px 14px; }
+.ini-search span { color: #7a8390; }
+.ini-search input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: #1a1f25; font-size: 15px; }
+.ini-search button { flex-shrink: 0; background: linear-gradient(180deg,#4dffae,var(--neon-dim)); color: #05130c; font-weight: 800; font-size: 14px; border-radius: 10px; padding: 10px 16px; }
+.ini-cta { display: inline-block; margin-top: 14px; color: var(--neon); font-weight: 700; font-size: 14.5px; }
+
+/* Secciones */
+.ini-sec { padding: 20px 16px 0; }
+.ini-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.ini-head h2 { font-size: 18px; margin: 0; }
+.ini-head a { color: var(--neon); font-size: 14px; }
+
+/* Categorías */
+.ini-cats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.ini-cat { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 4px; border-radius: 14px; background: var(--panel); border: 1px solid var(--stroke); color: var(--txt-2); font-size: 11.5px; font-weight: 600; text-align: center; }
+.ini-cat-ic { font-size: 22px; line-height: 1; }
+.ini-cat:hover { border-color: var(--neon); color: var(--neon); }
+
+/* Rail horizontal */
+.ini-rail { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; }
+.ini-rail::-webkit-scrollbar { display: none; }
+
+/* Oferta */
+.ini-off { flex: 0 0 168px; background: var(--panel); border: 1px solid var(--stroke); border-radius: 14px; overflow: hidden; color: inherit; }
+.ini-off-img { position: relative; height: 100px; background: linear-gradient(135deg,#11161d,#0a0c10); }
+.ini-off-img img { width: 100%; height: 100%; object-fit: cover; }
+.ini-off-b { padding: 10px 12px 12px; }
+.ini-off-b b { display: block; font-size: 14px; line-height: 1.2; }
+.ini-off-b small { color: var(--neon); font-size: 12px; }
+.ini-off-price { color: var(--txt); font-weight: 800; margin-top: 4px; }
+
+/* Video */
+.ini-vid { flex: 0 0 200px; }
+.ini-vid video { width: 100%; aspect-ratio: 9/16; max-height: 320px; border-radius: 14px; background: #000; border: 1px solid var(--stroke); object-fit: cover; }
+.ini-vid-b { display: block; margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--txt-2); }
+
+/* Canal + comercios */
+.ini-canal { display: flex; align-items: center; gap: 12px; justify-content: space-between; background: linear-gradient(135deg, rgba(37,211,102,.14), var(--panel)); border: 1px solid var(--stroke); border-radius: 16px; padding: 16px; }
+.ini-canal h3 { margin: 0 0 3px; font-size: 15px; }
+.ini-canal p { margin: 0; color: var(--txt-3); font-size: 12.5px; }
+.ini-negocio { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; background: var(--panel); border: 1px solid var(--stroke); border-radius: 16px; padding: 16px; color: inherit; }
+.ini-negocio b { display: block; font-size: 15px; }
+.ini-negocio span { color: var(--txt-3); font-size: 12.5px; }
+.ini-negocio-cta { color: var(--neon) !important; font-weight: 700; font-size: 13px; white-space: nowrap; }

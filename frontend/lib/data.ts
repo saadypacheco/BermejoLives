@@ -102,7 +102,7 @@ export type ComercioMapa = {
   logo_url: string | null; portada_url: string | null; portada_thumb_url: string | null; whatsapp: string;
   telefono: string | null; verificado: boolean; destacado: boolean; rating: number;
   direccion: string | null; descripcion: string | null; horario: string | null;
-  como_llegar: string | null; rubro_slug: string | null;
+  como_llegar: string | null; rubro_slug: string | null; plan: string | null;
 };
 
 // Comercios geolocalizados para el mapa de la Home (+ auspiciantes/destacados).
@@ -113,7 +113,7 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
     const [{ data, error }, { data: rubros, error: errorRubros }] = await Promise.all([
       supabase
         .from("comercios")
-        .select("id, slug, nombre, lat, lng, logo_url, portada_url, portada_thumb_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, rubro_id")
+        .select("id, slug, nombre, lat, lng, logo_url, portada_url, portada_thumb_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, plan, rubro_id")
         .eq("activo", true)
         .not("lat", "is", null)
         .gte("lat", -22.90).lte("lat", -22.58)
@@ -130,7 +130,7 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
         logo_url: c.logo_url, portada_url: c.portada_url, portada_thumb_url: c.portada_thumb_url ?? null, whatsapp: c.whatsapp, telefono: c.telefono,
         verificado: c.verificado, destacado: c.destacado, rating: c.rating,
         direccion: c.direccion, descripcion: c.descripcion, horario: c.horario, como_llegar: c.como_llegar,
-        rubro_slug: slugById.get(c.rubro_id) ?? null,
+        rubro_slug: slugById.get(c.rubro_id) ?? null, plan: c.plan ?? null,
       }));
     }
   } else {
@@ -141,7 +141,7 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
     logo_url: c.logo_url, portada_url: c.portada_url, portada_thumb_url: null, whatsapp: c.whatsapp, telefono: c.telefono,
     verificado: c.verificado, destacado: c.destacado, rating: c.rating,
     direccion: c.direccion, descripcion: c.descripcion, horario: c.horario, como_llegar: c.como_llegar,
-    rubro_slug: null,
+    rubro_slug: null, plan: c.plan,
   }));
 }
 
@@ -159,6 +159,22 @@ export async function getComercioBySlug(slug: string): Promise<Comercio | null> 
     return comercio;
   }
   return DEMO_COMERCIOS.find((c) => c.slug === slug) ?? DEMO_COMERCIOS[0];
+}
+
+// Videos recientes de comercios ("Recorrimos Bermejo" en la home Inicio).
+export type VideoRecap = { id: string; url: string; comercio_slug: string; comercio_nombre: string; portada_thumb_url: string | null };
+export async function getVideosRecientes(limit = 8): Promise<VideoRecap[]> {
+  if (!hasSupabase) return [];
+  const { data: vids } = await supabase
+    .from("comercio_videos").select("id, url, comercio_id").order("created_at", { ascending: false }).limit(limit);
+  if (!vids || vids.length === 0) return [];
+  const ids = [...new Set((vids as any[]).map((v) => v.comercio_id))];
+  const { data: coms } = await supabase.from("comercios").select("id, slug, nombre, portada_thumb_url").in("id", ids);
+  const byId = new Map((coms ?? []).map((c: any) => [c.id, c]));
+  return (vids as any[]).map((v) => {
+    const c = byId.get(v.comercio_id) ?? {};
+    return { id: v.id, url: v.url, comercio_slug: c.slug ?? "", comercio_nombre: c.nombre ?? "", portada_thumb_url: c.portada_thumb_url ?? null };
+  }).filter((v) => v.comercio_slug);
 }
 
 // Galería del comercio (migración 0030): fotos con thumb + videos. Lectura
