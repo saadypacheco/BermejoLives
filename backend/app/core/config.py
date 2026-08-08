@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     agente_email: str = "agente@bermejolive.com"
     agente_password: str = "campo1234"
 
+    # Publicador (contenido del sitio: cotizaciones, clima, videos promocionales)
+    publicador_email: str = "publicador@bermejolive.com"
+    publicador_password: str = "publicar1234"
+    # Worker que refresca el clima desde open-meteo cada 30 min (se apaga en tests)
+    clima_worker: bool = True
+
     # Transcripción de audio del "¿qué vende?".
     #  - Si OPENAI_API_KEY está seteada → usa la API de OpenAI Whisper.
     #  - Si no → usa faster-whisper SELF-HOSTED (gratis, en el VPS).

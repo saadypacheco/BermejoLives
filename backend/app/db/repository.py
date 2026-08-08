@@ -84,6 +84,14 @@ class Repo(Protocol):
     def add_video_comercio(self, row: dict) -> dict: ...
     def delete_video_comercio(self, video_id: str, comercio_id: str) -> bool: ...
     def count_videos_comercio(self, comercio_id: str) -> int: ...
+    # contenido de la home (cotizaciones / clima / videos promocionales)
+    def list_cotizaciones(self) -> list[dict]: ...
+    def update_cotizacion(self, clave: str, valor: float) -> dict | None: ...
+    def get_clima(self) -> dict | None: ...
+    def update_clima(self, patch: dict) -> dict | None: ...
+    def list_videos_promo(self, solo_activos: bool = False) -> list[dict]: ...
+    def add_video_promo(self, row: dict) -> dict: ...
+    def delete_video_promo(self, video_id: str) -> bool: ...
 
 
 class SupabaseRepo:
@@ -816,6 +824,48 @@ class SupabaseRepo:
 
     def count_videos_comercio(self, comercio_id: str) -> int:
         return len(self.list_videos_comercio(comercio_id))
+
+    # ---- contenido de la home (cotizaciones / clima / videos promocionales) ----
+    def list_cotizaciones(self) -> list[dict]:
+        res = self._db.table("cotizaciones").select("*").order("orden").execute()
+        return res.data or []
+
+    def update_cotizacion(self, clave: str, valor: float) -> dict | None:
+        from datetime import datetime, timezone
+        res = (
+            self._db.table("cotizaciones")
+            .update({"valor": valor, "actualizado_en": datetime.now(timezone.utc).isoformat()})
+            .eq("clave", clave).execute()
+        )
+        return res.data[0] if res.data else None
+
+    def get_clima(self) -> dict | None:
+        res = self._db.table("clima").select("*").eq("id", 1).limit(1).execute()
+        return res.data[0] if res.data else None
+
+    def update_clima(self, patch: dict) -> dict | None:
+        from datetime import datetime, timezone
+        res = (
+            self._db.table("clima")
+            .update({**patch, "actualizado_en": datetime.now(timezone.utc).isoformat()})
+            .eq("id", 1).execute()
+        )
+        return res.data[0] if res.data else None
+
+    def list_videos_promo(self, solo_activos: bool = False) -> list[dict]:
+        q = self._db.table("videos_promocionales").select("*")
+        if solo_activos:
+            q = q.eq("activo", True)
+        res = q.order("orden").execute()
+        return res.data or []
+
+    def add_video_promo(self, row: dict) -> dict:
+        res = self._db.table("videos_promocionales").insert(row).execute()
+        return res.data[0] if res.data else {}
+
+    def delete_video_promo(self, video_id: str) -> bool:
+        res = self._db.table("videos_promocionales").delete().eq("id", video_id).execute()
+        return bool(res.data)
 
 
 def get_repo() -> Repo:

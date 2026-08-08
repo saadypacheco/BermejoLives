@@ -2,6 +2,9 @@
 
 No requiere Supabase ni red: toda la lógica de negocio se ejerce contra dicts.
 """
+import os
+os.environ.setdefault("CLIMA_WORKER", "0")  # el worker de clima no corre en tests (no red)
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -44,6 +47,12 @@ class FakeRepo:
         self.mensajes: dict[str, dict] = {}          # id -> row
         self.comercio_fotos: list[dict] = []          # galería
         self.comercio_videos: list[dict] = []
+        self.cotizaciones: list[dict] = [
+            {"clave": "usd_bob", "etiqueta": "Dólar", "detalle": "1 USD", "valor": 0, "unidad": "Bs", "orden": 1},
+            {"clave": "ars_bob", "etiqueta": "Peso argentino", "detalle": "100 ARS", "valor": 0, "unidad": "Bs", "orden": 2},
+        ]
+        self.clima: dict = {"id": 1, "temp_c": None, "descripcion": None, "override_hasta": None}
+        self.videos_promo: list[dict] = []
         self.zonas: dict[str, str] = {"zona-moda": "zona-1"}
         self.rubros: dict[str, str] = {"importadora": "rub-1", "gastronomia": "rub-2", "gomeria": "rub-3", "servicios": "rub-4"}
         self._seq = 0
@@ -284,6 +293,38 @@ class FakeRepo:
 
     def count_videos_comercio(self, comercio_id):
         return len(self.list_videos_comercio(comercio_id))
+
+    # contenido de la home
+    def list_cotizaciones(self):
+        return sorted(self.cotizaciones, key=lambda x: x.get("orden", 0))
+
+    def update_cotizacion(self, clave, valor):
+        for c in self.cotizaciones:
+            if c["clave"] == clave:
+                c["valor"] = valor
+                return c
+        return None
+
+    def get_clima(self):
+        return self.clima
+
+    def update_clima(self, patch):
+        self.clima.update(patch)
+        return self.clima
+
+    def list_videos_promo(self, solo_activos=False):
+        vs = [v for v in self.videos_promo if (not solo_activos or v.get("activo"))]
+        return sorted(vs, key=lambda x: x.get("orden", 0))
+
+    def add_video_promo(self, row):
+        full = {"id": self._id("vpromo"), "activo": True, **row}
+        self.videos_promo.append(full)
+        return full
+
+    def delete_video_promo(self, video_id):
+        antes = len(self.videos_promo)
+        self.videos_promo = [v for v in self.videos_promo if v["id"] != video_id]
+        return len(self.videos_promo) < antes
 
     def crear_comercio_usuario(self, row):
         full = {"id": self._id("usr"), "activo": True, "email": None, "password_hash": None, **row}

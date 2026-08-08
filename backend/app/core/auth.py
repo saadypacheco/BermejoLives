@@ -52,6 +52,16 @@ def make_agente_token(email: str) -> str:
     return pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 
+def make_publicador_token(email: str) -> str:
+    payload = {
+        "sub": email,
+        "email": email,
+        "rol": "publicador",
+        "exp": int(time.time()) + settings.jwt_ttl_hours * 3600,
+    }
+    return pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+
+
 def make_comercio_token(comercio_id: str, email: str) -> str:
     payload = {
         "sub": email,
@@ -102,6 +112,19 @@ def require_agente(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)
         raise HTTPException(status_code=401, detail="Token inválido o expirado") from exc
     if claims.get("rol") not in {"agente", "admin"}:
         raise HTTPException(status_code=403, detail="Requiere cuenta de agente de campo")
+    return claims
+
+
+def require_publicador(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
+    """Exige Bearer de un publicador de contenido del sitio (o admin)."""
+    if not creds:
+        raise HTTPException(status_code=401, detail="No autenticado")
+    try:
+        claims = _decode(creds.credentials)
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Token inválido o expirado") from exc
+    if claims.get("rol") not in {"publicador", "admin", "moderador"}:
+        raise HTTPException(status_code=403, detail="Requiere cuenta de publicador")
     return claims
 
 

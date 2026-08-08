@@ -5,10 +5,12 @@ Responsabilidades (ver ADR 2026-06-04-stack-bermejo):
   - Moderación (aprobar/rechazar/cambios) con service_role.
 El catálogo y el feed los lee el frontend directo de Supabase (anon + RLS).
 """
+import asyncio
 import time
 import traceback
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 import structlog
 from fastapi import FastAPI, Request
@@ -17,17 +19,46 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
-from app.api import auth, campo, comercio, health, moderacion, observabilidad, usuario, webhook
+from app.api import auth, campo, comercio, contenido, health, moderacion, observabilidad, usuario, webhook
 from app.core.config import settings
+from app.services.clima import fetch_clima_bermejo
 from app.services.observabilidad import registrar_error, registrar_perf
+from app.db.repository import get_repo
 
 logger = structlog.get_logger()
+
+
+async def _clima_loop():
+    """Refresca el clima de Bermejo desde open-meteo cada 30 min, salvo que
+    haya un override manual del publicador vigente."""
+    while True:
+        try:
+            repo = get_repo()
+            actual = await run_in_threadpool(repo.get_clima) or {}
+            oh = actual.get("override_hasta")
+            vigente = False
+            if oh:
+                try:
+                    vigente = datetime.fromisoformat(str(oh).replace("Z", "+00:00")) > datetime.now(timezone.utc)
+                except Exception:  # noqa: BLE001
+                    vigente = False
+            if not vigente:
+                data = await fetch_clima_bermejo()
+                if data:
+                    data["override_hasta"] = None
+                    await run_in_threadpool(repo.update_clima, data)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("clima_loop.error", error=str(exc))
+        await asyncio.sleep(1800)  # 30 min
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("api.startup", service="bermejo", environment=settings.environment)
+    tarea = asyncio.create_task(_clima_loop()) if settings.clima_worker else None
     yield
+    if tarea:
+        tarea.cancel()
 
 
 app = FastAPI(title="Bermejo Live Market API", version="0.1.0", lifespan=lifespan)
@@ -126,6 +157,7 @@ app.include_router(webhook.router, prefix="/ingest", tags=["ingesta"])
 app.include_router(moderacion.router, tags=["moderacion"])
 app.include_router(usuario.router, tags=["usuario"])
 app.include_router(observabilidad.router, tags=["observabilidad"])
+app.include_router(contenido.router, tags=["contenido"])
 
 # Fotos de comercio: servidas por el propio backend (reemplaza a Supabase
 # Storage en el self-host — ver services/imagenes.py).
