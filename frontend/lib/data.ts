@@ -103,6 +103,7 @@ export type ComercioMapa = {
   telefono: string | null; verificado: boolean; destacado: boolean; rating: number;
   direccion: string | null; descripcion: string | null; horario: string | null;
   como_llegar: string | null; rubro_slug: string | null; plan: string | null;
+  ficha_activa: boolean;   // muestra "Más información": suscripción al día (paga_hasta vigente, no suspendido)
 };
 
 // Comercios geolocalizados para el mapa de la Home (+ auspiciantes/destacados).
@@ -113,7 +114,7 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
     const [{ data, error }, { data: rubros, error: errorRubros }] = await Promise.all([
       supabase
         .from("comercios")
-        .select("id, slug, nombre, lat, lng, logo_url, portada_url, portada_thumb_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, plan, rubro_id")
+        .select("id, slug, nombre, lat, lng, logo_url, portada_url, portada_thumb_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, plan, paga_hasta, suspendido, rubro_id")
         .eq("activo", true)
         .not("lat", "is", null)
         .gte("lat", -22.90).lte("lat", -22.58)
@@ -125,12 +126,14 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
     if (errorRubros) logSupaError("getComerciosMapa (rubros)", errorRubros);
     if (data) {
       const slugById = new Map((rubros ?? []).map((r: any) => [r.id, r.slug]));
+      const hoy = new Date().toISOString().slice(0, 10);
       return (data as any[]).map((c) => ({
         id: c.id, slug: c.slug, nombre: c.nombre, lat: c.lat, lng: c.lng,
         logo_url: c.logo_url, portada_url: c.portada_url, portada_thumb_url: c.portada_thumb_url ?? null, whatsapp: c.whatsapp, telefono: c.telefono,
         verificado: c.verificado, destacado: c.destacado, rating: c.rating,
         direccion: c.direccion, descripcion: c.descripcion, horario: c.horario, como_llegar: c.como_llegar,
         rubro_slug: slugById.get(c.rubro_id) ?? null, plan: c.plan ?? null,
+        ficha_activa: !c.suspendido && !!c.paga_hasta && String(c.paga_hasta).slice(0, 10) >= hoy,
       }));
     }
   } else {
@@ -141,7 +144,7 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
     logo_url: c.logo_url, portada_url: c.portada_url, portada_thumb_url: null, whatsapp: c.whatsapp, telefono: c.telefono,
     verificado: c.verificado, destacado: c.destacado, rating: c.rating,
     direccion: c.direccion, descripcion: c.descripcion, horario: c.horario, como_llegar: c.como_llegar,
-    rubro_slug: null, plan: c.plan,
+    rubro_slug: null, plan: c.plan, ficha_activa: c.plan !== "gratis",
   }));
 }
 
