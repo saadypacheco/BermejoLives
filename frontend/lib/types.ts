@@ -30,6 +30,7 @@ export type Comercio = {
   verificado: boolean;
   rating: number;
   destacado: boolean;
+  acepta_reservas?: boolean;
   zona_id: string | null;
   rubro_id: string | null;
   rubro_slug?: string | null;

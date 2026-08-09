@@ -203,6 +203,7 @@ export type Perfil = {
   plan?: string | null;
   verificado?: boolean;
   confiable?: boolean;
+  acepta_reservas?: boolean;
   lat?: number | null;
   lng?: number | null;
   rubro_slugs?: string[];

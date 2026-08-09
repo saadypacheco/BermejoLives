@@ -429,6 +429,17 @@ class FakeRepo:
         self.marcar_destacados_cobrados(pago["comercio_id"])
         return {"ok": True, "paga_hasta": nueva, "comercio_id": pago["comercio_id"]}
 
+    def ocultar_comercios_vencidos(self, dias=40):
+        from datetime import date, timedelta
+        limite = (date.today() - timedelta(days=dias)).isoformat()
+        n = 0
+        for c in self.comercios.values():
+            ph = c.get("paga_hasta")
+            if ph and str(ph) < limite and c.get("activo", True):
+                c["activo"] = False
+                n += 1
+        return n
+
     def marcar_destacados_cobrados(self, comercio_id):
         for p in self.publicaciones:
             if p.get("comercio_id") == comercio_id and p.get("costo") and not p.get("cobrado"):

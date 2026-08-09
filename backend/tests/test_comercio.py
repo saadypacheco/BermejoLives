@@ -504,3 +504,16 @@ def test_mi_comercio_video_no_es_video_400(client, repo):
     r = client.post("/comercio/videos", headers={"Authorization": f"Bearer {comercio_token(comercio_id='com-g')}"},
                     files={"video": ("x.jpg", _BytesIO(b"no"), "image/jpeg")})
     assert r.status_code == 400
+
+
+def test_ocultar_comercios_vencidos(repo):
+    from datetime import date, timedelta
+    hace50 = (date.today() - timedelta(days=50)).isoformat()
+    ayer = (date.today() - timedelta(days=1)).isoformat()
+    repo.seed_comercio(id="c-venc", paga_hasta=hace50, activo=True)  # pagó, 50 días vencido → oculta
+    repo.seed_comercio(id="c-grac", paga_hasta=ayer, activo=True)    # vencido ayer → NO
+    repo.seed_comercio(id="c-grat", activo=True)                     # nunca pagó → NO
+    assert repo.ocultar_comercios_vencidos(40) == 1
+    assert repo.comercios["c-venc"]["activo"] is False
+    assert repo.comercios["c-grac"]["activo"] is True
+    assert repo.comercios["c-grat"]["activo"] is True

@@ -44,6 +44,7 @@ class Repo(Protocol):
     def registrar_pago(self, comercio_id: str, row: dict) -> dict: ...
     def suspender_comercio(self, comercio_id: str) -> None: ...
     def activar_comercio(self, comercio_id: str) -> None: ...
+    def ocultar_comercios_vencidos(self, dias: int = 40) -> int: ...
     def crear_pago_pendiente(self, comercio_id: str, row: dict) -> dict: ...
     def list_pagos_pendientes(self) -> list[dict]: ...
     def confirmar_pago(self, pago_id: str, meses: int, by: str) -> dict: ...
@@ -552,10 +553,11 @@ class SupabaseRepo:
             "notas":        row.get("notas"),
         }).execute()
 
-        # Actualizar paga_hasta + desuspender
+        # Actualizar paga_hasta + desuspender + reactivar (si el job lo había ocultado)
         self._db.table("comercios").update({
             "paga_hasta": nueva_fecha,
             "suspendido": False,
+            "activo": True,
         }).eq("id", comercio_id).execute()
 
         return {"paga_hasta": nueva_fecha}
@@ -564,7 +566,22 @@ class SupabaseRepo:
         self._db.table("comercios").update({"suspendido": True}).eq("id", comercio_id).execute()
 
     def activar_comercio(self, comercio_id: str) -> None:
-        self._db.table("comercios").update({"suspendido": False}).eq("id", comercio_id).execute()
+        self._db.table("comercios").update({"suspendido": False, "activo": True}).eq("id", comercio_id).execute()
+
+    def ocultar_comercios_vencidos(self, dias: int = 40) -> int:
+        """Baja automática: oculta del mapa los comercios que PAGARON alguna vez
+        (paga_hasta no nulo) y llevan `dias` vencidos. Los gratis no se tocan.
+        Devuelve cuántos ocultó."""
+        from datetime import date, timedelta
+        limite = (date.today() - timedelta(days=dias)).isoformat()
+        res = (
+            self._db.table("comercios")
+            .update({"activo": False})
+            .lt("paga_hasta", limite)
+            .eq("activo", True)
+            .execute()
+        )
+        return len(res.data or [])
 
     # ---- pago self-service (comercio sube comprobante → admin confirma) ----
     def crear_pago_pendiente(self, comercio_id: str, row: dict) -> dict:

@@ -112,8 +112,8 @@ export default async function ComercioPage({ params }: { params: { slug: string 
           </div>
         </div>
 
-        {/* PRODUCTOS (reales, viven en Reservalo — cada uno linkea directo a su ficha) */}
-        {productos.length > 0 && (
+        {/* PRODUCTOS / reservas (viven en Reservalo) — solo si el comercio acepta reservas */}
+        {comercio.acepta_reservas !== false && productos.length > 0 && (
         <>
         <div className="section-head" style={{ marginTop: 40 }}>
           <div><h2 style={{ fontSize: 24 }}>Productos</h2></div>

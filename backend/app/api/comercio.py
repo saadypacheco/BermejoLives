@@ -38,7 +38,7 @@ _CAMPOS_EDITABLES = {
     "nombre", "descripcion", "whatsapp", "telefono", "email",
     "facebook_url", "instagram_url", "tiktok_url", "sitio_web", "logo_url",
     "direccion", "como_llegar", "horario", "pedido_minimo", "modalidad",
-    "lat", "lng",
+    "lat", "lng", "acepta_reservas",
 }
 
 
@@ -334,7 +334,7 @@ _CAMPOS_PERFIL = (
     "facebook_url", "instagram_url", "tiktok_url", "sitio_web", "logo_url",
     "portada_url", "direccion", "como_llegar", "horario", "pedido_minimo",
     "modalidad", "monedas_aceptadas", "plan", "verificado", "confiable",
-    "lat", "lng",
+    "lat", "lng", "acepta_reservas",
 )
 
 
@@ -360,6 +360,7 @@ class PerfilUpdate(BaseModel):
     horario: str | None = None
     pedido_minimo: str | None = None
     modalidad: str | None = None
+    acepta_reservas: bool | None = None
     lat: float | None = None
     lng: float | None = None
     rubro_slugs: list[str] | None = None

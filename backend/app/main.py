@@ -52,13 +52,30 @@ async def _clima_loop():
         await asyncio.sleep(1800)  # 30 min
 
 
+async def _baja_loop():
+    """Baja automática diaria: oculta del mapa a los comercios que pagaron y
+    llevan 40 días vencidos (10 de gracia + 1 mes en 'solo mapa')."""
+    while True:
+        try:
+            repo = get_repo()
+            n = await run_in_threadpool(repo.ocultar_comercios_vencidos, 40)
+            if n:
+                logger.info("baja_automatica", ocultados=n)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("baja_loop.error", error=str(exc))
+        await asyncio.sleep(86400)  # 1 día
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("api.startup", service="bermejo", environment=settings.environment)
-    tarea = asyncio.create_task(_clima_loop()) if settings.clima_worker else None
+    tareas = []
+    if settings.clima_worker:
+        tareas.append(asyncio.create_task(_clima_loop()))
+        tareas.append(asyncio.create_task(_baja_loop()))
     yield
-    if tarea:
-        tarea.cancel()
+    for t in tareas:
+        t.cancel()
 
 
 app = FastAPI(title="Bermejo Live Market API", version="0.1.0", lifespan=lifespan)

@@ -481,6 +481,23 @@ function GaleriaTab() {
   );
 }
 
+function AvisoSuscripcion({ sub, onPagar }: { sub: Suscripcion; onPagar: () => void }) {
+  const e = sub.estado;
+  if (e !== "por_vencer" && e !== "vencido" && e !== "suspendido") return null;
+  const rojo = e === "vencido" || e === "suspendido";
+  const texto =
+    e === "por_vencer" ? `Tu suscripción vence en ${sub.dias_restantes ?? "pocos"} días. Pagá para no perder tu ficha "Más información".`
+    : e === "vencido" ? `Tu suscripción venció. Tenés unos días de gracia; si no pagás, tu comercio pasa a "solo mapa" y después sale del mapa.`
+    : `Tu comercio está suspendido. Pagá/reactivá para volver a aparecer completo.`;
+  return (
+    <div style={{ margin: "16px 26px 0", padding: 14, borderRadius: 12, display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap",
+      background: rojo ? "rgba(255,77,141,.1)" : "rgba(255,176,32,.1)", border: `1px solid ${rojo ? "var(--pink)" : "var(--amber)"}` }}>
+      <span style={{ fontSize: 13.5, color: "var(--txt)" }}>{rojo ? "⚠️" : "⏳"} {texto}</span>
+      <button className="btn btn-primary btn-sm" onClick={onPagar}>Pagar ahora</button>
+    </div>
+  );
+}
+
 function Panel({ sess, onLogout }: { sess: ComercioSession; onLogout: () => void }) {
   const [vista, setVista] = useState<Vista>("inicio");
   const [sub, setSub] = useState<Suscripcion | null>(null);
@@ -495,6 +512,7 @@ function Panel({ sess, onLogout }: { sess: ComercioSession; onLogout: () => void
       <Sidebar vista={vista} setVista={setVista} sub={sub} onLogout={onLogout} noLeidos={noLeidos} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <Topbar titulo={TITULOS[vista]} noLeidos={noLeidos} onPublicar={() => setVista("productos")} />
+        {sub && <AvisoSuscripcion sub={sub} onPagar={() => setVista("suscripcion")} />}
         <div style={{ padding: "24px 26px", maxWidth: 1120 }}>
           {vista === "inicio" && <Overview onEditar={() => setVista("editar")} onProductos={() => setVista("productos")} onPlanes={() => setVista("suscripcion")} />}
           {vista === "editar" && <div style={{ maxWidth: 720 }}><button className="btn" onClick={() => setVista("inicio")} style={{ border: "1px solid var(--stroke)", marginBottom: 14 }}><Arrow style={{ width: 15, height: 15, transform: "rotate(180deg)" }} /> Volver</button><PerfilTab /></div>}
@@ -596,6 +614,7 @@ function PerfilTab() {
       const patch: Record<string, unknown> = Object.fromEntries(EDITABLES.map((k) => [k, perfil[k] ?? ""]));
       if (perfil.lat != null) patch.lat = perfil.lat;
       if (perfil.lng != null) patch.lng = perfil.lng;
+      patch.acepta_reservas = perfil.acepta_reservas !== false;   // siempre booleano
       patch.rubro_slugs = rubroSlugs;
       const upd = await updatePerfil(patch);
       setPerfil(upd); setRubroSlugs(upd.rubro_slugs ?? rubroSlugs); setMsg("Guardado ✓");
@@ -729,6 +748,11 @@ function PerfilTab() {
           <CampoRow key={r.k} label={r.label} ph={r.ph} value={(perfil[r.k] as string) ?? ""} onChange={(v) => set(r.k, v)} />
         ))}
       </div>
+
+      <label className="glass" style={{ padding: "14px 18px", borderRadius: 16, display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+        <input type="checkbox" checked={perfil.acepta_reservas !== false} onChange={(e) => setPerfil((p) => (p ? { ...p, acepta_reservas: e.target.checked } : p))} />
+        <div><b style={{ fontSize: 14 }}>Acepto reservas</b><div style={{ fontSize: 12, color: "var(--txt-3)" }}>Si lo desactivás, no se muestran tus productos/reservas en la ficha.</div></div>
+      </label>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <button className="btn btn-primary" onClick={guardar} disabled={saving}>{saving ? "Guardando…" : "Guardar cambios"}</button>
