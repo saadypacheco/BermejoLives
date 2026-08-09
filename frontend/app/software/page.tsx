@@ -45,7 +45,7 @@ export default function SoftwarePage() {
           </p>
           <div className="hero-cta" style={{ justifyContent: "center" }}>
             <a href="https://wa.me/59170000000?text=Quiero%20sumar%20mi%20comercio%20a%20Bermejo" target="_blank" rel="noopener" className="btn btn-primary">
-              <WhatsApp style={{ width: 18, height: 18 }} /> Sumar mi comercio
+              <WhatsApp style={{ width: 18, height: 18 }} /> Sumar mi negocio
             </a>
             <a href="#planes" className="btn btn-ghost">Ver planes <Arrow /></a>
           </div>

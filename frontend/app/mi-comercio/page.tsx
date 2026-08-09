@@ -60,7 +60,7 @@ function LoginGate({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
     <>
       <Nav mapOnly />
       <div className="wrap" style={{ maxWidth: 420, paddingTop: 56 }}>
-        <span className="eyebrow"><span className="dot-live" /> Mi comercio</span>
+        <span className="eyebrow"><span className="dot-live" /> Mi negocio</span>
         <h1 style={{ fontSize: 28, margin: "10px 0 6px" }}>Entrá a tu panel</h1>
         <p style={{ color: "var(--txt-3)", marginBottom: 20 }}>Gestioná tu comercio, ofertas y suscripción.</p>
         <form onSubmit={submit} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -83,12 +83,12 @@ const MODA_LABEL: Record<string, string> = { mayorista: "Mayorista", minorista: 
 
 type Vista = "inicio" | "editar" | "productos" | "ofertas" | "galeria" | "contactos" | "estadisticas" | "mensajes" | "suscripcion" | "config";
 const TITULOS: Record<Vista, string> = {
-  inicio: "Mi comercio", editar: "Editar mi comercio", productos: "Productos / Ofertas",
+  inicio: "Mi negocio", editar: "Editar mi negocio", productos: "Productos / Ofertas",
   ofertas: "Mis ofertas", galeria: "Fotos y videos", contactos: "Contactos", estadisticas: "Estadísticas", mensajes: "Mensajes",
   suscripcion: "Suscripción", config: "Configuración",
 };
 const NAV_ITEMS: { v: Vista; label: string; Icon: any }[] = [
-  { v: "inicio", label: "Mi comercio", Icon: Store },
+  { v: "inicio", label: "Mi negocio", Icon: Store },
   { v: "galeria", label: "Fotos y videos", Icon: ImageIcon },
   { v: "ofertas", label: "Mis ofertas", Icon: Tag },
   { v: "productos", label: "Productos", Icon: Send },

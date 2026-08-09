@@ -369,7 +369,7 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
         {loading ? "Creando…" : "Crear cuenta y publicar"}
       </button>
       <small style={{ color: "var(--txt-3)" }}>
-        Después, desde "Mi comercio" podés sumar redes sociales, cambiar de plan y completar el resto.
+        Después, desde "Mi negocio" podés sumar redes sociales, cambiar de plan y completar el resto.
       </small>
     </form>
   );
