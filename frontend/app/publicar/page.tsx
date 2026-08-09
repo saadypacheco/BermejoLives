@@ -518,13 +518,14 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
 
         {/* ── Foto ── */}
         <div>
-          <label className="campo-lbl">Foto del comercio *</label>
+          <label className="campo-lbl">Foto del local (portada) *</label>
           <label className="foto-drop">
             {preview ? <img src={preview} alt="" /> : <span>📷 Sacar foto / elegir</span>}
             <input type="file" accept="image/*" capture="environment" onChange={onFoto} hidden />
           </label>
           {comprimiendo && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>Comprimiendo foto…</div>}
           {!comprimiendo && foto && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>{(foto.size / 1024).toFixed(0)} KB</div>}
+          <div style={{ fontSize: 12, color: "var(--neon)", marginTop: 8 }}>📸🎬 Después de guardar vas a poder sumar <b>más fotos y videos</b> del local.</div>
         </div>
 
         <input className="adm-input" value={f.direccion} onChange={(e) => set("direccion", e.target.value)}
