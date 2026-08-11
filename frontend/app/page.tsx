@@ -58,11 +58,9 @@ export default async function InicioPage() {
       <section className="ini-sec ini-sec-cats">
         <div className="ini-cats">
           {CATS.map((c) => (
-            <Link key={c.label} href={`/buscar?q=${c.q}`} className="ini-cat">
-              <span className="ini-cat-ic">{c.emoji}</span><span>{c.label}</span>
-            </Link>
+            <Link key={c.label} href={`/buscar?q=${c.q}`} className="ini-cat">{c.label}</Link>
           ))}
-          <Link href="/buscar" className="ini-cat"><span className="ini-cat-ic">•••</span><span>Ver más</span></Link>
+          <Link href="/buscar" className="ini-cat">Ver más</Link>
         </div>
       </section>
 

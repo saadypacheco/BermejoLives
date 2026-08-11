@@ -1,13 +1,35 @@
 # Pendientes — ecosistema Encontralo + Reservalo + tienda
 
-> Backlog maestro. Actualizado 2026-07-07 (antes: 2026-06-21 — mucho de lo que
-> decía "pendiente" ya se hizo; ver sección 2bis para el detalle de lo nuevo).
+> Backlog maestro. Actualizado 2026-08-11 (antes: 2026-07-07 — ver sección 2bis).
 > - **Encontralo** (este repo, ex-buscadonde): mapa/descubrimiento, en producción.
 > - **Reservalo** (`C:\repos\proyectosClaude\reservalo`): catálogo multi-vendor
 >   + reservas, vive bajo `encontralo.store/reservalo`, en producción.
 > - **tienda** (`C:\repos\proyectosClaude\tienda`, ex-amandaclothing): motor de
 >   e-commerce white-label, ~95% funcional, deploy-por-cliente. *(No tocado en
 >   la sesión del 2026-07-07 — su estado abajo puede estar desactualizado.)*
+
+---
+
+## 🆕 Bloque activo (2026-08-11) — home, búsqueda e info al comercio
+
+### A) Búsqueda inteligente y filtros
+- [x] **Acento-insensible** (`unaccent`) — "vidrieria" ahora encuentra "Vidriería". *(migración 0035)*
+- [x] **Texto libre busca por NOMBRE DE CATEGORÍA** (todas las categorías del comercio, vía `comercio_rubros`) + por **substring del nombre** (ej. "vidri"). *(0035)*
+- [x] (ya estaba) el **filtro** por categoría usa `comercio_rubros` (todas las categorías, no solo la principal).
+- [ ] **Buscar por PRODUCTOS**: cuando el comercio cargue productos (Reservalo), incluir el catálogo en la búsqueda (hoy solo nombre/descr/dirección/ofertas/rubros).
+- [ ] **Tolerancia a errores de tipeo / sinónimos** (fuzzy con `pg_trgm`, ej. "farmasia"→farmacia; "hamburgesa"→hamburguesa).
+- [ ] Evaluar **mostrar productos en los resultados** (no solo comercios).
+- [ ] Al recorrer un negocio el agente carga **varias categorías** — confirmar que el alta permite multi-categoría y que se guardan bien en `comercio_rubros` (clave para que la búsqueda encuentre por rubro).
+
+### B) Rediseño de la home Inicio (acercarla al mockup)
+- [x] Barra fina arriba: **temperatura + cotización** dólar/peso.
+- [x] **Filtros solo texto** (sin iconos), fila fina pegada al buscador.
+- [ ] **Tarjetas clickeables debajo del buscador** como el mockup (ofertas del día / recorrimos / redes) — que se vean como cards y al tocar entren. Hoy están pero se ven pobres sin datos.
+- [ ] **Redes sociales ARRIBA** (sección "Presencia en redes sociales" del mockup).
+- [ ] **Colores/tema del mockup**: azul/oscuro con logo "Encontralo." + pin azul (hoy el acento es verde neón). Definir paleta y aplicarla.
+
+### C) Info para CADA comercio (valor agregado — gancho de venta)
+- [ ] Mostrar al dueño en **"Mi negocio"** sus métricas propias: **contactos (WhatsApp/tel), visitas a su ficha, y por qué búsquedas lo encontraron**. Hoy el ranking está solo en el **admin** (pestaña KPIs). Este panel por-comercio es lo que justifica pagar el destacado. *(base ya lista: `leads` con tipo `vista`/`whatsapp`/… + `busquedas`.)*
 
 ---
 
