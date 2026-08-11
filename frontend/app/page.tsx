@@ -46,6 +46,18 @@ export default async function InicioPage() {
         </div>
       </header>
 
+      {/* CATEGORÍAS: fila fina de filtros, pegada abajo del buscador */}
+      <section className="ini-sec ini-sec-cats">
+        <div className="ini-cats">
+          {CATS.map((c) => (
+            <Link key={c.label} href={`/buscar?q=${c.q}`} className="ini-cat">
+              <span className="ini-cat-ic">{c.emoji}</span><span>{c.label}</span>
+            </Link>
+          ))}
+          <Link href="/buscar" className="ini-cat"><span className="ini-cat-ic">•••</span><span>Ver más</span></Link>
+        </div>
+      </section>
+
       {/* COTIZACIÓN + CLIMA (los ganchos diarios) */}
       <section className="ini-sec">
         <div className="ini-widgets">
@@ -61,18 +73,6 @@ export default async function InicioPage() {
             <span className="ini-w-val">{clima?.icono ?? "🌡️"} {clima?.temp_c != null ? `${Math.round(clima.temp_c)}°` : "—"}</span>
             {clima?.descripcion && <span className="ini-w-sub">{clima.descripcion}</span>}
           </div>
-        </div>
-      </section>
-
-      {/* CATEGORÍAS */}
-      <section className="ini-sec">
-        <div className="ini-cats">
-          {CATS.map((c) => (
-            <Link key={c.label} href={`/buscar?q=${c.q}`} className="ini-cat">
-              <span className="ini-cat-ic">{c.emoji}</span><span>{c.label}</span>
-            </Link>
-          ))}
-          <Link href="/buscar" className="ini-cat"><span className="ini-cat-ic">•••</span><span>Ver más</span></Link>
         </div>
       </section>
 
