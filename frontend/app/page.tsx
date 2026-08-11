@@ -31,6 +31,14 @@ export default async function InicioPage() {
 
   return (
     <div className="ini">
+      {/* Barra fina arriba: temperatura + cotización dólar/peso (gancho diario) */}
+      <div className="ini-topbar">
+        <span>🌡️ <b>{clima?.temp_c != null ? `${Math.round(clima.temp_c)}°` : "—"}</b></span>
+        {cotizaciones.map((c) => (
+          <span key={c.clave}>{c.etiqueta} <b>{money(c.valor)} {c.unidad}</b></span>
+        ))}
+      </div>
+
       {/* HERO con foto de Bermejo */}
       <header className="ini-hero">
         <div className="ini-hero-in">
@@ -55,24 +63,6 @@ export default async function InicioPage() {
             </Link>
           ))}
           <Link href="/buscar" className="ini-cat"><span className="ini-cat-ic">•••</span><span>Ver más</span></Link>
-        </div>
-      </section>
-
-      {/* COTIZACIÓN + CLIMA (los ganchos diarios) */}
-      <section className="ini-sec">
-        <div className="ini-widgets">
-          {cotizaciones.map((c) => (
-            <div key={c.clave} className="ini-w">
-              <span className="ini-w-lbl">{c.etiqueta}</span>
-              <span className="ini-w-val">{money(c.valor)} <small>{c.unidad}</small></span>
-              {c.detalle && <span className="ini-w-sub">{c.detalle}</span>}
-            </div>
-          ))}
-          <div className="ini-w ini-w-clima">
-            <span className="ini-w-lbl">Clima · Bermejo</span>
-            <span className="ini-w-val">{clima?.icono ?? "🌡️"} {clima?.temp_c != null ? `${Math.round(clima.temp_c)}°` : "—"}</span>
-            {clima?.descripcion && <span className="ini-w-sub">{clima.descripcion}</span>}
-          </div>
         </div>
       </section>
 
