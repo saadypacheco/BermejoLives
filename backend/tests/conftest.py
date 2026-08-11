@@ -42,6 +42,7 @@ class FakeRepo:
         self.publicaciones: list[dict] = []
         self.wa_inbox: dict[str, dict] = {}          # wa_message_id -> row
         self.leads: list[dict] = []
+        self.busquedas: list[dict] = []
         self.producto_refs: dict[str, dict] = {}     # id -> row
         self.pagos: dict[str, dict] = {}             # id -> row
         self.mensajes: dict[str, dict] = {}          # id -> row
@@ -381,6 +382,30 @@ class FakeRepo:
 
     def list_leads_by_comercio(self, comercio_id, dias=30):
         return [l for l in self.leads if l.get("comercio_id") == comercio_id]
+
+    def insert_busqueda(self, query, resultados):
+        self.busquedas.append({"query": query, "resultados": resultados})
+
+    def kpis_admin(self):
+        from collections import Counter
+        from datetime import date
+        def norm(q): return (q or "").strip().lower()
+        top = Counter(norm(b["query"]) for b in self.busquedas if norm(b.get("query", "")))
+        sin = Counter(norm(b["query"]) for b in self.busquedas if norm(b.get("query", "")) and (b.get("resultados") or 0) == 0)
+        por_com = Counter(l["comercio_id"] for l in self.leads if l.get("comercio_id"))
+        top_comercios = [
+            {"comercio_id": cid, "nombre": (self.comercios.get(cid) or {}).get("nombre", "?"), "slug": (self.comercios.get(cid) or {}).get("slug"), "eventos": n}
+            for cid, n in por_com.most_common(10)
+        ]
+        hoy = date.today().isoformat()
+        activos = [c for c in self.comercios.values() if c.get("activo", True)]
+        pagando = sum(1 for c in activos if not c.get("suspendido") and c.get("paga_hasta") and str(c["paga_hasta"]) >= hoy)
+        return {
+            "top_busquedas": [{"query": q, "n": n} for q, n in top.most_common(15)],
+            "sin_resultado": [{"query": q, "n": n} for q, n in sin.most_common(15)],
+            "top_comercios": top_comercios,
+            "monetizacion": {"comercios_activos": len(activos), "pagando": pagando, "gratis": max(0, len(activos) - pagando)},
+        }
 
     # ---- producto_ref ----
     def crear_producto_ref(self, row):

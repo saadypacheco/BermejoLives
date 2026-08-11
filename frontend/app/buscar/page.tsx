@@ -8,7 +8,7 @@ import { buscarComercios, getRubros, getZonas } from "@/lib/data";
 import { type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD_LABEL, comoLlegarHref, waLink } from "@/lib/types";
 import { WhatsApp, Pin, Search, Verified, User } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
-import { registrarLead } from "@/lib/campo";
+import { registrarLead, logBusqueda } from "@/lib/campo";
 
 const RESERVALO_URL = "/reservalo";
 
@@ -49,6 +49,7 @@ export default function BuscarPage() {
     debounce.current = setTimeout(async () => {
       const r = await buscarComercios(filtros, PAGE, 0);
       setResults(r);
+      if (q.trim()) logBusqueda(q, r.length);   // KPI: qué se busca / qué no da resultados
       setHayMas(r.length === PAGE);
       setLoading(false);
     }, 280);

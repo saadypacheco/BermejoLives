@@ -22,7 +22,7 @@ router = APIRouter()
 logger = structlog.get_logger()
 
 _MODALIDADES = {"mayorista", "minorista", "ambos"}
-_TIPOS_LEAD  = {"whatsapp", "telefono", "email", "web"}
+_TIPOS_LEAD  = {"whatsapp", "telefono", "email", "web", "vista"}
 
 
 @router.post("/auth/campo/login")
@@ -289,9 +289,23 @@ class _LeadIn(BaseModel):
 
 @router.post("/lead")
 def registrar_lead(body: _LeadIn, repo: Repo = Depends(get_repo)) -> dict:
-    """Registra un click de contacto (WhatsApp, teléfono, email…)."""
+    """Registra un click de contacto (WhatsApp, teléfono, email…) o una vista de ficha."""
     tipo = body.tipo if body.tipo in _TIPOS_LEAD else "whatsapp"
     repo.insert_lead({"comercio_id": body.comercio_id, "tipo": tipo})
+    return {"ok": True}
+
+
+class _BusquedaIn(BaseModel):
+    query: str
+    resultados: int = 0
+
+
+@router.post("/busquedas/log")
+def log_busqueda(body: _BusquedaIn, repo: Repo = Depends(get_repo)) -> dict:
+    """Loguea una búsqueda (para los KPIs: qué se busca y qué no da resultados)."""
+    q = (body.query or "").strip()
+    if len(q) >= 2:
+        repo.insert_busqueda(q, max(0, int(body.resultados)))
     return {"ok": True}
 
 

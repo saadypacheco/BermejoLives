@@ -152,6 +152,17 @@ export async function getEstadisticas(): Promise<EstadisticasAdmin> {
   return res.json();
 }
 
+export type Kpis = {
+  top_busquedas: { query: string; n: number }[];
+  sin_resultado: { query: string; n: number }[];
+  top_comercios: { comercio_id: string; nombre: string; slug: string | null; eventos: number }[];
+  monetizacion: { comercios_activos: number; pagando: number; gratis: number };
+};
+export async function getKpis(): Promise<Kpis> {
+  const res = await authFetch("/admin/kpis");
+  return res.json();
+}
+
 // ---- Reclamos (Encontralo) ----
 export type Reclamo = {
   id: string;

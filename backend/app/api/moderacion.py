@@ -149,6 +149,13 @@ def estadisticas(
     return repo.estadisticas_admin()
 
 
+@router.get("/admin/kpis")
+def kpis(_admin: dict = Depends(require_admin), repo: Repo = Depends(get_repo)) -> dict:
+    """KPIs del sitio: búsquedas top, búsquedas sin resultado, locales más
+    visitados/contactados y resumen de monetización."""
+    return repo.kpis_admin()
+
+
 class ResponderReclamoBody(BaseModel):
     respuesta: str
 

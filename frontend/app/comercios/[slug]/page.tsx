@@ -5,6 +5,7 @@ import { WaLeadLink } from "@/components/wa-lead-link";
 import { GuardarBoton } from "@/components/guardar-boton";
 import { getComercioBySlug, getProductos, getGaleriaComercio } from "@/lib/data";
 import { GaleriaFicha } from "@/components/galeria-ficha";
+import { VistaLogger } from "@/components/vista-logger";
 import { precioFmt, MODALIDAD_LABEL } from "@/lib/types";
 import {
   WhatsApp, Verified, Pin, Phone, Globe, Instagram, Facebook, TikTok, Arrow,
@@ -32,6 +33,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
 
   return (
     <>
+      <VistaLogger comercioId={comercio.id} />
       <Nav active="negocios" />
 
       <div className="profile-cover">

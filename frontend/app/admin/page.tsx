@@ -11,6 +11,7 @@ import {
   listPagosPendientes, confirmarPago, type PagoPendiente,
   enviarMensajeComercio,
   getEstadisticas, type EstadisticasAdmin,
+  getKpis, type Kpis,
   listReclamos, responderReclamo, type Reclamo,
   getReservaloResumen, type ReservaloResumen,
   getReservaloConsultas, responderReservaloConsulta, type ConsultaReservalo,
@@ -26,7 +27,8 @@ export default function AdminPage() {
   const [email, setEmail] = useState("admin@bermejolive.com");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"publicaciones" | "comercios" | "suscripciones" | "pagos" | "monitoreo" | "reclamos" | "cambio-numero">("comercios");
+  const [tab, setTab] = useState<"publicaciones" | "comercios" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero">("comercios");
+  const [kpis, setKpis] = useState<Kpis | null>(null);
   const [items, setItems] = useState<PendingPub[]>([]);
   const [comercios, setComercios] = useState<ComercioPorVerificar[]>([]);
   const [todosLosComercios, setTodosLosComercios] = useState<ComercioPorVerificar[]>([]);
@@ -83,6 +85,10 @@ export default function AdminPage() {
   async function loadEstadisticas() {
     try { setEstadisticas(await getEstadisticas()); } catch { setEstadisticas(null); }
     try { setReservaloResumen(await getReservaloResumen()); } catch { setReservaloResumen(null); }
+  }
+
+  async function loadKpis() {
+    try { setKpis(await getKpis()); } catch { setKpis(null); }
   }
 
   async function loadReclamos() {
@@ -209,6 +215,7 @@ export default function AdminPage() {
             <span style={{ color: "var(--pink)" }}>⚠️ {estadisticas.alertas.vencido + estadisticas.alertas.suspendido}</span>
           )}
         </button>
+        <button className={tab === "kpis" ? "active" : ""} onClick={() => { setTab("kpis"); loadKpis(); }}>KPIs</button>
         <button className={tab === "reclamos" ? "active" : ""} onClick={() => { setTab("reclamos"); loadReclamos(); }}>
           Reclamos {(() => {
             const n = reclamos.filter((r) => r.estado === "pendiente").length + consultasReservalo.filter((c) => c.estado === "pendiente").length;
@@ -243,6 +250,7 @@ export default function AdminPage() {
       {tab === "pagos" && <TabPagos items={pagosPendientes} onConfirmar={doConfirmarPago} />}
 
       {tab === "monitoreo" && <TabMonitoreo data={estadisticas} reservalo={reservaloResumen} comercios={todosLosComercios} />}
+      {tab === "kpis" && <TabKpis data={kpis} />}
 
       {tab === "reclamos" && (
         <TabReclamos
@@ -493,6 +501,46 @@ function TabPagos({
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function TabKpis({ data }: { data: Kpis | null }) {
+  if (!data) return <p style={{ color: "var(--txt-3)" }}>Cargando KPIs…</p>;
+  const m = data.monetizacion;
+  const card: React.CSSProperties = { padding: 18, borderRadius: 14, border: "1px solid var(--stroke)", background: "var(--panel)" };
+  const Lista = ({ titulo, items, empty }: { titulo: string; items: { query?: string; nombre?: string; slug?: string | null; n?: number; eventos?: number }[]; empty: string }) => (
+    <div style={card}>
+      <h3 style={{ marginTop: 0, fontSize: 15 }}>{titulo}</h3>
+      {items.length === 0 ? <p style={{ color: "var(--txt-3)", fontSize: 13 }}>{empty}</p> : (
+        <ol style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
+          {items.map((it, i) => (
+            <li key={i} style={{ fontSize: 13.5, color: "var(--txt-2)" }}>
+              {it.slug ? <Link href={`/comercios/${it.slug}`} style={{ color: "var(--txt)" }}>{it.nombre}</Link> : (it.query ?? it.nombre)}
+              <b style={{ color: "var(--neon)", marginLeft: 6 }}>{it.n ?? it.eventos}</b>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Monetización (para el creador del sitio) */}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        {[["Comercios activos", m.comercios_activos, "var(--txt)"], ["Pagando", m.pagando, "var(--neon)"], ["Gratis", m.gratis, "var(--txt-3)"]].map(([lbl, val, col]) => (
+          <div key={lbl as string} style={{ ...card, flex: 1, minWidth: 130 }}>
+            <div style={{ fontSize: 12, color: "var(--txt-3)" }}>{lbl as string}</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: col as string }}>{val as number}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 }}>
+        <Lista titulo="🔎 Más buscado" items={data.top_busquedas} empty="Sin búsquedas todavía." />
+        <Lista titulo="🚫 Buscado sin resultado" items={data.sin_resultado} empty="Nada sin resultado 🎉" />
+        <Lista titulo="🏪 Locales más visitados" items={data.top_comercios} empty="Sin visitas todavía." />
+      </div>
+      <p style={{ color: "var(--txt-3)", fontSize: 12 }}>💡 "Buscado sin resultado" = oportunidades: rubros/productos que la gente busca y no están → a quién salir a sumar.</p>
     </div>
   );
 }

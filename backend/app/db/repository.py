@@ -40,6 +40,8 @@ class Repo(Protocol):
     def list_leads_by_comercio(self, comercio_id: str, dias: int) -> list[dict]: ...
     def stats_admin(self) -> dict: ...
     def estadisticas_admin(self) -> dict: ...
+    def insert_busqueda(self, query: str, resultados: int) -> None: ...
+    def kpis_admin(self) -> dict: ...
     def list_suscripciones(self) -> list[dict]: ...
     def registrar_pago(self, comercio_id: str, row: dict) -> dict: ...
     def suspender_comercio(self, comercio_id: str) -> None: ...
@@ -885,6 +887,43 @@ class SupabaseRepo:
     def delete_video_promo(self, video_id: str) -> bool:
         res = self._db.table("videos_promocionales").delete().eq("id", video_id).execute()
         return bool(res.data)
+
+    def insert_busqueda(self, query: str, resultados: int) -> None:
+        self._db.table("busquedas").insert({"query": query, "resultados": resultados}).execute()
+
+    def kpis_admin(self) -> dict:
+        from collections import Counter
+        from datetime import date
+
+        def norm(q: str) -> str:
+            return (q or "").strip().lower()
+
+        bus = (self._db.table("busquedas").select("query, resultados").order("created_at", desc=True).limit(1000).execute().data) or []
+        top = Counter(norm(b["query"]) for b in bus if norm(b.get("query", "")))
+        sin = Counter(norm(b["query"]) for b in bus if norm(b.get("query", "")) and (b.get("resultados") or 0) == 0)
+
+        leads = (self._db.table("leads").select("comercio_id, tipo").order("created_at", desc=True).limit(3000).execute().data) or []
+        por_com = Counter(l["comercio_id"] for l in leads if l.get("comercio_id"))
+        top_ids = [cid for cid, _ in por_com.most_common(10)]
+        coms: dict = {}
+        if top_ids:
+            cd = (self._db.table("comercios").select("id, nombre, slug").in_("id", top_ids).execute().data) or []
+            coms = {c["id"]: c for c in cd}
+        top_comercios = [
+            {"comercio_id": cid, "nombre": coms.get(cid, {}).get("nombre", "?"), "slug": coms.get(cid, {}).get("slug"), "eventos": n}
+            for cid, n in por_com.most_common(10)
+        ]
+
+        hoy = date.today().isoformat()
+        total = (self._db.table("comercios").select("id", count="exact").eq("activo", True).limit(1).execute().count) or 0
+        pagando = (self._db.table("comercios").select("id", count="exact").eq("activo", True).eq("suspendido", False).gte("paga_hasta", hoy).limit(1).execute().count) or 0
+
+        return {
+            "top_busquedas": [{"query": q, "n": n} for q, n in top.most_common(15)],
+            "sin_resultado": [{"query": q, "n": n} for q, n in sin.most_common(15)],
+            "top_comercios": top_comercios,
+            "monetizacion": {"comercios_activos": total, "pagando": pagando, "gratis": max(0, total - pagando)},
+        }
 
     def list_redes(self) -> list[dict]:
         res = self._db.table("redes_sociales").select("*").order("orden").execute()

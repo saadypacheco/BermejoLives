@@ -149,12 +149,22 @@ export async function eliminarComercioAgente(id: string): Promise<void> {
 }
 
 /** Registra un click de contacto (WhatsApp, teléfono, etc.) para un comercio. */
-export async function registrarLead(comercio_id: string, tipo: "whatsapp" | "telefono" | "email" | "web" = "whatsapp"): Promise<void> {
+export async function registrarLead(comercio_id: string, tipo: "whatsapp" | "telefono" | "email" | "web" | "vista" = "whatsapp"): Promise<void> {
   // Fire-and-forget: no bloqueamos la navegación del usuario
   fetch(`${API}/lead`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ comercio_id, tipo }),
+  }).catch(() => undefined);
+}
+
+/** Loguea una búsqueda para los KPIs (qué se busca / qué no da resultados). Fire-and-forget. */
+export function logBusqueda(query: string, resultados: number): void {
+  if (!query || query.trim().length < 2) return;
+  fetch(`${API}/busquedas/log`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query: query.trim(), resultados }),
   }).catch(() => undefined);
 }
 
