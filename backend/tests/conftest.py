@@ -43,6 +43,7 @@ class FakeRepo:
         self.wa_inbox: dict[str, dict] = {}          # wa_message_id -> row
         self.leads: list[dict] = []
         self.busquedas: list[dict] = []
+        self.busqueda_comercios: list[dict] = []
         self.producto_refs: dict[str, dict] = {}     # id -> row
         self.pagos: dict[str, dict] = {}             # id -> row
         self.mensajes: dict[str, dict] = {}          # id -> row
@@ -383,8 +384,23 @@ class FakeRepo:
     def list_leads_by_comercio(self, comercio_id, dias=30):
         return [l for l in self.leads if l.get("comercio_id") == comercio_id]
 
-    def insert_busqueda(self, query, resultados):
-        self.busquedas.append({"query": query, "resultados": resultados})
+    def insert_busqueda(self, query, resultados, comercios=None):
+        bid = self._id("busq")
+        self.busquedas.append({"id": bid, "query": query, "resultados": resultados})
+        for i, cid in enumerate((comercios or [])[:10]):
+            if cid:
+                self.busqueda_comercios.append(
+                    {"busqueda_id": bid, "comercio_id": cid, "posicion": i, "query": query}
+                )
+
+    def terminos_de_comercio(self, comercio_id, dias=30, limit=8):
+        from collections import Counter
+        cont = Counter(
+            (bc["query"] or "").strip().lower()
+            for bc in self.busqueda_comercios
+            if bc["comercio_id"] == comercio_id and (bc.get("query") or "").strip()
+        )
+        return [{"query": q, "n": n} for q, n in cont.most_common(limit)]
 
     def kpis_admin(self):
         from collections import Counter

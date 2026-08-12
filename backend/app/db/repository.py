@@ -40,7 +40,12 @@ class Repo(Protocol):
     def list_leads_by_comercio(self, comercio_id: str, dias: int) -> list[dict]: ...
     def stats_admin(self) -> dict: ...
     def estadisticas_admin(self) -> dict: ...
-    def insert_busqueda(self, query: str, resultados: int) -> None: ...
+    def insert_busqueda(
+        self, query: str, resultados: int, comercios: list[str] | None = None
+    ) -> None: ...
+    def terminos_de_comercio(
+        self, comercio_id: str, dias: int = 30, limit: int = 8
+    ) -> list[dict]: ...
     def kpis_admin(self) -> dict: ...
     def list_suscripciones(self) -> list[dict]: ...
     def registrar_pago(self, comercio_id: str, row: dict) -> dict: ...
@@ -888,8 +893,47 @@ class SupabaseRepo:
         res = self._db.table("videos_promocionales").delete().eq("id", video_id).execute()
         return bool(res.data)
 
-    def insert_busqueda(self, query: str, resultados: int) -> None:
-        self._db.table("busquedas").insert({"query": query, "resultados": resultados}).execute()
+    def insert_busqueda(
+        self, query: str, resultados: int, comercios: list[str] | None = None
+    ) -> None:
+        res = (
+            self._db.table("busquedas")
+            .insert({"query": query, "resultados": resultados})
+            .execute()
+        )
+        bid = res.data[0]["id"] if res.data else None
+        if bid and comercios:
+            rows = [
+                {"busqueda_id": bid, "comercio_id": cid, "posicion": i}
+                for i, cid in enumerate(comercios[:10])
+                if cid
+            ]
+            if rows:
+                self._db.table("busqueda_comercios").insert(rows).execute()
+
+    def terminos_de_comercio(
+        self, comercio_id: str, dias: int = 30, limit: int = 8
+    ) -> list[dict]:
+        """Términos con los que la gente encontró a este comercio (para 'Mi negocio')."""
+        from datetime import datetime, timezone, timedelta
+        from collections import Counter
+
+        desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+        res = (
+            self._db.table("busqueda_comercios")
+            .select("busquedas(query, created_at)")
+            .eq("comercio_id", comercio_id)
+            .limit(2000)
+            .execute()
+        )
+        cont: Counter = Counter()
+        for row in res.data or []:
+            b = row.get("busquedas") or {}
+            if (b.get("created_at") or "") >= desde:
+                q = (b.get("query") or "").strip().lower()
+                if q:
+                    cont[q] += 1
+        return [{"query": q, "n": n} for q, n in cont.most_common(limit)]
 
     def kpis_admin(self) -> dict:
         from collections import Counter

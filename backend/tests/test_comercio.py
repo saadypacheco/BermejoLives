@@ -211,6 +211,32 @@ def test_get_metricas_cuenta_leads_y_publicaciones(client, repo):
     assert data["publicaciones_total"] == 1
 
 
+def test_get_metricas_separa_visitas_de_contactos(client, repo):
+    """Las vistas a la ficha (tipo 'vista') no cuentan como contactos."""
+    repo.seed_comercio(id="com-v", slug="visitas", nombre="V", whatsapp="591701")
+    repo.insert_lead({"comercio_id": "com-v", "tipo": "whatsapp"})
+    repo.insert_lead({"comercio_id": "com-v", "tipo": "vista"})
+    repo.insert_lead({"comercio_id": "com-v", "tipo": "vista"})
+    r = client.get("/comercio/metricas", headers=_auth(cid="com-v"))
+    assert r.status_code == 200
+    data = r.json()
+    assert data["contactos_30d"] == 1          # solo el whatsapp
+    assert data["visitas_30d"] == 2            # las dos vistas, aparte
+
+
+def test_metricas_expone_terminos_de_busqueda(client, repo):
+    """Las búsquedas que encontraron al comercio aparecen como términos."""
+    repo.seed_comercio(id="com-t", slug="terminos", nombre="T", whatsapp="591702")
+    repo.insert_busqueda("vidrieria", 1, ["com-t"])
+    repo.insert_busqueda("vidrieria", 1, ["com-t"])
+    repo.insert_busqueda("aluminio", 1, ["com-t", "otro"])
+    r = client.get("/comercio/metricas", headers=_auth(cid="com-t"))
+    assert r.status_code == 200
+    terminos = {t["query"]: t["n"] for t in r.json()["terminos_busqueda"]}
+    assert terminos["vidrieria"] == 2
+    assert terminos["aluminio"] == 1
+
+
 def test_perfil_sin_token_401(client):
     assert client.get("/comercio/perfil").status_code == 401
 

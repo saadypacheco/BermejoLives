@@ -477,12 +477,19 @@ def get_suscripcion(
 def get_metricas(
     claims: dict = Depends(auth.require_comercio), repo: Repo = Depends(get_repo)
 ) -> dict:
-    """Resumen para el comercio: quién lo contactó (leads) y sus publicaciones."""
+    """Resumen para el comercio: visitas a su ficha + quién lo contactó + publicaciones."""
     leads = repo.list_leads_by_comercio(claims["comercio_id"], 30)
     por_tipo: dict[str, int] = {}
     for lead in leads:
         t = lead.get("tipo") or "otro"
         por_tipo[t] = por_tipo.get(t, 0) + 1
+
+    # Separar VISITAS a la ficha (tipo 'vista') de los CONTACTOS reales (whatsapp/tel/…)
+    corte7 = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    contactos = [l for l in leads if l.get("tipo") != "vista"]
+    visitas = [l for l in leads if l.get("tipo") == "vista"]
+    def _recientes(lst: list[dict]) -> int:
+        return sum(1 for l in lst if (l.get("created_at") or "") >= corte7)
 
     pubs = repo.list_publicaciones_de_comercio(claims["comercio_id"])
     por_estado: dict[str, int] = {}
@@ -490,9 +497,16 @@ def get_metricas(
         e = p.get("estado") or "otro"
         por_estado[e] = por_estado.get(e, 0) + 1
 
+    # Términos con los que la gente lo encontró (valor agregado para el comercio).
+    terminos = repo.terminos_de_comercio(claims["comercio_id"], 30, 8)
+
     return {
-        "contactos_30d": len(leads),
+        "contactos_30d": len(contactos),
+        "contactos_7d": _recientes(contactos),
+        "visitas_30d": len(visitas),
+        "visitas_7d": _recientes(visitas),
         "contactos_por_tipo": por_tipo,
+        "terminos_busqueda": terminos,
         "publicaciones_total": len(pubs),
         "publicaciones_por_estado": por_estado,
     }

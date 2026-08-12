@@ -221,7 +221,11 @@ export type Suscripcion = {
 
 export type Metricas = {
   contactos_30d: number;
+  contactos_7d?: number;
+  visitas_30d?: number;
+  visitas_7d?: number;
   contactos_por_tipo: Record<string, number>;
+  terminos_busqueda?: { query: string; n: number }[];
   publicaciones_total: number;
   publicaciones_por_estado: Record<string, number>;
 };

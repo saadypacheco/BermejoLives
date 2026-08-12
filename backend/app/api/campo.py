@@ -298,14 +298,15 @@ def registrar_lead(body: _LeadIn, repo: Repo = Depends(get_repo)) -> dict:
 class _BusquedaIn(BaseModel):
     query: str
     resultados: int = 0
+    comercios: list[str] | None = None   # ids que aparecieron, en orden (para análisis)
 
 
 @router.post("/busquedas/log")
 def log_busqueda(body: _BusquedaIn, repo: Repo = Depends(get_repo)) -> dict:
-    """Loguea una búsqueda (para los KPIs: qué se busca y qué no da resultados)."""
+    """Loguea una búsqueda (KPIs: qué se busca, qué no da resultados y a quién encontró)."""
     q = (body.query or "").strip()
     if len(q) >= 2:
-        repo.insert_busqueda(q, max(0, int(body.resultados)))
+        repo.insert_busqueda(q, max(0, int(body.resultados)), body.comercios)
     return {"ok": True}
 
 

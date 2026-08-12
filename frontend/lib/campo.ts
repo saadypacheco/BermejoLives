@@ -158,13 +158,13 @@ export async function registrarLead(comercio_id: string, tipo: "whatsapp" | "tel
   }).catch(() => undefined);
 }
 
-/** Loguea una búsqueda para los KPIs (qué se busca / qué no da resultados). Fire-and-forget. */
-export function logBusqueda(query: string, resultados: number): void {
+/** Loguea una búsqueda para los KPIs (qué se busca / qué no da / a quién encontró). Fire-and-forget. */
+export function logBusqueda(query: string, resultados: number, comercios?: string[]): void {
   if (!query || query.trim().length < 2) return;
   fetch(`${API}/busquedas/log`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: query.trim(), resultados }),
+    body: JSON.stringify({ query: query.trim(), resultados, comercios: comercios?.slice(0, 10) }),
   }).catch(() => undefined);
 }
 

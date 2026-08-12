@@ -15,6 +15,7 @@ const ic = (d: string) => (p: { style?: React.CSSProperties }) => (
 const Bell = ic("M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0");
 const Chart = ic("M3 3v18h18M7 15l3-3 3 3 5-6");
 const Chat = ic("M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.6-.8L3 21l1.9-5.4A8.4 8.4 0 1 1 21 11.5z");
+const Eye = ic("M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z");
 const Gear = ic("M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 0 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15H4a2 2 0 0 1 0-4h.1A1.7 1.7 0 0 0 6 8.3l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 11 4.6V4a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 .3 1.9 1.7 1.7 0 0 0 1.5 1H20a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z");
 const Ext = ic("M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3");
 const Logout = ic("M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9");
@@ -261,6 +262,7 @@ function Overview({ onEditar, onProductos, onPlanes }: { onEditar: () => void; o
           <div className="glass" style={{ padding: 20, borderRadius: 16 }}>
             <h3 style={{ margin: "0 0 14px" }}>Resumen de actividad</h3>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <MiniStat Icon={Eye} color="var(--blue-soft)" value={m?.visitas_30d ?? "–"} label="Visitas" sub="Últimos 30 días" />
               <MiniStat Icon={WhatsApp} color="var(--neon)" value={m?.contactos_30d ?? "–"} label="Contactos" sub="Últimos 30 días" />
               <MiniStat Icon={Store} value={m?.publicaciones_total ?? "–"} label="Publicaciones" sub="Activas" />
               <MiniStat Icon={Chat} value={noLeidos} label="Mensajes" sub="Sin leer" />
@@ -303,7 +305,7 @@ function ContactosView() {
     getMetricas().then(setM).catch(() => {});
   }, []);
   if (!p) return <p style={{ color: "var(--txt-3)" }}>Cargando…</p>;
-  const tipos = m ? Object.entries(m.contactos_por_tipo) : [];
+  const tipos = m ? Object.entries(m.contactos_por_tipo).filter(([t]) => t !== "vista") : [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -314,6 +316,13 @@ function ContactosView() {
         <InfoRow label="Email" value={p.email} Icon={Mail} />
         <InfoRow label="Dirección" value={p.direccion} Icon={Pin} />
         <InfoRow label="Horario" value={p.horario} Icon={ic("M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z")} />
+      </div>
+      <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
+        <h3 style={{ marginTop: 0 }}>👀 Visitas a tu ficha · últimos 30 días</h3>
+        <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
+          <Stat color="var(--blue-soft)" value={m?.visitas_30d ?? "–"} label="personas abrieron tu ficha" />
+          <Stat value={m?.visitas_7d ?? "–"} label="últimos 7 días" />
+        </div>
       </div>
       <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
         <h3 style={{ marginTop: 0 }}>Quién te contactó · últimos 30 días</h3>
@@ -916,14 +925,44 @@ function EstadisticasView() {
   const [m, setM] = useState<Metricas | null>(null);
   useEffect(() => { getMetricas().then(setM).catch(() => {}); }, []);
   if (!m) return <p style={{ color: "var(--txt-3)" }}>Cargando…</p>;
-  const tipos = Object.entries(m.contactos_por_tipo);
+  const tipos = Object.entries(m.contactos_por_tipo).filter(([t]) => t !== "vista");
   const estados = Object.entries(m.publicaciones_por_estado);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
+        <h3 style={{ marginTop: 0 }}>👀 Visitas a tu ficha</h3>
+        <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
+          <Stat color="var(--blue-soft)" value={m.visitas_30d ?? 0} label="últimos 30 días" />
+          <Stat value={m.visitas_7d ?? 0} label="últimos 7 días" />
+        </div>
+        <p style={{ color: "var(--txt-3)", fontSize: 13, marginTop: 12, marginBottom: 0 }}>
+          Cuántas personas abrieron tu ficha en el mapa. Sumá fotos y ofertas para que más gente entre.
+        </p>
+      </div>
+      <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
+        <h3 style={{ marginTop: 0 }}>🔎 Con qué te buscan · últimos 30 días</h3>
+        {(m.terminos_busqueda?.length ?? 0) === 0
+          ? <span style={{ color: "var(--txt-3)", fontSize: 14 }}>Todavía no registramos búsquedas que te hayan encontrado.</span>
+          : (
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {m.terminos_busqueda!.map((t) => (
+                <span key={t.query} style={{ background: "var(--surf-2, rgba(255,255,255,.06))", border: "1px solid var(--line, rgba(255,255,255,.1))", borderRadius: 999, padding: "6px 12px", fontSize: 14, color: "var(--txt-2)" }}>
+                  {t.query} <b style={{ color: "var(--blue-soft)" }}>· {t.n}</b>
+                </span>
+              ))}
+            </div>
+          )}
+        <p style={{ color: "var(--txt-3)", fontSize: 13, marginTop: 12, marginBottom: 0 }}>
+          Los términos que usó la gente para encontrarte. Usalos en el nombre y la descripción de tus productos.
+        </p>
+      </div>
+      <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
         <h3 style={{ marginTop: 0 }}>Contactos · últimos 30 días</h3>
-        <Stat color="var(--neon)" value={m.contactos_30d} label="contactos en total" />
+        <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
+          <Stat color="var(--neon)" value={m.contactos_30d} label="contactos en total" />
+          <Stat value={m.contactos_7d ?? 0} label="últimos 7 días" />
+        </div>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 14 }}>
           {tipos.length === 0
             ? <span style={{ color: "var(--txt-3)", fontSize: 14 }}>Todavía nadie te contactó por la app.</span>

@@ -49,7 +49,7 @@ export default function BuscarPage() {
     debounce.current = setTimeout(async () => {
       const r = await buscarComercios(filtros, PAGE, 0);
       setResults(r);
-      if (q.trim()) logBusqueda(q, r.length);   // KPI: qué se busca / qué no da resultados
+      if (q.trim()) logBusqueda(q, r.length, r.map((c) => c.id));   // KPI + análisis por comercio
       setHayMas(r.length === PAGE);
       setLoading(false);
     }, 280);
