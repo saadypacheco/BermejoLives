@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import "@/app/uruku.css";
 import { Nav } from "@/components/nav";
+import { ThemeToggle, ThemeNoFlash } from "@/components/uruku-theme";
 import {
   Send, Store, Phone, WhatsApp, Pin, Verified, Edit, Search, User,
   Instagram, Facebook, TikTok, Globe, Arrow,
@@ -42,8 +44,15 @@ export default function MiComercioPage() {
   useEffect(() => { setSess(getComercioSession()); setReady(true); }, []);
 
   if (!ready) return null;
-  if (!sess) return <LoginGate onLogged={setSess} />;
-  return <Panel sess={sess} onLogout={() => { clearComercio(); setSess(null); }} />;
+  return (
+    <div id="ukroot" className="uk uk-app">
+      <ThemeNoFlash />
+      <div className="uk-app-toggle"><ThemeToggle /></div>
+      {!sess
+        ? <LoginGate onLogged={setSess} />
+        : <Panel sess={sess} onLogout={() => { clearComercio(); setSess(null); }} />}
+    </div>
+  );
 }
 
 /* --------------------------------- Login gate --------------------------------- */
@@ -140,7 +149,7 @@ function Sidebar({ vista, setVista, sub, onLogout, noLeidos }: {
 
 function Topbar({ titulo, noLeidos, onPublicar }: { titulo: string; noLeidos: number; onPublicar: () => void }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 26px", borderBottom: "1px solid var(--stroke)", position: "sticky", top: 0, background: "rgba(11,13,17,.78)", backdropFilter: "blur(10px)", zIndex: 4 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 26px", borderBottom: "1px solid var(--stroke)", position: "sticky", top: 0, background: "var(--uk-header)", backdropFilter: "blur(10px)", zIndex: 4 }}>
       <h1 style={{ fontSize: 22, margin: 0, flex: 1 }}>{titulo}</h1>
       <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--panel)", border: "1px solid var(--stroke)", borderRadius: 12, padding: "8px 12px", width: 220 }}>
         <Search style={{ width: 16, height: 16, color: "var(--txt-3)" }} />

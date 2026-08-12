@@ -250,6 +250,26 @@
 .uk-map[data-theme="light"] .mcard-img { background: #eef1ee; }
 .uk-map .mtop-right { flex-wrap: wrap; justify-content: flex-end; }
 
+/* ===== Dashboard /mi-comercio theme-aware ===== */
+/* Remapeamos las variables del design system a claro (misma técnica que el mapa)
+   para que todo el panel adopte la paleta URUKU sin reescribir su markup. */
+.uk-app { min-height: 100vh; }
+.uk-app[data-theme="light"] {
+  --bg: #f4f6f4; --bg-1: #ffffff; --bg-2: #f8f9f6;
+  --panel: rgba(0,0,0,.03); --panel-2: rgba(0,0,0,.05);
+  --stroke: rgba(0,0,0,.09); --stroke-2: rgba(0,0,0,.14);
+  --txt: #0d2740; --txt-2: #4a5e68; --txt-3: #8a97a3;
+  --neon: #12a15f; --neon-dim: #0f8a50; --blue-soft: #2e84d8; --amber: #c07d00;
+}
+/* .glass tiene fondo blanco-translúcido hardcodeado → en claro se vuelve sólido. */
+.uk-app[data-theme="light"] .glass { background: #ffffff; box-shadow: var(--uk-shadow-soft); }
+.uk-app[data-theme="light"] .adm-input,
+.uk-app[data-theme="light"] .adm-textarea,
+.uk-app[data-theme="light"] select.adm-input { background: #fff; border-color: var(--uk-line); color: var(--uk-ink); }
+/* Toggle de tema flotante para el panel (visible en ambos temas). */
+.uk-app-toggle { position: fixed; top: 12px; right: 12px; z-index: 60; }
+.uk-app-toggle .uk-theme-toggle { background: var(--uk-surface); border: 1px solid var(--uk-line); color: var(--uk-ink); box-shadow: var(--uk-shadow-soft); }
+
 /* ===== Búsqueda / resultados (/buscar) ===== */
 .uk-buscar { padding: 22px 0 40px; }
 .uk-search-live { display: flex; align-items: center; background: var(--uk-surface); border: 1px solid var(--uk-line); box-shadow: var(--uk-shadow-soft); border-radius: 14px; overflow: hidden; min-height: 50px; margin-bottom: 14px; }
