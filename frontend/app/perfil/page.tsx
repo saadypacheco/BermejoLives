@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import "@/app/uruku.css";
 import { Nav } from "@/components/nav";
 import { BottomNav } from "@/components/bottom-nav";
+import { ThemeToggle, ThemeNoFlash } from "@/components/uruku-theme";
 import { CompradorAuthForm } from "@/components/comprador-auth";
 import { Bookmark, User } from "@/components/icons";
 import { getUsuarioSession, clearUsuario, type UsuarioSession } from "@/lib/usuario";
@@ -20,7 +22,9 @@ export default function PerfilPage() {
   if (!ready) return null;
 
   return (
-    <>
+    <div id="ukroot" className="uk uk-app">
+      <ThemeNoFlash />
+      <div className="uk-app-toggle"><ThemeToggle /></div>
       <Nav mapOnly />
       <div className="wrap" style={{ maxWidth: 480, paddingTop: 40, paddingBottom: 100 }}>
         <span className="eyebrow"><User style={{ width: 14, height: 14 }} /> Perfil</span>
@@ -58,6 +62,6 @@ export default function PerfilPage() {
         )}
       </div>
       <BottomNav active="Perfil" />
-    </>
+    </div>
   );
 }
