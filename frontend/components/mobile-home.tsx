@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { HomeMap } from "@/components/home-map";
+import { CitySelector } from "@/components/city-selector";
 import { WhatsApp, Phone, Send, User, Search } from "@/components/icons";
 import { type ComercioMapa } from "@/lib/data";
+import { type Ciudad } from "@/lib/types";
 import { type FeedItem, precioFmt, vencimientoFmt } from "@/lib/types";
 import { registrarLead } from "@/lib/campo";
 import { distanciaMetros, formatDistancia } from "@/lib/distancia";
@@ -22,7 +24,7 @@ const CHIPS: { label: string; rubro: string }[] = [
 ];
 const wa = (s?: string | null) => (s || "").replace(/\D/g, "");
 
-export function MobileHome({ comercios, feed, soloOfertas = false, center }: { comercios: ComercioMapa[]; feed: FeedItem[]; soloOfertas?: boolean; center?: [number, number] | null }) {
+export function MobileHome({ comercios, feed, soloOfertas = false, center, ciudad, ciudades }: { comercios: ComercioMapa[]; feed: FeedItem[]; soloOfertas?: boolean; center?: [number, number] | null; ciudad?: Ciudad | null; ciudades?: Ciudad[] }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
   const [sel, setSel] = useState<ComercioMapa | null>(null);
@@ -72,6 +74,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center }: { c
             <span className="mtag">EN EL MAPA</span>
           </Link>
           <div className="mtop-right">
+            {ciudades && ciudades.length > 0 && <CitySelector actual={ciudad ?? null} ciudades={ciudades} />}
             <Link href="/mi-comercio" className="mavatar" aria-label="Ingresá tu negocio" title="¿Tenés un negocio? Ingresá acá"><User style={{ width: 20, height: 20 }} /></Link>
             <Link href="/autoregistro?modo=registro" className="mpublica">Publicá tu negocio <span aria-hidden>↗</span></Link>
           </div>
