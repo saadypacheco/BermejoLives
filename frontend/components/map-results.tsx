@@ -81,7 +81,7 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
           <b>${r.nombre}</b>
           <span>${MODALIDAD_LABEL[r.modalidad] ?? r.modalidad}${r.rubro_nombre ? " · " + r.rubro_nombre : ""}</span>
           <div class="map-pop-act">
-            <a href="${waLink(r.whatsapp, "Hola, te vi en Encontralo")}" target="_blank" rel="noopener" data-lead-comercio="${r.id}">WhatsApp</a>
+            <a href="${waLink(r.whatsapp, "Hola, te vi en URUKU")}" target="_blank" rel="noopener" data-lead-comercio="${r.id}">WhatsApp</a>
             <a href="${comoLlegarHref(r)}" target="_blank" rel="noopener">Cómo llegar</a>
             <a href="/comercios/${r.slug}">Ver comercio</a>
           </div>

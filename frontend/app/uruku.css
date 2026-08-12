@@ -88,6 +88,19 @@
 
 .uk-tools { display: flex; align-items: center; gap: 14px; }
 .uk-pill { border: 1px solid var(--uk-line); background: var(--uk-surface); border-radius: 15px; padding: 11px 15px; color: var(--uk-ink); font-weight: 700; box-shadow: var(--uk-shadow-soft); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+/* Selector de ciudad */
+.uk-city { position: relative; }
+.uk-city-btn { cursor: pointer; }
+.uk-city-menu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; min-width: 220px; background: var(--uk-surface); border: 1px solid var(--uk-line); border-radius: 14px; box-shadow: var(--uk-shadow); padding: 6px; }
+.uk-city-item { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; background: transparent; border: 0; text-align: left; padding: 9px 12px; border-radius: 10px; cursor: pointer; color: var(--uk-ink); }
+.uk-city-item:hover { background: var(--uk-chip); }
+.uk-city-item.on { background: var(--uk-chip); color: var(--uk-green); font-weight: 700; }
+.uk-city-item span { font-size: 14px; }
+.uk-city-item small { font-size: 10px; color: var(--uk-ink-soft); }
+.uk-city-item.soon { cursor: default; opacity: .5; }
+.uk-city-item.soon:hover { background: transparent; }
+.uk-city-sep { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--uk-ink-soft); padding: 8px 12px 4px; }
+
 .uk-weather { display: flex; align-items: center; gap: 8px; padding-right: 12px; border-right: 1px solid var(--uk-line); }
 .uk-weather .uk-sun { font-size: 26px; }
 .uk-weather-t { display: flex; flex-direction: column; }
@@ -232,7 +245,7 @@
 /* ---- Responsive ---- */
 @media (max-width: 1120px) {
   .uk-header-main { grid-template-columns: 180px 1fr; }
-  .uk-tools { grid-column: 1 / -1; justify-content: flex-end; overflow-x: auto; padding-bottom: 6px; }
+  .uk-tools { grid-column: 1 / -1; justify-content: flex-end; flex-wrap: wrap; }
   .uk-trust { grid-template-columns: repeat(2,1fr); }
   .uk-offers { grid-template-columns: repeat(2,1fr); }
   .uk-catcards { grid-template-columns: repeat(4,1fr); }

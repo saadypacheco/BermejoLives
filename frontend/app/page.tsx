@@ -2,7 +2,9 @@ import Link from "next/link";
 import "./uruku.css";
 import { BottomNav } from "@/components/bottom-nav";
 import { ThemeToggle, ThemeNoFlash } from "@/components/uruku-theme";
+import { CitySelector } from "@/components/city-selector";
 import { getFeed, getCotizaciones, getClima, getVideosPromo, getRedes } from "@/lib/data";
+import { ciudadActual } from "@/lib/ciudad-server";
 import { precioFmt } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -35,9 +37,10 @@ const money = (v: number | null | undefined) =>
   v && v > 0 ? v.toLocaleString("es-AR", { maximumFractionDigits: 2 }) : "s/d";
 
 export default async function InicioPage() {
-  const [feed, cotizaciones, clima, videos, redes] = await Promise.all([
-    getFeed(12), getCotizaciones(), getClima(), getVideosPromo(8), getRedes(),
+  const [{ ciudad, ciudades }, feed, cotizaciones, clima, videos, redes] = await Promise.all([
+    ciudadActual(), getFeed(12), getCotizaciones(), getClima(), getVideosPromo(8), getRedes(),
   ]);
+  const nombre = ciudad?.nombre ?? "tu ciudad";
 
   const ofertas = feed.filter((f) => f.tipo === "oferta");
   const novedades = feed.filter((f) => f.tipo === "novedad");
@@ -80,7 +83,7 @@ export default async function InicioPage() {
         <div className="uk-container uk-header-main">
           <Link href="/" className="uk-brand">
             <div className="uk-brand-word"><span className="uk-brand-u">U</span>RUKU</div>
-            <small>Descubrí. Ahorrá. Disfrutá Bermejo.</small>
+            <small>Descubrí. Ahorrá. Disfrutá {nombre}.</small>
           </Link>
 
           <form className="uk-search" action="/buscar" method="get">
@@ -90,7 +93,7 @@ export default async function InicioPage() {
           </form>
 
           <div className="uk-tools">
-            <span className="uk-pill"><Ic d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" /> Bermejo</span>
+            <CitySelector actual={ciudad} ciudades={ciudades} />
             {clima?.temp_c != null && (
               <div className="uk-weather">
                 <span className="uk-sun">{clima.icono || "☀"}</span>
@@ -124,7 +127,7 @@ export default async function InicioPage() {
         <section className="uk-hero" style={{ backgroundImage: "url('/bermejo-ciudad4.png')" }}>
           <div className="uk-container uk-hero-grid">
             <div>
-              <h1>Descubrí <span>Bermejo</span><br />como nunca antes</h1>
+              <h1>Descubrí <span>{nombre}</span><br />como nunca antes</h1>
               <p>Explorá comercios locales, ofertas increíbles y todo lo que necesitás cerca de vos.</p>
               <div className="uk-hero-actions">
                 <Link href="/mapa" className="uk-btn uk-btn-primary">
@@ -138,7 +141,7 @@ export default async function InicioPage() {
               </div>
               <div className="uk-proof">
                 <div className="uk-avatars"><span>SP</span><span>AM</span><span>LR</span><span>JF</span></div>
-                <div>Miles de personas ya<br />descubren Bermejo con Uruku</div>
+                <div>Miles de personas ya<br />descubren {nombre} con Uruku</div>
               </div>
             </div>
 
@@ -179,7 +182,7 @@ export default async function InicioPage() {
           </article>
           <article>
             <div className="uk-trust-ic violet"><Ic d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" /></div>
-            <div className="uk-trust-t"><strong>Apoyemos lo local</strong><span>Juntos hacemos crecer Bermejo.</span></div>
+            <div className="uk-trust-t"><strong>Apoyemos lo local</strong><span>Juntos hacemos crecer {nombre}.</span></div>
           </article>
         </section>
 
@@ -222,7 +225,7 @@ export default async function InicioPage() {
         {/* ===== Highlight grid ===== */}
         <section className="uk-container uk-highlight">
           <article className="uk-panel">
-            <h3>Lo mejor de hoy en Bermejo</h3>
+            <h3>Lo mejor de hoy en {nombre}</h3>
             <div className="uk-statrow"><span>🏷️ Ofertas activas</span><strong>{ofertas.length}</strong></div>
             <div className="uk-statrow"><span>✨ Novedades</span><strong>{novedades.length}</strong></div>
             <div className="uk-statrow"><span>🎬 Recorridos</span><strong>{videos.length}</strong></div>
@@ -236,7 +239,7 @@ export default async function InicioPage() {
               <div><span><Ic d="M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></span><small>Actualizado<br />todos los días</small></div>
               <div><span><Ic d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" /></span><small>Cerca tuyo,<br />siempre</small></div>
               <div><span><Ic d="M13 2 3 14h7l-1 8 10-12h-7z" /></span><small>Fácil, rápido<br />y útil</small></div>
-              <div><span><Ic d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6C19 16.5 12 21 12 21z" /></span><small>100% local,<br />100% Bermejo</small></div>
+              <div><span><Ic d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6C19 16.5 12 21 12 21z" /></span><small>100% local,<br />100% {nombre}</small></div>
             </div>
           </article>
 
@@ -257,7 +260,7 @@ export default async function InicioPage() {
         {/* ===== Recorrimos Bermejo ===== */}
         {videos.length > 0 && (
           <section className="uk-container uk-section">
-            <h2>🎬 Recorrimos Bermejo</h2>
+            <h2>🎬 Recorrimos {nombre}</h2>
             <div className="uk-rail">
               {videos.map((v) => (
                 <div key={v.id} className="uk-vid">
@@ -300,7 +303,7 @@ export default async function InicioPage() {
           <section className="uk-container uk-canal">
             <div>
               <h3>📢 Canal de novedades</h3>
-              <p>Recibí ofertas, nuevos comercios y eventos de Bermejo.</p>
+              <p>Recibí ofertas, nuevos comercios y eventos de {nombre}.</p>
             </div>
             <a href={canalWa} target="_blank" rel="noopener">Unirme al canal</a>
           </section>
@@ -313,9 +316,9 @@ export default async function InicioPage() {
           <div>
             <div className="uk-brand uk-footer-brand">
               <div className="uk-brand-word"><span className="uk-brand-u">U</span>RUKU</div>
-              <small>Descubrí. Ahorrá. Disfrutá Bermejo.</small>
+              <small>Descubrí. Ahorrá. Disfrutá {nombre}.</small>
             </div>
-            <p>La plataforma local que conecta a compradores y comercios en Bermejo y en muchas ciudades más.</p>
+            <p>La plataforma local que conecta a compradores y comercios en {nombre} y en muchas ciudades más.</p>
             <SocialLinks cls="uk-footer-socials" />
           </div>
           <div>

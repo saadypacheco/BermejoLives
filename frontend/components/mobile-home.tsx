@@ -22,7 +22,7 @@ const CHIPS: { label: string; rubro: string }[] = [
 ];
 const wa = (s?: string | null) => (s || "").replace(/\D/g, "");
 
-export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios: ComercioMapa[]; feed: FeedItem[]; soloOfertas?: boolean }) {
+export function MobileHome({ comercios, feed, soloOfertas = false, center }: { comercios: ComercioMapa[]; feed: FeedItem[]; soloOfertas?: boolean; center?: [number, number] | null }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
   const [sel, setSel] = useState<ComercioMapa | null>(null);
@@ -68,7 +68,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
       <div className="mhead">
         <div className="mtop">
           <Link href="/" className="mbrand">
-            <span className="mbrand-name">ENCON<i>TRALO</i></span>
+            <span className="mbrand-name">URUKU</span>
             <span className="mtag">EN EL MAPA</span>
           </Link>
           <div className="mtop-right">
@@ -100,7 +100,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false }: { comercios
 
       {/* Mapa: crece y llena el espacio disponible */}
       <div className="mmap">
-        <HomeMap comercios={filtered} onSelect={setSel} selectedId={sel?.id} descuentoPorId={descuentoPorId} />
+        <HomeMap comercios={filtered} onSelect={setSel} selectedId={sel?.id} descuentoPorId={descuentoPorId} center={center} />
         <Link href="/buscar" className="mmapbtn">⛶ Ver mapa completo</Link>
 
       {/* Tarjeta flotante sobre el mapa, conectada al pin por la flecha */}

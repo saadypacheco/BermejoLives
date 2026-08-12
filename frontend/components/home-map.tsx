@@ -41,9 +41,9 @@ function loadLeaflet(): Promise<any> {
   return leafletPromise;
 }
 
-export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId }: {
+export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, center }: {
   comercios: ComercioMapa[]; onSelect?: (c: ComercioMapa) => void; selectedId?: string | null;
-  descuentoPorId?: Record<string, number>;
+  descuentoPorId?: Record<string, number>; center?: [number, number] | null;
 }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -56,13 +56,19 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId }: {
   const onSelRef = useRef(onSelect);
   onSelRef.current = onSelect;
 
+  // Re-centrar si cambia la ciudad seleccionada (el mapa se inicializa una sola vez).
+  useEffect(() => {
+    if (mapRef.current && center) mapRef.current.setView(center, 15);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [center?.[0], center?.[1]]);
+
   // init una sola vez
   useEffect(() => {
     let cancelled = false;
     loadLeaflet().then((L) => {
       if (cancelled || !elRef.current || mapRef.current) return;
       LRef.current = L;
-      const map = L.map(elRef.current, { zoomControl: false, attributionControl: false, scrollWheelZoom: false }).setView(BERMEJO, 15);
+      const map = L.map(elRef.current, { zoomControl: false, attributionControl: false, scrollWheelZoom: false }).setView(center ?? BERMEJO, 15);
       mapRef.current = map;
       L.control.zoom({ position: "topleft" }).addTo(map);
       // updateWhenIdle/keepBuffer: menos descargas de tiles (clave con internet malo)

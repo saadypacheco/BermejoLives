@@ -6,10 +6,10 @@ import { ErrorListener } from "@/components/error-listener";
 import { WebVitalsReporter } from "@/components/web-vitals-reporter";
 
 export const metadata: Metadata = {
-  title: "Encontralo — Comercios y ofertas en el mapa",
+  title: "URUKU — Comercios y ofertas en el mapa",
   description:
-    "Encontralo en el mapa. Reservalo en la tienda. Todo lo que se vende en tu ciudad, en tiempo real.",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Encontralo" },
+    "URUKU en el mapa. Reservalo en la tienda. Todo lo que se vende en tu ciudad, en tiempo real.",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "URUKU" },
   icons: { icon: "/icon-192.png", apple: "/apple-touch-icon.png" },
 };
 

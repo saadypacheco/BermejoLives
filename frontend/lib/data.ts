@@ -106,10 +106,21 @@ export type ComercioMapa = {
   ficha_activa: boolean;   // muestra "Más información": suscripción al día (paga_hasta vigente, no suspendido)
 };
 
-// Comercios geolocalizados para el mapa de la Home (+ auspiciantes/destacados).
-// Acotado al área de Bermejo (bbox) y SIN join (el embed era lentísimo sobre la
-// tabla con el import OSM masivo). El rubro se resuelve con una query chica aparte.
-export async function getComerciosMapa(): Promise<ComercioMapa[]> {
+// Bbox alrededor del centro de una ciudad (±grados). Usado para acotar el mapa
+// a la ciudad seleccionada sin traer todo el país.
+export function bboxCiudad(lat: number, lng: number, dLat = 0.16, dLng = 0.20) {
+  return { latMin: lat - dLat, latMax: lat + dLat, lngMin: lng - dLng, lngMax: lng + dLng };
+}
+
+// Comercios geolocalizados para el mapa (+ auspiciantes/destacados).
+// Acotado al área de la CIUDAD seleccionada (bbox) y SIN join (el embed era
+// lentísimo sobre la tabla con el import OSM masivo). El rubro se resuelve aparte.
+export async function getComerciosMapa(
+  ciudad?: { lat: number | null; lng: number | null } | null,
+): Promise<ComercioMapa[]> {
+  const c0 = ciudad?.lat != null && ciudad?.lng != null
+    ? bboxCiudad(ciudad.lat, ciudad.lng)
+    : { latMin: -22.90, latMax: -22.58, lngMin: -64.52, lngMax: -64.16 }; // Bermejo por defecto
   if (hasSupabase) {
     const [{ data, error }, { data: rubros, error: errorRubros }] = await Promise.all([
       supabase
@@ -117,8 +128,8 @@ export async function getComerciosMapa(): Promise<ComercioMapa[]> {
         .select("id, slug, nombre, lat, lng, logo_url, portada_url, portada_thumb_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, plan, paga_hasta, suspendido, rubro_id")
         .eq("activo", true)
         .not("lat", "is", null)
-        .gte("lat", -22.90).lte("lat", -22.58)
-        .gte("lng", -64.52).lte("lng", -64.16)
+        .gte("lat", c0.latMin).lte("lat", c0.latMax)
+        .gte("lng", c0.lngMin).lte("lng", c0.lngMax)
         .limit(250),
       supabase.from("rubros").select("id, slug"),
     ]);

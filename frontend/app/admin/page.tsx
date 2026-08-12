@@ -351,7 +351,7 @@ function TabReclamos({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div className="panel-card glass">
-        <div className="ph"><h3>Reclamos (Encontralo)</h3><span style={{ color: "var(--txt-3)", fontSize: 13 }}>Sobre negocios o la plataforma</span></div>
+        <div className="ph"><h3>Reclamos (URUKU)</h3><span style={{ color: "var(--txt-3)", fontSize: 13 }}>Sobre negocios o la plataforma</span></div>
         {reclamos.length === 0 && <div style={{ padding: 20, textAlign: "center", color: "var(--txt-3)" }}>Sin reclamos.</div>}
         {reclamos.map((r) => (
           <ReclamoRow

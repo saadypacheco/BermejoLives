@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Encontralo — Comercios y ofertas en el mapa",
-    short_name: "Encontralo",
-    description: "Encontralo en el mapa. Reservalo en la tienda.",
+    name: "URUKU — Comercios y ofertas en el mapa",
+    short_name: "URUKU",
+    description: "URUKU en el mapa. Reservalo en la tienda.",
     start_url: "/",
     scope: "/", // cubre todo el dominio, incluida la futura tienda en /tienda
     display: "standalone",

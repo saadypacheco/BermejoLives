@@ -17,7 +17,7 @@ export function Nav({ active, mapOnly = false }: { active?: string; mapOnly?: bo
       <header className="nav">
         <div className="wrap">
           <Link className="brand" href="/">
-            <b>ENCON<i>TRALO</i></b>
+            <b>URUKU</b>
             <span>EN EL MAPA</span>
           </Link>
           <div className="nav-actions">
@@ -34,7 +34,7 @@ export function Nav({ active, mapOnly = false }: { active?: string; mapOnly?: bo
     <header className="nav">
       <div className="wrap">
         <Link className="brand" href="/">
-          <b>ENCON<i>TRALO</i></b>
+          <b>URUKU</b>
           <span>EN EL MAPA</span>
         </Link>
         <nav className="nav-links">

@@ -106,7 +106,7 @@ function Sidebar({ vista, setVista, sub, onLogout, noLeidos }: {
   return (
     <aside style={{ width: 244, flexShrink: 0, borderRight: "1px solid var(--stroke)", display: "flex", flexDirection: "column", padding: "22px 16px", position: "sticky", top: 0, height: "100vh" }}>
       <Link className="brand" href="/" style={{ marginBottom: 26, paddingLeft: 8 }}>
-        <b>ENCON<i>TRALO</i></b><span>EN EL MAPA</span>
+        <b>URUKU</b><span>EN EL MAPA</span>
       </Link>
       <nav style={{ display: "flex", flexDirection: "column", gap: 3 }}>
         {NAV_ITEMS.map((it) => {
@@ -993,7 +993,7 @@ function MensajesTab() {
 
   if (err) return <p style={{ color: "var(--pink)" }}>{err}</p>;
   if (!items) return <p style={{ color: "var(--txt-3)" }}>Cargando…</p>;
-  if (items.length === 0) return <p style={{ color: "var(--txt-3)" }}>Todavía no tenés mensajes. Acá te llegan los avisos de Encontralo y las consultas de tus clientes.</p>;
+  if (items.length === 0) return <p style={{ color: "var(--txt-3)" }}>Todavía no tenés mensajes. Acá te llegan los avisos de URUKU y las consultas de tus clientes.</p>;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1002,7 +1002,7 @@ function MensajesTab() {
         return (
           <div key={m.id} className="glass" style={{ padding: 16, borderRadius: 14, borderLeft: m.leido ? "1px solid var(--stroke)" : "3px solid var(--neon)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-              <b>{m.autor === "admin" ? "📣 Encontralo" : (m.nombre || "Cliente")}{m.autor === "cliente" && m.contacto ? ` · ${m.contacto}` : ""}</b>
+              <b>{m.autor === "admin" ? "📣 URUKU" : (m.nombre || "Cliente")}{m.autor === "cliente" && m.contacto ? ` · ${m.contacto}` : ""}</b>
               <span style={{ fontSize: 12, color: "var(--txt-3)" }}>{new Date(m.created_at).toLocaleString("es-AR")}</span>
             </div>
             <p style={{ color: "var(--txt-2)", margin: "8px 0" }}>{m.cuerpo}</p>

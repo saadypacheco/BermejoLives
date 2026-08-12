@@ -41,21 +41,21 @@ export default function ReclamosPage() {
   return (
     <div className="wrap" style={{ maxWidth: 480, paddingTop: 60, paddingBottom: 60 }}>
       <Link className="brand" href="/" style={{ marginBottom: 24, display: "inline-flex" }}>
-        <b style={{ fontSize: 22 }}>Encontralo</b>
+        <b style={{ fontSize: 22 }}>URUKU</b>
       </Link>
 
       {estado === "ok" ? (
         <div className="glass" style={{ padding: 24, borderRadius: 16 }}>
           <h1 style={{ fontSize: 22, marginBottom: 8 }}>Comentario enviado ✓</h1>
-          <p style={{ color: "var(--txt-2)" }}>Lo va a revisar el equipo de Encontralo. Si dejaste tu contacto, te respondemos a la brevedad.</p>
+          <p style={{ color: "var(--txt-2)" }}>Lo va a revisar el equipo de URUKU. Si dejaste tu contacto, te respondemos a la brevedad.</p>
         </div>
       ) : (
         <>
           <h1 style={{ fontSize: 26, marginBottom: 6 }}>Dejar un comentario</h1>
           <p style={{ color: "var(--txt-3)", marginBottom: 24 }}>
             {nombreComercio
-              ? <>Sobre <b style={{ color: "var(--txt)" }}>{nombreComercio}</b>. Contanos qué pasó o qué te gustaría comentar — lo lee el equipo de Encontralo.</>
-              : "Contanos qué pasó, ya sea con un negocio o con la plataforma. Lo lee el equipo de Encontralo."}
+              ? <>Sobre <b style={{ color: "var(--txt)" }}>{nombreComercio}</b>. Contanos qué pasó o qué te gustaría comentar — lo lee el equipo de URUKU.</>
+              : "Contanos qué pasó, ya sea con un negocio o con la plataforma. Lo lee el equipo de URUKU."}
           </p>
           <form onSubmit={enviar} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
             <input className="adm-input" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Tu nombre (opcional)" />

@@ -63,7 +63,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
             </div>
           </div>
           <div className="profile-cta">
-            <WaLeadLink className="btn btn-wa" comercioId={comercio.id} whatsapp={comercio.whatsapp} mensaje={`Hola ${comercio.nombre}, te contacto desde Encontralo`}>
+            <WaLeadLink className="btn btn-wa" comercioId={comercio.id} whatsapp={comercio.whatsapp} mensaje={`Hola ${comercio.nombre}, te contacto desde URUKU`}>
               <WhatsApp style={{ width: 18, height: 18 }} /> WhatsApp
             </WaLeadLink>
             <a className="btn btn-ghost" href={mapsHref} target="_blank" rel="noopener"><Pin /> Cómo llegar</a>

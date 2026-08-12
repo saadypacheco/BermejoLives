@@ -75,7 +75,7 @@ export default function BuscarPage() {
       {/* Header claro estilo home: marca (vuelve al inicio) + avatar + buscador */}
       <div className="mhead">
         <div className="mtop">
-          <Link href="/" className="mbrand">ENCON<i>TRALO</i></Link>
+          <Link href="/" className="mbrand">URUKU</Link>
           <Link href="/mi-comercio" className="mavatar" aria-label="Perfil"><User style={{ width: 20, height: 20 }} /></Link>
         </div>
         <form className="msearch" onSubmit={(e) => e.preventDefault()}>
@@ -153,7 +153,7 @@ export default function BuscarPage() {
                   </div>
                   {r.direccion && <div className="resdir"><Pin style={{ width: 13, height: 13 }} />{r.direccion}</div>}
                   <div className="resact">
-                    <a className="btn btn-wa btn-sm" href={waLink(r.whatsapp, `Hola, te vi en Encontralo`)} target="_blank" rel="noopener" onClick={() => registrarLead(r.id)}>
+                    <a className="btn btn-wa btn-sm" href={waLink(r.whatsapp, `Hola, te vi en URUKU`)} target="_blank" rel="noopener" onClick={() => registrarLead(r.id)}>
                       <WhatsApp style={{ width: 15, height: 15 }} /> WhatsApp
                     </a>
                     <a className="btn btn-ghost btn-sm" href={comoLlegarHref(r)} target="_blank" rel="noopener">

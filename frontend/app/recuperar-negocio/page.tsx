@@ -18,7 +18,7 @@ export default function RecuperarNegocioPage() {
         <span className="eyebrow"><span className="dot-live" /> Recuperar negocio</span>
         <h1 style={{ fontSize: 28, margin: "10px 0 6px" }}>¿Cambiaste de número?</h1>
         <p style={{ color: "var(--txt-3)", marginBottom: 20 }}>
-          Buscá tu negocio, subí una foto actual del local y tu WhatsApp nuevo. Un admin de Encontralo revisa el pedido — nunca se aprueba solo, para que nadie pueda robarse un negocio ajeno.
+          Buscá tu negocio, subí una foto actual del local y tu WhatsApp nuevo. Un admin de URUKU revisa el pedido — nunca se aprueba solo, para que nadie pueda robarse un negocio ajeno.
         </p>
 
         {enviado ? (
@@ -26,7 +26,7 @@ export default function RecuperarNegocioPage() {
             <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
             <h3 style={{ marginBottom: 6 }}>Solicitud enviada</h3>
             <p style={{ color: "var(--txt-3)", fontSize: 14 }}>
-              La va a revisar el equipo de Encontralo. Si se aprueba, tu WhatsApp nuevo queda activo y podés entrar con el código de siempre.
+              La va a revisar el equipo de URUKU. Si se aprueba, tu WhatsApp nuevo queda activo y podés entrar con el código de siempre.
             </p>
             <Link className="btn btn-ghost btn-sm" href="/" style={{ marginTop: 14, display: "inline-flex" }}>Volver al inicio</Link>
           </div>

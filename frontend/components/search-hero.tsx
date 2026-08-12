@@ -46,7 +46,7 @@ export function SearchHero({ rubros, zonas }: { rubros: Opt[]; zonas: Opt[] }) {
       <form onSubmit={(e) => { e.preventDefault(); buscar(); }} className="bigsearch">
         <Search style={{ width: 20, height: 20, color: "var(--txt-3)", flexShrink: 0 }} />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={ph} aria-label="Buscar" />
-        <a className="bs-wa" href="https://wa.me/59170000000?text=Hola%2C%20busco%20en%20Encontralo" target="_blank" rel="noopener" title="Consultar por WhatsApp">
+        <a className="bs-wa" href="https://wa.me/59170000000?text=Hola%2C%20busco%20en%20URUKU" target="_blank" rel="noopener" title="Consultar por WhatsApp">
           <WhatsApp style={{ width: 19, height: 19 }} />
         </a>
       </form>

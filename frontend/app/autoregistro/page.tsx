@@ -31,7 +31,7 @@ export default function PublicarPage() {
 function QueOfrecemos() {
   return (
     <div className="glass" style={{ padding: 20, borderRadius: 16, marginBottom: 18 }}>
-      <h2 style={{ fontSize: 18, marginBottom: 10 }}>¿Por qué unirte a Encontralo?</h2>
+      <h2 style={{ fontSize: 18, marginBottom: 10 }}>¿Por qué unirte a URUKU?</h2>
       <ul style={{ display: "flex", flexDirection: "column", gap: 8, color: "var(--txt-2)", fontSize: 14, paddingLeft: 18, listStyle: "none" }}>
         <li>📍 Tu negocio aparece en el mapa.</li>
         <li>📢 Publicá ofertas y productos fácilmente.</li>
@@ -437,7 +437,7 @@ function ChatBot({ sess, onLogout }: { sess: ComercioSession; onLogout: () => vo
     try {
       const res = await publicar(draft);
       if (res.publicado_directo) {
-        say("bot", "🎉 ¡Listo! Tu publicación ya está EN VIVO en Encontralo. (Tu comercio es confiable, se publicó directo.)");
+        say("bot", "🎉 ¡Listo! Tu publicación ya está EN VIVO en URUKU. (Tu comercio es confiable, se publicó directo.)");
       } else {
         say("bot", "✅ ¡Recibido! Tu publicación quedó en revisión. Un moderador la aprueba y aparece en el feed en vivo. Te avisamos.");
       }

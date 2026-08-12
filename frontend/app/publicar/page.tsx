@@ -47,7 +47,7 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
   useEffect(() => { cargar(); getRubros().then(setRubros); }, []);
 
   async function eliminar(c: ComercioAgente) {
-    if (!window.confirm(`¿Dar de baja "${c.nombre}"? Deja de aparecer en Encontralo, pero el registro no se borra.`)) return;
+    if (!window.confirm(`¿Dar de baja "${c.nombre}"? Deja de aparecer en URUKU, pero el registro no se borra.`)) return;
     setBorrando(c.id);
     try { await eliminarComercioAgente(c.id); setItems((prev) => prev?.filter((x) => x.id !== c.id) ?? prev); }
     catch (e) { setErr(e instanceof Error ? e.message : "No se pudo eliminar"); }
