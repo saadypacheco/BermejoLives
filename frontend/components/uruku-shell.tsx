@@ -19,6 +19,8 @@ export async function UrukuShell({
   showCatnav = true,
   showFooter = true,
   mainClass,
+  fill = false,
+  rootClass,
 }: {
   children: React.ReactNode;
   activeCat?: string;
@@ -26,6 +28,8 @@ export async function UrukuShell({
   showCatnav?: boolean;
   showFooter?: boolean;
   mainClass?: string;
+  fill?: boolean;   // llena la pantalla (ej. mapa): flex column, sin footer, main flex-1
+  rootClass?: string;   // clase extra en el root (ej. "uk-map" para overrides del mapa)
 }) {
   const [{ ciudad, ciudades }, clima, cotizaciones, redes] = await Promise.all([
     ciudadActual(), getClima(), getCotizaciones(), getRedes(),
@@ -33,8 +37,10 @@ export async function UrukuShell({
   const nombre = ciudad?.nombre ?? "tu ciudad";
   const cot2 = cotizaciones.slice(0, 2);
 
+  const showFoot = showFooter && !fill;
+
   return (
-    <div id="ukroot" className="uk">
+    <div id="ukroot" className={`uk${fill ? " uk-fill" : ""}${rootClass ? " " + rootClass : ""}`}>
       <ThemeNoFlash />
 
       {/* Barra social */}
@@ -98,9 +104,9 @@ export async function UrukuShell({
         )}
       </header>
 
-      <main className={mainClass}>{children}</main>
+      <main className={`${fill ? "uk-fill-main" : ""}${mainClass ? " " + mainClass : ""}`.trim() || undefined}>{children}</main>
 
-      {showFooter && (
+      {showFoot && (
         <footer className="uk-footer">
           <div className="uk-container uk-footer-grid">
             <div>
@@ -139,7 +145,7 @@ export async function UrukuShell({
         </footer>
       )}
 
-      <div style={{ height: 20 }} />
+      {!fill && <div style={{ height: 20 }} />}
       <BottomNav active={activeNav ?? ""} />
     </div>
   );

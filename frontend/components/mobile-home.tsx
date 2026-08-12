@@ -25,7 +25,7 @@ const CHIPS: { label: string; rubro: string }[] = [
 ];
 const wa = (s?: string | null) => (s || "").replace(/\D/g, "");
 
-export function MobileHome({ comercios, feed, soloOfertas = false, center, ciudad, ciudades }: { comercios: ComercioMapa[]; feed: FeedItem[]; soloOfertas?: boolean; center?: [number, number] | null; ciudad?: Ciudad | null; ciudades?: Ciudad[] }) {
+export function MobileHome({ comercios, feed, soloOfertas = false, center, ciudad, ciudades, embedded = false }: { comercios: ComercioMapa[]; feed: FeedItem[]; soloOfertas?: boolean; center?: [number, number] | null; ciudad?: Ciudad | null; ciudades?: Ciudad[]; embedded?: boolean }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
   const [sel, setSel] = useState<ComercioMapa | null>(null);
@@ -66,8 +66,9 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
   }
 
   return (
-    <div className="mhome">
-      {/* Header oscuro: marca + tagline + acciones + buscador */}
+    <div className={`mhome${embedded ? " embedded" : ""}`}>
+      {/* Header propio (solo modo standalone; en /mapa lo provee el shell URUKU) */}
+      {!embedded && (
       <div className="mhead">
         <div className="mtop">
           <Link href="/" className="mbrand">
@@ -86,6 +87,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar locales o servicios…" aria-label="Buscar" />
         </form>
       </div>
+      )}
 
       {/* Chips de categoría (texto simple, filtran el mapa) */}
       <div className="mchips">

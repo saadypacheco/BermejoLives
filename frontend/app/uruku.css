@@ -229,6 +229,18 @@
 .uk-canal p { margin: 0; color: var(--uk-ink-soft); font-size: 13px; }
 .uk-canal a { border: 0; background: var(--uk-green-grad); color: #fff; padding: 13px 24px; border-radius: 13px; font-weight: 800; }
 
+/* ===== Modo "fill" (pantalla completa, ej. mapa) ===== */
+.uk-fill { height: 100dvh; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.uk-fill-main { flex: 1 1 auto; min-height: 0; position: relative; overflow: hidden; }
+/* El mapa embebido llena el main a lo ancho y alto (ya no es la columna de 480px). */
+.mhome.embedded { max-width: none; width: 100%; height: 100%; margin: 0; padding-bottom: 0; display: flex; flex-direction: column; background: transparent; }
+.mhome.embedded .mmap { flex: 1 1 auto; min-height: 0; }
+/* La tarjeta flotante: clarea el bottom-nav y no ocupa todo el ancho en desktop. */
+.uk-map .mcard { bottom: 68px; }
+@media (min-width: 760px) {
+  .uk-map .mcard { left: 16px; right: auto; margin: 0; max-width: 420px; }
+}
+
 /* ===== Mapa (/mapa) theme-aware ===== */
 /* En tema claro remapeamos las variables del design system a valores claros y
    ajustamos las superficies hardcodeadas del mapa para que combine con el home. */
