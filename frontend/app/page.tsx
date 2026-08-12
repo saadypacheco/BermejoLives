@@ -1,132 +1,349 @@
 import Link from "next/link";
+import "./uruku.css";
 import { BottomNav } from "@/components/bottom-nav";
+import { ThemeToggle, ThemeNoFlash } from "@/components/uruku-theme";
 import { getFeed, getCotizaciones, getClima, getVideosPromo, getRedes } from "@/lib/data";
 import { precioFmt } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+/* ---- Iconos SVG inline (livianos, sin librerías) ---- */
+const Ic = ({ d }: { d: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
+);
+
 const CATS = [
-  { label: "Restaurantes", emoji: "🍴", q: "restaurante" },
-  { label: "Supermercados", emoji: "🛒", q: "supermercado" },
-  { label: "Ropa", emoji: "👕", q: "ropa" },
-  { label: "Salud", emoji: "➕", q: "farmacia" },
-  { label: "Ferreterías", emoji: "🔧", q: "ferreteria" },
-  { label: "Servicios", emoji: "🧰", q: "servicio" },
+  { label: "Restaurantes", q: "restaurante", d: "M6 3v7a2 2 0 0 0 2 2v9M6 3v4M9 3v4M9 3v7a2 2 0 0 1-2 2M18 3c-1.5 0-3 1.8-3 5s1.5 4 3 4v9" },
+  { label: "Supermercados", q: "supermercado", d: "M3 3h2l2.4 12.3a1 1 0 0 0 1 .7h9.7a1 1 0 0 0 1-.8L22 7H6M9 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM18 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" },
+  { label: "Ropa", q: "ropa", d: "M20 6l-4-3-4 2-4-2-4 3 3 3v10h10V9z" },
+  { label: "Salud", q: "farmacia", d: "M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6C19 16.5 12 21 12 21z" },
+  { label: "Ferretería", q: "ferreteria", d: "M14 2l8 8-3 3-8-8zM11 5L3 13v4M3 21l6-6" },
+  { label: "Belleza", q: "belleza", d: "M9 2h6v3l-1 2v13a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V7L9 5zM9 11h6" },
+  { label: "Mascotas", q: "mascota", d: "M4.5 12.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM9 8a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM15 8a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM19.5 12.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM12 20c3 0 5-2 5-4s-2-4-5-4-5 2-5 4 2 4 5 4z" },
+  { label: "Más", q: "", d: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" },
 ];
+
+const RED_D: Record<string, string> = {
+  tiktok: "M9 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 15V4l7-1v9",
+  instagram: "M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM17.5 6.5h.01",
+  facebook: "M14 9h3V5h-3a4 4 0 0 0-4 4v2H7v4h3v6h4v-6h3l1-4h-4V9a1 1 0 0 1 1-1z",
+  youtube: "M22 8.2a3 3 0 0 0-2.1-2.1C18 5.5 12 5.5 12 5.5s-6 0-7.9.6A3 3 0 0 0 2 8.2 31 31 0 0 0 1.5 12 31 31 0 0 0 2 15.8a3 3 0 0 0 2.1 2.1c1.9.6 7.9.6 7.9.6s6 0 7.9-.6a3 3 0 0 0 2.1-2.1A31 31 0 0 0 22.5 12 31 31 0 0 0 22 8.2zM10 15V9l5 3z",
+  whatsapp_canal: "M12 3a9 9 0 0 0-7.7 13.6L3 21l4.5-1.2A9 9 0 1 0 12 3z",
+};
 
 const money = (v: number | null | undefined) =>
   v && v > 0 ? v.toLocaleString("es-AR", { maximumFractionDigits: 2 }) : "s/d";
 
-const RED_ICON: Record<string, string> = {
-  tiktok: "🎵", instagram: "📷", facebook: "📘", youtube: "▶️", whatsapp_canal: "💬",
-};
-
 export default async function InicioPage() {
   const [feed, cotizaciones, clima, videos, redes] = await Promise.all([
-    getFeed(10), getCotizaciones(), getClima(), getVideosPromo(8), getRedes(),
+    getFeed(12), getCotizaciones(), getClima(), getVideosPromo(8), getRedes(),
   ]);
-  const ofertas = feed.filter((f) => f.tipo !== "video");
+
+  const ofertas = feed.filter((f) => f.tipo === "oferta");
+  const novedades = feed.filter((f) => f.tipo === "novedad");
+  const cards = (ofertas.length ? ofertas : feed.filter((f) => f.tipo !== "video")).slice(0, 8);
+  const cot2 = cotizaciones.slice(0, 2);
   const canalWa = redes.find((r) => r.clave === "whatsapp_canal")?.url;
-  const seguinos = redes.filter((r) => r.url && r.clave !== "whatsapp_canal");
+  const seguinos = redes.filter((r) => r.url);
+
+  const SocialLinks = ({ cls }: { cls: string }) => (
+    <div className={cls}>
+      {seguinos.map((r) => (
+        <a key={r.clave} href={r.url as string} target="_blank" rel="noopener" aria-label={r.etiqueta}>
+          <Ic d={RED_D[r.clave] ?? "M4 4h16v16H4z"} />
+        </a>
+      ))}
+    </div>
+  );
 
   return (
-    <div className="ini">
-      {/* Barra fina arriba: temperatura + cotización dólar/peso (gancho diario) */}
-      <div className="ini-topbar">
-        <span>🌡️ <b>{clima?.temp_c != null ? `${Math.round(clima.temp_c)}°` : "—"}</b></span>
-        {cotizaciones.map((c) => (
-          <span key={c.clave}>{c.etiqueta} <b>{money(c.valor)} {c.unidad}</b></span>
-        ))}
+    <div id="ukroot" className="uk">
+      <ThemeNoFlash />
+
+      {/* ===== Barra social ===== */}
+      <div className="uk-social-bar">
+        <div className="uk-container uk-social-inner">
+          <div className="uk-social-copy">
+            <strong>URUKU EN REDES</strong>
+            <span aria-hidden>›</span>
+            <span className="uk-hide-sm">Ofertas, novedades y tips todos los días</span>
+          </div>
+          <div className="uk-social-right">
+            <SocialLinks cls="uk-social-links" />
+            <ThemeToggle />
+          </div>
+        </div>
       </div>
 
-      {/* HERO con foto de Bermejo */}
-      <header className="ini-hero">
-        <div className="ini-hero-in">
-          <div className="ini-brand">ENCON<i>TRALO</i> <span>BERMEJO</span></div>
-          <h1>El mapa de comercios de Bermejo</h1>
-          <p>Encontrá, reservá y elegí lo mejor de tu ciudad.</p>
-          <form className="ini-search" action="/buscar" method="get">
-            <span aria-hidden>🔍</span>
+      {/* ===== Header ===== */}
+      <header className="uk-header">
+        <div className="uk-container uk-header-main">
+          <Link href="/" className="uk-brand">
+            <div className="uk-brand-word"><span className="uk-brand-u">U</span>RUKU</div>
+            <small>Descubrí. Ahorrá. Disfrutá Bermejo.</small>
+          </Link>
+
+          <form className="uk-search" action="/buscar" method="get">
+            <Ic d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3" />
             <input name="q" placeholder="¿Qué estás buscando?" aria-label="Buscar" />
             <button type="submit">Buscar</button>
           </form>
-          <Link href="/mapa" className="ini-cta">Explorá el mapa →</Link>
+
+          <div className="uk-tools">
+            <span className="uk-pill"><Ic d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" /> Bermejo</span>
+            {clima?.temp_c != null && (
+              <div className="uk-weather">
+                <span className="uk-sun">{clima.icono || "☀"}</span>
+                <div className="uk-weather-t">
+                  <strong>{Math.round(clima.temp_c)}°C</strong>
+                  {clima.descripcion && <small>{clima.descripcion}</small>}
+                </div>
+              </div>
+            )}
+            {cot2.map((c) => (
+              <div key={c.clave} className="uk-quote-mini">
+                <small>{c.etiqueta}</small>
+                <strong>{money(c.valor)} {c.unidad}</strong>
+              </div>
+            ))}
+          </div>
         </div>
+
+        <nav className="uk-catnav">
+          <div className="uk-container uk-catnav-scroll">
+            <Link href="/buscar" className="active">Todos</Link>
+            {CATS.slice(0, 7).map((c) => (
+              <Link key={c.label} href={c.q ? `/buscar?q=${c.q}` : "/buscar"}>{c.label}</Link>
+            ))}
+          </div>
+        </nav>
       </header>
 
-      {/* CATEGORÍAS: fila fina de filtros, pegada abajo del buscador */}
-      <section className="ini-sec ini-sec-cats">
-        <div className="ini-cats">
-          {CATS.map((c) => (
-            <Link key={c.label} href={`/buscar?q=${c.q}`} className="ini-cat">{c.label}</Link>
-          ))}
-          <Link href="/buscar" className="ini-cat">Ver más</Link>
-        </div>
-      </section>
+      <main>
+        {/* ===== Hero ===== */}
+        <section className="uk-hero" style={{ backgroundImage: "url('/bermejo-ciudad4.png')" }}>
+          <div className="uk-container uk-hero-grid">
+            <div>
+              <h1>Descubrí <span>Bermejo</span><br />como nunca antes</h1>
+              <p>Explorá comercios locales, ofertas increíbles y todo lo que necesitás cerca de vos.</p>
+              <div className="uk-hero-actions">
+                <Link href="/mapa" className="uk-btn uk-btn-primary">
+                  Explorá el mapa
+                  <Ic d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3zM9 3v15M15 6v15" />
+                </Link>
+                <Link href="/mapa?of=1" className="uk-btn uk-btn-secondary">
+                  <Ic d="M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" />
+                  Ofertas del día
+                </Link>
+              </div>
+              <div className="uk-proof">
+                <div className="uk-avatars"><span>SP</span><span>AM</span><span>LR</span><span>JF</span></div>
+                <div>Miles de personas ya<br />descubren Bermejo con Uruku</div>
+              </div>
+            </div>
 
-      {/* OFERTAS DEL DÍA */}
-      {ofertas.length > 0 && (
-        <section className="ini-sec">
-          <div className="ini-head"><h2>🔥 Ofertas del día</h2><Link href="/mapa?of=1">Ver todas</Link></div>
-          <div className="ini-rail">
-            {ofertas.slice(0, 8).map((o) => (
-              <Link key={o.id} href={`/comercios/${o.comercio_slug}`} className="ini-off">
-                <div className="ini-off-img">
-                  {o.descuento_pct != null && <span className="off-badge">-{o.descuento_pct}%</span>}
-                  {o.imagen_url && <img src={o.imagen_url} alt="" loading="lazy" decoding="async" />}
+            {cot2.length > 0 && (
+              <aside className="uk-quote-card">
+                <div className="uk-quote-head">
+                  <h3>Cotización del día</h3>
+                  <span className="uk-chart-badge"><Ic d="M3 17l6-6 4 4 8-8M21 7h-4M21 7v4" /></span>
                 </div>
-                <div className="ini-off-b">
-                  <b>{o.titulo}</b><small>{o.comercio_nombre}</small>
-                  {o.precio != null && <div className="ini-off-price">{precioFmt(o.precio, o.moneda)}</div>}
+                <div className="uk-quote-grid">
+                  {cot2.map((c) => (
+                    <div key={c.clave}>
+                      <small>{c.etiqueta}</small>
+                      <strong>{money(c.valor)} {c.unidad}</strong>
+                      {c.detalle && <span className="uk-quote-detail">{c.detalle}</span>}
+                    </div>
+                  ))}
                 </div>
+                <div className="uk-updated">Actualizado por el equipo de Uruku</div>
+              </aside>
+            )}
+          </div>
+        </section>
+
+        {/* ===== Trust strip ===== */}
+        <section className="uk-container uk-trust">
+          <article>
+            <div className="uk-trust-ic green"><Ic d="M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" /></div>
+            <div className="uk-trust-t"><strong>Ofertas todos los días</strong><span>Descuentos reales cerca tuyo.</span></div>
+          </article>
+          <article>
+            <div className="uk-trust-ic blue"><Ic d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" /></div>
+            <div className="uk-trust-t"><strong>Comercios verificados</strong><span>Negocios confiables de tu ciudad.</span></div>
+          </article>
+          <article>
+            <div className="uk-trust-ic orange"><Ic d="M12 3l2.9 5.9 6.6.9-4.8 4.6 1.1 6.5L12 17.8 6.2 21l1.1-6.5L2.5 10.3l6.6-.9z" /></div>
+            <div className="uk-trust-t"><strong>Novedades locales</strong><span>Lo nuevo, primero acá.</span></div>
+          </article>
+          <article>
+            <div className="uk-trust-ic violet"><Ic d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" /></div>
+            <div className="uk-trust-t"><strong>Apoyemos lo local</strong><span>Juntos hacemos crecer Bermejo.</span></div>
+          </article>
+        </section>
+
+        {/* ===== Ofertas destacadas ===== */}
+        {cards.length > 0 && (
+          <section className="uk-container uk-section">
+            <div className="uk-section-head">
+              <h2>Ofertas destacadas</h2>
+              <Link href="/mapa?of=1">Ver todas →</Link>
+            </div>
+            <div className="uk-offers">
+              {cards.slice(0, 4).map((o) => (
+                <Link key={o.id} href={`/comercios/${o.comercio_slug}`} className="uk-offer"
+                  style={o.imagen_url ? { backgroundImage: `url('${o.imagen_url}')` } : undefined}>
+                  <span className="uk-offer-tag">{o.zona_nombre || o.comercio_nombre}</span>
+                  {o.descuento_pct != null && <span className="uk-offer-disc">-{o.descuento_pct}%</span>}
+                  <div className="uk-offer-body">
+                    <h3>{o.titulo}</h3>
+                    <small>{o.comercio_nombre}</small>
+                    {o.precio != null && <strong>{precioFmt(o.precio, o.moneda)}</strong>}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ===== Explorá por categoría ===== */}
+        <section className="uk-container uk-section">
+          <h2>Explorá por categoría</h2>
+          <div className="uk-catcards">
+            {CATS.map((c) => (
+              <Link key={c.label} href={c.q ? `/buscar?q=${c.q}` : "/buscar"}>
+                <Ic d={c.d} /><b>{c.label}</b>
               </Link>
             ))}
           </div>
         </section>
-      )}
 
-      {/* RECORRIMOS BERMEJO (videos promocionales de zonas) */}
-      {videos.length > 0 && (
-        <section className="ini-sec">
-          <div className="ini-head"><h2>🎬 Recorrimos Bermejo</h2></div>
-          <div className="ini-rail">
-            {videos.map((v) => (
-              <div key={v.id} className="ini-vid">
-                <video src={v.url} controls preload="metadata" playsInline />
-                {v.titulo && <span className="ini-vid-b">{v.titulo}</span>}
-              </div>
-            ))}
-          </div>
+        {/* ===== Highlight grid ===== */}
+        <section className="uk-container uk-highlight">
+          <article className="uk-panel">
+            <h3>Lo mejor de hoy en Bermejo</h3>
+            <div className="uk-statrow"><span>🏷️ Ofertas activas</span><strong>{ofertas.length}</strong></div>
+            <div className="uk-statrow"><span>✨ Novedades</span><strong>{novedades.length}</strong></div>
+            <div className="uk-statrow"><span>🎬 Recorridos</span><strong>{videos.length}</strong></div>
+            <Link href="/mapa?of=1" className="uk-panel-btn">Ver ofertas <span>→</span></Link>
+          </article>
+
+          <article className="uk-panel uk-discover" style={{ backgroundImage: "url('/Bermejo-plaza.png')" }}>
+            <h3>Descubrí más.<br /><span>Ahorrá siempre.</span></h3>
+            <p>Compará precios, encontrá promociones y elegí lo mejor para vos.</p>
+            <div className="uk-discover-icons">
+              <div><span><Ic d="M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></span><small>Actualizado<br />todos los días</small></div>
+              <div><span><Ic d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" /></span><small>Cerca tuyo,<br />siempre</small></div>
+              <div><span><Ic d="M13 2 3 14h7l-1 8 10-12h-7z" /></span><small>Fácil, rápido<br />y útil</small></div>
+              <div><span><Ic d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6C19 16.5 12 21 12 21z" /></span><small>100% local,<br />100% Bermejo</small></div>
+            </div>
+          </article>
+
+          <article className="uk-panel uk-merchant">
+            <div>
+              <h3>¿Tenés un comercio?</h3>
+              <p>Sumate a Uruku y llegá a más personas.</p>
+              <ul>
+                <li>Aparecé en el mapa</li>
+                <li>Más visibilidad</li>
+                <li>Sin complicaciones</li>
+              </ul>
+            </div>
+            <Link href="/autoregistro" className="uk-panel-btn">Publicá tu negocio <span>→</span></Link>
+          </article>
         </section>
-      )}
 
-      {/* SEGUINOS (redes que cargó el admin) */}
-      {seguinos.length > 0 && (
-        <section className="ini-sec">
-          <div className="ini-head"><h2>Seguinos</h2></div>
-          <div className="ini-redes">
-            {seguinos.map((r) => (
-              <a key={r.clave} href={r.url as string} target="_blank" rel="noopener" className="ini-red">
-                <span className="ini-red-ic">{RED_ICON[r.clave] ?? "🔗"}</span>{r.etiqueta}
-              </a>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* CANAL + PUBLICÁ */}
-      <section className="ini-sec">
-        {canalWa && (
-        <div className="ini-canal">
-          <div><h3>📢 Canal de novedades</h3><p>Ofertas diarias, nuevos comercios y eventos de Bermejo.</p></div>
-          <a className="btn btn-wa" href={canalWa} target="_blank" rel="noopener">Unirme al canal</a>
-        </div>
+        {/* ===== Recorrimos Bermejo ===== */}
+        {videos.length > 0 && (
+          <section className="uk-container uk-section">
+            <h2>🎬 Recorrimos Bermejo</h2>
+            <div className="uk-rail">
+              {videos.map((v) => (
+                <div key={v.id} className="uk-vid">
+                  <video src={v.url} controls preload="metadata" playsInline />
+                  {v.titulo && <span>{v.titulo}</span>}
+                </div>
+              ))}
+            </div>
+          </section>
         )}
-        <Link href="/autoregistro" className="ini-negocio">
-          <div><b>¿Tenés un comercio?</b><span>Publicalo gratis y aparecé en el mapa.</span></div>
-          <span className="ini-negocio-cta">Publicá tu negocio ↗</span>
-        </Link>
-      </section>
+
+        {/* ===== Así de simple ===== */}
+        <section className="uk-container uk-section" style={{ paddingTop: 0 }}>
+          <h2>Así de simple</h2>
+          <div className="uk-steps">
+            <article>
+              <span className="uk-step-ic"><Ic d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3" /><span className="uk-step-num">1</span></span>
+              <div><strong>Buscá</strong><p>Encontrá lo que necesitás.</p></div>
+              <span className="uk-arrow" aria-hidden>›</span>
+            </article>
+            <article>
+              <span className="uk-step-ic"><Ic d="M3 3h2l2.4 12.3a1 1 0 0 0 1 .7h9.7a1 1 0 0 0 1-.8L22 7H6" /><span className="uk-step-num b">2</span></span>
+              <div><strong>Explorá</strong><p>Compará opciones, mirá fotos y ofertas.</p></div>
+              <span className="uk-arrow" aria-hidden>›</span>
+            </article>
+            <article>
+              <span className="uk-step-ic"><Ic d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6C19 16.5 12 21 12 21z" /><span className="uk-step-num v">3</span></span>
+              <div><strong>Guardá</strong><p>Guardá tus favoritos para volver.</p></div>
+              <span className="uk-arrow" aria-hidden>›</span>
+            </article>
+            <article>
+              <span className="uk-step-ic"><Ic d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0" /><span className="uk-step-num o">4</span></span>
+              <div><strong>Disfrutá</strong><p>Ofertas exclusivas en tu ciudad.</p></div>
+            </article>
+          </div>
+        </section>
+
+        {/* ===== Canal de novedades ===== */}
+        {canalWa && (
+          <section className="uk-container uk-canal">
+            <div>
+              <h3>📢 Canal de novedades</h3>
+              <p>Recibí ofertas, nuevos comercios y eventos de Bermejo.</p>
+            </div>
+            <a href={canalWa} target="_blank" rel="noopener">Unirme al canal</a>
+          </section>
+        )}
+      </main>
+
+      {/* ===== Footer ===== */}
+      <footer className="uk-footer">
+        <div className="uk-container uk-footer-grid">
+          <div>
+            <div className="uk-brand uk-footer-brand">
+              <div className="uk-brand-word"><span className="uk-brand-u">U</span>RUKU</div>
+              <small>Descubrí. Ahorrá. Disfrutá Bermejo.</small>
+            </div>
+            <p>La plataforma local que conecta a compradores y comercios en Bermejo y en muchas ciudades más.</p>
+            <SocialLinks cls="uk-footer-socials" />
+          </div>
+          <div>
+            <h4>Navegación</h4>
+            <Link href="/">Inicio</Link>
+            <Link href="/mapa">Mapa</Link>
+            <Link href="/mapa?of=1">Ofertas</Link>
+            <Link href="/buscar">Buscar</Link>
+            <Link href="/autoregistro">Publicá tu negocio</Link>
+          </div>
+          <div>
+            <h4>Para comercios</h4>
+            <Link href="/autoregistro">Publicar comercio</Link>
+            <Link href="/mi-comercio">Mi negocio</Link>
+            <Link href="/autoregistro">Planes y beneficios</Link>
+          </div>
+          <div>
+            <h4>Información</h4>
+            <a href="#">Preguntas frecuentes</a>
+            <a href="#">Términos y condiciones</a>
+            <a href="#">Política de privacidad</a>
+          </div>
+        </div>
+        <div className="uk-container uk-footer-bottom">
+          <span>© 2026 Uruku. Todos los derechos reservados.</span>
+          <span>Hecho con ♥ para nuestra comunidad.</span>
+        </div>
+      </footer>
 
       <div style={{ height: 20 }} />
       <BottomNav active="Inicio" />
