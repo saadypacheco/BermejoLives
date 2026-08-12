@@ -229,6 +229,27 @@
 .uk-canal p { margin: 0; color: var(--uk-ink-soft); font-size: 13px; }
 .uk-canal a { border: 0; background: var(--uk-green-grad); color: #fff; padding: 13px 24px; border-radius: 13px; font-weight: 800; }
 
+/* ===== Mapa (/mapa) theme-aware ===== */
+/* En tema claro remapeamos las variables del design system a valores claros y
+   ajustamos las superficies hardcodeadas del mapa para que combine con el home. */
+.uk-map[data-theme="light"] {
+  --bg: #eef1ee;
+  --stroke: rgba(0,0,0,.09);
+  --stroke-2: rgba(0,0,0,.14);
+  --txt: #0d2740;
+  --txt-2: #4a5e68;
+  --txt-3: #8a97a3;
+  --neon: #12a15f;
+  --amber: #d98a00;
+}
+.uk-map[data-theme="light"] .mhead { background: #ffffff; border-bottom-color: var(--uk-line); }
+.uk-map[data-theme="light"] .mbrand-name { color: #0d2740; }
+.uk-map[data-theme="light"] .msearch { background: rgba(0,0,0,.04); }
+.uk-map[data-theme="light"] .mmapbtn { background: rgba(255,255,255,.92); color: #0d2740; }
+.uk-map[data-theme="light"] .mcard { background: rgba(255,255,255,.97); }
+.uk-map[data-theme="light"] .mcard-img { background: #eef1ee; }
+.uk-map .mtop-right { flex-wrap: wrap; justify-content: flex-end; }
+
 /* ===== Búsqueda / resultados (/buscar) ===== */
 .uk-buscar { padding: 22px 0 40px; }
 .uk-search-live { display: flex; align-items: center; background: var(--uk-surface); border: 1px solid var(--uk-line); box-shadow: var(--uk-shadow-soft); border-radius: 14px; overflow: hidden; min-height: 50px; margin-bottom: 14px; }

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { HomeMap } from "@/components/home-map";
 import { CitySelector } from "@/components/city-selector";
+import { ThemeToggle } from "@/components/uruku-theme";
 import { WhatsApp, Phone, Send, User, Search } from "@/components/icons";
 import { type ComercioMapa } from "@/lib/data";
 import { type Ciudad } from "@/lib/types";
@@ -75,6 +76,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
           </Link>
           <div className="mtop-right">
             {ciudades && ciudades.length > 0 && <CitySelector actual={ciudad ?? null} ciudades={ciudades} />}
+            <ThemeToggle />
             <Link href="/mi-comercio" className="mavatar" aria-label="Ingresá tu negocio" title="¿Tenés un negocio? Ingresá acá"><User style={{ width: 20, height: 20 }} /></Link>
             <Link href="/autoregistro?modo=registro" className="mpublica">Publicá tu negocio <span aria-hidden>↗</span></Link>
           </div>

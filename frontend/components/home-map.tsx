@@ -71,10 +71,21 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
       const map = L.map(elRef.current, { zoomControl: false, attributionControl: false, scrollWheelZoom: false }).setView(center ?? BERMEJO, 15);
       mapRef.current = map;
       L.control.zoom({ position: "topleft" }).addTo(map);
+      // Tiles según el tema (claro/oscuro), para que combine con el resto del sitio.
       // updateWhenIdle/keepBuffer: menos descargas de tiles (clave con internet malo)
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      const tileUrl = (dark: boolean) =>
+        `https://{s}.basemaps.cartocdn.com/${dark ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`;
+      const isDark = () => document.getElementById("ukroot")?.getAttribute("data-theme") !== "light";
+      const tiles = L.tileLayer(tileUrl(isDark()), {
         maxZoom: 19, updateWhenIdle: true, updateWhenZooming: false, keepBuffer: 2, crossOrigin: true,
       }).addTo(map);
+      // Cambiar los tiles si el usuario alterna el tema (observa data-theme en #ukroot).
+      const root = document.getElementById("ukroot");
+      if (root) {
+        const obs = new MutationObserver(() => tiles.setUrl(tileUrl(isDark())));
+        obs.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+        (map as any)._themeObs = obs;
+      }
       layerRef.current = L.layerGroup().addTo(map);
       pintar();
       // el conector pin→tarjeta se redibuja al mover/zoomear el mapa
@@ -104,6 +115,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
       cancelled = true;
       if (mapRef.current?._onResize) window.removeEventListener("resize", mapRef.current._onResize);
       mapRef.current?._ro?.disconnect();
+      mapRef.current?._themeObs?.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

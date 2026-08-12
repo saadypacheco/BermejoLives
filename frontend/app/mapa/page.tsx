@@ -1,6 +1,7 @@
 import "@/app/uruku.css";
 import { MobileHome } from "@/components/mobile-home";
 import { BottomNav } from "@/components/bottom-nav";
+import { ThemeNoFlash } from "@/components/uruku-theme";
 import { getComerciosMapa, getFeed } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
 
@@ -13,7 +14,8 @@ export default async function MapaPage({ searchParams }: { searchParams?: { of?:
   const center: [number, number] | null =
     ciudad?.lat != null && ciudad?.lng != null ? [ciudad.lat, ciudad.lng] : null;
   return (
-    <div id="ukroot" className="uk" data-theme="dark">
+    <div id="ukroot" className="uk uk-map">
+      <ThemeNoFlash />
       <MobileHome comercios={comercios} feed={feed} soloOfertas={soloOfertas} center={center} ciudad={ciudad} ciudades={ciudades} />
       <BottomNav active={soloOfertas ? "Ofertas" : "Mapa"} />
     </div>
