@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Nav } from "@/components/nav";
+import { UrukuShell } from "@/components/uruku-shell";
 import { MensajeComercioForm } from "@/components/mensaje-comercio-form";
 import { WaLeadLink } from "@/components/wa-lead-link";
 import { GuardarBoton } from "@/components/guardar-boton";
@@ -11,11 +11,17 @@ import {
   WhatsApp, Verified, Pin, Phone, Globe, Instagram, Facebook, TikTok, Arrow,
 } from "@/components/icons";
 
-export const revalidate = 60; // SSG + ISR para catálogo (lesson KB)
+export const dynamic = "force-dynamic"; // el header (ciudad por cookie) es dinámico
 
 export default async function ComercioPage({ params }: { params: { slug: string } }) {
   const comercio = await getComercioBySlug(params.slug);
-  if (!comercio) return <div className="wrap" style={{ padding: 80 }}>Comercio no encontrado.</div>;
+  if (!comercio) {
+    return (
+      <UrukuShell showCatnav={false}>
+        <div className="uk-container" style={{ padding: "80px 0" }}>Comercio no encontrado.</div>
+      </UrukuShell>
+    );
+  }
   const [productos, galeria] = await Promise.all([getProductos(comercio.id), getGaleriaComercio(comercio.id)]);
 
   const redes = [
@@ -32,72 +38,63 @@ export default async function ComercioPage({ params }: { params: { slug: string 
       : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(comercio.direccion ?? "Bermejo")}`);
 
   return (
-    <>
+    <UrukuShell showCatnav={false}>
       <VistaLogger comercioId={comercio.id} />
-      <Nav active="negocios" />
 
-      <div className="profile-cover">
+      <div className="uk-cover">
         {comercio.portada_url && <img src={comercio.portada_url} alt="Portada" />}
       </div>
 
-      <div className="wrap">
-        <Link className="back-link" href="/" style={{ display: "inline-flex", margin: "16px 0 0" }}>
-          <Arrow style={{ transform: "rotate(180deg)" }} /> Volver
-        </Link>
-        <div className="profile-head">
-          {comercio.logo_url && <img className="profile-logo" src={comercio.logo_url} alt="Logo" />}
-          <div className="profile-info">
+      <div className="uk-container uk-profile">
+        <Link className="uk-back" href="/"><Arrow style={{ transform: "rotate(180deg)" }} /> Volver</Link>
+
+        <div className="uk-profile-head">
+          {comercio.logo_url && <img className="uk-profile-logo" src={comercio.logo_url} alt="Logo" />}
+          <div className="uk-profile-info">
             <h1>
               {comercio.nombre}
-              {comercio.verificado && <span className="pverif" title="Negocio verificado"><Verified /></span>}
+              {comercio.verificado && <span className="uk-verif" title="Negocio verificado"><Verified style={{ width: 20, height: 20 }} /></span>}
             </h1>
-            <div className="meta">
-              {comercio.rubro_nombre && (
-                <span className="pill" style={{ color: "var(--neon)" }}>{comercio.rubro_nombre}</span>
-              )}
-              {comercio.direccion && <span><Pin />{comercio.direccion}</span>}
-              <span style={{ color: "var(--amber)" }}>★ {comercio.rating}</span>
-              {comercio.modalidad && (
-                <span className="pill" style={{ color: "var(--blue-soft)" }}>{MODALIDAD_LABEL[comercio.modalidad] ?? comercio.modalidad}</span>
-              )}
+            <div className="uk-meta">
+              {comercio.rubro_nombre && <span className="uk-pill green">{comercio.rubro_nombre}</span>}
+              {comercio.direccion && <span><Pin style={{ width: 14, height: 14 }} />{comercio.direccion}</span>}
+              <span style={{ color: "var(--uk-orange)" }}>★ {comercio.rating}</span>
+              {comercio.modalidad && <span className="uk-pill blue">{MODALIDAD_LABEL[comercio.modalidad] ?? comercio.modalidad}</span>}
             </div>
           </div>
-          <div className="profile-cta">
-            <WaLeadLink className="btn btn-wa" comercioId={comercio.id} whatsapp={comercio.whatsapp} mensaje={`Hola ${comercio.nombre}, te contacto desde URUKU`}>
+          <div className="uk-cta">
+            <WaLeadLink className="uk-btn-wa" comercioId={comercio.id} whatsapp={comercio.whatsapp} mensaje={`Hola ${comercio.nombre}, te contacto desde URUKU`}>
               <WhatsApp style={{ width: 18, height: 18 }} /> WhatsApp
             </WaLeadLink>
-            <a className="btn btn-ghost" href={mapsHref} target="_blank" rel="noopener"><Pin /> Cómo llegar</a>
-            <GuardarBoton comercioId={comercio.id} className="btn btn-ghost" />
+            <a className="uk-btn-ghost" href={mapsHref} target="_blank" rel="noopener"><Pin style={{ width: 16, height: 16 }} /> Cómo llegar</a>
+            <GuardarBoton comercioId={comercio.id} className="uk-btn-ghost" />
           </div>
         </div>
 
-        {comercio.descripcion && (
-          <p style={{ color: "var(--txt-2)", maxWidth: 640, margin: "18px 0 0" }}>{comercio.descripcion}</p>
-        )}
+        {comercio.descripcion && <p className="uk-desc">{comercio.descripcion}</p>}
 
         <GaleriaFicha fotos={galeria.fotos} videos={galeria.videos} />
 
-        {/* INFO: todos los datos del vendedor */}
-        <div className="info-grid" style={{ marginTop: 30 }}>
-          <div className="info-card glass">
+        <div className="uk-info-grid">
+          <div className="uk-info-card">
             <h3>Datos de contacto</h3>
-            <div className="info-row">
+            <div className="uk-info-row">
               <span className="ic"><WhatsApp style={{ width: 17, height: 17 }} /></span>
               <div><b>WhatsApp</b>+{comercio.whatsapp}</div>
             </div>
             {comercio.telefono && (
-              <div className="info-row"><span className="ic"><Phone /></span><div><b>Teléfono</b>{comercio.telefono}</div></div>
+              <div className="uk-info-row"><span className="ic"><Phone style={{ width: 17, height: 17 }} /></span><div><b>Teléfono</b>{comercio.telefono}</div></div>
             )}
             {comercio.direccion && (
-              <div className="info-row"><span className="ic"><Pin /></span><div><b>Dirección</b>{comercio.direccion}</div></div>
+              <div className="uk-info-row"><span className="ic"><Pin style={{ width: 17, height: 17 }} /></span><div><b>Dirección</b>{comercio.direccion}</div></div>
             )}
           </div>
 
           {redes.length > 0 && (
-            <div className="info-card glass">
+            <div className="uk-info-card">
               <h3>Redes y web</h3>
               {redes.map((r) => (
-                <a className="info-row" key={r.label} href={r.href} target="_blank" rel="noopener" style={{ color: "inherit" }}>
+                <a className="uk-info-row" key={r.label} href={r.href} target="_blank" rel="noopener" style={{ color: "inherit" }}>
                   <span className="ic"><r.Icon style={{ width: 17, height: 17 }} /></span>
                   <div><b>{r.label}</b>{r.href.replace(/^https?:\/\//, "")}</div>
                 </a>
@@ -107,45 +104,39 @@ export default async function ComercioPage({ params }: { params: { slug: string 
 
           <MensajeComercioForm comercioId={comercio.id} nombre={comercio.nombre} />
 
-          <div className="info-card glass" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="uk-info-card" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <h3>Comentarios y sugerencias</h3>
-            <p style={{ color: "var(--txt-3)", fontSize: 13 }}>¿Tuviste un inconveniente o querés dejar algún comentario sobre este negocio? Contanos.</p>
-            <Link className="btn btn-ghost btn-sm" href={`/reclamos?comercio_id=${comercio.id}&nombre_comercio=${encodeURIComponent(comercio.nombre)}`}>Dejar un comentario</Link>
+            <p style={{ color: "var(--uk-ink-soft)", fontSize: 13 }}>¿Tuviste un inconveniente o querés dejar algún comentario sobre este negocio? Contanos.</p>
+            <Link className="uk-btn-ghost" style={{ maxWidth: 220 }} href={`/reclamos?comercio_id=${comercio.id}&nombre_comercio=${encodeURIComponent(comercio.nombre)}`}>Dejar un comentario</Link>
           </div>
         </div>
 
-        {/* PRODUCTOS / reservas (viven en Reservalo) — solo si el comercio acepta reservas */}
         {comercio.acepta_reservas !== false && productos.length > 0 && (
-        <>
-        <div className="section-head" style={{ marginTop: 40 }}>
-          <div><h2 style={{ fontSize: 24 }}>Productos</h2></div>
-        </div>
-        <div className="product-grid">
-          {productos.map((p) => (
-            <article className="offer" key={p.id}>
-              <div className="body">
-                <a href={p.url ?? undefined} target="_blank" rel="noopener" style={{ color: "inherit" }}>
-                  <h4>{p.nombre}</h4>
-                </a>
-                {p.precio != null && <div className="price">{precioFmt(p.precio, p.moneda)}</div>}
-                <div className="foot">
-                  <span className="biz">{comercio.nombre}</span>
-                  <WaLeadLink className="wa-mini" comercioId={comercio.id} whatsapp={comercio.whatsapp} mensaje={`Hola, me interesa ${p.nombre}`}>
-                    <WhatsApp style={{ width: 17, height: 17, color: "#04240f" }} />
-                  </WaLeadLink>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-        </>
+          <>
+            <div className="uk-section-head" style={{ marginTop: 40 }}>
+              <h2>Productos</h2>
+            </div>
+            <div className="uk-product-grid">
+              {productos.map((p) => (
+                <article className="uk-product" key={p.id}>
+                  <a href={p.url ?? undefined} target="_blank" rel="noopener" style={{ color: "inherit" }}>
+                    <h4>{p.nombre}</h4>
+                  </a>
+                  {p.precio != null && <div className="price">{precioFmt(p.precio, p.moneda)}</div>}
+                  <div className="foot">
+                    <span>{comercio.nombre}</span>
+                    <WaLeadLink className="wa-mini" comercioId={comercio.id} whatsapp={comercio.whatsapp} mensaje={`Hola, me interesa ${p.nombre}`}>
+                      <WhatsApp style={{ width: 17, height: 17, color: "#fff" }} />
+                    </WaLeadLink>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
         )}
 
-        <Link className="back-link" href="/" style={{ display: "inline-flex", marginTop: 24 }}>
-          <Arrow style={{ transform: "rotate(180deg)" }} /> Volver al inicio
-        </Link>
-        <div style={{ height: 50 }} />
+        <Link className="uk-back" href="/" style={{ marginTop: 24 }}><Arrow style={{ transform: "rotate(180deg)" }} /> Volver al inicio</Link>
       </div>
-    </>
+    </UrukuShell>
   );
 }
