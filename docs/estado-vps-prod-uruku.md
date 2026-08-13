@@ -32,18 +32,18 @@ Registrados hasta **12/08/2027**: `uruku.bo` (principal), `uruku.com.bo`, `urucu
 
 ## Traefik (reverse proxy compartido)
 - Carpeta `/docker/traefik`, red externa `traefik` creada, `acme.json` (chmod 600).
-- Imagen **traefik:v3.1**, HTTP→HTTPS, certresolver **letsencrypt** (HTTP challenge),
-  email `saadypacheco@gmail.com`. Contenedor **Up** con puertos 80/443.
+- Imagen **`traefik:latest`** (⚠️ v3.1 falla con Docker 29: `client version 1.24 is too old`
+  → no ve contenedores → no emite certs; se resolvió actualizando la imagen).
+- HTTP→HTTPS, certresolver **letsencrypt** (HTTP challenge), email `saadypacheco@gmail.com`.
 
 ## Estado / próximos pasos
 - [x] Dominios + Cloudflare + nameservers
 - [x] DNS records (gris)
 - [x] VPS base (Docker + ufw)
-- [x] Traefik
-- [ ] **Stack URUKU**: clonar `BermejoLives` → `/docker/uruku`, `python3 selfhost/init_prod_env.py uruku.bo`
-      (genera secretos NUEVOS + escribe `.env` y `backend/.env`), luego
-      `docker compose -f docker-compose.prod.yml --env-file .env up -d --build`.
-- [ ] Verificar HTTPS (requiere `uruku.bo` **Active** en Cloudflare).
+- [x] Traefik (imagen actualizada por compat con Docker 29)
+- [x] **Stack URUKU DESPLEGADO Y VIVO** (2026-08-13): `uruku.bo` 200, `api.uruku.bo/health`
+      ok+connected, `db.uruku.bo` responde. HTTPS válido. Base vacía (aún sin comercios).
+- [ ] DNS de `waha.uruku.bo` (faltaba → único cert que erraba; WhatsApp bridge, opcional).
 - [ ] **Reservalo** en `/docker/reservalo` → `uruku.bo/tienda` (basePath `/tienda`,
       parametrizado por `DOMAIN`, misma PWA). Ver cambios pendientes del repo Reservalo.
 - [ ] Migrar el único comercio (re-registro en `uruku.bo/autoregistro`).

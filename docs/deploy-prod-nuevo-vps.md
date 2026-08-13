@@ -84,10 +84,16 @@ touch acme.json && chmod 600 acme.json
 docker network create traefik
 ```
 Creá `/docker/traefik/docker-compose.yml`:
+
+> ⚠️ **Compatibilidad Docker/Traefik:** con Docker Engine nuevo (29+), Traefik **v3.1
+> falla** (`client version 1.24 is too old`) → no ve los contenedores → no emite certs.
+> Usá una imagen actual (`traefik:latest` o una v3 reciente). Una vez corriendo, fijá la
+> versión exacta con `docker exec traefik traefik version` para que no cambie sola.
+
 ```yaml
 services:
   traefik:
-    image: traefik:v3.1
+    image: traefik:latest
     container_name: traefik
     restart: unless-stopped
     command:
