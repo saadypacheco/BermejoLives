@@ -16,6 +16,7 @@ pero si algún cliente cacheó el anon key viejo, hay que asegurarse de
 haber redeployado el frontend con el nuevo antes de rotar).
 """
 import secrets
+import sys
 import time
 
 import jwt
@@ -24,19 +25,24 @@ JWT_TTL_AÑOS = 20  # el anon key vive "para siempre" (se hornea en el build del
 
 
 def main() -> None:
+    # Dominio del ambiente: uruku.bo (prod), encontralo.store (QA), etc.
+    dominio = sys.argv[1] if len(sys.argv) > 1 else "encontralo.store"
+
     jwt_secret = secrets.token_urlsafe(48)
     authenticator_password = secrets.token_urlsafe(32)
     postgres_password = secrets.token_urlsafe(32)
 
     exp = int(time.time()) + JWT_TTL_AÑOS * 365 * 24 * 3600
-    anon_token = jwt.encode({"role": "anon", "iss": "encontralo-selfhost", "exp": exp}, jwt_secret, algorithm="HS256")
-    service_token = jwt.encode({"role": "service_role", "iss": "encontralo-selfhost", "exp": exp}, jwt_secret, algorithm="HS256")
+    iss = f"{dominio}-selfhost"
+    anon_token = jwt.encode({"role": "anon", "iss": iss, "exp": exp}, jwt_secret, algorithm="HS256")
+    service_token = jwt.encode({"role": "service_role", "iss": iss, "exp": exp}, jwt_secret, algorithm="HS256")
 
+    print(f"# Secretos para el ambiente: {dominio}")
     print("# --- pegar en el .env de la raíz (junto a docker-compose.prod.yml) ---")
     print(f"POSTGRES_PASSWORD={postgres_password}")
     print(f"AUTHENTICATOR_PASSWORD={authenticator_password}")
     print(f"PGRST_JWT_SECRET={jwt_secret}")
-    print("NEXT_PUBLIC_SUPABASE_URL=https://db.encontralo.store")
+    print(f"NEXT_PUBLIC_SUPABASE_URL=https://db.{dominio}")
     print(f"NEXT_PUBLIC_SUPABASE_ANON_KEY={anon_token}")
     print()
     print("# --- pegar en backend/.env (reemplaza el SUPABASE_SERVICE_ROLE_KEY viejo) ---")
