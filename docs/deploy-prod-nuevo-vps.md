@@ -210,28 +210,46 @@ docker compose -f docker-compose.prod.yml --env-file .env up -d --build
 Traefik pide los certificados de `uruku.bo`, `www`, `api`, `db` (y `waha`) solos.
 
 ## Paso 5 · Stack Reservalo (path `/tienda`, misma PWA)
+
+> ✅ **Cambios de código YA hechos** (commit `352f07a` en repo `reservalo` + `03abfe1`
+> en URUKU): `basePath`/`assetPrefix` → `/tienda`; compose parametrizado por `${DOMAIN}`
+> (`Host(${DOMAIN}) && PathPrefix(/tienda)` priority 1000, API `api.tienda.${DOMAIN}`,
+> 301 `tienda.${DOMAIN}` → `${DOMAIN}/tienda`); `SITE_URL`/`NEXT_PUBLIC_API_URL`/
+> `NEXT_PUBLIC_ENCONTRALO_URL` parametrizados; cross-link URUKU `/reservalo`→`/tienda`.
+> El **mismo código** sirve prod (`uruku.bo/tienda`) y QA (`encontralo.store/tienda`) según `DOMAIN`.
+
+**DNS (Cloudflare):** agregar `tienda` y `api.tienda` (A → IP del VPS, gris) — ya están en el Paso 3.
+
 ```bash
 cd /docker
 git clone https://github.com/saadypacheco/reservalo.git reservalo
 cd /docker/reservalo
 ```
-**Cambios necesarios en el repo de Reservalo** (los preparo yo si querés — checklist):
-1. `frontend/next.config.*`: `basePath` y `assetPrefix` de `/reservalo` → **`/tienda`**.
-2. Traefik labels (compose de Reservalo):
-   - Router tienda: `Host(\`uruku.bo\`) && PathPrefix(\`/tienda\`)`, `priority=1000`.
-   - Router API: `Host(\`api.tienda.uruku.bo\`)`.
-   - Router 301: `Host(\`tienda.uruku.bo\`)` → redirect a `https://uruku.bo/tienda`.
-3. `SITE_URL=https://uruku.bo/tienda` y `NEXT_PUBLIC_API_URL=https://api.tienda.uruku.bo`.
-4. Secretos propios de Reservalo (su base/JWT) — generados nuevos, no copiados de QA.
+
+**`.env` de Reservalo** (`/docker/reservalo/.env`):
+```
+DOMAIN=uruku.bo
+NEXT_PUBLIC_SUPABASE_URL=...        # ver "Base de Reservalo" abajo
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+```
+**`backend/.env` de Reservalo**: su propia config de base (SUPABASE_URL, SERVICE_ROLE_KEY,
+DATABASE_URL, JWT_SECRET) — secretos **nuevos**, no copiados de QA.
+
+> ⚠️ **Base de Reservalo (a definir):** Reservalo tiene su **propia** base (catálogo,
+> pedidos, cuentas) — separada de la de URUKU. El compose de Reservalo **no** trae Postgres;
+> usa un Supabase externo (`SUPABASE_URL`). Opciones para prod:
+> - **(a)** Reservalo sigue en su **Supabase Cloud** (lo más simple si es lo que usa QA hoy) → solo pegar esas claves.
+> - **(b)** Reservalo con **Postgres+PostgREST self-host propio** en el VPS (aislado, sin costo cloud) → hay que sumarle esos servicios + sus migraciones al compose.
+> Confirmar **qué usa QA hoy** antes de deployar.
 
 Deploy:
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+docker compose --env-file .env up -d --build
 ```
 
-### Cross-links entre los dos sitios (en ambos repos)
-- Ficha de URUKU → producto: `https://uruku.bo/tienda/productos/{slug}`.
-- Reservalo → ficha del local: `https://uruku.bo/comercios/{slug}`.
+### Cross-links entre los dos sitios (ya en el código)
+- Ficha/buscador de URUKU → tienda: `${DOMAIN}/tienda/productos/...` (const `RESERVALO_URL="/tienda"`).
+- Reservalo → sitio URUKU: `NEXT_PUBLIC_ENCONTRALO_URL=https://${DOMAIN}` (Navbar).
 
 ## Paso 6 · Migrar el único comercio
 Al ser 1 solo, lo más simple:
