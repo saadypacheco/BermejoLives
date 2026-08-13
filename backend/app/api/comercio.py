@@ -638,16 +638,22 @@ async def crear_producto(
     if not comercio:
         raise HTTPException(status_code=404, detail="comercio no encontrado")
 
-    # Lee y procesa las fotos (valida + resize). 1–3 imágenes.
-    imgs: list[bytes] = []
+    # Lee, procesa (valida + resize) y GUARDA las fotos en el disco de URUKU
+    # (subcarpeta productos/{slug}/…, servida por api.<dominio>/fotos). Mismo criterio
+    # que las fotos del comercio: todo lo que se sube queda en URUKU. Reservalo solo
+    # guarda las URLs, no las imágenes.
+    fotos_urls: list[str] = []
     for f in fotos:
         data = await f.read()
         if not data:
             continue
         try:
-            imgs.append(procesar_imagen(data))
+            procesada = procesar_imagen(data)
         except Exception:  # noqa: BLE001
             raise HTTPException(status_code=400, detail="Una de las fotos no es válida")
+        url = guardar_foto_local(f"productos/{comercio['slug']}/{secrets.token_hex(8)}.jpg", procesada)
+        if url:
+            fotos_urls.append(url)
 
     client = get_tienda_client()
     # 1) asegurar el vendedor en el ecommerce, 2) crear el producto (en threadpool: httpx sync)
@@ -660,7 +666,7 @@ async def crear_producto(
         "nombre": titulo.strip(), "precio": precio, "moneda": moneda,
         "categoria_slug": categoria_slug, "descripcion": (descripcion or "").strip() or None,
         "slug": comercio["slug"],
-    }, imgs)
+    }, fotos_urls)
 
     ref = repo.crear_producto_ref({
         "comercio_id": comercio["id"],
@@ -674,7 +680,7 @@ async def crear_producto(
         "cargado_por": claims.get("email"),
     })
     logger.info("comercio.producto_alta", comercio=comercio["slug"],
-                producto=res.get("producto_id"), fotos=len(imgs), stub=client.stub)
+                producto=res.get("producto_id"), fotos=len(fotos_urls), stub=client.stub)
     return {"ok": True, "producto_ref": ref, "url": res.get("url")}
 
 

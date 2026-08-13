@@ -54,14 +54,17 @@ class TiendaClient:
         r.raise_for_status()
         return r.json()
 
-    def crear_producto(self, vendedor_id: str, data: dict, fotos: list[bytes]) -> dict:
-        """data = {nombre, precio, moneda, categoria_slug, descripcion?}. Devuelve {producto_id, url}."""
+    def crear_producto(self, vendedor_id: str, data: dict, fotos_urls: list[str]) -> dict:
+        """data = {nombre, precio, moneda, categoria_slug, descripcion?, slug?}.
+        Las imágenes ya están alojadas en el disco de URUKU (fotos_urls). Se mandan
+        como URLs (JSON), no como bytes. Devuelve {producto_id, url, imagen_url}."""
         if self._stub:
             pid = uuid.uuid4().hex[:8]
-            return {"producto_id": pid, "url": f"/v/{data.get('slug', vendedor_id)}#p{pid}"}
-        files = [("fotos", (f"foto{i}.jpg", b, "image/jpeg")) for i, b in enumerate(fotos)]
+            return {"producto_id": pid, "url": f"/v/{data.get('slug', vendedor_id)}#p{pid}",
+                    "imagen_url": fotos_urls[0] if fotos_urls else None}
+        payload = {**data, "fotos_urls": fotos_urls}
         r = httpx.post(self._u(f"/api/servicio/vendedores/{vendedor_id}/productos"),
-                       data=data, files=files or None, headers=self._headers, timeout=30)
+                       json=payload, headers=self._headers, timeout=30)
         r.raise_for_status()
         return r.json()
 
