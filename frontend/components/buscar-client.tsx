@@ -9,7 +9,7 @@ import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
 import { registrarLead, logBusqueda } from "@/lib/campo";
 
-const RESERVALO_URL = "/reservalo";
+const RESERVALO_URL = "/tienda";
 
 export function BuscarClient() {
   const [q, setQ] = useState("");

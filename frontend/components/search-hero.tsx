@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search, WhatsApp } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
 
-const RESERVALO_URL = "/reservalo";
+const RESERVALO_URL = "/tienda";
 type Opt = { slug: string; nombre: string };
 
 export function SearchHero({ rubros, zonas }: { rubros: Opt[]; zonas: Opt[] }) {
