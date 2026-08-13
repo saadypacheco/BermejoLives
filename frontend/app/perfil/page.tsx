@@ -10,13 +10,23 @@ import { CompradorAuthForm } from "@/components/comprador-auth";
 import { Bookmark, User } from "@/components/icons";
 import { getUsuarioSession, clearUsuario, type UsuarioSession } from "@/lib/usuario";
 
+// Tras loguearse, si vino con ?next (ej. desde la tienda uruku.bo/tienda), volver ahí.
+function volverSiNext() {
+  if (typeof window === "undefined") return;
+  const next = new URLSearchParams(window.location.search).get("next");
+  if (next && next.startsWith("/")) window.location.href = next;
+}
+
 export default function PerfilPage() {
   const [sesion, setSesion] = useState<UsuarioSession | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setSesion(getUsuarioSession());
+    const s = getUsuarioSession();
+    setSesion(s);
     setReady(true);
+    // Si ya está logueado y llegó con ?next (ej. desde la tienda), volver ahí.
+    if (s) volverSiNext();
   }, []);
 
   if (!ready) return null;
@@ -36,7 +46,7 @@ export default function PerfilPage() {
               Sin contraseña — solo tu celular, para guardar locales y recibir avisos de ofertas.
             </p>
             <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
-              <CompradorAuthForm onOk={() => setSesion(getUsuarioSession())} />
+              <CompradorAuthForm onOk={() => { setSesion(getUsuarioSession()); volverSiNext(); }} />
             </div>
           </>
         ) : (
