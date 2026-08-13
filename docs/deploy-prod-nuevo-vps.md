@@ -21,6 +21,44 @@
 
 `uruku.com.bo`, `urucu.bo`, `urucu.com.bo` → **301 → `uruku.bo`** (se resuelve en el DNS/Cloudflare o en Traefik).
 
+## Organización de directorios (multi-sitio)
+
+Este VPS puede alojar **varios sitios**. Regla: **un Traefik compartido** (puerta de
+entrada de todos) + **una carpeta por sitio**, cada una con su repo, su `.env`, sus
+contenedores y su base **aislados**. Traefik reparte por **dominio**.
+
+```
+/docker/
+├── traefik/            ← reverse proxy ÚNICO y compartido
+│   ├── docker-compose.yml
+│   └── acme.json       ← certificados de TODOS los dominios
+├── uruku/              ← URUKU (uruku.bo)            · repo BermejoLives
+│   ├── docker-compose.prod.yml
+│   ├── .env
+│   └── backend/.env
+├── reservalo/          ← Reservalo (uruku.bo/tienda) · repo reservalo
+│   ├── docker-compose.prod.yml
+│   └── .env
+└── <otrositio>/        ← futuro sitio (otro dominio)
+```
+
+**Cómo se conectan:** cada stack se engancha a la red externa **`traefik`** (por ahí
+se enruta) y tiene además su red **`internal`** privada (base + backend) que nadie más
+ve. Traefik saca los certificados de todos (un solo `acme.json`).
+
+**4 reglas para que no choquen al sumar sitios:**
+1. **Nombres de contenedor únicos** por sitio (`uruku-frontend`, `reservalo-frontend`, …).
+2. **Nombres de router/service de Traefik únicos** en los labels (`uruku-fe`, `reservalo-fe`, …).
+3. **No publicar puertos al host** (`ports:`) — Traefik enruta por la red interna → nunca hay choque de puertos.
+4. **Un `.env` por sitio** (su `DOMAIN` y secretos). Bases y volúmenes quedan separados (Docker los prefija por carpeta).
+
+**Sumar un sitio nuevo = 5 pasos:** (1) `git clone <repo> /docker/<sitio>` · (2) su `.env`
+con `DOMAIN=` · (3) labels de Traefik con nombres únicos + su dominio · (4) DNS del dominio
+→ IP del VPS · (5) `docker compose ... up -d --build` (Traefik detecta y saca el cert solo).
+
+> Nota: los contenedores de URUKU se llaman `buscadonde-*` (codename interno, cosmético).
+> No molesta mientras haya **una** instancia de URUKU. Reservalo usará `reservalo-*`.
+
 ---
 
 ## Paso 0 · Provisionar el VPS
