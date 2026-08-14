@@ -43,6 +43,17 @@
       (imágenes al disco de URUKU, auth por token de URUKU, base self-host), reservas/carrito.
       **Regla:** todo cambio que se haga en prod se replica en QA.
 
+## 💡 Ideas para explorar (registrar, pensar después)
+- **Producción de contenido automatizada desde WhatsApp.** Que el comerciante mande
+  **texto / audio / fotos / videos** por WhatsApp y todo se guarde en la base (como el
+  proyecto **MentorComercial** en `C:\repos\proyectosClaude\MentorComercial`, donde ya se
+  ingestaba y almacenaba ese material). A partir de eso, **generar contenido** para redes
+  y publicaciones del sitio (posts, reels, descripciones de producto) — con IA:
+  transcripción de audio (Whisper, ya está en URUKU), generación de texto, y armado de
+  piezas. Reusa el bridge WAHA + el webhook de ingesta que ya existen. **Analizar
+  factibilidad y esfuerzo.** Encaja con los planes: "publicar por WhatsApp" (Plan 2/3) y
+  el marketplace de contenido para creadores. Ver [[monetizacion-planes-uruku]].
+
 ## ✅ Hecho
 - [x] VPS prod (KVM4, Brasil), Docker + Traefik, DNS Cloudflare, URUKU desplegado y vivo (HTTPS OK).
 - [x] Rediseño URUKU (shell, home, buscar, ficha, mapa, mi-negocio) + selector de ciudad.
