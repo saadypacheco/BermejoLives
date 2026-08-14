@@ -22,7 +22,8 @@
 ## 🟡 Infra / hardening
 - [ ] **Fijar la versión de Traefik** (hoy `traefik:latest` por compat con Docker 29). Ver la versión
       con `docker exec traefik traefik version` y pinearla en el compose.
-- [ ] **Backups** del Postgres self-host de URUKU (cron `pg_dump` + retención + prueba de restore).
+- [~] **Backups** del Postgres: script listo (`selfhost/backup.sh`, dump+gzip+rotación 14 días).
+      Falta en el VPS: copiar a `/docker/backup.sh`, `chmod +x`, y cron `0 3 * * *`. Probar restore.
 - [ ] **SSH hardening**: agregar SSH key y desactivar login por password (key-only).
 - [ ] **Monitoreo básico**: disco (en QA estaba al 66%), RAM, uptime. Uptime Kuma u similar.
 
