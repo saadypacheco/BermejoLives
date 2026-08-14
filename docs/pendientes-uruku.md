@@ -5,12 +5,10 @@
 > La **tienda (Reservalo)** tiene su propio plan: [plan-tienda-reservalo.md](plan-tienda-reservalo.md).
 
 ## 🔴 Ahora / alta prioridad
-- [ ] **DNS: flip a Proxied + SSL Full (strict).** Hoy los records están en **gris (DNS only)**
-      para el bootstrap de certificados. Pasar `@`, `www`, `tienda` a **Proxied (naranja)** y en
-      Cloudflare **SSL/TLS → Full (strict)**. Dejar `api`, `db`, `api.tienda` en **gris** (no cachear
-      API/base). Beneficio: CDN, DDoS, IP de origen oculta.
-- [ ] **Record DNS `waha`** (A → 179.198.126.170, gris) — hoy Traefik erra el cert de `waha.uruku.bo`
-      porque falta el registro. Alternativa: sacarle el label de Traefik si no se expone el panel.
+- [x] **DNS flip (2026-08-14):** `uruku.bo` + `www` en **Proxied (naranja)**, SSL/TLS **Full (strict)**,
+      Always-HTTPS **OFF** (renovación del cert). `api`/`db`/`waha`/`tienda`/`api.tienda`/`db.tienda`
+      quedan **grises**. `tienda.*` se flipean cuando Reservalo esté en prod. Verificado: `server: cloudflare`, edge GRU.
+- [x] **Record DNS `waha`** ya existe (gris) → Traefik le saca el cert solo.
 - [ ] **Migrar el comercio** a prod (re-registro en `uruku.bo/autoregistro` + subir sus fotos).
 - [ ] **Cargar contenido** en `uruku.bo/publicador`: cotización, clima y **redes sociales de URUKU**
       (sin URLs, la barra social no muestra íconos) + número real del **canal de WhatsApp**.
