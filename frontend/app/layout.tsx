@@ -4,6 +4,7 @@ import { SwRegister } from "@/components/sw-register";
 import { InstallPrompt } from "@/components/install-prompt";
 import { ErrorListener } from "@/components/error-listener";
 import { WebVitalsReporter } from "@/components/web-vitals-reporter";
+import { RefCapture } from "@/components/ref-capture";
 
 export const metadata: Metadata = {
   title: "URUKU — Comercios y ofertas en el mapa",
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ErrorListener />
         <WebVitalsReporter />
+        <RefCapture />
         <InstallPrompt />
         {children}
         <SwRegister />

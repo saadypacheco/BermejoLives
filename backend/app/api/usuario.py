@@ -19,6 +19,7 @@ logger = structlog.get_logger()
 
 class SolicitarCodigoBody(BaseModel):
     whatsapp: str
+    ref: str | None = None   # código de origen (referido/QR) — atribución first-touch
 
 
 @router.post("/auth/usuario/solicitar-codigo")
@@ -28,7 +29,7 @@ def solicitar_codigo(body: SolicitarCodigoBody, repo: Repo = Depends(get_repo)) 
     ver docs/pendientes.md sección 0, evita riesgo de ban por envío saliente)."""
     if not body.whatsapp.strip():
         raise HTTPException(status_code=400, detail="Falta el número de WhatsApp")
-    usuario = repo.get_usuario_por_whatsapp(body.whatsapp) or repo.crear_usuario(body.whatsapp)
+    usuario = repo.get_usuario_por_whatsapp(body.whatsapp) or repo.crear_usuario(body.whatsapp, body.ref)
     code = f"{secrets.randbelow(1_000_000):06d}"
     expira = (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()
     repo.set_reset_code_usuario(usuario["id"], code, expira)

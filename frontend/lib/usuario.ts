@@ -27,10 +27,12 @@ export type SolicitudCodigo = { codigo: string; wa_link: string };
  * que el usuario mande "CONFIRMAR-XXXXXX" él mismo (login por mensaje
  * entrante, sin riesgo de ban por envío saliente automatizado). */
 export async function solicitarCodigoUsuario(whatsapp: string): Promise<SolicitudCodigo> {
+  let ref: string | null = null;
+  try { ref = localStorage.getItem("uruku_ref"); } catch { /* noop */ }
   const res = await fetch(`${API}/auth/usuario/solicitar-codigo`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ whatsapp }),
+    body: JSON.stringify({ whatsapp, ref: ref || undefined }),
   });
   if (!res.ok) throw new Error("No se pudo generar el código");
   const data = await res.json();

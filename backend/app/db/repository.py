@@ -182,9 +182,12 @@ class SupabaseRepo:
         res = self._db.table("usuarios").select("*").eq("whatsapp", digitos).eq("activo", True).limit(1).execute()
         return res.data[0] if res.data else None
 
-    def crear_usuario(self, whatsapp: str) -> dict:
+    def crear_usuario(self, whatsapp: str, ref: str | None = None) -> dict:
         digitos = "".join(c for c in whatsapp if c.isdigit())
-        res = self._db.table("usuarios").insert({"whatsapp": digitos}).execute()
+        row: dict = {"whatsapp": digitos}
+        if ref:
+            row["ref"] = ref[:64]   # código de origen (referido), acotado
+        res = self._db.table("usuarios").insert(row).execute()
         return res.data[0]
 
     def set_reset_code_usuario(self, usuario_id: str, code: str | None, expira: str | None) -> None:

@@ -226,10 +226,11 @@ class FakeRepo:
                 return u
         return None
 
-    def crear_usuario(self, whatsapp):
+    def crear_usuario(self, whatsapp, ref=None):
         digitos = "".join(c for c in whatsapp if c.isdigit())
         full = {"id": self._id("comprador"), "whatsapp": digitos, "activo": True,
-                "reset_code": None, "reset_code_expira": None, "consentimiento_ofertas": True}
+                "reset_code": None, "reset_code_expira": None, "consentimiento_ofertas": True,
+                "ref": ref}
         self.compradores[full["id"]] = full
         return full
 
