@@ -101,6 +101,15 @@
 .uk-city-item.soon:hover { background: transparent; }
 .uk-city-sep { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--uk-ink-soft); padding: 8px 12px 4px; }
 
+/* Botón Ingresar (cuenta) */
+.uk-acct { position: relative; }
+.uk-acct-btn { cursor: pointer; }
+.uk-acct-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; min-width: 250px; background: var(--uk-surface); border: 1px solid var(--uk-line); border-radius: 14px; box-shadow: var(--uk-shadow); padding: 6px; }
+.uk-acct-item { display: flex; flex-direction: column; gap: 1px; padding: 10px 12px; border-radius: 10px; color: var(--uk-ink); }
+.uk-acct-item:hover { background: var(--uk-chip); }
+.uk-acct-item b { font-size: 14px; }
+.uk-acct-item small { font-size: 11px; color: var(--uk-ink-soft); }
+
 .uk-weather { display: flex; align-items: center; gap: 8px; padding-right: 12px; border-right: 1px solid var(--uk-line); }
 .uk-weather .uk-sun { font-size: 26px; }
 .uk-weather-t { display: flex; flex-direction: column; }

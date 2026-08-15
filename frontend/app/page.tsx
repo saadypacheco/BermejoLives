@@ -124,10 +124,13 @@ export default async function InicioPage() {
       <section className="uk-container uk-highlight">
         <article className="uk-panel">
           <h3>Lo mejor de hoy en {nombre}</h3>
-          <div className="uk-statrow"><span>🏷️ Ofertas activas</span><strong>{ofertas.length}</strong></div>
-          <div className="uk-statrow"><span>✨ Novedades</span><strong>{novedades.length}</strong></div>
-          <div className="uk-statrow"><span>🎬 Recorridos</span><strong>{videos.length}</strong></div>
-          <Link href="/mapa?of=1" className="uk-panel-btn">Ver ofertas <span>→</span></Link>
+          {ofertas.length > 0 && <div className="uk-statrow"><span>🏷️ Ofertas activas</span><strong>{ofertas.length}</strong></div>}
+          {novedades.length > 0 && <div className="uk-statrow"><span>✨ Novedades</span><strong>{novedades.length}</strong></div>}
+          {videos.length > 0 && <div className="uk-statrow"><span>🎬 Recorridos</span><strong>{videos.length}</strong></div>}
+          {ofertas.length === 0 && novedades.length === 0 && videos.length === 0 && (
+            <p style={{ color: "var(--uk-ink-soft)", fontSize: 14, margin: "4px 0 0" }}>Explorá el mapa y descubrí los comercios de {nombre}.</p>
+          )}
+          <Link href="/mapa" className="uk-panel-btn">Explorá el mapa <span>→</span></Link>
         </article>
 
         <article className="uk-panel uk-discover" style={{ backgroundImage: "url('/Bermejo-plaza.png')" }}>

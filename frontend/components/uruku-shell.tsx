@@ -2,6 +2,7 @@ import Link from "next/link";
 import "@/app/uruku.css";
 import { ThemeToggle, ThemeNoFlash } from "@/components/uruku-theme";
 import { CitySelector } from "@/components/city-selector";
+import { IngresarMenu } from "@/components/ingresar-menu";
 import { BottomNav } from "@/components/bottom-nav";
 import { Ic, CATS, SocialLinks, money } from "@/components/uruku-ui";
 import { getClima, getCotizaciones, getRedes } from "@/lib/data";
@@ -89,6 +90,7 @@ export async function UrukuShell({
                 <strong>{money(c.valor)} {c.unidad}</strong>
               </div>
             ))}
+            <IngresarMenu />
           </div>
         </div>
 
