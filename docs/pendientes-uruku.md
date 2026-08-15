@@ -13,6 +13,19 @@
 - [ ] **Cargar contenido** en `uruku.bo/publicador`: cotización, clima y **redes sociales de URUKU**
       (sin URLs, la barra social no muestra íconos) + número real del **canal de WhatsApp**.
 
+### 🔎 Diagnóstico "las redes no se ven" (2026-08-15)
+El **código está OK** de punta a punta (UI `/publicador` → `PUT /contenido/redes/{clave}`
+→ `repo.update_red` → tabla `redes_sociales` → `getRedes` → `SocialLinks`, que **filtra por
+`url` truthy**). El seed (`0033_reservas_y_redes.sql`) inserta las 5 redes **con `url = NULL`**,
+así que hasta que no se les cargue una URL, no se muestran (es lo esperado). Que la cotización
+sí se vea confirma que el frontend lee la **misma** base. Verificar en el VPS:
+```sql
+SELECT clave, url FROM redes_sociales ORDER BY orden;   -- si url IS NULL en todas → cargar en /publicador
+```
+Si en `/publicador` guardás la URL y sigue NULL → mirar que el token sea de rol
+`publicador/admin/moderador` y que el PUT no dé 401/403 (Network tab). Cotización "s/d" en el
+hero pero con valores en la barra superior = **caché del navegador** → hard refresh (Ctrl+Shift+R).
+
 ## 🟠 Redirects de los dominios secundarios
 - [ ] `uruku.com.bo`, `urucu.bo`, `urucu.com.bo` → **301 a `uruku.bo`**. Agregarlos como zonas en
       Cloudflare + **Redirect Rules**, o A al VPS + router de redirect en Traefik.
@@ -42,11 +55,11 @@
       **Regla:** todo cambio que se haga en prod se replica en QA.
 
 ## 💡 Ideas para explorar (registrar, pensar después)
-- **Moderación de contenido humana + IA.** Todo lo que envían comercios/creadores se revisa
-  antes de publicar: **revisión humana** (panel, rol publicador/moderador) + **botón de
-  revisión con IA** (Gemini, para volumen; asistido → automático por umbral). Construye sobre
-  la cola de moderación y el Gemini que YA existen. Diseño en
-  **[moderacion-ia-humana.md](moderacion-ia-humana.md)**.
+- **Producción de contenido automatizada desde WhatsApp** (ver abajo).
+- **Falloff del mapa (fase 2):** que los negocios que no pagan vayan cayendo del mapa para
+  mantenerlo fresco. Ver [[monetizacion-planes-uruku]].
+- **Más valor para el comprador:** botón "Llamar" (tel:) para mayores, orden por distancia en
+  la lista, "cerca mío", historial de vistos, alertas de ofertas guardadas.
 - **Producción de contenido automatizada desde WhatsApp.** Que el comerciante mande
   **texto / audio / fotos / videos** por WhatsApp y todo se guarde en la base (como el
   proyecto **MentorComercial** en `C:\repos\proyectosClaude\MentorComercial`, donde ya se
@@ -61,3 +74,15 @@
 - [x] VPS prod (KVM4, Brasil), Docker + Traefik, DNS Cloudflare, URUKU desplegado y vivo (HTTPS OK).
 - [x] Rediseño URUKU (shell, home, buscar, ficha, mapa, mi-negocio) + selector de ciudad.
 - [x] Reservalo: código migrado a `/tienda` parametrizado por `DOMAIN` (falta sacar Supabase).
+- [x] **Moderación humana + IA (2026-08-15):** cola abierta al **publicador** (`require_moderador`
+      = admin/moderador/publicador); asistente IA `moderar_publicacion()` (Gemini) →
+      `aprobar/rechazar/dudoso`, sin API key cae a "dudoso" (nunca aprueba a ciegas); endpoint
+      `POST /moderacion/publicaciones/{id}/revisar-ia`; panel admin con botón ✨ por ítem +
+      "Revisar todas con IA" (auto-aprueba solo confianza ≥0.8). +4 tests (136 verdes). Diseño:
+      [moderacion-ia-humana.md](moderacion-ia-humana.md).
+- [x] **Home (2026-08-15):** botón "Ingresar" (comprador → /perfil · comercio → /mi-comercio);
+      "Lo mejor de hoy" oculta filas en 0.
+- [x] **Valor para el comprador (2026-08-15):** indicador **"Abierto/Cerrado ahora"**
+      (`lib/horario.ts`, parser heurístico de texto libre, hora local) en ficha + tarjeta del
+      mapa; **botón Compartir** (Web Share + fallback copiar); filtro **"Abierto ahora"** en el mapa.
+- [x] **Captura de referidos:** `?ref=` se guarda (first-touch) y viaja al alta del comprador.
