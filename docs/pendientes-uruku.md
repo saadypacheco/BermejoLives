@@ -42,6 +42,11 @@
       **Regla:** todo cambio que se haga en prod se replica en QA.
 
 ## 💡 Ideas para explorar (registrar, pensar después)
+- **Moderación de contenido humana + IA.** Todo lo que envían comercios/creadores se revisa
+  antes de publicar: **revisión humana** (panel, rol publicador/moderador) + **botón de
+  revisión con IA** (Gemini, para volumen; asistido → automático por umbral). Construye sobre
+  la cola de moderación y el Gemini que YA existen. Diseño en
+  **[moderacion-ia-humana.md](moderacion-ia-humana.md)**.
 - **Producción de contenido automatizada desde WhatsApp.** Que el comerciante mande
   **texto / audio / fotos / videos** por WhatsApp y todo se guarde en la base (como el
   proyecto **MentorComercial** en `C:\repos\proyectosClaude\MentorComercial`, donde ya se
