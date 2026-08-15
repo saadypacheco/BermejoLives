@@ -13,6 +13,7 @@ import { type FeedItem, precioFmt, vencimientoFmt } from "@/lib/types";
 import { registrarLead } from "@/lib/campo";
 import { distanciaMetros, formatDistancia } from "@/lib/distancia";
 import { GuardarBoton } from "@/components/guardar-boton";
+import { HorarioBadge } from "@/components/horario-badge";
 import { ImageLightbox } from "@/components/image-lightbox";
 
 const CHIPS: { label: string; rubro: string }[] = [
@@ -135,7 +136,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
                 </div>
               </div>
               {sel.descripcion && <p>{sel.descripcion}</p>}
-              {sel.horario && <div className="mcard-line">🕐 {sel.horario}</div>}
+              {sel.horario && <div className="mcard-line">🕐 {sel.horario} <HorarioBadge horario={sel.horario} /></div>}
               <div className="mcard-line star">★ {sel.rating}{distanciaSel != null && <span className="mcard-dist">· 📍 {formatDistancia(distanciaSel)}</span>}</div>
             </div>
           </div>

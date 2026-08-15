@@ -88,6 +88,14 @@
 
 .uk-tools { display: flex; align-items: center; gap: 14px; }
 .uk-pill { border: 1px solid var(--uk-line); background: var(--uk-surface); border-radius: 15px; padding: 11px 15px; color: var(--uk-ink); font-weight: 700; box-shadow: var(--uk-shadow-soft); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+/* Chip Abierto / Cerrado ahora */
+.uk-open { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 999px; white-space: nowrap; line-height: 1.4; }
+.uk-open .uk-open-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.uk-open.is-open { color: #0f7f4e; background: rgba(21,152,94,.13); }
+.uk-open.is-closed { color: #c2410c; background: rgba(245,138,35,.14); }
+.uk-open.is-open .uk-open-dot { box-shadow: 0 0 0 0 rgba(21,152,94,.5); animation: uk-open-pulse 2s infinite; }
+@keyframes uk-open-pulse { 0% { box-shadow: 0 0 0 0 rgba(21,152,94,.5); } 70% { box-shadow: 0 0 0 5px rgba(21,152,94,0); } 100% { box-shadow: 0 0 0 0 rgba(21,152,94,0); } }
+@media (prefers-reduced-motion: reduce) { .uk-open.is-open .uk-open-dot { animation: none; } }
 /* Selector de ciudad */
 .uk-city { position: relative; }
 .uk-city-btn { cursor: pointer; }

@@ -3,6 +3,8 @@ import { UrukuShell } from "@/components/uruku-shell";
 import { MensajeComercioForm } from "@/components/mensaje-comercio-form";
 import { WaLeadLink } from "@/components/wa-lead-link";
 import { GuardarBoton } from "@/components/guardar-boton";
+import { HorarioBadge } from "@/components/horario-badge";
+import { CompartirBoton } from "@/components/compartir-boton";
 import { getComercioBySlug, getProductos, getGaleriaComercio } from "@/lib/data";
 import { GaleriaFicha } from "@/components/galeria-ficha";
 import { VistaLogger } from "@/components/vista-logger";
@@ -60,6 +62,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
               {comercio.direccion && <span><Pin style={{ width: 14, height: 14 }} />{comercio.direccion}</span>}
               <span style={{ color: "var(--uk-orange)" }}>★ {comercio.rating}</span>
               {comercio.modalidad && <span className="uk-pill blue">{MODALIDAD_LABEL[comercio.modalidad] ?? comercio.modalidad}</span>}
+              <HorarioBadge horario={comercio.horario} />
             </div>
           </div>
           <div className="uk-cta">
@@ -68,6 +71,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
             </WaLeadLink>
             <a className="uk-btn-ghost" href={mapsHref} target="_blank" rel="noopener"><Pin style={{ width: 16, height: 16 }} /> Cómo llegar</a>
             <GuardarBoton comercioId={comercio.id} className="uk-btn-ghost" />
+            <CompartirBoton titulo={comercio.nombre} texto={`${comercio.nombre} en URUKU`} className="uk-btn-ghost" />
           </div>
         </div>
 
@@ -87,6 +91,12 @@ export default async function ComercioPage({ params }: { params: { slug: string 
             )}
             {comercio.direccion && (
               <div className="uk-info-row"><span className="ic"><Pin style={{ width: 17, height: 17 }} /></span><div><b>Dirección</b>{comercio.direccion}</div></div>
+            )}
+            {comercio.horario && (
+              <div className="uk-info-row">
+                <span className="ic" aria-hidden>🕐</span>
+                <div><b>Horario</b>{comercio.horario} <HorarioBadge horario={comercio.horario} /></div>
+              </div>
             )}
           </div>
 
