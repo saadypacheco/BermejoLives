@@ -85,3 +85,55 @@ def test_comercios_requiere_admin(client):
     from tests.conftest import comercio_token
     r = client.get("/moderacion/comercios", headers={"Authorization": f"Bearer {comercio_token()}"})
     assert r.status_code == 403
+
+
+# ---- Cola de moderación abierta al publicador (require_moderador) ----
+def _publicador_token():
+    from app.core.auth import make_publicador_token
+    return make_publicador_token("pub@uruku.bo")
+
+
+def test_publicador_puede_ver_cola(client, repo):
+    """El publicador (no solo admin) puede abrir la cola de revisión."""
+    _seed_pendiente(repo)
+    r = client.get(
+        "/moderacion/publicaciones?estado=pendiente",
+        headers={"Authorization": f"Bearer {_publicador_token()}"},
+    )
+    assert r.status_code == 200
+    assert r.json()["total"] == 1
+
+
+def test_publicador_puede_moderar(client, repo):
+    _seed_pendiente(repo)
+    r = client.post(
+        "/moderacion/publicaciones/pub-1",
+        headers={"Authorization": f"Bearer {_publicador_token()}"},
+        json={"estado": "aprobado"},
+    )
+    assert r.status_code == 200
+    assert repo.publicaciones[0]["estado"] == "aprobado"
+    assert repo.publicaciones[0]["moderado_por"] == "pub@uruku.bo"
+
+
+def test_revisar_ia_sin_key_cae_a_humano(client, admin_token):
+    """Sin GEMINI_API_KEY la IA no aprueba a ciegas: devuelve 'dudoso'."""
+    r = client.post(
+        "/moderacion/publicaciones/pub-1/revisar-ia",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"titulo": "Zapatillas Nike", "descripcion": "Talle 42, nuevas"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["veredicto"] in {"aprobar", "rechazar", "dudoso"}
+    assert "motivo" in body
+
+
+def test_revisar_ia_requiere_moderador(client):
+    from tests.conftest import comercio_token
+    r = client.post(
+        "/moderacion/publicaciones/pub-1/revisar-ia",
+        headers={"Authorization": f"Bearer {comercio_token()}"},
+        json={"titulo": "X"},
+    )
+    assert r.status_code == 403

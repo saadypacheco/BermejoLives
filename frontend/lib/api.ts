@@ -65,6 +65,26 @@ export async function moderar(id: string, estado: string, motivo?: string) {
   return res.json();
 }
 
+export type VeredictoIA = {
+  veredicto: "aprobar" | "rechazar" | "dudoso";
+  motivo: string;
+  confianza: number;
+};
+
+/** Asistente IA: sugiere aprobar/rechazar/dudoso. No decide — el moderador confirma. */
+export async function revisarConIA(
+  id: string,
+  titulo: string,
+  descripcion: string | null,
+): Promise<VeredictoIA> {
+  const res = await authFetch(`/moderacion/publicaciones/${id}/revisar-ia`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ titulo, descripcion }),
+  });
+  return res.json();
+}
+
 export type ComercioPorVerificar = {
   id: string;
   nombre: string;

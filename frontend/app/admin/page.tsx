@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  listPendientes, moderar, login, getToken, type PendingPub,
+  listPendientes, moderar, revisarConIA, type VeredictoIA, login, getToken, type PendingPub,
   listComerciosPorVerificar, listTodosComercios, verificarComercio, rechazarComercio,
   editarComercio, type ComercioPorVerificar,
   listSuscripciones, registrarPago, suspenderComercio, activarComercio,
@@ -41,6 +41,7 @@ export default function AdminPage() {
   const [consultasReservalo, setConsultasReservalo] = useState<ConsultaReservalo[]>([]);
   const [solicitudesCambioNumero, setSolicitudesCambioNumero] = useState<SolicitudCambioNumero[]>([]);
   const [loading, setLoading] = useState(false);
+  const [veredictos, setVeredictos] = useState<Record<string, VeredictoIA | "cargando">>({});
 
   useEffect(() => {
     if (getToken()) {
@@ -168,6 +169,31 @@ export default function AdminPage() {
     }
   }
 
+  // La IA sugiere; el moderador confirma con los botones. Nunca aprueba sola.
+  async function revisarIA(p: PendingPub) {
+    setVeredictos((v) => ({ ...v, [p.id]: "cargando" }));
+    try {
+      const r = await revisarConIA(p.id, p.titulo ?? "", p.descripcion);
+      setVeredictos((v) => ({ ...v, [p.id]: r }));
+    } catch {
+      setVeredictos((v) => ({ ...v, [p.id]: { veredicto: "dudoso", motivo: "No se pudo consultar la IA.", confianza: 0 } }));
+    }
+  }
+
+  // Revisa con IA toda la cola y aprueba automáticamente solo lo que la IA marca
+  // "aprobar" con confianza alta; el resto queda para revisión humana.
+  async function revisarTodoIA() {
+    const pendientes = [...items];
+    for (const p of pendientes) {
+      const r = await revisarConIA(p.id, p.titulo ?? "", p.descripcion).catch(() => null);
+      if (r) setVeredictos((v) => ({ ...v, [p.id]: r }));
+      if (r && r.veredicto === "aprobar" && r.confianza >= 0.8) {
+        setItems((prev) => prev.filter((x) => x.id !== p.id));
+        await moderar(p.id, "aprobado").catch(() => {});
+      }
+    }
+  }
+
   if (!authed) {
     return (
       <div className="wrap" style={{ maxWidth: 420, paddingTop: 100 }}>
@@ -267,7 +293,14 @@ export default function AdminPage() {
 
       {tab === "publicaciones" && (
       <div className="panel-card glass">
-        <div className="ph"><h3>Cola de aprobación</h3><span style={{ color: "var(--txt-3)", fontSize: 13 }}>Aprobá, rechazá o pedí cambios</span></div>
+        <div className="ph" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <div><h3>Cola de aprobación</h3><span style={{ color: "var(--txt-3)", fontSize: 13 }}>Aprobá, rechazá o pedí cambios</span></div>
+          {items.length > 0 && (
+            <button className="btn btn-ghost btn-sm" onClick={revisarTodoIA} title="La IA revisa todas y aprueba automáticamente solo las de alta confianza; el resto queda para vos.">
+              ✨ Revisar todas con IA
+            </button>
+          )}
+        </div>
         {loading && <div className="mod-item" style={{ justifyContent: "center", color: "var(--txt-3)" }}>Cargando…</div>}
         {!loading && items.length === 0 && (
           <div className="mod-item" style={{ justifyContent: "center", color: "var(--txt-3)" }}>
@@ -285,8 +318,22 @@ export default function AdminPage() {
                 {p.tiktok_url && <span>🎬 TikTok adjunto</span>}
                 <span>🕒 {new Date(p.created_at).toLocaleString("es-BO")}</span>
               </div>
+              {(() => {
+                const v = veredictos[p.id];
+                if (!v) return null;
+                if (v === "cargando") return <div style={{ marginTop: 8, fontSize: 12, color: "var(--txt-3)" }}>✨ Consultando IA…</div>;
+                const color = v.veredicto === "aprobar" ? "var(--neon)" : v.veredicto === "rechazar" ? "var(--pink)" : "var(--amber)";
+                const label = v.veredicto === "aprobar" ? "✓ IA sugiere aprobar" : v.veredicto === "rechazar" ? "✕ IA sugiere rechazar" : "? IA: revisión humana";
+                return (
+                  <div style={{ marginTop: 8, fontSize: 12, color, border: `1px solid ${color}`, borderRadius: 8, padding: "4px 8px", display: "inline-block" }}>
+                    <b>{label}</b>{v.confianza > 0 && <span style={{ opacity: 0.7 }}> · {Math.round(v.confianza * 100)}%</span>}
+                    {v.motivo && <span style={{ display: "block", color: "var(--txt-3)", marginTop: 2 }}>{v.motivo}</span>}
+                  </div>
+                );
+              })()}
             </div>
             <div className="mod-actions">
+              <button className="mbtn" title="Revisar con IA" onClick={() => revisarIA(p)} disabled={veredictos[p.id] === "cargando"} style={{ fontSize: 16 }}>✨</button>
               <button className="mbtn approve" title="Aprobar" onClick={() => act(p.id, "aprobado")}><Check style={{ width: 18, height: 18 }} /></button>
               <button className="mbtn edit" title="Solicitar cambios" onClick={() => act(p.id, "cambios")}><Edit style={{ width: 18, height: 18 }} /></button>
               <button className="mbtn reject" title="Rechazar" onClick={() => act(p.id, "rechazado")}><X style={{ width: 18, height: 18 }} /></button>

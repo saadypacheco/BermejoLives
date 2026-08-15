@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>URUKU · Bermejo</title>
+  <meta name="description" content="Descubrí comercios, ofertas y novedades de Bermejo con Uruku." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="social-bar">
+    <div class="container social-bar-inner">
+      <div class="social-copy">
+        <strong>URUKU EN REDES</strong>
+        <span>›</span>
+        <span>Ofertas, novedades y tips todos los días</span>
+      </div>
+      <div class="social-links">
+        <span>Seguinos en</span>
+        <a href="#" aria-label="TikTok">♪</a>
+        <a href="#" aria-label="Instagram">◎</a>
+        <a href="#" aria-label="Facebook">f</a>
+        <a href="#" aria-label="WhatsApp">◉</a>
+      </div>
+    </div>
+  </div>
+
+  <header class="site-header">
+    <div class="container header-main">
+      <a href="#" class="brand">
+        <div class="brand-word"><span class="brand-u">U</span>RUKU</div>
+        <small>Descubrí. Ahorrá. Disfrutá Bermejo.</small>
+      </a>
+
+      <form class="search-box" id="searchForm">
+        <span class="search-icon">⌕</span>
+        <input id="searchInput" type="search" placeholder="¿Qué estás buscando?" />
+        <button type="submit">Buscar</button>
+      </form>
+
+      <div class="header-tools">
+        <button class="pill location-pill" id="locationBtn">⌖ Bermejo ˅</button>
+
+        <div class="weather-box">
+          <span class="sun">☀</span>
+          <div>
+            <strong>28°C</strong>
+            <small>Soleado</small>
+          </div>
+        </div>
+
+        <div class="quote-mini">
+          <small>DÓLAR (USD)</small>
+          <strong>Bs 7,42</strong>
+          <span class="positive">+0,15%</span>
+        </div>
+
+        <div class="quote-mini">
+          <small>PESO (ARS)</small>
+          <strong>Bs 1,00</strong>
+          <span class="negative">-0,02%</span>
+        </div>
+      </div>
+    </div>
+
+    <nav class="category-nav">
+      <div class="container category-nav-scroll">
+        <button class="nav-item active" data-category="Todos">⌘ Todos</button>
+        <button class="nav-item" data-category="Restaurantes">♜ Restaurantes</button>
+        <button class="nav-item" data-category="Supermercados">🛒 Supermercados</button>
+        <button class="nav-item" data-category="Ropa">♕ Ropa</button>
+        <button class="nav-item" data-category="Salud">♡ Salud</button>
+        <button class="nav-item" data-category="Ferretería">⚒ Ferretería</button>
+        <button class="nav-item" data-category="Belleza">♙ Belleza</button>
+        <button class="nav-item" data-category="Mascotas">♧ Mascotas</button>
+        <button class="nav-item" data-category="Más">Más ˅</button>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-fade"></div>
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <h1>Descubrí <span>Bermejo</span><br>como nunca antes</h1>
+          <p>Explorá comercios locales, ofertas increíbles y todo lo que necesitás cerca de vos.</p>
+
+          <div class="hero-actions">
+            <a href="#categorias" class="btn btn-primary">Explorá el mapa <span>⌁</span></a>
+            <a href="#ofertas" class="btn btn-secondary">🏷 Ofertas del día</a>
+          </div>
+
+          <div class="people-proof">
+            <div class="avatars">
+              <span>SP</span><span>AM</span><span>LR</span><span>JF</span>
+            </div>
+            <div>Miles de personas ya<br>descubren Bermejo con Uruku</div>
+            <span class="heart">♡</span>
+          </div>
+        </div>
+
+        <aside class="quote-card">
+          <div class="quote-card-head">
+            <h3>Cotización en tiempo real</h3>
+            <span class="chart-badge">↗</span>
+          </div>
+          <div class="quote-grid">
+            <div>
+              <small>DÓLAR (USD)</small>
+              <strong>Bs 7,42</strong>
+              <span class="positive">+0,15%</span>
+              <div class="spark positive-line">╱╲╱╲╱╲</div>
+            </div>
+            <div>
+              <small>PESO (ARS)</small>
+              <strong>Bs 1,00</strong>
+              <span class="negative">-0,02%</span>
+              <div class="spark negative-line">╲╱╲╱╲╱</div>
+            </div>
+          </div>
+          <div class="updated">Actualizado hace 1 minuto</div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="container trust-strip">
+      <article>
+        <div class="trust-icon green">🏷</div>
+        <div><strong>Ofertas todos los días</strong><span>Descuentos reales cerca tuyo.</span></div>
+      </article>
+      <article>
+        <div class="trust-icon blue">🛡</div>
+        <div><strong>Comercios verificados</strong><span>Negocios confiables de tu ciudad.</span></div>
+      </article>
+      <article>
+        <div class="trust-icon orange">★</div>
+        <div><strong>Novedades locales</strong><span>Lo nuevo, primero acá.</span></div>
+      </article>
+      <article>
+        <div class="trust-icon violet">♙</div>
+        <div><strong>Apoyemos lo local</strong><span>Juntos hacemos crecer Bermejo.</span></div>
+      </article>
+    </section>
+
+    <section class="container section" id="ofertas">
+      <div class="section-head">
+        <h2>Ofertas destacadas</h2>
+        <a href="#">Ver todas →</a>
+      </div>
+
+      <div class="offers-grid">
+        <article class="offer-card offer-super">
+          <span class="tag green-tag">SUPERMERCADO</span>
+          <div class="offer-body">
+            <h3>OFERTAS<br>DEL DÍA 🔥</h3>
+            <strong>Hasta 30% OFF</strong>
+          </div>
+        </article>
+
+        <article class="offer-card offer-food">
+          <span class="tag orange-tag">RESTAURANTE</span>
+          <div class="offer-body">
+            <h3>20% OFF</h3>
+            <p>en tu primera visita</p>
+          </div>
+        </article>
+
+        <article class="offer-card offer-fashion">
+          <span class="tag violet-tag">ROPA</span>
+          <div class="offer-body">
+            <h3>NUEVA<br>COLECCIÓN</h3>
+            <strong>Hasta 25% OFF</strong>
+          </div>
+        </article>
+
+        <article class="offer-card offer-health">
+          <span class="tag teal-tag">SALUD</span>
+          <div class="offer-body">
+            <h3>CUIDÁ<br>TU SALUD</h3>
+            <strong>Hasta 20% OFF</strong>
+          </div>
+        </article>
+      </div>
+
+      <div class="dots"><span class="active"></span><span></span><span></span><span></span><span></span></div>
+    </section>
+
+    <section class="container section" id="categorias">
+      <h2>Explorá por categoría</h2>
+      <div class="category-cards">
+        <a href="#"><span>♜</span><b>Restaurantes</b></a>
+        <a href="#"><span>🛒</span><b>Supermercados</b></a>
+        <a href="#"><span>♕</span><b>Ropa</b></a>
+        <a href="#"><span>♡</span><b>Salud</b></a>
+        <a href="#"><span>⚒</span><b>Ferretería</b></a>
+        <a href="#"><span>♙</span><b>Belleza</b></a>
+        <a href="#"><span>♧</span><b>Mascotas</b></a>
+        <a href="#"><span>⌘</span><b>Más</b></a>
+      </div>
+    </section>
+
+    <section class="container highlight-grid">
+      <article class="mini-panel today-panel">
+        <h3>Lo mejor de hoy en Bermejo</h3>
+        <div class="stat-row"><span>🏷 Ofertas nuevas</span><strong>+120</strong></div>
+        <div class="stat-row"><span>🛡 Comercios activos</span><strong>+350</strong></div>
+        <div class="stat-row"><span>★ Novedades del día</span><strong>+80</strong></div>
+        <a href="#" class="panel-btn">Ver novedades <span>→</span></a>
+      </article>
+
+      <article class="mini-panel discover-panel">
+        <div class="discover-copy">
+          <h3>Descubrí más.<br><span>Ahorrá siempre.</span></h3>
+          <p>Compará precios, encontrá promociones y elegí lo mejor para vos.</p>
+          <div class="discover-icons">
+            <div><span>◴</span><small>Actualizado<br>todos los días</small></div>
+            <div><span>⌖</span><small>Cerca tuyo,<br>siempre</small></div>
+            <div><span>ϟ</span><small>Fácil, rápido<br>y útil</small></div>
+            <div><span>♡</span><small>100% local,<br>100% Bermejo</small></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="mini-panel merchant-panel">
+        <div>
+          <h3>¿Tenés un comercio?</h3>
+          <p>Sumate a Uruku y llegá a más personas.</p>
+          <ul>
+            <li>Aparecé en el mapa</li>
+            <li>Más visibilidad</li>
+            <li>Sin complicaciones</li>
+          </ul>
+          <a href="#" class="panel-btn dark">Publicá tu negocio <span>→</span></a>
+        </div>
+        <div class="store-illustration">
+          <div class="pin">●</div>
+          <div class="awning"></div>
+          <div class="store-door"></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="container section simple-section">
+      <h2>Así de simple</h2>
+      <div class="steps">
+        <article>
+          <span class="step-icon">⌕</span>
+          <span class="step-num">1</span>
+          <div><strong>Buscá</strong><p>Encontrá lo que necesitás.</p></div>
+          <span class="arrow">›</span>
+        </article>
+        <article>
+          <span class="step-icon">🛒</span>
+          <span class="step-num blue-num">2</span>
+          <div><strong>Explorá</strong><p>Compará opciones, mirá fotos y ofertas.</p></div>
+          <span class="arrow">›</span>
+        </article>
+        <article>
+          <span class="step-icon">♡</span>
+          <span class="step-num violet-num">3</span>
+          <div><strong>Guardá</strong><p>Guardá tus favoritos para volver después.</p></div>
+          <span class="arrow">›</span>
+        </article>
+        <article>
+          <span class="step-icon">👜</span>
+          <span class="step-num orange-num">4</span>
+          <div><strong>Disfrutá</strong><p>Disfrutá ofertas exclusivas en tu ciudad.</p></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="container newsletter">
+      <div class="mail-art">✉</div>
+      <div class="newsletter-copy">
+        <h3>No te pierdas nada</h3>
+        <p>Recibí ofertas, novedades y tips de Bermejo directo en tu correo.</p>
+      </div>
+      <form id="newsletterForm">
+        <input id="newsletterEmail" type="email" placeholder="Tu correo electrónico" required />
+        <button type="submit">Suscribirme</button>
+      </form>
+      <div class="paper-plane">➤</div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-grid">
+      <div>
+        <div class="brand footer-brand">
+          <div class="brand-word"><span class="brand-u">U</span>RUKU</div>
+          <small>Descubrí. Ahorrá. Disfrutá Bermejo.</small>
+        </div>
+        <p>La plataforma local que conecta a compradores y comercios en Bermejo y en muchas ciudades más.</p>
+        <div class="footer-socials"><a href="#">♪</a><a href="#">◎</a><a href="#">f</a><a href="#">◉</a></div>
+      </div>
+      <div>
+        <h4>Navegación</h4>
+        <a href="#">Inicio</a><a href="#">Mapa</a><a href="#">Ofertas</a><a href="#">Categorías</a><a href="#">Comercios</a><a href="#">Contacto</a>
+      </div>
+      <div>
+        <h4>Para comercios</h4>
+        <a href="#">Publicar comercio</a><a href="#">Planes y beneficios</a><a href="#">Cómo funciona</a><a href="#">Centro de ayuda</a>
+      </div>
+      <div>
+        <h4>Información</h4>
+        <a href="#">Preguntas frecuentes</a><a href="#">Términos y condiciones</a><a href="#">Política de privacidad</a>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <span>© 2026 Uruku. Todos los derechos reservados.</span>
+      <span>Hecho con ♥ para nuestra comunidad.</span>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

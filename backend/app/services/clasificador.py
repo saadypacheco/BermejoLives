@@ -46,6 +46,54 @@ def clasificar(titulo: str, descripcion: str | None, categorias: list[dict]) -> 
     return None
 
 
+def moderar_publicacion(titulo: str, descripcion: str | None) -> dict:
+    """Revisión IA de contenido antes de publicar (asistente del moderador humano).
+
+    Devuelve ``{"veredicto": "aprobar"|"rechazar"|"dudoso", "motivo": str, "confianza": float}``.
+    Sin ``GEMINI_API_KEY`` (o si el modelo falla) devuelve veredicto ``"dudoso"`` para
+    que la publicación caiga a revisión humana — nunca aprueba automáticamente a ciegas.
+    """
+    if not settings.gemini_api_key:
+        return {"veredicto": "dudoso", "motivo": "IA no configurada; revisión humana.", "confianza": 0.0}
+
+    prompt = (
+        "Sos moderador de contenido de URUKU, un directorio de comercios locales de "
+        "Bermejo (Bolivia). Revisá esta publicación y decidí si puede publicarse.\n"
+        "RECHAZÁ si hay: contenido ofensivo o violento, spam, estafa evidente, venta de "
+        "productos ilegales (drogas, armas), datos de contacto falsos, o si el título y la "
+        "descripción no tienen ningún sentido. En caso de duda razonable, marcá 'dudoso' "
+        "para que lo vea una persona. Si es un producto/comercio normal, 'aprobar'.\n\n"
+        f"Título: {titulo}\nDescripción: {descripcion or '-'}\n\n"
+        "Devolvé SOLO un JSON (sin markdown): "
+        '{"veredicto": "aprobar"|"rechazar"|"dudoso", "motivo": "breve, máx 15 palabras", '
+        '"confianza": 0.0-1.0}'
+    )
+    try:
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
+        )
+        r = httpx.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=20)
+        r.raise_for_status()
+        texto = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+        texto = texto.strip("`")
+        if texto.lower().startswith("json"):
+            texto = texto[4:].strip()
+        data = json.loads(texto)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("moderar_publicacion.error", error=str(exc))
+        return {"veredicto": "dudoso", "motivo": "No se pudo consultar la IA; revisión humana.", "confianza": 0.0}
+
+    veredicto = str(data.get("veredicto", "dudoso")).strip().lower()
+    if veredicto not in {"aprobar", "rechazar", "dudoso"}:
+        veredicto = "dudoso"
+    try:
+        confianza = max(0.0, min(1.0, float(data.get("confianza", 0.0))))
+    except (TypeError, ValueError):
+        confianza = 0.0
+    return {"veredicto": veredicto, "motivo": str(data.get("motivo", ""))[:200], "confianza": confianza}
+
+
 def generar_texto_comercio(nombre: str, que_vende: str, rubros: list[dict]) -> dict | None:
     """A partir de "qué vendés" en texto libre, genera una descripción de
     perfil + infiere el rubro más adecuado. None si no hay GEMINI_API_KEY o falla

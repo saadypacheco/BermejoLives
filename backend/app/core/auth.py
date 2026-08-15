@@ -128,6 +128,20 @@ def require_publicador(creds: HTTPAuthorizationCredentials | None = Depends(_bea
     return claims
 
 
+def require_moderador(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
+    """Panel de moderación de contenido: admin, moderador o publicador.
+    Amplía el acceso de la cola de revisión al publicador (no solo admin)."""
+    if not creds:
+        raise HTTPException(status_code=401, detail="No autenticado")
+    try:
+        claims = _decode(creds.credentials)
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Token inválido o expirado") from exc
+    if claims.get("rol") not in {"admin", "moderador", "publicador"}:
+        raise HTTPException(status_code=403, detail="Requiere rol de moderación")
+    return claims
+
+
 def require_comercio(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
     """Exige Bearer de un comercio logueado; devuelve sus claims (incluye comercio_id)."""
     if not creds:
