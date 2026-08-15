@@ -87,7 +87,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
               <div><b>WhatsApp</b>+{comercio.whatsapp}</div>
             </div>
             {comercio.telefono && (
-              <div className="uk-info-row"><span className="ic"><Phone style={{ width: 17, height: 17 }} /></span><div><b>Teléfono</b>{comercio.telefono}</div></div>
+              <div className="uk-info-row"><span className="ic"><Phone style={{ width: 17, height: 17 }} /></span><div><b>Teléfono</b><a href={`tel:${comercio.telefono.replace(/[^\d+]/g, "")}`}>{comercio.telefono}</a></div></div>
             )}
             {comercio.direccion && (
               <div className="uk-info-row"><span className="ic"><Pin style={{ width: 17, height: 17 }} /></span><div><b>Dirección</b>{comercio.direccion}</div></div>
