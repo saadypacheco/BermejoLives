@@ -12,6 +12,7 @@ import { type Ciudad } from "@/lib/types";
 import { type FeedItem, precioFmt, vencimientoFmt } from "@/lib/types";
 import { registrarLead } from "@/lib/campo";
 import { distanciaMetros, formatDistancia } from "@/lib/distancia";
+import { abiertoAhora } from "@/lib/horario";
 import { GuardarBoton } from "@/components/guardar-boton";
 import { HorarioBadge } from "@/components/horario-badge";
 import { ImageLightbox } from "@/components/image-lightbox";
@@ -29,6 +30,7 @@ const wa = (s?: string | null) => (s || "").replace(/\D/g, "");
 export function MobileHome({ comercios, feed, soloOfertas = false, center, ciudad, ciudades, embedded = false }: { comercios: ComercioMapa[]; feed: FeedItem[]; soloOfertas?: boolean; center?: [number, number] | null; ciudad?: Ciudad | null; ciudades?: Ciudad[]; embedded?: boolean }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
+  const [soloAbiertos, setSoloAbiertos] = useState(false);
   const [sel, setSel] = useState<ComercioMapa | null>(null);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
   const [miUbicacion, setMiUbicacion] = useState<{ lat: number; lng: number } | null>(null);
@@ -50,6 +52,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
   const offerSlugs = new Set(feed.map((f) => f.comercio_slug));
   let filtered = cat ? comercios.filter((c) => c.rubro_slug === cat) : comercios;
   if (soloOfertas) filtered = filtered.filter((c) => offerSlugs.has(c.slug));
+  if (soloAbiertos) filtered = filtered.filter((c) => abiertoAhora(c.horario).estado === "abierto");
   const ofertasNegocio = sel ? feed.filter((f) => f.comercio_slug === sel.slug) : [];
 
   // Mayor % de descuento activo por comercio, para el badge del pin en el mapa
@@ -92,12 +95,22 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
 
       {/* Chips de categoría (texto simple, filtran el mapa) */}
       <div className="mchips">
+        <button type="button" className={`mchip mchip-open ${soloAbiertos ? "active" : ""}`} onClick={() => { setSoloAbiertos((v) => !v); setSel(null); }}>
+          🟢 Abierto ahora
+        </button>
         {CHIPS.map((c) => (
           <button type="button" key={c.label} className={`mchip ${cat === c.rubro ? "active" : ""}`} onClick={() => { setCat(c.rubro); setSel(null); }}>
             {c.label}
           </button>
         ))}
       </div>
+
+      {soloAbiertos && (
+        <div className="mfilter-note">
+          <span>🟢 Mostrando {filtered.length} {filtered.length === 1 ? "negocio abierto" : "negocios abiertos"} ahora</span>
+          <button type="button" onClick={() => setSoloAbiertos(false)} style={{ background: "none", border: 0, color: "inherit", cursor: "pointer", font: "inherit" }}>Ver todos ✕</button>
+        </div>
+      )}
 
       {soloOfertas && (
         <div className="mfilter-note">

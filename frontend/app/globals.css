@@ -294,6 +294,7 @@
 .mchips::-webkit-scrollbar { display: none; }
 .mchip { white-space: nowrap; padding: 5px 11px; border-radius: 999px; background: transparent; border: 1px solid var(--stroke); color: var(--txt-2); font-size: 13px; font-weight: 600; flex-shrink: 0; }
 .mchip.active { background: rgba(57,255,158,.12); border-color: rgba(57,255,158,.5); color: var(--neon); }
+.mchip-open.active { background: rgba(21,152,94,.16); border-color: rgba(21,152,94,.55); color: #15985e; }
 
 /* Mapa: crece para llenar el espacio entre los chips y las ofertas */
 .mmap { position: relative; flex: 1 1 auto; min-height: 0; }
