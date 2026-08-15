@@ -73,10 +73,15 @@
   self-host (JWT firmado con el `PGRST_JWT_SECRET` de Reservalo), igual que URUKU.
 - **Frontend**: dejar de leer datos con supabase-js (anon); todo por el backend FastAPI.
 
-### Fase D · Realtime del chat → polling (o diferir)
-*Único uso de realtime (chat comprador↔vendedor).*
-- Reemplazar `supabase.channel(...)` por **polling** cada ~3-5s contra el backend (como el polling
-  de confirmación de URUKU), **o diferir** el chat para el lanzamiento si no es crítico.
+### Fase D · Chat → RETIRADO ✅ (2026-08-15)
+*Se resolvió eliminándolo, no migrándolo.* El chat era el único uso de realtime y de las tablas
+`chats`/`mensajes_chat` (migración 004, ya excluida del self-host). Se retiró por completo:
+backend (`routers/chat.py`, bandeja `/admin/chats*`, KPI `top_productos_consultados`→`[]`),
+frontend (`ChatWidget`, `hooks/useChat`, `app/admin/consultas`) y tests. El contacto
+comprador↔vendedor queda **por WhatsApp**. Commit en el repo Reservalo.
+
+> Pendiente relacionado de Fase C: **favoritos/wishlist** (`hooks/useWishlist`) todavía habla
+> directo a Supabase → mover a un endpoint del backend self-host.
 
 ### Fase E · Reservas / carrito con el comprador de URUKU
 *Lo que destacaste. En gran parte ya existe; se completa con B.*
