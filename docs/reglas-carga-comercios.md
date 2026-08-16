@@ -5,6 +5,11 @@
 > Aplica a `/autoregistro` (dueño), `/publicador`, y sobre todo al **agente de campo**
 > (que recorre Bermejo cargando locales — ahí la velocidad importa).
 
+> **DECISIÓN (2026-08-16): sin taxonomías por ahora.** Se descarta la meta-clasificación
+> por sub-rubros/atributos (Parte 2, Opción C). Se va con lo simple: **rubro(s) de lista
+> cerrada + "qué vende" en texto/voz libre**, y la IA clasifica/embebe. La Parte 2 queda
+> como evaluación registrada por si se retoma. Reglas de calidad (Parte 1) siguen vigentes.
+
 ## Parte 1 · Reglas de calidad (qué debe cumplir cada ficha)
 
 **Obligatorios (sin esto no se publica):**
