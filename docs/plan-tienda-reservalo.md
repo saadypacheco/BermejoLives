@@ -5,6 +5,15 @@
 > disco de URUKU**, y las **reservas/carrito** funcionando. Todo cambio se replica en **QA**.
 > Base de la investigación: informes de mapeo de ambos repos (2026-08-13).
 
+> ## ✅ ESTADO 2026-08-15: Supabase Cloud ELIMINADO (código)
+> El backend tiene **cero `db.auth`** (gotrue) y **cero `db.storage`**; el frontend tiene
+> **cero `supabase.from`/`.auth`/`.storage`** directos. El cliente `supabase` que resta habla
+> contra **PostgREST self-host** (`db.tienda.${DOMAIN}`), no contra la nube. Commits en el repo
+> Reservalo: **Supabase-out (A) auth admin** · **(B) auth frontend** · **(C) datos-directo al
+> backend** · **(D) storage a disco** · **(E) alta mayorista**. Falta solo **pushear + deploy**
+> (QA→prod) y el **bootstrap del admin** (`UPDATE usuarios SET rol='admin' WHERE id='<usuario_id URUKU>'`;
+> el admin de plataforma con token URUKU rol=admin entra directo). El chat se retiró (Fase D).
+
 ## Cómo está hoy (resumen del mapeo)
 
 **URUKU**
