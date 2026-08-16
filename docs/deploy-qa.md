@@ -96,9 +96,17 @@ hay que escribir el `.sql` inverso. Por eso QA existe: probá acá primero.
 
 ## Reservalo en QA
 Reservalo es su propio repo/stack (`reservalo-frontend/-backend`). Se sirve en
-`encontralo.store/tienda`. Deploy análogo desde su carpeta:
+`encontralo.store/tienda`. **Su compose es `docker-compose.yml`** (NO `.prod.yml`,
+ese es el de URUKU) y está parametrizado por `${DOMAIN}` (que sale del `.env`:
+`DOMAIN=encontralo.store`). Deploy desde su carpeta:
 ```bash
 cd /docker/reservalo
 git pull
-docker compose -f docker-compose.prod.yml --env-file .env up -d --build frontend
+# Rebuild frontend Y backend (la salida de Supabase tocó ambos). El compose
+# ya trae el volumen reservalo_fotos y las envs FOTOS_* para el storage a disco.
+docker compose --env-file .env up -d --build backend frontend
 ```
+Tras el deploy sin-Supabase: el panel `encontralo.store/tienda/admin` pide login de
+URUKU; para entrar como dueño-comprador, marcá tu usuario una vez:
+`UPDATE usuarios SET rol='admin' WHERE id='<usuario_id de URUKU>';` (el admin de
+plataforma con token URUKU rol=admin entra directo).
