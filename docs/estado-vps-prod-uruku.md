@@ -44,8 +44,12 @@ Registrados hasta **12/08/2027**: `uruku.bo` (principal), `uruku.com.bo`, `urucu
 - [x] **Stack URUKU DESPLEGADO Y VIVO** (2026-08-13): `uruku.bo` 200, `api.uruku.bo/health`
       ok+connected, `db.uruku.bo` responde. HTTPS válido. Base vacía (aún sin comercios).
 - [ ] DNS de `waha.uruku.bo` (faltaba → único cert que erraba; WhatsApp bridge, opcional).
-- [ ] **Reservalo** en `/docker/reservalo` → `uruku.bo/tienda` (basePath `/tienda`,
-      parametrizado por `DOMAIN`, misma PWA). Ver cambios pendientes del repo Reservalo.
+- [x] **Reservalo DESPLEGADO** (2026-08-16) en `/docker/reservalo` → `uruku.bo/tienda`,
+      **self-host completo, sin Supabase Cloud** (base propia Postgres+PostgREST, auth por
+      token de URUKU, storage a disco). `api.tienda`/`db.tienda` con cert OK. Esquema completo
+      (26 tablas). Integración URUKU→tienda conectada (`TIENDA_API_*` en el backend de URUKU).
+      Fix clave del init: se excluyó `012_agente_bot.sql` (dependía del chat retirado y
+      abortaba las migraciones 013+). Ver [deploy-prod-nuevo-vps.md](deploy-prod-nuevo-vps.md) Paso 5.
 - [ ] Migrar el único comercio (re-registro en `uruku.bo/autoregistro`).
 - [ ] Cargar redes de URUKU en `uruku.bo/publicador`.
 - [ ] Flip DNS a Proxied + Full (strict); redirect 301 de los 3 dominios secundarios.
