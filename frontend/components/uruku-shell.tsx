@@ -4,7 +4,8 @@ import { ThemeToggle, ThemeNoFlash } from "@/components/uruku-theme";
 import { CitySelector } from "@/components/city-selector";
 import { IngresarMenu } from "@/components/ingresar-menu";
 import { BottomNav } from "@/components/bottom-nav";
-import { Ic, CATS, SocialLinks, money } from "@/components/uruku-ui";
+import { CatNav } from "@/components/catnav";
+import { Ic, SocialLinks, money } from "@/components/uruku-ui";
 import { getClima, getCotizaciones, getRedes } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
 
@@ -94,16 +95,7 @@ export async function UrukuShell({
           </div>
         </div>
 
-        {showCatnav && (
-          <nav className="uk-catnav">
-            <div className="uk-container uk-catnav-scroll">
-              <Link href="/buscar" className={activeCat === "Todos" ? "active" : ""}>Todos</Link>
-              {CATS.filter((c) => c.q).map((c) => (
-                <Link key={c.label} href={`/buscar?q=${c.q}`} className={activeCat === c.label ? "active" : ""}>{c.label}</Link>
-              ))}
-            </div>
-          </nav>
-        )}
+        {showCatnav && <CatNav active={activeCat} />}
       </header>
 
       <main className={`${fill ? "uk-fill-main" : ""}${mainClass ? " " + mainClass : ""}`.trim() || undefined}>{children}</main>

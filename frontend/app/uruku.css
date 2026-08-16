@@ -129,8 +129,12 @@
 
 /* ---- Nav de categorías (texto) ---- */
 .uk-catnav { border-top: 1px solid var(--uk-line); }
-.uk-catnav-scroll { display: flex; gap: 6px; align-items: center; overflow-x: auto; scrollbar-width: none; }
+.uk-catnav-wrap { display: flex; align-items: center; gap: 2px; }
+.uk-catnav-scroll { flex: 1; min-width: 0; display: flex; gap: 6px; align-items: center; overflow-x: auto; scrollbar-width: none; scroll-behavior: smooth; }
 .uk-catnav-scroll::-webkit-scrollbar { display: none; }
+/* Flechas del carrusel de categorías (la derecha vuelve al inicio al llegar al final). */
+.uk-catnav-arrow { flex-shrink: 0; border: 0; background: transparent; color: var(--uk-ink-soft); cursor: pointer; font-size: 24px; line-height: 1; padding: 0 8px; align-self: stretch; display: flex; align-items: center; }
+.uk-catnav-arrow:hover { color: var(--uk-green); }
 .uk-catnav a { color: var(--uk-ink); padding: 14px 16px; white-space: nowrap; border-bottom: 2px solid transparent; font-size: 14px; }
 .uk-catnav a.active, .uk-catnav a:hover { color: var(--uk-green); border-bottom-color: var(--uk-green); font-weight: 700; }
 
