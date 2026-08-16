@@ -65,7 +65,7 @@ export async function UrukuShell({
         <div className="uk-container uk-header-main">
           <Link href="/" className="uk-brand">
             <div className="uk-brand-word"><span className="uk-brand-u">U</span>RUKU</div>
-            <small>Descubrí. Ahorrá. Disfrutá {nombre}.</small>
+            <small>Descubrí. <span className="uk-red">Ahorrá.</span> Disfrutá {nombre}.</small>
           </Link>
 
           <form className="uk-search" action="/buscar" method="get">
@@ -106,7 +106,7 @@ export async function UrukuShell({
             <div>
               <div className="uk-brand uk-footer-brand">
                 <div className="uk-brand-word"><span className="uk-brand-u">U</span>RUKU</div>
-                <small>Descubrí. Ahorrá. Disfrutá {nombre}.</small>
+                <small>Descubrí. <span className="uk-red">Ahorrá.</span> Disfrutá {nombre}.</small>
               </div>
               <p>La plataforma local que conecta a compradores y comercios en {nombre} y en muchas ciudades más.</p>
               <SocialLinks redes={redes} cls="uk-footer-socials" />

@@ -4,30 +4,31 @@
    Sin fuentes ni imágenes externas (conexión lenta en Bermejo → todo local).
    =========================================================================== */
 .uk {
-  /* Acentos (iguales en ambos temas) */
-  --uk-green: #15985e;
-  --uk-green-2: #0f7f4e;
-  --uk-green-grad: linear-gradient(135deg, #20a86a, #07814f);
-  --uk-orange: #f58a23;
+  /* Acentos de marca URUKU (verde pino + rojo llama, del logo). Iguales en ambos temas. */
+  --uk-green: #177a49;
+  --uk-green-2: #0f5836;
+  --uk-green-grad: linear-gradient(135deg, #1f9256, #0f5b38);
+  --uk-red: #e0392b;              /* rojo del logo (la llama y los puntos) */
+  --uk-orange: #e0392b;           /* alias: el sitio no usa naranja, es el rojo de marca */
   --uk-blue: #2e84d8;
   --uk-violet: #9b54d8;
   --uk-pos: #0eaa64;
-  --uk-neg: #f0344d;
+  --uk-neg: #e0392b;
   --uk-radius: 20px;
 
-  /* Tema CLARO (por defecto) */
-  --uk-page: radial-gradient(circle at 20% 0%, rgba(225,240,234,.45), transparent 30%),
-             linear-gradient(180deg, #f7faf8 0%, #f5f6f2 60%, #f8f8f6 100%);
+  /* Tema CLARO (por defecto) — fondo CREMA como el logo */
+  --uk-page: radial-gradient(circle at 20% 0%, rgba(23,122,73,.06), transparent 32%),
+             linear-gradient(180deg, #f7f2e7 0%, #f4eee1 60%, #f8f4ea 100%);
   --uk-surface: #ffffff;
-  --uk-surface-2: #f8f9f6;
-  --uk-ink: #0d2740;
-  --uk-ink-soft: #4a5e68;
-  --uk-line: #e7ecef;
-  --uk-header: rgba(255,255,255,.94);
-  --uk-shadow: 0 16px 45px rgba(27,52,70,.10);
-  --uk-shadow-soft: 0 8px 24px rgba(27,52,70,.08);
-  --uk-chip: #eef7f1;
-  --uk-hero-fade: linear-gradient(90deg, rgba(246,249,247,.98) 0%, rgba(246,249,247,.86) 24%, rgba(246,249,247,.10) 55%, rgba(246,249,247,.02) 100%);
+  --uk-surface-2: #f6f0e4;
+  --uk-ink: #143a2b;
+  --uk-ink-soft: #5a6b60;
+  --uk-line: #e8e2d4;
+  --uk-header: rgba(250,246,238,.94);
+  --uk-shadow: 0 16px 45px rgba(20,58,43,.10);
+  --uk-shadow-soft: 0 8px 24px rgba(20,58,43,.08);
+  --uk-chip: #eaf3ec;
+  --uk-hero-fade: linear-gradient(90deg, rgba(247,242,231,.98) 0%, rgba(247,242,231,.86) 24%, rgba(247,242,231,.10) 55%, rgba(247,242,231,.02) 100%);
 
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--uk-ink);
@@ -80,6 +81,7 @@
 .uk-brand-u { color: var(--uk-green); position: relative; }
 .uk-brand-u::after { content:""; position:absolute; width:6px; height:6px; border-radius:50%; background:var(--uk-orange); top:-3px; left:8px; }
 .uk-brand small { display: block; margin-top: 6px; color: var(--uk-ink-soft); font-size: 12px; font-weight: 500; }
+.uk-red { color: var(--uk-red); font-weight: 700; }
 
 .uk-search { display: flex; align-items: center; background: var(--uk-surface); border: 1px solid var(--uk-line); box-shadow: var(--uk-shadow-soft); border-radius: 16px; overflow: hidden; min-height: 52px; }
 .uk-search svg { margin-left: 16px; width: 20px; height: 20px; color: var(--uk-ink-soft); flex-shrink: 0; }
