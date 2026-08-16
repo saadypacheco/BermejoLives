@@ -37,8 +37,9 @@ contenedores y su base **aislados**. Traefik reparte por **dominio**.
 │   ├── .env
 │   └── backend/.env
 ├── reservalo/          ← Reservalo (uruku.bo/tienda) · repo reservalo
-│   ├── docker-compose.prod.yml
-│   └── .env
+│   ├── docker-compose.yml   ← (NO .prod.yml; su compose se llama docker-compose.yml)
+│   ├── .env                 ← DOMAIN + secretos de la base self-host
+│   └── backend/.env         ← SUPABASE_URL self-host + JWT_SECRET compartido con URUKU
 └── <otrositio>/        ← futuro sitio (otro dominio)
 ```
 
@@ -137,6 +138,7 @@ En Cloudflare, zona `uruku.bo`, creá registros **A** → IP del VPS, en **"DNS 
 | A | `db` | IP del VPS | DNS only |
 | A | `tienda` | IP del VPS | DNS only |
 | A | `api.tienda` | IP del VPS | DNS only |
+| A | `db.tienda` | IP del VPS | DNS only |
 | A | `waha` | IP del VPS | DNS only (opcional) |
 
 **Redirect de los otros 3 dominios** (`uruku.com.bo`, `urucu.bo`, `urucu.com.bo`):
@@ -209,43 +211,57 @@ docker compose -f docker-compose.prod.yml --env-file .env up -d --build
 ```
 Traefik pide los certificados de `uruku.bo`, `www`, `api`, `db` (y `waha`) solos.
 
-## Paso 5 · Stack Reservalo (path `/tienda`, misma PWA)
+## Paso 5 · Stack Reservalo (path `/tienda`, base self-host, SIN Supabase)
 
-> ✅ **Cambios de código YA hechos** (commit `352f07a` en repo `reservalo` + `03abfe1`
-> en URUKU): `basePath`/`assetPrefix` → `/tienda`; compose parametrizado por `${DOMAIN}`
-> (`Host(${DOMAIN}) && PathPrefix(/tienda)` priority 1000, API `api.tienda.${DOMAIN}`,
-> 301 `tienda.${DOMAIN}` → `${DOMAIN}/tienda`); `SITE_URL`/`NEXT_PUBLIC_API_URL`/
-> `NEXT_PUBLIC_ENCONTRALO_URL` parametrizados; cross-link URUKU `/reservalo`→`/tienda`.
-> El **mismo código** sirve prod (`uruku.bo/tienda`) y QA (`encontralo.store/tienda`) según `DOMAIN`.
+> ✅ **Estado 2026-08-16:** Reservalo ya **no usa Supabase Cloud**. Trae su **propia base
+> self-host** (Postgres + PostgREST) dentro del compose, **auth por el token de URUKU**
+> (mismo `jwt_secret`, mismo origen), **imágenes/comprobantes a disco** (`/fotos`, volumen
+> `reservalo_fotos`) y el **chat retirado**. El **mismo código** sirve prod y QA según `DOMAIN`.
+> Su compose se llama **`docker-compose.yml`** (no `.prod.yml`).
 
-**DNS (Cloudflare):** agregar `tienda` y `api.tienda` (A → IP del VPS, gris) — ya están en el Paso 3.
+**DNS (Cloudflare):** además de `tienda` y `api.tienda`, agregá **`db.tienda`** (A → IP del
+VPS, gris). Confirmá: `nslookup api.tienda.uruku.bo` y `nslookup db.tienda.uruku.bo`.
+
+**Prerequisito:** URUKU ya desplegado → existe `/docker/uruku/backend/.env` con su `JWT_SECRET`
+(Reservalo comparte ese valor para validar el token del comprador).
 
 ```bash
 cd /docker
 git clone https://github.com/saadypacheco/reservalo.git reservalo
 cd /docker/reservalo
-```
 
-**`.env` de Reservalo** (`/docker/reservalo/.env`):
-```
-DOMAIN=uruku.bo
-NEXT_PUBLIC_SUPABASE_URL=...        # ver "Base de Reservalo" abajo
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-```
-**`backend/.env` de Reservalo**: su propia config de base (SUPABASE_URL, SERVICE_ROLE_KEY,
-DATABASE_URL, JWT_SECRET) — secretos **nuevos**, no copiados de QA.
+# Genera .env + backend/.env de Reservalo, COMPARTIENDO el jwt_secret de URUKU
+# y con secretos NUEVOS para su base self-host. Necesita PyJWT:
+apt install -y python3-jwt || pip3 install pyjwt
+python3 selfhost/init_reservalo_env.py uruku.bo "$(grep '^JWT_SECRET=' /docker/uruku/backend/.env | cut -d= -f2-)"
 
-> ⚠️ **Base de Reservalo (a definir):** Reservalo tiene su **propia** base (catálogo,
-> pedidos, cuentas) — separada de la de URUKU. El compose de Reservalo **no** trae Postgres;
-> usa un Supabase externo (`SUPABASE_URL`). Opciones para prod:
-> - **(a)** Reservalo sigue en su **Supabase Cloud** (lo más simple si es lo que usa QA hoy) → solo pegar esas claves.
-> - **(b)** Reservalo con **Postgres+PostgREST self-host propio** en el VPS (aislado, sin costo cloud) → hay que sumarle esos servicios + sus migraciones al compose.
-> Confirmar **qué usa QA hoy** antes de deployar.
+# (opcional) sincronizar postgres-init con las migraciones actuales del repo
+bash selfhost/build-postgres-init.sh
 
-Deploy:
-```bash
+# Levantar. La base self-host se inicializa sola la 1ra vez (corre postgres-init
+# COMPLETO → trae 016 + grants, sin el drift que hubo en QA).
 docker compose --env-file .env up -d --build
 ```
+
+Traefik saca solos los certs de `api.tienda.uruku.bo`, `db.tienda.uruku.bo` y `tienda.uruku.bo`.
+
+### 5a · Conectar URUKU → Reservalo (para que URUKU cree productos en la tienda)
+El script imprime 3 líneas (`TIENDA_API_URL`, `TIENDA_API_SECRET`, `ADMIN_SYNC_SECRET`).
+Pegalas en `/docker/uruku/backend/.env` y rebuildeá el backend de URUKU (deja el modo STUB):
+```bash
+cd /docker/uruku    # tras agregar las 3 líneas al backend/.env
+docker compose -f docker-compose.prod.yml --env-file .env up -d --build backend
+```
+
+### 5b · Bootstrap del admin de la tienda
+El dueño entra logueándose en URUKU (WhatsApp) y marcándose admin en la base de Reservalo, una vez.
+El `id` es su `usuario_id` de URUKU (F12 en el navegador:
+`JSON.parse(atob(localStorage.bermejo_usuario_token.split('.')[1])).usuario_id`):
+```bash
+docker exec -i reservalo-postgres psql -U postgres -d postgres -c \
+ "INSERT INTO usuarios (id, whatsapp, rol) VALUES ('<usuario_id>', '<whatsapp>', 'admin') ON CONFLICT (id) DO UPDATE SET rol='admin';"
+```
+(El admin de plataforma, con token URUKU rol=admin, entra directo sin este paso.)
 
 ### Cross-links entre los dos sitios (ya en el código)
 - Ficha/buscador de URUKU → tienda: `${DOMAIN}/tienda/productos/...` (const `RESERVALO_URL="/tienda"`).
@@ -264,7 +280,9 @@ curl -I https://uruku.bo
 curl -s https://api.uruku.bo/health
 curl -s "https://db.uruku.bo/comercios?limit=1"
 curl -I https://uruku.bo/tienda/productos
-curl -I https://tienda.uruku.bo            # 301 → uruku.bo/tienda
+curl -I https://tienda.uruku.bo               # 301 → uruku.bo/tienda
+curl -s https://api.tienda.uruku.bo/health    # backend Reservalo → {"status":"ok"}
+curl -s "https://api.tienda.uruku.bo/productos/" | head -c 200   # 200 (lista, aunque vacía)
 ```
 A ojo: home + toggle de tema, `/mapa`, `/buscar`, `/tienda`, **instalar la PWA**
 (debe ser **una sola** y cubrir `/` y `/tienda`), cross-links ficha ↔ producto.
