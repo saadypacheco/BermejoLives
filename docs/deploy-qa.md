@@ -110,3 +110,26 @@ Tras el deploy sin-Supabase: el panel `encontralo.store/tienda/admin` pide login
 URUKU; para entrar como dueño-comprador, marcá tu usuario una vez:
 `UPDATE usuarios SET rol='admin' WHERE id='<usuario_id de URUKU>';` (el admin de
 plataforma con token URUKU rol=admin entra directo).
+
+### Drift de esquema en QA (2026-08-16) — solo QA, NO prod
+La base `reservalo-postgres` de QA se inicializó **antes** de que `postgres-init`
+estuviera completo, y los init-scripts no se re-ejecutan sobre un volumen existente.
+Faltaban la migración **016** (columna `productos.disponible`, `vendedor_id`, `moneda`,
+tabla `vendedores`) y los **GRANTs** a `service_role`. Se parcheó a mano:
+```sql
+-- 016 idempotente
+CREATE TABLE IF NOT EXISTS vendedores (id UUID PRIMARY KEY, nombre TEXT NOT NULL,
+  slug TEXT UNIQUE NOT NULL, whatsapp TEXT, tipo TEXT NOT NULL DEFAULT 'minorista',
+  activo BOOLEAN NOT NULL DEFAULT TRUE, moneda_default TEXT NOT NULL DEFAULT 'ARS',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+ALTER TABLE productos ADD COLUMN IF NOT EXISTS vendedor_id UUID REFERENCES vendedores(id);
+ALTER TABLE productos ADD COLUMN IF NOT EXISTS moneda TEXT NOT NULL DEFAULT 'ARS';
+ALTER TABLE productos ADD COLUMN IF NOT EXISTS disponible BOOLEAN NOT NULL DEFAULT TRUE;
+-- grants de todo el esquema
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+NOTIFY pgrst, 'reload schema';
+```
+**Prod NO necesita esto**: arranca con volumen vacío → corre el `postgres-init`
+actual completo (016 + `99-grants.sql` ya incluidos).
