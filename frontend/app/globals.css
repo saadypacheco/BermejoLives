@@ -391,9 +391,13 @@
 .bresults { padding: 10px 12px 0; }
 
 /* Barra inferior */
-.bottomnav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; display: flex; background: rgba(11,13,17,.92); backdrop-filter: blur(12px); border-top: 1px solid var(--stroke); padding: 8px 6px calc(8px + env(safe-area-inset-bottom)); z-index: 50; }
-.bn-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--txt-3); font-size: 11px; font-weight: 600; background: none; border: none; cursor: pointer; }
-.bn-item.active { color: var(--neon); }
+.bottomnav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; display: flex; background: rgba(11,13,17,.92); backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,.12); padding: 8px 6px calc(8px + env(safe-area-inset-bottom)); z-index: 50; }
+/* Ítems inactivos: gris claro legible sobre la barra oscura (antes --txt-3 se perdía). */
+.bn-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; color: rgba(233,243,240,.72); font-size: 11px; font-weight: 600; background: none; border: none; cursor: pointer; }
+.bn-item:hover { color: #fff; }
+.bn-item.active { color: #4dffae; }
+/* En desktop la barra de abajo es redundante (el header ya tiene toda la navegación). */
+@media (min-width: 900px) { .bottomnav { display: none; } }
 
 /* Banner de "Instalar app" (PWA) */
 .install-banner {

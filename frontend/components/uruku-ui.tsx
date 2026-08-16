@@ -31,6 +31,24 @@ export const RED_D: Record<string, string> = {
 export const money = (v: number | null | undefined) =>
   v && v > 0 ? v.toLocaleString("es-AR", { maximumFractionDigits: 2 }) : "s/d";
 
+/** Base de URL por red, para cuando en el admin cargan un handle (@usuario) en vez de la URL completa. */
+const RED_BASE: Record<string, string> = {
+  instagram: "https://instagram.com/",
+  tiktok: "https://tiktok.com/@",
+  facebook: "https://facebook.com/",
+  youtube: "https://youtube.com/@",
+};
+
+/** Devuelve una URL absoluta y válida para la red, sea que cargaron la URL completa o solo el handle. */
+export function redHref(clave: string, url: string): string {
+  const u = url.trim();
+  if (/^https?:\/\//i.test(u)) return u;              // ya es URL completa
+  const handle = u.replace(/^@+/, "");                 // saca @ del handle
+  const base = RED_BASE[clave];
+  if (base) return base + handle;                      // arma URL por red
+  return u.includes(".") ? `https://${u}` : u;         // fallback: prepend https si parece dominio
+}
+
 /** Íconos de redes (desde la tabla `redes`, cargados en el admin). */
 export function SocialLinks({ redes, cls }: { redes: { clave: string; url: string | null; etiqueta: string }[]; cls: string }) {
   const items = redes.filter((r) => r.url);
@@ -38,7 +56,7 @@ export function SocialLinks({ redes, cls }: { redes: { clave: string; url: strin
   return (
     <div className={cls}>
       {items.map((r) => (
-        <a key={r.clave} href={r.url as string} target="_blank" rel="noopener" aria-label={r.etiqueta}>
+        <a key={r.clave} href={redHref(r.clave, r.url as string)} target="_blank" rel="noopener" aria-label={r.etiqueta}>
           <Ic d={RED_D[r.clave] ?? "M4 4h16v16H4z"} />
         </a>
       ))}

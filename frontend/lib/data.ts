@@ -184,7 +184,16 @@ export type VideoPromo = { id: string; titulo: string | null; url: string };
 export async function getCotizaciones(): Promise<Cotizacion[]> {
   if (!hasSupabase) return [];
   const { data } = await supabase.from("cotizaciones").select("clave, etiqueta, detalle, valor, unidad, orden").order("orden");
-  return (data as Cotizacion[]) ?? [];
+  const rows = (data as Cotizacion[]) ?? [];
+  // Dedup por clave prefiriendo la fila con valor: si hay duplicados (una con valor y
+  // otra en null), sin orden estable cada fetch agarraba una distinta → el hero mostraba
+  // "s/d" y la barra superior el valor. Así ambos leen siempre la fila con dato.
+  const porClave = new Map<string, Cotizacion>();
+  for (const r of rows) {
+    const prev = porClave.get(r.clave);
+    if (!prev || (prev.valor == null && r.valor != null)) porClave.set(r.clave, r);
+  }
+  return [...porClave.values()];
 }
 export async function getClima(): Promise<Clima | null> {
   if (!hasSupabase) return null;
