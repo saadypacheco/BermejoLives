@@ -14,7 +14,7 @@ export default function manifest(): MetadataRoute.Manifest {
     lang: "es",
     categories: ["shopping", "business", "maps"],
     icons: [
-      { src: "/logouruku.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/logouruku-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/logouruku.png", sizes: "512x512", type: "image/png", purpose: "any" },
       // maskable queda en el ícono con margen seguro (el logo circular se recortaría en Android).
       { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
