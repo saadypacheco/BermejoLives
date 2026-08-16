@@ -98,8 +98,8 @@ export async function UrukuShell({
           <nav className="uk-catnav">
             <div className="uk-container uk-catnav-scroll">
               <Link href="/buscar" className={activeCat === "Todos" ? "active" : ""}>Todos</Link>
-              {CATS.slice(0, 7).map((c) => (
-                <Link key={c.label} href={c.q ? `/buscar?q=${c.q}` : "/buscar"} className={activeCat === c.label ? "active" : ""}>{c.label}</Link>
+              {CATS.filter((c) => c.q).map((c) => (
+                <Link key={c.label} href={`/buscar?q=${c.q}`} className={activeCat === c.label ? "active" : ""}>{c.label}</Link>
               ))}
             </div>
           </nav>
