@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description:
     "URUKU en el mapa. Reservalo en la tienda. Todo lo que se vende en tu ciudad, en tiempo real.",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "URUKU" },
-  icons: { icon: "/icon-192.png", apple: "/apple-touch-icon.png" },
+  icons: { icon: "/logouruku.png", apple: "/logouruku.png" },
 };
 
 export const viewport: Viewport = {

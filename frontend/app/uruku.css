@@ -77,9 +77,9 @@
 /* ---- Header ---- */
 .uk-header { background: var(--uk-header); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--uk-line); }
 .uk-header-main { min-height: 96px; display: grid; grid-template-columns: 200px minmax(280px,1fr) auto; gap: 24px; align-items: center; }
-.uk-brand-word { font-weight: 900; font-size: 38px; letter-spacing: .02em; line-height: .95; }
+.uk-brand-word { display: inline-flex; align-items: center; gap: 10px; font-weight: 900; font-size: 34px; letter-spacing: .02em; line-height: 1; color: var(--uk-ink); }
+.uk-brand-logo { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
 .uk-brand-u { color: var(--uk-green); position: relative; }
-.uk-brand-u::after { content:""; position:absolute; width:6px; height:6px; border-radius:50%; background:var(--uk-orange); top:-3px; left:8px; }
 .uk-brand small { display: block; margin-top: 6px; color: var(--uk-ink-soft); font-size: 12px; font-weight: 500; }
 .uk-red { color: var(--uk-red); font-weight: 700; }
 
