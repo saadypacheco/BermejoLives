@@ -366,6 +366,9 @@ class FakeRepo:
     def get_rubro_id(self, slug):
         return self.rubros.get(slug)
 
+    def get_rubro_nombre(self, slug):
+        return slug.title() if self.rubros.get(slug) else None
+
     def get_ciudad_id(self, slug):
         return {"bermejo": "ciu-1"}.get(slug)
 

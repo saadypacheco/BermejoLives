@@ -109,6 +109,7 @@ def rechazar_comercio(
 class EditarComercioBody(BaseModel):
     nombre: str | None = None
     whatsapp: str | None = None
+    telefono: str | None = None
     descripcion: str | None = None
     modalidad: str | None = None
     direccion: str | None = None

@@ -134,14 +134,19 @@ async def alta_campo(
         raise HTTPException(status_code=400, detail=f"modalidad inválida: {modalidad}")
     if lat is None or lng is None:
         raise HTTPException(status_code=400, detail="Falta la ubicación")
-    # Alta mínima: solo la ubicación es obligatoria. Nombre por defecto si no lo cargan;
-    # whatsapp/teléfono/descripción/foto quedan opcionales (locales sin contacto).
-    nombre_final = nombre.strip() if nombre and nombre.strip() else "Comercio"
-
+    # Alta mínima: solo la ubicación es obligatoria; whatsapp/teléfono/descripción/foto opcionales.
     ciudad_id = repo.get_ciudad_id(ciudad_slug) or repo.get_ciudad_id("bermejo")
 
     # rubros: resuelve los slugs a ids; el 1º es el principal
     rubro_ids = [rid for rid in (repo.get_rubro_id(s) for s in rubro_slugs if s) if rid]
+
+    # Nombre por defecto: si no lo cargan, usa el rubro elegido (ej. "Ferretería");
+    # si tampoco hay rubro útil, queda "Comercio".
+    if nombre and nombre.strip():
+        nombre_final = nombre.strip()
+    else:
+        rubro_util = next((s for s in rubro_slugs if s and s != "otros"), None)
+        nombre_final = (repo.get_rubro_nombre(rubro_util) if rubro_util else None) or "Comercio"
 
     slug = slug_unico(repo, slugify(nombre_final))
 

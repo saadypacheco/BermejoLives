@@ -944,12 +944,14 @@ function ModalEditar({
   onDone: () => void;
 }) {
   const [nombre, setNombre] = useState(comercio.nombre);
-  const [whatsapp, setWhatsapp] = useState(comercio.whatsapp);
+  const [whatsapp, setWhatsapp] = useState(comercio.whatsapp ?? "");
+  const [telefono, setTelefono] = useState((comercio as Record<string, unknown>).telefono as string ?? "");
   const [descripcion, setDescripcion] = useState(comercio.descripcion ?? "");
   const [modalidad, setModalidad] = useState(comercio.modalidad ?? "local");
   const [direccion, setDireccion] = useState(comercio.direccion ?? "");
   const [horario, setHorario] = useState((comercio as Record<string, unknown>).horario as string ?? "");
-  const [rubroSlug, setRubroSlug] = useState((comercio.rubros as { slug: string } | undefined)?.slug ?? "");
+  const _rubroActual = (comercio.rubros as { slug: string } | undefined)?.slug;
+  const [rubroSlugs, setRubroSlugs] = useState<string[]>(_rubroActual ? [_rubroActual] : []);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
@@ -961,11 +963,12 @@ function ModalEditar({
       await editarComercio(comercio.id, {
         nombre: nombre || undefined,
         whatsapp: whatsapp || undefined,
+        telefono: telefono || undefined,
         descripcion: descripcion || undefined,
         modalidad: modalidad || undefined,
         direccion: direccion || undefined,
         horario: horario || undefined,
-        rubro_slugs: rubroSlug ? [rubroSlug] : undefined,
+        rubro_slugs: rubroSlugs.length ? rubroSlugs : undefined,
       });
       onDone();
     } catch {
@@ -983,18 +986,28 @@ function ModalEditar({
           <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Nombre
             <input className="adm-input" style={{ marginTop: 4 }} value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre del negocio" />
           </label>
-          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>WhatsApp
+          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>WhatsApp (opcional)
             <input className="adm-input" style={{ marginTop: 4 }} value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="591XXXXXXXX" />
+          </label>
+          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Teléfono (opcional)
+            <input className="adm-input" style={{ marginTop: 4 }} value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Fijo o celular para llamar" />
           </label>
           <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Descripción / reseña
             <textarea className="adm-input" style={{ marginTop: 4, minHeight: 70, resize: "vertical" }} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Qué vende o qué ofrece…" />
           </label>
-          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Rubro
-            <select className="adm-input" style={{ marginTop: 4 }} value={rubroSlug} onChange={(e) => setRubroSlug(e.target.value)}>
-              <option value="">— sin cambiar —</option>
-              {rubros.map((r) => <option key={r.slug} value={r.slug}>{r.nombre}</option>)}
-            </select>
-          </label>
+          <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Categorías (tocá para elegir varias)
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+              {rubros.map((r) => {
+                const on = rubroSlugs.includes(r.slug);
+                return (
+                  <button type="button" key={r.slug} className={`mchip ${on ? "active" : ""}`} style={{ cursor: "pointer" }}
+                    onClick={() => setRubroSlugs((prev) => on ? prev.filter((s) => s !== r.slug) : [...prev, r.slug])}>
+                    {r.nombre}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Modalidad
             <select className="adm-input" style={{ marginTop: 4 }} value={modalidad} onChange={(e) => setModalidad(e.target.value)}>
               <option value="local">Local</option>
