@@ -443,11 +443,11 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
         {/* ── Nombre ── */}
-        <input className="adm-input" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre del comercio *" />
+        <input className="adm-input" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre del comercio (opcional — si no, queda 'Comercio')" />
 
         {/* ── WhatsApp ── */}
         <div>
-          <label className="campo-lbl">WhatsApp del comercio *</label>
+          <label className="campo-lbl">WhatsApp del comercio (opcional)</label>
           <div className="cel-wrap">
             <span className="cel-flag">{prefijo === "54" ? "🇦🇷" : "🇧🇴"} +{prefijo}</span>
             <input className="adm-input" type="tel" inputMode="numeric" value={f.cel}
@@ -465,45 +465,37 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           </div>
         </div>
 
-        {/* ── Descripción / audio ── */}
+        {/* ── Descripción: texto primero (siempre), audio como opción ── */}
         <div>
-          <label className="campo-lbl">¿Qué vende? Grabá un audio *</label>
-          {puedeGrabar ? (
+          <label className="campo-lbl">¿Qué vende? (opcional)</label>
+          <textarea className="adm-input" rows={3} value={f.descripcion}
+            onChange={(e) => set("descripcion", e.target.value)}
+            onBlur={() => f.descripcion.trim() && sugerirDesdeDescripcion(f.descripcion)}
+            placeholder="Ej: Gomería y repuestos de moto. Importa desde China. Pedido mínimo 1 caja." style={{ resize: "vertical" }} />
+          {puedeGrabar && (
             !grabando ? (
-              <button type="button" className="btn btn-ghost" style={{ width: "100%", marginBottom: 8 }}
+              <button type="button" className="btn btn-ghost" style={{ width: "100%", marginTop: 8 }}
                 onClick={iniciarGrabacion} disabled={transcribiendo}>
-                🎤 {transcribiendo ? "Transcribiendo…" : `Grabar descripción${intentosAudio > 0 ? ` (intento ${intentosAudio + 1}/${MAX_INTENTOS_AUDIO})` : ""}`}
+                🎤 {transcribiendo ? "Transcribiendo…" : "O grabá un audio"}
               </button>
             ) : (
-              <button type="button" className="btn btn-primary" style={{ width: "100%", marginBottom: 8 }} onClick={detenerGrabacion}>
+              <button type="button" className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} onClick={detenerGrabacion}>
                 <span className="dot-live" style={{ background: "#05130c" }} /> Detener y transcribir
               </button>
             )
-          ) : (
-            <p style={{ fontSize: 12.5, color: "var(--amber)", marginBottom: 8 }}>
-              Ya grabaste {MAX_INTENTOS_AUDIO} veces — completá o corregí el texto a mano abajo.
-            </p>
-          )}
-          {(intentosAudio > 0 || !puedeGrabar) && (
-            <textarea className="adm-input" rows={3} value={f.descripcion}
-              onChange={(e) => set("descripcion", e.target.value)}
-              onBlur={() => sugerirDesdeDescripcion(f.descripcion)}
-              placeholder="Ej: Gomería y repuestos de moto. Importa desde China. Pedido mínimo 1 caja." style={{ resize: "vertical" }} />
           )}
         </div>
 
-        {/* ── Categorías: las sugiere la IA a partir de la descripción, el agente puede corregir ── */}
-        {(rubroSlugs.length > 0 || sugiriendo) && (
-          <div>
-            <label className="campo-lbl">Categoría{sugiriendo && " (sugiriendo…)"}</label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-              {rubros.map((r) => (
-                <ChipToggle key={r.slug} label={r.nombre} active={rubroSlugs.includes(r.slug)}
-                  onClick={() => setRubroSlugs((prev) => toggle(prev, r.slug))} />
-              ))}
-            </div>
+        {/* ── Categorías: siempre visibles para elegir a mano (la IA además puede sugerir) ── */}
+        <div>
+          <label className="campo-lbl">Categoría{sugiriendo && " (sugiriendo…)"}</label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+            {rubros.map((r) => (
+              <ChipToggle key={r.slug} label={r.nombre} active={rubroSlugs.includes(r.slug)}
+                onClick={() => setRubroSlugs((prev) => toggle(prev, r.slug))} />
+            ))}
           </div>
-        )}
+        </div>
 
         {/* ── GPS ── */}
         <div>
@@ -517,7 +509,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
 
         {/* ── Foto ── */}
         <div>
-          <label className="campo-lbl">Foto del local (portada) *</label>
+          <label className="campo-lbl">Foto del local (portada, opcional)</label>
           <label className="foto-drop">
             {preview ? <img src={preview} alt="" /> : <span>📷 Sacar foto / elegir</span>}
             <input type="file" accept="image/*" capture="environment" onChange={onFoto} hidden />
