@@ -35,16 +35,24 @@ export function GaleriaUploader({ api }: { api: GaleriaApi }) {
   }, []);
 
   async function onFoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]; e.target.value = "";
-    if (!file) return;
+    const files = Array.from(e.target.files ?? []); e.target.value = "";
+    if (!files.length) return;
     setErr("");
-    try {
-      const comp = await comprimirImagen(file);
-      setTipo("foto"); setProg(0);
-      const foto = await api.subirFoto(comp, setProg);
-      setFotos((f) => [...f, foto]);
-    } catch (ex) { setErr(ex instanceof Error ? ex.message : "No se pudo subir"); }
-    finally { setProg(null); }
+    setTipo("foto");
+    // Sube de a una e INDEPENDIENTE: si una falla (mala señal), sigue con el resto
+    // y las subidas OK quedan guardadas. El local ya está creado → nunca se pierde.
+    const espacio = MAX_FOTOS - fotos.length;
+    let fallas = 0;
+    for (const file of files.slice(0, Math.max(0, espacio))) {
+      try {
+        const comp = await comprimirImagen(file);
+        setProg(0);
+        const foto = await api.subirFoto(comp, setProg);
+        setFotos((f) => [...f, foto]);
+      } catch { fallas += 1; }
+    }
+    setProg(null);
+    if (fallas) setErr(`${fallas} foto(s) no subieron (señal). Probá de nuevo con esas.`);
   }
 
   async function onVideo(e: React.ChangeEvent<HTMLInputElement>) {
@@ -111,7 +119,7 @@ export function GaleriaUploader({ api }: { api: GaleriaApi }) {
       )}
       {err && <div className="galup-err">{err}</div>}
 
-      <input ref={fotoInput} type="file" accept="image/*" capture="environment" hidden onChange={onFoto} />
+      <input ref={fotoInput} type="file" accept="image/*" capture="environment" multiple hidden onChange={onFoto} />
       <input ref={videoInput} type="file" accept="video/*" capture="environment" hidden onChange={onVideo} />
     </div>
   );
