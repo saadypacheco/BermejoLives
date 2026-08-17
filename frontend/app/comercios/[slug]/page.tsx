@@ -66,9 +66,15 @@ export default async function ComercioPage({ params }: { params: { slug: string 
             </div>
           </div>
           <div className="uk-cta">
-            <WaLeadLink className="uk-btn-wa" comercioId={comercio.id} whatsapp={comercio.whatsapp} mensaje={`Hola ${comercio.nombre}, te contacto desde URUKU`}>
-              <WhatsApp style={{ width: 18, height: 18 }} /> WhatsApp
-            </WaLeadLink>
+            {comercio.whatsapp ? (
+              <WaLeadLink className="uk-btn-wa" comercioId={comercio.id} whatsapp={comercio.whatsapp} mensaje={`Hola ${comercio.nombre}, te contacto desde URUKU`}>
+                <WhatsApp style={{ width: 18, height: 18 }} /> WhatsApp
+              </WaLeadLink>
+            ) : comercio.telefono ? (
+              <a className="uk-btn-wa" href={`tel:${comercio.telefono.replace(/[^\d+]/g, "")}`}>
+                <Phone style={{ width: 18, height: 18 }} /> Llamar
+              </a>
+            ) : null}
             <a className="uk-btn-ghost" href={mapsHref} target="_blank" rel="noopener"><Pin style={{ width: 16, height: 16 }} /> Cómo llegar</a>
             <GuardarBoton comercioId={comercio.id} className="uk-btn-ghost" />
             <CompartirBoton titulo={comercio.nombre} texto={`${comercio.nombre} en URUKU`} className="uk-btn-ghost" />
@@ -82,10 +88,12 @@ export default async function ComercioPage({ params }: { params: { slug: string 
         <div className="uk-info-grid">
           <div className="uk-info-card">
             <h3>Datos de contacto</h3>
-            <div className="uk-info-row">
-              <span className="ic"><WhatsApp style={{ width: 17, height: 17 }} /></span>
-              <div><b>WhatsApp</b>+{comercio.whatsapp}</div>
-            </div>
+            {comercio.whatsapp && (
+              <div className="uk-info-row">
+                <span className="ic"><WhatsApp style={{ width: 17, height: 17 }} /></span>
+                <div><b>WhatsApp</b>+{comercio.whatsapp}</div>
+              </div>
+            )}
             {comercio.telefono && (
               <div className="uk-info-row"><span className="ic"><Phone style={{ width: 17, height: 17 }} /></span><div><b>Teléfono</b><a href={`tel:${comercio.telefono.replace(/[^\d+]/g, "")}`}>{comercio.telefono}</a></div></div>
             )}
@@ -135,9 +143,11 @@ export default async function ComercioPage({ params }: { params: { slug: string 
                   {p.precio != null && <div className="price">{precioFmt(p.precio, p.moneda)}</div>}
                   <div className="foot">
                     <span>{comercio.nombre}</span>
-                    <WaLeadLink className="wa-mini" comercioId={comercio.id} whatsapp={comercio.whatsapp} mensaje={`Hola, me interesa ${p.nombre}`}>
-                      <WhatsApp style={{ width: 17, height: 17, color: "#fff" }} />
-                    </WaLeadLink>
+                    {comercio.whatsapp && (
+                      <WaLeadLink className="wa-mini" comercioId={comercio.id} whatsapp={comercio.whatsapp} mensaje={`Hola, me interesa ${p.nombre}`}>
+                        <WhatsApp style={{ width: 17, height: 17, color: "#fff" }} />
+                      </WaLeadLink>
+                    )}
                   </div>
                 </article>
               ))}

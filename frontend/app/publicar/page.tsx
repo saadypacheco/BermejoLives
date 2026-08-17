@@ -357,25 +357,24 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     e.preventDefault();
     setErr("");
     const cel = f.cel.replace(/\D/g, "");
-    if (!f.nombre.trim() || !cel) { setErr("Faltan nombre y celular."); return; }
-    if (!f.descripcion.trim()) { setErr("Falta qué vende (grabá un audio o escribí)."); return; }
+    // Alta mínima: solo la ubicación es obligatoria. Nombre, WhatsApp, descripción y
+    // foto son opcionales (locales sin contacto → quedan como punto en el mapa).
     if (!coords) { setErr("Falta la ubicación — tocá \"Usar mi ubicación actual\"."); return; }
     if (comprimiendo) { setErr("Esperá a que termine de comprimir la foto."); return; }
-    if (!foto) { setErr("Falta la foto del comercio."); return; }
 
     setSaving(true);
     const fd = new FormData();
-    fd.append("nombre",      f.nombre);
-    fd.append("whatsapp",    prefijo + cel);
+    if (f.nombre.trim()) fd.append("nombre", f.nombre.trim());
+    if (cel) fd.append("whatsapp", prefijo + cel);
     fd.append("ciudad_slug", ciudadSlug);
     (rubroSlugs.length > 0 ? rubroSlugs : ["otros"]).forEach((r) => fd.append("rubro_slugs", r));
     fd.append("modalidad",   f.modalidad);
-    fd.append("descripcion", f.descripcion.trim());
+    if (f.descripcion.trim()) fd.append("descripcion", f.descripcion.trim());
     if (f.direccion.trim()) fd.append("direccion", f.direccion.trim());
     fd.append("lat", String(coords.lat));
     fd.append("lng", String(coords.lng));
     fd.append("consentimiento", String(consent));
-    fd.append("foto", foto);
+    if (foto) fd.append("foto", foto);
 
     try {
       const r = await altaComercioCampo(fd);

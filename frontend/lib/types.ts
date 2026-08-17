@@ -14,7 +14,7 @@ export type Comercio = {
   descripcion: string | null;
   logo_url: string | null;
   portada_url: string | null;
-  whatsapp: string;
+  whatsapp: string | null;
   telefono: string | null;
   email: string | null;
   tiktok_url: string | null;

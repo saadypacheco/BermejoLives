@@ -99,7 +99,7 @@ export async function getComercios(): Promise<Comercio[]> {
 export type ComercioMapa = {
   id: string; slug: string; nombre: string;
   lat: number | null; lng: number | null;
-  logo_url: string | null; portada_url: string | null; portada_thumb_url: string | null; whatsapp: string;
+  logo_url: string | null; portada_url: string | null; portada_thumb_url: string | null; whatsapp: string | null;
   telefono: string | null; verificado: boolean; destacado: boolean; rating: number;
   direccion: string | null; descripcion: string | null; horario: string | null;
   como_llegar: string | null; rubro_slug: string | null; plan: string | null;

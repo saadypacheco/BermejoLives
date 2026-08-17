@@ -101,8 +101,9 @@ def _subir_foto(slug: str, foto: UploadFile, data: bytes) -> tuple[str | None, s
 
 @router.post("/campo/comercio")
 async def alta_campo(
-    nombre: str = Form(...),
-    whatsapp: str = Form(...),
+    nombre: str = Form(""),
+    whatsapp: str | None = Form(None),
+    telefono: str | None = Form(None),
     ciudad_slug: str = Form("bermejo"),           # ciudad donde está el negocio
     rubro_slugs: list[str] = Form(default=[]),    # uno o varios rubros
     modalidad: str = Form("mayorista"),
@@ -125,25 +126,24 @@ async def alta_campo(
     tiene_factura: bool = Form(False),
     horario: str | None = Form(None),
     tiene_stock: bool = Form(True),
-    foto: UploadFile = File(...),
+    foto: UploadFile | None = File(None),
     agente: dict = Depends(auth.require_agente),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     if modalidad not in _MODALIDADES:
         raise HTTPException(status_code=400, detail=f"modalidad inválida: {modalidad}")
-    if not nombre.strip() or not whatsapp.strip():
-        raise HTTPException(status_code=400, detail="Faltan nombre y/o celular")
-    if not descripcion or not descripcion.strip():
-        raise HTTPException(status_code=400, detail="Falta la descripción (audio o texto) de qué vende")
     if lat is None or lng is None:
         raise HTTPException(status_code=400, detail="Falta la ubicación")
+    # Alta mínima: solo la ubicación es obligatoria. Nombre por defecto si no lo cargan;
+    # whatsapp/teléfono/descripción/foto quedan opcionales (locales sin contacto).
+    nombre_final = nombre.strip() if nombre and nombre.strip() else "Comercio"
 
     ciudad_id = repo.get_ciudad_id(ciudad_slug) or repo.get_ciudad_id("bermejo")
 
     # rubros: resuelve los slugs a ids; el 1º es el principal
     rubro_ids = [rid for rid in (repo.get_rubro_id(s) for s in rubro_slugs if s) if rid]
 
-    slug = slug_unico(repo, slugify(nombre))
+    slug = slug_unico(repo, slugify(nombre_final))
 
     portada_url, portada_thumb = None, None
     if foto is not None:
@@ -157,9 +157,10 @@ async def alta_campo(
     comercio = repo.crear_comercio(
         {
             "slug": slug,
-            "nombre": nombre.strip(),
+            "nombre": nombre_final,
             "descripcion": _none(descripcion),
-            "whatsapp": whatsapp.strip(),
+            "whatsapp": _none(whatsapp),
+            "telefono": _none(telefono),
             "email": _none(email),
             "tiktok_url": _none(tiktok_url),
             "facebook_url": _none(facebook_url),
@@ -195,7 +196,7 @@ async def alta_campo(
     vurl = _none(video_url)
     if vurl:
         repo.insert_publicacion_directa({
-            "comercio_id": comercio["id"], "tipo": "video", "titulo": nombre.strip(),
+            "comercio_id": comercio["id"], "tipo": "video", "titulo": nombre_final,
             "tiktok_url": vurl, "estado": "pendiente", "origen": "panel",
         })
 
