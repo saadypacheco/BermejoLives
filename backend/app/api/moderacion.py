@@ -72,7 +72,9 @@ def listar_comercios(
     repo: Repo = Depends(get_repo),
 ) -> dict:
     if todos:
-        items = repo.list_todos_comercios(verificado=None)
+        # El panel filtra/busca/pagina del lado del cliente: traemos hasta 5000
+        # (suficiente para el admin; si algún día se superan, pasar a filtro server-side).
+        items = repo.list_todos_comercios(verificado=None, limit=5000)
     else:
         items = repo.list_comercios_admin(verificado)
     return {"items": items, "total": len(items)}

@@ -89,13 +89,16 @@ export type ComercioPorVerificar = {
   id: string;
   nombre: string;
   slug: string;
-  whatsapp: string;
+  whatsapp: string | null;
+  telefono: string | null;
   modalidad: string;
   descripcion: string | null;
   direccion: string | null;
   lat: number | null;
   lng: number | null;
   portada_url: string | null;
+  portada_thumb_url: string | null;
+  cargado_por: string | null;
   verificado: boolean;
   suspendido: boolean;
   paga_hasta: string | null;

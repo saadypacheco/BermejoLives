@@ -18,6 +18,7 @@ import {
   listSolicitudesCambioNumero, aprobarSolicitudCambioNumero, rechazarSolicitudCambioNumero, type SolicitudCambioNumero,
 } from "@/lib/api";
 import { getRubros } from "@/lib/data";
+import { AdminMap } from "@/components/admin-map";
 import type { Rubro } from "@/lib/types";
 import { precioFmt, MODALIDAD_LABEL, comoLlegarHref } from "@/lib/types";
 import { Check, X, Edit, Pin, WhatsApp, Verified } from "@/components/icons";
@@ -804,7 +805,26 @@ function TabSuscripciones({
 
 // ── Tab Comercios ─────────────────────────────────────────────────────────────
 
-type FiltroComercio = "todos" | "pendientes" | "verificados";
+type FiltroComercio = "todos" | "pendientes" | "verificados" | "incompletos";
+type OrdenComercio = "recientes" | "alfabetico" | "estado";
+type VistaComercio = "lista" | "mapa";
+
+function normTxt(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+// Motivos por los que un comercio está "incompleto" (para completarlo en tanda).
+function incompletoDe(c: ComercioPorVerificar): string[] {
+  const r: string[] = [];
+  const nombre = (c.nombre ?? "").trim();
+  const rubroNombre = (c.rubros?.nombre ?? "").trim();
+  // "sin nombre" = vacío, el default 'Comercio', o quedó con el nombre del rubro.
+  if (!nombre || nombre.toLowerCase() === "comercio" || (!!rubroNombre && nombre.toLowerCase() === rubroNombre.toLowerCase())) r.push("sin nombre");
+  if (!c.portada_url) r.push("sin foto");
+  if (!c.whatsapp && !c.telefono) r.push("sin contacto");
+  if (!c.rubros?.slug) r.push("sin rubro");
+  return r;
+}
 
 function TabComercios({
   todos, pendientes, rubros, onVerificar, onRechazar, onEdited,
@@ -817,48 +837,117 @@ function TabComercios({
   onEdited: () => void;
 }) {
   const [filtro, setFiltro] = useState<FiltroComercio>("todos");
+  const [q, setQ] = useState("");
+  const [orden, setOrden] = useState<OrdenComercio>("recientes");
+  const [vista, setVista] = useState<VistaComercio>("lista");
+  const [limitVis, setLimitVis] = useState(50);
   const [editandoId, setEditandoId] = useState<string | null>(null);
 
-  const visibles = filtro === "todos"
-    ? todos
-    : filtro === "pendientes"
-    ? todos.filter((c) => !c.verificado)
-    : todos.filter((c) => c.verificado);
+  const nIncompletos = todos.filter((c) => incompletoDe(c).length > 0).length;
+  const nVerificados = todos.filter((c) => c.verificado).length;
 
+  // 1) filtro por estado (B incluye "incompletos")
+  const porEstado = filtro === "todos" ? todos
+    : filtro === "pendientes" ? todos.filter((c) => !c.verificado)
+    : filtro === "verificados" ? todos.filter((c) => c.verificado)
+    : todos.filter((c) => incompletoDe(c).length > 0);
+
+  // 2) buscador multi-campo (A): nombre + qué vende + dirección + contacto + rubro + ciudad
+  const nq = normTxt(q.trim());
+  const buscadas = !nq ? porEstado : porEstado.filter((c) =>
+    [c.nombre, c.descripcion, c.direccion, c.whatsapp, c.telefono, c.rubros?.nombre, c.ciudades?.nombre]
+      .map((x) => normTxt(x ?? "")).join(" ").includes(nq));
+
+  // 3) orden (G)
+  const filtradas = [...buscadas].sort((a, b) => {
+    if (orden === "alfabetico") return (a.nombre ?? "").localeCompare(b.nombre ?? "");
+    if (orden === "estado") return Number(a.verificado) - Number(b.verificado);      // pendientes primero
+    return (b.created_at ?? "").localeCompare(a.created_at ?? "");                    // recientes primero
+  });
+
+  // reset de la paginación cuando cambian filtros/búsqueda/orden
+  useEffect(() => { setLimitVis(50); }, [filtro, q, orden]);
+
+  const visibles = filtradas.slice(0, limitVis);
   const editando = editandoId ? todos.find((c) => c.id === editandoId) ?? null : null;
+
+  const chips: { key: FiltroComercio; label: string; n: number; amber?: boolean }[] = [
+    { key: "todos", label: "Todos", n: todos.length },
+    { key: "pendientes", label: "Pendientes", n: pendientes.length },
+    { key: "verificados", label: "Verificados", n: nVerificados },
+    { key: "incompletos", label: "Incompletos", n: nIncompletos, amber: true },
+  ];
 
   return (
     <div className="panel-card glass">
       <div className="ph">
         <h3>Negocios</h3>
-        <span style={{ color: "var(--txt-3)", fontSize: 13 }}>Listado completo · click para editar</span>
+        <span style={{ color: "var(--txt-3)", fontSize: 13 }}>{filtradas.length} resultado(s) · click para editar</span>
       </div>
 
-      {/* Filtros */}
-      <div style={{ display: "flex", gap: 8, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
-        {(["todos", "pendientes", "verificados"] as FiltroComercio[]).map((f) => {
-          const n = f === "todos" ? todos.length : f === "pendientes" ? pendientes.length : todos.filter((c) => c.verificado).length;
+      {/* Buscador (A) + orden (G) + vista lista/mapa (D) */}
+      <div style={{ display: "flex", gap: 8, padding: "12px 16px 0", flexWrap: "wrap", alignItems: "center" }}>
+        <input className="adm-input" style={{ flex: 1, minWidth: 200 }} value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar por nombre, qué vende, dirección, teléfono…" />
+        <select className="adm-input" style={{ width: "auto" }} value={orden} onChange={(e) => setOrden(e.target.value as OrdenComercio)}>
+          <option value="recientes">Más recientes</option>
+          <option value="alfabetico">A → Z</option>
+          <option value="estado">Pendientes primero</option>
+        </select>
+        <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
+          {(["lista", "mapa"] as VistaComercio[]).map((v) => (
+            <button key={v} onClick={() => setVista(v)}
+              style={{ padding: "7px 14px", fontSize: 13, cursor: "pointer", border: "none",
+                background: vista === v ? "var(--neon)22" : "transparent",
+                color: vista === v ? "var(--neon)" : "var(--txt-2)", fontWeight: vista === v ? 600 : 400 }}>
+              {v === "lista" ? "☰ Lista" : "🗺 Mapa"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Filtros por estado */}
+      <div style={{ display: "flex", gap: 8, padding: "12px 16px", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
+        {chips.map(({ key, label, n, amber }) => {
+          const activo = filtro === key;
+          const col = amber ? "var(--amber)" : "var(--neon)";
           return (
-            <button key={f} onClick={() => setFiltro(f)}
+            <button key={key} onClick={() => setFiltro(key)}
               style={{ padding: "5px 14px", borderRadius: 20, border: "1px solid", cursor: "pointer", fontSize: 13,
-                borderColor: filtro === f ? "var(--neon)" : "var(--border)",
-                background: filtro === f ? "var(--neon)22" : "transparent",
-                color: filtro === f ? "var(--neon)" : "var(--txt-2)", fontWeight: filtro === f ? 600 : 400 }}>
-              {f.charAt(0).toUpperCase() + f.slice(1)} ({n})
+                borderColor: activo ? col : "var(--border)",
+                background: activo ? `${col}22` : "transparent",
+                color: activo ? col : "var(--txt-2)", fontWeight: activo ? 600 : 400 }}>
+              {label} ({n})
             </button>
           );
         })}
       </div>
 
+      {/* Vista MAPA (D): tocar un pin abre el editor; ideal para los sin nombre */}
+      {vista === "mapa" ? (
+        <div style={{ padding: 12 }}>
+          <AdminMap
+            comercios={filtradas.map((c) => ({
+              id: c.id, nombre: c.nombre, lat: c.lat, lng: c.lng,
+              rubro_slug: c.rubros?.slug ?? null, incompleto: incompletoDe(c).length > 0,
+            }))}
+            onSelect={setEditandoId}
+          />
+        </div>
+      ) : (
+      <>
       {visibles.length === 0 && (
         <div style={{ padding: 24, textAlign: "center", color: "var(--txt-3)" }}>Sin resultados.</div>
       )}
 
-      {visibles.map((c) => (
+      {visibles.map((c) => {
+        const motivos = incompletoDe(c);
+        return (
         <div key={c.id} style={{ display: "flex", gap: 12, padding: "14px 16px", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
           {/* Foto */}
           <img
-            src={c.portada_url ?? "https://picsum.photos/seed/" + c.id + "/80/80"}
+            src={c.portada_thumb_url ?? c.portada_url ?? "https://picsum.photos/seed/" + c.id + "/80/80"}
             alt=""
             style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 10, flexShrink: 0 }}
           />
@@ -866,15 +955,18 @@ function TabComercios({
           {/* Info */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ fontWeight: 600, fontSize: 15 }}>{c.nombre}</span>
+              <span style={{ fontWeight: 600, fontSize: 15 }}>{c.nombre || "Sin nombre"}</span>
               {c.verificado
                 ? <span style={{ fontSize: 11, color: "var(--neon)", background: "var(--neon)22", padding: "2px 8px", borderRadius: 10 }}>✓ verificado</span>
                 : <span style={{ fontSize: 11, color: "var(--amber)", background: "var(--amber)22", padding: "2px 8px", borderRadius: 10 }}>pendiente</span>}
               {c.suspendido && <span style={{ fontSize: 11, color: "#888", background: "#88888822", padding: "2px 8px", borderRadius: 10 }}>suspendido</span>}
+              {motivos.map((m) => (
+                <span key={m} style={{ fontSize: 11, color: "var(--amber)", border: "1px dashed var(--amber)", padding: "1px 7px", borderRadius: 10 }}>⚠️ {m}</span>
+              ))}
             </div>
             <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 3 }}>
-              {(c.rubros as { nombre: string } | undefined)?.nombre ?? "Sin rubro"}
-              {(c.ciudades as { nombre: string } | undefined)?.nombre ? ` · ${(c.ciudades as { nombre: string }).nombre}` : ""}
+              {c.rubros?.nombre ?? "Sin rubro"}
+              {c.ciudades?.nombre ? ` · ${c.ciudades.nombre}` : ""}
               {c.modalidad ? ` · ${MODALIDAD_LABEL[c.modalidad] ?? c.modalidad}` : ""}
             </div>
             {c.descripcion && (
@@ -886,15 +978,17 @@ function TabComercios({
 
           {/* Acciones */}
           <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
-            <a
-              href={`https://wa.me/${c.whatsapp}`}
-              target="_blank" rel="noopener"
-              className="mbtn"
-              title={`WhatsApp +${c.whatsapp}`}
-              style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
-            >
-              <WhatsApp style={{ width: 16, height: 16 }} />
-            </a>
+            {c.whatsapp && (
+              <a
+                href={`https://wa.me/${c.whatsapp}`}
+                target="_blank" rel="noopener"
+                className="mbtn"
+                title={`WhatsApp +${c.whatsapp}`}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                <WhatsApp style={{ width: 16, height: 16 }} />
+              </a>
+            )}
             {c.lat != null && (
               <a
                 href={comoLlegarHref(c)}
@@ -921,7 +1015,18 @@ function TabComercios({
             )}
           </div>
         </div>
-      ))}
+        );
+      })}
+
+      {filtradas.length > limitVis && (
+        <div style={{ padding: 16, textAlign: "center" }}>
+          <button className="btn btn-ghost" onClick={() => setLimitVis((n) => n + 50)}>
+            Ver más ({filtradas.length - limitVis} restantes)
+          </button>
+        </div>
+      )}
+      </>
+      )}
 
       {editando && (
         <ModalEditar
