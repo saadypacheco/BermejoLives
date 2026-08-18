@@ -45,18 +45,19 @@ export async function UrukuShell({
     <div id="ukroot" className={`uk${fill ? " uk-fill" : ""}${rootClass ? " " + rootClass : ""}`}>
       <ThemeNoFlash />
 
-      {/* Barra social */}
+      {/* Barra superior: redes + clima + cotización + tema, todo en una línea */}
       <div className="uk-social-bar">
         <div className="uk-container uk-social-inner">
-          <div className="uk-social-copy">
-            <strong>URUKU EN REDES</strong>
-            <span aria-hidden>›</span>
-            <span className="uk-hide-sm">Ofertas, novedades y tips todos los días</span>
+          <SocialLinks redes={redes} cls="uk-social-links" />
+          <div className="uk-topinfo">
+            {clima?.temp_c != null && (
+              <span className="uk-top-item">{clima.icono || "☀"} {Math.round(clima.temp_c)}°</span>
+            )}
+            {cot2.map((c) => (
+              <span key={c.clave} className="uk-top-item"><b>{money(c.valor)}</b> {c.unidad} · {c.etiqueta}</span>
+            ))}
           </div>
-          <div className="uk-social-right">
-            <SocialLinks redes={redes} cls="uk-social-links" />
-            <ThemeToggle />
-          </div>
+          <ThemeToggle iconOnly />
         </div>
       </div>
 
@@ -76,23 +77,6 @@ export async function UrukuShell({
 
           <div className="uk-tools">
             <div className="uk-tool-city"><CitySelector actual={ciudad} ciudades={ciudades} /></div>
-            <div className="uk-tools-strip">
-              {clima?.temp_c != null && (
-                <div className="uk-weather">
-                  <span className="uk-sun">{clima.icono || "☀"}</span>
-                  <div className="uk-weather-t">
-                    <strong>{Math.round(clima.temp_c)}°C</strong>
-                    {clima.descripcion && <small>{clima.descripcion}</small>}
-                  </div>
-                </div>
-              )}
-              {cot2.map((c) => (
-                <div key={c.clave} className="uk-quote-mini">
-                  <small>{c.etiqueta}</small>
-                  <strong>{money(c.valor)} {c.unidad}</strong>
-                </div>
-              ))}
-            </div>
             <div className="uk-tool-ingresar"><IngresarMenu /></div>
           </div>
         </div>

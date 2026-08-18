@@ -57,12 +57,13 @@
 
 /* ---- Barra social superior ---- */
 .uk-social-bar { background: #083f4b; color: #fff; font-size: 13px; }
-.uk-social-inner { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.uk-social-copy { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.uk-social-copy strong { color: #34d394; letter-spacing: .02em; }
-.uk-social-copy .uk-hide-sm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.uk-social-right { display: flex; align-items: center; gap: 10px; }
-.uk-social-links { display: flex; align-items: center; gap: 8px; }
+.uk-social-inner { min-height: 40px; display: flex; align-items: center; gap: 12px; }
+/* Barra superior compacta: redes + clima + cotización (scroll) + tema */
+.uk-topinfo { flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.uk-topinfo::-webkit-scrollbar { display: none; }
+.uk-top-item { font-size: 12px; color: rgba(255,255,255,.82); white-space: nowrap; flex-shrink: 0; }
+.uk-top-item b { color: #fff; font-weight: 800; }
+.uk-social-links { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .uk-social-links a {
   width: 26px; height: 26px; display: grid; place-items: center;
   border-radius: 8px; background: rgba(255,255,255,.12);
@@ -73,6 +74,7 @@
   color: #fff; border-radius: 9px; padding: 5px 10px; cursor: pointer;
   display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
 }
+.uk-theme-toggle-icon { padding: 5px 8px; flex-shrink: 0; }
 
 /* ---- Header ---- */
 .uk-header { background: var(--uk-header); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--uk-line); }
@@ -91,7 +93,7 @@
 .uk-tools { display: flex; align-items: center; gap: 14px; }
 /* En desktop los wrappers "desaparecen" (los hijos entran directo al flex de .uk-tools);
    en mobile se activan para reordenar (ver media query). */
-.uk-tool-city, .uk-tools-strip, .uk-tool-ingresar { display: contents; }
+.uk-tool-city, .uk-tool-ingresar { display: contents; }
 .uk-pill { border: 1px solid var(--uk-line); background: var(--uk-surface); border-radius: 15px; padding: 11px 15px; color: var(--uk-ink); font-weight: 700; box-shadow: var(--uk-shadow-soft); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 /* Chip Abierto / Cerrado ahora */
 .uk-open { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 999px; white-space: nowrap; line-height: 1.4; }
@@ -406,7 +408,7 @@
 @media (max-width: 780px) {
   .uk-social-copy .uk-hide-sm { display: none; }
   .uk-social-inner { min-height: 36px; }
-  /* Header compacto: fila 1 = logo + ciudad + Ingresar; fila 2 = tira clima+cotización; fila 3 = buscador */
+  /* Header compacto: fila 1 = logo + ciudad + Ingresar; fila 2 = buscador (clima/cotización van arriba) */
   .uk-header-main { display: flex; flex-wrap: wrap; align-items: center; column-gap: 10px; row-gap: 10px; padding: 12px 0; min-height: 0; }
   .uk-tools { display: contents; }
   .uk-brand { order: 1; flex: 0 1 auto; min-width: 0; }
@@ -414,12 +416,7 @@
   .uk-brand-word { font-size: 34px; }
   .uk-tool-city { order: 2; display: block; margin-left: auto; }
   .uk-tool-ingresar { order: 3; display: block; }
-  .uk-tool-ingresar { order: 3; display: block; }
-  .uk-tools-strip { order: 4; flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; padding: 8px 13px; background: var(--uk-surface); border: 1px solid var(--uk-line); border-radius: 12px; box-shadow: var(--uk-shadow-soft); }
-  .uk-tools-strip .uk-weather { border-right: 0; padding-right: 0; }
-  .uk-tools-strip .uk-weather .uk-sun { font-size: 20px; }
-  .uk-tools-strip .uk-weather-t strong { font-size: 15px; }
-  .uk-search { order: 5; flex-basis: 100%; }
+  .uk-search { order: 4; flex-basis: 100%; }
   .uk-hero { min-height: auto; }
   .uk-hero-grid { grid-template-columns: 1fr; padding: 34px 0; }
   .uk-quote-card { justify-self: stretch; width: 100%; margin: 0; }
