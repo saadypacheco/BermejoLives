@@ -354,6 +354,10 @@
 .mh-dot { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; flex-shrink: 0; border: 2px solid rgba(13,16,21,.7); }
 .mh-nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mh-inc { font-size: 11px; color: var(--amber); border: 1px dashed var(--amber); padding: 1px 6px; border-radius: 8px; flex-shrink: 0; }
+/* Directorio del mercado (comprador): portada + video de recorrido arriba de la lista */
+.mapa-hoja-media { display: flex; gap: 4px; background: #000; max-height: 170px; overflow: hidden; flex-shrink: 0; }
+.mapa-hoja-media img, .mapa-hoja-media video { flex: 1; min-width: 0; width: 100%; max-height: 170px; object-fit: cover; display: block; }
+.mh-thumb { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
 .ukpin.sel { border-color: #39ff9e; box-shadow: 0 0 0 4px rgba(57,255,158,.30), 0 3px 12px rgba(0,0,0,.6); }
 .ukpin.sel .ukpin-emo { font-size: 18px; }
 .ukpin-badge { position: absolute; top: -8px; right: -6px; z-index: 2; background: #39ff9e; color: #04240f; font-size: 9px; font-weight: 800; padding: 1px 4px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,.4); white-space: nowrap; pointer-events: none; }

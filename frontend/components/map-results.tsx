@@ -1,15 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type ResultadoBusqueda, comoLlegarHref, waLink, MODALIDAD_LABEL } from "@/lib/types";
 import { registrarLead } from "@/lib/campo";
-import { rubroStyle, loadLeaflet } from "@/lib/mapa-visual";
+import { rubroStyle, loadLeaflet, opcionesCluster, manejarClusterClick } from "@/lib/mapa-visual";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 
 // Pin del mapa de resultados: color por rubro; los verificados resaltan (anillo).
-// El type ResultadoBusqueda no trae plan, así que acá no hay jerarquía por plan;
-// el clustering resuelve el amontonamiento (Bermejo tiene los comercios pegados).
 function pinHtml(r: ResultadoBusqueda): string {
   const style = rubroStyle(r.rubro_slug);
   const cls = r.verificado ? "ukpin destacado" : "ukpin pago";
@@ -21,6 +19,9 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const clusterRef = useRef<any>(null);
+  const [hoja, setHoja] = useState<ResultadoBusqueda[] | null>(null);
+  const hojaRef = useRef<(items: ResultadoBusqueda[]) => void>(() => {});
+  hojaRef.current = setHoja;
 
   useEffect(() => {
     let cancelled = false;
@@ -31,13 +32,12 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
         L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
           maxZoom: 19, updateWhenIdle: true, keepBuffer: 2,
         }).addTo(mapRef.current);
-        clusterRef.current = L.markerClusterGroup({
-          maxClusterRadius: 48, showCoverageOnHover: false, spiderfyOnMaxZoom: true, chunkedLoading: true,
-          iconCreateFunction: (cl: any) => L.divIcon({
-            className: "", iconSize: [38, 38],
-            html: `<div class="ukclus">${cl.getChildCount()}</div>`,
-          }),
-        }).addTo(mapRef.current);
+        const cluster = L.markerClusterGroup(opcionesCluster(L)).addTo(mapRef.current);
+        clusterRef.current = cluster;
+        cluster.on("clusterclick", (e: any) => {
+          const r = manejarClusterClick(mapRef.current, e);
+          if (r.accion === "hoja") hojaRef.current(r.comercios as ResultadoBusqueda[]);
+        });
       }
       renderPins(L);
     });
@@ -80,7 +80,9 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
             <a href="/comercios/${r.slug}">Ver comercio</a>
           </div>
         </div>`;
-      markers.push(L.marker([r.lat, r.lng], { icon, zIndexOffset: r.verificado ? 300 : 0 }).bindPopup(popup));
+      const m = L.marker([r.lat, r.lng], { icon, zIndexOffset: r.verificado ? 300 : 0 }).bindPopup(popup);
+      m.__data = r;
+      markers.push(m);
       bounds.push([r.lat as number, r.lng as number]);
     }
     cluster.addLayers(markers);
@@ -91,8 +93,29 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
   const sinCoords = results.filter((r) => r.lat == null || r.lng == null).length;
 
   return (
-    <div>
+    <div style={{ position: "relative" }}>
       <div ref={elRef} className="map-canvas" />
+
+      {hoja && hoja.length > 0 && (
+        <div className="mapa-hoja">
+          <div className="mapa-hoja-head">
+            <b>{hoja.length} comercios acá</b>
+            <button type="button" onClick={() => setHoja(null)} aria-label="Cerrar">✕</button>
+          </div>
+          <div className="mapa-hoja-list">
+            {hoja.map((r) => {
+              const st = rubroStyle(r.rubro_slug);
+              return (
+                <a key={r.id} href={`/comercios/${r.slug}`} className="mapa-hoja-row">
+                  <span className="mh-dot" style={{ background: st.color }}>{st.emoji}</span>
+                  <span className="mh-nom">{r.nombre}{r.rubro_nombre ? ` · ${r.rubro_nombre}` : ""}</span>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {sinCoords > 0 && (
         <p style={{ color: "var(--txt-3)", fontSize: 12.5, marginTop: 10 }}>
           {sinCoords} comercio(s) sin ubicación todavía (la comparten por WhatsApp). Mientras tanto aparecen en la lista.

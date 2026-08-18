@@ -1,18 +1,19 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { ComercioMapa } from "@/lib/data";
 import { abiertoAhora } from "@/lib/horario";
-import { rubroStyle, loadLeaflet } from "@/lib/mapa-visual";
+import { rubroStyle, loadLeaflet, opcionesCluster, manejarClusterClick, escapeHtml } from "@/lib/mapa-visual";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 // Debajo de este zoom (vista de toda la ciudad) los "gratis" se ocultan: solo se
-// ven los que pagan (premia el plan). Al acercar aparecen todos. 15 es el zoom
-// por defecto, así que en la vista normal se ven todos; solo desaparecen al alejar.
+// ven los que pagan (premia el plan). Al acercar aparecen todos.
 const ZOOM_GRATIS = 14;
 
 type Tier = "gratis" | "pago" | "destacado";
+type Hoja = { titulo: string; portada?: string | null; video?: string | null; items: ComercioMapa[] };
+
 function tierDe(c: ComercioMapa): Tier {
   if (c.destacado) return "destacado";
   if (c.plan && c.plan !== "gratis") return "pago";
@@ -27,7 +28,6 @@ function pinHtml(c: ComercioMapa, tier: Tier, isSel: boolean, cerrado: boolean, 
   const style = rubroStyle(c.rubro_slug);
   const cls = ["ukpin", tier, cerrado ? "cerrado" : "", isSel ? "sel" : ""].filter(Boolean).join(" ");
   const badge = pct ? `<b class="ukpin-badge">-${pct}%</b>` : "";
-  // El destacado muestra la MINI-FOTO (thumbnail de 20KB) si la tiene; si no, el emoji.
   const conFoto = tier === "destacado" && !!c.portada_thumb_url;
   const inner = conFoto
     ? `<img class="ukpin-photo" src="${c.portada_thumb_url}" alt="" loading="lazy" />`
@@ -42,7 +42,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
 }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
-  const clusterRef = useRef<any>(null);          // UN solo cluster para todos (evita el pin suelto encima del número)
+  const clusterRef = useRef<any>(null);
   const markerByIdRef = useRef<Map<string, any>>(new Map());
   const gratisMarkersRef = useRef<any[]>([]);
   const gratisShownRef = useRef(false);
@@ -52,16 +52,17 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
   const selIdRef = useRef<string | null | undefined>(selectedId);
   const selRadiusRef = useRef(18);
   const onSelRef = useRef(onSelect);
+  const [hoja, setHoja] = useState<Hoja | null>(null);
+  const hojaRef = useRef<(h: Hoja) => void>(() => {});
   onSelRef.current = onSelect;
   selIdRef.current = selectedId;
+  hojaRef.current = setHoja;
 
-  // Re-centrar si cambia la ciudad seleccionada (el mapa se inicializa una sola vez).
   useEffect(() => {
     if (mapRef.current && center) mapRef.current.setView(center, 15);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [center?.[0], center?.[1]]);
 
-  // init una sola vez
   useEffect(() => {
     let cancelled = false;
     loadLeaflet().then((L) => {
@@ -82,18 +83,15 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
         obs.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
         (map as any)._themeObs = obs;
       }
-      // Un solo cluster para TODOS los pines. Cuando están amontonados se agrupan en
-      // un círculo con el número; al acercar se separan. El seleccionado NO se dibuja
-      // suelto por encima (eso generaba el "símbolo raro" número+pin): si está dentro
-      // de un cluster, no se muestra individual y la flecha se oculta (ver drawConnector).
-      clusterRef.current = L.markerClusterGroup({
-        maxClusterRadius: 46, showCoverageOnHover: false, spiderfyOnMaxZoom: true, chunkedLoading: true,
-        iconCreateFunction: (cl: any) => L.divIcon({
-          className: "", iconSize: [38, 38],
-          html: `<div class="ukclus">${cl.getChildCount()}</div>`,
-        }),
-      }).addTo(map);
-      clusterRef.current.on("animationend", drawConnector);
+      // Smart cluster: tocar un grupo hace ZOOM FUERTE (sin patitas); si están muy
+      // pegados, HOJA con la lista. Igual que el finder.
+      const cluster = L.markerClusterGroup(opcionesCluster(L)).addTo(map);
+      clusterRef.current = cluster;
+      cluster.on("clusterclick", (e: any) => {
+        const r = manejarClusterClick(map, e);
+        if (r.accion === "hoja") hojaRef.current({ titulo: `${r.comercios.length} comercios acá`, items: r.comercios as ComercioMapa[] });
+      });
+      cluster.on("animationend", drawConnector);
       pintar();
       map.on("move zoom moveend", drawConnector);
       map.on("zoomend", aplicarZoomProgresivo);
@@ -122,7 +120,6 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // repintar cuando cambian comercios o el seleccionado
   useEffect(() => { pintar(); /* eslint-disable-next-line */ }, [comercios, selectedId, descuentoPorId]);
 
   function marcador(L: any, c: ComercioMapa, tier: Tier, isSel: boolean) {
@@ -136,6 +133,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
     const m = L.marker([c.lat as number, c.lng as number], {
       icon, zIndexOffset: isSel ? 1200 : tier === "destacado" ? 400 : tier === "pago" ? 100 : 0,
     });
+    m.__data = c;
     m.on("click", () => {
       onSelRef.current?.(c);
       const map = mapRef.current;
@@ -147,32 +145,55 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
     return m;
   }
 
+  function iconoLugar(L: any, nombre: string, n: number) {
+    const html = `<div class="ukpinlugar"><span>🏬</span><b>${escapeHtml(nombre)}</b><i>${n}</i></div>`;
+    return L.divIcon({ className: "", html, iconSize: null as any, iconAnchor: [15, 16] });
+  }
+
   function pintar() {
     const L = LRef.current, cluster = clusterRef.current;
     if (!L || !cluster) return;
     cluster.clearLayers();
     markerByIdRef.current = new Map();
     gratisMarkersRef.current = [];
-    const fijos: any[] = [];   // pagos, destacados y el seleccionado: siempre en el cluster
+    const fijos: any[] = [];
+    // Agrupar los que están dentro de un mercado/galería; el resto, sueltos.
+    const grupos = new Map<string, { nombre: string; lat: number | null; lng: number | null; sumLat: number; sumLng: number; n: number; portada: string | null; video: string | null; items: ComercioMapa[] }>();
 
     for (const c of comercios) {
       if (c.lat == null || c.lng == null) continue;
+      if (c.lugar_id) {
+        let g = grupos.get(c.lugar_id);
+        if (!g) { g = { nombre: c.lugar_nombre || "Mercado", lat: c.lugar_lat, lng: c.lugar_lng, sumLat: 0, sumLng: 0, n: 0, portada: c.lugar_portada_thumb_url, video: c.lugar_video_url, items: [] }; grupos.set(c.lugar_id, g); }
+        g.items.push(c); g.sumLat += c.lat; g.sumLng += c.lng; g.n += 1;
+        continue;
+      }
       const tier = tierDe(c);
       const isSel = c.id === selectedId;
       const m = marcador(L, c, tier, isSel);
       markerByIdRef.current.set(c.id, m);
       if (isSel) selRadiusRef.current = sizeDe(tier, true) / 2;
-      // Solo los gratis (no seleccionados) están sujetos al zoom progresivo.
       if (tier === "gratis" && !isSel) gratisMarkersRef.current.push(m);
       else fijos.push(m);
     }
+
+    for (const g of grupos.values()) {
+      const lat = g.lat ?? (g.n ? g.sumLat / g.n : null);
+      const lng = g.lng ?? (g.n ? g.sumLng / g.n : null);
+      if (lat == null || lng == null) continue;
+      const items = g.items;
+      const m = L.marker([lat, lng], { icon: iconoLugar(L, g.nombre, items.length), zIndexOffset: 500 });
+      m.__data = items[0];
+      m.on("click", () => hojaRef.current({ titulo: `🏬 ${g.nombre}`, portada: g.portada, video: g.video, items }));
+      fijos.push(m);
+    }
+
     cluster.addLayers(fijos);
-    gratisShownRef.current = false;   // se agregan (o no) según el zoom actual
+    gratisShownRef.current = false;
     aplicarZoomProgresivo();
     drawConnector();
   }
 
-  // Zoom progresivo: los gratis solo se muestran de ZOOM_GRATIS para arriba.
   function aplicarZoomProgresivo() {
     const map = mapRef.current, cluster = clusterRef.current;
     if (!map || !cluster) return;
@@ -183,9 +204,6 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
     drawConnector();
   }
 
-  // Flecha punteada del pin seleccionado hacia la tarjeta. Solo se dibuja si el pin
-  // está VISIBLE individualmente (no dentro de un cluster) y apunta a la posición
-  // REAL de la tarjeta (en el celular abajo-centro; en desktop flota abajo-izquierda).
   function drawConnector() {
     const map = mapRef.current, svg = svgRef.current, path = pathRef.current, cluster = clusterRef.current;
     if (!map || !svg || !path || !cluster) return;
@@ -223,6 +241,35 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
         </defs>
         <path ref={pathRef} fill="none" stroke="#39ff9e" strokeWidth="2" strokeDasharray="4 6" strokeLinecap="round" markerEnd="url(#hmArrow)" />
       </svg>
+
+      {/* Directorio del mercado (o "N comercios acá"): portada + video + puestos */}
+      {hoja && hoja.items.length > 0 && (
+        <div className="mapa-hoja">
+          {(hoja.portada || hoja.video) && (
+            <div className="mapa-hoja-media">
+              {hoja.portada && <img src={hoja.portada} alt="" />}
+              {hoja.video && <video src={hoja.video} controls muted playsInline preload="metadata" />}
+            </div>
+          )}
+          <div className="mapa-hoja-head">
+            <b>{hoja.titulo} · {hoja.items.length}</b>
+            <button type="button" onClick={() => setHoja(null)} aria-label="Cerrar">✕</button>
+          </div>
+          <div className="mapa-hoja-list">
+            {hoja.items.map((c) => {
+              const st = rubroStyle(c.rubro_slug);
+              const thumb = c.portada_thumb_url || c.portada_url;
+              return (
+                <button key={c.id} type="button" className="mapa-hoja-row" onClick={() => { onSelect?.(c); setHoja(null); }}>
+                  {thumb ? <img className="mh-thumb" src={thumb} alt="" /> : <span className="mh-dot" style={{ background: st.color }}>{st.emoji}</span>}
+                  <span className="mh-nom">{c.puesto ? `#${c.puesto} · ` : ""}{c.nombre}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <Link href="/buscar" className="hm-btn hm-full">⛶ Ver mapa completo</Link>
     </div>
   );

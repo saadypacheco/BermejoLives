@@ -104,6 +104,10 @@ export type ComercioMapa = {
   direccion: string | null; descripcion: string | null; horario: string | null;
   como_llegar: string | null; rubro_slug: string | null; plan: string | null;
   ficha_activa: boolean;   // muestra "Más información": suscripción al día (paga_hasta vigente, no suspendido)
+  // Lugar (mercado/galería) al que pertenece, si está adentro de uno
+  lugar_id: string | null; puesto: string | null;
+  lugar_nombre: string | null; lugar_lat: number | null; lugar_lng: number | null;
+  lugar_portada_thumb_url: string | null; lugar_video_url: string | null;
 };
 
 // Bbox alrededor del centro de una ciudad (±grados). Usado para acotar el mapa
@@ -122,31 +126,39 @@ export async function getComerciosMapa(
     ? bboxCiudad(ciudad.lat, ciudad.lng)
     : { latMin: -22.90, latMax: -22.58, lngMin: -64.52, lngMax: -64.16 }; // Bermejo por defecto
   if (hasSupabase) {
-    const [{ data, error }, { data: rubros, error: errorRubros }] = await Promise.all([
+    const [{ data, error }, { data: rubros, error: errorRubros }, { data: lugs }] = await Promise.all([
       supabase
         .from("comercios")
-        .select("id, slug, nombre, lat, lng, logo_url, portada_url, portada_thumb_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, plan, paga_hasta, suspendido, rubro_id")
+        .select("id, slug, nombre, lat, lng, logo_url, portada_url, portada_thumb_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, plan, paga_hasta, suspendido, rubro_id, lugar_id, puesto")
         .eq("activo", true)
         .not("lat", "is", null)
         .gte("lat", c0.latMin).lte("lat", c0.latMax)
         .gte("lng", c0.lngMin).lte("lng", c0.lngMax)
         .limit(250),
       supabase.from("rubros").select("id, slug"),
+      supabase.from("lugares").select("id, nombre, tipo, lat, lng, portada_thumb_url, video_url").eq("activo", true),
     ]);
     if (error) logSupaError("getComerciosMapa (comercios)", error);
     if (errorRubros) logSupaError("getComerciosMapa (rubros)", errorRubros);
     if (data) {
       const slugById = new Map((rubros ?? []).map((r: any) => [r.id, r.slug]));
+      const lugById = new Map((lugs ?? []).map((l: any) => [l.id, l]));
       // Gracia de 10 días: tras vencer el pago, la ficha sigue 10 días antes de pasar a "solo mapa".
       const graceISO = new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10);
-      return (data as any[]).map((c) => ({
-        id: c.id, slug: c.slug, nombre: c.nombre, lat: c.lat, lng: c.lng,
-        logo_url: c.logo_url, portada_url: c.portada_url, portada_thumb_url: c.portada_thumb_url ?? null, whatsapp: c.whatsapp, telefono: c.telefono,
-        verificado: c.verificado, destacado: c.destacado, rating: c.rating,
-        direccion: c.direccion, descripcion: c.descripcion, horario: c.horario, como_llegar: c.como_llegar,
-        rubro_slug: slugById.get(c.rubro_id) ?? null, plan: c.plan ?? null,
-        ficha_activa: !c.suspendido && !!c.paga_hasta && String(c.paga_hasta).slice(0, 10) >= graceISO,
-      }));
+      return (data as any[]).map((c) => {
+        const lg = c.lugar_id ? lugById.get(c.lugar_id) : null;
+        return {
+          id: c.id, slug: c.slug, nombre: c.nombre, lat: c.lat, lng: c.lng,
+          logo_url: c.logo_url, portada_url: c.portada_url, portada_thumb_url: c.portada_thumb_url ?? null, whatsapp: c.whatsapp, telefono: c.telefono,
+          verificado: c.verificado, destacado: c.destacado, rating: c.rating,
+          direccion: c.direccion, descripcion: c.descripcion, horario: c.horario, como_llegar: c.como_llegar,
+          rubro_slug: slugById.get(c.rubro_id) ?? null, plan: c.plan ?? null,
+          ficha_activa: !c.suspendido && !!c.paga_hasta && String(c.paga_hasta).slice(0, 10) >= graceISO,
+          lugar_id: c.lugar_id ?? null, puesto: c.puesto ?? null,
+          lugar_nombre: lg?.nombre ?? null, lugar_lat: lg?.lat ?? null, lugar_lng: lg?.lng ?? null,
+          lugar_portada_thumb_url: lg?.portada_thumb_url ?? null, lugar_video_url: lg?.video_url ?? null,
+        };
+      });
     }
   } else {
     console.warn("getComerciosMapa: hasSupabase=false — faltan NEXT_PUBLIC_SUPABASE_URL/ANON_KEY");
@@ -157,6 +169,8 @@ export async function getComerciosMapa(
     verificado: c.verificado, destacado: c.destacado, rating: c.rating,
     direccion: c.direccion, descripcion: c.descripcion, horario: c.horario, como_llegar: c.como_llegar,
     rubro_slug: null, plan: c.plan, ficha_activa: c.plan !== "gratis",
+    lugar_id: null, puesto: null, lugar_nombre: null, lugar_lat: null, lugar_lng: null,
+    lugar_portada_thumb_url: null, lugar_video_url: null,
   }));
 }
 
