@@ -107,7 +107,9 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
         navigator.geolocation.getCurrentPosition((pos) => {
           if (cancelled || !mapRef.current) return;
           const here = L.divIcon({ className: "", html: `<div class="here-dot"></div>`, iconSize: [22, 22], iconAnchor: [11, 11] });
-          L.marker([pos.coords.latitude, pos.coords.longitude], { icon: here, zIndexOffset: 1000 }).addTo(map);
+          L.marker([pos.coords.latitude, pos.coords.longitude], { icon: here, zIndexOffset: 1000 })
+            .bindTooltip("Estás acá", { direction: "top", offset: [0, -8], className: "here-tip" })
+            .addTo(map);
         }, () => {}, { timeout: 5000, maximumAge: 600000 });
       }
     });
