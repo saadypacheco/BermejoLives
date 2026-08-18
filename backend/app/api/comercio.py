@@ -18,6 +18,7 @@ from app.core.text import slug_unico, slugify
 from app.db.repository import Repo, get_repo
 from app.models.schemas import LoginBody, PublicarBody
 from app.services.clasificador import clasificar, generar_texto_comercio, sugerir_rubros
+from app.services.lugares import elegir_lugar
 from app.services.imagenes import (
     guardar_foto_local, procesar_imagen, subir_foto_comercio,
     subir_foto_galeria, subir_video_comercio,
@@ -74,6 +75,13 @@ async def comercio_registro(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    ciudad_id = repo.get_ciudad_id("bermejo")
+    # Detección automática del lugar por GPS: si el punto cae dentro de la manzana de
+    # un mercado/galería (o muy cerca de su punto), lo asignamos solo.
+    lugares = repo.list_lugares(ciudad_id)
+    lugar_id = elegir_lugar(lugares, lat, lng)
+    lugar_nombre = next((l["nombre"] for l in lugares if l["id"] == lugar_id), None) if lugar_id else None
+
     comercio = repo.crear_comercio(
         {
             "slug": slug,
@@ -83,10 +91,11 @@ async def comercio_registro(
             "direccion": direccion.strip() if direccion and direccion.strip() else None,
             "lat": lat,
             "lng": lng,
+            "lugar_id": lugar_id,
             "portada_url": portada_url,
             "portada_thumb_url": portada_thumb,
             "rubro_id": rubro_ids[0] if rubro_ids else None,
-            "ciudad_id": repo.get_ciudad_id("bermejo"),
+            "ciudad_id": ciudad_id,
             "modalidad": modalidad,
             "plan": "gratis",
             "confiable": False,            # nuevo comercio NO publica directo hasta ser verificado
@@ -99,7 +108,7 @@ async def comercio_registro(
     repo.crear_comercio_usuario({"comercio_id": comercio["id"], "nombre": nombre.strip()})
 
     token = auth.make_comercio_token(comercio["id"], whatsapp.strip())
-    logger.info("comercio.registro", slug=slug, con_gps=True, con_foto=bool(portada_url))
+    logger.info("comercio.registro", slug=slug, con_gps=True, con_foto=bool(portada_url), lugar=lugar_id)
     return {
         "access_token": token,
         "comercio": {
@@ -107,6 +116,7 @@ async def comercio_registro(
             "nombre": comercio["nombre"],
             "slug": comercio["slug"],
             "confiable": False,
+            "lugar_nombre": lugar_nombre,   # mercado/galería detectado por GPS (o null)
         },
     }
 

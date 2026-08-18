@@ -61,6 +61,7 @@ class FakeRepo:
         ]
         self.zonas: dict[str, str] = {"zona-moda": "zona-1"}
         self.rubros: dict[str, str] = {"importadora": "rub-1", "gastronomia": "rub-2", "gomeria": "rub-3", "servicios": "rub-4"}
+        self.lugares: dict[str, dict] = {}
         self._seq = 0
 
     def _id(self, prefix: str) -> str:
@@ -98,6 +99,25 @@ class FakeRepo:
         row = {"id": cid, "confiable": False, "verificado": False, "plan": "gratis", **kw}
         self.comercios[cid] = row
         return row
+
+    # ---- lugares (mercados / galerías) ----
+    def crear_lugar(self, row):
+        lid = row.get("id") or self._id("lug")
+        r = {"id": lid, "activo": True, **row}
+        self.lugares[lid] = r
+        return r
+
+    def list_lugares(self, ciudad_id=None):
+        return [l for l in self.lugares.values() if l.get("activo", True)]
+
+    def get_lugar(self, lugar_id):
+        return self.lugares.get(lugar_id)
+
+    def update_lugar(self, lugar_id, patch):
+        l = self.lugares.get(lugar_id)
+        if l:
+            l.update(patch)
+        return l or {}
 
     # ---- ingesta ----
     def insert_wa_inbox(self, row):

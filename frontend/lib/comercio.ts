@@ -4,7 +4,7 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_comercio_token";
 const COMERCIO_KEY = "bermejo_comercio";
 
-export type ComercioSession = { id: string; nombre: string; slug: string; confiable: boolean };
+export type ComercioSession = { id: string; nombre: string; slug: string; confiable: boolean; lugar_nombre?: string | null };
 
 export function getCToken(): string | null {
   return typeof window === "undefined" ? null : localStorage.getItem(TOKEN_KEY);
