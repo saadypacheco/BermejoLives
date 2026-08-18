@@ -59,15 +59,27 @@ export function redHref(clave: string, url: string): string {
   return u.includes(".") ? `https://${u}` : u;         // fallback: prepend https si parece dominio
 }
 
-/** Íconos de redes (desde la tabla `redes`, cargados en el admin). */
+/** Color oficial de cada red (fondo del tile). Instagram va con su gradiente. */
+export const RED_BG: Record<string, string> = {
+  facebook: "#1877F2",
+  instagram: "linear-gradient(45deg,#feda75,#fa7e1e,#d62976,#962fbf,#4f5bd5)",
+  tiktok: "#010101",
+  whatsapp: "#25D366",
+  whatsapp_canal: "#25D366",
+  youtube: "#FF0000",
+};
+
+/** Íconos de redes (desde la tabla `redes`, cargados en el admin). Tile con el color
+ * oficial de la marca + glifo blanco (estilo app-icon). */
 export function SocialLinks({ redes, cls }: { redes: { clave: string; url: string | null; etiqueta: string }[]; cls: string }) {
   const items = redes.filter((r) => r.url);
   if (!items.length) return null;
   return (
     <div className={cls}>
       {items.map((r) => (
-        <a key={r.clave} href={redHref(r.clave, r.url as string)} target="_blank" rel="noopener" aria-label={r.etiqueta}>
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d={RED_D[r.clave] ?? RED_D.facebook} /></svg>
+        <a key={r.clave} href={redHref(r.clave, r.url as string)} target="_blank" rel="noopener" aria-label={r.etiqueta}
+          style={{ background: RED_BG[r.clave] ?? "#444" }}>
+          <svg viewBox="0 0 24 24" fill="#fff" aria-hidden><path d={RED_D[r.clave] ?? RED_D.facebook} /></svg>
         </a>
       ))}
     </div>
