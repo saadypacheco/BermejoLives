@@ -42,18 +42,18 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
 }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
-  const clusterRef = useRef<any>(null);   // gratis + pagos (clusters con número)
-  const destRef = useRef<any>(null);      // destacados (nunca colapsan en número; spiderfy si se enciman)
-  const selLayerRef = useRef<any>(null);  // el seleccionado, siempre suelto y visible
+  const clusterRef = useRef<any>(null);          // UN solo cluster para todos (evita el pin suelto encima del número)
+  const markerByIdRef = useRef<Map<string, any>>(new Map());
   const gratisMarkersRef = useRef<any[]>([]);
-  const gratisShownRef = useRef(true);
+  const gratisShownRef = useRef(false);
   const LRef = useRef<any>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const pathRef = useRef<SVGPathElement>(null);
-  const selCoordRef = useRef<[number, number] | null>(null);
+  const selIdRef = useRef<string | null | undefined>(selectedId);
   const selRadiusRef = useRef(18);
   const onSelRef = useRef(onSelect);
   onSelRef.current = onSelect;
+  selIdRef.current = selectedId;
 
   // Re-centrar si cambia la ciudad seleccionada (el mapa se inicializa una sola vez).
   useEffect(() => {
@@ -82,24 +82,18 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
         obs.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
         (map as any)._themeObs = obs;
       }
-      // Cluster de gratis+pagos: se agrupan en un círculo con el número al amontonarse.
+      // Un solo cluster para TODOS los pines. Cuando están amontonados se agrupan en
+      // un círculo con el número; al acercar se separan. El seleccionado NO se dibuja
+      // suelto por encima (eso generaba el "símbolo raro" número+pin): si está dentro
+      // de un cluster, no se muestra individual y la flecha se oculta (ver drawConnector).
       clusterRef.current = L.markerClusterGroup({
-        maxClusterRadius: 48, showCoverageOnHover: false, spiderfyOnMaxZoom: true, chunkedLoading: true,
+        maxClusterRadius: 46, showCoverageOnHover: false, spiderfyOnMaxZoom: true, chunkedLoading: true,
         iconCreateFunction: (cl: any) => L.divIcon({
           className: "", iconSize: [38, 38],
           html: `<div class="ukclus">${cl.getChildCount()}</div>`,
         }),
       }).addTo(map);
-      // Cluster de destacados: radio chico (solo se juntan si están casi encimados) y
-      // se abren en abanico (spiderfy) al tocarlos; nunca se muestran como número común.
-      destRef.current = L.markerClusterGroup({
-        maxClusterRadius: 22, showCoverageOnHover: false, spiderfyOnMaxZoom: true,
-        iconCreateFunction: (cl: any) => L.divIcon({
-          className: "", iconSize: [40, 40],
-          html: `<div class="ukclus ukclus-dest">⭐${cl.getChildCount()}</div>`,
-        }),
-      }).addTo(map);
-      selLayerRef.current = L.layerGroup().addTo(map);
+      clusterRef.current.on("animationend", drawConnector);
       pintar();
       map.on("move zoom moveend", drawConnector);
       map.on("zoomend", aplicarZoomProgresivo);
@@ -152,35 +146,27 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
   }
 
   function pintar() {
-    const L = LRef.current, cluster = clusterRef.current, dest = destRef.current, sel = selLayerRef.current;
-    if (!L || !cluster || !dest || !sel) return;
-    cluster.clearLayers(); dest.clearLayers(); sel.clearLayers();
+    const L = LRef.current, cluster = clusterRef.current;
+    if (!L || !cluster) return;
+    cluster.clearLayers();
+    markerByIdRef.current = new Map();
     gratisMarkersRef.current = [];
-    const pagos: any[] = [];
-    let selCoords: [number, number] | null = null;
+    const fijos: any[] = [];   // pagos, destacados y el seleccionado: siempre en el cluster
 
     for (const c of comercios) {
       if (c.lat == null || c.lng == null) continue;
       const tier = tierDe(c);
       const isSel = c.id === selectedId;
       const m = marcador(L, c, tier, isSel);
-      if (isSel) {
-        selCoords = [c.lat, c.lng];
-        selRadiusRef.current = sizeDe(tier, true) / 2;
-        sel.addLayer(m);                       // el seleccionado, siempre suelto
-      } else if (tier === "destacado") {
-        dest.addLayer(m);
-      } else if (tier === "pago") {
-        pagos.push(m);
-      } else {
-        gratisMarkersRef.current.push(m);      // gratis: sujeto al zoom progresivo
-      }
+      markerByIdRef.current.set(c.id, m);
+      if (isSel) selRadiusRef.current = sizeDe(tier, true) / 2;
+      // Solo los gratis (no seleccionados) están sujetos al zoom progresivo.
+      if (tier === "gratis" && !isSel) gratisMarkersRef.current.push(m);
+      else fijos.push(m);
     }
-    cluster.addLayers(pagos);
-    gratisShownRef.current = false;            // se agregan (o no) según el zoom actual
+    cluster.addLayers(fijos);
+    gratisShownRef.current = false;   // se agregan (o no) según el zoom actual
     aplicarZoomProgresivo();
-
-    selCoordRef.current = selCoords;
     drawConnector();
   }
 
@@ -192,23 +178,32 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
     const arr = gratisMarkersRef.current;
     if (show && !gratisShownRef.current) { cluster.addLayers(arr); gratisShownRef.current = true; }
     else if (!show && gratisShownRef.current) { cluster.removeLayers(arr); gratisShownRef.current = false; }
+    drawConnector();
   }
 
-  // Flecha punteada desde el pin seleccionado hacia la tarjeta (abajo).
+  // Flecha punteada del pin seleccionado hacia la tarjeta. Solo se dibuja si el pin
+  // está VISIBLE individualmente (no dentro de un cluster) y apunta a la posición
+  // REAL de la tarjeta (en el celular abajo-centro; en desktop flota abajo-izquierda).
   function drawConnector() {
-    const map = mapRef.current, svg = svgRef.current, path = pathRef.current;
-    if (!map || !svg || !path) return;
-    const sc = selCoordRef.current;
-    if (!sc) { svg.style.display = "none"; return; }
+    const map = mapRef.current, svg = svgRef.current, path = pathRef.current, cluster = clusterRef.current;
+    if (!map || !svg || !path || !cluster) return;
+    const hide = () => { svg.style.display = "none"; };
+    const id = selIdRef.current;
+    const marker = id ? markerByIdRef.current.get(id) : null;
+    if (!marker || !cluster.hasLayer(marker) || cluster.getVisibleParent(marker) !== marker) return hide();
+    const cardEl = document.querySelector<HTMLElement>(".mcard");
+    if (!cardEl) return hide();
+
     const size = map.getSize();
+    const sc = marker.getLatLng();
     const p = map.latLngToContainerPoint(sc);
+    const mapRect = elRef.current!.getBoundingClientRect();
+    const cardRect = cardEl.getBoundingClientRect();
+    const x2 = cardRect.left + cardRect.width / 2 - mapRect.left;
+    const y2 = cardRect.top - mapRect.top - 8;
     svg.setAttribute("width", String(size.x));
     svg.setAttribute("height", String(size.y));
     svg.style.display = "block";
-    const cardEl = elRef.current?.closest(".mmap")?.querySelector<HTMLElement>(".mcard");
-    const mapTop = elRef.current!.getBoundingClientRect().top;
-    const x2 = size.x / 2;
-    const y2 = cardEl ? cardEl.getBoundingClientRect().top - mapTop - 8 : size.y * 0.52;
     const c1x = p.x + 14, c1y = p.y + (y2 - p.y) * 0.55;
     const c2x = x2 + 14, c2y = p.y + (y2 - p.y) * 0.75;
     const r = selRadiusRef.current;
