@@ -700,8 +700,9 @@ class SupabaseRepo:
         """Comercios que este agente de campo dio de alta (para que vea su propio recorrido)."""
         res = (
             self._db.table("comercios")
-            .select("id, slug, nombre, whatsapp, modalidad, direccion, portada_url, "
-                    "verificado, created_at, rubros!comercios_rubro_id_fkey(nombre, slug)")
+            .select("id, slug, nombre, whatsapp, telefono, modalidad, direccion, lat, lng, "
+                    "portada_url, portada_thumb_url, verificado, created_at, "
+                    "rubros!comercios_rubro_id_fkey(nombre, slug)")
             .eq("cargado_por", email)
             .eq("activo", True)
             .order("created_at", desc=True)

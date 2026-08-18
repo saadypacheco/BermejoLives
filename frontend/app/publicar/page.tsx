@@ -11,6 +11,7 @@ import type { Ciudad, Rubro } from "@/lib/types";
 import { Pin, User, Arrow, Edit } from "@/components/icons";
 import { comprimirImagen } from "@/lib/imagen";
 import { GaleriaUploader } from "@/components/galeria-uploader";
+import { AdminMap } from "@/components/admin-map";
 import { geoErrorMsg } from "@/lib/geo";
 import { encolarAlta, contarPendientes, sincronizarPendientes } from "@/lib/offline-altas";
 
@@ -37,15 +38,39 @@ export default function CampoPage() {
 }
 
 // ─────────────────────────────────────────────
+function normTxtA(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+// Motivos por los que un comercio del agente está incompleto (para completarlo).
+function agenteIncompleto(c: ComercioAgente): string[] {
+  const r: string[] = [];
+  const nombre = (c.nombre ?? "").trim();
+  const rubroNombre = (c.rubros?.nombre ?? "").trim();
+  if (!nombre || nombre.toLowerCase() === "comercio" || (!!rubroNombre && nombre.toLowerCase() === rubroNombre.toLowerCase())) r.push("sin nombre");
+  if (!c.portada_url) r.push("sin foto");
+  if (!c.whatsapp && !c.telefono) r.push("sin contacto");
+  if (!c.rubros) r.push("sin rubro");
+  return r;
+}
+
+type FiltroAg = "todos" | "pendientes" | "verificados" | "incompletos";
+type OrdenAg = "recientes" | "alfabetico" | "estado";
+
 function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: () => void }) {
   const [items, setItems] = useState<ComercioAgente[] | null>(null);
   const [rubros, setRubros] = useState<Rubro[]>([]);
   const [err, setErr] = useState("");
   const [editando, setEditando] = useState<ComercioAgente | null>(null);
   const [borrando, setBorrando] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [filtro, setFiltro] = useState<FiltroAg>("todos");
+  const [orden, setOrden] = useState<OrdenAg>("recientes");
+  const [vista, setVista] = useState<"lista" | "mapa">("lista");
+  const [limitVis, setLimitVis] = useState(50);
 
   const cargar = () => misComercios().then(setItems).catch((e) => setErr(e instanceof Error ? e.message : "Error"));
   useEffect(() => { cargar(); getRubros().then(setRubros); }, []);
+  useEffect(() => { setLimitVis(50); }, [filtro, q, orden]);
 
   async function eliminar(c: ComercioAgente) {
     if (!window.confirm(`¿Dar de baja "${c.nombre}"? Deja de aparecer en URUKU, pero el registro no se borra.`)) return;
@@ -54,6 +79,33 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
     catch (e) { setErr(e instanceof Error ? e.message : "No se pudo eliminar"); }
     finally { setBorrando(null); }
   }
+
+  const todos = items ?? [];
+  const nVerificados = todos.filter((c) => c.verificado).length;
+  const nPend = todos.length - nVerificados;
+  const nIncompletos = todos.filter((c) => agenteIncompleto(c).length > 0).length;
+
+  // A: filtro por estado → B: incompletos → búsqueda multi-campo → G: orden
+  const porEstado = filtro === "todos" ? todos
+    : filtro === "pendientes" ? todos.filter((c) => !c.verificado)
+    : filtro === "verificados" ? todos.filter((c) => c.verificado)
+    : todos.filter((c) => agenteIncompleto(c).length > 0);
+  const nq = normTxtA(q.trim());
+  const buscadas = !nq ? porEstado : porEstado.filter((c) =>
+    [c.nombre, c.direccion, c.whatsapp, c.telefono, c.rubros?.nombre].map((x) => normTxtA(x ?? "")).join(" ").includes(nq));
+  const filtradas = [...buscadas].sort((a, b) => {
+    if (orden === "alfabetico") return (a.nombre ?? "").localeCompare(b.nombre ?? "");
+    if (orden === "estado") return Number(a.verificado) - Number(b.verificado);
+    return (b.created_at ?? "").localeCompare(a.created_at ?? "");
+  });
+  const visibles = filtradas.slice(0, limitVis);
+
+  const chips: { key: FiltroAg; label: string; n: number; amber?: boolean }[] = [
+    { key: "todos", label: "Todos", n: todos.length },
+    { key: "pendientes", label: "Pendientes", n: nPend },
+    { key: "verificados", label: "Verificados", n: nVerificados },
+    { key: "incompletos", label: "Incompletos", n: nIncompletos, amber: true },
+  ];
 
   return (
     <div className="campo-wrap">
@@ -65,50 +117,126 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
         <button className="link-more" onClick={onLogout} style={{ padding: "6px 12px" }}>Salir</button>
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <button className="link-more" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={onVolver}>
           <Arrow style={{ width: 15, height: 15, transform: "rotate(180deg)" }} /> Volver
         </button>
         <button className="btn btn-ghost" style={{ flex: 1 }} onClick={onVolver}>+ Cargar otro comercio</button>
       </div>
 
+      {/* Buscador (A) + orden (G) + vista lista/mapa (D) */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <input className="adm-input" style={{ flex: 1, minWidth: 160 }} value={q} onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar por nombre, dirección, teléfono…" />
+        <select className="adm-input" style={{ width: "auto" }} value={orden} onChange={(e) => setOrden(e.target.value as OrdenAg)}>
+          <option value="recientes">Recientes</option>
+          <option value="alfabetico">A → Z</option>
+          <option value="estado">Pendientes primero</option>
+        </select>
+        <div style={{ display: "flex", border: "1px solid var(--stroke)", borderRadius: 8, overflow: "hidden" }}>
+          {(["lista", "mapa"] as const).map((v) => (
+            <button key={v} onClick={() => setVista(v)}
+              style={{ padding: "8px 12px", fontSize: 13, border: "none",
+                background: vista === v ? "rgba(57,255,158,.12)" : "transparent",
+                color: vista === v ? "var(--neon)" : "var(--txt-2)", fontWeight: vista === v ? 700 : 400 }}>
+              {v === "lista" ? "☰ Lista" : "🗺 Mapa"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Filtros por estado (B: incluye Incompletos) */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+        {chips.map(({ key, label, n, amber }) => {
+          const activo = filtro === key;
+          const col = amber ? "var(--amber)" : "var(--neon)";
+          return (
+            <button key={key} onClick={() => setFiltro(key)}
+              style={{ padding: "5px 12px", borderRadius: 20, border: "1px solid", fontSize: 12.5,
+                borderColor: activo ? col : "var(--stroke)",
+                background: activo ? "rgba(57,255,158,.10)" : "transparent",
+                color: activo ? col : "var(--txt-2)", fontWeight: activo ? 700 : 400 }}>
+              {label} ({n})
+            </button>
+          );
+        })}
+      </div>
+
       {err && <p style={{ color: "var(--pink)", fontSize: 13 }}>{err}</p>}
       {!items && !err && <p style={{ color: "var(--txt-3)" }}>Cargando…</p>}
       {items && items.length === 0 && <p style={{ color: "var(--txt-3)" }}>Todavía no cargaste ningún comercio.</p>}
+      {items && items.length > 0 && filtradas.length === 0 && <p style={{ color: "var(--txt-3)" }}>Sin resultados para ese filtro/búsqueda.</p>}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {items?.map((c) => (
-          <div key={c.id} className="glass" style={{ padding: 14, borderRadius: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <div style={{ width: 48, height: 48, borderRadius: 10, overflow: "hidden", background: "var(--panel)", flexShrink: 0, display: "grid", placeItems: "center", fontSize: 20 }}>
-                {c.portada_url ? <img src={c.portada_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "🏪"}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nombre}</div>
-                <div style={{ fontSize: 12.5, color: "var(--txt-3)" }}>{c.rubros?.nombre ?? "Sin rubro"}{c.direccion ? ` · ${c.direccion}` : ""}</div>
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: c.verificado ? "var(--neon)" : "var(--amber)", background: c.verificado ? "rgba(57,255,158,.12)" : "rgba(255,176,32,.12)" }}>
-                {c.verificado ? "Verificado" : "Pendiente"}
-              </span>
+      {/* Vista MAPA (D): tocá un pin y se abre el editor de ese comercio (ideal para los sin nombre) */}
+      {vista === "mapa" ? (
+        editando ? (
+          <div className="glass" style={{ padding: 14, borderRadius: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, gap: 8 }}>
+              <b style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editando.nombre || "Sin nombre"}</b>
+              <button className="link-more" style={{ flexShrink: 0 }} onClick={() => setEditando(null)}>← Volver al mapa</button>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn btn-sm" style={{ flex: 1, border: "1px solid var(--stroke)" }} onClick={() => setEditando(editando?.id === c.id ? null : c)}>
-                <Edit style={{ width: 14, height: 14 }} /> Editar
-              </button>
-              <button className="btn btn-sm" style={{ flex: 1, border: "1px solid var(--stroke)", color: "var(--pink)" }} disabled={borrando === c.id} onClick={() => eliminar(c)}>
-                {borrando === c.id ? "Eliminando…" : "Eliminar"}
-              </button>
-            </div>
-            {editando?.id === c.id && (
-              <EditarComercioForm
-                comercio={c} rubros={rubros}
-                onCancel={() => setEditando(null)}
-                onGuardado={(actualizado) => { setItems((prev) => prev?.map((x) => (x.id === c.id ? { ...x, ...actualizado } : x)) ?? prev); setEditando(null); }}
-              />
-            )}
+            <EditarComercioForm
+              comercio={editando} rubros={rubros}
+              onCancel={() => setEditando(null)}
+              onGuardado={(actualizado) => { setItems((prev) => prev?.map((x) => (x.id === editando.id ? { ...x, ...actualizado } : x)) ?? prev); setEditando(null); }}
+            />
           </div>
-        ))}
-      </div>
+        ) : (
+          <AdminMap
+            comercios={filtradas.map((c) => ({ id: c.id, nombre: c.nombre, lat: c.lat, lng: c.lng, rubro_slug: c.rubros?.slug ?? null, incompleto: agenteIncompleto(c).length > 0 }))}
+            onSelect={(id) => setEditando(todos.find((x) => x.id === id) ?? null)}
+          />
+        )
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {visibles.map((c) => {
+            const motivos = agenteIncompleto(c);
+            return (
+            <div key={c.id} className="glass" style={{ padding: 14, borderRadius: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <div style={{ width: 48, height: 48, borderRadius: 10, overflow: "hidden", background: "var(--panel)", flexShrink: 0, display: "grid", placeItems: "center", fontSize: 20 }}>
+                  {(c.portada_thumb_url || c.portada_url) ? <img src={(c.portada_thumb_url || c.portada_url) as string} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "🏪"}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nombre || "Sin nombre"}</div>
+                  <div style={{ fontSize: 12.5, color: "var(--txt-3)" }}>{c.rubros?.nombre ?? "Sin rubro"}{c.direccion ? ` · ${c.direccion}` : ""}</div>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: c.verificado ? "var(--neon)" : "var(--amber)", background: c.verificado ? "rgba(57,255,158,.12)" : "rgba(255,176,32,.12)" }}>
+                  {c.verificado ? "Verificado" : "Pendiente"}
+                </span>
+              </div>
+              {motivos.length > 0 && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {motivos.map((m) => (
+                    <span key={m} style={{ fontSize: 11, color: "var(--amber)", border: "1px dashed var(--amber)", padding: "1px 7px", borderRadius: 10 }}>⚠️ {m}</span>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn-sm" style={{ flex: 1, border: "1px solid var(--stroke)" }} onClick={() => setEditando(editando?.id === c.id ? null : c)}>
+                  <Edit style={{ width: 14, height: 14 }} /> Editar
+                </button>
+                <button className="btn btn-sm" style={{ flex: 1, border: "1px solid var(--stroke)", color: "var(--pink)" }} disabled={borrando === c.id} onClick={() => eliminar(c)}>
+                  {borrando === c.id ? "Eliminando…" : "Eliminar"}
+                </button>
+              </div>
+              {editando?.id === c.id && (
+                <EditarComercioForm
+                  comercio={c} rubros={rubros}
+                  onCancel={() => setEditando(null)}
+                  onGuardado={(actualizado) => { setItems((prev) => prev?.map((x) => (x.id === c.id ? { ...x, ...actualizado } : x)) ?? prev); setEditando(null); }}
+                />
+              )}
+            </div>
+            );
+          })}
+          {filtradas.length > limitVis && (
+            <button className="btn btn-ghost" onClick={() => setLimitVis((n) => n + 50)}>
+              Ver más ({filtradas.length - limitVis} restantes)
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

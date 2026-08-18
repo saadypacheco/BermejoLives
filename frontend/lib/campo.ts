@@ -84,8 +84,9 @@ export async function altaComercioCampo(form: FormData): Promise<AltaCampoResult
 }
 
 export type ComercioAgente = {
-  id: string; slug: string; nombre: string; whatsapp: string; modalidad: string | null;
-  direccion: string | null; portada_url: string | null; verificado: boolean; created_at: string;
+  id: string; slug: string; nombre: string; whatsapp: string | null; telefono: string | null; modalidad: string | null;
+  direccion: string | null; lat: number | null; lng: number | null;
+  portada_url: string | null; portada_thumb_url: string | null; verificado: boolean; created_at: string;
   rubros?: { nombre: string; slug: string } | null;
 };
 
