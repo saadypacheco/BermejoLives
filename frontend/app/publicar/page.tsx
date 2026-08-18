@@ -402,6 +402,9 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   const [puesto,      setPuesto]      = useState("");
   const [nuevoLugar,  setNuevoLugar]  = useState("");
   const [creandoLugar,setCreandoLugar]= useState(false);
+  // "Modo mercado": recuerda el lugar recién cargado para seguir con el próximo puesto
+  const [subioLugar,  setSubioLugar]  = useState<{ id: string; nombre: string } | null>(null);
+  const [ultimoPuesto,setUltimoPuesto]= useState("");
 
   const [coords,      setCoords]      = useState<{ lat: number; lng: number; acc: number } | null>(null);
   const [geoMsg,      setGeoMsg]      = useState("");
@@ -560,6 +563,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     if (f.direccion.trim()) campos.direccion = f.direccion.trim();
     if (lugarId && lugarId !== "__nuevo__") campos.lugar_id = lugarId;
     if (puesto.trim()) campos.puesto = puesto.trim();
+    const lugarActual = (lugarId && lugarId !== "__nuevo__") ? lugares.find((l) => l.id === lugarId) ?? null : null;
     const rubroList = rubroSlugs.length > 0 ? rubroSlugs : ["otros"];
     const online = typeof navigator === "undefined" || navigator.onLine;
 
@@ -573,6 +577,9 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       setDone(r.comercio.nombre);
       setAltaId(r.comercio.id);
       setCount((c) => c + 1);
+      setSubioLugar(lugarActual ? { id: lugarActual.id, nombre: lugarActual.nombre } : null);
+      setUltimoPuesto(puesto);
+      listarLugares(ciudadSlug).then(setLugares).catch(() => {});   // refresca el conteo del mercado
     } catch (ex) {
       // Sin señal o falló la red → guardar OFFLINE (se sube solo cuando vuelva internet).
       const esRed = !online || ex instanceof TypeError || /__offline__|fetch|network|Failed/i.test(String(ex));
@@ -582,6 +589,8 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           setDone(campos.nombre ?? "Comercio");
           setDoneOffline(true);
           setCount((c) => c + 1);
+          setSubioLugar(lugarActual ? { id: lugarActual.id, nombre: lugarActual.nombre } : null);
+          setUltimoPuesto(puesto);
           refrescarPend();
         } catch {
           setErr("No se pudo guardar ni siquiera offline. Reintentá.");
@@ -594,11 +603,21 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     }
   }
 
-  function otro() {
+  function limpiar() {
     setF({ ...EMPTY }); setRubroSlugs([]); setIntentosAudio(0);
     setCoords(null); setGeoMsg(""); setFoto(null); setPreview(""); setConsent(true);
-    setLugarId(""); setPuesto(""); setNuevoLugar("");
-    setDone(null); setDoneOffline(false); setAltaId(null); setErr("");
+    setNuevoLugar(""); setDone(null); setDoneOffline(false); setAltaId(null); setErr("");
+  }
+  function otro() {
+    limpiar();
+    setLugarId(""); setPuesto(""); setSubioLugar(null);   // sale del mercado (a la calle u otro)
+  }
+  // Sigue cargando en el MISMO mercado: mantiene el lugar y sugiere el próximo N° de puesto.
+  function otroPuestoAca() {
+    limpiar();
+    setLugarId(subioLugar?.id ?? "");
+    const m = ultimoPuesto.trim().match(/^(\d+)$/);
+    setPuesto(m ? String(parseInt(m[1], 10) + 1) : "");
   }
 
   if (done) {
@@ -628,7 +647,12 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           </div>
         )}
 
-        <button className="btn btn-primary" style={{ width: "100%", marginBottom: 10 }} onClick={otro}>Cargar otro comercio</button>
+        {subioLugar && (
+          <button className="btn btn-primary" style={{ width: "100%", marginBottom: 10, background: "#6d28d9", borderColor: "#6d28d9", color: "#fff" }} onClick={otroPuestoAca}>
+            ➕ Otro puesto en {subioLugar.nombre}
+          </button>
+        )}
+        <button className={subioLugar ? "btn btn-ghost" : "btn btn-primary"} style={{ width: "100%", marginBottom: 10 }} onClick={otro}>Cargar otro comercio {subioLugar ? "(a la calle / otro)" : ""}</button>
         <button className="link-more" onClick={onVerMisComercios}>Ver mis comercios cargados</button>
       </div>
     );
@@ -659,6 +683,17 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       )}
 
       <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+        {/* Banner "modo mercado": el lugar queda fijado hasta que el agente salga */}
+        {lugarId && lugarId !== "__nuevo__" && (() => {
+          const l = lugares.find((x) => x.id === lugarId);
+          return (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: "rgba(109,40,217,.14)", border: "1px solid rgba(139,92,246,.45)", color: "#c4b5fd", borderRadius: 12, padding: "9px 12px", fontSize: 13 }}>
+              <span>🏬 Cargando en <b>{l?.nombre ?? "mercado"}</b>{l?.n_comercios ? ` · ya llevás ${l.n_comercios}` : ""}</span>
+              <button type="button" className="link-more" style={{ flexShrink: 0, color: "#c4b5fd" }} onClick={() => { setLugarId(""); setPuesto(""); }}>Salir</button>
+            </div>
+          );
+        })()}
 
         {/* ── Nombre ── */}
         <input className="adm-input" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre del comercio (opcional — si no, queda 'Comercio')" />
@@ -730,7 +765,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           <label className="campo-lbl">¿Está dentro de un mercado o galería? (opcional)</label>
           <select className="adm-input" value={lugarId} onChange={(e) => setLugarId(e.target.value)}>
             <option value="">No — local a la calle</option>
-            {lugares.map((l) => <option key={l.id} value={l.id}>🏬 {l.nombre}</option>)}
+            {lugares.map((l) => <option key={l.id} value={l.id}>🏬 {l.nombre}{l.n_comercios ? ` (${l.n_comercios})` : ""}</option>)}
             <option value="__nuevo__">➕ Crear nuevo mercado/galería…</option>
           </select>
           {lugarId === "__nuevo__" && (

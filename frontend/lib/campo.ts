@@ -67,12 +67,14 @@ export const subirVideoCampo = (cid: string, file: File, dur: number | null, onP
   subirConProgreso<{ video: VideoGaleria }>(`${API}/campo/mis-comercios/${cid}/videos`, "video", file, getAgenteToken(), dur != null ? { duracion_seg: String(dur) } : {}, onP).then((d) => d.video);
 
 // ---- Lugares (mercados / galerías / paseos: contenedores de puestos) ----
-export type Lugar = { id: string; nombre: string; tipo: string; lat: number | null; lng: number | null; ciudad_id?: string | null };
+export type Lugar = { id: string; nombre: string; tipo: string; lat: number | null; lng: number | null; ciudad_id?: string | null; n_comercios?: number };
 
 export async function listarLugares(ciudadSlug = "bermejo"): Promise<Lugar[]> {
   const res = await fetch(`${API}/campo/lugares?ciudad_slug=${encodeURIComponent(ciudadSlug)}`, { headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` } });
   if (!res.ok) return [];
-  return (await res.json()).items as Lugar[];
+  const items = (await res.json()).items as (Lugar & { comercios?: { count: number }[] })[];
+  // PostgREST devuelve el conteo como comercios:[{count}] → lo aplanamos a n_comercios.
+  return items.map((l) => ({ ...l, n_comercios: l.comercios?.[0]?.count ?? 0 }));
 }
 
 export async function crearLugar(body: { nombre: string; tipo?: string; ciudad_slug?: string; lat?: number | null; lng?: number | null }): Promise<Lugar> {

@@ -732,7 +732,9 @@ class SupabaseRepo:
         return res.data[0]
 
     def list_lugares(self, ciudad_id: str | None = None) -> list[dict]:
-        q = self._db.table("lugares").select("id, nombre, tipo, lat, lng, ciudad_id").eq("activo", True)
+        # comercios(count): cuántos puestos ya tiene cada lugar (para mostrar el
+        # progreso en el selector del alta → "Mercado Central (6)" y poder resumir).
+        q = self._db.table("lugares").select("id, nombre, tipo, lat, lng, ciudad_id, comercios(count)").eq("activo", True)
         if ciudad_id:
             q = q.eq("ciudad_id", ciudad_id)
         return q.order("nombre").execute().data or []
