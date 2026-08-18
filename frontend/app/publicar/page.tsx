@@ -178,7 +178,7 @@ function EditarComercioForm({ comercio, rubros, onCancel, onGuardado }: {
           cargarVideos: () => listarVideosCampo(comercio.id),
           subirVideo: (f, dur, onP) => subirVideoCampo(comercio.id, f, dur, onP),
           borrarVideo: (id) => borrarVideoCampo(comercio.id, id),
-        }} />
+        }} comercioId={comercio.id} />
       </div>
       {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
       <div style={{ display: "flex", gap: 8 }}>
@@ -465,7 +465,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
               cargarVideos: () => listarVideosCampo(altaId),
               subirVideo: (f, dur, onP) => subirVideoCampo(altaId, f, dur, onP),
               borrarVideo: (id) => borrarVideoCampo(altaId, id),
-            }} />
+            }} comercioId={altaId} />
           </div>
         )}
 

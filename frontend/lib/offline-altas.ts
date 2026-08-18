@@ -18,8 +18,15 @@ export type AltaPendiente = {
 
 function abrir(): Promise<IDBDatabase> {
   return new Promise((res, rej) => {
-    const req = indexedDB.open(DB, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: "id" });
+    // v2: comparte la base con offline-media.ts (store "media"). Ambos módulos
+    // abren con la MISMA versión y crean los stores que falten, para que abrir
+    // con una versión menor no tire VersionError.
+    const req = indexedDB.open(DB, 2);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id" });
+      if (!db.objectStoreNames.contains("media")) db.createObjectStore("media", { keyPath: "id" });
+    };
     req.onsuccess = () => res(req.result);
     req.onerror = () => rej(req.error);
   });

@@ -61,11 +61,15 @@ def subir_foto_comercio(slug: str, data: bytes) -> str | None:
 
 
 def subir_foto_galeria(slug: str, data: bytes) -> tuple[str | None, str | None]:
-    """Procesa una foto de galería: guarda la grande (1600px) y una miniatura
+    """Procesa una foto de galería: guarda la grande (1280px) y una miniatura
     (400px) para las tarjetas/mapa. Devuelve (url, thumb_url).
-    Lanza ValueError si el archivo no es una imagen válida."""
+    Lanza ValueError si el archivo no es una imagen válida.
+
+    Grande a 1280px/q80 (antes 1600/82): en un celular se ve igual y pesa ~40%
+    menos (≈140-330KB vs 230-540KB). La grande solo carga cuando el comprador
+    abre la foto en pantalla completa; el mapa/tarjetas usan siempre el thumb."""
     try:
-        grande = procesar_imagen(data, 1600, 82)
+        grande = procesar_imagen(data, 1280, 80)
         chica = procesar_imagen(data, 400, 80)
     except Exception as exc:  # noqa: BLE001
         raise ValueError("El archivo no es una imagen válida") from exc

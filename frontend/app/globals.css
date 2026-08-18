@@ -311,6 +311,26 @@
 .catpin.sel { border-color: #39ff9e; box-shadow: 0 0 0 4px rgba(57,255,158,.25), 0 3px 10px rgba(0,0,0,.6); font-size: 17px; }
 .catpin-badge { position: absolute; top: -9px; right: -6px; background: #39ff9e; color: #04240f; font-size: 9px; font-weight: 800; padding: 1px 4px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,.4); white-space: nowrap; pointer-events: none; }
 
+/* Pin URUKU: TAMAÑO por plan (JS setea iconSize), COLOR por rubro (--pc).
+   gratis = chico apagado · pago = mediano · destacado = grande con mini-foto + anillo dorado.
+   .cerrado = apagado (fuera de horario) · .sel = anillo neón (seleccionado). */
+.ukpin { position: relative; width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; box-sizing: border-box; background: var(--pc, #FFB020); border: 2px solid rgba(13,16,21,.85); box-shadow: 0 3px 8px rgba(0,0,0,.5); }
+.ukpin-emo { font-size: 13px; line-height: 1; }
+.ukpin.gratis { border-width: 1.5px; opacity: .9; }
+.ukpin.gratis .ukpin-emo { font-size: 9px; }
+.ukpin.pago .ukpin-emo { font-size: 12px; }
+.ukpin.destacado { border: 2px solid #fff; overflow: visible; }
+.ukpin.destacado .ukpin-emo { font-size: 20px; }
+.ukpin-photo { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+.ukpin-ring { position: absolute; inset: -5px; border-radius: 50%; border: 2px solid #FFC94D; box-shadow: 0 2px 8px rgba(0,0,0,.45); pointer-events: none; }
+.ukpin.cerrado { filter: grayscale(1) brightness(.72); }
+.ukpin.sel { border-color: #39ff9e; box-shadow: 0 0 0 4px rgba(57,255,158,.30), 0 3px 12px rgba(0,0,0,.6); }
+.ukpin.sel .ukpin-emo { font-size: 18px; }
+.ukpin-badge { position: absolute; top: -8px; right: -6px; z-index: 2; background: #39ff9e; color: #04240f; font-size: 9px; font-weight: 800; padding: 1px 4px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,.4); white-space: nowrap; pointer-events: none; }
+/* Clusters: número (gratis+pagos) y estrella dorada (destacados encimados) */
+.ukclus { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 14px; color: #04130c; background: radial-gradient(circle at 30% 30%, #7CF0B4, #2bd17e); border: 2px solid rgba(13,16,21,.8); box-shadow: 0 4px 12px rgba(0,0,0,.5); }
+.ukclus-dest { color: #3a2a00; background: radial-gradient(circle at 30% 30%, #FFE08A, #F5B301); border-color: #fff; box-shadow: 0 0 0 2px #FFC94D, 0 4px 12px rgba(0,0,0,.5); font-size: 13px; }
+
 /* Tarjeta flotante sobre el mapa (el pin se mueve arriba, la flecha la conecta) */
 .mcard { position: absolute; left: 0; right: 0; bottom: 12px; margin: 0 12px; z-index: 6; max-height: 72%; overflow-y: auto; background: rgba(10,13,20,.92); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border: 1px solid var(--stroke); border-radius: 18px; padding: 13px; box-shadow: 0 14px 36px -10px rgba(0,0,0,.78); }
 .mcard-row { display: flex; gap: 12px; }
@@ -441,6 +461,14 @@
 .galup-bar { position: absolute; inset: 0 auto 0 0; background: rgba(57,255,158,.25); transition: width .15s; }
 .galup-prog span { position: relative; font-size: 12px; font-weight: 600; color: var(--txt); }
 .galup-err { margin-top: 8px; color: var(--pink); font-size: 13px; }
+/* Material diferido (sin señal): se muestra apagado con 📴 hasta que sube */
+.galup-pend { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; padding: 8px 12px; border-radius: 10px; background: rgba(255,176,32,.12); border: 1px solid rgba(255,176,32,.35); color: var(--txt-2); font-size: 12.5px; }
+.galup-pend button { background: var(--neon); color: #04240f; border: none; border-radius: 8px; font-weight: 700; font-size: 12.5px; padding: 6px 12px; }
+.galup-pend button:disabled { opacity: .6; }
+.galup-penditem { opacity: .72; }
+.galup-penditem img { filter: grayscale(.4); }
+.galup-clock { position: absolute; top: 4px; left: 4px; font-size: 15px; z-index: 1; }
+.galup-vid.galup-penditem { background: var(--panel); }
 
 /* ===== Galería en la ficha del comercio ===== */
 .gf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-top: 14px; }
