@@ -474,6 +474,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   const [prefijo,     setPrefijo]     = useState("591");
   const [rubroSlugs,  setRubroSlugs]  = useState<string[]>([]);
   const [sugiriendo,  setSugiriendo]  = useState(false);
+  const [catFiltro,   setCatFiltro]   = useState("");
 
   // Lugares (mercados/galerías): dónde está el puesto, opcional
   const [lugares,     setLugares]     = useState<Lugar[]>([]);
@@ -686,7 +687,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   function limpiar() {
     setF({ ...EMPTY }); setRubroSlugs([]); setIntentosAudio(0);
     setCoords(null); setGeoMsg(""); setFoto(null); setPreview(""); setConsent(true);
-    setNuevoLugar(""); setEditMercado(false); setDone(null); setDoneOffline(false); setAltaId(null); setErr("");
+    setNuevoLugar(""); setEditMercado(false); setCatFiltro(""); setDone(null); setDoneOffline(false); setAltaId(null); setErr("");
   }
   function otro() {
     limpiar();
@@ -828,14 +829,19 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           )}
         </div>
 
-        {/* ── Categorías: siempre visibles para elegir a mano (la IA además puede sugerir) ── */}
+        {/* ── Categorías: buscador + chips (la IA también sugiere desde la descripción) ── */}
         <div>
           <label className="campo-lbl">Categoría{sugiriendo && " (sugiriendo…)"}</label>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-            {rubros.map((r) => (
-              <ChipToggle key={r.slug} label={r.nombre} active={rubroSlugs.includes(r.slug)}
-                onClick={() => setRubroSlugs((prev) => toggle(prev, r.slug))} />
-            ))}
+          <input className="adm-input" style={{ marginTop: 6 }} value={catFiltro}
+            onChange={(e) => setCatFiltro(e.target.value)}
+            placeholder="Buscar categoría (ej: cambio, celular, ropa)…" />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+            {rubros
+              .filter((r) => rubroSlugs.includes(r.slug) || !catFiltro.trim() || normTxtA(r.nombre).includes(normTxtA(catFiltro.trim())))
+              .map((r) => (
+                <ChipToggle key={r.slug} label={r.nombre} active={rubroSlugs.includes(r.slug)}
+                  onClick={() => setRubroSlugs((prev) => toggle(prev, r.slug))} />
+              ))}
           </div>
         </div>
 
