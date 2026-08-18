@@ -7,9 +7,10 @@ import { abiertoAhora } from "@/lib/horario";
 import { rubroStyle, loadLeaflet, opcionesCluster, manejarClusterClick, escapeHtml } from "@/lib/mapa-visual";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
-// Debajo de este zoom (vista de toda la ciudad) los "gratis" se ocultan: solo se
-// ven los que pagan (premia el plan). Al acercar aparecen todos.
-const ZOOM_GRATIS = 14;
+// Zoom desde el cual se muestran los "gratis". DESACTIVADO en fase de lanzamiento
+// (0 = siempre visibles): hoy TODOS los comercios son gratis, así que ocultarlos al
+// alejar dejaba el mapa vacío. Volver a ~14 en Fase 2, cuando haya planes pagos.
+const ZOOM_GRATIS = 0;
 
 type Tier = "gratis" | "pago" | "destacado";
 type Hoja = { titulo: string; portada?: string | null; video?: string | null; items: ComercioMapa[] };
