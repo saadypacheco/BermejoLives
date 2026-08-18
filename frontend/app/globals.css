@@ -344,6 +344,7 @@
 .ukpinlugar > span { font-size: 14px; }
 .ukpinlugar > b { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
 .ukpinlugar > i { font-style: normal; background: rgba(255,255,255,.25); border-radius: 999px; padding: 1px 7px; font-size: 11px; }
+.ukpinlugar-foto { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255,255,255,.5); flex-shrink: 0; }
 /* Hoja (bottom sheet) de "comercios acá" para los que caen en el mismo punto */
 .mapa-hoja { position: absolute; left: 8px; right: 8px; bottom: 8px; max-height: 58%; z-index: 600; display: flex; flex-direction: column; background: rgba(10,13,20,.96); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--stroke); border-radius: 14px; box-shadow: 0 -8px 30px rgba(0,0,0,.5); overflow: hidden; }
 .mapa-hoja-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--stroke); font-size: 13.5px; }

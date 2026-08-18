@@ -107,7 +107,7 @@ export type ComercioPorVerificar = {
   puesto: string | null;
   rubros?: { nombre: string; slug: string };
   ciudades?: { nombre: string; slug: string };
-  lugares?: { nombre: string; tipo: string; lat: number | null; lng: number | null } | null;
+  lugares?: { nombre: string; tipo: string; lat: number | null; lng: number | null; portada_thumb_url?: string | null } | null;
 };
 
 export async function listComerciosPorVerificar(): Promise<ComercioPorVerificar[]> {
@@ -145,6 +145,7 @@ export async function rechazarComercio(id: string) {
 export type LugarAdmin = {
   id: string; nombre: string; tipo: string; lat: number | null; lng: number | null;
   n_comercios?: number; portada_thumb_url?: string | null; video_url?: string | null;
+  poligono?: [number, number][] | null;
 };
 
 export async function adminListLugares(ciudadSlug = "bermejo"): Promise<LugarAdmin[]> {
@@ -158,7 +159,7 @@ export async function adminCrearLugar(body: { nombre: string; tipo?: string; ciu
   return (await res.json()).lugar as LugarAdmin;
 }
 
-export async function adminUpdateLugar(id: string, body: { nombre?: string; tipo?: string; lat?: number | null; lng?: number | null }): Promise<LugarAdmin> {
+export async function adminUpdateLugar(id: string, body: { nombre?: string; tipo?: string; lat?: number | null; lng?: number | null; poligono?: [number, number][] }): Promise<LugarAdmin> {
   const res = await authFetch(`/admin/lugares/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   return (await res.json()).lugar as LugarAdmin;
 }

@@ -151,6 +151,7 @@ class LugarAdminBody(BaseModel):
     ciudad_slug: str | None = None
     lat: float | None = None
     lng: float | None = None
+    poligono: list | None = None
 
 
 @router.get("/admin/lugares")
@@ -194,6 +195,8 @@ def admin_update_lugar(
         patch["lat"] = body.lat
     if body.lng is not None:
         patch["lng"] = body.lng
+    if body.poligono is not None:
+        patch["poligono"] = body.poligono   # [] borra el polígono
     if not patch:
         raise HTTPException(status_code=400, detail="Nada para actualizar")
     return {"ok": True, "lugar": repo.update_lugar(lugar_id, patch)}

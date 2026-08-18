@@ -16,7 +16,7 @@ const ZOOM_LABEL = 17;   // desde acá los pines se agrandan y muestran el nombr
 export type AdminPin = {
   id: string; nombre: string; lat: number | null; lng: number | null;
   rubro_slug: string | null; incompleto: boolean;
-  lugar_id?: string | null; lugar_nombre?: string | null; lugar_lat?: number | null; lugar_lng?: number | null;
+  lugar_id?: string | null; lugar_nombre?: string | null; lugar_lat?: number | null; lugar_lng?: number | null; lugar_portada_thumb?: string | null;
 };
 
 type Hoja = { titulo: string; items: AdminPin[] };
@@ -46,8 +46,9 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
     return L.divIcon({ className: "", html, iconSize: [26, 26], iconAnchor: [13, 13] });
   }
 
-  function iconoLugar(L: any, nombre: string, n: number) {
-    const html = `<div class="ukpinlugar"><span>🏬</span><b>${escapeHtml(nombre)}</b><i>${n}</i></div>`;
+  function iconoLugar(L: any, nombre: string, n: number, portada?: string | null) {
+    const head = portada ? `<img class="ukpinlugar-foto" src="${portada}" alt="" loading="lazy" />` : `<span>🏬</span>`;
+    const html = `<div class="ukpinlugar">${head}<b>${escapeHtml(nombre)}</b><i>${n}</i></div>`;
     return L.divIcon({ className: "", html, iconSize: null as any, iconAnchor: [15, 16] });
   }
 
@@ -61,12 +62,12 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
     const markers: any[] = [];
 
     // Agrupar los que están DENTRO de un mercado/galería; el resto van sueltos.
-    const grupos = new Map<string, { nombre: string; lat: number | null; lng: number | null; sumLat: number; sumLng: number; n: number; items: AdminPin[] }>();
+    const grupos = new Map<string, { nombre: string; lat: number | null; lng: number | null; sumLat: number; sumLng: number; n: number; portada: string | null; items: AdminPin[] }>();
     const sueltos: AdminPin[] = [];
     for (const c of comerciosRef.current) {
       if (c.lugar_id) {
         let g = grupos.get(c.lugar_id);
-        if (!g) { g = { nombre: c.lugar_nombre || "Mercado", lat: c.lugar_lat ?? null, lng: c.lugar_lng ?? null, sumLat: 0, sumLng: 0, n: 0, items: [] }; grupos.set(c.lugar_id, g); }
+        if (!g) { g = { nombre: c.lugar_nombre || "Mercado", lat: c.lugar_lat ?? null, lng: c.lugar_lng ?? null, sumLat: 0, sumLng: 0, n: 0, portada: c.lugar_portada_thumb ?? null, items: [] }; grupos.set(c.lugar_id, g); }
         g.items.push(c);
         if (c.lat != null && c.lng != null) { g.sumLat += c.lat; g.sumLng += c.lng; g.n += 1; }
       } else if (c.lat != null && c.lng != null) {
@@ -88,7 +89,7 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
       const lng = g.lng ?? (g.n ? g.sumLng / g.n : null);
       if (lat == null || lng == null) continue;
       const items = g.items;
-      const m = L.marker([lat, lng], { icon: iconoLugar(L, g.nombre, items.length), zIndexOffset: 500 });
+      const m = L.marker([lat, lng], { icon: iconoLugar(L, g.nombre, items.length, g.portada), zIndexOffset: 500 });
       m.__data = items[0];   // fallback si llegara a caer en un cluster
       m.on("click", () => hojaRef.current({ titulo: `🏬 ${g.nombre}`, items }));
       markers.push(m);

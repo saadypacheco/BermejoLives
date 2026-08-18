@@ -43,6 +43,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const clusterRef = useRef<any>(null);
+  const polyLayerRef = useRef<any>(null);   // polígonos de las manzanas (mercados)
   const markerByIdRef = useRef<Map<string, any>>(new Map());
   const gratisMarkersRef = useRef<any[]>([]);
   const gratisShownRef = useRef(false);
@@ -83,6 +84,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
         obs.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
         (map as any)._themeObs = obs;
       }
+      polyLayerRef.current = L.layerGroup().addTo(map);   // manzanas por debajo de los pines
       // Smart cluster: tocar un grupo hace ZOOM FUERTE (sin patitas); si están muy
       // pegados, HOJA con la lista. Igual que el finder.
       const cluster = L.markerClusterGroup(opcionesCluster(L)).addTo(map);
@@ -145,8 +147,9 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
     return m;
   }
 
-  function iconoLugar(L: any, nombre: string, n: number) {
-    const html = `<div class="ukpinlugar"><span>🏬</span><b>${escapeHtml(nombre)}</b><i>${n}</i></div>`;
+  function iconoLugar(L: any, nombre: string, n: number, portada?: string | null) {
+    const head = portada ? `<img class="ukpinlugar-foto" src="${portada}" alt="" loading="lazy" />` : `<span>🏬</span>`;
+    const html = `<div class="ukpinlugar">${head}<b>${escapeHtml(nombre)}</b><i>${n}</i></div>`;
     return L.divIcon({ className: "", html, iconSize: null as any, iconAnchor: [15, 16] });
   }
 
@@ -154,17 +157,18 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
     const L = LRef.current, cluster = clusterRef.current;
     if (!L || !cluster) return;
     cluster.clearLayers();
+    polyLayerRef.current?.clearLayers();
     markerByIdRef.current = new Map();
     gratisMarkersRef.current = [];
     const fijos: any[] = [];
     // Agrupar los que están dentro de un mercado/galería; el resto, sueltos.
-    const grupos = new Map<string, { nombre: string; lat: number | null; lng: number | null; sumLat: number; sumLng: number; n: number; portada: string | null; video: string | null; items: ComercioMapa[] }>();
+    const grupos = new Map<string, { nombre: string; lat: number | null; lng: number | null; sumLat: number; sumLng: number; n: number; portada: string | null; video: string | null; poligono: [number, number][] | null; items: ComercioMapa[] }>();
 
     for (const c of comercios) {
       if (c.lat == null || c.lng == null) continue;
       if (c.lugar_id) {
         let g = grupos.get(c.lugar_id);
-        if (!g) { g = { nombre: c.lugar_nombre || "Mercado", lat: c.lugar_lat, lng: c.lugar_lng, sumLat: 0, sumLng: 0, n: 0, portada: c.lugar_portada_thumb_url, video: c.lugar_video_url, items: [] }; grupos.set(c.lugar_id, g); }
+        if (!g) { g = { nombre: c.lugar_nombre || "Mercado", lat: c.lugar_lat, lng: c.lugar_lng, sumLat: 0, sumLng: 0, n: 0, portada: c.lugar_portada_thumb_url, video: c.lugar_video_url, poligono: c.lugar_poligono, items: [] }; grupos.set(c.lugar_id, g); }
         g.items.push(c); g.sumLat += c.lat; g.sumLng += c.lng; g.n += 1;
         continue;
       }
@@ -182,7 +186,10 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
       const lng = g.lng ?? (g.n ? g.sumLng / g.n : null);
       if (lat == null || lng == null) continue;
       const items = g.items;
-      const m = L.marker([lat, lng], { icon: iconoLugar(L, g.nombre, items.length), zIndexOffset: 500 });
+      if (g.poligono && g.poligono.length >= 3 && polyLayerRef.current) {
+        L.polygon(g.poligono, { color: "#8b5cf6", weight: 2, fillColor: "#8b5cf6", fillOpacity: 0.12 }).addTo(polyLayerRef.current);
+      }
+      const m = L.marker([lat, lng], { icon: iconoLugar(L, g.nombre, items.length, g.portada), zIndexOffset: 500 });
       m.__data = items[0];
       m.on("click", () => hojaRef.current({ titulo: `🏬 ${g.nombre}`, portada: g.portada, video: g.video, items }));
       fijos.push(m);

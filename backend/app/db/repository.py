@@ -692,7 +692,7 @@ class SupabaseRepo:
             self._db.table("comercios")
             .select("id, slug, nombre, whatsapp, telefono, modalidad, descripcion, direccion, lat, lng, "
                     "verificado, suspendido, paga_hasta, portada_url, portada_thumb_url, cargado_por, created_at, lugar_id, puesto, "
-                    "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), lugares(nombre, tipo, lat, lng)")
+                    "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), lugares(nombre, tipo, lat, lng, portada_thumb_url)")
             .eq("activo", True)
         )
         if verificado is not None:
@@ -706,7 +706,7 @@ class SupabaseRepo:
             self._db.table("comercios")
             .select("id, slug, nombre, whatsapp, telefono, modalidad, direccion, lat, lng, "
                     "portada_url, portada_thumb_url, verificado, created_at, lugar_id, puesto, "
-                    "rubros!comercios_rubro_id_fkey(nombre, slug), lugares(nombre, tipo, lat, lng)")
+                    "rubros!comercios_rubro_id_fkey(nombre, slug), lugares(nombre, tipo, lat, lng, portada_thumb_url)")
             .eq("cargado_por", email)
             .eq("activo", True)
             .order("created_at", desc=True)
@@ -735,7 +735,7 @@ class SupabaseRepo:
     def list_lugares(self, ciudad_id: str | None = None) -> list[dict]:
         # comercios(count): cuántos puestos ya tiene cada lugar (para mostrar el
         # progreso en el selector del alta → "Mercado Central (6)" y poder resumir).
-        q = self._db.table("lugares").select("id, nombre, tipo, lat, lng, ciudad_id, portada_url, portada_thumb_url, video_url, comercios(count)").eq("activo", True)
+        q = self._db.table("lugares").select("id, nombre, tipo, lat, lng, ciudad_id, portada_url, portada_thumb_url, video_url, poligono, comercios(count)").eq("activo", True)
         if ciudad_id:
             q = q.eq("ciudad_id", ciudad_id)
         return q.order("nombre").execute().data or []

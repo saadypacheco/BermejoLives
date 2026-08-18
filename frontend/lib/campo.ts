@@ -134,7 +134,7 @@ export type ComercioAgente = {
   portada_url: string | null; portada_thumb_url: string | null; verificado: boolean; created_at: string;
   lugar_id: string | null; puesto: string | null;
   rubros?: { nombre: string; slug: string } | null;
-  lugares?: { nombre: string; tipo: string; lat: number | null; lng: number | null } | null;
+  lugares?: { nombre: string; tipo: string; lat: number | null; lng: number | null; portada_thumb_url?: string | null } | null;
 };
 
 /** Comercios que este agente dio de alta, para que vea su propio recorrido. */

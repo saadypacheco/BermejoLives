@@ -937,7 +937,7 @@ function TabComercios({
             comercios={filtradas.map((c) => ({
               id: c.id, nombre: c.nombre, lat: c.lat, lng: c.lng,
               rubro_slug: c.rubros?.slug ?? null, incompleto: incompletoDe(c).length > 0,
-              lugar_id: c.lugar_id, lugar_nombre: c.lugares?.nombre ?? null, lugar_lat: c.lugares?.lat ?? null, lugar_lng: c.lugares?.lng ?? null,
+              lugar_id: c.lugar_id, lugar_nombre: c.lugares?.nombre ?? null, lugar_lat: c.lugares?.lat ?? null, lugar_lng: c.lugares?.lng ?? null, lugar_portada_thumb: c.lugares?.portada_thumb_url ?? null,
             }))}
             onSelect={setEditandoId}
           />

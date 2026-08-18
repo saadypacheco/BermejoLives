@@ -17,6 +17,8 @@ export function LugaresEditor() {
   const mapRef = useRef<any>(null);
   const layerRef = useRef<any>(null);
   const draftRef = useRef<any>(null);
+  const polyRef = useRef<any>(null);
+  const dibujandoRef = useRef(false);
   const LRef = useRef<any>(null);
   const [lugares, setLugares] = useState<LugarAdmin[]>([]);
   const [selId, setSelId] = useState<string | null>(null);
@@ -25,6 +27,9 @@ export function LugaresEditor() {
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [dibujando, setDibujando] = useState(false);
+  const [poly, setPoly] = useState<[number, number][]>([]);
+  dibujandoRef.current = dibujando;
 
   async function cargar() { setLugares(await adminListLugares().catch(() => [])); }
   useEffect(() => { cargar(); }, []);
@@ -38,7 +43,10 @@ export function LugaresEditor() {
       mapRef.current = map;
       L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom: 19, updateWhenIdle: true, keepBuffer: 2 }).addTo(map);
       layerRef.current = L.layerGroup().addTo(map);
-      map.on("click", (e: any) => setPos({ lat: e.latlng.lat, lng: e.latlng.lng }));
+      map.on("click", (e: any) => {
+        if (dibujandoRef.current) setPoly((p) => [...p, [e.latlng.lat, e.latlng.lng]]);
+        else setPos({ lat: e.latlng.lat, lng: e.latlng.lng });
+      });
       setTimeout(() => map.invalidateSize(), 60);
       pintar();
     });
@@ -48,6 +56,7 @@ export function LugaresEditor() {
 
   useEffect(() => { pintar(); /* eslint-disable-next-line */ }, [lugares, selId]);
   useEffect(() => { pintarDraft(); /* eslint-disable-next-line */ }, [pos]);
+  useEffect(() => { pintarPoly(); /* eslint-disable-next-line */ }, [poly, dibujando]);
 
   function pintar() {
     const L = LRef.current, layer = layerRef.current;
@@ -71,13 +80,43 @@ export function LugaresEditor() {
     }
   }
 
+  function pintarPoly() {
+    const L = LRef.current, map = mapRef.current;
+    if (!L || !map) return;
+    if (polyRef.current) { map.removeLayer(polyRef.current); polyRef.current = null; }
+    if (poly.length >= 2) {
+      polyRef.current = L.polygon(poly, {
+        color: "#8b5cf6", weight: 2, fillColor: "#8b5cf6",
+        fillOpacity: dibujando ? 0.1 : 0.18, dashArray: dibujando ? "5 5" : undefined,
+      }).addTo(map);
+    }
+  }
+
   function seleccionar(l: LugarAdmin) {
     setSelId(l.id); setNombre(l.nombre); setTipo(l.tipo || "mercado");
     setPos(l.lat != null && l.lng != null ? { lat: l.lat, lng: l.lng } : null);
-    setErr("");
+    setPoly((l.poligono as [number, number][]) ?? []); setDibujando(false); setErr("");
     if (l.lat != null && l.lng != null) mapRef.current?.panTo([l.lat, l.lng]);
   }
-  function nuevo() { setSelId(null); setNombre(""); setTipo("mercado"); setPos(null); setErr(""); }
+  function nuevo() { setSelId(null); setNombre(""); setTipo("mercado"); setPos(null); setPoly([]); setDibujando(false); setErr(""); }
+
+  function dibujarManzana() { setDibujando(true); setPoly([]); setErr(""); }
+  function deshacer() { setPoly((p) => p.slice(0, -1)); }
+  async function guardarManzana() {
+    if (!selId) return;
+    if (poly.length < 3) { setErr("Marcá al menos 3 esquinas de la manzana"); return; }
+    setBusy(true); setErr("");
+    try { await adminUpdateLugar(selId, { poligono: poly }); setDibujando(false); await cargar(); }
+    catch (e) { setErr(e instanceof Error ? e.message : "Error"); }
+    finally { setBusy(false); }
+  }
+  async function borrarManzana() {
+    if (!selId) return;
+    setBusy(true); setErr("");
+    try { await adminUpdateLugar(selId, { poligono: [] }); setPoly([]); setDibujando(false); await cargar(); }
+    catch (e) { setErr(e instanceof Error ? e.message : "Error"); }
+    finally { setBusy(false); }
+  }
 
   async function guardar() {
     if (!nombre.trim()) { setErr("Falta el nombre"); return; }
@@ -116,10 +155,31 @@ export function LugaresEditor() {
           {selId && <button className="btn btn-ghost" onClick={nuevo}>Nuevo</button>}
           {selId && <button className="btn btn-ghost" style={{ color: "var(--pink)" }} disabled={busy} onClick={borrar}>Borrar</button>}
         </div>
-        <div style={{ fontSize: 12.5, color: pos ? "var(--neon)" : "var(--amber)" }}>
-          {pos ? `📍 Ubicación: ${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)} (tocá el mapa para mover)` : "Tocá el mapa para ubicar el lugar."}
-          {selId && " · Editando uno existente."}
+        <div style={{ fontSize: 12.5, color: dibujando ? "#c4b5fd" : pos ? "var(--neon)" : "var(--amber)" }}>
+          {dibujando
+            ? `✏️ Tocá las esquinas de la manzana (${poly.length} marcadas)`
+            : pos ? `📍 Ubicación: ${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)} (tocá el mapa para mover)` : "Tocá el mapa para ubicar el lugar."}
+          {selId && !dibujando && " · Editando uno existente."}
         </div>
+
+        {/* Fase 2: polígono de la manzana (solo sobre un lugar existente) */}
+        {selId && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", fontSize: 13 }}>
+            {!dibujando ? (
+              <>
+                <button className="btn btn-ghost" onClick={dibujarManzana}>✏️ Dibujar manzana</button>
+                {poly.length >= 3 && <span style={{ color: "var(--txt-3)" }}>Manzana: {poly.length} esquinas</span>}
+                {poly.length >= 3 && <button className="btn btn-ghost" style={{ color: "var(--pink)" }} disabled={busy} onClick={borrarManzana}>Borrar manzana</button>}
+              </>
+            ) : (
+              <>
+                <button className="btn btn-ghost" disabled={!poly.length} onClick={deshacer}>↶ Deshacer</button>
+                <button className="btn btn-primary" disabled={busy || poly.length < 3} onClick={guardarManzana}>Guardar manzana</button>
+                <button className="btn btn-ghost" onClick={() => setDibujando(false)}>Cancelar</button>
+              </>
+            )}
+          </div>
+        )}
         {err && <div style={{ color: "var(--pink)", fontSize: 13 }}>{err}</div>}
         <div ref={elRef} style={{ height: 420, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)" }} />
       </div>

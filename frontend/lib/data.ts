@@ -108,6 +108,7 @@ export type ComercioMapa = {
   lugar_id: string | null; puesto: string | null;
   lugar_nombre: string | null; lugar_lat: number | null; lugar_lng: number | null;
   lugar_portada_thumb_url: string | null; lugar_video_url: string | null;
+  lugar_poligono: [number, number][] | null;
 };
 
 // Bbox alrededor del centro de una ciudad (±grados). Usado para acotar el mapa
@@ -136,7 +137,7 @@ export async function getComerciosMapa(
         .gte("lng", c0.lngMin).lte("lng", c0.lngMax)
         .limit(250),
       supabase.from("rubros").select("id, slug"),
-      supabase.from("lugares").select("id, nombre, tipo, lat, lng, portada_thumb_url, video_url").eq("activo", true),
+      supabase.from("lugares").select("id, nombre, tipo, lat, lng, portada_thumb_url, video_url, poligono").eq("activo", true),
     ]);
     if (error) logSupaError("getComerciosMapa (comercios)", error);
     if (errorRubros) logSupaError("getComerciosMapa (rubros)", errorRubros);
@@ -157,6 +158,7 @@ export async function getComerciosMapa(
           lugar_id: c.lugar_id ?? null, puesto: c.puesto ?? null,
           lugar_nombre: lg?.nombre ?? null, lugar_lat: lg?.lat ?? null, lugar_lng: lg?.lng ?? null,
           lugar_portada_thumb_url: lg?.portada_thumb_url ?? null, lugar_video_url: lg?.video_url ?? null,
+          lugar_poligono: (lg?.poligono as [number, number][] | undefined) ?? null,
         };
       });
     }
@@ -170,7 +172,7 @@ export async function getComerciosMapa(
     direccion: c.direccion, descripcion: c.descripcion, horario: c.horario, como_llegar: c.como_llegar,
     rubro_slug: null, plan: c.plan, ficha_activa: c.plan !== "gratis",
     lugar_id: null, puesto: null, lugar_nombre: null, lugar_lat: null, lugar_lng: null,
-    lugar_portada_thumb_url: null, lugar_video_url: null,
+    lugar_portada_thumb_url: null, lugar_video_url: null, lugar_poligono: null,
   }));
 }
 
