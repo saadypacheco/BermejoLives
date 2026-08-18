@@ -43,6 +43,41 @@ function cargarJs(src: string): Promise<void> {
   });
 }
 
+// Opciones de cluster SIN "patitas" (spiderfy): tocar un grupo hace ZOOM (no expande
+// con líneas). El zoom lo maneja cada mapa con manejarClusterClick para poder caer a
+// la "hoja" (lista) cuando los pines están tan pegados que el zoom no los separa.
+export function opcionesCluster(L: any) {
+  return {
+    spiderfyOnMaxZoom: false,
+    zoomToBoundsOnClick: false,        // lo manejamos nosotros (zoom fuerte o hoja)
+    showCoverageOnHover: false,
+    maxClusterRadius: 45,
+    disableClusteringAtZoom: 19,       // de acá se ven todos individuales
+    chunkedLoading: true,
+    iconCreateFunction: (cl: any) => L.divIcon({
+      className: "", iconSize: [38, 38], html: `<div class="ukclus">${cl.getChildCount()}</div>`,
+    }),
+  };
+}
+
+/** Al tocar un cluster: si se pueden separar con zoom, vuela ahí (zoom fuerte).
+ * Si están casi en el mismo punto (el zoom no los separa), devuelve "hoja" con la
+ * lista de los comercios (cada marker guarda su dato en m.__data) para elegir. */
+export function manejarClusterClick(map: any, e: any, zoomMax = 18, minSpanM = 6): { accion: "zoom" | "hoja"; comercios: any[] } {
+  const b = e.layer.getBounds();
+  const spanM = b.getNorthEast().distanceTo(b.getSouthWest());
+  if (map.getZoom() < zoomMax && spanM > minSpanM) {
+    map.flyToBounds(b, { maxZoom: zoomMax, padding: [50, 50], duration: 0.45 });
+    return { accion: "zoom", comercios: [] };
+  }
+  return { accion: "hoja", comercios: e.layer.getAllChildMarkers().map((m: any) => m.__data) };
+}
+
+/** Escapa texto para meterlo en HTML de un divIcon/tooltip sin romper ni inyectar. */
+export function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch] as string));
+}
+
 /** Carga Leaflet + markercluster una sola vez y resuelve `L` (con markerClusterGroup). */
 export function loadLeaflet(): Promise<any> {
   if (typeof window === "undefined") return Promise.reject();

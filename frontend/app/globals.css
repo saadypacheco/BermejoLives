@@ -332,6 +332,23 @@
 .ukpin-ring { position: absolute; inset: -5px; border-radius: 50%; border: 2px solid #FFC94D; box-shadow: 0 2px 8px rgba(0,0,0,.45); pointer-events: none; }
 .ukpin.cerrado { filter: grayscale(1) brightness(.72); }
 .ukpin.incompleto { background: #7a5a12; border: 2px dashed #FFC94D; }
+/* Los divIcon no deben traer el recuadro blanco por defecto de Leaflet */
+.leaflet-div-icon { background: transparent; border: 0; }
+/* Pin con etiqueta (zoom alto en el finder): pill con emoji + nombre, tap amplio */
+.ukpinlab { display: inline-flex; align-items: center; gap: 5px; background: var(--pc, #FFB020); color: #04130c; font-weight: 700; font-size: 12px; line-height: 1; padding: 4px 10px 4px 5px; border-radius: 999px; border: 2px solid rgba(13,16,21,.85); box-shadow: 0 3px 8px rgba(0,0,0,.5); white-space: nowrap; }
+.ukpinlab > span { font-size: 14px; }
+.ukpinlab > b { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.ukpinlab.incompleto { background: #7a5a12; color: #fff; border: 2px dashed #FFC94D; }
+/* Hoja (bottom sheet) de "comercios acá" para los que caen en el mismo punto */
+.mapa-hoja { position: absolute; left: 8px; right: 8px; bottom: 8px; max-height: 58%; z-index: 600; display: flex; flex-direction: column; background: rgba(10,13,20,.96); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--stroke); border-radius: 14px; box-shadow: 0 -8px 30px rgba(0,0,0,.5); overflow: hidden; }
+.mapa-hoja-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--stroke); font-size: 13.5px; }
+.mapa-hoja-head button { background: none; border: none; color: var(--txt-2); font-size: 16px; cursor: pointer; }
+.mapa-hoja-list { overflow-y: auto; }
+.mapa-hoja-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; background: none; border: none; border-bottom: 1px solid var(--stroke); color: var(--txt); font-size: 14px; text-align: left; cursor: pointer; }
+.mapa-hoja-row:hover { background: rgba(255,255,255,.04); }
+.mh-dot { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; flex-shrink: 0; border: 2px solid rgba(13,16,21,.7); }
+.mh-nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mh-inc { font-size: 11px; color: var(--amber); border: 1px dashed var(--amber); padding: 1px 6px; border-radius: 8px; flex-shrink: 0; }
 .ukpin.sel { border-color: #39ff9e; box-shadow: 0 0 0 4px rgba(57,255,158,.30), 0 3px 12px rgba(0,0,0,.6); }
 .ukpin.sel .ukpin-emo { font-size: 18px; }
 .ukpin-badge { position: absolute; top: -8px; right: -6px; z-index: 2; background: #39ff9e; color: #04240f; font-size: 9px; font-weight: 800; padding: 1px 4px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,.4); white-space: nowrap; pointer-events: none; }
