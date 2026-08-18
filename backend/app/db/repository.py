@@ -65,6 +65,7 @@ class Repo(Protocol):
     def crear_lugar(self, row: dict) -> dict: ...
     def list_lugares(self, ciudad_id: str | None) -> list[dict]: ...
     def get_lugar(self, lugar_id: str) -> dict | None: ...
+    def update_lugar(self, lugar_id: str, patch: dict) -> dict: ...
     def crear_producto_ref(self, row: dict) -> dict: ...
     def list_producto_refs(self, comercio_id: str) -> list[dict]: ...
     def get_producto_ref(self, ref_id: str) -> dict | None: ...
@@ -734,7 +735,7 @@ class SupabaseRepo:
     def list_lugares(self, ciudad_id: str | None = None) -> list[dict]:
         # comercios(count): cuántos puestos ya tiene cada lugar (para mostrar el
         # progreso en el selector del alta → "Mercado Central (6)" y poder resumir).
-        q = self._db.table("lugares").select("id, nombre, tipo, lat, lng, ciudad_id, comercios(count)").eq("activo", True)
+        q = self._db.table("lugares").select("id, nombre, tipo, lat, lng, ciudad_id, portada_url, portada_thumb_url, video_url, comercios(count)").eq("activo", True)
         if ciudad_id:
             q = q.eq("ciudad_id", ciudad_id)
         return q.order("nombre").execute().data or []
@@ -742,6 +743,11 @@ class SupabaseRepo:
     def get_lugar(self, lugar_id: str) -> dict | None:
         res = self._db.table("lugares").select("*").eq("id", lugar_id).limit(1).execute()
         return res.data[0] if res.data else None
+
+    def update_lugar(self, lugar_id: str, patch: dict) -> dict:
+        if patch:
+            self._db.table("lugares").update(patch).eq("id", lugar_id).execute()
+        return self.get_lugar(lugar_id) or {}
 
     # ---- producto_ref (puente con el ecommerce) ----
     def crear_producto_ref(self, row: dict) -> dict:

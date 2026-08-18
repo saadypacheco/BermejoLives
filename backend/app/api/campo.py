@@ -256,6 +256,64 @@ def crear_lugar(
     return {"ok": True, "lugar": lugar}
 
 
+class LugarEditBody(BaseModel):
+    nombre: str | None = None
+    tipo: str | None = None
+
+
+@router.patch("/campo/lugares/{lugar_id}")
+def editar_lugar(
+    lugar_id: str,
+    body: LugarEditBody,
+    agente: dict = Depends(auth.require_agente),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Corrige el nombre/tipo de un mercado/galería (ej. arreglar un typo)."""
+    patch: dict = {}
+    if body.nombre is not None and body.nombre.strip():
+        patch["nombre"] = body.nombre.strip()
+    if body.tipo is not None and body.tipo.strip():
+        patch["tipo"] = body.tipo.strip()
+    if not patch:
+        raise HTTPException(status_code=400, detail="Nada para actualizar")
+    return {"ok": True, "lugar": repo.update_lugar(lugar_id, patch)}
+
+
+@router.post("/campo/lugares/{lugar_id}/portada")
+async def lugar_portada(
+    lugar_id: str,
+    foto: UploadFile = File(...),
+    agente: dict = Depends(auth.require_agente),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Sube/reemplaza la foto de portada del lugar (el agente, parado ahí)."""
+    data = await foto.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Falta la foto")
+    try:
+        url, thumb = subir_foto_galeria(f"lugares/{lugar_id}", data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "lugar": repo.update_lugar(lugar_id, {"portada_url": url, "portada_thumb_url": thumb})}
+
+
+@router.post("/campo/lugares/{lugar_id}/video")
+async def lugar_video(
+    lugar_id: str,
+    video: UploadFile = File(...),
+    agente: dict = Depends(auth.require_agente),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Sube el video de recorrido del lugar (crudo, se sirve por /fotos)."""
+    if not (video.content_type or "").startswith("video/"):
+        raise HTTPException(status_code=400, detail="El archivo no es un video")
+    data = await video.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Falta el video")
+    url = subir_video_comercio(f"lugares/{lugar_id}", data, video.content_type)
+    return {"ok": True, "lugar": repo.update_lugar(lugar_id, {"video_url": url})}
+
+
 @router.get("/campo/mis-comercios")
 def mis_comercios(agente: dict = Depends(auth.require_agente), repo: Repo = Depends(get_repo)) -> dict:
     """Comercios que este agente dio de alta, para que vea su propio recorrido."""

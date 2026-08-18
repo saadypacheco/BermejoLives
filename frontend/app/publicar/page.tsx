@@ -5,8 +5,9 @@ import {
   agenteLogin, getAgenteToken, clearAgente, altaComercioCampo, transcribirAudio, sugerirRubros,
   misComercios, editarComercioAgente, eliminarComercioAgente, actualizarFotoComercioAgente, type ComercioAgente,
   listarFotosCampo, listarVideosCampo, subirFotoCampo, subirVideoCampo, borrarFotoCampo, borrarVideoCampo,
-  listarLugares, crearLugar, type Lugar,
+  listarLugares, crearLugar, editarLugar, subirPortadaLugar, subirVideoLugar, type Lugar,
 } from "@/lib/campo";
+import { duracionVideo } from "@/lib/upload";
 import { getCiudades, getRubros } from "@/lib/data";
 import type { Ciudad, Rubro } from "@/lib/types";
 import { Pin, User, Arrow, Edit } from "@/components/icons";
@@ -371,6 +372,84 @@ function ChipToggle({ label, active, onClick }: { label: string; active: boolean
   );
 }
 
+// Editor del mercado/galería (nombre + tipo + foto de portada + video de recorrido).
+// El agente está parado ahí: es el mejor momento para la portada y el recorrido.
+function MercadoEditor({ lugar, onClose, onSaved }: { lugar: Lugar; onClose: () => void; onSaved: (l: Lugar) => void }) {
+  const [nombre, setNombre] = useState(lugar.nombre);
+  const [tipo, setTipo] = useState(lugar.tipo || "mercado");
+  const [portadaThumb, setPortadaThumb] = useState(lugar.portada_thumb_url ?? lugar.portada_url ?? null);
+  const [videoUrl, setVideoUrl] = useState(lugar.video_url ?? null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+
+  async function guardarNombre() {
+    if (!nombre.trim()) { setErr("El nombre no puede quedar vacío"); return; }
+    setBusy(true); setErr(""); setMsg("");
+    try { const l = await editarLugar(lugar.id, { nombre: nombre.trim(), tipo }); onSaved(l); setMsg("Guardado ✓"); }
+    catch (e) { setErr(e instanceof Error ? e.message : "Error"); }
+    finally { setBusy(false); }
+  }
+  async function onPortada(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
+    setBusy(true); setErr(""); setMsg("");
+    try {
+      const comp = await comprimirImagen(file);
+      const l = await subirPortadaLugar(lugar.id, comp);
+      setPortadaThumb(l.portada_thumb_url ?? l.portada_url ?? null); onSaved(l); setMsg("Foto subida ✓");
+    } catch (e) { setErr(e instanceof Error ? e.message : "No se pudo subir la foto"); }
+    finally { setBusy(false); }
+  }
+  async function onVideo(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
+    setErr(""); setMsg("");
+    if (file.size > 50 * 1024 * 1024) { setErr("El video supera los 50 MB"); return; }
+    const dur = await duracionVideo(file);
+    if (dur > 60) { setErr(`El video dura ${dur}s — máximo 60s`); return; }
+    setBusy(true);
+    try { const l = await subirVideoLugar(lugar.id, file); setVideoUrl(l.video_url ?? null); onSaved(l); setMsg("Video subido ✓"); }
+    catch (e) { setErr(e instanceof Error ? e.message : "No se pudo subir el video"); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="glass" style={{ padding: 12, borderRadius: 12, display: "flex", flexDirection: "column", gap: 10, border: "1px solid rgba(139,92,246,.4)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <b style={{ fontSize: 13.5 }}>Editar mercado / galería</b>
+        <button type="button" className="link-more" onClick={onClose}>Cerrar</button>
+      </div>
+      <input className="adm-input" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre" />
+      <select className="adm-input" value={tipo} onChange={(e) => setTipo(e.target.value)}>
+        <option value="mercado">Mercado</option>
+        <option value="galeria">Galería</option>
+        <option value="paseo">Paseo comercial</option>
+        <option value="shopping">Shopping</option>
+        <option value="referencia">Referencia (plaza, terminal…)</option>
+      </select>
+      <button type="button" className="btn btn-ghost" disabled={busy} onClick={guardarNombre}>Guardar nombre / tipo</button>
+      <div style={{ display: "flex", gap: 10 }}>
+        <label className="btn btn-ghost" style={{ flex: 1, textAlign: "center", cursor: "pointer" }}>
+          📷 {portadaThumb ? "Cambiar portada" : "Foto de portada"}
+          <input type="file" accept="image/*" capture="environment" hidden onChange={onPortada} />
+        </label>
+        <label className="btn btn-ghost" style={{ flex: 1, textAlign: "center", cursor: "pointer" }}>
+          🎬 {videoUrl ? "Cambiar recorrido" : "Video recorrido"}
+          <input type="file" accept="video/*" capture="environment" hidden onChange={onVideo} />
+        </label>
+      </div>
+      {(portadaThumb || videoUrl) && (
+        <div style={{ display: "flex", gap: 10 }}>
+          {portadaThumb && <img src={portadaThumb} alt="" style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 8 }} />}
+          {videoUrl && <video src={videoUrl} muted playsInline preload="metadata" style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 8, background: "#000" }} />}
+        </div>
+      )}
+      {busy && <span style={{ fontSize: 12, color: "var(--txt-3)" }}>Subiendo…</span>}
+      {msg && <span style={{ fontSize: 12, color: "var(--neon)" }}>{msg}</span>}
+      {err && <span style={{ fontSize: 12, color: "var(--pink)" }}>{err}</span>}
+    </div>
+  );
+}
+
 // Ciudad más cercana a un punto GPS (distancia euclidiana simple, alcanza para elegir entre pocas ciudades).
 function ciudadMasCercana(ciudades: Ciudad[], lat: number, lng: number): Ciudad | null {
   const conCoords = ciudades.filter((c) => c.lat != null && c.lng != null);
@@ -405,6 +484,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   // "Modo mercado": recuerda el lugar recién cargado para seguir con el próximo puesto
   const [subioLugar,  setSubioLugar]  = useState<{ id: string; nombre: string } | null>(null);
   const [ultimoPuesto,setUltimoPuesto]= useState("");
+  const [editMercado, setEditMercado] = useState(false);
 
   const [coords,      setCoords]      = useState<{ lat: number; lng: number; acc: number } | null>(null);
   const [geoMsg,      setGeoMsg]      = useState("");
@@ -606,7 +686,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   function limpiar() {
     setF({ ...EMPTY }); setRubroSlugs([]); setIntentosAudio(0);
     setCoords(null); setGeoMsg(""); setFoto(null); setPreview(""); setConsent(true);
-    setNuevoLugar(""); setDone(null); setDoneOffline(false); setAltaId(null); setErr("");
+    setNuevoLugar(""); setEditMercado(false); setDone(null); setDoneOffline(false); setAltaId(null); setErr("");
   }
   function otro() {
     limpiar();
@@ -688,10 +768,19 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
         {lugarId && lugarId !== "__nuevo__" && (() => {
           const l = lugares.find((x) => x.id === lugarId);
           return (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: "rgba(109,40,217,.14)", border: "1px solid rgba(139,92,246,.45)", color: "#c4b5fd", borderRadius: 12, padding: "9px 12px", fontSize: 13 }}>
-              <span>🏬 Cargando en <b>{l?.nombre ?? "mercado"}</b>{l?.n_comercios ? ` · ya llevás ${l.n_comercios}` : ""}</span>
-              <button type="button" className="link-more" style={{ flexShrink: 0, color: "#c4b5fd" }} onClick={() => { setLugarId(""); setPuesto(""); }}>Salir</button>
-            </div>
+            <>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: "rgba(109,40,217,.14)", border: "1px solid rgba(139,92,246,.45)", color: "#c4b5fd", borderRadius: 12, padding: "9px 12px", fontSize: 13 }}>
+                <span>🏬 Cargando en <b>{l?.nombre ?? "mercado"}</b>{l?.n_comercios ? ` · ya llevás ${l.n_comercios}` : ""}</span>
+                <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+                  <button type="button" className="link-more" style={{ color: "#c4b5fd" }} onClick={() => setEditMercado((v) => !v)}>✏️ Editar</button>
+                  <button type="button" className="link-more" style={{ color: "#c4b5fd" }} onClick={() => { setLugarId(""); setPuesto(""); setEditMercado(false); }}>Salir</button>
+                </div>
+              </div>
+              {editMercado && l && (
+                <MercadoEditor lugar={l} onClose={() => setEditMercado(false)}
+                  onSaved={(nl) => setLugares((prev) => prev.map((x) => (x.id === nl.id ? { ...x, ...nl } : x)))} />
+              )}
+            </>
           );
         })()}
 

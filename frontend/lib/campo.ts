@@ -67,7 +67,31 @@ export const subirVideoCampo = (cid: string, file: File, dur: number | null, onP
   subirConProgreso<{ video: VideoGaleria }>(`${API}/campo/mis-comercios/${cid}/videos`, "video", file, getAgenteToken(), dur != null ? { duracion_seg: String(dur) } : {}, onP).then((d) => d.video);
 
 // ---- Lugares (mercados / galerías / paseos: contenedores de puestos) ----
-export type Lugar = { id: string; nombre: string; tipo: string; lat: number | null; lng: number | null; ciudad_id?: string | null; n_comercios?: number };
+export type Lugar = { id: string; nombre: string; tipo: string; lat: number | null; lng: number | null; ciudad_id?: string | null; n_comercios?: number; portada_url?: string | null; portada_thumb_url?: string | null; video_url?: string | null };
+
+export async function editarLugar(id: string, body: { nombre?: string; tipo?: string }): Promise<Lugar> {
+  const res = await fetch(`${API}/campo/lugares/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAgenteToken() ?? ""}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail ?? "No se pudo editar"); }
+  return (await res.json()).lugar as Lugar;
+}
+
+export async function subirPortadaLugar(id: string, foto: File): Promise<Lugar> {
+  const fd = new FormData(); fd.append("foto", foto);
+  const res = await fetch(`${API}/campo/lugares/${id}/portada`, { method: "POST", headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` }, body: fd });
+  if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail ?? "No se pudo subir la foto"); }
+  return (await res.json()).lugar as Lugar;
+}
+
+export async function subirVideoLugar(id: string, video: File): Promise<Lugar> {
+  const fd = new FormData(); fd.append("video", video);
+  const res = await fetch(`${API}/campo/lugares/${id}/video`, { method: "POST", headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` }, body: fd });
+  if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail ?? "No se pudo subir el video"); }
+  return (await res.json()).lugar as Lugar;
+}
 
 export async function listarLugares(ciudadSlug = "bermejo"): Promise<Lugar[]> {
   const res = await fetch(`${API}/campo/lugares?ciudad_slug=${encodeURIComponent(ciudadSlug)}`, { headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` } });
