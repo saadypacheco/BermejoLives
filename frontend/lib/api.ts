@@ -141,6 +141,32 @@ export async function rechazarComercio(id: string) {
   return res.json();
 }
 
+// ── Lugares (mercados / galerías / referencias): ABM desde el admin ──────────
+export type LugarAdmin = {
+  id: string; nombre: string; tipo: string; lat: number | null; lng: number | null;
+  n_comercios?: number; portada_thumb_url?: string | null; video_url?: string | null;
+};
+
+export async function adminListLugares(ciudadSlug = "bermejo"): Promise<LugarAdmin[]> {
+  const res = await authFetch(`/admin/lugares?ciudad_slug=${encodeURIComponent(ciudadSlug)}`);
+  const data = await res.json();
+  return (data.items as (LugarAdmin & { comercios?: { count: number }[] })[]).map((l) => ({ ...l, n_comercios: l.comercios?.[0]?.count ?? 0 }));
+}
+
+export async function adminCrearLugar(body: { nombre: string; tipo?: string; ciudad_slug?: string; lat?: number | null; lng?: number | null }): Promise<LugarAdmin> {
+  const res = await authFetch(`/admin/lugares`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return (await res.json()).lugar as LugarAdmin;
+}
+
+export async function adminUpdateLugar(id: string, body: { nombre?: string; tipo?: string; lat?: number | null; lng?: number | null }): Promise<LugarAdmin> {
+  const res = await authFetch(`/admin/lugares/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return (await res.json()).lugar as LugarAdmin;
+}
+
+export async function adminDeleteLugar(id: string): Promise<void> {
+  await authFetch(`/admin/lugares/${id}`, { method: "DELETE" });
+}
+
 // ── Suscripciones ──────────────────────────────────────────────────────────
 
 export type EstadoSuscripcion = "activo" | "por_vencer" | "vencido" | "suspendido" | "sin_plan";

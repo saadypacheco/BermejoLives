@@ -19,6 +19,7 @@ import {
 } from "@/lib/api";
 import { getRubros } from "@/lib/data";
 import { AdminMap } from "@/components/admin-map";
+import { LugaresEditor } from "@/components/lugares-editor";
 import type { Rubro } from "@/lib/types";
 import { precioFmt, MODALIDAD_LABEL, comoLlegarHref } from "@/lib/types";
 import { Check, X, Edit, Pin, WhatsApp, Verified } from "@/components/icons";
@@ -28,7 +29,7 @@ export default function AdminPage() {
   const [email, setEmail] = useState("admin@bermejolive.com");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"publicaciones" | "comercios" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero">("comercios");
+  const [tab, setTab] = useState<"publicaciones" | "comercios" | "lugares" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero">("comercios");
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [items, setItems] = useState<PendingPub[]>([]);
   const [comercios, setComercios] = useState<ComercioPorVerificar[]>([]);
@@ -228,6 +229,9 @@ export default function AdminPage() {
         <button className={tab === "comercios" ? "active" : ""} onClick={() => setTab("comercios")}>
           Negocios ({todosLosComercios.length}) {comercios.length > 0 && <span style={{ color: "var(--amber)" }}>· {comercios.length} pendientes</span>}
         </button>
+        <button className={tab === "lugares" ? "active" : ""} onClick={() => setTab("lugares")}>
+          🏬 Lugares
+        </button>
         <button className={tab === "publicaciones" ? "active" : ""} onClick={() => setTab("publicaciones")}>
           Publicaciones {items.length > 0 && `(${items.length})`}
         </button>
@@ -253,6 +257,8 @@ export default function AdminPage() {
           Cambios de número {solicitudesCambioNumero.length > 0 && <span style={{ color: "var(--amber)" }}>· {solicitudesCambioNumero.length}</span>}
         </button>
       </div>
+
+      {tab === "lugares" && <LugaresEditor />}
 
       {tab === "comercios" && (
         <TabComercios

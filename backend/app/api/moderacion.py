@@ -144,6 +144,72 @@ def editar_comercio(
     return {"ok": True, "comercio": updated}
 
 
+# ── Lugares (mercados / galerías / referencias): ABM desde el admin ─────────────
+class LugarAdminBody(BaseModel):
+    nombre: str | None = None
+    tipo: str | None = None
+    ciudad_slug: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+
+
+@router.get("/admin/lugares")
+def admin_list_lugares(
+    ciudad_slug: str = Query(default="bermejo"),
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    ciudad_id = repo.get_ciudad_id(ciudad_slug) or repo.get_ciudad_id("bermejo")
+    return {"items": repo.list_lugares(ciudad_id)}
+
+
+@router.post("/admin/lugares")
+def admin_crear_lugar(
+    body: LugarAdminBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    nombre = (body.nombre or "").strip()
+    if not nombre:
+        raise HTTPException(status_code=400, detail="Falta el nombre")
+    ciudad_id = repo.get_ciudad_id(body.ciudad_slug or "bermejo") or repo.get_ciudad_id("bermejo")
+    lugar = repo.crear_lugar({"nombre": nombre, "tipo": body.tipo or "mercado", "ciudad_id": ciudad_id, "lat": body.lat, "lng": body.lng})
+    logger.info("admin.lugar_creado", lugar=lugar["id"], by=admin["email"])
+    return {"ok": True, "lugar": lugar}
+
+
+@router.put("/admin/lugares/{lugar_id}")
+def admin_update_lugar(
+    lugar_id: str,
+    body: LugarAdminBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    patch: dict = {}
+    if body.nombre is not None and body.nombre.strip():
+        patch["nombre"] = body.nombre.strip()
+    if body.tipo is not None and body.tipo.strip():
+        patch["tipo"] = body.tipo.strip()
+    if body.lat is not None:
+        patch["lat"] = body.lat
+    if body.lng is not None:
+        patch["lng"] = body.lng
+    if not patch:
+        raise HTTPException(status_code=400, detail="Nada para actualizar")
+    return {"ok": True, "lugar": repo.update_lugar(lugar_id, patch)}
+
+
+@router.delete("/admin/lugares/{lugar_id}")
+def admin_delete_lugar(
+    lugar_id: str,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    repo.update_lugar(lugar_id, {"activo": False})
+    logger.info("admin.lugar_borrado", lugar=lugar_id, by=admin["email"])
+    return {"ok": True}
+
+
 class PagoBody(BaseModel):
     monto: float
     moneda: str = "BOB"
