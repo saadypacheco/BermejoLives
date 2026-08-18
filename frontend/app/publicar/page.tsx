@@ -12,6 +12,7 @@ import { Pin, User, Arrow, Edit } from "@/components/icons";
 import { comprimirImagen } from "@/lib/imagen";
 import { GaleriaUploader } from "@/components/galeria-uploader";
 import { geoErrorMsg } from "@/lib/geo";
+import { encolarAlta, contarPendientes, sincronizarPendientes } from "@/lib/offline-altas";
 
 // Prefijo telefónico según país
 const PREFIJO: Record<string, string> = { Bolivia: "591", Argentina: "54" };
@@ -274,9 +275,28 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   const [consent,     setConsent]     = useState(true);
   const [saving,      setSaving]      = useState(false);
   const [done,        setDone]        = useState<string | null>(null);
+  const [doneOffline, setDoneOffline] = useState(false);
   const [altaId,      setAltaId]      = useState<string | null>(null);
   const [count,       setCount]       = useState(0);
   const [err,         setErr]         = useState("");
+
+  // Cola offline: altas guardadas sin señal que se suben cuando vuelve internet.
+  const [pendientes,   setPendientes]   = useState(0);
+  const [sincronizando, setSincronizando] = useState(false);
+  const refrescarPend = () => contarPendientes().then(setPendientes).catch(() => {});
+  async function sincronizar() {
+    if (sincronizando) return;
+    setSincronizando(true);
+    try { await sincronizarPendientes(refrescarPend); } finally { setSincronizando(false); refrescarPend(); }
+  }
+  useEffect(() => {
+    refrescarPend();
+    sincronizar();                                  // intento al abrir
+    const onOnline = () => sincronizar();
+    window.addEventListener("online", onOnline);    // y al volver la señal
+    return () => window.removeEventListener("online", onOnline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Audio: hasta 2 intentos de grabación; al llegar al límite, solo queda escribir a mano.
   const [grabando,      setGrabando]      = useState(false);
@@ -374,26 +394,43 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     if (comprimiendo) { setErr("Esperá a que termine de comprimir la foto."); return; }
 
     setSaving(true);
-    const fd = new FormData();
-    if (f.nombre.trim()) fd.append("nombre", f.nombre.trim());
-    if (cel) fd.append("whatsapp", prefijo + cel);
-    fd.append("ciudad_slug", ciudadSlug);
-    (rubroSlugs.length > 0 ? rubroSlugs : ["otros"]).forEach((r) => fd.append("rubro_slugs", r));
-    fd.append("modalidad",   f.modalidad);
-    if (f.descripcion.trim()) fd.append("descripcion", f.descripcion.trim());
-    if (f.direccion.trim()) fd.append("direccion", f.direccion.trim());
-    fd.append("lat", String(coords.lat));
-    fd.append("lng", String(coords.lng));
-    fd.append("consentimiento", String(consent));
-    if (foto) fd.append("foto", foto);
+    const campos: Record<string, string> = {
+      ciudad_slug: ciudadSlug, modalidad: f.modalidad,
+      lat: String(coords.lat), lng: String(coords.lng), consentimiento: String(consent),
+    };
+    if (f.nombre.trim()) campos.nombre = f.nombre.trim();
+    if (cel) campos.whatsapp = prefijo + cel;
+    if (f.descripcion.trim()) campos.descripcion = f.descripcion.trim();
+    if (f.direccion.trim()) campos.direccion = f.direccion.trim();
+    const rubroList = rubroSlugs.length > 0 ? rubroSlugs : ["otros"];
+    const online = typeof navigator === "undefined" || navigator.onLine;
 
     try {
+      if (!online) throw new Error("__offline__");
+      const fd = new FormData();
+      Object.entries(campos).forEach(([k, v]) => fd.append(k, v));
+      rubroList.forEach((r) => fd.append("rubro_slugs", r));
+      if (foto) fd.append("foto", foto);
       const r = await altaComercioCampo(fd);
       setDone(r.comercio.nombre);
       setAltaId(r.comercio.id);
       setCount((c) => c + 1);
     } catch (ex) {
-      setErr(ex instanceof Error ? ex.message : "Error al guardar");
+      // Sin señal o falló la red → guardar OFFLINE (se sube solo cuando vuelva internet).
+      const esRed = !online || ex instanceof TypeError || /__offline__|fetch|network|Failed/i.test(String(ex));
+      if (esRed) {
+        try {
+          await encolarAlta(campos, rubroList, foto);
+          setDone(campos.nombre ?? "Comercio");
+          setDoneOffline(true);
+          setCount((c) => c + 1);
+          refrescarPend();
+        } catch {
+          setErr("No se pudo guardar ni siquiera offline. Reintentá.");
+        }
+      } else {
+        setErr(ex instanceof Error ? ex.message : "Error al guardar");
+      }
     } finally {
       setSaving(false);
     }
@@ -402,19 +439,21 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   function otro() {
     setF({ ...EMPTY }); setRubroSlugs([]); setIntentosAudio(0);
     setCoords(null); setGeoMsg(""); setFoto(null); setPreview(""); setConsent(true);
-    setDone(null); setAltaId(null); setErr("");
+    setDone(null); setDoneOffline(false); setAltaId(null); setErr("");
   }
 
   if (done) {
     const ciudadActual = ciudades.find((c) => c.slug === ciudadSlug);
     return (
       <div className="campo-wrap" style={{ textAlign: "center", paddingTop: 60 }}>
-        <div style={{ fontSize: 48 }}>✅</div>
-        <h1 style={{ fontSize: 24, margin: "10px 0 4px" }}>¡{done} cargado!</h1>
+        <div style={{ fontSize: 48 }}>{doneOffline ? "📴" : "✅"}</div>
+        <h1 style={{ fontSize: 24, margin: "10px 0 4px" }}>¡{done} {doneOffline ? "guardado sin conexión" : "cargado"}!</h1>
         <p style={{ color: "var(--txt-3)", marginBottom: 6 }}>
-          {ciudadActual ? `${ciudadActual.nombre} · ` : ""}Pendiente de verificar.
+          {doneOffline
+            ? "Se sube solo cuando haya señal. Las fotos las agregás después desde \"mis comercios\"."
+            : `${ciudadActual ? `${ciudadActual.nombre} · ` : ""}Pendiente de verificar.`}
         </p>
-        <p style={{ color: "var(--txt-3)", marginBottom: 18 }}>Llevás {count} en este recorrido.</p>
+        <p style={{ color: "var(--txt-3)", marginBottom: 18 }}>Llevás {count} en este recorrido.{pendientes > 0 ? ` · ${pendientes} sin subir` : ""}</p>
 
         {altaId && (
           <div style={{ textAlign: "left", marginBottom: 18, padding: 14, borderRadius: 14, background: "var(--panel)", border: "1px solid var(--stroke)" }}>
@@ -450,6 +489,15 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           <button className="link-more" onClick={onLogout} style={{ padding: "6px 12px" }}>Salir</button>
         </div>
       </div>
+
+      {pendientes > 0 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: "rgba(240,160,40,.12)", border: "1px solid rgba(240,160,40,.45)", color: "var(--amber)", borderRadius: 12, padding: "10px 12px", marginBottom: 12, fontSize: 13 }}>
+          <span>📴 {pendientes} guardado{pendientes > 1 ? "s" : ""} sin conexión — se sube{pendientes > 1 ? "n" : ""} con señal</span>
+          <button type="button" className="btn btn-ghost" style={{ padding: "5px 12px", whiteSpace: "nowrap" }} disabled={sincronizando} onClick={sincronizar}>
+            {sincronizando ? "Subiendo…" : "Sincronizar"}
+          </button>
+        </div>
+      )}
 
       <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
