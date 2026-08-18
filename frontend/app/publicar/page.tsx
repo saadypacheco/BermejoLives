@@ -117,7 +117,7 @@ function EditarComercioForm({ comercio, rubros, onCancel, onGuardado }: {
   comercio: ComercioAgente; rubros: Rubro[]; onCancel: () => void; onGuardado: (patch: Partial<ComercioAgente>) => void;
 }) {
   const [nombre, setNombre] = useState(comercio.nombre);
-  const [whatsapp, setWhatsapp] = useState(comercio.whatsapp);
+  const [whatsapp, setWhatsapp] = useState(comercio.whatsapp ?? "");
   const [direccion, setDireccion] = useState(comercio.direccion ?? "");
   const [modalidad, setModalidad] = useState(comercio.modalidad ?? "mayorista");
   const [rubroSlugs, setRubroSlugs] = useState<string[]>(comercio.rubros ? [comercio.rubros.slug] : []);
@@ -127,7 +127,7 @@ function EditarComercioForm({ comercio, rubros, onCancel, onGuardado }: {
   const [err, setErr] = useState("");
 
   async function guardar() {
-    if (!nombre.trim() || !whatsapp.trim()) { setErr("Nombre y WhatsApp son obligatorios"); return; }
+    if (!nombre.trim()) { setErr("El nombre es obligatorio"); return; }
     setGuardando(true); setErr("");
     try {
       let portada_url: string | null | undefined;
@@ -167,6 +167,17 @@ function EditarComercioForm({ comercio, rubros, onCancel, onGuardado }: {
         {rubros.map((r) => (
           <ChipToggle key={r.slug} label={r.nombre} active={rubroSlugs.includes(r.slug)} onClick={() => setRubroSlugs((s) => toggle(s, r.slug))} />
         ))}
+      </div>
+      {/* Galería del comercio ya cargado: agregar/quitar varias fotos y videos */}
+      <div style={{ marginTop: 2 }}>
+        <GaleriaUploader api={{
+          cargarFotos: () => listarFotosCampo(comercio.id),
+          subirFoto: (f, onP) => subirFotoCampo(comercio.id, f, onP),
+          borrarFoto: (id) => borrarFotoCampo(comercio.id, id),
+          cargarVideos: () => listarVideosCampo(comercio.id),
+          subirVideo: (f, dur, onP) => subirVideoCampo(comercio.id, f, dur, onP),
+          borrarVideo: (id) => borrarVideoCampo(comercio.id, id),
+        }} />
       </div>
       {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
       <div style={{ display: "flex", gap: 8 }}>
