@@ -931,6 +931,7 @@ function TabComercios({
             comercios={filtradas.map((c) => ({
               id: c.id, nombre: c.nombre, lat: c.lat, lng: c.lng,
               rubro_slug: c.rubros?.slug ?? null, incompleto: incompletoDe(c).length > 0,
+              lugar_id: c.lugar_id, lugar_nombre: c.lugares?.nombre ?? null, lugar_lat: c.lugares?.lat ?? null, lugar_lng: c.lugares?.lng ?? null,
             }))}
             onSelect={setEditandoId}
           />
@@ -966,6 +967,7 @@ function TabComercios({
             </div>
             <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 3 }}>
               {c.rubros?.nombre ?? "Sin rubro"}
+              {c.lugares?.nombre ? ` · 🏬 ${c.lugares.nombre}${c.puesto ? ` #${c.puesto}` : ""}` : ""}
               {c.ciudades?.nombre ? ` · ${c.ciudades.nombre}` : ""}
               {c.modalidad ? ` · ${MODALIDAD_LABEL[c.modalidad] ?? c.modalidad}` : ""}
             </div>

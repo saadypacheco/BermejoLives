@@ -66,6 +66,25 @@ export const subirFotoCampo = (cid: string, file: File, onP?: (p: number) => voi
 export const subirVideoCampo = (cid: string, file: File, dur: number | null, onP?: (p: number) => void): Promise<VideoGaleria> =>
   subirConProgreso<{ video: VideoGaleria }>(`${API}/campo/mis-comercios/${cid}/videos`, "video", file, getAgenteToken(), dur != null ? { duracion_seg: String(dur) } : {}, onP).then((d) => d.video);
 
+// ---- Lugares (mercados / galerías / paseos: contenedores de puestos) ----
+export type Lugar = { id: string; nombre: string; tipo: string; lat: number | null; lng: number | null; ciudad_id?: string | null };
+
+export async function listarLugares(ciudadSlug = "bermejo"): Promise<Lugar[]> {
+  const res = await fetch(`${API}/campo/lugares?ciudad_slug=${encodeURIComponent(ciudadSlug)}`, { headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` } });
+  if (!res.ok) return [];
+  return (await res.json()).items as Lugar[];
+}
+
+export async function crearLugar(body: { nombre: string; tipo?: string; ciudad_slug?: string; lat?: number | null; lng?: number | null }): Promise<Lugar> {
+  const res = await fetch(`${API}/campo/lugares`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAgenteToken() ?? ""}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail ?? "No se pudo crear el lugar"); }
+  return (await res.json()).lugar as Lugar;
+}
+
 export async function altaComercioCampo(form: FormData): Promise<AltaCampoResult> {
   const res = await fetch(`${API}/campo/comercio`, {
     method: "POST",
@@ -87,7 +106,9 @@ export type ComercioAgente = {
   id: string; slug: string; nombre: string; whatsapp: string | null; telefono: string | null; modalidad: string | null;
   direccion: string | null; lat: number | null; lng: number | null;
   portada_url: string | null; portada_thumb_url: string | null; verificado: boolean; created_at: string;
+  lugar_id: string | null; puesto: string | null;
   rubros?: { nombre: string; slug: string } | null;
+  lugares?: { nombre: string; tipo: string; lat: number | null; lng: number | null } | null;
 };
 
 /** Comercios que este agente dio de alta, para que vea su propio recorrido. */

@@ -5,6 +5,7 @@ import {
   agenteLogin, getAgenteToken, clearAgente, altaComercioCampo, transcribirAudio, sugerirRubros,
   misComercios, editarComercioAgente, eliminarComercioAgente, actualizarFotoComercioAgente, type ComercioAgente,
   listarFotosCampo, listarVideosCampo, subirFotoCampo, subirVideoCampo, borrarFotoCampo, borrarVideoCampo,
+  listarLugares, crearLugar, type Lugar,
 } from "@/lib/campo";
 import { getCiudades, getRubros } from "@/lib/data";
 import type { Ciudad, Rubro } from "@/lib/types";
@@ -183,7 +184,7 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
           </div>
         ) : (
           <AdminMap
-            comercios={filtradas.map((c) => ({ id: c.id, nombre: c.nombre, lat: c.lat, lng: c.lng, rubro_slug: c.rubros?.slug ?? null, incompleto: agenteIncompleto(c).length > 0 }))}
+            comercios={filtradas.map((c) => ({ id: c.id, nombre: c.nombre, lat: c.lat, lng: c.lng, rubro_slug: c.rubros?.slug ?? null, incompleto: agenteIncompleto(c).length > 0, lugar_id: c.lugar_id, lugar_nombre: c.lugares?.nombre ?? null, lugar_lat: c.lugares?.lat ?? null, lugar_lng: c.lugares?.lng ?? null }))}
             onSelect={(id) => setEditando(todos.find((x) => x.id === id) ?? null)}
           />
         )
@@ -199,7 +200,7 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nombre || "Sin nombre"}</div>
-                  <div style={{ fontSize: 12.5, color: "var(--txt-3)" }}>{c.rubros?.nombre ?? "Sin rubro"}{c.direccion ? ` · ${c.direccion}` : ""}</div>
+                  <div style={{ fontSize: 12.5, color: "var(--txt-3)" }}>{c.rubros?.nombre ?? "Sin rubro"}{c.lugares?.nombre ? ` · 🏬 ${c.lugares.nombre}${c.puesto ? ` #${c.puesto}` : ""}` : c.direccion ? ` · ${c.direccion}` : ""}</div>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: c.verificado ? "var(--neon)" : "var(--amber)", background: c.verificado ? "rgba(57,255,158,.12)" : "rgba(255,176,32,.12)" }}>
                   {c.verificado ? "Verificado" : "Pendiente"}
@@ -395,6 +396,13 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   const [rubroSlugs,  setRubroSlugs]  = useState<string[]>([]);
   const [sugiriendo,  setSugiriendo]  = useState(false);
 
+  // Lugares (mercados/galerías): dónde está el puesto, opcional
+  const [lugares,     setLugares]     = useState<Lugar[]>([]);
+  const [lugarId,     setLugarId]     = useState("");
+  const [puesto,      setPuesto]      = useState("");
+  const [nuevoLugar,  setNuevoLugar]  = useState("");
+  const [creandoLugar,setCreandoLugar]= useState(false);
+
   const [coords,      setCoords]      = useState<{ lat: number; lng: number; acc: number } | null>(null);
   const [geoMsg,      setGeoMsg]      = useState("");
   const [foto,        setFoto]        = useState<File | null>(null);
@@ -437,6 +445,26 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     getCiudades().then(setCiudades);
     getRubros().then(setRubros);
   }, []);
+
+  // Mercados/galerías de la ciudad (para el selector "¿está dentro de un mercado?")
+  useEffect(() => { listarLugares(ciudadSlug).then(setLugares).catch(() => {}); }, [ciudadSlug]);
+
+  async function crearNuevoLugar() {
+    const nombre = nuevoLugar.trim();
+    if (!nombre) return;
+    setCreandoLugar(true);
+    setErr("");
+    try {
+      const lugar = await crearLugar({ nombre, ciudad_slug: ciudadSlug, lat: coords?.lat ?? null, lng: coords?.lng ?? null });
+      setLugares((prev) => [...prev, lugar].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      setLugarId(lugar.id);
+      setNuevoLugar("");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "No se pudo crear el mercado");
+    } finally {
+      setCreandoLugar(false);
+    }
+  }
 
   async function sugerirDesdeDescripcion(descripcion: string) {
     if (!descripcion.trim() || rubros.length === 0) return;
@@ -530,6 +558,8 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     if (cel) campos.whatsapp = prefijo + cel;
     if (f.descripcion.trim()) campos.descripcion = f.descripcion.trim();
     if (f.direccion.trim()) campos.direccion = f.direccion.trim();
+    if (lugarId && lugarId !== "__nuevo__") campos.lugar_id = lugarId;
+    if (puesto.trim()) campos.puesto = puesto.trim();
     const rubroList = rubroSlugs.length > 0 ? rubroSlugs : ["otros"];
     const online = typeof navigator === "undefined" || navigator.onLine;
 
@@ -567,6 +597,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   function otro() {
     setF({ ...EMPTY }); setRubroSlugs([]); setIntentosAudio(0);
     setCoords(null); setGeoMsg(""); setFoto(null); setPreview(""); setConsent(true);
+    setLugarId(""); setPuesto(""); setNuevoLugar("");
     setDone(null); setDoneOffline(false); setAltaId(null); setErr("");
   }
 
@@ -692,6 +723,27 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           </button>
           {coords && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>📍 {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} (±{coords.acc} m)</div>}
           {geoMsg && <div style={{ fontSize: 12.5, color: "var(--amber)", marginTop: 6 }}>{geoMsg}</div>}
+        </div>
+
+        {/* ── ¿Dentro de un mercado / galería? ── */}
+        <div>
+          <label className="campo-lbl">¿Está dentro de un mercado o galería? (opcional)</label>
+          <select className="adm-input" value={lugarId} onChange={(e) => setLugarId(e.target.value)}>
+            <option value="">No — local a la calle</option>
+            {lugares.map((l) => <option key={l.id} value={l.id}>🏬 {l.nombre}</option>)}
+            <option value="__nuevo__">➕ Crear nuevo mercado/galería…</option>
+          </select>
+          {lugarId === "__nuevo__" && (
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <input className="adm-input" style={{ flex: 1 }} value={nuevoLugar} onChange={(e) => setNuevoLugar(e.target.value)} placeholder="Nombre (ej: Mercado Central)" />
+              <button type="button" className="btn btn-ghost" style={{ whiteSpace: "nowrap" }} disabled={creandoLugar || !nuevoLugar.trim()} onClick={crearNuevoLugar}>
+                {creandoLugar ? "Creando…" : "Crear"}
+              </button>
+            </div>
+          )}
+          {lugarId && lugarId !== "__nuevo__" && (
+            <input className="adm-input" style={{ marginTop: 8 }} value={puesto} onChange={(e) => setPuesto(e.target.value)} placeholder="N° de puesto / local (opcional)" />
+          )}
         </div>
 
         {/* ── Foto ── */}

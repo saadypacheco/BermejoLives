@@ -62,6 +62,9 @@ class Repo(Protocol):
     def marcar_mensaje_leido(self, mensaje_id: str, comercio_id: str) -> dict: ...
     def list_todos_comercios(self, verificado: bool | None, limit: int) -> list[dict]: ...
     def update_comercio(self, comercio_id: str, patch: dict, rubro_slugs: list[str] | None) -> dict: ...
+    def crear_lugar(self, row: dict) -> dict: ...
+    def list_lugares(self, ciudad_id: str | None) -> list[dict]: ...
+    def get_lugar(self, lugar_id: str) -> dict | None: ...
     def crear_producto_ref(self, row: dict) -> dict: ...
     def list_producto_refs(self, comercio_id: str) -> list[dict]: ...
     def get_producto_ref(self, ref_id: str) -> dict | None: ...
@@ -687,8 +690,8 @@ class SupabaseRepo:
         q = (
             self._db.table("comercios")
             .select("id, slug, nombre, whatsapp, telefono, modalidad, descripcion, direccion, lat, lng, "
-                    "verificado, suspendido, paga_hasta, portada_url, portada_thumb_url, cargado_por, created_at, "
-                    "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug)")
+                    "verificado, suspendido, paga_hasta, portada_url, portada_thumb_url, cargado_por, created_at, lugar_id, puesto, "
+                    "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), lugares(nombre, tipo, lat, lng)")
             .eq("activo", True)
         )
         if verificado is not None:
@@ -701,8 +704,8 @@ class SupabaseRepo:
         res = (
             self._db.table("comercios")
             .select("id, slug, nombre, whatsapp, telefono, modalidad, direccion, lat, lng, "
-                    "portada_url, portada_thumb_url, verificado, created_at, "
-                    "rubros!comercios_rubro_id_fkey(nombre, slug)")
+                    "portada_url, portada_thumb_url, verificado, created_at, lugar_id, puesto, "
+                    "rubros!comercios_rubro_id_fkey(nombre, slug), lugares(nombre, tipo, lat, lng)")
             .eq("cargado_por", email)
             .eq("activo", True)
             .order("created_at", desc=True)
@@ -722,6 +725,21 @@ class SupabaseRepo:
                 self._db.table("comercio_rubros").delete().eq("comercio_id", comercio_id).execute()
                 self.set_comercio_rubros(comercio_id, rubro_ids)
         return self.get_comercio(comercio_id) or {}
+
+    # ---- lugares (mercados / galerías / paseos: contenedores de puestos) ----
+    def crear_lugar(self, row: dict) -> dict:
+        res = self._db.table("lugares").insert(row).execute()
+        return res.data[0]
+
+    def list_lugares(self, ciudad_id: str | None = None) -> list[dict]:
+        q = self._db.table("lugares").select("id, nombre, tipo, lat, lng, ciudad_id").eq("activo", True)
+        if ciudad_id:
+            q = q.eq("ciudad_id", ciudad_id)
+        return q.order("nombre").execute().data or []
+
+    def get_lugar(self, lugar_id: str) -> dict | None:
+        res = self._db.table("lugares").select("*").eq("id", lugar_id).limit(1).execute()
+        return res.data[0] if res.data else None
 
     # ---- producto_ref (puente con el ecommerce) ----
     def crear_producto_ref(self, row: dict) -> dict:

@@ -108,6 +108,8 @@ async def alta_campo(
     rubro_slugs: list[str] = Form(default=[]),    # uno o varios rubros
     modalidad: str = Form("mayorista"),
     direccion: str | None = Form(None),
+    lugar_id: str | None = Form(None),            # si está DENTRO de un mercado/galería
+    puesto: str | None = Form(None),              # N° de puesto/local dentro del lugar
     descripcion: str | None = Form(None),
     email: str | None = Form(None),
     tiktok_url: str | None = Form(None),
@@ -175,6 +177,8 @@ async def alta_campo(
             "ciudad_id": ciudad_id,
             "modalidad": modalidad,
             "direccion": _none(direccion),
+            "lugar_id": _none(lugar_id),
+            "puesto": _none(puesto),
             "lat": lat,
             "lng": lng,
             "portada_url": portada_url,
@@ -212,6 +216,44 @@ async def alta_campo(
                                      "ciudad": ciudad_slug, "rubros": len(rubro_ids),
                                      "foto": bool(portada_url), "gps": lat is not None,
                                      "video": bool(vurl)}}
+
+
+class LugarBody(BaseModel):
+    nombre: str
+    tipo: str = "mercado"
+    ciudad_slug: str = "bermejo"
+    lat: float | None = None
+    lng: float | None = None
+
+
+@router.get("/campo/lugares")
+def listar_lugares(
+    ciudad_slug: str = "bermejo",
+    _agente: dict = Depends(auth.require_agente),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Mercados/galerías/paseos para el selector del alta (elegir dónde está el puesto)."""
+    ciudad_id = repo.get_ciudad_id(ciudad_slug) or repo.get_ciudad_id("bermejo")
+    return {"items": repo.list_lugares(ciudad_id)}
+
+
+@router.post("/campo/lugares")
+def crear_lugar(
+    body: LugarBody,
+    agente: dict = Depends(auth.require_agente),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Crea un mercado/galería en el momento (el agente lo carga la 1ª vez que lo encuentra)."""
+    nombre = (body.nombre or "").strip()
+    if not nombre:
+        raise HTTPException(status_code=400, detail="Falta el nombre del lugar")
+    ciudad_id = repo.get_ciudad_id(body.ciudad_slug) or repo.get_ciudad_id("bermejo")
+    lugar = repo.crear_lugar({
+        "nombre": nombre, "tipo": body.tipo or "mercado", "ciudad_id": ciudad_id,
+        "lat": body.lat, "lng": body.lng,
+    })
+    logger.info("campo.lugar_creado", lugar=lugar["id"], nombre=nombre, by=agente["email"])
+    return {"ok": True, "lugar": lugar}
 
 
 @router.get("/campo/mis-comercios")

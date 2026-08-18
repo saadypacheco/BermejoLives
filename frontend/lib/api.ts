@@ -103,8 +103,11 @@ export type ComercioPorVerificar = {
   suspendido: boolean;
   paga_hasta: string | null;
   created_at: string;
+  lugar_id: string | null;
+  puesto: string | null;
   rubros?: { nombre: string; slug: string };
   ciudades?: { nombre: string; slug: string };
+  lugares?: { nombre: string; tipo: string; lat: number | null; lng: number | null } | null;
 };
 
 export async function listComerciosPorVerificar(): Promise<ComercioPorVerificar[]> {
