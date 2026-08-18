@@ -176,6 +176,22 @@ export async function getComerciosMapa(
   }));
 }
 
+export type LugarPublico = { id: string; nombre: string; tipo: string; portada_thumb_url: string | null; n_comercios: number };
+
+/** Mercados/galerías activos con al menos un comercio, para el home. */
+export async function getLugaresPublicos(limit = 12): Promise<LugarPublico[]> {
+  if (!hasSupabase) return [];
+  const { data } = await supabase
+    .from("lugares")
+    .select("id, nombre, tipo, portada_thumb_url, comercios(count)")
+    .eq("activo", true)
+    .order("nombre");
+  return (data ?? [])
+    .map((l: any) => ({ id: l.id, nombre: l.nombre, tipo: l.tipo, portada_thumb_url: l.portada_thumb_url ?? null, n_comercios: l.comercios?.[0]?.count ?? 0 }))
+    .filter((l) => l.n_comercios > 0)
+    .slice(0, limit);
+}
+
 export async function getComercioBySlug(slug: string): Promise<Comercio | null> {
   if (hasSupabase) {
     const { data } = await supabase.from("comercios").select("*").eq("slug", slug).limit(1);

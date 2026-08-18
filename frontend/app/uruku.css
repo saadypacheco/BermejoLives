@@ -89,6 +89,9 @@
 .uk-search button { align-self: stretch; border: 0; color: #fff; font-weight: 800; background: var(--uk-green-grad); padding: 0 26px; cursor: pointer; }
 
 .uk-tools { display: flex; align-items: center; gap: 14px; }
+/* En desktop los wrappers "desaparecen" (los hijos entran directo al flex de .uk-tools);
+   en mobile se activan para reordenar (ver media query). */
+.uk-tool-city, .uk-tools-strip, .uk-tool-ingresar { display: contents; }
 .uk-pill { border: 1px solid var(--uk-line); background: var(--uk-surface); border-radius: 15px; padding: 11px 15px; color: var(--uk-ink); font-weight: 700; box-shadow: var(--uk-shadow-soft); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 /* Chip Abierto / Cerrado ahora */
 .uk-open { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 999px; white-space: nowrap; line-height: 1.4; }
@@ -234,6 +237,11 @@
 .uk-vid { flex: 0 0 260px; border-radius: 16px; overflow: hidden; background: #000; border: 1px solid var(--uk-line); position: relative; }
 .uk-vid video { width: 100%; height: 160px; object-fit: cover; display: block; }
 .uk-vid span { position: absolute; left: 10px; bottom: 10px; color: #fff; font-size: 12px; font-weight: 700; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
+/* Tarjetas de mercados/galerías (home) */
+.uk-lugar-card { flex: 0 0 auto; width: 152px; display: flex; flex-direction: column; gap: 6px; }
+.uk-lugar-img { width: 152px; height: 100px; border-radius: 14px; background: var(--uk-surface); border: 1px solid var(--uk-line); background-size: cover; background-position: center; display: grid; place-items: center; font-size: 34px; box-shadow: var(--uk-shadow-soft); }
+.uk-lugar-card b { font-size: 14px; color: var(--uk-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uk-lugar-card small { font-size: 12px; color: var(--uk-ink-soft); }
 
 /* ---- Pasos ---- */
 .uk-steps { display: grid; grid-template-columns: repeat(4,1fr); background: var(--uk-surface); border: 1px solid var(--uk-line); border-radius: 18px; padding: 16px 18px; box-shadow: var(--uk-shadow-soft); }
@@ -397,9 +405,21 @@
 }
 @media (max-width: 780px) {
   .uk-social-copy .uk-hide-sm { display: none; }
-  .uk-header-main { grid-template-columns: 1fr; gap: 16px; padding: 18px 0; }
-  .uk-search { order: 3; }
-  .uk-tools { justify-content: flex-start; }
+  .uk-social-inner { min-height: 36px; }
+  /* Header compacto: fila 1 = logo + ciudad + Ingresar; fila 2 = tira clima+cotización; fila 3 = buscador */
+  .uk-header-main { display: flex; flex-wrap: wrap; align-items: center; column-gap: 10px; row-gap: 10px; padding: 12px 0; min-height: 0; }
+  .uk-tools { display: contents; }
+  .uk-brand { order: 1; flex: 0 1 auto; min-width: 0; }
+  .uk-brand small { display: none; }              /* tagline solo en desktop/footer; libera espacio */
+  .uk-brand-word { font-size: 34px; }
+  .uk-tool-city { order: 2; display: block; margin-left: auto; }
+  .uk-tool-ingresar { order: 3; display: block; }
+  .uk-tool-ingresar { order: 3; display: block; }
+  .uk-tools-strip { order: 4; flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; padding: 8px 13px; background: var(--uk-surface); border: 1px solid var(--uk-line); border-radius: 12px; box-shadow: var(--uk-shadow-soft); }
+  .uk-tools-strip .uk-weather { border-right: 0; padding-right: 0; }
+  .uk-tools-strip .uk-weather .uk-sun { font-size: 20px; }
+  .uk-tools-strip .uk-weather-t strong { font-size: 15px; }
+  .uk-search { order: 5; flex-basis: 100%; }
   .uk-hero { min-height: auto; }
   .uk-hero-grid { grid-template-columns: 1fr; padding: 34px 0; }
   .uk-quote-card { justify-self: stretch; width: 100%; margin: 0; }

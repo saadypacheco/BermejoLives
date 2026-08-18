@@ -1,15 +1,15 @@
 import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
-import { Ic, CATS, money } from "@/components/uruku-ui";
-import { getFeed, getCotizaciones, getVideosPromo, getRedes } from "@/lib/data";
+import { Ic, money } from "@/components/uruku-ui";
+import { getFeed, getCotizaciones, getVideosPromo, getRedes, getLugaresPublicos } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { precioFmt } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function InicioPage() {
-  const [{ ciudad }, feed, cotizaciones, videos, redes] = await Promise.all([
-    ciudadActual(), getFeed(12), getCotizaciones(), getVideosPromo(8), getRedes(),
+  const [{ ciudad }, feed, cotizaciones, videos, redes, lugares] = await Promise.all([
+    ciudadActual(), getFeed(12), getCotizaciones(), getVideosPromo(8), getRedes(), getLugaresPublicos(12),
   ]);
   const nombre = ciudad?.nombre ?? "tu ciudad";
 
@@ -108,17 +108,26 @@ export default async function InicioPage() {
         </section>
       )}
 
-      {/* ===== Explorá por categoría ===== */}
-      <section className="uk-container uk-section">
-        <h2>Explorá por categoría</h2>
-        <div className="uk-catcards">
-          {CATS.map((c) => (
-            <Link key={c.label} href={c.q ? `/buscar?q=${c.q}` : "/buscar"}>
-              <Ic d={c.d} /><b>{c.label}</b>
-            </Link>
-          ))}
-        </div>
-      </section>
+      {/* ===== Mercados y galerías (usa los lugares cargados) ===== */}
+      {lugares.length > 0 && (
+        <section className="uk-container uk-section">
+          <div className="uk-section-head">
+            <h2>🏬 Mercados y galerías de {nombre}</h2>
+            <Link href="/mapa">Ver en el mapa →</Link>
+          </div>
+          <div className="uk-rail">
+            {lugares.map((l) => (
+              <Link key={l.id} href="/mapa" className="uk-lugar-card">
+                <div className="uk-lugar-img" style={l.portada_thumb_url ? { backgroundImage: `url('${l.portada_thumb_url}')` } : undefined}>
+                  {!l.portada_thumb_url && <span>🏬</span>}
+                </div>
+                <b>{l.nombre}</b>
+                <small>{l.n_comercios} {l.n_comercios === 1 ? "local" : "locales"}</small>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ===== Highlight grid ===== */}
       <section className="uk-container uk-highlight">

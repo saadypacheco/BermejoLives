@@ -75,23 +75,25 @@ export async function UrukuShell({
           </form>
 
           <div className="uk-tools">
-            <CitySelector actual={ciudad} ciudades={ciudades} />
-            {clima?.temp_c != null && (
-              <div className="uk-weather">
-                <span className="uk-sun">{clima.icono || "☀"}</span>
-                <div className="uk-weather-t">
-                  <strong>{Math.round(clima.temp_c)}°C</strong>
-                  {clima.descripcion && <small>{clima.descripcion}</small>}
+            <div className="uk-tool-city"><CitySelector actual={ciudad} ciudades={ciudades} /></div>
+            <div className="uk-tools-strip">
+              {clima?.temp_c != null && (
+                <div className="uk-weather">
+                  <span className="uk-sun">{clima.icono || "☀"}</span>
+                  <div className="uk-weather-t">
+                    <strong>{Math.round(clima.temp_c)}°C</strong>
+                    {clima.descripcion && <small>{clima.descripcion}</small>}
+                  </div>
                 </div>
-              </div>
-            )}
-            {cot2.map((c) => (
-              <div key={c.clave} className="uk-quote-mini">
-                <small>{c.etiqueta}</small>
-                <strong>{money(c.valor)} {c.unidad}</strong>
-              </div>
-            ))}
-            <IngresarMenu />
+              )}
+              {cot2.map((c) => (
+                <div key={c.clave} className="uk-quote-mini">
+                  <small>{c.etiqueta}</small>
+                  <strong>{money(c.valor)} {c.unidad}</strong>
+                </div>
+              ))}
+            </div>
+            <div className="uk-tool-ingresar"><IngresarMenu /></div>
           </div>
         </div>
 
