@@ -55,24 +55,13 @@ export default async function InicioPage() {
         </div>
       </section>
 
-      {/* ===== Trust strip ===== */}
-      <section className="uk-container uk-trust">
-        <article>
-          <div className="uk-trust-ic green"><Ic d="M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" /></div>
-          <div className="uk-trust-t"><strong>Ofertas todos los días</strong><span>Descuentos reales cerca tuyo.</span></div>
-        </article>
-        <article>
-          <div className="uk-trust-ic blue"><Ic d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" /></div>
-          <div className="uk-trust-t"><strong>Comercios verificados</strong><span>Negocios confiables de tu ciudad.</span></div>
-        </article>
-        <article>
-          <div className="uk-trust-ic orange"><Ic d="M12 3l2.9 5.9 6.6.9-4.8 4.6 1.1 6.5L12 17.8 6.2 21l1.1-6.5L2.5 10.3l6.6-.9z" /></div>
-          <div className="uk-trust-t"><strong>Novedades locales</strong><span>Lo nuevo, primero acá.</span></div>
-        </article>
-        <article>
-          <div className="uk-trust-ic violet"><Ic d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" /></div>
-          <div className="uk-trust-t"><strong>Apoyemos lo local</strong><span>Juntos hacemos crecer {nombre}.</span></div>
-        </article>
+      {/* ===== Features (cards) ===== */}
+      <section className="uk-container uk-feats">
+        <div className="uk-feat"><span className="uk-feat-ic"><Ic d="M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" /></span><b>Ofertas<br />diarias</b></div>
+        <div className="uk-feat"><span className="uk-feat-ic"><Ic d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0" /></span><b>Comercios<br />verificados</b></div>
+        <div className="uk-feat"><span className="uk-feat-ic"><Ic d="M12 15a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8.2 13.9 7 22l5-3 5 3-1.2-8.1" /></span><b>Locales<br />destacados</b></div>
+        <div className="uk-feat"><span className="uk-feat-ic"><Ic d="M19 5 5 19M6.5 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM17.5 14.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" /></span><b>Promos<br />exclusivas</b></div>
+        <div className="uk-feat"><span className="uk-feat-ic"><Ic d="M4 12a8 8 0 0 1 16 0M4 12v3a2 2 0 0 0 2 2h1v-6H5a1 1 0 0 0-1 1zM20 12v3a2 2 0 0 1-2 2h-1v-6h2a1 1 0 0 1 1 1z" /></span><b>Atención<br />24/7</b></div>
       </section>
 
       {/* ===== Ofertas destacadas ===== */}
