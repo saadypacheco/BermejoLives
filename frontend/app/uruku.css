@@ -409,17 +409,29 @@
 .uk-product .wa-mini { width: 34px; height: 34px; border-radius: 10px; background: #25d366; display: grid; place-items: center; flex-shrink: 0; }
 
 /* ---- Footer ---- */
-.uk-footer { background: var(--uk-surface-2); border-top: 1px solid var(--uk-line); padding: 32px 0 20px; }
-.uk-footer-grid { display: grid; grid-template-columns: 1.4fr repeat(3,1fr); gap: 48px; }
-.uk-footer-brand .uk-brand-word { font-size: 30px; }
-.uk-footer p { max-width: 270px; color: var(--uk-ink-soft); font-size: 12px; line-height: 1.6; }
-.uk-footer h4 { margin: 0 0 12px; font-size: 13px; }
-.uk-footer a { display: block; margin: 7px 0; color: var(--uk-ink-soft); font-size: 12px; }
-.uk-footer a:hover { color: var(--uk-green); }
-.uk-footer-socials { display: flex; gap: 8px; margin-top: 12px; }
-.uk-footer-socials a { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: var(--uk-surface); border: 1px solid var(--uk-line); }
+.uk-footer { background: var(--uk-surface-2); border-top: 1px solid var(--uk-line); padding: 30px 0 20px; }
+.uk-foot-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
+.uk-foot-col h4 { font-size: 18px; color: var(--uk-ink); margin: 0; font-weight: 800; }
+.uk-foot-col h4::after { content: ""; display: block; width: 36px; height: 3px; background: var(--uk-green); border-radius: 2px; margin: 9px 0 6px; }
+.uk-foot-link { display: flex; align-items: center; gap: 13px; padding: 10px 0; color: var(--uk-ink); font-size: 15px; }
+.uk-foot-link svg { width: 21px; height: 21px; color: var(--uk-ink); flex-shrink: 0; }
+.uk-foot-link span { flex: 1; }
+.uk-foot-link i { color: var(--uk-ink-soft); font-style: normal; font-size: 18px; }
+.uk-foot-link:hover, .uk-foot-link:hover svg { color: var(--uk-green); }
+/* Banner CTA de comercios */
+.uk-foot-cta { display: flex; align-items: center; gap: 16px; background: rgba(21,152,94,.10); border: 1px solid rgba(21,152,94,.22); border-radius: 18px; padding: 18px 20px; margin: 18px 0; }
+.uk-foot-cta-ic { width: 58px; height: 58px; border-radius: 50%; background: var(--uk-green); color: #fff; display: grid; place-items: center; flex-shrink: 0; }
+.uk-foot-cta-ic svg { width: 28px; height: 28px; }
+.uk-foot-cta-txt { flex: 1; min-width: 0; }
+.uk-foot-cta-txt b { font-size: 18px; color: var(--uk-ink); }
+.uk-foot-cta-txt p { font-size: 13.5px; color: var(--uk-ink-soft); margin: 4px 0 0; line-height: 1.45; }
+.uk-foot-cta-btn { flex-shrink: 0; background: var(--uk-green-grad); color: #fff; padding: 14px 24px; border-radius: 13px; font-weight: 800; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+.uk-foot-bottom { display: flex; align-items: center; gap: 14px 22px; margin-top: 8px; padding-top: 18px; border-top: 1px solid var(--uk-line); flex-wrap: wrap; }
+.uk-foot-logo img { height: 38px; width: auto; display: block; }
+.uk-footer-socials { display: flex; gap: 8px; }
+.uk-footer-socials a { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; }
 .uk-footer-socials svg { width: 15px; height: 15px; }
-.uk-footer-bottom { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--uk-line); display: flex; justify-content: space-between; gap: 20px; color: var(--uk-ink-soft); font-size: 11px; flex-wrap: wrap; }
+.uk-foot-copy { color: var(--uk-ink-soft); font-size: 12px; margin-left: auto; }
 
 /* ---- Responsive ---- */
 @media (max-width: 1120px) {
@@ -448,10 +460,13 @@
   .uk-discover p { max-width: 100%; }
   .uk-steps { grid-template-columns: 1fr; }
   .uk-steps .uk-arrow { display: none; }
-  .uk-footer-grid { grid-template-columns: 1fr 1fr; }
+  .uk-foot-cols { grid-template-columns: 1fr 1fr; gap: 8px 24px; }
+  .uk-foot-cta { flex-wrap: wrap; }
+  .uk-foot-cta-btn { width: 100%; justify-content: center; margin-top: 4px; }
 }
 @media (max-width: 520px) {
   .uk-brand-word { font-size: 32px; }
   .uk-catcards { grid-template-columns: repeat(2,1fr); }
-  .uk-footer-grid { grid-template-columns: 1fr; }
+  .uk-foot-cols { grid-template-columns: 1fr; }
+  .uk-foot-copy { margin-left: 0; width: 100%; }
 }
