@@ -70,17 +70,19 @@
 }
 .uk-social-links svg { width: 15px; height: 15px; }
 .uk-theme-toggle {
-  border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08);
-  color: #fff; border-radius: 9px; padding: 5px 10px; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--uk-line); background: var(--uk-surface);
+  color: var(--uk-ink); border-radius: 11px; padding: 8px 10px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700;
+  box-shadow: var(--uk-shadow-soft);
 }
-.uk-theme-toggle-icon { padding: 5px 8px; flex-shrink: 0; }
+.uk-theme-toggle-icon { padding: 8px 9px; flex-shrink: 0; }
 
 /* ---- Header ---- */
 .uk-header { background: var(--uk-header); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--uk-line); }
 /* Header en filas: 1) logo + ciudad + Ingresar + tema · 2) redes + clima + cotización · 3) buscador */
 .uk-headwrap { display: flex; flex-direction: column; gap: 9px; padding: 8px 0 12px; }
 .uk-head-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.uk-head-top .uk-brand { flex-shrink: 0; order: 0; }   /* logo primero (izquierda), sin comprimir */
 .uk-head-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .uk-head-strip { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 @media (min-width: 900px) { .uk-brand-full { height: 96px; } .uk-search { max-width: 680px; } }
@@ -432,18 +434,10 @@
 @media (max-width: 780px) {
   .uk-social-copy .uk-hide-sm { display: none; }
   .uk-social-inner { min-height: 36px; }
-  /* Header compacto: fila 1 = logo + ciudad + Ingresar; fila 2 = buscador (clima/cotización van arriba) */
-  .uk-header-main { display: flex; flex-wrap: wrap; align-items: center; column-gap: 10px; row-gap: 10px; padding: 12px 0; min-height: 0; }
-  .uk-tools { display: contents; }
-  .uk-brand { order: 1; flex: 0 1 auto; min-width: 0; }
-  .uk-brand small { display: none; }              /* tagline solo en desktop/footer; libera espacio */
-  .uk-brand-full { height: 80px; }
-  /* Pills compactas (ciudad + Ingresar) para que entren en la misma línea del logo (Android) */
-  .uk-header-main .uk-pill { padding: 6px 10px; font-size: 12px; }
-  .uk-header-main .uk-pill svg { width: 15px; height: 15px; }
-  .uk-tool-city { order: 2; display: block; margin-left: auto; }
-  .uk-tool-ingresar { order: 3; display: block; }
-  .uk-search { order: 4; flex-basis: 100%; }
+  /* Header mobile: logo a la IZQUIERDA (sin el order/margin viejos) + pills compactas */
+  .uk-brand-full { height: 56px; }
+  .uk-head-actions .uk-pill { padding: 6px 10px; font-size: 12px; }
+  .uk-head-actions .uk-pill svg { width: 15px; height: 15px; }
   .uk-hero { min-height: auto; }
   .uk-hero-grid { grid-template-columns: 1fr; padding: 34px 0; }
   .uk-quote-card { justify-self: stretch; width: 100%; margin: 0; }
