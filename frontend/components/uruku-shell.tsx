@@ -8,6 +8,7 @@ import { CatNav } from "@/components/catnav";
 import { Ic, SocialLinks, money } from "@/components/uruku-ui";
 import { getClima, getCotizaciones, getRedes } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
+import { versionLabel } from "@/lib/version";
 
 /**
  * Marco compartido del diseño URUKU: barra social + header (buscador, ciudad,
@@ -121,6 +122,7 @@ export async function UrukuShell({
               <Link href="/" className="uk-foot-logo"><img src="/logouruku-wordmark.png" alt="URUKU" /></Link>
               <SocialLinks redes={redes} cls="uk-footer-socials" />
               <span className="uk-foot-copy">© 2026 URUKU. Todos los derechos reservados.</span>
+              <span className="uk-version" title="Build en línea">{versionLabel()}</span>
             </div>
           </div>
         </footer>

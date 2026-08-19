@@ -93,6 +93,10 @@ services:
         # "1" = sitio en modo captura: solo /bermejo y /admin; el resto muestra "Próximamente".
         # Para abrir el sitio público: poné "0" y reconstruí el frontend.
         NEXT_PUBLIC_MODO_CAPTURA: ${MODO_CAPTURA:-1}
+        # Versión: el deploy pasa GIT_SHA=$(git rev-parse --short HEAD); APP_ENV
+        # etiqueta el ambiente (prod/qa). Se ven en el footer y en GET /version.
+        GIT_SHA: ${GIT_SHA:-dev}
+        APP_ENV: ${APP_ENV:-}
     container_name: buscadonde-frontend
     restart: unless-stopped
     depends_on:

@@ -432,6 +432,7 @@
 .uk-footer-socials a { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; }
 .uk-footer-socials svg { width: 15px; height: 15px; }
 .uk-foot-copy { color: var(--uk-ink-soft); font-size: 12px; margin-left: auto; }
+.uk-version { color: var(--uk-ink-soft); opacity: .6; font-size: 11px; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 
 /* ---- Responsive ---- */
 @media (max-width: 1120px) {
