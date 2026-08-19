@@ -85,7 +85,7 @@
 .uk-head-top .uk-brand { flex-shrink: 0; order: 0; }   /* logo primero (izquierda), sin comprimir */
 .uk-head-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .uk-head-strip { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-@media (min-width: 900px) { .uk-brand-full { height: 96px; } .uk-search { max-width: 680px; } }
+@media (min-width: 900px) { .uk-brand-full { height: 120px; } .uk-search { max-width: 680px; } }
 .uk-header-main { min-height: 96px; display: grid; grid-template-columns: 300px minmax(240px,1fr) auto; gap: 24px; align-items: center; }
 .uk-brand-word { display: inline-flex; align-items: center; gap: 3px; font-weight: 900; font-size: 46px; letter-spacing: .01em; line-height: 1; color: var(--uk-ink); }
 .uk-brand-logo { width: 46px; height: 46px; object-fit: contain; flex-shrink: 0; }
@@ -93,7 +93,7 @@
 .uk-brand small { display: block; margin-top: 6px; color: var(--uk-ink-soft); font-size: 12px; font-weight: 500; }
 /* Logo completo URUKU (imagen transparente, sirve claro y oscuro). max-width evita
    que desborde su columna en pantallas intermedias (se achica solo). */
-.uk-brand-full { height: 64px; width: auto; max-width: 100%; display: block; }
+.uk-brand-full { height: 72px; width: auto; max-width: 100%; display: block; }
 .uk-footer-brand .uk-brand-full { height: 48px; }
 .uk-red { color: var(--uk-red); font-weight: 700; }
 
@@ -435,8 +435,7 @@
   .uk-social-copy .uk-hide-sm { display: none; }
   .uk-social-inner { min-height: 36px; }
   /* Header mobile: logo a la IZQUIERDA (sin el order/margin viejos) + pills compactas */
-  .uk-brand-full { height: 56px; }
-  .uk-head-actions .uk-pill { padding: 6px 10px; font-size: 12px; }
+  .uk-head-actions .uk-pill { padding: 6px 9px; font-size: 12px; }
   .uk-head-actions .uk-pill svg { width: 15px; height: 15px; }
   .uk-hero { min-height: auto; }
   .uk-hero-grid { grid-template-columns: 1fr; padding: 34px 0; }
