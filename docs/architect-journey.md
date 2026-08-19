@@ -659,7 +659,7 @@ backend siguen siendo `/campo/*` y `/auth/campo/login`, son internos).
 ### Decisiones de producto/ecosistema (documentadas)
 
 `docs/modelo-comercial-y-ecosistema.md`: embudo de 3 pasadas, membresías (4 tiers),
-add-ons, ideas, y análisis de `tienda` (amandaclothing) + BermejoOfertas. Hallazgos:
+add-ons, ideas, y análisis de `tienda` (Reservalo) + BermejoOfertas. Hallazgos:
 `tienda` mismo stack, ya tiene carrito→WhatsApp + auto-redes + B2B, pero es
 **deploy-por-cliente** (no multi-tenant) y **auth solo email**. Recomendación:
 vender tiendas por-vendedor con `tienda` tal cual; BermejoOfertas = el feed que

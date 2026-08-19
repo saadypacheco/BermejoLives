@@ -4,7 +4,7 @@
 > - **Encontralo** (este repo, ex-buscadonde): mapa/descubrimiento, en producción.
 > - **Reservalo** (`C:\repos\proyectosClaude\reservalo`): catálogo multi-vendor
 >   + reservas, vive bajo `encontralo.store/reservalo`, en producción.
-> - **tienda** (`C:\repos\proyectosClaude\tienda`, ex-amandaclothing): motor de
+> - **tienda** (`C:\repos\proyectosClaude\tienda`, ex-Reservalo): motor de
 >   e-commerce white-label, ~95% funcional, deploy-por-cliente. *(No tocado en
 >   la sesión del 2026-07-07 — su estado abajo puede estar desactualizado.)*
 
@@ -122,8 +122,8 @@
 ## 🧩 1. DECISIÓN ESTRATÉGICA — cómo se conectan los productos
 *Parcialmente resuelto:* **Reservalo** (repo separado, deployado bajo
 `encontralo.store/reservalo`) terminó siendo el catálogo multi-vendor
-compartido — parece construido sobre el motor de "tienda"/Amanda Clothing
-(su frontend todavía tiene clases `amanda-*` sin renombrar del todo), pero
+compartido — construido sobre el motor de "tienda"/la tienda piloto
+(su frontend ya usa clases `brand-*` white-label), pero
 ahora es multi-tenant (`vendedores`, no un deploy por cliente) y ya está
 integrado con Encontralo vía `producto_ref` (Encontralo linkea directo a la
 ficha del producto en Reservalo). No confirmado si esto reemplaza del todo
@@ -340,7 +340,7 @@ priorización y venta:
 ## 5. tienda — para producción
 > ⚠️ **Sospecha sin confirmar (2026-07-07):** esta sección puede describir un
 > estado anterior de lo que hoy es **Reservalo** (su frontend todavía tiene
-> clases `amanda-*` sin renombrar, y tiene motor de recomendaciones + carrito
+> clases `brand-*` white-label, y tiene motor de recomendaciones + carrito
 > + `.github/workflows/deploy.yml` con **CI/CD automático ya funcionando** —
 > lo vi correr esta sesión). Si "tienda" y "Reservalo" son el mismo código en
 > distintos momentos, la línea de "Deploy backend CI/CD (hoy es manual)" de
@@ -355,9 +355,9 @@ priorización y venta:
 - [x] **Deploy backend CI/CD** al VPS — si esto es Reservalo, ya está: push a
       `main` dispara build + push de imágenes + deploy por SSH automático.
 - [ ] Paginación de catálogo (>50 productos), SEO dinámico por producto.
-- [ ] Renombrar/parametrizar lo que queda atado a "amandaclothing" (WA y pricing en
-      `/software`, `.env` de ejemplo) — confirmado que sigue así en Reservalo
-      (clases `amanda-*` en el CSS, tema por defecto "Amanda Clothing").
+- [x] Renombrar/parametrizar lo que estaba atado a la tienda piloto (WA y pricing
+      en `/software`, `.env` de ejemplo, clases CSS white-label (`brand-*`), seed de
+      `tienda_config` con marca neutra) — hecho 2026-08-19.
 
 ## 6. tienda — ya resuelto (no tocar)
 B2C minorista + **B2B mayorista completo** (cuenta corriente, listas de precio,

@@ -2,13 +2,13 @@
 
 > "El ecommerce de buscadonde" = UNA instancia de la tienda en modo **marketplace
 > multi-vendedor** (`reservalo.com`). Muchos comercios, un catálogo
-> compartido, separados por `vendedor_id`. La tienda **per-cliente** (Amanda) sigue
+> compartido, separados por `vendedor_id`. La tienda **per-cliente** (la tienda piloto) sigue
 > aparte como tenant aislado premium — mismo motor, otro deploy.
 > Estado: 🧠 en discusión, sin código.
 
 ## Multi-tenant vs multi-vendedor (para que no se mezcle)
 - **Multi-tenant** = tiendas **aisladas** (cada marca su data/dominio). Ya existe:
-  deploy-por-cliente (Amanda). Un tenant no ve al otro.
+  deploy-por-cliente (la tienda piloto). Un tenant no ve al otro.
 - **Multi-vendedor (marketplace)** = **una** tienda con productos de **muchos
   vendedores** en un catálogo común. Es lo nuevo, para la masa de Bermejo.
 - Conviven ambos. Mismo código, dos modos de deploy.

@@ -38,7 +38,7 @@ guarda solo una **referencia** y opera por API.
 **Prerequisito (clave):** la tienda hoy es **deploy-por-cliente** (una base por
 comercio). Para esto hace falta **UNA tienda compartida multi-vendedor** =
 "el ecommerce de buscadonde" (`reservalo.com`), con `vendedor_id` en cada
-producto. La tienda per-cliente (Amanda) sigue como **producto premium** aparte.
+producto. La tienda per-cliente (la tienda piloto) sigue como **producto premium** aparte.
 
 **Contrato de integración:**
 - Tabla nueva en buscadonde **`producto_ref`**: `comercio_id`, `tienda_producto_id`,

@@ -15,7 +15,7 @@ Se mantienen **dos repositorios independientes**:
 > Reservalo es **white-label** (deploy por cliente), por eso vive en su propio repo.
 
 ### Por qué separados (no monorepo)
-- **Reservalo es white-label y reusable**: se despliega *por cliente* (Amanda, etc.), no es exclusivo de Encontralo. Meterlo en el repo de Encontralo acoplaría un producto reusable a un solo consumidor y complicaría sus otros deploys.
+- **Reservalo es white-label y reusable**: se despliega *por cliente* (la tienda piloto, etc.), no es exclusivo de Encontralo. Meterlo en el repo de Encontralo acoplaría un producto reusable a un solo consumidor y complicaría sus otros deploys.
 - **Ciclos de vida independientes**, stacks distintos, historiales de git distintos.
 - Menor *blast radius*: un commit malo en uno no rompe el otro.
 
