@@ -4,13 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { ComercioMapa } from "@/lib/data";
 import { abiertoAhora } from "@/lib/horario";
-import { rubroStyle, loadLeaflet, opcionesCluster, manejarClusterClick, escapeHtml } from "@/lib/mapa-visual";
+import { rubroStyle, loadLeaflet, escapeHtml } from "@/lib/mapa-visual";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
-// Zoom desde el cual se muestran los "gratis". DESACTIVADO en fase de lanzamiento
-// (0 = siempre visibles): hoy TODOS los comercios son gratis, así que ocultarlos al
-// alejar dejaba el mapa vacío. Volver a ~14 en Fase 2, cuando haya planes pagos.
-const ZOOM_GRATIS = 0;
 
 type Tier = "gratis" | "pago" | "destacado";
 type Hoja = { titulo: string; portada?: string | null; video?: string | null; items: ComercioMapa[] };
@@ -46,8 +42,6 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
   const clusterRef = useRef<any>(null);
   const polyLayerRef = useRef<any>(null);   // polígonos de las manzanas (mercados)
   const markerByIdRef = useRef<Map<string, any>>(new Map());
-  const gratisMarkersRef = useRef<any[]>([]);
-  const gratisShownRef = useRef(false);
   const LRef = useRef<any>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const pathRef = useRef<SVGPathElement>(null);
@@ -86,18 +80,12 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
         (map as any)._themeObs = obs;
       }
       polyLayerRef.current = L.layerGroup().addTo(map);   // manzanas por debajo de los pines
-      // Smart cluster: tocar un grupo hace ZOOM FUERTE (sin patitas); si están muy
-      // pegados, HOJA con la lista. Igual que el finder.
-      const cluster = L.markerClusterGroup(opcionesCluster(L)).addTo(map);
-      clusterRef.current = cluster;
-      cluster.on("clusterclick", (e: any) => {
-        const r = manejarClusterClick(map, e);
-        if (r.accion === "hoja") hojaRef.current({ titulo: `${r.comercios.length} comercios acá`, items: r.comercios as ComercioMapa[] });
-      });
-      cluster.on("animationend", drawConnector);
+      // Locales a la calle: pines INDIVIDUALES (sin agrupador, mapa lleno de puntos por
+      // rubro). Los mercados/galerías se muestran como un pin 🏬 que abre el directorio.
+      const layer = L.layerGroup().addTo(map);
+      clusterRef.current = layer;
       pintar();
       map.on("move zoom moveend", drawConnector);
-      map.on("zoomend", aplicarZoomProgresivo);
       const ro = new ResizeObserver(() => { map.invalidateSize(); drawConnector(); });
       ro.observe(elRef.current);
       (map as any)._ro = ro;
@@ -155,14 +143,13 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
   }
 
   function pintar() {
-    const L = LRef.current, cluster = clusterRef.current;
-    if (!L || !cluster) return;
-    cluster.clearLayers();
+    const L = LRef.current, layer = clusterRef.current;
+    if (!L || !layer) return;
+    layer.clearLayers();
     polyLayerRef.current?.clearLayers();
     markerByIdRef.current = new Map();
-    gratisMarkersRef.current = [];
-    const fijos: any[] = [];
-    // Agrupar los que están dentro de un mercado/galería; el resto, sueltos.
+    // Agrupar los que están dentro de un mercado/galería (pin 🏬 → directorio); el
+    // resto se dibujan como pines INDIVIDUALES (sin agrupador).
     const grupos = new Map<string, { nombre: string; lat: number | null; lng: number | null; sumLat: number; sumLng: number; n: number; portada: string | null; video: string | null; poligono: [number, number][] | null; items: ComercioMapa[] }>();
 
     for (const c of comercios) {
@@ -178,8 +165,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
       const m = marcador(L, c, tier, isSel);
       markerByIdRef.current.set(c.id, m);
       if (isSel) selRadiusRef.current = sizeDe(tier, true) / 2;
-      if (tier === "gratis" && !isSel) gratisMarkersRef.current.push(m);
-      else fijos.push(m);
+      layer.addLayer(m);
     }
 
     for (const g of grupos.values()) {
@@ -193,32 +179,19 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
       const m = L.marker([lat, lng], { icon: iconoLugar(L, g.nombre, items.length, g.portada), zIndexOffset: 500 });
       m.__data = items[0];
       m.on("click", () => hojaRef.current({ titulo: `🏬 ${g.nombre}`, portada: g.portada, video: g.video, items }));
-      fijos.push(m);
+      layer.addLayer(m);
     }
 
-    cluster.addLayers(fijos);
-    gratisShownRef.current = false;
-    aplicarZoomProgresivo();
-    drawConnector();
-  }
-
-  function aplicarZoomProgresivo() {
-    const map = mapRef.current, cluster = clusterRef.current;
-    if (!map || !cluster) return;
-    const show = map.getZoom() >= ZOOM_GRATIS;
-    const arr = gratisMarkersRef.current;
-    if (show && !gratisShownRef.current) { cluster.addLayers(arr); gratisShownRef.current = true; }
-    else if (!show && gratisShownRef.current) { cluster.removeLayers(arr); gratisShownRef.current = false; }
     drawConnector();
   }
 
   function drawConnector() {
-    const map = mapRef.current, svg = svgRef.current, path = pathRef.current, cluster = clusterRef.current;
-    if (!map || !svg || !path || !cluster) return;
+    const map = mapRef.current, svg = svgRef.current, path = pathRef.current, layer = clusterRef.current;
+    if (!map || !svg || !path || !layer) return;
     const hide = () => { svg.style.display = "none"; };
     const id = selIdRef.current;
     const marker = id ? markerByIdRef.current.get(id) : null;
-    if (!marker || !cluster.hasLayer(marker) || cluster.getVisibleParent(marker) !== marker) return hide();
+    if (!marker || !layer.hasLayer(marker)) return hide();
     const cardEl = document.querySelector<HTMLElement>(".mcard");
     if (!cardEl) return hide();
 

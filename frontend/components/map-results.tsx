@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { type ResultadoBusqueda, comoLlegarHref, waLink, MODALIDAD_LABEL } from "@/lib/types";
 import { registrarLead } from "@/lib/campo";
-import { rubroStyle, loadLeaflet, opcionesCluster, manejarClusterClick } from "@/lib/mapa-visual";
+import { rubroStyle, loadLeaflet } from "@/lib/mapa-visual";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 
@@ -19,9 +19,6 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const clusterRef = useRef<any>(null);
-  const [hoja, setHoja] = useState<ResultadoBusqueda[] | null>(null);
-  const hojaRef = useRef<(items: ResultadoBusqueda[]) => void>(() => {});
-  hojaRef.current = setHoja;
 
   useEffect(() => {
     let cancelled = false;
@@ -32,12 +29,8 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
         L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
           maxZoom: 19, updateWhenIdle: true, keepBuffer: 2,
         }).addTo(mapRef.current);
-        const cluster = L.markerClusterGroup(opcionesCluster(L)).addTo(mapRef.current);
-        clusterRef.current = cluster;
-        cluster.on("clusterclick", (e: any) => {
-          const r = manejarClusterClick(mapRef.current, e);
-          if (r.accion === "hoja") hojaRef.current(r.comercios as ResultadoBusqueda[]);
-        });
+        // Sin agrupador: mapa lleno de puntos individuales por rubro.
+        clusterRef.current = L.layerGroup().addTo(mapRef.current);
       }
       renderPins(L);
     });
@@ -59,12 +52,11 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
   }, []);
 
   function renderPins(L: any) {
-    const cluster = clusterRef.current;
-    if (!cluster) return;
-    cluster.clearLayers();
+    const layer = clusterRef.current;
+    if (!layer) return;
+    layer.clearLayers();
     const withCoords = results.filter((r) => r.lat != null && r.lng != null);
     const bounds: [number, number][] = [];
-    const markers: any[] = [];
     for (const r of withCoords) {
       const size = r.verificado ? 34 : 22;
       const icon = L.divIcon({
@@ -82,10 +74,9 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
         </div>`;
       const m = L.marker([r.lat, r.lng], { icon, zIndexOffset: r.verificado ? 300 : 0 }).bindPopup(popup);
       m.__data = r;
-      markers.push(m);
+      layer.addLayer(m);
       bounds.push([r.lat as number, r.lng as number]);
     }
-    cluster.addLayers(markers);
     if (bounds.length > 1) mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
     else if (bounds.length === 1) mapRef.current.setView(bounds[0], 16);
   }
@@ -95,26 +86,6 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
   return (
     <div style={{ position: "relative" }}>
       <div ref={elRef} className="map-canvas" />
-
-      {hoja && hoja.length > 0 && (
-        <div className="mapa-hoja">
-          <div className="mapa-hoja-head">
-            <b>{hoja.length} comercios acá</b>
-            <button type="button" onClick={() => setHoja(null)} aria-label="Cerrar">✕</button>
-          </div>
-          <div className="mapa-hoja-list">
-            {hoja.map((r) => {
-              const st = rubroStyle(r.rubro_slug);
-              return (
-                <a key={r.id} href={`/comercios/${r.slug}`} className="mapa-hoja-row">
-                  <span className="mh-dot" style={{ background: st.color }}>{st.emoji}</span>
-                  <span className="mh-nom">{r.nombre}{r.rubro_nombre ? ` · ${r.rubro_nombre}` : ""}</span>
-                </a>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {sinCoords > 0 && (
         <p style={{ color: "var(--txt-3)", fontSize: 12.5, marginTop: 10 }}>

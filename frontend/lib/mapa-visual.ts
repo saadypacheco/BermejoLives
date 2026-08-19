@@ -1,31 +1,50 @@
 // Compartido por los dos mapas (HomeMap y MapResults): carga de Leaflet + plugin
 // de clustering desde CDN (el SW cachea unpkg) y el estilo por rubro (color+emoji).
 
-// Ícono + color por rubro (matchea los slugs de los chips de categoría de Bermejo).
+// Ícono + color por rubro (taxonomía v2, 42 rubros). Color por FAMILIA (para leer
+// el mapa por zonas de color) y EMOJI distinto por rubro. + aliases de slugs viejos.
 export const CATEGORY_STYLE: Record<string, { emoji: string; color: string }> = {
-  ropa: { emoji: "👕", color: "#3b82f6" },
-  "ropa-americana": { emoji: "👕", color: "#6366f1" },
-  calzado: { emoji: "👟", color: "#8b5cf6" },
-  zapatillas: { emoji: "👟", color: "#8b5cf6" },
-  belleza: { emoji: "💄", color: "#ec4899" },
-  mascotas: { emoji: "🐾", color: "#f59e0b" },
-  restaurantes: { emoji: "🍴", color: "#f97316" },
-  gastronomia: { emoji: "🍴", color: "#f97316" },
-  mercado: { emoji: "🛒", color: "#22c55e" },
-  mercados: { emoji: "🛒", color: "#22c55e" },
-  alimentos: { emoji: "🛒", color: "#22c55e" },
-  electronica: { emoji: "💻", color: "#06b6d4" },
-  tecnologia: { emoji: "💻", color: "#06b6d4" },
-  celulares: { emoji: "📱", color: "#0ea5e9" },
-  tablets: { emoji: "📱", color: "#0ea5e9" },
-  ferreteria: { emoji: "🔧", color: "#eab308" },
-  hogar: { emoji: "🛋️", color: "#14b8a6" },
-  electrodomesticos: { emoji: "🔌", color: "#ef4444" },
-  farmacia: { emoji: "➕", color: "#ef4444" },
-  gomeria: { emoji: "🛞", color: "#64748b" },
+  // 👗 Moda y accesorios
+  ropa: { emoji: "👕", color: "#3b82f6" }, calzado: { emoji: "👟", color: "#3b82f6" },
+  bolsos: { emoji: "🎒", color: "#3b82f6" }, joyeria: { emoji: "💍", color: "#3b82f6" },
+  // 💄 Belleza
+  belleza: { emoji: "💄", color: "#ec4899" }, optica: { emoji: "👓", color: "#ec4899" },
+  // 📱 Tecnología
+  celulares: { emoji: "📱", color: "#06b6d4" }, computacion: { emoji: "💻", color: "#06b6d4" },
+  electronica: { emoji: "📺", color: "#06b6d4" }, electrodomesticos: { emoji: "🔌", color: "#06b6d4" },
+  // 🏠 Hogar
+  bazar: { emoji: "🍳", color: "#14b8a6" }, hogar: { emoji: "🛏️", color: "#14b8a6" },
   muebles: { emoji: "🛋️", color: "#14b8a6" },
-  jugueteria: { emoji: "🧸", color: "#f43f5e" },
-  bebidas: { emoji: "🥤", color: "#a855f7" },
+  // 🔧 Ferretería
+  ferreteria: { emoji: "🔧", color: "#eab308" },
+  // 🚗 Vehículos
+  "repuestos-autos": { emoji: "🚗", color: "#64748b" }, neumaticos: { emoji: "🛞", color: "#64748b" },
+  motos: { emoji: "🏍️", color: "#64748b" }, bicicletas: { emoji: "🚲", color: "#64748b" },
+  // 🛒 Consumo
+  alimentos: { emoji: "🛒", color: "#22c55e" }, bebidas: { emoji: "🥤", color: "#22c55e" },
+  farmacia: { emoji: "💊", color: "#22c55e" }, mascotas: { emoji: "🐾", color: "#22c55e" },
+  // 🍽️ Gastronomía
+  restaurantes: { emoji: "🍽️", color: "#f97316" }, "comida-rapida": { emoji: "🍔", color: "#f97316" },
+  cafeteria: { emoji: "☕", color: "#f97316" }, panaderia: { emoji: "🥖", color: "#f97316" },
+  // 🧰 Servicios
+  cambio: { emoji: "💱", color: "#6366f1" }, envios: { emoji: "📦", color: "#6366f1" },
+  peluqueria: { emoji: "💈", color: "#6366f1" }, lavadero: { emoji: "🧼", color: "#6366f1" },
+  "gomeria-servicio": { emoji: "🔩", color: "#6366f1" }, cerrajeria: { emoji: "🗝️", color: "#6366f1" },
+  hospedaje: { emoji: "🏨", color: "#6366f1" },
+  // 🧸 Familia y ocio
+  jugueteria: { emoji: "🧸", color: "#f43f5e" }, bebes: { emoji: "👶", color: "#f43f5e" },
+  deportes: { emoji: "⚽", color: "#f43f5e" }, regaleria: { emoji: "🎉", color: "#f43f5e" },
+  // 👕 Feria americana / usado
+  "ropa-americana": { emoji: "👕", color: "#92766a" }, "calzado-usado": { emoji: "👟", color: "#92766a" },
+  usados: { emoji: "♻️", color: "#92766a" },
+  // 📦 Otros
+  otros: { emoji: "📦", color: "#FFB020" }, floreria: { emoji: "🌷", color: "#FFB020" },
+  // aliases de slugs viejos (comercios cargados antes de la taxonomía v2)
+  zapatillas: { emoji: "👟", color: "#3b82f6" }, moda: { emoji: "👕", color: "#3b82f6" },
+  gastronomia: { emoji: "🍽️", color: "#f97316" }, mercado: { emoji: "🛒", color: "#22c55e" },
+  mercados: { emoji: "🛒", color: "#22c55e" }, tecnologia: { emoji: "💻", color: "#06b6d4" },
+  gomeria: { emoji: "🛞", color: "#64748b" }, servicios: { emoji: "🧰", color: "#6366f1" },
+  tablets: { emoji: "📱", color: "#06b6d4" },
 };
 export const DEFAULT_STYLE = { emoji: "📍", color: "#FFB020" };
 export const rubroStyle = (slug: string | null) => (slug && CATEGORY_STYLE[slug]) || DEFAULT_STYLE;
