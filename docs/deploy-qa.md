@@ -23,17 +23,29 @@ Traefik enruta por dominio y emite los certificados (Let's Encrypt). La base es
 
 ## 1) Deploy de un cambio de código (lo habitual)
 
+> **Siempre** con el prefijo `GIT_SHA=… APP_ENV=qa` — así el build hornea la versión
+> (commit + ambiente) y se puede verificar con `GET /version`. Sin ese prefijo el
+> commit cae a `dev` y no sabés qué está corriendo.
+
 ```bash
 cd /docker/buscadonde
 git pull
-docker compose -f docker-compose.prod.yml --env-file .env up -d --build frontend
-# si tocaste el backend, agregá 'backend':
-# docker compose -f docker-compose.prod.yml --env-file .env up -d --build frontend backend
+GIT_SHA=$(git rev-parse --short HEAD) APP_ENV=qa \
+  docker compose -f docker-compose.prod.yml --env-file .env up -d --build frontend
+# si tocaste el backend, agregá 'backend' al final:
+# GIT_SHA=$(git rev-parse --short HEAD) APP_ENV=qa \
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build frontend backend
 ```
 
 - El **frontend** hay que **rebuildearlo** siempre que cambien archivos del front
   o variables `NEXT_PUBLIC_*` (se hornean en el bundle).
-- Verificá el commit que quedó: `git log -1 --oneline`.
+- Verificá qué build quedó corriendo (commit + ambiente + fecha de build):
+  ```bash
+  curl -s https://encontralo.store/version
+  # → {"version":"1.0.0","commit":"<sha>","buildTime":"...","env":"qa"}
+  ```
+  También se ve en el **footer** del sitio (`v1.0.0 · qa · <sha> · <fecha>`).
+- La versión semántica (`1.0.0`) se sube a mano en `frontend/package.json` en cada hito.
 
 ## 2) Deploy con migración de base
 
@@ -47,8 +59,9 @@ git pull
 docker exec -i buscadonde-postgres psql -U postgres -d postgres < supabase/migrations/0036_busqueda_comercios.sql
 # Recargar el schema en PostgREST (para que exponga tablas/columnas nuevas):
 docker exec buscadonde-postgres psql -U postgres -d postgres -c "NOTIFY pgrst, 'reload schema';"
-# Rebuild de los servicios afectados:
-docker compose -f docker-compose.prod.yml --env-file .env up -d --build frontend backend
+# Rebuild de los servicios afectados (con la versión horneada):
+GIT_SHA=$(git rev-parse --short HEAD) APP_ENV=qa \
+  docker compose -f docker-compose.prod.yml --env-file .env up -d --build frontend backend
 ```
 
 > Las migraciones son idempotentes (`create ... if not exists`), pero **revisá**
@@ -62,13 +75,15 @@ docker compose -f docker-compose.prod.yml --env-file .env up -d --build frontend
 (el resto "Próximamente"); `0` = sitio público abierto. Tras cambiarlo:
 
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env up -d --build frontend
+GIT_SHA=$(git rev-parse --short HEAD) APP_ENV=qa \
+  docker compose -f docker-compose.prod.yml --env-file .env up -d --build frontend
 ```
 
 ## 4) Verificar
 
 ```bash
 curl -I https://encontralo.store            # 200, candado OK
+curl -s https://encontralo.store/version     # {"commit":"<sha>","env":"qa",...}
 curl -s https://api.encontralo.store/health # responde
 curl -s "https://db.encontralo.store/comercios?limit=1"  # la base responde
 ```

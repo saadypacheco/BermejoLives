@@ -207,9 +207,24 @@ La base **se inicializa sola** la primera vez (corre `selfhost/postgres-init/*.s
 = todas las migraciones, sin datos de ejemplo). Aseguráte de que estén al día:
 ```bash
 bash selfhost/build-postgres-init.sh    # sincroniza postgres-init con supabase/migrations
-docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+GIT_SHA=$(git rev-parse --short HEAD) APP_ENV=prod \
+  docker compose -f docker-compose.prod.yml --env-file .env up -d --build
 ```
 Traefik pide los certificados de `uruku.bo`, `www`, `api`, `db` (y `waha`) solos.
+
+> **Versión horneada:** el prefijo `GIT_SHA=… APP_ENV=prod` hace que el build guarde
+> el commit + ambiente, visibles en el **footer** y en `GET /version`. Usalo **siempre**
+> (también en los redeploys de abajo); sin él el commit cae a `dev`.
+
+### 4e · Redeploy rutinario de PROD (un cambio de código ya mergeado)
+```bash
+cd /docker/uruku && git pull
+GIT_SHA=$(git rev-parse --short HEAD) APP_ENV=prod \
+  docker compose -f docker-compose.prod.yml --env-file .env up -d --build frontend
+# agregá 'backend' al final si tocaste el backend. Luego verificá:
+curl -s https://uruku.bo/version   # → {"commit":"<sha>","env":"prod",...}
+```
+La versión semántica (`1.0.0`) se sube a mano en `frontend/package.json` en cada hito.
 
 ## Paso 5 · Stack Reservalo (path `/tienda`, base self-host, SIN Supabase)
 
@@ -277,6 +292,7 @@ export/import puntual y te lo dejo.
 ## Paso 7 · Verificar
 ```bash
 curl -I https://uruku.bo
+curl -s https://uruku.bo/version              # {"commit":"<sha>","env":"prod",...}
 curl -s https://api.uruku.bo/health
 curl -s "https://db.uruku.bo/comercios?limit=1"
 curl -I https://uruku.bo/tienda/productos
