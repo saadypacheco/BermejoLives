@@ -132,10 +132,11 @@ export default async function ComercioPage({ params }: { params: { slug: string 
         {comercio.acepta_reservas !== false && productos.length > 0 && (
           <>
             <div className="uk-section-head" style={{ marginTop: 40 }}>
-              <h2>Productos</h2>
+              <h2>Ofertas y productos</h2>
+              <a href={`/tienda?q=${encodeURIComponent(comercio.nombre)}`}>Ver todas en la tienda →</a>
             </div>
             <div className="uk-product-grid">
-              {productos.map((p) => (
+              {productos.slice(0, 3).map((p) => (
                 <article className="uk-product" key={p.id}>
                   <a href={p.url ?? undefined} target="_blank" rel="noopener" style={{ color: "inherit" }}>
                     <h4>{p.nombre}</h4>
@@ -152,6 +153,9 @@ export default async function ComercioPage({ params }: { params: { slug: string 
                 </article>
               ))}
             </div>
+            <a className="uk-btn uk-btn-primary" href={`/tienda?q=${encodeURIComponent(comercio.nombre)}`} style={{ marginTop: 18 }}>
+              Ver todas las ofertas de {comercio.nombre} en la tienda →
+            </a>
           </>
         )}
 
