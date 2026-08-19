@@ -1,22 +1,21 @@
 import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
-import { Ic, money } from "@/components/uruku-ui";
-import { getFeed, getCotizaciones, getVideosPromo, getRedes, getLugaresPublicos } from "@/lib/data";
+import { Ic } from "@/components/uruku-ui";
+import { getFeed, getVideosPromo, getRedes, getLugaresPublicos } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { precioFmt } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function InicioPage() {
-  const [{ ciudad }, feed, cotizaciones, videos, redes, lugares] = await Promise.all([
-    ciudadActual(), getFeed(12), getCotizaciones(), getVideosPromo(8), getRedes(), getLugaresPublicos(12),
+  const [{ ciudad }, feed, videos, redes, lugares] = await Promise.all([
+    ciudadActual(), getFeed(12), getVideosPromo(8), getRedes(), getLugaresPublicos(12),
   ]);
   const nombre = ciudad?.nombre ?? "tu ciudad";
 
   const ofertas = feed.filter((f) => f.tipo === "oferta");
   const novedades = feed.filter((f) => f.tipo === "novedad");
   const cards = (ofertas.length ? ofertas : feed.filter((f) => f.tipo !== "video")).slice(0, 8);
-  const cot2 = cotizaciones.slice(0, 2);
   const canalWa = redes.find((r) => r.clave === "whatsapp_canal")?.url;
 
   return (
@@ -43,24 +42,16 @@ export default async function InicioPage() {
             </div>
           </div>
 
-          {cot2.length > 0 && (
-            <aside className="uk-quote-card">
-              <div className="uk-quote-head">
-                <h3>Cotización del día</h3>
-                <span className="uk-chart-badge"><Ic d="M3 17l6-6 4 4 8-8M21 7h-4M21 7v4" /></span>
-              </div>
-              <div className="uk-quote-grid">
-                {cot2.map((c) => (
-                  <div key={c.clave}>
-                    <small>{c.etiqueta}</small>
-                    <strong>{money(c.valor)} {c.unidad}</strong>
-                    {c.detalle && <span className="uk-quote-detail">{c.detalle}</span>}
-                  </div>
-                ))}
-              </div>
-              <div className="uk-updated">Actualizado por el equipo de Uruku</div>
-            </aside>
-          )}
+          <aside className="uk-quote-card uk-hero-cta">
+            <h3>¿Tenés un comercio?</h3>
+            <p>Sumate a Uruku y llegá a más personas en {nombre}.</p>
+            <ul>
+              <li>Aparecé en el mapa</li>
+              <li>Fotos, videos y ofertas</li>
+              <li>Más visibilidad, sin complicaciones</li>
+            </ul>
+            <Link href="/autoregistro" className="uk-panel-btn">Publicá tu negocio <span>→</span></Link>
+          </aside>
         </div>
       </section>
 
@@ -153,18 +144,6 @@ export default async function InicioPage() {
           </div>
         </article>
 
-        <article className="uk-panel uk-merchant">
-          <div>
-            <h3>¿Tenés un comercio?</h3>
-            <p>Sumate a Uruku y llegá a más personas.</p>
-            <ul>
-              <li>Aparecé en el mapa</li>
-              <li>Más visibilidad</li>
-              <li>Sin complicaciones</li>
-            </ul>
-          </div>
-          <Link href="/autoregistro" className="uk-panel-btn">Publicá tu negocio <span>→</span></Link>
-        </article>
       </section>
 
       {/* ===== Recorrimos ===== */}

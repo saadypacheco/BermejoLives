@@ -78,14 +78,15 @@
 
 /* ---- Header ---- */
 .uk-header { background: var(--uk-header); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--uk-line); }
-.uk-header-main { min-height: 96px; display: grid; grid-template-columns: 200px minmax(280px,1fr) auto; gap: 24px; align-items: center; }
+.uk-header-main { min-height: 96px; display: grid; grid-template-columns: 300px minmax(240px,1fr) auto; gap: 24px; align-items: center; }
 .uk-brand-word { display: inline-flex; align-items: center; gap: 3px; font-weight: 900; font-size: 46px; letter-spacing: .01em; line-height: 1; color: var(--uk-ink); }
 .uk-brand-logo { width: 46px; height: 46px; object-fit: contain; flex-shrink: 0; }
 .uk-brand-u { color: var(--uk-green); position: relative; }
 .uk-brand small { display: block; margin-top: 6px; color: var(--uk-ink-soft); font-size: 12px; font-weight: 500; }
-/* Logo completo URUKU (imagen transparente, sirve claro y oscuro). */
-.uk-brand-full { height: 84px; width: auto; display: block; }
-.uk-footer-brand .uk-brand-full { height: 44px; }
+/* Logo completo URUKU (imagen transparente, sirve claro y oscuro). max-width evita
+   que desborde su columna en pantallas intermedias (se achica solo). */
+.uk-brand-full { height: 140px; width: auto; max-width: 100%; display: block; }
+.uk-footer-brand .uk-brand-full { height: 48px; }
 .uk-red { color: var(--uk-red); font-weight: 700; }
 
 .uk-search { display: flex; align-items: center; background: var(--uk-surface); border: 1px solid var(--uk-line); box-shadow: var(--uk-shadow-soft); border-radius: 16px; overflow: hidden; min-height: 52px; }
@@ -165,6 +166,11 @@
 .uk-avatars span { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; margin-right: -8px; background: linear-gradient(135deg, #0f6b62, #e3a264); border: 2px solid var(--uk-surface); color: #fff; font-size: 10px; font-weight: 800; }
 
 .uk-quote-card { justify-self: end; align-self: end; margin-bottom: 20px; width: min(390px, 100%); background: var(--uk-surface); border: 1px solid var(--uk-line); box-shadow: var(--uk-shadow); border-radius: 20px; padding: 22px; }
+/* CTA de comercios en el hero (reemplaza la cotización) */
+.uk-hero-cta { background: linear-gradient(135deg, rgba(21,152,94,.16), rgba(245,138,35,.12)); }
+.uk-hero-cta h3 { font-size: 21px; margin: 0 0 6px; }
+.uk-hero-cta p { font-size: 13.5px; color: var(--uk-ink-soft); margin: 0; }
+.uk-hero-cta ul { margin: 14px 0 2px; padding-left: 18px; font-size: 13px; line-height: 1.9; }
 .uk-quote-head { display: flex; justify-content: space-between; align-items: center; }
 .uk-quote-head h3 { margin: 0; font-size: 16px; }
 .uk-chart-badge { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--uk-green); color: var(--uk-green); }
@@ -215,7 +221,7 @@
 .uk-catcards b { font-size: 11px; }
 
 /* ---- Highlight grid ---- */
-.uk-highlight { display: grid; grid-template-columns: .9fr 1.35fr 1fr; gap: 16px; padding-bottom: 30px; }
+.uk-highlight { display: grid; grid-template-columns: 1fr 1.3fr; gap: 16px; padding-bottom: 30px; }
 .uk-panel { min-height: 240px; border-radius: 19px; padding: 22px; background: var(--uk-surface); border: 1px solid var(--uk-line); box-shadow: var(--uk-shadow-soft); }
 .uk-panel h3 { margin: 0 0 15px; font-size: 20px; }
 .uk-statrow { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--uk-line); font-size: 13px; }
@@ -416,7 +422,7 @@
   .uk-tools { display: contents; }
   .uk-brand { order: 1; flex: 0 1 auto; min-width: 0; }
   .uk-brand small { display: none; }              /* tagline solo en desktop/footer; libera espacio */
-  .uk-brand-full { height: 58px; }
+  .uk-brand-full { height: 80px; }
   /* Pills compactas (ciudad + Ingresar) para que entren en la misma línea del logo (Android) */
   .uk-header-main .uk-pill { padding: 6px 10px; font-size: 12px; }
   .uk-header-main .uk-pill svg { width: 15px; height: 15px; }
