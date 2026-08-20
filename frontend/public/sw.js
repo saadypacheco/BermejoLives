@@ -4,7 +4,7 @@
    - Estáticos de Next / iconos / fuentes: stale-while-revalidate.
    - Navegación (HTML): network-first con fallback a caché / home.
    Bump VERSION para invalidar cachés viejas en cada deploy importante. */
-const VERSION = "enc-v1";
+const VERSION = "uruku-v2";
 const SHELL = `${VERSION}-shell`;
 const STATIC = `${VERSION}-static`;
 const TILES = `${VERSION}-tiles`;

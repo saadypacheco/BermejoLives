@@ -32,7 +32,14 @@ const MAX_INTENTOS_AUDIO = 2;
 export default function CampoPage() {
   const [authed, setAuthed] = useState(false);
   const [vista, setVista] = useState<"form" | "lista">("form");
-  useEffect(() => setAuthed(Boolean(getAgenteToken())), []);
+  useEffect(() => {
+    setAuthed(Boolean(getAgenteToken()));
+    // Entrada directa desde el shortcut de la PWA (mantener apretado el ícono).
+    // Se lee de window en vez de useSearchParams para no arrastrar un Suspense.
+    if (new URLSearchParams(window.location.search).get("vista") === "mis-comercios") {
+      setVista("lista");
+    }
+  }, []);
   if (!authed) return <Login onOk={() => setAuthed(true)} />;
   const onLogout = () => { clearAgente(); setAuthed(false); };
   if (vista === "lista") return <MisComercios onVolver={() => setVista("form")} onLogout={onLogout} />;
