@@ -503,6 +503,8 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   const [saving,      setSaving]      = useState(false);
   const [done,        setDone]        = useState<string | null>(null);
   const [doneOffline, setDoneOffline] = useState(false);
+  // Por qué quedó guardado sin subir. Vacío = de verdad no había señal.
+  const [doneMotivo,  setDoneMotivo]  = useState("");
   // Código del local recién dado de alta: hay que dictárselo o anotárselo al
   // dueño en el momento — es lo que le permite mandar ofertas por WhatsApp sin
   // tener número cargado, sin login y sin haber pagado.
@@ -515,10 +517,29 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   const [pendientes,   setPendientes]   = useState(0);
   const [sincronizando, setSincronizando] = useState(false);
   const refrescarPend = () => contarPendientes().then(setPendientes).catch(() => {});
-  async function sincronizar() {
+  // Resultado del último intento manual. Sin esto el botón falla en silencio: se
+  // reintenta, todo rebota, el contador no baja y no hay nada en pantalla que
+  // explique por qué.
+  const [syncMsg, setSyncMsg] = useState("");
+
+  async function sincronizar(manual = false) {
     if (sincronizando) return;
     setSincronizando(true);
-    try { await sincronizarPendientes(refrescarPend); } finally { setSincronizando(false); refrescarPend(); }
+    if (manual) setSyncMsg("");
+    try {
+      const r = await sincronizarPendientes(refrescarPend);
+      if (!manual) return;
+      if (r.sinSenal) setSyncMsg("El celular está sin conexión — se suben solas cuando vuelva.");
+      else if (r.fallas === 0 && r.subidas > 0) setSyncMsg(`✅ Subieron ${r.subidas}.`);
+      else if (r.fallas > 0) {
+        setSyncMsg(`${r.subidas > 0 ? `Subieron ${r.subidas}. ` : ""}Fallaron ${r.fallas}: ${r.errores.join(" · ")}`);
+      }
+    } catch (ex) {
+      if (manual) setSyncMsg(ex instanceof Error ? ex.message : "No se pudo sincronizar");
+    } finally {
+      setSincronizando(false);
+      refrescarPend();
+    }
   }
   useEffect(() => {
     refrescarPend();
@@ -674,13 +695,20 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       setUltimoPuesto(puesto);
       listarLugares(ciudadSlug).then(setLugares).catch(() => {});   // refresca el conteo del mercado
     } catch (ex) {
-      // Sin señal o falló la red → guardar OFFLINE (se sube solo cuando vuelva internet).
+      // Falló la subida → guardar OFFLINE igual, así el alta NUNCA se pierde.
+      //
+      // Antes esto sólo encolaba si parecía un problema de red, y además la
+      // pantalla decía "sin conexión" pasara lo que pasara. Con un backend
+      // roto el agente se pasó una hora buscando señal con el celular
+      // perfecto. Ahora se encola siempre y se distingue el motivo real.
       const esRed = !online || ex instanceof TypeError || /__offline__|fetch|network|Failed/i.test(String(ex));
-      if (esRed) {
+      const motivo = ex instanceof Error ? ex.message : String(ex);
+      {
         try {
           await encolarAlta(campos, rubroList, foto);
           setDone(campos.nombre ?? "Comercio");
           setDoneOffline(true);
+          setDoneMotivo(esRed ? "" : motivo);
           setCount((c) => c + 1);
           setSubioLugar(lugarActual ? { id: lugarActual.id, nombre: lugarActual.nombre } : null);
           setUltimoPuesto(puesto);
@@ -688,8 +716,6 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
         } catch {
           setErr("No se pudo guardar ni siquiera offline. Reintentá.");
         }
-      } else {
-        setErr(ex instanceof Error ? ex.message : "Error al guardar");
       }
     } finally {
       setSaving(false);
@@ -699,7 +725,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   function limpiar() {
     setF({ ...EMPTY }); setRubroSlugs([]); setIntentosAudio(0);
     setCoords(null); setGeoMsg(""); setFoto(null); setPreview(""); setConsent(true);
-    setNuevoLugar(""); setEditMercado(false); setCatFiltro(""); setDone(null); setDoneOffline(false); setDoneCodigo(null); setAltaId(null); setErr("");
+    setNuevoLugar(""); setEditMercado(false); setCatFiltro(""); setDone(null); setDoneOffline(false); setDoneMotivo(""); setDoneCodigo(null); setAltaId(null); setErr("");
   }
   function otro() {
     limpiar();
@@ -721,7 +747,9 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
         <h1 style={{ fontSize: 24, margin: "10px 0 4px" }}>¡{done} {doneOffline ? "guardado sin conexión" : "cargado"}!</h1>
         <p style={{ color: "var(--txt-3)", marginBottom: 6 }}>
           {doneOffline
-            ? "Se sube solo cuando haya señal. Las fotos las agregás después desde \"mis comercios\"."
+            ? (doneMotivo
+                ? `Quedó guardado en el celular, pero NO por falta de señal: ${doneMotivo}`
+                : "Se sube solo cuando haya señal. Las fotos las agregás después desde \"mis comercios\".")
             : `${ciudadActual ? `${ciudadActual.nombre} · ` : ""}Pendiente de verificar.`}
         </p>
         <p style={{ color: "var(--txt-3)", marginBottom: 18 }}>Llevás {count} en este recorrido.{pendientes > 0 ? ` · ${pendientes} sin subir` : ""}</p>
@@ -793,11 +821,18 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       </div>
 
       {pendientes > 0 && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: "rgba(240,160,40,.12)", border: "1px solid rgba(240,160,40,.45)", color: "var(--amber)", borderRadius: 12, padding: "10px 12px", marginBottom: 12, fontSize: 13 }}>
-          <span>📴 {pendientes} guardado{pendientes > 1 ? "s" : ""} sin conexión — se sube{pendientes > 1 ? "n" : ""} con señal</span>
-          <button type="button" className="btn btn-ghost" style={{ padding: "5px 12px", whiteSpace: "nowrap" }} disabled={sincronizando} onClick={sincronizar}>
-            {sincronizando ? "Subiendo…" : "Sincronizar"}
-          </button>
+        <div style={{ background: "rgba(240,160,40,.12)", border: "1px solid rgba(240,160,40,.45)", color: "var(--amber)", borderRadius: 12, padding: "10px 12px", marginBottom: 12, fontSize: 13 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <span>📴 {pendientes} guardado{pendientes > 1 ? "s" : ""} sin conexión — se sube{pendientes > 1 ? "n" : ""} con señal</span>
+            <button type="button" className="btn btn-ghost" style={{ padding: "5px 12px", whiteSpace: "nowrap" }} disabled={sincronizando} onClick={() => sincronizar(true)}>
+              {sincronizando ? "Subiendo…" : "Sincronizar"}
+            </button>
+          </div>
+          {syncMsg && (
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(240,160,40,.3)", fontSize: 12.5, lineHeight: 1.45, wordBreak: "break-word" }}>
+              {syncMsg}
+            </div>
+          )}
         </div>
       )}
 

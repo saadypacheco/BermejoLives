@@ -72,21 +72,35 @@ function armarFd(rec: AltaPendiente): FormData {
   return fd;
 }
 
+export type ResultadoSync = {
+  subidas: number;
+  fallas: number;
+  sinSenal: boolean;
+  /** Motivos de las que fallaron, sin repetir. Sin esto el botón "Sincronizar"
+   * falla en silencio: el contador no baja y no hay forma de saber por qué. */
+  errores: string[];
+};
+
 /** Sube todas las pendientes (una por una). Las que suben se borran de la cola; las
- * que fallan quedan para reintentar. Devuelve el conteo. */
-export async function sincronizarPendientes(onCambio?: () => void): Promise<{ subidas: number; fallas: number }> {
-  if (typeof navigator !== "undefined" && !navigator.onLine) return { subidas: 0, fallas: 0 };
+ * que fallan quedan para reintentar. */
+export async function sincronizarPendientes(onCambio?: () => void): Promise<ResultadoSync> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return { subidas: 0, fallas: 0, sinSenal: true, errores: [] };
+  }
   const pend = await listarPendientes();
   let subidas = 0, fallas = 0;
+  const errores: string[] = [];
   for (const rec of pend) {
     try {
       await altaComercioCampo(armarFd(rec));
       await borrar(rec.id);
       subidas += 1;
       onCambio?.();
-    } catch {
+    } catch (ex) {
       fallas += 1;   // queda en la cola; se reintenta la próxima vez que haya señal
+      const motivo = ex instanceof Error ? ex.message : String(ex);
+      if (!errores.includes(motivo)) errores.push(motivo);
     }
   }
-  return { subidas, fallas };
+  return { subidas, fallas, sinSenal: false, errores };
 }
