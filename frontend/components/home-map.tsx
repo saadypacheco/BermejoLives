@@ -158,7 +158,11 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
         let g = grupos.get(c.lugar_id);
         if (!g) { g = { nombre: c.lugar_nombre || "Mercado", lat: c.lugar_lat, lng: c.lugar_lng, sumLat: 0, sumLng: 0, n: 0, portada: c.lugar_portada_thumb_url, video: c.lugar_video_url, poligono: c.lugar_poligono, items: [] }; grupos.set(c.lugar_id, g); }
         g.items.push(c); g.sumLat += c.lat; g.sumLng += c.lng; g.n += 1;
-        continue;
+        // NO se hace `continue`: el comercio se dibuja igual como pin propio.
+        // El pin del mercado queda como REFERENCIA (nombre + conteo), pero los
+        // locales tienen que verse en el mapa. Mientras sean pocos esto es lo
+        // más útil; si un mercado se llena, conviene volver a esconderlos por
+        // debajo de cierto zoom.
       }
       const tier = tierDe(c);
       const isSel = c.id === selectedId;
@@ -178,7 +182,24 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
       }
       const m = L.marker([lat, lng], { icon: iconoLugar(L, g.nombre, items.length, g.portada), zIndexOffset: 500 });
       m.__data = items[0];
-      m.on("click", () => hojaRef.current({ titulo: `🏬 ${g.nombre}`, portada: g.portada, video: g.video, items }));
+      // Tocar el mercado ENCUADRA sus locales en vez de abrir un listado: los
+      // pines ya están en el mapa, así que lo útil es acercarse y verlos.
+      m.on("click", () => {
+        const map = mapRef.current;
+        const puntos = items.filter((c) => c.lat != null && c.lng != null)
+                            .map((c) => [c.lat as number, c.lng as number] as [number, number]);
+        if (!map || puntos.length === 0) {
+          hojaRef.current({ titulo: `🏬 ${g.nombre}`, portada: g.portada, video: g.video, items });
+          return;
+        }
+        if (puntos.length === 1) {
+          // Un solo local: acercarse a él y seleccionarlo, sin pasos de más.
+          map.setView(puntos[0], Math.max(map.getZoom(), 18), { animate: true });
+          onSelRef.current?.(items[0]);
+          return;
+        }
+        map.fitBounds(L.latLngBounds(puntos), { padding: [60, 60], maxZoom: 19, animate: true });
+      });
       layer.addLayer(m);
     }
 
