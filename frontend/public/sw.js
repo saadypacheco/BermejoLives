@@ -56,6 +56,7 @@ self.addEventListener("fetch", (e) => {
     url.pathname.startsWith("/reservalo/_next/static/") ||
     url.pathname.startsWith("/icon") ||
     url.pathname === "/manifest.webmanifest" ||
+    url.pathname === "/campo.webmanifest" ||
     /\.(png|jpe?g|svg|webp|ico|woff2?)$/.test(url.pathname)
   ) {
     e.respondWith((async () => {

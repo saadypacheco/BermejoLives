@@ -1,0 +1,18 @@
+{
+  "id": "/publicar",
+  "name": "URUKU Campo — cargar comercios",
+  "short_name": "URUKU Campo",
+  "description": "Alta rápida de comercios durante el recorrido. Funciona sin señal: las altas se guardan en el celular y se suben solas.",
+  "start_url": "/publicar",
+  "scope": "/publicar",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "lang": "es",
+  "icons": [
+    { "src": "/logouruku-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/logouruku.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
