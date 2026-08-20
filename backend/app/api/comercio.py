@@ -386,6 +386,30 @@ def get_perfil(
     return _perfil_dict(repo, comercio)
 
 
+# Campos del comercio que Reservalo replica en su tabla `vendedores`. Si el
+# comercio edita alguno hay que reenviar el upsert: si no, Reservalo se queda con
+# el dato viejo y las reservas siguen yendo al WhatsApp anterior.
+_CAMPOS_ESPEJADOS_EN_TIENDA = {"nombre", "whatsapp", "lat", "lng"}
+
+
+def _sync_vendedor_tienda(comercio: dict, patch: dict) -> None:
+    """Reenvía el comercio a Reservalo si cambió algo que la tienda replica.
+
+    Best-effort: si la tienda está caída, el perfil se guarda igual. El upsert es
+    idempotente, así que el próximo alta de producto lo vuelve a intentar.
+    """
+    if not _CAMPOS_ESPEJADOS_EN_TIENDA & patch.keys():
+        return
+    try:
+        get_tienda_client().upsert_vendedor(comercio["id"], {
+            "nombre": comercio["nombre"], "slug": comercio["slug"],
+            "whatsapp": comercio.get("whatsapp"), "activo": True,
+            "lat": comercio.get("lat"), "lng": comercio.get("lng"),
+        })
+    except Exception:  # noqa: BLE001
+        logger.warning("comercio.sync_vendedor_fallo", comercio=comercio["id"], exc_info=True)
+
+
 @router.put("/comercio/perfil")
 def update_perfil(
     body: PerfilUpdate,
@@ -401,6 +425,7 @@ def update_perfil(
         raise HTTPException(status_code=400, detail="No hay campos para actualizar")
     comercio = repo.update_comercio(claims["comercio_id"], patch, body.rubro_slugs)
     logger.info("comercio.perfil_update", comercio=claims["comercio_id"], campos=list(patch))
+    _sync_vendedor_tienda(comercio, patch)
     return _perfil_dict(repo, comercio)
 
 
