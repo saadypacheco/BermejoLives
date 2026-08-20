@@ -181,6 +181,22 @@ def test_put_perfil_modalidad_invalida_400(client, repo):
     assert r.status_code == 400
 
 
+def test_put_perfil_slug_generico_se_rearma_con_el_nombre(client, repo):
+    # Se cargó sin nombre → slug genérico. Al ponerle nombre real, se rearma.
+    repo.seed_comercio(id="com-p", slug="comercio-2", nombre="Comercio", whatsapp="591700")
+    r = client.put("/comercio/perfil", headers=_auth(), json={"nombre": "Ferretería López"})
+    assert r.status_code == 200
+    assert repo.comercios["com-p"]["slug"] == "ferreteria-lopez"
+
+
+def test_put_perfil_slug_bueno_no_cambia_al_renombrar(client, repo):
+    # Slug ya "bueno": renombrar NO lo toca (no rompe links compartidos).
+    repo.seed_comercio(id="com-p", slug="ferreteria-lopez", nombre="Ferretería López", whatsapp="591700")
+    r = client.put("/comercio/perfil", headers=_auth(), json={"nombre": "Ferretería López SRL"})
+    assert r.status_code == 200
+    assert repo.comercios["com-p"]["slug"] == "ferreteria-lopez"
+
+
 def test_get_suscripcion_estado(client, repo):
     repo.seed_comercio(id="com-p", slug="perf", nombre="X", whatsapp="591700",
                        plan="premium", paga_hasta="2999-01-01", suspendido=False)

@@ -2,9 +2,15 @@
 
 Patrón Protocol como en mentorcomercial para poder testear con un fake.
 """
+import re
 from typing import Protocol
 
+from app.core.text import slugify, slug_unico
 from app.db.session import get_supabase
+
+# Slug "genérico" (sin nombre real al dar de alta): comercio, comercio-2, ...
+# Mientras el slug sea así, se rearma solo cuando le ponen un nombre de verdad.
+_SLUG_GENERICO = re.compile(r"^comercio(-\d+)?$")
 
 
 class Repo(Protocol):
@@ -716,6 +722,17 @@ class SupabaseRepo:
         return res.data or []
 
     def update_comercio(self, comercio_id: str, patch: dict, rubro_slugs: list[str] | None) -> dict:
+        patch = dict(patch)  # copia: no mutamos el dict del caller
+        # Si le ponen un NOMBRE real y el slug actual todavía es genérico
+        # (comercio / comercio-N), rearmamos el slug desde ese nombre. Los slugs
+        # ya "buenos" no se tocan, así no se rompen los links ya compartidos.
+        nombre_nuevo = patch.get("nombre")
+        if nombre_nuevo and nombre_nuevo.strip() and "slug" not in patch:
+            actual = self.get_comercio(comercio_id)
+            if actual and _SLUG_GENERICO.match(actual.get("slug") or ""):
+                base = slugify(nombre_nuevo)
+                if base and base != "comercio":
+                    patch["slug"] = slug_unico(self, base)
         if patch:
             self._db.table("comercios").update(patch).eq("id", comercio_id).execute()
         if rubro_slugs is not None:

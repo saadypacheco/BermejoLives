@@ -396,6 +396,16 @@ class FakeRepo:
         c = self.comercios.get(comercio_id)
         if not c:
             return {}
+        patch = dict(patch)
+        # Espeja al repo real: rearma el slug si es genérico y le ponen nombre real.
+        import re as _re
+        from app.core.text import slugify as _slugify, slug_unico as _slug_unico
+        nombre_nuevo = patch.get("nombre")
+        if nombre_nuevo and nombre_nuevo.strip() and "slug" not in patch:
+            if _re.match(r"^comercio(-\d+)?$", c.get("slug") or ""):
+                base = _slugify(nombre_nuevo)
+                if base and base != "comercio":
+                    patch["slug"] = _slug_unico(self, base)
         c.update(patch)
         if rubro_slugs:
             c["rubros"] = list(rubro_slugs)
