@@ -57,9 +57,14 @@ class Settings(BaseSettings):
     dias_vencido_baja: int = 40
     # Días desde el alta que tiene un comercio que NUNCA pagó antes de caerse del
     # mapa. Es la segunda pasada: se carga rápido en la calle, y a los 2 meses o
-    # paga o desaparece. `None` desactiva la baja de los que nunca pagaron, que
-    # es lo que conviene mientras se está poblando el mapa.
-    dias_gracia_sin_pago: int | None = 60
+    # paga o desaparece.
+    #
+    # APAGADO (None) a propósito: la lógica está lista y testeada, pero prenderla
+    # sin revisar antes tiraría del mapa, de una, a todos los comercios cargados
+    # hace más de 60 días que nunca pagaron — sin que nadie lo vea venir. Se
+    # prende con DIAS_GRACIA_SIN_PAGO=60 después de revisar a quiénes alcanza
+    # (POST /admin/bajas/ejecutar permite probarlo cuando se quiera).
+    dias_gracia_sin_pago: int | None = None
 
     # Gate por plan de la ingesta por WhatsApp (mandar productos sin loguearse).
     # Arranca APAGADO a propósito: durante la captación conviene que cualquier

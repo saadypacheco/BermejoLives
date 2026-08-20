@@ -644,7 +644,7 @@ class SupabaseRepo:
 
         res = (
             self._db.table("comercios")
-            .select("id, slug, nombre, whatsapp, verificado, suspendido, paga_hasta, created_at")
+            .select("id, slug, nombre, whatsapp, verificado, confiable, plan, suspendido, paga_hasta, created_at")
             .eq("activo", True)
             .order("nombre")
             .limit(500)

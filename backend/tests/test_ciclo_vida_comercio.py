@@ -167,8 +167,24 @@ def test_ingesta_gateada_cuando_se_prende(monkeypatch):
 
 
 # --------------------------------------------------------- bajas manuales
-def test_endpoint_de_bajas_manual(client, repo, admin_token):
-    repo.seed_comercio(nombre="Viejo", created_at=_hace(400), activo=True)
+def test_bajas_manual_no_toca_gratis_con_gracia_apagada(client, repo, admin_token):
+    """Default de producción: la gracia está apagada hasta revisar a quién alcanza."""
+    from app.core.config import settings
+    assert settings.dias_gracia_sin_pago is None
+
+    c = repo.seed_comercio(nombre="Viejo", created_at=_hace(400), activo=True)
     r = client.post("/admin/bajas/ejecutar", headers={"Authorization": f"Bearer {admin_token}"})
     assert r.status_code == 200, r.text
-    assert r.json()["ocultos"] >= 1
+    assert r.json()["ocultos"] == 0
+    assert repo.comercios[c["id"]]["activo"] is True
+
+
+def test_bajas_manual_con_gracia_prendida(client, repo, admin_token, monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "dias_gracia_sin_pago", 60)
+
+    c = repo.seed_comercio(nombre="Viejo", created_at=_hace(400), activo=True)
+    r = client.post("/admin/bajas/ejecutar", headers={"Authorization": f"Bearer {admin_token}"})
+    assert r.status_code == 200, r.text
+    assert r.json()["ocultos"] == 1
+    assert repo.comercios[c["id"]]["activo"] is False

@@ -178,6 +178,8 @@ export type ComercioSuscripcion = {
   nombre: string;
   whatsapp: string;
   verificado: boolean;
+  confiable?: boolean;
+  plan?: string;
   suspendido: boolean;
   paga_hasta: string | null;
   suscripcion_estado: EstadoSuscripcion;
@@ -326,6 +328,37 @@ export async function registrarPago(comercioId: string, body: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  return res.json();
+}
+
+export async function setConfiable(comercioId: string, confiable: boolean) {
+  const res = await authFetch(`/admin/comercio/${comercioId}/confiable`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confiable }),
+  });
+  return res.json();
+}
+
+export type NumeroComercio = {
+  id: string; numero: string; etiqueta: string | null; created_by?: string | null;
+};
+
+export async function listarNumeros(comercioId: string): Promise<{ items: NumeroComercio[] }> {
+  const res = await authFetch(`/admin/comercio/${comercioId}/numeros`);
+  return res.json();
+}
+
+export async function agregarNumero(comercioId: string, numero: string, etiqueta?: string) {
+  const res = await authFetch(`/admin/comercio/${comercioId}/numeros`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ numero, etiqueta: etiqueta || null }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "No se pudo autorizar el número");
+  }
   return res.json();
 }
 

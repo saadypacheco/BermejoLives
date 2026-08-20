@@ -7,6 +7,7 @@ import {
   listComerciosPorVerificar, listTodosComercios, verificarComercio, rechazarComercio,
   editarComercio, type ComercioPorVerificar,
   listSuscripciones, registrarPago, suspenderComercio, activarComercio,
+  setConfiable as setConfiable_, listarNumeros, agregarNumero, type NumeroComercio,
   type ComercioSuscripcion, type EstadoSuscripcion,
   listPagosPendientes, confirmarPago, type PagoPendiente,
   enviarMensajeComercio,
@@ -725,6 +726,7 @@ function TabSuscripciones({
 }) {
   const [filtro, setFiltro] = useState<EstadoSuscripcion | "todos">("todos");
   const [pagandoId, setPagandoId] = useState<string | null>(null);
+  const [gestionandoId, setGestionandoId] = useState<string | null>(null);
 
   const conteo = (e: EstadoSuscripcion) => items.filter((c) => c.suscripcion_estado === e).length;
   const visibles = filtro === "todos" ? items : items.filter((c) => c.suscripcion_estado === filtro);
@@ -780,6 +782,9 @@ function TabSuscripciones({
                 const cuerpo = prompt(`Mensaje para ${c.nombre}:`);
                 if (cuerpo && cuerpo.trim()) { try { await enviarMensajeComercio(c.id, cuerpo.trim()); alert("Mensaje enviado ✓"); } catch { alert("No se pudo enviar"); } }
               }}>✉️</button>
+              <button className="btn btn-ghost btn-sm" title="Confiable y números autorizados" onClick={() => setGestionandoId(c.id)}>
+                ⚙️
+              </button>
               <button className="btn btn-ghost btn-sm" onClick={() => setPagandoId(c.id)}>
                 + Pago
               </button>
@@ -796,6 +801,14 @@ function TabSuscripciones({
           </div>
         );
       })}
+
+      {/* Modal de gestión: confiable + números autorizados */}
+      {gestionandoId && (
+        <ModalGestionComercio
+          comercio={items.find((c) => c.id === gestionandoId)!}
+          onClose={() => setGestionandoId(null)}
+        />
+      )}
 
       {/* Modal registro de pago */}
       {pagandoId && (
@@ -1151,6 +1164,95 @@ function ModalEditar({
 
 // ── Modal Pago ────────────────────────────────────────────────────────────────
 
+function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscripcion; onClose: () => void }) {
+  const [confiable, setConfiable] = useState(!!comercio.confiable);
+  const [numeros, setNumeros] = useState<NumeroComercio[]>([]);
+  const [nuevo, setNuevo] = useState("");
+  const [etiqueta, setEtiqueta] = useState("");
+  const [err, setErr] = useState("");
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    listarNumeros(comercio.id)
+      .then((r) => setNumeros(r.items ?? []))
+      .catch(() => setErr("No se pudieron cargar los números"))
+      .finally(() => setCargando(false));
+  }, [comercio.id]);
+
+  async function toggleConfiable() {
+    const valor = !confiable;
+    setConfiable(valor);
+    try { await setConfiable_(comercio.id, valor); }
+    catch { setConfiable(!valor); setErr("No se pudo cambiar"); }
+  }
+
+  async function agregar(e: React.FormEvent) {
+    e.preventDefault();
+    setErr("");
+    try {
+      const r = await agregarNumero(comercio.id, nuevo.trim(), etiqueta.trim() || undefined);
+      setNumeros((prev) => [...prev.filter((n) => n.numero !== r.numero.numero), r.numero]);
+      setNuevo(""); setEtiqueta("");
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "No se pudo autorizar");
+    }
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div className="glass" style={{ width: "100%", maxWidth: 460, borderRadius: 16, padding: 24, maxHeight: "90vh", overflowY: "auto" }}>
+        <h3 style={{ marginBottom: 4 }}>{comercio.nombre}</h3>
+        <p style={{ color: "var(--txt-3)", fontSize: 13, marginBottom: 18 }}>Confianza y números autorizados</p>
+
+        {/* Confiable */}
+        <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0", borderBottom: "1px solid var(--border)", cursor: "pointer" }}>
+          <input type="checkbox" checked={confiable} onChange={toggleConfiable} />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Comercio confiable</div>
+            <div style={{ fontSize: 12, color: "var(--txt-3)" }}>
+              Lo que publique sale directo, sin pasar por moderación.
+            </div>
+          </div>
+        </label>
+
+        {/* Números */}
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Números que pueden publicar</div>
+          <div style={{ fontSize: 12, color: "var(--txt-3)", marginBottom: 10 }}>
+            El número del local y el del empleado que manda las fotos pueden ser distintos.
+            Cualquiera de estos identifica al comercio cuando escribe por WhatsApp.
+          </div>
+
+          {cargando && <div style={{ fontSize: 13, color: "var(--txt-3)" }}>Cargando…</div>}
+          {!cargando && numeros.length === 0 && (
+            <div style={{ fontSize: 13, color: "var(--amber)" }}>
+              Ninguno. Si escribe por WhatsApp se va a crear un comercio nuevo duplicado.
+            </div>
+          )}
+          {numeros.map((n) => (
+            <div key={n.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
+              <span>+{n.numero}</span>
+              <span style={{ color: "var(--txt-3)" }}>{n.etiqueta || "—"}</span>
+            </div>
+          ))}
+
+          <form onSubmit={agregar} style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+            <input className="adm-input" value={nuevo} onChange={(e) => setNuevo(e.target.value)}
+              placeholder="Número (ej: 70123456)" inputMode="tel" />
+            <input className="adm-input" value={etiqueta} onChange={(e) => setEtiqueta(e.target.value)}
+              placeholder="De quién es (ej: vendedora del local)" />
+            <button type="submit" className="btn btn-primary btn-sm" disabled={!nuevo.trim()}>Autorizar número</button>
+          </form>
+        </div>
+
+        {err && <div style={{ color: "var(--pink)", fontSize: 13, marginTop: 10 }}>{err}</div>}
+
+        <button className="btn btn-ghost" style={{ width: "100%", marginTop: 18 }} onClick={onClose}>Cerrar</button>
+      </div>
+    </div>
+  );
+}
+
 function ModalPago({ comercio, onClose, onDone }: { comercio: ComercioSuscripcion; onClose: () => void; onDone: () => void }) {
   const [monto, setMonto] = useState("100");
   const [moneda, setMoneda] = useState("BOB");
@@ -1160,22 +1262,59 @@ function ModalPago({ comercio, onClose, onDone }: { comercio: ComercioSuscripcio
   const [notas, setNotas] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  // Resultado del pago: el backend avisa si el WhatsApp del comercio no sirve y
+  // si le quedó cuenta para entrar al panel. Se muestra ANTES de cerrar, porque
+  // es el único momento en que el admin está cara a cara con el dueño.
+  const [resultado, setResultado] = useState<{ advertencias: string[]; login: boolean } | null>(null);
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
     if (!monto || isNaN(Number(monto))) { setErr("Ingresá un monto válido"); return; }
     setSaving(true);
     try {
-      await registrarPago(comercio.id, {
+      const r = await registrarPago(comercio.id, {
         monto: Number(monto), moneda, metodo, meses: Number(meses),
         referencia: referencia || undefined, notas: notas || undefined,
       });
-      onDone();
+      setResultado({ advertencias: r?.advertencias ?? [], login: !!r?.login });
     } catch {
       setErr("No se pudo registrar el pago. Verificá el backend.");
     } finally {
       setSaving(false);
     }
+  }
+
+  if (resultado) {
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div className="glass" style={{ width: "100%", maxWidth: 420, borderRadius: 16, padding: 24 }}>
+          <h3 style={{ marginBottom: 4 }}>Pago registrado ✓</h3>
+          <p style={{ color: "var(--txt-3)", fontSize: 13, marginBottom: 18 }}>{comercio.nombre}</p>
+
+          <div style={{ fontSize: 14, marginBottom: 12 }}>
+            {resultado.login
+              ? <span style={{ color: "var(--neon)" }}>✓ El comercio ya puede entrar al panel</span>
+              : <span style={{ color: "var(--amber)" }}>⚠️ No se pudo crear la cuenta del panel</span>}
+          </div>
+
+          {resultado.advertencias.length > 0 && (
+            <div style={{ border: "1px solid var(--amber)", borderRadius: 10, padding: 12, marginBottom: 14 }}>
+              <div style={{ color: "var(--amber)", fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
+                Revisá esto con el dueño ahora
+              </div>
+              {resultado.advertencias.map((a, i) => (
+                <div key={i} style={{ fontSize: 13, color: "var(--txt-2)" }}>· {a}</div>
+              ))}
+              <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 8 }}>
+                Sin un WhatsApp válido no le llegan las reservas de la tienda.
+              </div>
+            </div>
+          )}
+
+          <button className="btn btn-primary" style={{ width: "100%" }} onClick={onDone}>Listo</button>
+        </div>
+      </div>
+    );
   }
 
   return (
