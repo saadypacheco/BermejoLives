@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.core.auth import require_admin, require_moderador
+from app.core.telefono import validar_whatsapp
 from app.db.repository import Repo, get_repo
 from app.models.schemas import ModerarBody
 from app.services.clasificador import moderar_publicacion
@@ -316,6 +317,27 @@ def reservalo_responder_consulta(
     return {"ok": True, "consulta": updated}
 
 
+def _advertencias_whatsapp(repo: Repo, comercio_id: str | None) -> list[str]:
+    """Chequea el WhatsApp del comercio al momento de cobrarle.
+
+    El alta es mínima a propósito (se carga rápido, a veces sin número), así que
+    esta es la primera instancia donde el número importa de verdad: a partir del
+    pago el comercio está en el mapa y las reservas de Reservalo le llegan por
+    ahí. No bloquea el pago —la plata ya entró— pero deja el problema a la vista
+    del admin, que está con el comercio en ese momento y puede corregirlo.
+    """
+    if not comercio_id:
+        return []
+    comercio = repo.get_comercio(comercio_id)
+    if not comercio:
+        return []
+    error = validar_whatsapp(comercio.get("whatsapp"))
+    if not error:
+        return []
+    logger.warning("suscripcion.whatsapp_invalido", comercio=comercio_id, detalle=error)
+    return [error]
+
+
 @router.post("/admin/comercio/{comercio_id}/pago")
 def registrar_pago(
     comercio_id: str,
@@ -334,7 +356,7 @@ def registrar_pago(
         "registrado_por": admin["email"],
     })
     logger.info("suscripcion.pago", comercio=comercio_id, meses=body.meses, by=admin["email"])
-    return {"ok": True, **result}
+    return {"ok": True, **result, "advertencias": _advertencias_whatsapp(repo, comercio_id)}
 
 
 @router.post("/admin/comercio/{comercio_id}/suspender")
@@ -386,7 +408,7 @@ def confirmar_pago(
     """Confirma un pago pendiente: lo marca confirmado y extiende paga_hasta."""
     result = repo.confirmar_pago(pago_id, body.meses, admin["email"])
     logger.info("suscripcion.pago_confirmado", pago=pago_id, meses=body.meses, by=admin["email"])
-    return result
+    return {**result, "advertencias": _advertencias_whatsapp(repo, result.get("comercio_id"))}
 
 
 # ---- Mensaje del admin a un comercio (notificación) ----
