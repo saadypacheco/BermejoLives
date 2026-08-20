@@ -15,7 +15,8 @@ import { comprimirImagen } from "@/lib/imagen";
 import { GaleriaUploader } from "@/components/galeria-uploader";
 import { AdminMap } from "@/components/admin-map";
 import { geoErrorMsg } from "@/lib/geo";
-import { encolarAlta, contarPendientes, sincronizarPendientes } from "@/lib/offline-altas";
+import { encolarAlta, contarPendientes, sincronizarPendientes, listarPendientes,
+         descartarPendiente, esIrrecuperable, type AltaPendiente } from "@/lib/offline-altas";
 
 // Prefijo telefónico según país
 const PREFIJO: Record<string, string> = { Bolivia: "591", Argentina: "54" };
@@ -521,6 +522,20 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   // reintenta, todo rebota, el contador no baja y no hay nada en pantalla que
   // explique por qué.
   const [syncMsg, setSyncMsg] = useState("");
+  const [detallePend, setDetallePend] = useState<AltaPendiente[] | null>(null);
+
+  async function verPendientes() {
+    if (detallePend) { setDetallePend(null); return; }
+    setDetallePend(await listarPendientes());
+  }
+
+  async function descartar(rec: AltaPendiente) {
+    const nombre = rec.campos.nombre || "este comercio";
+    if (!window.confirm(`¿Descartar "${nombre}"? No se puede recuperar.`)) return;
+    await descartarPendiente(rec.id);
+    setDetallePend(await listarPendientes());
+    refrescarPend();
+  }
 
   async function sincronizar(manual = false) {
     if (sincronizando) return;
@@ -831,6 +846,32 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           {syncMsg && (
             <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(240,160,40,.3)", fontSize: 12.5, lineHeight: 1.45, wordBreak: "break-word" }}>
               {syncMsg}
+            </div>
+          )}
+          <button type="button" className="link-more" style={{ color: "var(--amber)", marginTop: 6, padding: 0 }} onClick={verPendientes}>
+            {detallePend ? "Ocultar" : "Ver cuáles son"}
+          </button>
+          {detallePend && (
+            <div style={{ marginTop: 8, borderTop: "1px solid rgba(240,160,40,.3)", paddingTop: 8 }}>
+              {detallePend.map((rec) => {
+                const roto = esIrrecuperable(rec);
+                return (
+                  <div key={rec.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "5px 0", fontSize: 12.5 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600 }}>{rec.campos.nombre || "(sin nombre)"}</div>
+                      <div style={{ opacity: 0.8 }}>
+                        {new Date(rec.creado).toLocaleString("es-BO")}
+                        {roto && " · sin GPS: no va a entrar nunca"}
+                      </div>
+                    </div>
+                    {roto && (
+                      <button type="button" className="link-more" style={{ color: "var(--pink)", flexShrink: 0, padding: 0 }} onClick={() => descartar(rec)}>
+                        Descartar
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

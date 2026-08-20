@@ -45,10 +45,30 @@ function uid(): string {
 }
 
 export async function encolarAlta(campos: Record<string, string>, rubro_slugs: string[], foto: File | null): Promise<void> {
+  // Sin coordenadas el backend rechaza el alta con 400 para SIEMPRE: el GPS es
+  // el único campo obligatorio, y no se puede completar después desde el
+  // celular porque hay que estar parado en el local. Encolar un alta así es
+  // guardar basura que reintenta eternamente y le hace creer al agente que su
+  // trabajo está a salvo. Mejor fallar acá, mientras todavía está en el local.
+  const lat = Number(campos.lat), lng = Number(campos.lng);
+  if (!campos.lat || !campos.lng || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw new Error("Sin ubicación no se puede guardar: volvé a tocar \"Usar mi ubicación actual\".");
+  }
   const rec: AltaPendiente = {
     id: uid(), campos, rubro_slugs, foto: foto ?? null, fotoName: foto?.name ?? "foto.jpg", creado: Date.now(),
   };
   await run("readwrite", (s) => s.put(rec));
+}
+
+/** Descarta una pendiente que no se va a poder subir nunca (ej: sin GPS). */
+export async function descartarPendiente(id: string): Promise<void> {
+  await borrar(id);
+}
+
+/** Las que nunca van a entrar: sin coordenadas el backend las rechaza siempre. */
+export function esIrrecuperable(rec: AltaPendiente): boolean {
+  const lat = Number(rec.campos.lat), lng = Number(rec.campos.lng);
+  return !rec.campos.lat || !rec.campos.lng || !Number.isFinite(lat) || !Number.isFinite(lng);
 }
 
 export async function listarPendientes(): Promise<AltaPendiente[]> {
