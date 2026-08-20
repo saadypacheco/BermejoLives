@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.core.auth import require_admin, require_moderador
+from app.core.config import settings
 from app.core.telefono import validar_whatsapp
 from app.db.repository import Repo, get_repo
 from app.models.schemas import ModerarBody
@@ -338,6 +339,27 @@ def _advertencias_whatsapp(repo: Repo, comercio_id: str | None) -> list[str]:
     return [error]
 
 
+def _asegurar_login(repo: Repo, comercio_id: str | None) -> bool:
+    """Le garantiza cuenta al comercio en el momento en que empieza a pagar.
+
+    El alta por agente de campo nunca creaba la fila en `comercio_usuarios`, así
+    que el comercio cargado en la calle no tenía forma de entrar al panel — ni
+    siquiera por la recuperación de WhatsApp, que busca justamente esa fila. El
+    pago es el punto exacto del ciclo donde deja de ser un comercio del mapa y
+    pasa a ser uno que publica, así que la cuenta se crea acá.
+
+    Devuelve True si el comercio quedó con cuenta utilizable.
+    """
+    if not comercio_id:
+        return False
+    try:
+        repo.asegurar_comercio_usuario(comercio_id)
+        return True
+    except Exception:  # noqa: BLE001 — nunca romper el registro de un pago
+        logger.warning("suscripcion.login_no_creado", comercio=comercio_id, exc_info=True)
+        return False
+
+
 @router.post("/admin/comercio/{comercio_id}/pago")
 def registrar_pago(
     comercio_id: str,
@@ -356,7 +378,11 @@ def registrar_pago(
         "registrado_por": admin["email"],
     })
     logger.info("suscripcion.pago", comercio=comercio_id, meses=body.meses, by=admin["email"])
-    return {"ok": True, **result, "advertencias": _advertencias_whatsapp(repo, comercio_id)}
+    return {
+        "ok": True, **result,
+        "advertencias": _advertencias_whatsapp(repo, comercio_id),
+        "login": _asegurar_login(repo, comercio_id),
+    }
 
 
 @router.post("/admin/comercio/{comercio_id}/suspender")
@@ -408,7 +434,12 @@ def confirmar_pago(
     """Confirma un pago pendiente: lo marca confirmado y extiende paga_hasta."""
     result = repo.confirmar_pago(pago_id, body.meses, admin["email"])
     logger.info("suscripcion.pago_confirmado", pago=pago_id, meses=body.meses, by=admin["email"])
-    return {**result, "advertencias": _advertencias_whatsapp(repo, result.get("comercio_id"))}
+    comercio_id = result.get("comercio_id")
+    return {
+        **result,
+        "advertencias": _advertencias_whatsapp(repo, comercio_id),
+        "login": _asegurar_login(repo, comercio_id),
+    }
 
 
 # ---- Mensaje del admin a un comercio (notificación) ----
@@ -471,3 +502,82 @@ def rechazar_solicitud_cambio_numero(
         raise HTTPException(status_code=404, detail="solicitud no encontrada")
     logger.info("solicitud_cambio_numero.rechazada", solicitud=solicitud_id, by=admin["email"])
     return {"ok": True, "solicitud": updated}
+
+
+# ---- Confiable: publica sin pasar por la cola de moderación ----
+class ConfiableBody(BaseModel):
+    confiable: bool = True
+
+
+@router.post("/admin/comercio/{comercio_id}/confiable")
+def set_confiable(
+    comercio_id: str,
+    body: ConfiableBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Marca (o desmarca) un comercio como confiable.
+
+    `confiable` decide si lo que publica sale directo o cae en la cola de
+    moderación, pero no había NINGUNA forma de escribirlo: los únicos valores
+    true venían del seed inicial. En la práctica todo pasaba por moderación.
+    """
+    comercio = repo.set_comercio_confiable(comercio_id, body.confiable)
+    logger.info("comercio.confiable", comercio=comercio_id, valor=body.confiable, by=admin["email"])
+    return {"ok": True, "comercio": comercio}
+
+
+# ---- Números de WhatsApp autorizados a publicar por el comercio ----
+class NumeroBody(BaseModel):
+    numero: str
+    etiqueta: str | None = None
+
+
+@router.get("/admin/comercio/{comercio_id}/numeros")
+def listar_numeros(
+    comercio_id: str,
+    _admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    items = repo.list_numeros_comercio(comercio_id)
+    return {"items": items, "total": len(items)}
+
+
+@router.post("/admin/comercio/{comercio_id}/numeros")
+def agregar_numero(
+    comercio_id: str,
+    body: NumeroBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Autoriza un número a publicar en nombre del comercio.
+
+    El número público del local y el que manda los productos por WhatsApp no
+    tienen por qué ser el mismo (el del empleado, el del dueño, un segundo
+    local). Se dan de alta en la segunda pasada, con el dueño presente.
+    """
+    error = validar_whatsapp(body.numero)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    fila = repo.agregar_numero_comercio(comercio_id, body.numero, body.etiqueta, admin["email"])
+    logger.info("comercio.numero_autorizado", comercio=comercio_id, by=admin["email"])
+    return {"ok": True, "numero": fila}
+
+
+# ---- Bajas del mapa: disparo manual ----
+@router.post("/admin/bajas/ejecutar")
+def ejecutar_bajas(
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Corre la baja de comercios vencidos ahora mismo.
+
+    El job automático vive dentro del proceso del backend (loop con sleep de un
+    día), así que se reinicia en cada deploy y puede pasar mucho sin correr.
+    Esto permite dispararlo a mano sin esperar al ciclo.
+    """
+    ocultos = repo.ocultar_comercios_vencidos(
+        dias=settings.dias_vencido_baja, dias_gracia=settings.dias_gracia_sin_pago
+    )
+    logger.info("suscripcion.bajas_manual", ocultos=ocultos, by=admin["email"])
+    return {"ok": True, "ocultos": ocultos}

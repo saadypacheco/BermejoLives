@@ -58,7 +58,13 @@ class Repo(Protocol):
     def registrar_pago(self, comercio_id: str, row: dict) -> dict: ...
     def suspender_comercio(self, comercio_id: str) -> None: ...
     def activar_comercio(self, comercio_id: str) -> None: ...
-    def ocultar_comercios_vencidos(self, dias: int = 40) -> int: ...
+    def ocultar_comercios_vencidos(self, dias: int = 40, dias_gracia: int | None = None) -> int: ...
+    def get_comercio_por_numero(self, numero: str) -> dict | None: ...
+    def vincular_wa_jid(self, comercio_id: str, wa_jid: str) -> None: ...
+    def agregar_numero_comercio(self, comercio_id: str, numero: str, etiqueta: str | None, by: str) -> dict: ...
+    def list_numeros_comercio(self, comercio_id: str) -> list[dict]: ...
+    def asegurar_comercio_usuario(self, comercio_id: str) -> dict: ...
+    def set_comercio_confiable(self, comercio_id: str, valor: bool) -> dict: ...
     def crear_pago_pendiente(self, comercio_id: str, row: dict) -> dict: ...
     def list_pagos_pendientes(self) -> list[dict]: ...
     def confirmar_pago(self, pago_id: str, meses: int, by: str) -> dict: ...
@@ -126,11 +132,79 @@ class SupabaseRepo:
         res = self._db.table("comercios").select("*").eq("wa_jid", wa_jid).limit(1).execute()
         return res.data[0] if res.data else None
 
+    def get_comercio_por_numero(self, numero: str) -> dict | None:
+        """Busca el comercio dueño de un número, normalizado a E.164 sin '+'.
+
+        Orden: primero los números autorizados explícitamente (comercio_numeros),
+        después el número público del comercio. El segundo paso es el que rescata
+        a los comercios cargados por el agente de campo, que tienen `whatsapp`
+        tipeado a mano pero todavía no tienen `wa_jid`.
+        """
+        from app.core.telefono import normalizar_whatsapp
+
+        num = normalizar_whatsapp(numero)
+        if not num:
+            return None
+
+        aut = (
+            self._db.table("comercio_numeros")
+            .select("comercio_id").eq("numero", num).eq("activo", True).limit(1).execute()
+        )
+        if aut.data:
+            return self.get_comercio(aut.data[0]["comercio_id"])
+
+        # El número público se guarda con formato libre (nadie lo validaba hasta
+        # que el comercio empieza a pagar), así que se comparan los normalizados.
+        for candidato in {num, num[3:] if num.startswith("591") else num}:
+            res = (
+                self._db.table("comercios")
+                .select("*").eq("whatsapp", candidato).eq("activo", True).limit(1).execute()
+            )
+            if res.data:
+                return res.data[0]
+        return None
+
+    def vincular_wa_jid(self, comercio_id: str, wa_jid: str) -> None:
+        self._db.table("comercios").update({"wa_jid": wa_jid}).eq("id", comercio_id).execute()
+
+    def agregar_numero_comercio(self, comercio_id: str, numero: str, etiqueta: str | None, by: str) -> dict:
+        from app.core.telefono import normalizar_whatsapp
+
+        num = normalizar_whatsapp(numero)
+        if not num:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail=f"Número inválido: {numero}")
+        res = self._db.table("comercio_numeros").upsert({
+            "comercio_id": comercio_id, "numero": num,
+            "etiqueta": etiqueta, "created_by": by, "activo": True,
+        }, on_conflict="numero").execute()
+        return res.data[0]
+
+    def list_numeros_comercio(self, comercio_id: str) -> list[dict]:
+        res = (
+            self._db.table("comercio_numeros")
+            .select("*").eq("comercio_id", comercio_id).eq("activo", True).execute()
+        )
+        return res.data or []
+
     def upsert_comercio_by_jid(self, wa_jid: str, phone: str) -> dict:
-        """Crea un comercio 'borrador' si el remitente es nuevo (alta progresiva)."""
+        """Devuelve el comercio del remitente, creándolo sólo si es realmente nuevo.
+
+        Antes de crear reconcilia por número: un comercio cargado en la calle por
+        el agente tiene `whatsapp` pero no `wa_jid`, así que buscarlo sólo por
+        jid no lo encontraba y se creaba un DUPLICADO "Comercio 1989" cada vez
+        que el dueño escribía. Si el número ya pertenece a un comercio, se le ata
+        el jid a ese y listo.
+        """
         existing = self.get_comercio_by_jid(wa_jid)
         if existing:
             return existing
+
+        por_numero = self.get_comercio_por_numero(phone)
+        if por_numero:
+            self.vincular_wa_jid(por_numero["id"], wa_jid)
+            return {**por_numero, "wa_jid": wa_jid}
+
         slug = f"comercio-{phone[-6:]}"
         row = {
             "slug": slug,
@@ -141,7 +215,14 @@ class SupabaseRepo:
             "plan": "gratis",
         }
         res = self._db.table("comercios").upsert(row, on_conflict="wa_jid").execute()
-        return res.data[0]
+        creado = res.data[0]
+        # Queda autorizado el número con el que se dio de alta, para que la
+        # próxima reconciliación lo encuentre por comercio_numeros.
+        try:
+            self.agregar_numero_comercio(creado["id"], phone, "alta por WhatsApp", "ingest")
+        except Exception:  # noqa: BLE001 — el alta del comercio no depende de esto
+            pass
+        return creado
 
     def actualizar_ubicacion_comercio(self, comercio_id, lat, lng, direccion=None):
         patch: dict = {"lat": lat, "lng": lng}
@@ -348,6 +429,46 @@ class SupabaseRepo:
 
     def crear_comercio_usuario(self, row: dict) -> dict:
         res = self._db.table("comercio_usuarios").insert(row).execute()
+        return res.data[0]
+
+    def asegurar_comercio_usuario(self, comercio_id: str) -> dict:
+        """Garantiza que el comercio tenga una cuenta con la que poder entrar.
+
+        El alta por agente de campo crea la fila en `comercios` pero NUNCA creaba
+        la de `comercio_usuarios` (el autoregistro sí lo hace). Resultado: un
+        comercio cargado en la calle no podía loguearse jamás, ni siquiera con la
+        recuperación por WhatsApp, que busca justamente esa fila. Este es el
+        puente que faltaba entre el alta mínima y el panel.
+
+        Idempotente: si ya existe, la devuelve sin tocarla.
+        """
+        existente = (
+            self._db.table("comercio_usuarios")
+            .select("*").eq("comercio_id", comercio_id).eq("activo", True).limit(1).execute()
+        )
+        if existente.data:
+            return existente.data[0]
+
+        comercio = self.get_comercio(comercio_id)
+        if not comercio:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="comercio no encontrado")
+
+        # Sin email ni password: el dueño entra por el OTP de WhatsApp y define
+        # su clave ahí (habilitado por 0023_comercio_usuarios_sin_password).
+        return self.crear_comercio_usuario({
+            "comercio_id": comercio_id,
+            "nombre": comercio["nombre"],
+        })
+
+    def set_comercio_confiable(self, comercio_id: str, valor: bool) -> dict:
+        res = (
+            self._db.table("comercios")
+            .update({"confiable": valor}).eq("id", comercio_id).execute()
+        )
+        if not res.data:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="comercio no encontrado")
         return res.data[0]
 
     def set_comercio_rubros(self, comercio_id: str, rubro_ids: list[str]) -> None:
@@ -593,20 +714,46 @@ class SupabaseRepo:
     def activar_comercio(self, comercio_id: str) -> None:
         self._db.table("comercios").update({"suspendido": False, "activo": True}).eq("id", comercio_id).execute()
 
-    def ocultar_comercios_vencidos(self, dias: int = 40) -> int:
-        """Baja automática: oculta del mapa los comercios que PAGARON alguna vez
-        (paga_hasta no nulo) y llevan `dias` vencidos. Los gratis no se tocan.
-        Devuelve cuántos ocultó."""
-        from datetime import date, timedelta
-        limite = (date.today() - timedelta(days=dias)).isoformat()
-        res = (
+    def ocultar_comercios_vencidos(self, dias: int = 40, dias_gracia: int | None = None) -> int:
+        """Baja automática del mapa. Devuelve cuántos ocultó.
+
+        Dos poblaciones distintas, con relojes distintos:
+
+        1. El que PAGÓ alguna vez y se venció: `paga_hasta` + `dias`.
+        2. El que NUNCA pagó (`paga_hasta` NULL, típico del alta de campo):
+           `created_at` + `dias_gracia`. Este caso antes no se contemplaba —
+           `.lt("paga_hasta", ...)` excluye los NULL en PostgREST — así que el
+           comercio cargado en la calle se quedaba en el mapa para siempre y la
+           segunda pasada no tenía ninguna consecuencia si no pagaba.
+
+        `dias_gracia=None` desactiva la baja de los que nunca pagaron, que es el
+        comportamiento viejo (útil durante la captación inicial).
+        """
+        from datetime import date, datetime, timedelta, timezone
+
+        hoy = date.today()
+        vencidos = (
             self._db.table("comercios")
             .update({"activo": False})
-            .lt("paga_hasta", limite)
+            .lt("paga_hasta", (hoy - timedelta(days=dias)).isoformat())
             .eq("activo", True)
             .execute()
         )
-        return len(res.data or [])
+        total = len(vencidos.data or [])
+
+        if dias_gracia is not None:
+            corte = datetime.now(timezone.utc) - timedelta(days=dias_gracia)
+            nunca_pagaron = (
+                self._db.table("comercios")
+                .update({"activo": False})
+                .is_("paga_hasta", "null")
+                .lt("created_at", corte.isoformat())
+                .eq("activo", True)
+                .execute()
+            )
+            total += len(nunca_pagaron.data or [])
+
+        return total
 
     # ---- pago self-service (comercio sube comprobante → admin confirma) ----
     def crear_pago_pendiente(self, comercio_id: str, row: dict) -> dict:

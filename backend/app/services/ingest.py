@@ -18,6 +18,7 @@ import re
 
 import structlog
 
+from app.core.config import settings
 from app.db.repository import Repo, get_repo
 from app.models.whatsapp import WahaEvent, WahaMessagePayload
 
@@ -32,6 +33,14 @@ _VIDEO_HINTS = ("tiktok.com", "video", "reel")
 
 class IngestError(Exception):
     """Error recuperable de ingesta."""
+
+
+def _puede_publicar_por_whatsapp(comercio: dict) -> bool:
+    """El gate por plan de la ingesta. Apagado por default (ver config)."""
+    if not settings.ingesta_requiere_plan:
+        return True
+    permitidos = {p.strip() for p in settings.planes_con_ingesta.split(",") if p.strip()}
+    return (comercio.get("plan") or "gratis") in permitidos
 
 
 def _classify_tipo(payload: WahaMessagePayload) -> str:
@@ -122,6 +131,17 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
             repo.actualizar_ubicacion_comercio(comercio["id"], loc[0], loc[1], loc[2])
         logger.info("ingest.ubicacion", comercio=comercio["slug"], ok=bool(loc))
         return {"captured": True, "comercio": comercio["slug"], "ubicacion_actualizada": bool(loc)}
+
+    # 2.c) ¿Este comercio puede publicar por WhatsApp?
+    #      Es una función del plan más caro, pero durante la captación conviene
+    #      que cualquiera pueda mandar productos para que el catálogo tenga
+    #      volumen: por eso el gate arranca apagado (ingesta_requiere_plan=False).
+    #      El mensaje ya quedó guardado en wa_inbox, así que nada se pierde: si
+    #      después el comercio contrata el plan, el crudo sigue estando.
+    if not _puede_publicar_por_whatsapp(comercio):
+        logger.info("ingest.plan_insuficiente", comercio=comercio["slug"], plan=comercio.get("plan"))
+        return {"captured": True, "comercio": comercio["slug"], "publicada": False,
+                "motivo": "el plan del comercio no incluye publicar por WhatsApp"}
 
     # 3) Crear publicación. Comercio confiable -> publica directo; si no, a moderación.
     from datetime import datetime, timezone

@@ -51,6 +51,25 @@ class Settings(BaseSettings):
     # Worker que refresca el clima desde open-meteo cada 30 min (se apaga en tests)
     clima_worker: bool = True
 
+    # ---- Ciclo de vida del comercio en el mapa ----
+    # Días después de vencido el pago antes de sacarlo del mapa (10 de gracia +
+    # ~1 mes en "solo mapa").
+    dias_vencido_baja: int = 40
+    # Días desde el alta que tiene un comercio que NUNCA pagó antes de caerse del
+    # mapa. Es la segunda pasada: se carga rápido en la calle, y a los 2 meses o
+    # paga o desaparece. `None` desactiva la baja de los que nunca pagaron, que
+    # es lo que conviene mientras se está poblando el mapa.
+    dias_gracia_sin_pago: int | None = 60
+
+    # Gate por plan de la ingesta por WhatsApp (mandar productos sin loguearse).
+    # Arranca APAGADO a propósito: durante la captación conviene que cualquier
+    # comercio pueda mandar productos, ofertas y servicios para que el catálogo
+    # tenga volumen. Cuando la captación termine, se prende y pasa a ser una
+    # función del plan más caro.
+    ingesta_requiere_plan: bool = False
+    # Planes habilitados a publicar por WhatsApp cuando el gate está prendido.
+    planes_con_ingesta: str = "premium"
+
     # Transcripción de audio del "¿qué vende?".
     #  - Si OPENAI_API_KEY está seteada → usa la API de OpenAI Whisper.
     #  - Si no → usa faster-whisper SELF-HOSTED (gratis, en el VPS).

@@ -53,12 +53,23 @@ async def _clima_loop():
 
 
 async def _baja_loop():
-    """Baja automática diaria: oculta del mapa a los comercios que pagaron y
-    llevan 40 días vencidos (10 de gracia + 1 mes en 'solo mapa')."""
+    """Baja automática diaria del mapa. Dos relojes:
+
+    - el que pagó y venció: `dias_vencido_baja` (40 = 10 de gracia + 1 mes en
+      'solo mapa');
+    - el que nunca pagó: `dias_gracia_sin_pago` desde el alta (la segunda pasada).
+
+    Corre dentro del proceso, así que se reinicia en cada deploy; para dispararlo
+    a mano está POST /admin/bajas/ejecutar.
+    """
     while True:
         try:
             repo = get_repo()
-            n = await run_in_threadpool(repo.ocultar_comercios_vencidos, 40)
+            n = await run_in_threadpool(
+                repo.ocultar_comercios_vencidos,
+                settings.dias_vencido_baja,
+                settings.dias_gracia_sin_pago,
+            )
             if n:
                 logger.info("baja_automatica", ocultados=n)
         except Exception as exc:  # noqa: BLE001

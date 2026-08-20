@@ -48,6 +48,7 @@ class FakeRepo:
         self.pagos: dict[str, dict] = {}             # id -> row
         self.mensajes: dict[str, dict] = {}          # id -> row
         self.comercio_fotos: list[dict] = []          # galería
+        self.comercio_numeros: list[dict] = []        # números autorizados a publicar
         self.comercio_videos: list[dict] = []
         self.cotizaciones: list[dict] = [
             {"clave": "usd_bob", "etiqueta": "Dólar", "detalle": "1 USD", "valor": 0, "unidad": "Bs", "orden": 1},
@@ -76,13 +77,74 @@ class FakeRepo:
         existing = self.get_comercio_by_jid(wa_jid)
         if existing:
             return existing
+        por_numero = self.get_comercio_por_numero(phone)
+        if por_numero:
+            self.vincular_wa_jid(por_numero["id"], wa_jid)
+            return por_numero
         cid = self._id("com")
         row = {
             "id": cid, "slug": f"comercio-{phone[-6:]}", "nombre": f"Comercio {phone[-4:]}",
             "whatsapp": phone, "wa_jid": wa_jid, "confiable": False, "verificado": False, "plan": "gratis",
         }
         self.comercios[cid] = row
+        self.agregar_numero_comercio(cid, phone, "alta por WhatsApp", "ingest")
         return row
+
+    # ---- números autorizados ----
+    def get_comercio_por_numero(self, numero):
+        from app.core.telefono import normalizar_whatsapp
+        num = normalizar_whatsapp(numero)
+        if not num:
+            return None
+        for n in self.comercio_numeros:
+            if n["numero"] == num and n.get("activo", True):
+                return self.comercios.get(n["comercio_id"])
+        candidatos = {num, num[3:] if num.startswith("591") else num}
+        for c in self.comercios.values():
+            if c.get("whatsapp") in candidatos and c.get("activo", True):
+                return c
+        return None
+
+    def vincular_wa_jid(self, comercio_id, wa_jid):
+        if comercio_id in self.comercios:
+            self.comercios[comercio_id]["wa_jid"] = wa_jid
+
+    def agregar_numero_comercio(self, comercio_id, numero, etiqueta, by):
+        from app.core.telefono import normalizar_whatsapp
+        num = normalizar_whatsapp(numero)
+        if not num:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail=f"Número inválido: {numero}")
+        for n in self.comercio_numeros:
+            if n["numero"] == num:
+                n.update({"comercio_id": comercio_id, "etiqueta": etiqueta, "activo": True})
+                return n
+        fila = {"id": self._id("num"), "comercio_id": comercio_id, "numero": num,
+                "etiqueta": etiqueta, "created_by": by, "activo": True}
+        self.comercio_numeros.append(fila)
+        return fila
+
+    def list_numeros_comercio(self, comercio_id):
+        return [n for n in self.comercio_numeros
+                if n["comercio_id"] == comercio_id and n.get("activo", True)]
+
+    def asegurar_comercio_usuario(self, comercio_id):
+        for u in self.usuarios.values():
+            if u.get("comercio_id") == comercio_id and u.get("activo", True):
+                return u
+        comercio = self.comercios.get(comercio_id)
+        if not comercio:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="comercio no encontrado")
+        return self.crear_comercio_usuario({"comercio_id": comercio_id, "nombre": comercio.get("nombre")})
+
+    def set_comercio_confiable(self, comercio_id, valor):
+        c = self.comercios.get(comercio_id)
+        if not c:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="comercio no encontrado")
+        c["confiable"] = valor
+        return c
 
     def get_comercio(self, comercio_id):
         return self.comercios.get(comercio_id)
@@ -490,6 +552,20 @@ class FakeRepo:
     def list_pagos_pendientes(self):
         return [p for p in self.pagos.values() if p.get("estado") == "pendiente"]
 
+    def registrar_pago(self, comercio_id, row):
+        from datetime import date, timedelta
+        c = self.comercios.get(comercio_id)
+        if not c:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="comercio no encontrado")
+        nueva = (date.today() + timedelta(days=30 * max(1, int(row.get("meses", 1))))).isoformat()
+        pid = self._id("pag")
+        self.pagos[pid] = {"id": pid, "comercio_id": comercio_id, "estado": "confirmado", **row}
+        c["paga_hasta"] = nueva
+        c["suspendido"] = False
+        self.marcar_destacados_cobrados(comercio_id)
+        return {"paga_hasta": nueva, "comercio_id": comercio_id}
+
     def confirmar_pago(self, pago_id, meses, by):
         from datetime import date, timedelta
         pago = self.pagos.get(pago_id)
@@ -504,13 +580,19 @@ class FakeRepo:
         self.marcar_destacados_cobrados(pago["comercio_id"])
         return {"ok": True, "paga_hasta": nueva, "comercio_id": pago["comercio_id"]}
 
-    def ocultar_comercios_vencidos(self, dias=40):
-        from datetime import date, timedelta
+    def ocultar_comercios_vencidos(self, dias=40, dias_gracia=None):
+        from datetime import date, datetime, timedelta, timezone
         limite = (date.today() - timedelta(days=dias)).isoformat()
+        corte = (datetime.now(timezone.utc) - timedelta(days=dias_gracia)).isoformat() if dias_gracia is not None else None
         n = 0
         for c in self.comercios.values():
+            if not c.get("activo", True):
+                continue
             ph = c.get("paga_hasta")
-            if ph and str(ph) < limite and c.get("activo", True):
+            if ph and str(ph) < limite:
+                c["activo"] = False
+                n += 1
+            elif not ph and corte and str(c.get("created_at") or "") < corte:
                 c["activo"] = False
                 n += 1
         return n
