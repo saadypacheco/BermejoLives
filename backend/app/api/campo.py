@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from app.core import auth
+from app.core.codigo import formatear as formatear_codigo
 from app.core.config import settings
 from app.core.text import slug_unico, slugify
 from app.db.repository import Repo, get_repo
@@ -212,10 +213,15 @@ async def alta_campo(
     logger.info("campo.alta", slug=slug, ciudad=ciudad_slug, rubros=len(rubro_ids),
                 con_foto=bool(portada_url), con_gps=lat is not None, con_video=bool(vurl),
                 consentimiento=consentimiento, cargado_por=agente["email"])
+    # El código va en la respuesta para poder dictárselo o anotárselo al dueño en
+    # el momento: es lo que le permite mandar ofertas por WhatsApp sin tener
+    # número cargado, sin login y sin haber pagado.
     return {"ok": True, "comercio": {"id": comercio["id"], "nombre": comercio["nombre"], "slug": slug,
                                      "ciudad": ciudad_slug, "rubros": len(rubro_ids),
                                      "foto": bool(portada_url), "gps": lat is not None,
-                                     "video": bool(vurl)}}
+                                     "video": bool(vurl),
+                                     "codigo": comercio.get("codigo"),
+                                     "codigo_formateado": formatear_codigo(comercio["codigo"]) if comercio.get("codigo") else None}}
 
 
 class LugarBody(BaseModel):

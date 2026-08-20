@@ -21,6 +21,7 @@ class Repo(Protocol):
     def insert_publicacion(self, row: dict) -> bool: ...
     def insert_publicacion_directa(self, row: dict) -> dict: ...
     def list_publicaciones(self, estado: str | None) -> list[dict]: ...
+    def get_publicacion(self, pub_id: str) -> dict | None: ...
     def set_estado_publicacion(self, pub_id: str, estado: str, motivo: str | None, by: str) -> dict: ...
     def list_comercios_admin(self, verificado: bool | None) -> list[dict]: ...
     def set_comercio_verificado(self, comercio_id: str, valor: bool) -> dict: ...
@@ -40,6 +41,7 @@ class Repo(Protocol):
     def get_rubro_nombre(self, slug: str) -> str | None: ...
     def get_ciudad_id(self, slug: str) -> str | None: ...
     def crear_comercio(self, row: dict) -> dict: ...
+    def get_comercio_por_codigo(self, codigo: str) -> dict | None: ...
     def crear_comercio_usuario(self, row: dict) -> dict: ...
     def set_comercio_rubros(self, comercio_id: str, rubro_ids: list[str]) -> None: ...
     def get_comercio_rubros(self, comercio_id: str) -> list[str]: ...
@@ -213,6 +215,7 @@ class SupabaseRepo:
             "wa_jid": wa_jid,
             "verificado": False,
             "plan": "gratis",
+            "codigo": self._codigo_libre(),
         }
         res = self._db.table("comercios").upsert(row, on_conflict="wa_jid").execute()
         creado = res.data[0]
@@ -424,8 +427,37 @@ class SupabaseRepo:
         return res.data[0]["id"] if res.data else None
 
     def crear_comercio(self, row: dict) -> dict:
+        """Alta de comercio. Siempre sale con código: es lo que le permite
+        publicar por WhatsApp desde cualquier número, sin login ni pago."""
+        if not row.get("codigo"):
+            row = {**row, "codigo": self._codigo_libre()}
         res = self._db.table("comercios").insert(row).execute()
         return res.data[0]
+
+    def _codigo_libre(self, intentos: int = 12) -> str:
+        """Genera un código que no esté tomado. ~923.000 combinaciones, así que
+        una colisión es rarísima; igual se reintenta para no fallar un alta."""
+        from app.core.codigo import generar_codigo
+
+        for _ in range(intentos):
+            candidato = generar_codigo()
+            if not self.get_comercio_por_codigo(candidato):
+                return candidato
+        # Con la tabla llena de códigos esto sería un problema real, pero antes
+        # de eso hay que agrandar el largo del código, no seguir reintentando.
+        raise RuntimeError("No se pudo generar un código de comercio único")
+
+    def get_comercio_por_codigo(self, codigo: str) -> dict | None:
+        from app.core.codigo import normalizar
+
+        norm = normalizar(codigo)
+        if not norm:
+            return None
+        res = (
+            self._db.table("comercios")
+            .select("*").eq("codigo", norm).eq("activo", True).limit(1).execute()
+        )
+        return res.data[0] if res.data else None
 
     def crear_comercio_usuario(self, row: dict) -> dict:
         res = self._db.table("comercio_usuarios").insert(row).execute()
@@ -492,6 +524,10 @@ class SupabaseRepo:
             q = q.eq("estado", estado)
         res = q.order("created_at", desc=True).limit(200).execute()
         return res.data or []
+
+    def get_publicacion(self, pub_id: str) -> dict | None:
+        res = self._db.table("publicaciones").select("*").eq("id", pub_id).limit(1).execute()
+        return res.data[0] if res.data else None
 
     def set_estado_publicacion(self, pub_id: str, estado: str, motivo: str | None, by: str) -> dict:
         from datetime import datetime, timezone
@@ -644,7 +680,7 @@ class SupabaseRepo:
 
         res = (
             self._db.table("comercios")
-            .select("id, slug, nombre, whatsapp, verificado, confiable, plan, suspendido, paga_hasta, created_at")
+            .select("id, slug, nombre, whatsapp, verificado, confiable, plan, codigo, suspendido, paga_hasta, created_at")
             .eq("activo", True)
             .order("nombre")
             .limit(500)

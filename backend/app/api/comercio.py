@@ -344,7 +344,7 @@ _CAMPOS_PERFIL = (
     "facebook_url", "instagram_url", "tiktok_url", "sitio_web", "logo_url",
     "portada_url", "direccion", "como_llegar", "horario", "pedido_minimo",
     "modalidad", "monedas_aceptadas", "plan", "verificado", "confiable",
-    "lat", "lng", "acepta_reservas",
+    "lat", "lng", "acepta_reservas", "codigo",
 )
 
 

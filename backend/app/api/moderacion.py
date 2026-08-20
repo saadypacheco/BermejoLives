@@ -30,6 +30,38 @@ def listar(
     return {"items": items, "total": len(items)}
 
 
+def _validar_codigo_al_aprobar(repo: Repo, pub_id: str) -> None:
+    """Antes de publicar algo que se atribuyó por código, se revalida el código.
+
+    La atribución se hizo cuando entró el mensaje; entre eso y la aprobación pudo
+    pasar cualquier cosa (el comercio cambió de código, se dio de baja, alguien
+    reasignó la publicación). Aprobar es el acto que la hace pública, así que la
+    verificación se rehace acá contra el código del alta.
+    """
+    from app.core.codigo import formatear, normalizar
+
+    pub = repo.get_publicacion(pub_id)
+    if not pub:
+        raise HTTPException(status_code=404, detail="publicación no encontrada")
+    if pub.get("identidad_origen") != "codigo":
+        return  # se identificó por número: no hay código que validar
+
+    recibido = normalizar(pub.get("codigo_recibido"))
+    comercio = repo.get_comercio(pub["comercio_id"])
+    esperado = normalizar((comercio or {}).get("codigo"))
+
+    if not recibido or not esperado or recibido != esperado:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "El código de esta publicación ya no coincide con el del comercio "
+                f"(recibido: {formatear(recibido) if recibido else 'ninguno'}, "
+                f"actual: {formatear(esperado) if esperado else 'ninguno'}). "
+                "Revisá a qué comercio corresponde antes de aprobarla."
+            ),
+        )
+
+
 @router.post("/moderacion/publicaciones/{pub_id}")
 def moderar(
     pub_id: str,
@@ -39,6 +71,8 @@ def moderar(
 ) -> dict:
     if body.estado not in _ESTADOS:
         raise HTTPException(status_code=400, detail=f"estado inválido: {body.estado}")
+    if body.estado == "aprobado":
+        _validar_codigo_al_aprobar(repo, pub_id)
     updated = repo.set_estado_publicacion(pub_id, body.estado, body.motivo, mod["email"])
     if not updated:
         raise HTTPException(status_code=404, detail="publicación no encontrada")

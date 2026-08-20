@@ -35,6 +35,46 @@ class IngestError(Exception):
     """Error recuperable de ingesta."""
 
 
+def _identificar_comercio(repo: Repo, payload) -> tuple[dict, str, str | None]:
+    """Resuelve de qué comercio es este mensaje.
+
+    Devuelve (comercio, identidad_origen, codigo_recibido).
+
+    `identidad_origen` queda guardado en la publicación para que el panel sepa en
+    qué se apoyó la atribución al momento de aprobar:
+      - 'numero': el número del remitente ya estaba asociado al comercio.
+      - 'codigo': el número era desconocido y el mensaje traía el código del local.
+      - 'desconocido': ni número conocido ni código; se creó un borrador nuevo.
+    """
+    from app.core.codigo import extraer_codigo
+
+    wa_jid = payload.from_ or ""
+
+    conocido = repo.get_comercio_by_jid(wa_jid) or repo.get_comercio_por_numero(payload.phone)
+    if conocido:
+        return conocido, "numero", None
+
+    codigo = extraer_codigo(payload.body)
+    if codigo:
+        por_codigo = repo.get_comercio_por_codigo(codigo)
+        if por_codigo:
+            # El número queda autorizado para este comercio: de acá en adelante ya
+            # no hace falta repetir el código. El código es un vínculo de una vez
+            # entre un local físico y un número, no una contraseña permanente.
+            try:
+                repo.agregar_numero_comercio(
+                    por_codigo["id"], payload.phone, "se identificó con el código", "ingest-codigo")
+                repo.vincular_wa_jid(por_codigo["id"], wa_jid)
+            except Exception:  # noqa: BLE001 — la publicación importa más que el vínculo
+                logger.warning("ingest.autorizar_numero_fallo", comercio=por_codigo["id"], exc_info=True)
+            logger.info("ingest.identificado_por_codigo", comercio=por_codigo["slug"], codigo=codigo)
+            return por_codigo, "codigo", codigo
+        logger.info("ingest.codigo_desconocido", codigo=codigo)
+
+    # Ni número conocido ni código válido: borrador nuevo, como siempre.
+    return repo.upsert_comercio_by_jid(wa_jid, payload.phone), "desconocido", codigo
+
+
 def _puede_publicar_por_whatsapp(comercio: dict) -> bool:
     """El gate por plan de la ingesta. Apagado por default (ver config)."""
     if not settings.ingesta_requiere_plan:
@@ -120,8 +160,15 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         logger.info("ingest.duplicado", wa_message_id=payload.id)
         return {"captured": True, "duplicate": True}
 
-    # 2) Asociar / crear comercio por número (alta progresiva)
-    comercio = repo.upsert_comercio_by_jid(payload.from_ or "", payload.phone)
+    # 2) Identificar al comercio.
+    #    Primero por número (registrado o ya visto). Si el número es desconocido,
+    #    se busca el CÓDIGO en el texto: es lo que le permite a un comercio sin
+    #    número propio, sin login y sin pagar, mandar ofertas desde el celular de
+    #    quien sea. Sin código, recién ahí se crea el borrador "Comercio 1234".
+    comercio, identidad_origen, codigo_recibido = _identificar_comercio(repo, payload)
+    # Sólo para logs y respuesta: un comercio identificado por código puede venir
+    # de una fila parcial, y una línea de log no puede tumbar la ingesta.
+    slug = comercio.get("slug") or comercio.get("id") or "?"
 
     # 2.b) ¿Compartió su ubicación por WhatsApp? -> actualizamos el comercio y listo.
     #      (forma simple para vendedores con poca tecnología: tocar "compartir ubicación")
@@ -129,8 +176,8 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     if payload.type == "location" or loc:
         if loc:
             repo.actualizar_ubicacion_comercio(comercio["id"], loc[0], loc[1], loc[2])
-        logger.info("ingest.ubicacion", comercio=comercio["slug"], ok=bool(loc))
-        return {"captured": True, "comercio": comercio["slug"], "ubicacion_actualizada": bool(loc)}
+        logger.info("ingest.ubicacion", comercio=slug, ok=bool(loc))
+        return {"captured": True, "comercio": slug, "ubicacion_actualizada": bool(loc)}
 
     # 2.c) ¿Este comercio puede publicar por WhatsApp?
     #      Es una función del plan más caro, pero durante la captación conviene
@@ -139,14 +186,17 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     #      El mensaje ya quedó guardado en wa_inbox, así que nada se pierde: si
     #      después el comercio contrata el plan, el crudo sigue estando.
     if not _puede_publicar_por_whatsapp(comercio):
-        logger.info("ingest.plan_insuficiente", comercio=comercio["slug"], plan=comercio.get("plan"))
-        return {"captured": True, "comercio": comercio["slug"], "publicada": False,
+        logger.info("ingest.plan_insuficiente", comercio=slug, plan=comercio.get("plan"))
+        return {"captured": True, "comercio": slug, "publicada": False,
                 "motivo": "el plan del comercio no incluye publicar por WhatsApp"}
 
     # 3) Crear publicación. Comercio confiable -> publica directo; si no, a moderación.
     from datetime import datetime, timezone
 
-    confiable = bool(comercio.get("confiable"))
+    # Un número nuevo que se identificó con el código NO hereda `confiable`: el
+    # código está en un papel en el local y cualquiera que lo vea podría publicar
+    # en nombre del comercio. La primera vez pasa por moderación siempre.
+    confiable = bool(comercio.get("confiable")) and identidad_origen != "codigo"
     now = datetime.now(timezone.utc).isoformat()
     tipo = _classify_tipo(payload)
     row = {
@@ -161,11 +211,13 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         "moderado_por": "auto-confiable" if confiable else None,
         "moderado_at": now if confiable else None,
         "origen": "whatsapp",
+        "codigo_recibido": codigo_recibido,
+        "identidad_origen": identidad_origen,
         "wa_message_id": payload.id,
         "raw": event.payload,
     }
     repo.insert_publicacion(row)
 
     estado = row["estado"]
-    logger.info("ingest.publicacion", comercio=comercio["slug"], tipo=tipo, estado=estado)
-    return {"captured": True, "comercio": comercio["slug"], "tipo": tipo, "estado": estado}
+    logger.info("ingest.publicacion", comercio=slug, tipo=tipo, estado=estado)
+    return {"captured": True, "comercio": slug, "tipo": tipo, "estado": estado}

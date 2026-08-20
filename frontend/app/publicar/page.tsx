@@ -496,6 +496,10 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   const [saving,      setSaving]      = useState(false);
   const [done,        setDone]        = useState<string | null>(null);
   const [doneOffline, setDoneOffline] = useState(false);
+  // Código del local recién dado de alta: hay que dictárselo o anotárselo al
+  // dueño en el momento — es lo que le permite mandar ofertas por WhatsApp sin
+  // tener número cargado, sin login y sin haber pagado.
+  const [doneCodigo,  setDoneCodigo]  = useState<string | null>(null);
   const [altaId,      setAltaId]      = useState<string | null>(null);
   const [count,       setCount]       = useState(0);
   const [err,         setErr]         = useState("");
@@ -656,6 +660,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       if (foto) fd.append("foto", foto);
       const r = await altaComercioCampo(fd);
       setDone(r.comercio.nombre);
+      setDoneCodigo(r.comercio.codigo_formateado ?? null);
       setAltaId(r.comercio.id);
       setCount((c) => c + 1);
       setSubioLugar(lugarActual ? { id: lugarActual.id, nombre: lugarActual.nombre } : null);
@@ -687,7 +692,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   function limpiar() {
     setF({ ...EMPTY }); setRubroSlugs([]); setIntentosAudio(0);
     setCoords(null); setGeoMsg(""); setFoto(null); setPreview(""); setConsent(true);
-    setNuevoLugar(""); setEditMercado(false); setCatFiltro(""); setDone(null); setDoneOffline(false); setAltaId(null); setErr("");
+    setNuevoLugar(""); setEditMercado(false); setCatFiltro(""); setDone(null); setDoneOffline(false); setDoneCodigo(null); setAltaId(null); setErr("");
   }
   function otro() {
     limpiar();
@@ -713,6 +718,32 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
             : `${ciudadActual ? `${ciudadActual.nombre} · ` : ""}Pendiente de verificar.`}
         </p>
         <p style={{ color: "var(--txt-3)", marginBottom: 18 }}>Llevás {count} en este recorrido.{pendientes > 0 ? ` · ${pendientes} sin subir` : ""}</p>
+
+        {doneCodigo && (
+          <div style={{ marginBottom: 18, padding: 16, borderRadius: 14, background: "var(--panel)", border: "2px solid var(--neon)" }}>
+            <p style={{ color: "var(--txt-2)", fontSize: 13.5, marginBottom: 8 }}>
+              📝 Dejale este código al dueño:
+            </p>
+            <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: 3, color: "var(--neon)", fontFamily: "monospace", marginBottom: 10 }}>
+              {doneCodigo}
+            </div>
+            <p style={{ color: "var(--txt-3)", fontSize: 12.5, lineHeight: 1.5, marginBottom: 10 }}>
+              Con este código puede mandar sus ofertas por WhatsApp desde cualquier
+              celular, sin cuenta y sin cargar su número. Sólo tiene que escribirlo
+              en el mensaje.
+            </p>
+            <button
+              className="btn btn-ghost"
+              style={{ width: "100%" }}
+              onClick={() => {
+                const texto = `Tu código de URUKU es ${doneCodigo}. Mandá tus ofertas por WhatsApp escribiendo ese código en el mensaje.`;
+                navigator.clipboard?.writeText(texto).catch(() => {});
+              }}
+            >
+              Copiar mensaje para el dueño
+            </button>
+          </div>
+        )}
 
         {altaId && (
           <div style={{ textAlign: "left", marginBottom: 18, padding: 14, borderRadius: 14, background: "var(--panel)", border: "1px solid var(--stroke)" }}>

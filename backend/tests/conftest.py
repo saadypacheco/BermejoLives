@@ -85,6 +85,7 @@ class FakeRepo:
         row = {
             "id": cid, "slug": f"comercio-{phone[-6:]}", "nombre": f"Comercio {phone[-4:]}",
             "whatsapp": phone, "wa_jid": wa_jid, "confiable": False, "verificado": False, "plan": "gratis",
+            "codigo": self._codigo_libre(),
         }
         self.comercios[cid] = row
         self.agregar_numero_comercio(cid, phone, "alta por WhatsApp", "ingest")
@@ -149,6 +150,30 @@ class FakeRepo:
     def get_comercio(self, comercio_id):
         return self.comercios.get(comercio_id)
 
+    def get_comercio_por_codigo(self, codigo):
+        from app.core.codigo import normalizar
+        norm = normalizar(codigo)
+        if not norm:
+            return None
+        for c in self.comercios.values():
+            if c.get("codigo") == norm and c.get("activo", True):
+                return c
+        return None
+
+    def _codigo_libre(self):
+        from app.core.codigo import generar_codigo
+        for _ in range(20):
+            c = generar_codigo()
+            if not self.get_comercio_por_codigo(c):
+                return c
+        raise RuntimeError("sin códigos libres")
+
+    def get_publicacion(self, pub_id):
+        for p in self.publicaciones:
+            if p.get("id") == pub_id:
+                return p
+        return None
+
     def actualizar_ubicacion_comercio(self, comercio_id, lat, lng, direccion=None):
         c = self.comercios.get(comercio_id)
         if c:
@@ -160,6 +185,8 @@ class FakeRepo:
         cid = kw.get("id") or self._id("com")
         row = {"id": cid, "confiable": False, "verificado": False, "plan": "gratis", **kw}
         self.comercios[cid] = row
+        if not row.get("codigo"):
+            row["codigo"] = self._codigo_libre()
         return row
 
     # ---- lugares (mercados / galerías) ----
@@ -291,6 +318,8 @@ class FakeRepo:
         cid = self._id("com")
         full = {"id": cid, **row}
         self.comercios[cid] = full
+        if not full.get("codigo"):
+            full["codigo"] = self._codigo_libre()
         return full
 
     def list_comercios_por_agente(self, email, limit=200):

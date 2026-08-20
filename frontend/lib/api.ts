@@ -48,6 +48,10 @@ export type PendingPub = {
   estado: string;
   created_at: string;
   comercios?: { nombre: string; slug: string; logo_url: string | null };
+  // En qué se apoyó la atribución: 'numero' (remitente ya asociado al comercio),
+  // 'codigo' (número desconocido + código del local en el mensaje) o 'desconocido'.
+  identidad_origen?: string | null;
+  codigo_recibido?: string | null;
 };
 
 export async function listPendientes(estado = "pendiente"): Promise<PendingPub[]> {
@@ -180,6 +184,7 @@ export type ComercioSuscripcion = {
   verificado: boolean;
   confiable?: boolean;
   plan?: string;
+  codigo?: string | null;
   suspendido: boolean;
   paga_hasta: string | null;
   suscripcion_estado: EstadoSuscripcion;

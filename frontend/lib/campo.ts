@@ -46,7 +46,16 @@ export async function sugerirRubros(descripcion: string, rubros: { slug: string;
   return (await res.json()).rubro_slugs as string[];
 }
 
-export type AltaCampoResult = { ok: boolean; comercio: { id: string; nombre: string; slug: string; ciudad: string; foto: boolean; gps: boolean } };
+export type AltaCampoResult = {
+  ok: boolean;
+  comercio: {
+    id: string; nombre: string; slug: string; ciudad: string; foto: boolean; gps: boolean;
+    // Código del local, ya formateado como 'URUKU-K7M2'. Se le deja al dueño en
+    // papel: con eso publica por WhatsApp sin número propio, cuenta ni pago.
+    codigo?: string | null;
+    codigo_formateado?: string | null;
+  };
+};
 
 // ---- Galería (fotos/videos) del comercio, lado agente ----
 export type FotoGaleria = { id: string; url: string; thumb_url: string | null; orden?: number };

@@ -325,6 +325,7 @@ export default function AdminPage() {
                 {p.precio != null && <span style={{ color: "var(--neon)", fontWeight: 700 }}>{precioFmt(p.precio, p.moneda)}</span>}
                 {p.tiktok_url && <span>🎬 TikTok adjunto</span>}
                 <span>🕒 {new Date(p.created_at).toLocaleString("es-BO")}</span>
+                <IdentidadBadge pub={p} />
               </div>
               {(() => {
                 const v = veredictos[p.id];
@@ -352,6 +353,27 @@ export default function AdminPage() {
       )}
     </div>
   );
+}
+
+/** De dónde salió la atribución de una publicación entrante.
+ *
+ * Importa al aprobar: si vino por código, el mensaje llegó de un número que no
+ * estaba asociado al comercio y se identificó con el papel que quedó en el
+ * local. Cualquiera que vea ese papel puede publicar, así que conviene mirarlo
+ * antes de aprobar — el backend además revalida el código y devuelve 409 si dejó
+ * de coincidir. */
+function IdentidadBadge({ pub }: { pub: PendingPub }) {
+  if (pub.identidad_origen === "codigo") {
+    return (
+      <span style={{ color: "var(--amber)" }} title="El número no estaba asociado: se identificó con el código del local">
+        🔑 por código {pub.codigo_recibido ? `URUKU-${pub.codigo_recibido}` : ""}
+      </span>
+    );
+  }
+  if (pub.identidad_origen === "desconocido") {
+    return <span style={{ color: "var(--pink)" }} title="Ni número conocido ni código: se creó un comercio borrador">⚠️ sin identificar</span>;
+  }
+  return null;  // 'numero' es el caso normal, no merece ruido visual
 }
 
 // ── Tab Reclamos ──────────────────────────────────────────────────────────────
@@ -1202,7 +1224,22 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div className="glass" style={{ width: "100%", maxWidth: 460, borderRadius: 16, padding: 24, maxHeight: "90vh", overflowY: "auto" }}>
         <h3 style={{ marginBottom: 4 }}>{comercio.nombre}</h3>
-        <p style={{ color: "var(--txt-3)", fontSize: 13, marginBottom: 18 }}>Confianza y números autorizados</p>
+        <p style={{ color: "var(--txt-3)", fontSize: 13, marginBottom: 18 }}>Código, confianza y números autorizados</p>
+
+        {/* Código del local: identificador estable de cara al dueño. El celular
+            puede cambiar; esto no. Con él publica por WhatsApp desde cualquier
+            número, sin cuenta y sin haber pagado. */}
+        {comercio.codigo && (
+          <div style={{ padding: 12, borderRadius: 10, background: "var(--panel)", border: "1px solid var(--border)", marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: "var(--txt-3)", marginBottom: 4 }}>Código del local</div>
+            <div style={{ fontFamily: "monospace", fontSize: 22, fontWeight: 700, letterSpacing: 2, color: "var(--neon)" }}>
+              URUKU-{comercio.codigo}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>
+              Escribiéndolo en un WhatsApp, sus ofertas caen en este comercio.
+            </div>
+          </div>
+        )}
 
         {/* Confiable */}
         <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0", borderBottom: "1px solid var(--border)", cursor: "pointer" }}>
