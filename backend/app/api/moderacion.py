@@ -8,8 +8,10 @@ from pydantic import BaseModel
 
 from app.core.auth import require_admin, require_moderador
 from app.core.config import settings
+from starlette.concurrency import run_in_threadpool
 from app.core.telefono import validar_whatsapp
 from app.services.imagenes import subir_foto_galeria
+from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.rubros import SLUG_DESCARTE, aplicar_rubros, resolver_rubros
 from app.db.repository import Repo, get_repo
 from app.models.schemas import ModerarBody
@@ -744,3 +746,58 @@ def admin_borrar_foto(
         raise HTTPException(status_code=404, detail="Foto no encontrada")
     logger.info("admin.foto_del", comercio=comercio_id, by=mod["email"])
     return {"ok": True}
+
+
+# ---- Clasificar un comercio desde sus fotos ----
+@router.post("/admin/comercio/{comercio_id}/analizar")
+async def analizar_comercio(
+    comercio_id: str,
+    aplicar: bool = Query(False, description="false = sólo proponer; true = escribir"),
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Mira las fotos del local y propone productos, descripción, subcategoría y rubros.
+
+    Por defecto NO escribe: devuelve la propuesta para poder revisarla. Aun con
+    `aplicar=true`, `prod_obs_human` no se toca nunca — es el dato de la persona.
+    """
+    comercio = _comercio_o_404(repo, comercio_id)
+
+    urls = [f["url"] for f in repo.list_fotos_comercio(comercio_id) if f.get("url")]
+    if comercio.get("portada_url"):
+        urls.insert(0, comercio["portada_url"])   # la portada primero: suele ser la vidriera
+    if not urls:
+        raise HTTPException(status_code=400, detail="El comercio no tiene fotos para analizar")
+
+    try:
+        propuesta = await run_in_threadpool(analizar_fotos, urls, repo.list_rubros())
+    except VisionNoConfigurada as exc:
+        raise HTTPException(status_code=503, detail=f"{exc}. Cargá GEMINI_API_KEY en backend/.env") from exc
+
+    resultado = {
+        "comercio": {"slug": comercio.get("slug"), "nombre": comercio.get("nombre"),
+                     "prod_obs_human": comercio.get("prod_obs_human")},
+        "fotos_disponibles": len(urls),
+        "propuesta": propuesta,
+        "aplicado": False,
+    }
+
+    if aplicar and propuesta.get("confianza", 0) > 0:
+        from datetime import datetime, timezone
+        patch = {
+            "prod_det_ia": propuesta["productos"] or None,
+            "subcategoria": propuesta["subcategoria"] or None,
+            "ia_analizado_at": datetime.now(timezone.utc).isoformat(),
+        }
+        # La descripción sólo se completa si NO hay una escrita: si una persona
+        # ya la redactó, la IA no la reemplaza.
+        if not (comercio.get("descripcion") or "").strip() and propuesta["descripcion"]:
+            patch["descripcion"] = propuesta["descripcion"]
+        actualizado = repo.update_comercio(comercio_id, patch, None)
+        if propuesta["rubro_slugs"]:
+            aplicar_rubros(repo, actualizado, propuesta["rubro_slugs"])
+        resultado["aplicado"] = True
+        logger.info("vision.aplicado", comercio=comercio_id, confianza=propuesta.get("confianza"),
+                    rubros=propuesta.get("rubro_slugs"), by=admin["email"])
+
+    return resultado

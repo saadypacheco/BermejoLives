@@ -496,6 +496,9 @@ class FakeRepo:
             for c in items[:limit]
         ]
 
+    def list_rubros(self):
+        return [{"slug": s, "nombre": s.title()} for s in self.rubros]
+
     def sugerir_rubros_por_texto(self, texto):
         if not texto or not texto.strip():
             return []
