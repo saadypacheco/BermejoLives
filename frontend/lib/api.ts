@@ -97,6 +97,8 @@ export type ComercioPorVerificar = {
   telefono: string | null;
   modalidad: string;
   descripcion: string | null;
+  productos: string | null;
+  codigo: string | null;
   direccion: string | null;
   lat: number | null;
   lng: number | null;

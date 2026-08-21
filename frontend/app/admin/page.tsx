@@ -863,7 +863,11 @@ function incompletoDe(c: ComercioPorVerificar): string[] {
   if (!nombre || nombre.toLowerCase() === "comercio" || (!!rubroNombre && nombre.toLowerCase() === rubroNombre.toLowerCase())) r.push("sin nombre");
   if (!c.portada_url) r.push("sin foto");
   if (!c.whatsapp && !c.telefono) r.push("sin contacto");
-  if (!c.rubros?.slug) r.push("sin rubro");
+  // "otros" NO es un rubro: es el descarte. Un comercio ahí no aparece en
+  // ninguna búsqueda por categoría, así que cuenta como sin clasificar. Antes
+  // esto no se detectaba y los 92 comercios en "otros" figuraban como completos.
+  if (!c.rubros?.slug || c.rubros.slug === "otros") r.push("sin clasificar");
+  if (!c.productos?.trim()) r.push("sin productos");
   return r;
 }
 
@@ -896,7 +900,10 @@ function TabComercios({
   // 2) buscador multi-campo (A): nombre + qué vende + dirección + contacto + rubro + ciudad
   const nq = normTxt(q.trim());
   const buscadas = !nq ? porEstado : porEstado.filter((c) =>
-    [c.nombre, c.descripcion, c.direccion, c.whatsapp, c.telefono, c.rubros?.nombre, c.ciudades?.nombre]
+    // El código se busca con o sin el prefijo: en el papel dice "URUKU-K7M2" pero
+    // en la base sólo está "K7M2".
+    [c.nombre, c.descripcion, c.productos, c.direccion, c.whatsapp, c.telefono,
+     c.rubros?.nombre, c.ciudades?.nombre, c.codigo, c.codigo ? `uruku-${c.codigo}` : ""]
       .map((x) => normTxt(x ?? "")).join(" ").includes(nq));
 
   // 3) orden (G)
@@ -930,7 +937,7 @@ function TabComercios({
       <div style={{ display: "flex", gap: 8, padding: "12px 16px 0", flexWrap: "wrap", alignItems: "center" }}>
         <input className="adm-input" style={{ flex: 1, minWidth: 200 }} value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por nombre, qué vende, dirección, teléfono…" />
+          placeholder="Buscar por nombre, código (URUKU-K7M2), productos, dirección, teléfono…" />
         <select className="adm-input" style={{ width: "auto" }} value={orden} onChange={(e) => setOrden(e.target.value as OrdenComercio)}>
           <option value="recientes">Más recientes</option>
           <option value="alfabetico">A → Z</option>
@@ -1007,13 +1014,21 @@ function TabComercios({
               ))}
             </div>
             <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 3 }}>
+              {c.codigo && <span style={{ fontFamily: "monospace", color: "var(--neon)" }}>URUKU-{c.codigo} · </span>}
               {c.rubros?.nombre ?? "Sin rubro"}
               {c.lugares?.nombre ? ` · 🏬 ${c.lugares.nombre}${c.puesto ? ` #${c.puesto}` : ""}` : ""}
               {c.ciudades?.nombre ? ` · ${c.ciudades.nombre}` : ""}
               {c.modalidad ? ` · ${MODALIDAD_LABEL[c.modalidad] ?? c.modalidad}` : ""}
             </div>
+            {/* Productos primero: es el texto del que sale la clasificación, así
+                que es lo que hay que leer para decidir si el rubro está bien. */}
+            {c.productos && (
+              <div style={{ fontSize: 12, color: "var(--txt)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 460 }}>
+                🛍️ {c.productos}
+              </div>
+            )}
             {c.descripcion && (
-              <div style={{ fontSize: 12, color: "var(--txt-2)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 400 }}>
+              <div style={{ fontSize: 12, color: "var(--txt-2)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 460 }}>
                 {c.descripcion}
               </div>
             )}
