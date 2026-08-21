@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
   listPendientes, moderar, revisarConIA, type VeredictoIA, login, getToken, type PendingPub,
@@ -995,7 +996,10 @@ function TabComercios({
       {visibles.map((c) => {
         const motivos = incompletoDe(c);
         return (
-        <div key={c.id} style={{ display: "flex", gap: 12, padding: "14px 16px", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
+        // flexWrap + minWidth en la info: en un celular los 5 botones de acción
+        // no cedían espacio (flex-shrink: 0) y aplastaban el texto hasta dejar
+        // una palabra por renglón. Ahora las acciones bajan a otra línea.
+        <div key={c.id} style={{ display: "flex", gap: 12, padding: "14px 16px", borderBottom: "1px solid var(--border)", alignItems: "flex-start", flexWrap: "wrap" }}>
           {/* Foto */}
           <img
             src={c.portada_thumb_url ?? c.portada_url ?? "https://picsum.photos/seed/" + c.id + "/80/80"}
@@ -1004,7 +1008,7 @@ function TabComercios({
           />
 
           {/* Info */}
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ flex: "1 1 200px", minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span style={{ fontWeight: 600, fontSize: 15 }}>{c.nombre || "Sin nombre"}</span>
               {c.verificado
@@ -1042,7 +1046,7 @@ function TabComercios({
           </div>
 
           {/* Acciones */}
-          <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center", marginLeft: "auto" }}>
             {c.whatsapp && (
               <a
                 href={`https://wa.me/${c.whatsapp}`}
@@ -1159,98 +1163,115 @@ function ModalEditar({
   }
 
   return (
-    <div onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div className="glass" onClick={(e) => e.stopPropagation()}
-        style={{ width: "100%", maxWidth: 480, borderRadius: 16, padding: 24, maxHeight: "90vh", overflowY: "auto" }}>
-        {/* Encabezado pegajoso: la salida tiene que estar siempre a la vista,
-            no al final de un formulario de 42 chips. */}
-        <div style={{ position: "sticky", top: -24, zIndex: 1, background: "var(--panel, #12161d)",
-                      margin: "-24px -24px 14px", padding: "18px 24px 12px",
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      borderBottom: "1px solid var(--border)" }}>
-          <h3 style={{ margin: 0 }}>Editar negocio</h3>
-          <button type="button" onClick={onClose} aria-label="Cerrar"
-            style={{ background: "none", border: "none", color: "var(--txt-2)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>
-            ✕
-          </button>
-        </div>
-        {/* Primero de todo: es la acción principal del trabajo de clasificación.
-            Antes estaba después de las fotos y quedaba fuera de la vista. */}
-        <AnalisisComercio comercioId={comercio.id} onAplicado={onDone} />
-
-        <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
-          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Nombre
-            <input className="adm-input" style={{ marginTop: 4 }} value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre del negocio" />
-          </label>
-          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>WhatsApp (opcional)
-            <input className="adm-input" style={{ marginTop: 4 }} value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="591XXXXXXXX" />
-          </label>
-          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Teléfono (opcional)
-            <input className="adm-input" style={{ marginTop: 4 }} value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Fijo o celular para llamar" />
-          </label>
-          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>👤 Productos observados (dato humano — la IA no lo toca)
-            <textarea className="adm-input" style={{ marginTop: 4, minHeight: 56, resize: "vertical" }} value={prodObsHuman}
-              onChange={(e) => setProdObsHuman(e.target.value)}
-              placeholder="zapatillas, championes, chinelas, mochilas" />
-          </label>
-          {comercio.prod_det_ia && (
-            <div style={{ fontSize: 12, color: "var(--txt-3)" }}>🤖 Detectado por IA
-              <div style={{ marginTop: 4, padding: 8, border: "1px solid var(--border)", borderRadius: 8, color: "var(--txt-2)" }}>
-                {comercio.prod_det_ia}
-                {comercio.subcategoria && <div style={{ opacity: .8, marginTop: 4 }}>Subcategoría: {comercio.subcategoria}</div>}
-              </div>
-            </div>
-          )}
-          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Descripción / reseña
-            <textarea className="adm-input" style={{ marginTop: 4, minHeight: 70, resize: "vertical" }} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Qué vende o qué ofrece…" />
-          </label>
-          <FotosComercio comercioId={comercio.id} portada={comercio.portada_url ?? null} />
-
-          <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Categorías (tocá para elegir varias)
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6,
-                          maxHeight: 170, overflowY: "auto", padding: 6,
-                          border: "1px solid var(--border)", borderRadius: 10 }}>
-              {rubros.map((r) => {
-                const on = rubroSlugs.includes(r.slug);
-                return (
-                  <button type="button" key={r.slug} className={`mchip ${on ? "active" : ""}`} style={{ cursor: "pointer" }}
-                    onClick={() => setRubroSlugs((prev) => on ? prev.filter((s) => s !== r.slug) : [...prev, r.slug])}>
-                    {r.nombre}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Modalidad
-            <select className="adm-input" style={{ marginTop: 4 }} value={modalidad} onChange={(e) => setModalidad(e.target.value)}>
-              <option value="local">Local</option>
-              <option value="mayorista">Mayorista</option>
-              <option value="delivery">Delivery</option>
-              <option value="online">Online</option>
-              <option value="mixto">Mixto</option>
-            </select>
-          </label>
-          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Dirección
-            <input className="adm-input" style={{ marginTop: 4 }} value={direccion} onChange={(e) => setDireccion(e.target.value)} placeholder="Calle, número, referencia" />
-          </label>
-          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Horario
-            <input className="adm-input" style={{ marginTop: 4 }} value={horario} onChange={(e) => setHorario(e.target.value)} placeholder="Lun-Sáb 9-20 · Dom 10-14" />
-          </label>
-          {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
-          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-            <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={onClose}>Cancelar</button>
-            <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={saving}>
-              {saving ? "Guardando…" : "Guardar cambios"}
+    <Portal>
+      <div onClick={onClose}
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div className="glass" onClick={(e) => e.stopPropagation()}
+          style={{ width: "100%", maxWidth: 480, borderRadius: 16, padding: 24, maxHeight: "90vh", overflowY: "auto" }}>
+          {/* Encabezado pegajoso: la salida tiene que estar siempre a la vista,
+              no al final de un formulario de 42 chips. */}
+          <div style={{ position: "sticky", top: -24, zIndex: 1, background: "var(--panel, #12161d)",
+                        margin: "-24px -24px 14px", padding: "18px 24px 12px",
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        borderBottom: "1px solid var(--border)" }}>
+            <h3 style={{ margin: 0 }}>Editar negocio</h3>
+            <button type="button" onClick={onClose} aria-label="Cerrar"
+              style={{ background: "none", border: "none", color: "var(--txt-2)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>
+              ✕
             </button>
           </div>
-        </form>
+          {/* Primero de todo: es la acción principal del trabajo de clasificación.
+              Antes estaba después de las fotos y quedaba fuera de la vista. */}
+          <AnalisisComercio comercioId={comercio.id} onAplicado={onDone} />
+
+          <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
+            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Nombre
+              <input className="adm-input" style={{ marginTop: 4 }} value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre del negocio" />
+            </label>
+            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>WhatsApp (opcional)
+              <input className="adm-input" style={{ marginTop: 4 }} value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="591XXXXXXXX" />
+            </label>
+            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Teléfono (opcional)
+              <input className="adm-input" style={{ marginTop: 4 }} value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Fijo o celular para llamar" />
+            </label>
+            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>👤 Productos observados (dato humano — la IA no lo toca)
+              <textarea className="adm-input" style={{ marginTop: 4, minHeight: 56, resize: "vertical" }} value={prodObsHuman}
+                onChange={(e) => setProdObsHuman(e.target.value)}
+                placeholder="zapatillas, championes, chinelas, mochilas" />
+            </label>
+            {comercio.prod_det_ia && (
+              <div style={{ fontSize: 12, color: "var(--txt-3)" }}>🤖 Detectado por IA
+                <div style={{ marginTop: 4, padding: 8, border: "1px solid var(--border)", borderRadius: 8, color: "var(--txt-2)" }}>
+                  {comercio.prod_det_ia}
+                  {comercio.subcategoria && <div style={{ opacity: .8, marginTop: 4 }}>Subcategoría: {comercio.subcategoria}</div>}
+                </div>
+              </div>
+            )}
+            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Descripción / reseña
+              <textarea className="adm-input" style={{ marginTop: 4, minHeight: 70, resize: "vertical" }} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Qué vende o qué ofrece…" />
+            </label>
+            <FotosComercio comercioId={comercio.id} portada={comercio.portada_url ?? null} />
+
+            <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Categorías (tocá para elegir varias)
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6,
+                            maxHeight: 170, overflowY: "auto", padding: 6,
+                            border: "1px solid var(--border)", borderRadius: 10 }}>
+                {rubros.map((r) => {
+                  const on = rubroSlugs.includes(r.slug);
+                  return (
+                    <button type="button" key={r.slug} className={`mchip ${on ? "active" : ""}`} style={{ cursor: "pointer" }}
+                      onClick={() => setRubroSlugs((prev) => on ? prev.filter((s) => s !== r.slug) : [...prev, r.slug])}>
+                      {r.nombre}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Modalidad
+              <select className="adm-input" style={{ marginTop: 4 }} value={modalidad} onChange={(e) => setModalidad(e.target.value)}>
+                <option value="local">Local</option>
+                <option value="mayorista">Mayorista</option>
+                <option value="delivery">Delivery</option>
+                <option value="online">Online</option>
+                <option value="mixto">Mixto</option>
+              </select>
+            </label>
+            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Dirección
+              <input className="adm-input" style={{ marginTop: 4 }} value={direccion} onChange={(e) => setDireccion(e.target.value)} placeholder="Calle, número, referencia" />
+            </label>
+            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Horario
+              <input className="adm-input" style={{ marginTop: 4 }} value={horario} onChange={(e) => setHorario(e.target.value)} placeholder="Lun-Sáb 9-20 · Dom 10-14" />
+            </label>
+            {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
+            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+              <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={saving}>
+                {saving ? "Guardando…" : "Guardar cambios"}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </Portal>
   );
 }
 
 // ── Modal Pago ────────────────────────────────────────────────────────────────
+
+/** Saca el contenido al <body>.
+ *
+ * Los modales viven dentro de `.panel-card.glass`, y `.glass` tiene
+ * backdrop-filter. Un elemento con backdrop-filter se vuelve el marco de
+ * referencia de todo `position: fixed` que tenga adentro, así que el modal no se
+ * centraba en la pantalla sino sobre la tarjeta de la lista: había que scrollear
+ * hasta el fondo para encontrarlo. En el celular quedaba directamente perdido.
+ */
+function Portal({ children }: { children: React.ReactNode }) {
+  const [montado, setMontado] = useState(false);
+  useEffect(() => setMontado(true), []);
+  if (!montado) return null;
+  return createPortal(children, document.body);
+}
 
 /** Clasificación por fotos: propone y, si el admin acepta, aplica.
  *
@@ -1394,45 +1415,47 @@ function FotosComercio({ comercioId, portada }: { comercioId: string; portada: s
   ];
 
   return (
-    <div style={{ fontSize: 12, color: "var(--txt-3)" }}>
-      Fotos del local (tocá para ampliar)
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-        {todas.length === 0 && <span style={{ opacity: 0.7 }}>Sin fotos todavía.</span>}
-        {todas.map((f) => (
-          <div key={f.id} style={{ position: "relative" }}>
-            <img src={f.thumb_url ?? f.url} alt="" onClick={() => setAmpliada(f.url)}
-              style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, cursor: "zoom-in" }} />
-            {f.id !== "__portada" && (
-              <button type="button" onClick={() => borrar(f.id)} aria-label="Borrar foto"
-                style={{ position: "absolute", top: -6, right: -6, background: "var(--pink)", color: "#fff",
-                         border: "none", borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 12 }}>
-                ×
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <input ref={input} type="file" accept="image/*" style={{ display: "none" }}
-        onChange={(e) => subir(e.target.files?.[0])} />
-      <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 8 }}
-        disabled={subiendo} onClick={() => input.current?.click()}>
-        {subiendo ? "Subiendo…" : "+ Agregar foto"}
-      </button>
-      {err && <div style={{ color: "var(--pink)", marginTop: 6 }}>{err}</div>}
-
-      {/* Visor: la foto grande, sobre todo lo demás */}
-      {ampliada && (
-        <div onClick={() => setAmpliada(null)}
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.92)", zIndex: 1200,
-                   display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out" }}>
-          <img src={ampliada} alt="" style={{ maxWidth: "96vw", maxHeight: "92vh", objectFit: "contain" }} />
-          <button type="button" onClick={() => setAmpliada(null)} aria-label="Cerrar"
-            style={{ position: "fixed", top: 16, right: 20, background: "none", border: "none",
-                     color: "#fff", fontSize: 30, cursor: "pointer" }}>✕</button>
+    <Portal>
+      <div style={{ fontSize: 12, color: "var(--txt-3)" }}>
+        Fotos del local (tocá para ampliar)
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+          {todas.length === 0 && <span style={{ opacity: 0.7 }}>Sin fotos todavía.</span>}
+          {todas.map((f) => (
+            <div key={f.id} style={{ position: "relative" }}>
+              <img src={f.thumb_url ?? f.url} alt="" onClick={() => setAmpliada(f.url)}
+                style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, cursor: "zoom-in" }} />
+              {f.id !== "__portada" && (
+                <button type="button" onClick={() => borrar(f.id)} aria-label="Borrar foto"
+                  style={{ position: "absolute", top: -6, right: -6, background: "var(--pink)", color: "#fff",
+                           border: "none", borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 12 }}>
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
         </div>
-      )}
-    </div>
+
+        <input ref={input} type="file" accept="image/*" style={{ display: "none" }}
+          onChange={(e) => subir(e.target.files?.[0])} />
+        <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 8 }}
+          disabled={subiendo} onClick={() => input.current?.click()}>
+          {subiendo ? "Subiendo…" : "+ Agregar foto"}
+        </button>
+        {err && <div style={{ color: "var(--pink)", marginTop: 6 }}>{err}</div>}
+
+        {/* Visor: la foto grande, sobre todo lo demás */}
+        {ampliada && (
+          <div onClick={() => setAmpliada(null)}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.92)", zIndex: 1200,
+                     display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out" }}>
+            <img src={ampliada} alt="" style={{ maxWidth: "96vw", maxHeight: "92vh", objectFit: "contain" }} />
+            <button type="button" onClick={() => setAmpliada(null)} aria-label="Cerrar"
+              style={{ position: "fixed", top: 16, right: 20, background: "none", border: "none",
+                       color: "#fff", fontSize: 30, cursor: "pointer" }}>✕</button>
+          </div>
+        )}
+      </div>
+    </Portal>
   );
 }
 
@@ -1471,72 +1494,74 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div className="glass" style={{ width: "100%", maxWidth: 460, borderRadius: 16, padding: 24, maxHeight: "90vh", overflowY: "auto" }}>
-        <h3 style={{ marginBottom: 4 }}>{comercio.nombre}</h3>
-        <p style={{ color: "var(--txt-3)", fontSize: 13, marginBottom: 18 }}>Código, confianza y números autorizados</p>
+    <Portal>
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div className="glass" style={{ width: "100%", maxWidth: 460, borderRadius: 16, padding: 24, maxHeight: "90vh", overflowY: "auto" }}>
+          <h3 style={{ marginBottom: 4 }}>{comercio.nombre}</h3>
+          <p style={{ color: "var(--txt-3)", fontSize: 13, marginBottom: 18 }}>Código, confianza y números autorizados</p>
 
-        {/* Código del local: identificador estable de cara al dueño. El celular
-            puede cambiar; esto no. Con él publica por WhatsApp desde cualquier
-            número, sin cuenta y sin haber pagado. */}
-        {comercio.codigo && (
-          <div style={{ padding: 12, borderRadius: 10, background: "var(--panel)", border: "1px solid var(--border)", marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: "var(--txt-3)", marginBottom: 4 }}>Código del local</div>
-            <div style={{ fontFamily: "monospace", fontSize: 22, fontWeight: 700, letterSpacing: 2, color: "var(--neon)" }}>
-              URUKU-{comercio.codigo}
-            </div>
-            <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>
-              Escribiéndolo en un WhatsApp, sus ofertas caen en este comercio.
-            </div>
-          </div>
-        )}
-
-        {/* Confiable */}
-        <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0", borderBottom: "1px solid var(--border)", cursor: "pointer" }}>
-          <input type="checkbox" checked={confiable} onChange={toggleConfiable} />
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>Comercio confiable</div>
-            <div style={{ fontSize: 12, color: "var(--txt-3)" }}>
-              Lo que publique sale directo, sin pasar por moderación.
-            </div>
-          </div>
-        </label>
-
-        {/* Números */}
-        <div style={{ marginTop: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Números que pueden publicar</div>
-          <div style={{ fontSize: 12, color: "var(--txt-3)", marginBottom: 10 }}>
-            El número del local y el del empleado que manda las fotos pueden ser distintos.
-            Cualquiera de estos identifica al comercio cuando escribe por WhatsApp.
-          </div>
-
-          {cargando && <div style={{ fontSize: 13, color: "var(--txt-3)" }}>Cargando…</div>}
-          {!cargando && numeros.length === 0 && (
-            <div style={{ fontSize: 13, color: "var(--amber)" }}>
-              Ninguno. Si escribe por WhatsApp se va a crear un comercio nuevo duplicado.
+          {/* Código del local: identificador estable de cara al dueño. El celular
+              puede cambiar; esto no. Con él publica por WhatsApp desde cualquier
+              número, sin cuenta y sin haber pagado. */}
+          {comercio.codigo && (
+            <div style={{ padding: 12, borderRadius: 10, background: "var(--panel)", border: "1px solid var(--border)", marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: "var(--txt-3)", marginBottom: 4 }}>Código del local</div>
+              <div style={{ fontFamily: "monospace", fontSize: 22, fontWeight: 700, letterSpacing: 2, color: "var(--neon)" }}>
+                URUKU-{comercio.codigo}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>
+                Escribiéndolo en un WhatsApp, sus ofertas caen en este comercio.
+              </div>
             </div>
           )}
-          {numeros.map((n) => (
-            <div key={n.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
-              <span>+{n.numero}</span>
-              <span style={{ color: "var(--txt-3)" }}>{n.etiqueta || "—"}</span>
+
+          {/* Confiable */}
+          <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0", borderBottom: "1px solid var(--border)", cursor: "pointer" }}>
+            <input type="checkbox" checked={confiable} onChange={toggleConfiable} />
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Comercio confiable</div>
+              <div style={{ fontSize: 12, color: "var(--txt-3)" }}>
+                Lo que publique sale directo, sin pasar por moderación.
+              </div>
             </div>
-          ))}
+          </label>
 
-          <form onSubmit={agregar} style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-            <input className="adm-input" value={nuevo} onChange={(e) => setNuevo(e.target.value)}
-              placeholder="Número (ej: 70123456)" inputMode="tel" />
-            <input className="adm-input" value={etiqueta} onChange={(e) => setEtiqueta(e.target.value)}
-              placeholder="De quién es (ej: vendedora del local)" />
-            <button type="submit" className="btn btn-primary btn-sm" disabled={!nuevo.trim()}>Autorizar número</button>
-          </form>
+          {/* Números */}
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Números que pueden publicar</div>
+            <div style={{ fontSize: 12, color: "var(--txt-3)", marginBottom: 10 }}>
+              El número del local y el del empleado que manda las fotos pueden ser distintos.
+              Cualquiera de estos identifica al comercio cuando escribe por WhatsApp.
+            </div>
+
+            {cargando && <div style={{ fontSize: 13, color: "var(--txt-3)" }}>Cargando…</div>}
+            {!cargando && numeros.length === 0 && (
+              <div style={{ fontSize: 13, color: "var(--amber)" }}>
+                Ninguno. Si escribe por WhatsApp se va a crear un comercio nuevo duplicado.
+              </div>
+            )}
+            {numeros.map((n) => (
+              <div key={n.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
+                <span>+{n.numero}</span>
+                <span style={{ color: "var(--txt-3)" }}>{n.etiqueta || "—"}</span>
+              </div>
+            ))}
+
+            <form onSubmit={agregar} style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+              <input className="adm-input" value={nuevo} onChange={(e) => setNuevo(e.target.value)}
+                placeholder="Número (ej: 70123456)" inputMode="tel" />
+              <input className="adm-input" value={etiqueta} onChange={(e) => setEtiqueta(e.target.value)}
+                placeholder="De quién es (ej: vendedora del local)" />
+              <button type="submit" className="btn btn-primary btn-sm" disabled={!nuevo.trim()}>Autorizar número</button>
+            </form>
+          </div>
+
+          {err && <div style={{ color: "var(--pink)", fontSize: 13, marginTop: 10 }}>{err}</div>}
+
+          <button className="btn btn-ghost" style={{ width: "100%", marginTop: 18 }} onClick={onClose}>Cerrar</button>
         </div>
-
-        {err && <div style={{ color: "var(--pink)", fontSize: 13, marginTop: 10 }}>{err}</div>}
-
-        <button className="btn btn-ghost" style={{ width: "100%", marginTop: 18 }} onClick={onClose}>Cerrar</button>
       </div>
-    </div>
+    </Portal>
   );
 }
 
@@ -1573,73 +1598,77 @@ function ModalPago({ comercio, onClose, onDone }: { comercio: ComercioSuscripcio
 
   if (resultado) {
     return (
-      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-        <div className="glass" style={{ width: "100%", maxWidth: 420, borderRadius: 16, padding: 24 }}>
-          <h3 style={{ marginBottom: 4 }}>Pago registrado ✓</h3>
-          <p style={{ color: "var(--txt-3)", fontSize: 13, marginBottom: 18 }}>{comercio.nombre}</p>
+      <Portal>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div className="glass" style={{ width: "100%", maxWidth: 420, borderRadius: 16, padding: 24 }}>
+            <h3 style={{ marginBottom: 4 }}>Pago registrado ✓</h3>
+            <p style={{ color: "var(--txt-3)", fontSize: 13, marginBottom: 18 }}>{comercio.nombre}</p>
 
-          <div style={{ fontSize: 14, marginBottom: 12 }}>
-            {resultado.login
-              ? <span style={{ color: "var(--neon)" }}>✓ El comercio ya puede entrar al panel</span>
-              : <span style={{ color: "var(--amber)" }}>⚠️ No se pudo crear la cuenta del panel</span>}
-          </div>
-
-          {resultado.advertencias.length > 0 && (
-            <div style={{ border: "1px solid var(--amber)", borderRadius: 10, padding: 12, marginBottom: 14 }}>
-              <div style={{ color: "var(--amber)", fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
-                Revisá esto con el dueño ahora
-              </div>
-              {resultado.advertencias.map((a, i) => (
-                <div key={i} style={{ fontSize: 13, color: "var(--txt-2)" }}>· {a}</div>
-              ))}
-              <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 8 }}>
-                Sin un WhatsApp válido no le llegan las reservas de la tienda.
-              </div>
+            <div style={{ fontSize: 14, marginBottom: 12 }}>
+              {resultado.login
+                ? <span style={{ color: "var(--neon)" }}>✓ El comercio ya puede entrar al panel</span>
+                : <span style={{ color: "var(--amber)" }}>⚠️ No se pudo crear la cuenta del panel</span>}
             </div>
-          )}
 
-          <button className="btn btn-primary" style={{ width: "100%" }} onClick={onDone}>Listo</button>
+            {resultado.advertencias.length > 0 && (
+              <div style={{ border: "1px solid var(--amber)", borderRadius: 10, padding: 12, marginBottom: 14 }}>
+                <div style={{ color: "var(--amber)", fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
+                  Revisá esto con el dueño ahora
+                </div>
+                {resultado.advertencias.map((a, i) => (
+                  <div key={i} style={{ fontSize: 13, color: "var(--txt-2)" }}>· {a}</div>
+                ))}
+                <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 8 }}>
+                  Sin un WhatsApp válido no le llegan las reservas de la tienda.
+                </div>
+              </div>
+            )}
+
+            <button className="btn btn-primary" style={{ width: "100%" }} onClick={onDone}>Listo</button>
+          </div>
         </div>
-      </div>
+      </Portal>
     );
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div className="glass" style={{ width: "100%", maxWidth: 420, borderRadius: 16, padding: 24 }}>
-        <h3 style={{ marginBottom: 4 }}>Registrar pago</h3>
-        <p style={{ color: "var(--txt-3)", fontSize: 13, marginBottom: 18 }}>{comercio.nombre}</p>
-        <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ display: "flex", gap: 10 }}>
-            <input className="adm-input" style={{ flex: 2 }} type="number" value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="Monto" />
-            <select className="adm-input" style={{ flex: 1 }} value={moneda} onChange={(e) => setMoneda(e.target.value)}>
-              <option value="BOB">BOB</option>
-              <option value="ARS">ARS</option>
-              <option value="USD">USD</option>
+    <Portal>
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div className="glass" style={{ width: "100%", maxWidth: 420, borderRadius: 16, padding: 24 }}>
+          <h3 style={{ marginBottom: 4 }}>Registrar pago</h3>
+          <p style={{ color: "var(--txt-3)", fontSize: 13, marginBottom: 18 }}>{comercio.nombre}</p>
+          <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", gap: 10 }}>
+              <input className="adm-input" style={{ flex: 2 }} type="number" value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="Monto" />
+              <select className="adm-input" style={{ flex: 1 }} value={moneda} onChange={(e) => setMoneda(e.target.value)}>
+                <option value="BOB">BOB</option>
+                <option value="ARS">ARS</option>
+                <option value="USD">USD</option>
+              </select>
+            </div>
+            <select className="adm-input" value={metodo} onChange={(e) => setMetodo(e.target.value)}>
+              <option value="qr-bolivia">QR Bolivia</option>
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
             </select>
-          </div>
-          <select className="adm-input" value={metodo} onChange={(e) => setMetodo(e.target.value)}>
-            <option value="qr-bolivia">QR Bolivia</option>
-            <option value="efectivo">Efectivo</option>
-            <option value="transferencia">Transferencia</option>
-          </select>
-          <select className="adm-input" value={meses} onChange={(e) => setMeses(e.target.value)}>
-            <option value="1">1 mes</option>
-            <option value="3">3 meses</option>
-            <option value="6">6 meses</option>
-            <option value="12">12 meses</option>
-          </select>
-          <input className="adm-input" value={referencia} onChange={(e) => setReferencia(e.target.value)} placeholder="N° comprobante / referencia (opcional)" />
-          <input className="adm-input" value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Notas (opcional)" />
-          {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
-          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-            <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={onClose}>Cancelar</button>
-            <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={saving}>
-              {saving ? "Guardando…" : "Confirmar pago"}
-            </button>
-          </div>
-        </form>
+            <select className="adm-input" value={meses} onChange={(e) => setMeses(e.target.value)}>
+              <option value="1">1 mes</option>
+              <option value="3">3 meses</option>
+              <option value="6">6 meses</option>
+              <option value="12">12 meses</option>
+            </select>
+            <input className="adm-input" value={referencia} onChange={(e) => setReferencia(e.target.value)} placeholder="N° comprobante / referencia (opcional)" />
+            <input className="adm-input" value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Notas (opcional)" />
+            {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
+            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+              <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={saving}>
+                {saving ? "Guardando…" : "Confirmar pago"}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </Portal>
   );
 }
