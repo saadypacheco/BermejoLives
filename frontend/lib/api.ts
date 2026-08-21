@@ -340,6 +340,34 @@ export async function registrarPago(comercioId: string, body: {
   return res.json();
 }
 
+export type PropuestaIA = {
+  productos: string;
+  descripcion: string;
+  subcategoria: string;
+  rubro_slugs: string[];
+  confianza: number;
+  fotos_analizadas: number;
+  error?: string;
+  slugs_descartados?: string[];
+};
+
+export type AnalisisIA = {
+  comercio: { slug: string; nombre: string; prod_obs_human: string | null };
+  fotos_disponibles: number;
+  propuesta: PropuestaIA;
+  aplicado: boolean;
+};
+
+/** aplicar=false devuelve la propuesta sin escribir nada. */
+export async function analizarComercio(comercioId: string, aplicar = false): Promise<AnalisisIA> {
+  const res = await authFetch(`/admin/comercio/${comercioId}/analizar?aplicar=${aplicar}`, { method: "POST" });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail ?? "No se pudo analizar");
+  }
+  return res.json();
+}
+
 export type FotoComercio = { id: string; url: string; thumb_url: string | null };
 
 export async function adminListarFotos(comercioId: string): Promise<FotoComercio[]> {

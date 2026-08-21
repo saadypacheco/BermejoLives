@@ -9,6 +9,7 @@ import {
   listSuscripciones, registrarPago, suspenderComercio, activarComercio,
   setConfiable as setConfiable_, listarNumeros, agregarNumero, type NumeroComercio,
   adminListarFotos, adminSubirFoto, adminBorrarFoto, type FotoComercio,
+  analizarComercio, type AnalisisIA,
   type ComercioSuscripcion, type EstadoSuscripcion,
   listPagosPendientes, confirmarPago, type PagoPendiente,
   enviarMensajeComercio,
@@ -1202,6 +1203,8 @@ function ModalEditar({
           </label>
           <FotosComercio comercioId={comercio.id} portada={comercio.portada_url ?? null} />
 
+          <AnalisisComercio comercioId={comercio.id} onAplicado={onDone} />
+
           <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Categorías (tocá para elegir varias)
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6,
                           maxHeight: 170, overflowY: "auto", padding: 6,
@@ -1246,6 +1249,90 @@ function ModalEditar({
 }
 
 // ── Modal Pago ────────────────────────────────────────────────────────────────
+
+/** Clasificación por fotos: propone y, si el admin acepta, aplica.
+ *
+ * La propuesta se muestra SIEMPRE antes de escribir. El modelo es elocuente
+ * aunque no vea nada —ante una persiana cerrada va a inventar algo plausible—,
+ * así que la confianza va en grande y la decisión es de una persona. */
+function AnalisisComercio({ comercioId, onAplicado }: { comercioId: string; onAplicado: () => void }) {
+  const [res, setRes] = useState<AnalisisIA | null>(null);
+  const [cargando, setCargando] = useState(false);
+  const [aplicando, setAplicando] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function analizar() {
+    setErr(""); setCargando(true); setRes(null);
+    try { setRes(await analizarComercio(comercioId, false)); }
+    catch (e) { setErr(e instanceof Error ? e.message : "No se pudo analizar"); }
+    finally { setCargando(false); }
+  }
+
+  async function aplicar() {
+    setErr(""); setAplicando(true);
+    try {
+      await analizarComercio(comercioId, true);
+      setRes(null);
+      onAplicado();
+    } catch (e) { setErr(e instanceof Error ? e.message : "No se pudo aplicar"); }
+    finally { setAplicando(false); }
+  }
+
+  const p = res?.propuesta;
+  const conf = p?.confianza ?? 0;
+  const colorConf = conf >= 0.7 ? "var(--neon)" : conf >= 0.4 ? "var(--amber)" : "var(--pink)";
+  const etiquetaConf = conf >= 0.7 ? "alta" : conf >= 0.4 ? "media" : "baja";
+
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <span style={{ fontSize: 12, color: "var(--txt-3)" }}>🤖 Clasificar desde las fotos</span>
+        <button type="button" className="btn btn-ghost btn-sm" disabled={cargando} onClick={analizar}>
+          {cargando ? "Mirando las fotos…" : res ? "Analizar de nuevo" : "Analizar"}
+        </button>
+      </div>
+
+      {err && <div style={{ color: "var(--pink)", fontSize: 12.5, marginTop: 8 }}>{err}</div>}
+
+      {p && (
+        <div style={{ marginTop: 10, fontSize: 12.5, lineHeight: 1.5 }}>
+          <div style={{ marginBottom: 8 }}>
+            Confianza <b style={{ color: colorConf }}>{etiquetaConf} ({Math.round(conf * 100)}%)</b>
+            <span style={{ color: "var(--txt-3)" }}> · {p.fotos_analizadas} foto(s) analizada(s)</span>
+          </div>
+
+          {conf < 0.4 && (
+            <div style={{ color: "var(--amber)", marginBottom: 8 }}>
+              El modelo no vio mercadería clara. Conviene mirar la foto antes de aplicar.
+            </div>
+          )}
+
+          <div><b>Productos:</b> {p.productos || <i style={{ color: "var(--txt-3)" }}>nada detectado</i>}</div>
+          <div><b>Subcategoría:</b> {p.subcategoria || <i style={{ color: "var(--txt-3)" }}>—</i>}</div>
+          <div><b>Categorías:</b> {p.rubro_slugs.length ? p.rubro_slugs.join(", ") : <i style={{ color: "var(--txt-3)" }}>ninguna</i>}</div>
+          {p.descripcion && <div style={{ marginTop: 6 }}><b>Descripción:</b> {p.descripcion}</div>}
+
+          <div style={{ color: "var(--txt-3)", marginTop: 8, fontSize: 11.5 }}>
+            Al aplicar se guardan en <b>prod_det_ia</b> y <b>subcategoría</b>.
+            Tus productos observados no se tocan
+            {res?.comercio.prod_obs_human ? ` (siguen siendo: "${res.comercio.prod_obs_human}")` : ""}.
+            La descripción sólo se completa si está vacía.
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <button type="button" className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => setRes(null)}>
+              Descartar
+            </button>
+            <button type="button" className="btn btn-primary btn-sm" style={{ flex: 2 }}
+              disabled={aplicando || conf <= 0} onClick={aplicar}>
+              {aplicando ? "Aplicando…" : "Aplicar"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Fotos del comercio dentro del editor.
  *
