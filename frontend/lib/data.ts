@@ -101,7 +101,7 @@ export type ComercioMapa = {
   lat: number | null; lng: number | null;
   logo_url: string | null; portada_url: string | null; portada_thumb_url: string | null; whatsapp: string | null;
   telefono: string | null; verificado: boolean; destacado: boolean; rating: number;
-  direccion: string | null; descripcion: string | null; productos: string | null; horario: string | null;
+  direccion: string | null; descripcion: string | null; prod_obs_human: string | null; prod_det_ia: string | null; subcategoria: string | null; horario: string | null;
   como_llegar: string | null; rubro_slug: string | null; plan: string | null;
   ficha_activa: boolean;   // muestra "Más información": suscripción al día (paga_hasta vigente, no suspendido)
   // Lugar (mercado/galería) al que pertenece, si está adentro de uno
@@ -130,7 +130,7 @@ export async function getComerciosMapa(
     const [{ data, error }, { data: rubros, error: errorRubros }, { data: lugs }] = await Promise.all([
       supabase
         .from("comercios")
-        .select("id, slug, nombre, lat, lng, logo_url, portada_url, portada_thumb_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, plan, paga_hasta, suspendido, rubro_id, lugar_id, puesto, productos")
+        .select("id, slug, nombre, lat, lng, logo_url, portada_url, portada_thumb_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, plan, paga_hasta, suspendido, rubro_id, lugar_id, puesto, prod_obs_human, prod_det_ia, subcategoria")
         .eq("activo", true)
         .not("lat", "is", null)
         .gte("lat", c0.latMin).lte("lat", c0.latMax)
@@ -152,7 +152,7 @@ export async function getComerciosMapa(
           id: c.id, slug: c.slug, nombre: c.nombre, lat: c.lat, lng: c.lng,
           logo_url: c.logo_url, portada_url: c.portada_url, portada_thumb_url: c.portada_thumb_url ?? null, whatsapp: c.whatsapp, telefono: c.telefono,
           verificado: c.verificado, destacado: c.destacado, rating: c.rating,
-          direccion: c.direccion, descripcion: c.descripcion, productos: c.productos ?? null, horario: c.horario, como_llegar: c.como_llegar,
+          direccion: c.direccion, descripcion: c.descripcion, prod_obs_human: c.prod_obs_human ?? null, prod_det_ia: c.prod_det_ia ?? null, subcategoria: c.subcategoria ?? null, horario: c.horario, como_llegar: c.como_llegar,
           rubro_slug: slugById.get(c.rubro_id) ?? null, plan: c.plan ?? null,
           ficha_activa: !c.suspendido && !!c.paga_hasta && String(c.paga_hasta).slice(0, 10) >= graceISO,
           lugar_id: c.lugar_id ?? null, puesto: c.puesto ?? null,
@@ -169,7 +169,7 @@ export async function getComerciosMapa(
     id: c.id, slug: c.slug, nombre: c.nombre, lat: c.lat, lng: c.lng,
     logo_url: c.logo_url, portada_url: c.portada_url, portada_thumb_url: null, whatsapp: c.whatsapp, telefono: c.telefono,
     verificado: c.verificado, destacado: c.destacado, rating: c.rating,
-    direccion: c.direccion, descripcion: c.descripcion, productos: null, horario: c.horario, como_llegar: c.como_llegar,
+    direccion: c.direccion, descripcion: c.descripcion, prod_obs_human: null, prod_det_ia: null, subcategoria: null, horario: c.horario, como_llegar: c.como_llegar,
     rubro_slug: null, plan: c.plan, ficha_activa: c.plan !== "gratis",
     lugar_id: null, puesto: null, lugar_nombre: null, lugar_lat: null, lugar_lng: null,
     lugar_portada_thumb_url: null, lugar_video_url: null, lugar_poligono: null,

@@ -868,7 +868,7 @@ function incompletoDe(c: ComercioPorVerificar): string[] {
   // ninguna búsqueda por categoría, así que cuenta como sin clasificar. Antes
   // esto no se detectaba y los 92 comercios en "otros" figuraban como completos.
   if (!c.rubros?.slug || c.rubros.slug === "otros") r.push("sin clasificar");
-  if (!c.productos?.trim()) r.push("sin productos");
+  if (!c.prod_obs_human?.trim() && !c.prod_det_ia?.trim()) r.push("sin productos");
   return r;
 }
 
@@ -903,7 +903,7 @@ function TabComercios({
   const buscadas = !nq ? porEstado : porEstado.filter((c) =>
     // El código se busca con o sin el prefijo: en el papel dice "URUKU-K7M2" pero
     // en la base sólo está "K7M2".
-    [c.nombre, c.descripcion, c.productos, c.direccion, c.whatsapp, c.telefono,
+    [c.nombre, c.descripcion, c.prod_obs_human, c.prod_det_ia, c.subcategoria, c.direccion, c.whatsapp, c.telefono,
      c.rubros?.nombre, c.ciudades?.nombre, c.codigo, c.codigo ? `uruku-${c.codigo}` : ""]
       .map((x) => normTxt(x ?? "")).join(" ").includes(nq));
 
@@ -1023,9 +1023,14 @@ function TabComercios({
             </div>
             {/* Productos primero: es el texto del que sale la clasificación, así
                 que es lo que hay que leer para decidir si el rubro está bien. */}
-            {c.productos && (
+            {c.prod_obs_human && (
               <div style={{ fontSize: 12, color: "var(--txt)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 460 }}>
-                🛍️ {c.productos}
+                👤 {c.prod_obs_human}
+              </div>
+            )}
+            {c.prod_det_ia && (
+              <div style={{ fontSize: 12, color: "var(--blue-soft, #7aa2f7)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 460 }}>
+                🤖 {c.prod_det_ia}{c.subcategoria ? ` · ${c.subcategoria}` : ""}
               </div>
             )}
             {c.descripcion && (
@@ -1116,7 +1121,7 @@ function ModalEditar({
   const [horario, setHorario] = useState((comercio as Record<string, unknown>).horario as string ?? "");
   const _rubroActual = (comercio.rubros as { slug: string } | undefined)?.slug;
   const [rubroSlugs, setRubroSlugs] = useState<string[]>(_rubroActual ? [_rubroActual] : []);
-  const [productos, setProductos] = useState(comercio.productos ?? "");
+  const [prodObsHuman, setProdObsHuman] = useState(comercio.prod_obs_human ?? "");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
@@ -1134,7 +1139,7 @@ function ModalEditar({
     setErr("");
     try {
       await editarComercio(comercio.id, {
-        productos: productos || undefined,
+        prod_obs_human: prodObsHuman || undefined,
         nombre: nombre || undefined,
         whatsapp: whatsapp || undefined,
         telefono: telefono || undefined,
@@ -1179,11 +1184,19 @@ function ModalEditar({
           <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Teléfono (opcional)
             <input className="adm-input" style={{ marginTop: 4 }} value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Fijo o celular para llamar" />
           </label>
-          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Productos que vende (define las categorías)
-            <textarea className="adm-input" style={{ marginTop: 4, minHeight: 56, resize: "vertical" }} value={productos}
-              onChange={(e) => setProductos(e.target.value)}
+          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>👤 Productos observados (dato humano — la IA no lo toca)
+            <textarea className="adm-input" style={{ marginTop: 4, minHeight: 56, resize: "vertical" }} value={prodObsHuman}
+              onChange={(e) => setProdObsHuman(e.target.value)}
               placeholder="zapatillas, championes, chinelas, mochilas" />
           </label>
+          {comercio.prod_det_ia && (
+            <div style={{ fontSize: 12, color: "var(--txt-3)" }}>🤖 Detectado por IA
+              <div style={{ marginTop: 4, padding: 8, border: "1px solid var(--border)", borderRadius: 8, color: "var(--txt-2)" }}>
+                {comercio.prod_det_ia}
+                {comercio.subcategoria && <div style={{ opacity: .8, marginTop: 4 }}>Subcategoría: {comercio.subcategoria}</div>}
+              </div>
+            </div>
+          )}
           <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Descripción / reseña
             <textarea className="adm-input" style={{ marginTop: 4, minHeight: 70, resize: "vertical" }} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Qué vende o qué ofrece…" />
           </label>

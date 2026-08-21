@@ -359,7 +359,7 @@ function Login({ onOk }: { onOk: () => void }) {
 }
 
 // ─────────────────────────────────────────────
-const EMPTY = { nombre: "", cel: "", modalidad: "mayorista", direccion: "", descripcion: "", productos: "" };
+const EMPTY = { nombre: "", cel: "", modalidad: "mayorista", direccion: "", descripcion: "", prodObs: "" };
 
 function toggle<T>(arr: T[], val: T): T[] {
   return arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val];
@@ -691,7 +691,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     if (f.nombre.trim()) campos.nombre = f.nombre.trim();
     if (cel) campos.whatsapp = prefijo + cel;
     if (f.descripcion.trim()) campos.descripcion = f.descripcion.trim();
-    if (f.productos.trim()) campos.productos = f.productos.trim();
+    if (f.prodObs.trim()) campos.prod_obs_human = f.prodObs.trim();
     if (f.direccion.trim()) campos.direccion = f.direccion.trim();
     if (lugarId && lugarId !== "__nuevo__") campos.lugar_id = lugarId;
     if (puesto.trim()) campos.puesto = puesto.trim();
@@ -930,16 +930,18 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           </div>
         </div>
 
-        {/* ── Productos: lo que más pesa para que el comprador lo encuentre ── */}
+        {/* ── Productos observados: OPCIONAL. Lo principal son las fotos: de ahí
+               se detectan después los productos, el rubro y la descripción. ── */}
         <div>
-          <label className="campo-lbl">¿Qué productos vende?</label>
-          <textarea className="adm-input" rows={2} value={f.productos}
-            onChange={(e) => set("productos", e.target.value)}
-            onBlur={() => f.productos.trim() && sugerirDesdeDescripcion(`${f.productos} ${f.descripcion}`)}
-            placeholder="Ej: zapatillas, championes, chinelas, mochilas" style={{ resize: "vertical" }} />
+          <label className="campo-lbl">¿Qué productos ves? (opcional)</label>
+          <textarea className="adm-input" rows={2} value={f.prodObs}
+            onChange={(e) => set("prodObs", e.target.value)}
+            onBlur={() => f.prodObs.trim() && sugerirDesdeDescripcion(`${f.prodObs} ${f.descripcion}`)}
+            placeholder="Ej: zapatillas, championes, chinelas" style={{ resize: "vertical" }} />
           <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 4, lineHeight: 1.4 }}>
-            Lista de 4 o 5 productos separados por coma, con la palabra que usa el
-            cliente. Es lo que hace que aparezca en el buscador y define su rubro.
+            Sólo si lo tenés a mano. Lo importante es <b>la foto de la vidriera</b>:
+            de ahí se detectan después los productos y la categoría. Lo que escribas
+            acá queda como dato tuyo y no se sobrescribe.
           </div>
         </div>
 

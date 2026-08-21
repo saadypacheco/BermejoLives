@@ -9,14 +9,14 @@ había forma de notarlo desde el código del frontend.
 # Campos que el panel de Comercios necesita sí o sí: son los que usa el buscador
 # multi-campo y los que muestra en cada fila.
 CAMPOS_QUE_USA_EL_PANEL = [
-    "nombre", "slug", "descripcion", "productos", "codigo",
+    "nombre", "slug", "descripcion", "prod_obs_human", "codigo",
     "direccion", "whatsapp", "telefono", "verificado", "lat", "lng",
 ]
 
 
 def test_listado_admin_trae_los_campos_del_buscador(client, repo, admin_token):
     repo.seed_comercio(slug="comercio-24", nombre="Comercio", codigo="TCHE",
-                       productos="medias, ropa interior", activo=True)
+                       prod_obs_human="medias, ropa interior", activo=True)
 
     r = client.get("/moderacion/comercios?todos=true",
                    headers={"Authorization": f"Bearer {admin_token}"})

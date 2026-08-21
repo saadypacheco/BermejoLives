@@ -34,7 +34,9 @@ def texto_para_rubros(comercio: dict) -> str:
     ellos escribió el agente la palabra que importa."""
     return " ".join(filter(None, (
         comercio.get("nombre"),
-        comercio.get("productos"),
+        comercio.get("prod_obs_human"),
+        comercio.get("prod_det_ia"),
+        comercio.get("subcategoria"),
         comercio.get("descripcion"),
     )))
 

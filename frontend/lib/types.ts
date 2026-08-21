@@ -12,9 +12,11 @@ export type Comercio = {
   slug: string;
   nombre: string;
   descripcion: string | null;
-  /** Lista de lo que vende, en palabras del cliente. Alimenta el buscador y la
-   *  sugerencia de rubros, y es lo que ve el comprador cuando no hay descripción. */
-  productos?: string | null;
+  /** Lo que vio una persona en el local. Dato humano: no lo pisa la IA. */
+  prod_obs_human?: string | null;
+  /** Lo que detectó la IA en las fotos. Reemplazable. */
+  prod_det_ia?: string | null;
+  subcategoria?: string | null;
   logo_url: string | null;
   portada_url: string | null;
   whatsapp: string | null;
