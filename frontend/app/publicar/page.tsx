@@ -816,12 +816,22 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
                         {new Date(rec.creado).toLocaleString("es-BO")}
                         {roto && " · sin GPS: no va a entrar nunca"}
                       </div>
+                      {/* Las coordenadas a la vista: si una falla por "falta la
+                          ubicación" pero acá se ven, el problema está en el envío
+                          y no en el dato. Sin esto hay que adivinar. */}
+                      <div style={{ opacity: 0.65, fontFamily: "monospace", fontSize: 11 }}>
+                        {rec.campos.lat && rec.campos.lng
+                          ? `${Number(rec.campos.lat).toFixed(5)}, ${Number(rec.campos.lng).toFixed(5)}`
+                          : "sin coordenadas"}
+                        {rec.foto ? " · con foto" : " · sin foto"}
+                      </div>
                     </div>
-                    {roto && (
-                      <button type="button" className="link-more" style={{ color: "var(--pink)", flexShrink: 0, padding: 0 }} onClick={() => descartar(rec)}>
-                        Descartar
-                      </button>
-                    )}
+                    {/* Se puede descartar CUALQUIERA, no sólo las rotas: si una
+                        se traba por lo que sea, tiene que haber forma de sacarla
+                        de la cola sin borrar los datos del navegador. */}
+                    <button type="button" className="link-more" style={{ color: "var(--pink)", flexShrink: 0, padding: 0 }} onClick={() => descartar(rec)}>
+                      Descartar
+                    </button>
                   </div>
                 );
               })}
