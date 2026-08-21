@@ -304,7 +304,7 @@ A ojo: home + toggle de tema, `/mapa`, `/buscar`, `/tienda`, **instalar la PWA**
 (debe ser **una sola** y cubrir `/` y `/tienda`), cross-links ficha ↔ producto.
 
 ## Paso 8 · Post-deploy
-- **Publicador**: entrá a `uruku.bo/publicador` y cargá cotización, clima y las
+- **Publicador**: entrá a `uruku.bo/contenido` y cargá cotización, clima y las
   **redes sociales de URUKU** (así aparecen los íconos en la barra social).
 - **Admin**: `uruku.bo/admin` (con `ADMIN_EMAIL`/`ADMIN_PASSWORD`).
 - Confirmá que **QA quedó con las claves viejas** y prod con las nuevas (rotación hecha).

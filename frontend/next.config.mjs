@@ -15,6 +15,12 @@ const nextConfig = {
     NEXT_PUBLIC_BUILD_TIME: buildTime,
     NEXT_PUBLIC_ENV_LABEL: process.env.APP_ENV || "",
   },
+  // /publicador se renombró a /contenido: "publicador" y "publicar" (la app de
+  // campo) se confundían entre sí. La redirección permanente mantiene vivos los
+  // accesos directos y links guardados de quien ya tenía la ruta vieja.
+  async redirects() {
+    return [{ source: "/publicador", destination: "/contenido", permanent: true }];
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "picsum.photos" },

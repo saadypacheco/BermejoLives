@@ -10,19 +10,19 @@
       quedan **grises**. `tienda.*` se flipean cuando Reservalo esté en prod. Verificado: `server: cloudflare`, edge GRU.
 - [x] **Record DNS `waha`** ya existe (gris) → Traefik le saca el cert solo.
 - [ ] **Migrar el comercio** a prod (re-registro en `uruku.bo/autoregistro` + subir sus fotos).
-- [ ] **Cargar contenido** en `uruku.bo/publicador`: cotización, clima y **redes sociales de URUKU**
+- [ ] **Cargar contenido** en `uruku.bo/contenido`: cotización, clima y **redes sociales de URUKU**
       (sin URLs, la barra social no muestra íconos) + número real del **canal de WhatsApp**.
 
 ### 🔎 Diagnóstico "las redes no se ven" (2026-08-15)
-El **código está OK** de punta a punta (UI `/publicador` → `PUT /contenido/redes/{clave}`
+El **código está OK** de punta a punta (UI `/contenido` → `PUT /contenido/redes/{clave}`
 → `repo.update_red` → tabla `redes_sociales` → `getRedes` → `SocialLinks`, que **filtra por
 `url` truthy**). El seed (`0033_reservas_y_redes.sql`) inserta las 5 redes **con `url = NULL`**,
 así que hasta que no se les cargue una URL, no se muestran (es lo esperado). Que la cotización
 sí se vea confirma que el frontend lee la **misma** base. Verificar en el VPS:
 ```sql
-SELECT clave, url FROM redes_sociales ORDER BY orden;   -- si url IS NULL en todas → cargar en /publicador
+SELECT clave, url FROM redes_sociales ORDER BY orden;   -- si url IS NULL en todas → cargar en /contenido
 ```
-Si en `/publicador` guardás la URL y sigue NULL → mirar que el token sea de rol
+Si en `/contenido` guardás la URL y sigue NULL → mirar que el token sea de rol
 `publicador/admin/moderador` y que el PUT no dé 401/403 (Network tab). Cotización "s/d" en el
 hero pero con valores en la barra superior = **caché del navegador** → hard refresh (Ctrl+Shift+R).
 

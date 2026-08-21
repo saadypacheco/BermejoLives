@@ -7,7 +7,7 @@ import {
   listarVideosPromo, subirVideoPromo, borrarVideoPromo, editarRed, type VideoPromoItem,
 } from "@/lib/publicador";
 
-export default function PublicadorPage() {
+export default function ContenidoPage() {
   const [authed, setAuthed] = useState(false);
   const [ready, setReady] = useState(false);
   useEffect(() => { setAuthed(hayPub()); setReady(true); }, []);
@@ -24,7 +24,7 @@ function Login({ onOk }: { onOk: () => void }) {
   }
   return (
     <div className="campo-wrap">
-      <span className="eyebrow"><span className="dot-live" /> Publicador</span>
+      <span className="eyebrow"><span className="dot-live" /> Contenido del sitio</span>
       <h1 style={{ fontSize: 24, margin: "8px 0 16px" }}>Contenido de la home</h1>
       <form onSubmit={submit} className="glass" style={{ padding: 20, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
         <input className="adm-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />

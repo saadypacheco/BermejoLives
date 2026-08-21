@@ -2,7 +2,7 @@
 
 > Calidad de datos > algoritmo. Estas reglas definen QUÉ se carga y CÓMO, para que la
 > clasificación y el buscador (ver [buscador-ia.md](buscador-ia.md)) funcionen bien y barato.
-> Aplica a `/autoregistro` (dueño), `/publicador`, y sobre todo al **agente de campo**
+> Aplica a `/autoregistro` (dueño), `/contenido`, y sobre todo al **agente de campo**
 > (que recorre Bermejo cargando locales — ahí la velocidad importa).
 
 > **DECISIÓN (2026-08-16): sin taxonomías por ahora.** Se descarta la meta-clasificación

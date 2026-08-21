@@ -51,7 +51,7 @@ Registrados hasta **12/08/2027**: `uruku.bo` (principal), `uruku.com.bo`, `urucu
       Fix clave del init: se excluyó `012_agente_bot.sql` (dependía del chat retirado y
       abortaba las migraciones 013+). Ver [deploy-prod-nuevo-vps.md](deploy-prod-nuevo-vps.md) Paso 5.
 - [ ] Migrar el único comercio (re-registro en `uruku.bo/autoregistro`).
-- [ ] Cargar redes de URUKU en `uruku.bo/publicador`.
+- [ ] Cargar redes de URUKU en `uruku.bo/contenido`.
 - [ ] Flip DNS a Proxied + Full (strict); redirect 301 de los 3 dominios secundarios.
 - [ ] Redeploy de Reservalo en **QA** a `encontralo.store/tienda` (consistencia).
 
