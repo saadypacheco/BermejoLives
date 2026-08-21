@@ -21,8 +21,8 @@ from app.core.config import settings
 
 logger = structlog.get_logger()
 
-TIMEOUT_DESCARGA = 20
-TIMEOUT_MODELO = 60
+TIMEOUT_DESCARGA = 8   # interactivo: mejor fallar rápido que colgar el panel
+TIMEOUT_MODELO = 45
 MAX_FOTOS = 3          # más no aporta y multiplica el costo
 MAX_BYTES_FOTO = 4 * 1024 * 1024
 
@@ -31,7 +31,34 @@ class VisionNoConfigurada(RuntimeError):
     """Falta GEMINI_API_KEY: el análisis no puede correr."""
 
 
+def _leer_local(url: str) -> bytes | None:
+    """Las fotos las guarda y las sirve el propio backend, así que casi siempre
+    están en su disco. Leerlas de ahí evita que el contenedor tenga que salir a
+    internet para pedirse un archivo a sí mismo — una vuelta que es lenta cuando
+    anda y se cuelga cuando la red interna no resuelve el dominio público.
+    """
+    from pathlib import Path
+
+    base = settings.fotos_public_base_url.rstrip("/")
+    if not url.startswith(base):
+        return None
+    relativo = url[len(base):].lstrip("/").split("?")[0]
+    # Nunca salir del volumen de fotos, aunque la URL venga con '..'.
+    try:
+        raiz = Path(settings.fotos_dir).resolve()
+        destino = (raiz / relativo).resolve()
+        if not str(destino).startswith(str(raiz)) or not destino.is_file():
+            return None
+        data = destino.read_bytes()
+        return data if len(data) <= MAX_BYTES_FOTO else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _descargar(url: str) -> bytes | None:
+    local = _leer_local(url)
+    if local is not None:
+        return local
     try:
         r = httpx.get(url, timeout=TIMEOUT_DESCARGA, follow_redirects=True)
         r.raise_for_status()
