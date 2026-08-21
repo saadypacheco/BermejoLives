@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   listPendientes, moderar, revisarConIA, type VeredictoIA, login, getToken, type PendingPub,
@@ -8,6 +8,7 @@ import {
   editarComercio, type ComercioPorVerificar,
   listSuscripciones, registrarPago, suspenderComercio, activarComercio,
   setConfiable as setConfiable_, listarNumeros, agregarNumero, type NumeroComercio,
+  adminListarFotos, adminSubirFoto, adminBorrarFoto, type FotoComercio,
   type ComercioSuscripcion, type EstadoSuscripcion,
   listPagosPendientes, confirmarPago, type PagoPendiente,
   enviarMensajeComercio,
@@ -1186,6 +1187,8 @@ function ModalEditar({
           <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Descripción / reseña
             <textarea className="adm-input" style={{ marginTop: 4, minHeight: 70, resize: "vertical" }} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Qué vende o qué ofrece…" />
           </label>
+          <FotosComercio comercioId={comercio.id} portada={comercio.portada_url ?? null} />
+
           <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Categorías (tocá para elegir varias)
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6,
                           maxHeight: 170, overflowY: "auto", padding: 6,
@@ -1230,6 +1233,85 @@ function ModalEditar({
 }
 
 // ── Modal Pago ────────────────────────────────────────────────────────────────
+
+/** Fotos del comercio dentro del editor.
+ *
+ * Existe porque para saber qué vende un local muchas veces hay que MIRAR la
+ * vidriera: el texto que trajo el agente no siempre alcanza para clasificarlo.
+ * Antes la única foto visible era el thumb de 64px de la lista, sin forma de
+ * agrandarla, y no había manera de sumar fotos desde el panel. */
+function FotosComercio({ comercioId, portada }: { comercioId: string; portada: string | null }) {
+  const [fotos, setFotos] = useState<FotoComercio[]>([]);
+  const [ampliada, setAmpliada] = useState<string | null>(null);
+  const [subiendo, setSubiendo] = useState(false);
+  const [err, setErr] = useState("");
+  const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { adminListarFotos(comercioId).then(setFotos).catch(() => {}); }, [comercioId]);
+
+  async function subir(file: File | undefined) {
+    if (!file) return;
+    setErr(""); setSubiendo(true);
+    try {
+      const nueva = await adminSubirFoto(comercioId, file);
+      setFotos((prev) => [...prev, nueva]);
+    } catch (e) { setErr(e instanceof Error ? e.message : "No se pudo subir"); }
+    finally { setSubiendo(false); if (input.current) input.current.value = ""; }
+  }
+
+  async function borrar(id: string) {
+    if (!window.confirm("¿Borrar esta foto?")) return;
+    await adminBorrarFoto(comercioId, id);
+    setFotos((prev) => prev.filter((f) => f.id !== id));
+  }
+
+  const todas = [
+    ...(portada ? [{ id: "__portada", url: portada, thumb_url: portada }] : []),
+    ...fotos,
+  ];
+
+  return (
+    <div style={{ fontSize: 12, color: "var(--txt-3)" }}>
+      Fotos del local (tocá para ampliar)
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+        {todas.length === 0 && <span style={{ opacity: 0.7 }}>Sin fotos todavía.</span>}
+        {todas.map((f) => (
+          <div key={f.id} style={{ position: "relative" }}>
+            <img src={f.thumb_url ?? f.url} alt="" onClick={() => setAmpliada(f.url)}
+              style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, cursor: "zoom-in" }} />
+            {f.id !== "__portada" && (
+              <button type="button" onClick={() => borrar(f.id)} aria-label="Borrar foto"
+                style={{ position: "absolute", top: -6, right: -6, background: "var(--pink)", color: "#fff",
+                         border: "none", borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 12 }}>
+                ×
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <input ref={input} type="file" accept="image/*" style={{ display: "none" }}
+        onChange={(e) => subir(e.target.files?.[0])} />
+      <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 8 }}
+        disabled={subiendo} onClick={() => input.current?.click()}>
+        {subiendo ? "Subiendo…" : "+ Agregar foto"}
+      </button>
+      {err && <div style={{ color: "var(--pink)", marginTop: 6 }}>{err}</div>}
+
+      {/* Visor: la foto grande, sobre todo lo demás */}
+      {ampliada && (
+        <div onClick={() => setAmpliada(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.92)", zIndex: 1200,
+                   display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out" }}>
+          <img src={ampliada} alt="" style={{ maxWidth: "96vw", maxHeight: "92vh", objectFit: "contain" }} />
+          <button type="button" onClick={() => setAmpliada(null)} aria-label="Cerrar"
+            style={{ position: "fixed", top: 16, right: 20, background: "none", border: "none",
+                     color: "#fff", fontSize: 30, cursor: "pointer" }}>✕</button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscripcion; onClose: () => void }) {
   const [confiable, setConfiable] = useState(!!comercio.confiable);

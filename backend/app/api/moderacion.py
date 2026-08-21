@@ -3,12 +3,13 @@
 Escrituras con service_role (backend). Requiere JWT de admin.
 """
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from app.core.auth import require_admin, require_moderador
 from app.core.config import settings
 from app.core.telefono import validar_whatsapp
+from app.services.imagenes import subir_foto_galeria
 from app.services.rubros import SLUG_DESCARTE, aplicar_rubros, resolver_rubros
 from app.db.repository import Repo, get_repo
 from app.models.schemas import ModerarBody
@@ -673,3 +674,71 @@ def reclasificar_rubros(
         "sin_match": sin_match,
         "resumen": {"con_cambios": len(cambios), "sin_match": len(sin_match)},
     }
+
+
+# ---- Galería del comercio desde el panel ----
+# Hasta ahora sólo podían tocarla el agente que lo cargó y el dueño del comercio.
+# El admin no tenía forma de ver ni sumar fotos, y las fotos son justamente lo
+# que hay que mirar para saber qué vende un local cuando el texto no alcanza.
+_ADMIN_MAX_FOTOS = 10
+_ADMIN_MAX_FOTO_BYTES = 15 * 1024 * 1024
+
+
+def _comercio_o_404(repo: Repo, comercio_id: str) -> dict:
+    comercio = repo.get_comercio(comercio_id)
+    if not comercio:
+        raise HTTPException(status_code=404, detail="Comercio no encontrado")
+    return comercio
+
+
+@router.get("/admin/comercio/{comercio_id}/fotos")
+def admin_listar_fotos(
+    comercio_id: str,
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    _comercio_o_404(repo, comercio_id)
+    return {"items": repo.list_fotos_comercio(comercio_id)}
+
+
+@router.post("/admin/comercio/{comercio_id}/fotos")
+async def admin_agregar_foto(
+    comercio_id: str,
+    foto: UploadFile = File(...),
+    mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    comercio = _comercio_o_404(repo, comercio_id)
+    if repo.count_fotos_comercio(comercio_id) >= _ADMIN_MAX_FOTOS:
+        raise HTTPException(status_code=409, detail=f"Máximo {_ADMIN_MAX_FOTOS} fotos por comercio")
+    data = await foto.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Falta la foto")
+    if len(data) > _ADMIN_MAX_FOTO_BYTES:
+        raise HTTPException(status_code=413, detail="La foto supera los 15 MB")
+    try:
+        url, thumb = subir_foto_galeria(comercio["slug"], data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not url:
+        raise HTTPException(status_code=502, detail="No se pudo subir la foto, probá de nuevo")
+    row = repo.add_foto_comercio({
+        "comercio_id": comercio_id, "url": url, "thumb_url": thumb,
+        "orden": repo.count_fotos_comercio(comercio_id),
+    })
+    logger.info("admin.foto_add", comercio=comercio_id, by=mod["email"])
+    return {"ok": True, "foto": row}
+
+
+@router.delete("/admin/comercio/{comercio_id}/fotos/{foto_id}")
+def admin_borrar_foto(
+    comercio_id: str,
+    foto_id: str,
+    mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    _comercio_o_404(repo, comercio_id)
+    if not repo.delete_foto_comercio(foto_id, comercio_id):
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+    logger.info("admin.foto_del", comercio=comercio_id, by=mod["email"])
+    return {"ok": True}

@@ -338,6 +338,28 @@ export async function registrarPago(comercioId: string, body: {
   return res.json();
 }
 
+export type FotoComercio = { id: string; url: string; thumb_url: string | null };
+
+export async function adminListarFotos(comercioId: string): Promise<FotoComercio[]> {
+  const res = await authFetch(`/admin/comercio/${comercioId}/fotos`);
+  return (await res.json()).items ?? [];
+}
+
+export async function adminSubirFoto(comercioId: string, file: File): Promise<FotoComercio> {
+  const fd = new FormData();
+  fd.append("foto", file);
+  const res = await authFetch(`/admin/comercio/${comercioId}/fotos`, { method: "POST", body: fd });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail ?? "No se pudo subir la foto");
+  }
+  return (await res.json()).foto as FotoComercio;
+}
+
+export async function adminBorrarFoto(comercioId: string, fotoId: string): Promise<void> {
+  await authFetch(`/admin/comercio/${comercioId}/fotos/${fotoId}`, { method: "DELETE" });
+}
+
 export async function setConfiable(comercioId: string, confiable: boolean) {
   const res = await authFetch(`/admin/comercio/${comercioId}/confiable`, {
     method: "POST",
