@@ -82,6 +82,11 @@ export default async function ComercioPage({ params }: { params: { slug: string 
         </div>
 
         {comercio.descripcion && <p className="uk-desc">{comercio.descripcion}</p>}
+        {/* Lo que vende. Va aunque no haya descripción: es lo que el comprador
+            necesita saber, y muchos locales se cargan sólo con esta lista. */}
+        {comercio.productos && (
+          <p className="uk-desc"><b>Vende:</b> {comercio.productos}</p>
+        )}
 
         <GaleriaFicha fotos={galeria.fotos} videos={galeria.videos} />
 

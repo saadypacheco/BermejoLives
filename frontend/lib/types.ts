@@ -12,6 +12,9 @@ export type Comercio = {
   slug: string;
   nombre: string;
   descripcion: string | null;
+  /** Lista de lo que vende, en palabras del cliente. Alimenta el buscador y la
+   *  sugerencia de rubros, y es lo que ve el comprador cuando no hay descripción. */
+  productos?: string | null;
   logo_url: string | null;
   portada_url: string | null;
   whatsapp: string | null;

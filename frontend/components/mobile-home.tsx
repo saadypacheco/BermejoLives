@@ -149,6 +149,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
                 </div>
               </div>
               {sel.descripcion && <p>{sel.descripcion}</p>}
+              {sel.productos && <p style={{ opacity: 0.85 }}>🛍️ {sel.productos}</p>}
               {sel.horario && <div className="mcard-line">🕐 {sel.horario} <HorarioBadge horario={sel.horario} /></div>}
               <div className="mcard-line star">★ {sel.rating}{distanciaSel != null && <span className="mcard-dist">· 📍 {formatDistancia(distanciaSel)}</span>}</div>
             </div>
