@@ -1115,8 +1115,17 @@ function ModalEditar({
   const [horario, setHorario] = useState((comercio as Record<string, unknown>).horario as string ?? "");
   const _rubroActual = (comercio.rubros as { slug: string } | undefined)?.slug;
   const [rubroSlugs, setRubroSlugs] = useState<string[]>(_rubroActual ? [_rubroActual] : []);
+  const [productos, setProductos] = useState(comercio.productos ?? "");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+
+  // El formulario es largo (42 categorías) y el botón Cancelar queda muy abajo:
+  // sin Escape ni ✕ en el encabezado, se entra al editor y no se ve cómo salir.
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
+  }, [onClose]);
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
@@ -1124,6 +1133,7 @@ function ModalEditar({
     setErr("");
     try {
       await editarComercio(comercio.id, {
+        productos: productos || undefined,
         nombre: nombre || undefined,
         whatsapp: whatsapp || undefined,
         telefono: telefono || undefined,
@@ -1142,9 +1152,22 @@ function ModalEditar({
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div className="glass" style={{ width: "100%", maxWidth: 480, borderRadius: 16, padding: 24, maxHeight: "90vh", overflowY: "auto" }}>
-        <h3 style={{ marginBottom: 18 }}>Editar negocio</h3>
+    <div onClick={onClose}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div className="glass" onClick={(e) => e.stopPropagation()}
+        style={{ width: "100%", maxWidth: 480, borderRadius: 16, padding: 24, maxHeight: "90vh", overflowY: "auto" }}>
+        {/* Encabezado pegajoso: la salida tiene que estar siempre a la vista,
+            no al final de un formulario de 42 chips. */}
+        <div style={{ position: "sticky", top: -24, zIndex: 1, background: "var(--panel, #12161d)",
+                      margin: "-24px -24px 14px", padding: "18px 24px 12px",
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      borderBottom: "1px solid var(--border)" }}>
+          <h3 style={{ margin: 0 }}>Editar negocio</h3>
+          <button type="button" onClick={onClose} aria-label="Cerrar"
+            style={{ background: "none", border: "none", color: "var(--txt-2)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>
+            ✕
+          </button>
+        </div>
         <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Nombre
             <input className="adm-input" style={{ marginTop: 4 }} value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre del negocio" />
@@ -1155,11 +1178,18 @@ function ModalEditar({
           <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Teléfono (opcional)
             <input className="adm-input" style={{ marginTop: 4 }} value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Fijo o celular para llamar" />
           </label>
+          <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Productos que vende (define las categorías)
+            <textarea className="adm-input" style={{ marginTop: 4, minHeight: 56, resize: "vertical" }} value={productos}
+              onChange={(e) => setProductos(e.target.value)}
+              placeholder="zapatillas, championes, chinelas, mochilas" />
+          </label>
           <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Descripción / reseña
             <textarea className="adm-input" style={{ marginTop: 4, minHeight: 70, resize: "vertical" }} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Qué vende o qué ofrece…" />
           </label>
           <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Categorías (tocá para elegir varias)
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6,
+                          maxHeight: 170, overflowY: "auto", padding: 6,
+                          border: "1px solid var(--border)", borderRadius: 10 }}>
               {rubros.map((r) => {
                 const on = rubroSlugs.includes(r.slug);
                 return (

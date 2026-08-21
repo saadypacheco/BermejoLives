@@ -150,6 +150,7 @@ class EditarComercioBody(BaseModel):
     whatsapp: str | None = None
     telefono: str | None = None
     descripcion: str | None = None
+    productos: str | None = None
     modalidad: str | None = None
     direccion: str | None = None
     email: str | None = None
@@ -177,6 +178,10 @@ def editar_comercio(
     if not patch and not body.rubro_slugs:
         raise HTTPException(status_code=400, detail="Nada para actualizar")
     updated = repo.update_comercio(comercio_id, patch, body.rubro_slugs)
+    # Si cambió de qué vende, se recalculan los rubros. Sólo suma: los que se
+    # eligieron a mano en este mismo formulario no se pierden.
+    if {"productos", "descripcion", "nombre"} & patch.keys():
+        aplicar_rubros(repo, updated, body.rubro_slugs or repo.get_comercio_rubros(comercio_id))
     logger.info("moderacion.comercio_editado", comercio=comercio_id, campos=list(patch.keys()), by=admin["email"])
     return {"ok": True, "comercio": updated}
 
