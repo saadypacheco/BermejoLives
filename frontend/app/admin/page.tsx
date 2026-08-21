@@ -1175,7 +1175,11 @@ function ModalEditar({
             ✕
           </button>
         </div>
-        <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Primero de todo: es la acción principal del trabajo de clasificación.
+            Antes estaba después de las fotos y quedaba fuera de la vista. */}
+        <AnalisisComercio comercioId={comercio.id} onAplicado={onDone} />
+
+        <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
           <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Nombre
             <input className="adm-input" style={{ marginTop: 4 }} value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre del negocio" />
           </label>
@@ -1202,8 +1206,6 @@ function ModalEditar({
             <textarea className="adm-input" style={{ marginTop: 4, minHeight: 70, resize: "vertical" }} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Qué vende o qué ofrece…" />
           </label>
           <FotosComercio comercioId={comercio.id} portada={comercio.portada_url ?? null} />
-
-          <AnalisisComercio comercioId={comercio.id} onAplicado={onDone} />
 
           <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Categorías (tocá para elegir varias)
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6,
@@ -1284,10 +1286,12 @@ function AnalisisComercio({ comercioId, onAplicado }: { comercioId: string; onAp
   const etiquetaConf = conf >= 0.7 ? "alta" : conf >= 0.4 ? "media" : "baja";
 
   return (
-    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
+    <div style={{ border: "1px solid var(--neon)", background: "rgba(57,255,158,.06)",
+                  borderRadius: 12, padding: 14 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <span style={{ fontSize: 12, color: "var(--txt-3)" }}>🤖 Clasificar desde las fotos</span>
-        <button type="button" className="btn btn-ghost btn-sm" disabled={cargando} onClick={analizar}>
+        <span style={{ fontSize: 13.5, fontWeight: 600 }}>🤖 Clasificar desde las fotos</span>
+        <button type="button" className={res ? "btn btn-ghost btn-sm" : "btn btn-primary btn-sm"}
+          disabled={cargando} onClick={analizar}>
           {cargando ? "Mirando las fotos…" : res ? "Analizar de nuevo" : "Analizar"}
         </button>
       </div>
