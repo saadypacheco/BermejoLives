@@ -61,7 +61,12 @@ class FakeRepo:
             {"clave": "instagram", "etiqueta": "Instagram", "url": None, "orden": 2},
         ]
         self.zonas: dict[str, str] = {"zona-moda": "zona-1"}
-        self.rubros: dict[str, str] = {"importadora": "rub-1", "gastronomia": "rub-2", "gomeria": "rub-3", "servicios": "rub-4"}
+        self.rubros: dict[str, str] = {
+            "importadora": "rub-1", "gastronomia": "rub-2", "gomeria": "rub-3", "servicios": "rub-4",
+            # Los que usa la deducción por texto (espejo de rubro_palabras).
+            "otros": "rub-otros", "calzado": "rub-cal", "ropa": "rub-ropa",
+            "neumaticos": "rub-neu", "electronica": "rub-ele", "ferreteria": "rub-fer",
+        }
         self.lugares: dict[str, dict] = {}
         self._seq = 0
 
@@ -459,8 +464,40 @@ class FakeRepo:
         self.usuarios[full["id"]] = full
         return full
 
+    # Espejo mínimo del diccionario real (tabla rubro_palabras). No busca ser
+    # completo: alcanza para ejercer la lógica de "sumar sin pisar" y el descarte
+    # de "otros". El vocabulario de verdad vive en la base.
+    _PALABRAS_FAKE = {
+        "calzado":    ("zapatilla", "championes", "chinela", "sandalia"),
+        "ropa":       ("ropa", "remera", "pantalon", "vestido", "medias"),
+        "neumaticos": ("neumatico", "cubierta", "llanta", "goma"),
+        "electronica": ("televisor", "parlante", "audio"),
+        "ferreteria": ("tornillo", "pintura", "foco", "herramienta"),
+    }
+
+    def list_todos_comercios(self, verificado=None, limit=200):
+        items = [c for c in self.comercios.values() if c.get("activo", True)]
+        if verificado is not None:
+            items = [c for c in items if c.get("verificado") == verificado]
+        return items[:limit]
+
+    def sugerir_rubros_por_texto(self, texto):
+        if not texto or not texto.strip():
+            return []
+        t = texto.lower()
+        return sorted({slug for slug, palabras in self._PALABRAS_FAKE.items()
+                       if any(p in t for p in palabras)})
+
+    def quitar_rubro_comercio(self, comercio_id, rubro_id):
+        c = self.comercios.get(comercio_id)
+        if c and c.get("rubros"):
+            c["rubros"] = [r for r in c["rubros"] if r != rubro_id]
+
     def set_comercio_rubros(self, comercio_id, rubro_ids):
-        self.comercios[comercio_id]["rubros"] = list(rubro_ids)
+        # El repo real hace upsert: SUMA, no reemplaza. El fake tiene que hacer lo
+        # mismo o los tests validarían un comportamiento que no existe.
+        actuales = self.comercios[comercio_id].get("rubros") or []
+        self.comercios[comercio_id]["rubros"] = list(dict.fromkeys([*actuales, *rubro_ids]))
 
     def get_comercio_rubros(self, comercio_id):
         id_to_slug = {v: k for k, v in self.rubros.items()}

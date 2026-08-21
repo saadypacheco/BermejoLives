@@ -23,6 +23,7 @@ from app.services.imagenes import (
     guardar_foto_local, procesar_imagen, subir_foto_comercio,
     subir_foto_galeria, subir_video_comercio,
 )
+from app.services.rubros import aplicar_rubros
 from app.services.tienda_client import get_tienda_client
 
 router = APIRouter()
@@ -426,6 +427,10 @@ def update_perfil(
         raise HTTPException(status_code=400, detail="No hay campos para actualizar")
     comercio = repo.update_comercio(claims["comercio_id"], patch, body.rubro_slugs)
     logger.info("comercio.perfil_update", comercio=claims["comercio_id"], campos=list(patch))
+    # Si cambió de qué vende, se recalculan los rubros. Sólo SUMA: si alguien los
+    # curó a mano, ese trabajo no se pisa.
+    if {"productos", "descripcion", "nombre"} & patch.keys():
+        aplicar_rubros(repo, comercio, repo.get_comercio_rubros(comercio["id"]))
     _sync_vendedor_tienda(comercio, patch)
     return _perfil_dict(repo, comercio)
 

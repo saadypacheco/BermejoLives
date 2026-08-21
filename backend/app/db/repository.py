@@ -44,6 +44,28 @@ class Repo(Protocol):
     def get_comercio_por_codigo(self, codigo: str) -> dict | None: ...
     def crear_comercio_usuario(self, row: dict) -> dict: ...
     def set_comercio_rubros(self, comercio_id: str, rubro_ids: list[str]) -> None: ...
+    def sugerir_rubros_por_texto(self, texto: str) -> list[str]: ...
+    def quitar_rubro_comercio(self, comercio_id: str, rubro_id: str) -> None: ...
+    def sugerir_rubros_por_texto(self, texto: str) -> list[str]:
+        """Rubros que se deducen de un texto libre, vía el diccionario en la base.
+
+        Se delega a la función SQL rubros_sugeridos() en vez de reimplementar el
+        matcheo acá: el vocabulario vive en la tabla rubro_palabras, que se edita
+        sin deploy, y así el alta, la reclasificación masiva y el CSV de revisión
+        usan exactamente el mismo criterio.
+        """
+        if not texto or not texto.strip():
+            return []
+        try:
+            res = self._db.rpc("rubros_sugeridos", {"p_texto": texto}).execute()
+            return list(res.data or [])
+        except Exception:  # noqa: BLE001 — nunca bloquear un alta por esto
+            return []
+
+    def quitar_rubro_comercio(self, comercio_id: str, rubro_id: str) -> None:
+        (self._db.table("comercio_rubros").delete()
+         .eq("comercio_id", comercio_id).eq("rubro_id", rubro_id).execute())
+
     def get_comercio_rubros(self, comercio_id: str) -> list[str]: ...
     def insert_lead(self, row: dict) -> None: ...
     def list_leads_by_comercio(self, comercio_id: str, dias: int) -> list[dict]: ...

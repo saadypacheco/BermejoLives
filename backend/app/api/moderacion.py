@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from app.core.auth import require_admin, require_moderador
 from app.core.config import settings
 from app.core.telefono import validar_whatsapp
+from app.services.rubros import SLUG_DESCARTE, aplicar_rubros, resolver_rubros
 from app.db.repository import Repo, get_repo
 from app.models.schemas import ModerarBody
 from app.services.clasificador import moderar_publicacion
@@ -615,3 +616,55 @@ def ejecutar_bajas(
     )
     logger.info("suscripcion.bajas_manual", ocultos=ocultos, by=admin["email"])
     return {"ok": True, "ocultos": ocultos}
+
+
+# ---- Reclasificar rubros a partir de lo cargado ----
+@router.post("/admin/rubros/reclasificar")
+def reclasificar_rubros(
+    aplicar: bool = Query(False, description="false = previsualizar; true = escribir"),
+    limite: int = Query(500, ge=1, le=2000),
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Deduce los rubros de los comercios ya cargados, desde nombre + productos +
+    descripción.
+
+    Nace de un problema concreto: en el primer recorrido se cargaron 84 locales en
+    un día y los 92 quedaron en "Otros", porque elegir rubro de una lista de 42
+    caminando es inviable. El dato para clasificarlos ya estaba escrito — sólo
+    faltaba leerlo.
+
+    Por defecto NO escribe: devuelve qué haría, para revisar antes. Sólo suma
+    rubros, nunca borra los que se hayan curado a mano.
+    """
+    comercios = repo.list_todos_comercios(None, limite)
+    cambios, sin_match = [], []
+
+    for c in comercios:
+        if not c.get("activo", True):
+            continue
+        actuales = set(repo.get_comercio_rubros(c["id"]))
+        propuestos = set(resolver_rubros(repo, c, sorted(actuales)))
+        if propuestos == {SLUG_DESCARTE}:
+            sin_match.append({"slug": c.get("slug"), "nombre": c.get("nombre"),
+                              "productos": c.get("productos"), "descripcion": c.get("descripcion")})
+            continue
+        if propuestos == actuales:
+            continue
+        cambios.append({
+            "slug": c.get("slug"), "nombre": c.get("nombre"),
+            "antes": sorted(actuales), "despues": sorted(propuestos),
+            "suma": sorted(propuestos - actuales),
+        })
+        if aplicar:
+            aplicar_rubros(repo, c, sorted(actuales))
+
+    logger.info("rubros.reclasificar", aplicado=aplicar, cambios=len(cambios),
+                sin_match=len(sin_match), by=admin["email"])
+    return {
+        "aplicado": aplicar,
+        "analizados": len(comercios),
+        "cambios": cambios,
+        "sin_match": sin_match,
+        "resumen": {"con_cambios": len(cambios), "sin_match": len(sin_match)},
+    }

@@ -18,6 +18,7 @@ from app.db.repository import Repo, get_repo
 from app.models.schemas import LoginBody
 from app.services.clasificador import sugerir_rubros
 from app.services.imagenes import subir_foto_comercio, subir_foto_galeria, subir_video_comercio
+from app.services.rubros import aplicar_rubros
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -201,8 +202,10 @@ async def alta_campo(
             "cargado_por": agente["email"],
         }
     )
-    if rubro_ids:
-        repo.set_comercio_rubros(comercio["id"], rubro_ids)
+    # Los rubros se deducen de nombre + productos + descripción y se suman a los
+    # que el agente haya elegido. En la calle no se eligen rubros: se anota lo que
+    # se ve, y de ahí sale la categoría.
+    aplicar_rubros(repo, comercio, rubro_slugs)
 
     # video (link TikTok) opcional → publicación pendiente tipo video
     vurl = _none(video_url)
