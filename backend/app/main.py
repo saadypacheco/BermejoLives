@@ -174,7 +174,18 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         request.url.path,
         500,
     )
-    return JSONResponse({"detail": "Error interno"}, status_code=500)
+    # Las cabeceras CORS se agregan A MANO acá porque este handler corre POR FUERA
+    # del CORSMiddleware: sin esto, TODO error 500 le llega al navegador como
+    # "blocked by CORS policy" y el error real queda invisible. Cuesta horas de
+    # diagnóstico buscando un problema de CORS que no existe.
+    headers = {}
+    origen = request.headers.get("origin")
+    permitidos = _cors_origins()
+    if origen and (permitidos == ["*"] or origen in permitidos):
+        headers["Access-Control-Allow-Origin"] = origen
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Vary"] = "Origin"
+    return JSONResponse({"detail": "Error interno"}, status_code=500, headers=headers)
 
 
 app.include_router(health.router, tags=["health"])
