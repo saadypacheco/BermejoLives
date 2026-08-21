@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  agenteLogin, getAgenteToken, clearAgente, altaComercioCampo, transcribirAudio, sugerirRubros,
+  agenteLogin, getAgenteToken, clearAgente, altaComercioCampo,
   misComercios, editarComercioAgente, eliminarComercioAgente, actualizarFotoComercioAgente, type ComercioAgente,
   listarFotosCampo, listarVideosCampo, subirFotoCampo, subirVideoCampo, borrarFotoCampo, borrarVideoCampo,
   listarLugares, crearLugar, editarLugar, subirPortadaLugar, subirVideoLugar, type Lugar,
@@ -30,7 +30,6 @@ const MODALIDADES = [
   { key: "ambos",     label: "Ambos" },
 ];
 
-const MAX_INTENTOS_AUDIO = 2;
 
 // ─────────────────────────────────────────────
 export default function CampoPage() {
@@ -483,9 +482,6 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
 
   const [ciudadSlug,  setCiudadSlug]  = useState("bermejo");
   const [prefijo,     setPrefijo]     = useState("591");
-  const [rubroSlugs,  setRubroSlugs]  = useState<string[]>([]);
-  const [sugiriendo,  setSugiriendo]  = useState(false);
-  const [catFiltro,   setCatFiltro]   = useState("");
 
   // Lugares (mercados/galerías): dónde está el puesto, opcional
   const [lugares,     setLugares]     = useState<Lugar[]>([]);
@@ -568,12 +564,6 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Audio: hasta 2 intentos de grabación; al llegar al límite, solo queda escribir a mano.
-  const [grabando,      setGrabando]      = useState(false);
-  const [transcribiendo,setTranscribiendo]= useState(false);
-  const [intentosAudio, setIntentosAudio] = useState(0);
-  const recRef   = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     getCiudades().then(setCiudades);
@@ -600,51 +590,9 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     }
   }
 
-  async function sugerirDesdeDescripcion(descripcion: string) {
-    if (!descripcion.trim() || rubros.length === 0) return;
-    setSugiriendo(true);
-    try {
-      const sugeridos = await sugerirRubros(descripcion, rubros);
-      setRubroSlugs(sugeridos.length > 0 ? sugeridos : ["otros"]);
-    } finally {
-      setSugiriendo(false);
-    }
-  }
-
-  async function iniciarGrabacion() {
-    setErr("");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const rec = new MediaRecorder(stream);
-      chunksRef.current = [];
-      rec.ondataavailable = (e) => e.data.size > 0 && chunksRef.current.push(e.data);
-      rec.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
-        setTranscribiendo(true);
-        try {
-          const texto = await transcribirAudio(blob);
-          const nueva = (f.descripcion ? f.descripcion + " " : "") + texto;
-          setF((s) => ({ ...s, descripcion: nueva }));
-          setIntentosAudio((n) => n + 1);
-          await sugerirDesdeDescripcion(nueva);
-        } catch (ex) {
-          setErr(ex instanceof Error ? ex.message : "No se pudo transcribir — escribí a mano");
-          setIntentosAudio((n) => n + 1);
-        } finally {
-          setTranscribiendo(false);
-        }
-      };
-      recRef.current = rec;
-      rec.start();
-      setGrabando(true);
-    } catch {
-      setErr("No se pudo acceder al micrófono (¿permiso/HTTPS?). Escribí a mano.");
-    }
-  }
-
-  function detenerGrabacion() { recRef.current?.stop(); setGrabando(false); }
-
+  // El rubro ya no se elige ni se sugiere en el campo: se deduce en el servidor
+  // del texto cargado, y después la IA lo recalcula desde las fotos. Sacar la
+  // llamada acá evita además un request en zonas sin señal.
   function ubicar() {
     setGeoMsg("Obteniendo ubicación…");
     if (!navigator.geolocation) { setGeoMsg("Este dispositivo no tiene GPS disponible."); return; }
@@ -696,7 +644,9 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     if (lugarId && lugarId !== "__nuevo__") campos.lugar_id = lugarId;
     if (puesto.trim()) campos.puesto = puesto.trim();
     const lugarActual = (lugarId && lugarId !== "__nuevo__") ? lugares.find((l) => l.id === lugarId) ?? null : null;
-    const rubroList = rubroSlugs.length > 0 ? rubroSlugs : ["otros"];
+    // Sin chips en el formulario: el backend deduce los rubros del texto y la IA
+    // los recalcula desde las fotos. "otros" es sólo el punto de partida.
+    const rubroList = ["otros"];
     const online = typeof navigator === "undefined" || navigator.onLine;
 
     try {
@@ -742,9 +692,9 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   }
 
   function limpiar() {
-    setF({ ...EMPTY }); setRubroSlugs([]); setIntentosAudio(0);
+    setF({ ...EMPTY });
     setCoords(null); setGeoMsg(""); setFoto(null); setPreview(""); setConsent(true);
-    setNuevoLugar(""); setEditMercado(false); setCatFiltro(""); setDone(null); setDoneOffline(false); setDoneMotivo(""); setDoneCodigo(null); setAltaId(null); setErr("");
+    setNuevoLugar(""); setEditMercado(false); setDone(null); setDoneOffline(false); setDoneMotivo(""); setDoneCodigo(null); setAltaId(null); setErr("");
   }
   function otro() {
     limpiar();
@@ -824,7 +774,6 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     );
   }
 
-  const puedeGrabar = intentosAudio < MAX_INTENTOS_AUDIO;
 
   return (
     <div className="campo-wrap">
@@ -930,58 +879,6 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           </div>
         </div>
 
-        {/* ── Productos observados: OPCIONAL. Lo principal son las fotos: de ahí
-               se detectan después los productos, el rubro y la descripción. ── */}
-        <div>
-          <label className="campo-lbl">¿Qué productos ves? (opcional)</label>
-          <textarea className="adm-input" rows={2} value={f.prodObs}
-            onChange={(e) => set("prodObs", e.target.value)}
-            onBlur={() => f.prodObs.trim() && sugerirDesdeDescripcion(`${f.prodObs} ${f.descripcion}`)}
-            placeholder="Ej: zapatillas, championes, chinelas" style={{ resize: "vertical" }} />
-          <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 4, lineHeight: 1.4 }}>
-            Sólo si lo tenés a mano. Lo importante es <b>la foto de la vidriera</b>:
-            de ahí se detectan después los productos y la categoría. Lo que escribas
-            acá queda como dato tuyo y no se sobrescribe.
-          </div>
-        </div>
-
-        {/* ── Descripción: texto primero (siempre), audio como opción ── */}
-        <div>
-          <label className="campo-lbl">Algo más del negocio (opcional)</label>
-          <textarea className="adm-input" rows={3} value={f.descripcion}
-            onChange={(e) => set("descripcion", e.target.value)}
-            onBlur={() => f.descripcion.trim() && sugerirDesdeDescripcion(f.descripcion)}
-            placeholder="Ej: Importa desde China. Pedido mínimo 1 caja. Atiende sábados." style={{ resize: "vertical" }} />
-          {puedeGrabar && (
-            !grabando ? (
-              <button type="button" className="btn btn-ghost" style={{ width: "100%", marginTop: 8 }}
-                onClick={iniciarGrabacion} disabled={transcribiendo}>
-                🎤 {transcribiendo ? "Transcribiendo…" : "O grabá un audio"}
-              </button>
-            ) : (
-              <button type="button" className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} onClick={detenerGrabacion}>
-                <span className="dot-live" style={{ background: "#05130c" }} /> Detener y transcribir
-              </button>
-            )
-          )}
-        </div>
-
-        {/* ── Categorías: buscador + chips (la IA también sugiere desde la descripción) ── */}
-        <div>
-          <label className="campo-lbl">Categoría{sugiriendo && " (sugiriendo…)"}</label>
-          <input className="adm-input" style={{ marginTop: 6 }} value={catFiltro}
-            onChange={(e) => setCatFiltro(e.target.value)}
-            placeholder="Buscar categoría (ej: cambio, celular, ropa)…" />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-            {rubros
-              .filter((r) => rubroSlugs.includes(r.slug) || !catFiltro.trim() || normTxtA(r.nombre).includes(normTxtA(catFiltro.trim())))
-              .map((r) => (
-                <ChipToggle key={r.slug} label={r.nombre} active={rubroSlugs.includes(r.slug)}
-                  onClick={() => setRubroSlugs((prev) => toggle(prev, r.slug))} />
-              ))}
-          </div>
-        </div>
-
         {/* ── GPS ── */}
         <div>
           <label className="campo-lbl">Ubicación (parado en la puerta) *</label>
@@ -1023,6 +920,28 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           {comprimiendo && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>Comprimiendo foto…</div>}
           {!comprimiendo && foto && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>{(foto.size / 1024).toFixed(0)} KB</div>}
           <div style={{ fontSize: 12, color: "var(--neon)", marginTop: 8 }}>📸🎬 Después de guardar vas a poder sumar <b>más fotos y videos</b> del local.</div>
+        </div>
+
+        {/* ── Productos observados: OPCIONAL. Lo importante son las fotos: de
+               ahí se detectan después los productos, el rubro y la descripción.
+               Por eso este bloque va DESPUÉS de la foto y no antes. ── */}
+        <div>
+          <label className="campo-lbl">¿Qué productos ves? (opcional)</label>
+          <textarea className="adm-input" rows={2} value={f.prodObs}
+            onChange={(e) => set("prodObs", e.target.value)}
+            placeholder="Ej: zapatillas, championes, chinelas" style={{ resize: "vertical" }} />
+          <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 4, lineHeight: 1.4 }}>
+            Sólo si lo tenés a mano. Lo que escribas acá queda como dato tuyo y no
+            se sobrescribe.
+          </div>
+        </div>
+
+        {/* ── Algo más del negocio ── */}
+        <div>
+          <label className="campo-lbl">Algo más del negocio (opcional)</label>
+          <textarea className="adm-input" rows={3} value={f.descripcion}
+            onChange={(e) => set("descripcion", e.target.value)}
+            placeholder="Ej: Importa desde China. Pedido mínimo 1 caja. Atiende sábados." style={{ resize: "vertical" }} />
         </div>
 
         <input className="adm-input" value={f.direccion} onChange={(e) => set("direccion", e.target.value)}
