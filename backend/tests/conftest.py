@@ -49,6 +49,8 @@ class FakeRepo:
         self.mensajes: dict[str, dict] = {}          # id -> row
         self.comercio_fotos: list[dict] = []          # galería
         self.comercio_numeros: list[dict] = []        # números autorizados a publicar
+        self.reclamos: dict[str, dict] = {}           # id -> row
+        self.solicitudes_numero: dict[str, dict] = {} # id -> row
         self.comercio_videos: list[dict] = []
         self.cotizaciones: list[dict] = [
             {"clave": "usd_bob", "etiqueta": "Dólar", "detalle": "1 USD", "valor": 0, "unidad": "Bs", "orden": 1},
@@ -151,6 +153,10 @@ class FakeRepo:
             raise HTTPException(status_code=404, detail="comercio no encontrado")
         c["confiable"] = valor
         return c
+
+    def _ahora(self):
+        from datetime import datetime, timezone
+        return datetime.now(timezone.utc).isoformat()
 
     def get_comercio(self, comercio_id):
         return self.comercios.get(comercio_id)
@@ -485,6 +491,116 @@ class FakeRepo:
         "lugar_id", "puesto",
     )
 
+    # ---- reclamos ----
+    def crear_reclamo(self, row):
+        rid = self._id("rec")
+        full = {"id": rid, "estado": "pendiente", "created_at": self._ahora(), **row}
+        self.reclamos[rid] = full
+        return full
+
+    def list_reclamos(self, estado=None):
+        items = list(self.reclamos.values())
+        if estado:
+            items = [r for r in items if r.get("estado") == estado]
+        return sorted(items, key=lambda r: r.get("created_at", ""), reverse=True)
+
+    def responder_reclamo(self, reclamo_id, respuesta, by):
+        r = self.reclamos.get(reclamo_id)
+        if not r:
+            return None
+        r.update({"respuesta": respuesta, "estado": "respondido",
+                  "respondido_por": by, "respondido_en": self._ahora()})
+        return r
+
+    # ---- solicitudes de cambio de número ----
+    def crear_solicitud_cambio_numero(self, row):
+        sid = self._id("sol")
+        full = {"id": sid, "estado": "pendiente", "created_at": self._ahora(), **row}
+        self.solicitudes_numero[sid] = full
+        return full
+
+    def list_solicitudes_cambio_numero(self, estado=None):
+        items = list(self.solicitudes_numero.values())
+        if estado:
+            items = [x for x in items if x.get("estado") == estado]
+        return sorted(items, key=lambda x: x.get("created_at", ""), reverse=True)
+
+    def aprobar_solicitud_cambio_numero(self, solicitud_id, by):
+        sol = self.solicitudes_numero.get(solicitud_id)
+        if not sol:
+            return None
+        # Igual que el repo real: aprobar CAMBIA el whatsapp del comercio.
+        c = self.comercios.get(sol["comercio_id"])
+        if c:
+            c["whatsapp"] = sol["whatsapp_nuevo"]
+        sol.update({"estado": "aprobada", "revisada_por": by, "revisada_en": self._ahora()})
+        return sol
+
+    def rechazar_solicitud_cambio_numero(self, solicitud_id, by):
+        sol = self.solicitudes_numero.get(solicitud_id)
+        if not sol:
+            return None
+        sol.update({"estado": "rechazada", "revisada_por": by, "revisada_en": self._ahora()})
+        return sol
+
+    # ---- suscripciones y estado de plataforma ----
+    def list_suscripciones(self):
+        from datetime import date, timedelta
+        hoy, aviso = date.today().isoformat(), (date.today() + timedelta(days=5)).isoformat()
+        out = []
+        for c in self.comercios.values():
+            if not c.get("activo", True):
+                continue
+            ph = c.get("paga_hasta")
+            if c.get("suspendido"):
+                estado = "suspendido"
+            elif not ph:
+                estado = "sin_plan"
+            elif str(ph) < hoy:
+                estado = "vencido"
+            elif str(ph) <= aviso:
+                estado = "por_vencer"
+            else:
+                estado = "activo"
+            out.append({**c, "suscripcion_estado": estado})
+        return out
+
+    def suspender_comercio(self, comercio_id):
+        if comercio_id in self.comercios:
+            self.comercios[comercio_id]["suspendido"] = True
+
+    def activar_comercio(self, comercio_id):
+        if comercio_id in self.comercios:
+            self.comercios[comercio_id].update({"suspendido": False, "activo": True})
+
+    def buscar_comercios_por_nombre(self, q):
+        nq = (q or "").lower()
+        return [c for c in self.comercios.values()
+                if c.get("activo", True) and nq in (c.get("nombre") or "").lower()]
+
+    def stats_admin(self):
+        return {
+            "comercios": len([c for c in self.comercios.values() if c.get("activo", True)]),
+            "publicaciones": len(self.publicaciones),
+            "pendientes": len([p for p in self.publicaciones if p.get("estado") == "pendiente"]),
+        }
+
+    def estadisticas_admin(self):
+        activos = [c for c in self.comercios.values() if c.get("activo", True)]
+        return {
+            "comercios_nuevos_7d": len(activos),
+            "comercios_nuevos_30d": len(activos),
+            "alertas": {
+                "vencido": len([c for c in activos if c.get("paga_hasta") and not c.get("suspendido")]),
+                "suspendido": len([c for c in activos if c.get("suspendido")]),
+                "por_vencer": 0,
+            },
+            "ofertas_total": len(self.publicaciones),
+            "ofertas_top_comercios": [],
+            "contactos_30d": len(self.leads),
+            "contactos_top_comercios": [],
+        }
+
     def list_todos_comercios(self, verificado=None, limit=200):
         items = [c for c in self.comercios.values() if c.get("activo", True)]
         if verificado is not None:
@@ -715,6 +831,11 @@ def client(repo):
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def agente_token():
+    return auth.make_agente_token("agente@bermejolive.com")
 
 
 @pytest.fixture

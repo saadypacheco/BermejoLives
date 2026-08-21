@@ -4,9 +4,10 @@ import hashlib
 import hmac
 
 import structlog
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from app.core.config import settings
+from app.db.repository import Repo, get_repo
 from app.services import ingest
 
 router = APIRouter()
@@ -24,7 +25,14 @@ def _valid_signature(body: bytes, signature: str | None) -> bool:
 
 
 @router.post("/webhook")
-async def webhook(request: Request, x_webhook_hmac: str | None = Header(default=None)) -> dict:
+async def webhook(
+    request: Request,
+    x_webhook_hmac: str | None = Header(default=None),
+    # Por inyección, como el resto de la app: antes se resolvía adentro de
+    # handle_message contra la base real, así que este endpoint no se podía
+    # probar ni apuntar a otro repositorio.
+    repo: Repo = Depends(get_repo),
+) -> dict:
     body = await request.body()
     if not _valid_signature(body, x_webhook_hmac):
         raise HTTPException(status_code=401, detail="firma inválida")
@@ -34,7 +42,7 @@ async def webhook(request: Request, x_webhook_hmac: str | None = Header(default=
 
     if kind in {"message", "message.any"}:
         try:
-            result = await asyncio.to_thread(ingest.handle_message, event)
+            result = await asyncio.to_thread(ingest.handle_message, event, repo)
         except ingest.IngestError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"ok": True, **result}

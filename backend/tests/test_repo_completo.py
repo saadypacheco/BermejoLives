@@ -25,18 +25,10 @@ def test_supabase_repo_implementa_todo_el_protocolo():
     )
 
 
-# Métodos del Protocol que el FakeRepo todavía no implementa. Cada uno es un
-# endpoint SIN NINGÚN TEST: reclamos, solicitudes de cambio de número,
-# suscripciones y estadísticas del admin. Es deuda conocida, congelada acá para
-# que no crezca — al agregar un método nuevo hay que implementarlo en el fake o
-# sumarlo a esta lista a conciencia, no por accidente.
-SIN_COBERTURA = {
-    "activar_comercio", "aprobar_solicitud_cambio_numero", "buscar_comercios_por_nombre",
-    "crear_reclamo", "crear_solicitud_cambio_numero", "estadisticas_admin",
-    "list_reclamos", "list_solicitudes_cambio_numero", "list_suscripciones",
-    "rechazar_solicitud_cambio_numero", "responder_reclamo", "stats_admin",
-    "suspender_comercio",
-}
+# Métodos del Protocol que el FakeRepo no implementa. Vacío = todo el Protocol
+# es ejercitable desde los tests. Si alguna vez hay que sumar uno acá, que sea
+# una decisión consciente: cada entrada es un endpoint que nadie prueba.
+SIN_COBERTURA: set[str] = set()
 
 
 def test_el_fake_no_se_queda_mas_corto_de_lo_que_ya_esta():
