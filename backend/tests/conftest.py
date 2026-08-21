@@ -475,11 +475,26 @@ class FakeRepo:
         "ferreteria": ("tornillo", "pintura", "foco", "herramienta"),
     }
 
+    # Columnas que el repo real pide en el select. PostgREST las devuelve TODAS,
+    # con null si están vacías; el fake tiene que hacer lo mismo o los tests no
+    # detectan que falte una en el select de producción (pasó con `codigo`).
+    _COLS_LISTADO_ADMIN = (
+        "id", "slug", "nombre", "whatsapp", "telefono", "modalidad", "descripcion",
+        "productos", "codigo", "direccion", "lat", "lng", "verificado", "suspendido",
+        "paga_hasta", "portada_url", "portada_thumb_url", "cargado_por", "created_at",
+        "lugar_id", "puesto",
+    )
+
     def list_todos_comercios(self, verificado=None, limit=200):
         items = [c for c in self.comercios.values() if c.get("activo", True)]
         if verificado is not None:
             items = [c for c in items if c.get("verificado") == verificado]
-        return items[:limit]
+        return [
+            {**{k: c.get(k) for k in self._COLS_LISTADO_ADMIN},
+             "rubros": c.get("rubros_join"), "ciudades": c.get("ciudades_join"),
+             "lugares": c.get("lugares_join")}
+            for c in items[:limit]
+        ]
 
     def sugerir_rubros_por_texto(self, texto):
         if not texto or not texto.strip():
