@@ -36,6 +36,23 @@ async function authFetch(path: string, opts: RequestInit = {}) {
   return res;
 }
 
+/** Lee `items` de una respuesta de lista.
+ *
+ * Existe porque el patrón `(await res.json()).items` es una trampa: ante un 500
+ * el cuerpo es {"detail": "..."}, así que `items` viene undefined y la función
+ * devuelve undefined SIN lanzar. El catch del componente nunca corre, el estado
+ * queda en undefined y el primer `.filter()` tira abajo el panel entero — que
+ * es exactamente lo que pasó. Acá se falla fuerte y con mensaje.
+ */
+async function itemsDe<T>(res: Response, que: string): Promise<T[]> {
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail ?? `No se pudo cargar ${que} (HTTP ${res.status})`);
+  }
+  const data = await res.json().catch(() => ({}));
+  return (data.items ?? []) as T[];
+}
+
 export type PendingPub = {
   id: string;
   tipo: string;
@@ -56,8 +73,7 @@ export type PendingPub = {
 
 export async function listPendientes(estado = "pendiente"): Promise<PendingPub[]> {
   const res = await authFetch(`/moderacion/publicaciones?estado=${estado}`);
-  const data = await res.json();
-  return data.items as PendingPub[];
+  return itemsDe<PendingPub>(res, "las publicaciones");
 }
 
 export async function moderar(id: string, estado: string, motivo?: string) {
@@ -120,14 +136,12 @@ export type ComercioPorVerificar = {
 
 export async function listComerciosPorVerificar(): Promise<ComercioPorVerificar[]> {
   const res = await authFetch(`/moderacion/comercios?verificado=false`);
-  const data = await res.json();
-  return data.items as ComercioPorVerificar[];
+  return itemsDe<ComercioPorVerificar>(res, "los comercios por verificar");
 }
 
 export async function listTodosComercios(): Promise<ComercioPorVerificar[]> {
   const res = await authFetch(`/moderacion/comercios?todos=true`);
-  const data = await res.json();
-  return data.items as ComercioPorVerificar[];
+  return itemsDe<ComercioPorVerificar>(res, "los comercios");
 }
 
 export async function editarComercio(id: string, patch: Record<string, unknown>) {
@@ -158,8 +172,8 @@ export type LugarAdmin = {
 
 export async function adminListLugares(ciudadSlug = "bermejo"): Promise<LugarAdmin[]> {
   const res = await authFetch(`/admin/lugares?ciudad_slug=${encodeURIComponent(ciudadSlug)}`);
-  const data = await res.json();
-  return (data.items as (LugarAdmin & { comercios?: { count: number }[] })[]).map((l) => ({ ...l, n_comercios: l.comercios?.[0]?.count ?? 0 }));
+  const items = await itemsDe<LugarAdmin & { comercios?: { count: number }[] }>(res, "los lugares");
+  return items.map((l) => ({ ...l, n_comercios: l.comercios?.[0]?.count ?? 0 }));
 }
 
 export async function adminCrearLugar(body: { nombre: string; tipo?: string; ciudad_slug?: string; lat?: number | null; lng?: number | null }): Promise<LugarAdmin> {
@@ -197,8 +211,7 @@ export type ComercioSuscripcion = {
 
 export async function listSuscripciones(): Promise<ComercioSuscripcion[]> {
   const res = await authFetch("/admin/suscripciones");
-  const data = await res.json();
-  return data.items as ComercioSuscripcion[];
+  return itemsDe<ComercioSuscripcion>(res, "las suscripciones");
 }
 
 export type EstadisticasAdmin = {
@@ -244,8 +257,7 @@ export type Reclamo = {
 
 export async function listReclamos(estado?: string): Promise<Reclamo[]> {
   const res = await authFetch(`/admin/reclamos${estado ? `?estado=${estado}` : ""}`);
-  const data = await res.json();
-  return data.items as Reclamo[];
+  return itemsDe<Reclamo>(res, "los reclamos");
 }
 
 export async function responderReclamo(id: string, respuesta: string) {
@@ -273,8 +285,7 @@ export type SolicitudCambioNumero = {
 
 export async function listSolicitudesCambioNumero(estado?: string): Promise<SolicitudCambioNumero[]> {
   const res = await authFetch(`/admin/solicitudes-cambio-numero${estado ? `?estado=${estado}` : ""}`);
-  const data = await res.json();
-  return data.items as SolicitudCambioNumero[];
+  return itemsDe<SolicitudCambioNumero>(res, "las solicitudes de cambio de número");
 }
 
 export async function aprobarSolicitudCambioNumero(id: string) {
@@ -316,8 +327,7 @@ export type ConsultaReservalo = {
 
 export async function getReservaloConsultas(estado?: string): Promise<ConsultaReservalo[]> {
   const res = await authFetch(`/admin/reservalo/consultas${estado ? `?estado=${estado}` : ""}`);
-  const data = await res.json();
-  return data.items as ConsultaReservalo[];
+  return itemsDe<ConsultaReservalo>(res, "las consultas de Reservalo");
 }
 
 export async function responderReservaloConsulta(id: number, respuesta: string) {
@@ -446,8 +456,7 @@ export type PagoPendiente = {
 
 export async function listPagosPendientes(): Promise<PagoPendiente[]> {
   const res = await authFetch("/admin/pagos/pendientes");
-  const data = await res.json();
-  return data.items as PagoPendiente[];
+  return itemsDe<PagoPendiente>(res, "los pagos pendientes");
 }
 
 export async function confirmarPago(pagoId: string, meses: number) {
