@@ -36,7 +36,7 @@ _MODALIDADES = {"mayorista", "minorista", "ambos"}
 # (verificado, confiable, plan, paga_hasta, suspendido, slug, rating) es
 # administrado solo por el admin y nunca se toca desde este endpoint.
 _CAMPOS_EDITABLES = {
-    "nombre", "descripcion", "whatsapp", "telefono", "email",
+    "nombre", "descripcion", "productos", "whatsapp", "telefono", "email",
     "facebook_url", "instagram_url", "tiktok_url", "sitio_web", "logo_url",
     "direccion", "como_llegar", "horario", "pedido_minimo", "modalidad",
     "lat", "lng", "acepta_reservas",
@@ -340,7 +340,7 @@ def baja_publicacion(
 
 # Campos que el comercio ve de su perfil (subconjunto seguro de la fila completa).
 _CAMPOS_PERFIL = (
-    "id", "slug", "nombre", "descripcion", "whatsapp", "telefono", "email",
+    "id", "slug", "nombre", "descripcion", "productos", "whatsapp", "telefono", "email",
     "facebook_url", "instagram_url", "tiktok_url", "sitio_web", "logo_url",
     "portada_url", "direccion", "como_llegar", "horario", "pedido_minimo",
     "modalidad", "monedas_aceptadas", "plan", "verificado", "confiable",
@@ -357,6 +357,7 @@ def _perfil_dict(repo: Repo, comercio: dict) -> dict:
 class PerfilUpdate(BaseModel):
     nombre: str | None = None
     descripcion: str | None = None
+    productos: str | None = None
     whatsapp: str | None = None
     telefono: str | None = None
     email: str | None = None

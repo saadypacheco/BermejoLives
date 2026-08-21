@@ -23,29 +23,29 @@ select
   coalesce(c.puesto, '') as puesto,
   coalesce(c.descripcion, '') as descripcion,
   case
-    when array_length(rubros_sugeridos(coalesce(c.nombre,'') || ' ' || coalesce(c.descripcion,'')), 1) is null
+    when array_length(rubros_sugeridos(coalesce(c.nombre,'') || ' ' || coalesce(c.productos,'') || ' ' || coalesce(c.descripcion,'')), 1) is null
       then 'SIN MATCH'
-    when array_length(rubros_sugeridos(coalesce(c.nombre,'') || ' ' || coalesce(c.descripcion,'')), 1) = 1
+    when array_length(rubros_sugeridos(coalesce(c.nombre,'') || ' ' || coalesce(c.productos,'') || ' ' || coalesce(c.descripcion,'')), 1) = 1
       then '1 rubro'
-    else array_length(rubros_sugeridos(coalesce(c.nombre,'') || ' ' || coalesce(c.descripcion,'')), 1) || ' rubros'
+    else array_length(rubros_sugeridos(coalesce(c.nombre,'') || ' ' || coalesce(c.productos,'') || ' ' || coalesce(c.descripcion,'')), 1) || ' rubros'
   end as estado,
   (select string_agg(r.nombre, ' | ' order by r.orden)
-     from unnest(rubros_sugeridos(coalesce(c.nombre,'') || ' ' || coalesce(c.descripcion,''))) s
+     from unnest(rubros_sugeridos(coalesce(c.nombre,'') || ' ' || coalesce(c.productos,'') || ' ' || coalesce(c.descripcion,''))) s
      join rubros r on r.slug = s) as rubros_sugeridos,
   -- Qué palabra concreta disparó cada rubro: sirve para auditar el diccionario y
   -- para entender qué conviene escribir en la próxima descripción.
   (select string_agg(distinct m.palabra, ', ')
      from rubro_palabras rp
      cross join lateral (
-       select (regexp_matches(unaccent(lower(coalesce(c.nombre,'') || ' ' || coalesce(c.descripcion,''))),
+       select (regexp_matches(unaccent(lower(coalesce(c.nombre,'') || ' ' || coalesce(c.productos,'') || ' ' || coalesce(c.descripcion,''))),
                               rp.patron))[1] as palabra
      ) m
-    where unaccent(lower(coalesce(c.nombre,'') || ' ' || coalesce(c.descripcion,''))) ~ rp.patron
+    where unaccent(lower(coalesce(c.nombre,'') || ' ' || coalesce(c.productos,'') || ' ' || coalesce(c.descripcion,''))) ~ rp.patron
   ) as palabras_clave,
   case
     when coalesce(c.descripcion,'') = ''
       then 'Sin descripción: no hay de dónde inferir. Anotar qué vende.'
-    when array_length(rubros_sugeridos(coalesce(c.nombre,'') || ' ' || coalesce(c.descripcion,'')), 1) is null
+    when array_length(rubros_sugeridos(coalesce(c.nombre,'') || ' ' || coalesce(c.productos,'') || ' ' || coalesce(c.descripcion,'')), 1) is null
       then 'La descripción no nombra productos concretos. Agregar 3-5 productos que se ven en el local.'
     else ''
   end as falta,
@@ -55,6 +55,6 @@ from comercios c
 left join lugares l on l.id = c.lugar_id
 where c.activo
 order by
-  case when array_length(rubros_sugeridos(coalesce(c.nombre,'') || ' ' || coalesce(c.descripcion,'')), 1) is null
+  case when array_length(rubros_sugeridos(coalesce(c.nombre,'') || ' ' || coalesce(c.productos,'') || ' ' || coalesce(c.descripcion,'')), 1) is null
        then 0 else 1 end,   -- primero los que no matchean: son los que hay que tocar
   c.nombre;

@@ -112,6 +112,7 @@ async def alta_campo(
     lugar_id: str | None = Form(None),            # si está DENTRO de un mercado/galería
     puesto: str | None = Form(None),              # N° de puesto/local dentro del lugar
     descripcion: str | None = Form(None),
+    productos: str | None = Form(None),   # lista de lo que vende: alimenta buscador y rubros
     email: str | None = Form(None),
     tiktok_url: str | None = Form(None),
     facebook_url: str | None = Form(None),
@@ -167,6 +168,7 @@ async def alta_campo(
             "slug": slug,
             "nombre": nombre_final,
             "descripcion": _none(descripcion),
+            "productos": _none(productos),
             "whatsapp": _none(whatsapp),
             "telefono": _none(telefono),
             "email": _none(email),
@@ -341,6 +343,7 @@ class _EditarComercioBody(BaseModel):
     modalidad: str | None = None
     direccion: str | None = None
     descripcion: str | None = None
+    productos: str | None = None
     rubro_slugs: list[str] | None = None
 
 

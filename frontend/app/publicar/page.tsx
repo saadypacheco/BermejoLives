@@ -19,7 +19,10 @@ import { encolarAlta, contarPendientes, sincronizarPendientes, listarPendientes,
          descartarPendiente, esIrrecuperable, type AltaPendiente } from "@/lib/offline-altas";
 
 // Prefijo telefónico según país
-const PREFIJO: Record<string, string> = { Bolivia: "591", Argentina: "54" };
+// Prefijo telefónico para wa.me. Argentina lleva el 9 de móvil (549…): sin él
+// el link no abre ningún chat. Bermejo es frontera, así que hay comercios
+// con número de los dos países y el prefijo tiene que poder cambiarse a mano.
+const PREFIJO: Record<string, string> = { Bolivia: "591", Argentina: "549" };
 
 const MODALIDADES = [
   { key: "mayorista", label: "Mayorista" },
@@ -356,7 +359,7 @@ function Login({ onOk }: { onOk: () => void }) {
 }
 
 // ─────────────────────────────────────────────
-const EMPTY = { nombre: "", cel: "", modalidad: "mayorista", direccion: "", descripcion: "" };
+const EMPTY = { nombre: "", cel: "", modalidad: "mayorista", direccion: "", descripcion: "", productos: "" };
 
 function toggle<T>(arr: T[], val: T): T[] {
   return arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val];
@@ -688,6 +691,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     if (f.nombre.trim()) campos.nombre = f.nombre.trim();
     if (cel) campos.whatsapp = prefijo + cel;
     if (f.descripcion.trim()) campos.descripcion = f.descripcion.trim();
+    if (f.productos.trim()) campos.productos = f.productos.trim();
     if (f.direccion.trim()) campos.direccion = f.direccion.trim();
     if (lugarId && lugarId !== "__nuevo__") campos.lugar_id = lugarId;
     if (puesto.trim()) campos.puesto = puesto.trim();
@@ -906,9 +910,13 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
         <div>
           <label className="campo-lbl">WhatsApp del comercio (opcional)</label>
           <div className="cel-wrap">
-            <span className="cel-flag">{prefijo === "54" ? "🇦🇷" : "🇧🇴"} +{prefijo}</span>
+            <button type="button" className="cel-flag" title="Tocar para cambiar de país"
+              onClick={() => setPrefijo((p) => (p === "591" ? "549" : "591"))}
+              style={{ cursor: "pointer", border: "none" }}>
+              {prefijo === "549" ? "🇦🇷" : "🇧🇴"} +{prefijo} ⇄
+            </button>
             <input className="adm-input" type="tel" inputMode="numeric" value={f.cel}
-              onChange={(e) => set("cel", e.target.value)} placeholder={prefijo === "54" ? "3514XXXXXX" : "7XXXXXXX"} />
+              onChange={(e) => set("cel", e.target.value)} placeholder={prefijo === "549" ? "3514XXXXXX" : "7XXXXXXX"} />
           </div>
         </div>
 
@@ -922,13 +930,26 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           </div>
         </div>
 
+        {/* ── Productos: lo que más pesa para que el comprador lo encuentre ── */}
+        <div>
+          <label className="campo-lbl">¿Qué productos vende?</label>
+          <textarea className="adm-input" rows={2} value={f.productos}
+            onChange={(e) => set("productos", e.target.value)}
+            onBlur={() => f.productos.trim() && sugerirDesdeDescripcion(`${f.productos} ${f.descripcion}`)}
+            placeholder="Ej: zapatillas, championes, chinelas, mochilas" style={{ resize: "vertical" }} />
+          <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 4, lineHeight: 1.4 }}>
+            Lista de 4 o 5 productos separados por coma, con la palabra que usa el
+            cliente. Es lo que hace que aparezca en el buscador y define su rubro.
+          </div>
+        </div>
+
         {/* ── Descripción: texto primero (siempre), audio como opción ── */}
         <div>
-          <label className="campo-lbl">¿Qué vende? (opcional)</label>
+          <label className="campo-lbl">Algo más del negocio (opcional)</label>
           <textarea className="adm-input" rows={3} value={f.descripcion}
             onChange={(e) => set("descripcion", e.target.value)}
             onBlur={() => f.descripcion.trim() && sugerirDesdeDescripcion(f.descripcion)}
-            placeholder="Ej: Gomería y repuestos de moto. Importa desde China. Pedido mínimo 1 caja." style={{ resize: "vertical" }} />
+            placeholder="Ej: Importa desde China. Pedido mínimo 1 caja. Atiende sábados." style={{ resize: "vertical" }} />
           {puedeGrabar && (
             !grabando ? (
               <button type="button" className="btn btn-ghost" style={{ width: "100%", marginTop: 8 }}

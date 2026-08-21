@@ -16,6 +16,12 @@ PREFIJO_BO = "591"
 _LARGO_MOVIL_BO = 8
 _INICIOS_MOVIL_BO = ("6", "7")
 
+# Bermejo es frontera: hay comercios con número argentino. Para wa.me el móvil
+# argentino va como 54 + 9 + área + número (10 dígitos después del 9). El "9" es
+# el que marca que es celular; sin él el link no abre ningún chat.
+PREFIJO_AR = "549"
+_LARGO_MOVIL_AR = 10
+
 
 def normalizar_whatsapp(valor: str | None, prefijo_default: str = PREFIJO_BO) -> str | None:
     """Devuelve el número en E.164 sin '+', o None si no se puede interpretar.
@@ -31,6 +37,13 @@ def normalizar_whatsapp(valor: str | None, prefijo_default: str = PREFIJO_BO) ->
     # '00591...' → '591...'
     if digitos.startswith("00"):
         digitos = digitos[2:]
+    # '54' + 10 dígitos: le falta el 9 de móvil. Se agrega, porque un número
+    # argentino sin el 9 produce un link de WhatsApp que no abre nada.
+    if digitos.startswith("54") and not digitos.startswith(PREFIJO_AR):
+        resto_ar = digitos[2:]
+        if len(resto_ar) == _LARGO_MOVIL_AR:
+            return PREFIJO_AR + resto_ar
+
     # Local sin código de país: arranca en 6 o 7 y no llega al largo de un
     # número internacional. Se le antepone el prefijo aunque le falten dígitos,
     # para que validar_whatsapp pueda decir "es un celular boliviano incompleto"
@@ -62,6 +75,14 @@ def validar_whatsapp(valor: str | None) -> str | None:
         if resto[0] not in _INICIOS_MOVIL_BO:
             return (f"El WhatsApp «{valor}» no parece un celular: "
                     f"los móviles bolivianos empiezan con {' o '.join(_INICIOS_MOVIL_BO)}")
+        return None
+
+    if numero.startswith(PREFIJO_AR):
+        resto = numero[len(PREFIJO_AR):]
+        if len(resto) != _LARGO_MOVIL_AR:
+            return (f"El WhatsApp «{valor}» no es un celular argentino válido: "
+                    f"esperaba {_LARGO_MOVIL_AR} dígitos después de {PREFIJO_AR} "
+                    f"(área + número), tiene {len(resto)}")
         return None
 
     # Otro país: no se conocen las reglas locales, sólo se chequea que sea
