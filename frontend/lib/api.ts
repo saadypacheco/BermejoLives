@@ -359,6 +359,8 @@ export type PropuestaIA = {
   fotos_analizadas: number;
   error?: string;
   slugs_descartados?: string[];
+  /** Respuesta textual del modelo. Distingue "no vio nada" de "la llamada falló". */
+  crudo?: string;
 };
 
 export type AnalisisIA = {

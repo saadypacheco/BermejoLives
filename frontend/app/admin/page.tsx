@@ -1305,9 +1305,16 @@ function AnalisisComercio({ comercioId, onAplicado }: { comercioId: string; onAp
             <span style={{ color: "var(--txt-3)" }}> · {p.fotos_analizadas} foto(s) analizada(s)</span>
           </div>
 
-          {conf < 0.4 && (
+          {/* Un fallo de la llamada NO es lo mismo que "no vio nada": antes las
+              dos cosas mostraban el mismo cartel y no había cómo distinguirlas. */}
+          {p.error ? (
+            <div style={{ color: "var(--pink)", marginBottom: 8 }}>
+              ⚠️ La llamada al modelo falló: {p.error}
+            </div>
+          ) : conf < 0.4 && (
             <div style={{ color: "var(--amber)", marginBottom: 8 }}>
-              El modelo no vio mercadería clara. Conviene mirar la foto antes de aplicar.
+              El modelo miró las fotos y no reconoció mercadería. Abrí la foto para
+              ver si efectivamente no se ve nada, o si hay que sacar otra.
             </div>
           )}
 
@@ -1322,6 +1329,18 @@ function AnalisisComercio({ comercioId, onAplicado }: { comercioId: string; onAp
             {res?.comercio.prod_obs_human ? ` (siguen siendo: "${res.comercio.prod_obs_human}")` : ""}.
             La descripción sólo se completa si está vacía.
           </div>
+
+          {p.crudo && (
+            <details style={{ marginTop: 8 }}>
+              <summary style={{ cursor: "pointer", color: "var(--txt-3)", fontSize: 11.5 }}>
+                Ver la respuesta del modelo
+              </summary>
+              <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 11,
+                            color: "var(--txt-3)", marginTop: 6, maxHeight: 180, overflowY: "auto" }}>
+                {p.crudo}
+              </pre>
+            </details>
+          )}
 
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
             <button type="button" className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => setRes(null)}>

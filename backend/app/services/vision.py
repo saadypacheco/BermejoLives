@@ -135,16 +135,26 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
 
     url_api = (f"https://generativelanguage.googleapis.com/v1beta/models/"
                f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}")
+    r = None
     try:
         r = httpx.post(url_api, json={"contents": [{"parts": partes}]}, timeout=TIMEOUT_MODELO)
         r.raise_for_status()
-        texto = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+        cuerpo = r.json()
+        texto = cuerpo["candidates"][0]["content"]["parts"][0]["text"]
         out = _parsear(texto)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("vision.modelo_fallo", error=str(exc))
+        # El crudo es lo único que distingue "no vio nada" de "la llamada
+        # falló": sin esto las dos cosas se ven idénticas en el panel.
+        crudo = ""
+        if r is not None:                      # si falló la conexión, no hay respuesta
+            try:
+                crudo = str(r.json())[:600]
+            except Exception:  # noqa: BLE001
+                crudo = str(getattr(r, "text", ""))[:600]
+        logger.warning("vision.modelo_fallo", error=str(exc), crudo=crudo)
         return {"productos": "", "descripcion": "", "subcategoria": "",
                 "rubro_slugs": [], "confianza": 0.0, "fotos_analizadas": usadas,
-                "error": f"El modelo falló: {exc}"}
+                "error": f"El modelo falló: {exc}", "crudo": crudo}
 
     # El modelo puede devolver slugs que no existen: se descartan en vez de
     # crear rubros fantasma.
@@ -162,4 +172,7 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
         "confianza": float(out.get("confianza") or 0),
         "fotos_analizadas": usadas,
         "slugs_descartados": descartados,
+        # Lo que respondió el modelo, tal cual. Es la única forma de saber si una
+        # confianza baja es honesta o si el prompt está pidiendo mal las cosas.
+        "crudo": texto[:1500],
     }
