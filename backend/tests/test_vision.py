@@ -162,3 +162,42 @@ def test_confianza_cero_no_escribe_nada(client, repo, admin_token, monkeypatch):
 
     assert r.json()["aplicado"] is False
     assert repo.comercios[c["id"]].get("prod_det_ia") is None
+
+
+# ─────────────────────────── la API key no puede salir en pantalla
+def test_el_error_no_expone_la_api_key(monkeypatch):
+    """httpx mete la URL completa en sus mensajes, y la URL de Gemini lleva
+    ?key=... — así un 404 mostraba la clave entera en el panel del admin."""
+    from app.core.config import settings
+    from app.services.vision import _sin_secretos
+
+    monkeypatch.setattr(settings, "gemini_api_key", "AQ.Ab8RN6secretisimo")
+    mensaje = ("Client error '404 Not Found' for url 'https://generativelanguage."
+               "googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+               "?key=AQ.Ab8RN6secretisimo'")
+
+    limpio = _sin_secretos(mensaje)
+    assert "AQ.Ab8RN6secretisimo" not in limpio
+    assert "<oculta>" in limpio
+    assert "404" in limpio, "el diagnóstico útil tiene que sobrevivir"
+
+
+def test_se_tapa_la_key_aunque_venga_sin_el_parametro(monkeypatch):
+    from app.core.config import settings
+    from app.services.vision import _sin_secretos
+
+    monkeypatch.setattr(settings, "gemini_api_key", "AIzaSuperSecreta")
+    assert "AIzaSuperSecreta" not in _sin_secretos("falló con la clave AIzaSuperSecreta")
+
+
+def test_el_error_del_endpoint_llega_sin_la_key(monkeypatch):
+    """De punta a punta: lo que ve el panel no puede tener la clave."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "gemini_api_key", "AQ.Ab8RN6secretisimo")
+
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post",
+               side_effect=RuntimeError("404 for url 'https://x?key=AQ.Ab8RN6secretisimo'")):
+        out = analizar_fotos(["http://x/f.jpg"], RUBROS)
+
+    assert "AQ.Ab8RN6secretisimo" not in out["error"]
+    assert "AQ.Ab8RN6secretisimo" not in out.get("crudo", "")

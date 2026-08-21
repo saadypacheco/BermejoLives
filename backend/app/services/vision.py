@@ -101,6 +101,22 @@ Rubros disponibles:
 {lista}"""
 
 
+def _sin_secretos(texto: str) -> str:
+    """Saca la API key de cualquier texto que vaya a mostrarse.
+
+    httpx incluye la URL completa en el mensaje de sus errores, y la URL de
+    Gemini lleva ?key=... — así que un 404 terminaba mostrando la clave entera
+    en el panel del admin. Cualquiera con acceso a esa pantalla, o a una captura,
+    se la lleva.
+    """
+    if not texto:
+        return texto
+    limpio = re.sub(r"([?&]key=)[^&\s\"']+", r"\g<1><oculta>", texto)
+    if settings.gemini_api_key:
+        limpio = limpio.replace(settings.gemini_api_key, "<oculta>")
+    return limpio
+
+
 def _parsear(texto: str) -> dict:
     limpio = texto.strip().strip("`")
     if limpio.lower().startswith("json"):
@@ -151,10 +167,18 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
                 crudo = str(r.json())[:600]
             except Exception:  # noqa: BLE001
                 crudo = str(getattr(r, "text", ""))[:600]
-        logger.warning("vision.modelo_fallo", error=str(exc), crudo=crudo)
+        detalle = _sin_secretos(str(exc))
+        crudo = _sin_secretos(crudo)
+        logger.warning("vision.modelo_fallo", error=detalle, crudo=crudo)
+        # Un 404 acá casi siempre es el nombre del modelo, no la key: conviene
+        # decirlo, porque el mensaje crudo de httpx no lo sugiere.
+        ayuda = ""
+        if "404" in detalle:
+            ayuda = (f" — el modelo '{settings.gemini_model}' no existe para esta API key. "
+                     "Verificá GEMINI_MODEL contra los modelos que la key tiene habilitados.")
         return {"productos": "", "descripcion": "", "subcategoria": "",
                 "rubro_slugs": [], "confianza": 0.0, "fotos_analizadas": usadas,
-                "error": f"El modelo falló: {exc}", "crudo": crudo}
+                "error": f"El modelo falló: {detalle}{ayuda}", "crudo": crudo}
 
     # El modelo puede devolver slugs que no existen: se descartan en vez de
     # crear rubros fantasma.
