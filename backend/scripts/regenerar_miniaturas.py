@@ -9,6 +9,10 @@ siente como "el buscador va lento" en una conexión mala.
 A 200px cubre el doble del tamaño de pantalla más grande (pantallas retina) y
 pesa alrededor de un tercio.
 
+También se puede correr por tubería, sin que la imagen lo tenga:
+    docker compose ... exec -T backend python - < backend/scripts/regenerar_miniaturas.py
+    docker compose ... exec -T -e APLICAR=1 backend python - < backend/scripts/regenerar_miniaturas.py
+
 Uso, dentro del contenedor del backend:
     docker compose -f docker-compose.prod.yml exec -T backend \\
         python /app/scripts/regenerar_miniaturas.py --aplicar
@@ -17,6 +21,7 @@ Sin --aplicar sólo informa cuánto se ahorraría. No toca la base: los nombres 
 archivo no cambian, así que las URLs guardadas siguen sirviendo.
 """
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -35,6 +40,9 @@ def main() -> int:
     ap.add_argument("--lado", type=int, default=LADO)
     ap.add_argument("--calidad", type=int, default=CALIDAD)
     args = ap.parse_args()
+    # Por tubería (python - < script) argparse no recibe argumentos: ahí se usa
+    # la variable de entorno.
+    aplicar = args.aplicar or os.environ.get("APLICAR") in {"1", "true", "si"}
 
     raiz = Path(settings.fotos_dir)
     if not raiz.is_dir():
@@ -65,7 +73,7 @@ def main() -> int:
         peso_viejo = thumb.stat().st_size
         antes += peso_viejo
         despues += len(nueva)
-        if args.aplicar:
+        if aplicar:
             thumb.write_bytes(nueva)
 
     n = len(thumbs) - saltadas - errores
@@ -77,7 +85,7 @@ def main() -> int:
         print(f"  después: {despues/1024/1024:.1f} MB  ({despues/n/1024:.0f} KB promedio)")
         ahorro = 100 * (1 - despues / antes) if antes else 0
         print(f"  ahorro:  {ahorro:.0f}%")
-    print("APLICADO" if args.aplicar else "\nSimulación. Volvé a correrlo con --aplicar para escribir.")
+    print("APLICADO" if aplicar else "\nSimulación. Volvé a correrlo con --aplicar para escribir.")
     return 0
 
 

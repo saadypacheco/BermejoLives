@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir --timeout 120 --retries 8 uv \
  && uv pip install --system .
 
 COPY app ./app
+# Scripts de mantenimiento que se corren con `docker compose exec`
+# (regenerar miniaturas, etc.). Sin esto no existen dentro del contenedor.
+COPY scripts ./scripts
 
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
