@@ -382,8 +382,16 @@
 
 /* ===== Ficha de comercio (/comercios/[slug]) ===== */
 .uk-profile { padding-bottom: 50px; }
-.uk-cover { height: 220px; background: var(--uk-chip); overflow: hidden; }
-.uk-cover img { width: 100%; height: 100%; object-fit: cover; }
+/* La portada la saca el agente parado en la puerta: casi siempre es vertical o
+   4:3 de una vidriera. Con una franja fija de 220px en pantalla ancha el recorte
+   se comía el local entero y dejaba una tira de perchas sin contexto.
+   El alto sigue la proporción de la foto, acotado para que no empuje el nombre
+   del negocio fuera de la pantalla. */
+.uk-cover { aspect-ratio: 16 / 9; max-height: 62vh; background: var(--uk-chip); overflow: hidden; }
+.uk-cover img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
+/* En celular la pantalla es angosta y alta: 4:3 muestra bastante más de la
+   vidriera sin dejar la ficha abajo de todo. */
+@media (max-width: 720px) { .uk-cover { aspect-ratio: 4 / 3; max-height: 52vh; } }
 .uk-back { display: inline-flex; align-items: center; gap: 6px; color: var(--uk-ink-soft); font-size: 14px; margin: 16px 0; }
 .uk-profile-head { display: flex; gap: 18px; align-items: flex-start; margin-top: -50px; position: relative; flex-wrap: wrap; }
 .uk-profile-logo { width: 96px; height: 96px; border-radius: 20px; border: 3px solid var(--uk-surface); object-fit: cover; background: var(--uk-surface); box-shadow: var(--uk-shadow-soft); }
