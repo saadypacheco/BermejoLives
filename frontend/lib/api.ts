@@ -361,6 +361,8 @@ export type PropuestaIA = {
   slugs_descartados?: string[];
   /** Respuesta textual del modelo. Distingue "no vio nada" de "la llamada falló". */
   crudo?: string;
+  /** Consumo real de esta llamada, para ver el costo por comercio. */
+  tokens?: { entrada: number | null; salida: number | null; total: number | null };
 };
 
 export type AnalisisIA = {

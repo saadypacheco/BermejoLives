@@ -158,6 +158,11 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
         cuerpo = r.json()
         texto = cuerpo["candidates"][0]["content"]["parts"][0]["text"]
         out = _parsear(texto)
+        # Consumo real de ESTA llamada. Sin esto el costo sólo se puede estimar,
+        # o mirar agregado en el panel de Google: acá se ve por comercio, que es
+        # lo que permite decidir si conviene bajar a un modelo más barato o
+        # mandar menos fotos.
+        uso = cuerpo.get("usageMetadata") or {}
     except Exception as exc:  # noqa: BLE001
         # El crudo es lo único que distingue "no vio nada" de "la llamada
         # falló": sin esto las dos cosas se ven idénticas en el panel.
@@ -209,6 +214,9 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
     if descartados:
         logger.info("vision.slugs_invalidos", descartados=descartados)
 
+    logger.info("vision.uso", fotos=usadas, tokens=uso.get("totalTokenCount"),
+                modelo=settings.gemini_model, confianza=out.get("confianza"))
+
     return {
         "productos": (out.get("productos") or "").strip(),
         "descripcion": (out.get("descripcion") or "").strip(),
@@ -217,6 +225,11 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
         "confianza": float(out.get("confianza") or 0),
         "fotos_analizadas": usadas,
         "slugs_descartados": descartados,
+        "tokens": {
+            "entrada": uso.get("promptTokenCount"),
+            "salida": uso.get("candidatesTokenCount"),
+            "total": uso.get("totalTokenCount"),
+        },
         # Lo que respondió el modelo, tal cual. Es la única forma de saber si una
         # confianza baja es honesta o si el prompt está pidiendo mal las cosas.
         "crudo": texto[:1500],

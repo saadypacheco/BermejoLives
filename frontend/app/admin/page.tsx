@@ -1324,6 +1324,9 @@ function AnalisisComercio({ comercioId, onAplicado }: { comercioId: string; onAp
           <div style={{ marginBottom: 8 }}>
             Confianza <b style={{ color: colorConf }}>{etiquetaConf} ({Math.round(conf * 100)}%)</b>
             <span style={{ color: "var(--txt-3)" }}> · {p.fotos_analizadas} foto(s) analizada(s)</span>
+            {p.tokens?.total != null && (
+              <span style={{ color: "var(--txt-3)" }}> · {p.tokens.total.toLocaleString("es-BO")} tokens</span>
+            )}
           </div>
 
           {/* Un fallo de la llamada NO es lo mismo que "no vio nada": antes las

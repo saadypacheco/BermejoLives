@@ -62,7 +62,10 @@ def _respuesta(payload: dict):
         def raise_for_status(self): pass
         def json(self):
             import json as j
-            return {"candidates": [{"content": {"parts": [{"text": j.dumps(payload)}]}}]}
+            return {"candidates": [{"content": {"parts": [{"text": j.dumps(payload)}]}}],
+                    "usageMetadata": {"promptTokenCount": 1800,
+                                      "candidatesTokenCount": 120,
+                                      "totalTokenCount": 1920}}
     return R()
 
 
@@ -278,3 +281,34 @@ def test_lo_que_no_matchea_con_nada_se_reporta(monkeypatch):
         out = analizar_fotos(["http://x/f.jpg"], RUBROS)
     assert out["rubro_slugs"] == ["calzado"]
     assert out["slugs_descartados"] == ["peluqueria canina"]
+
+
+def test_se_reporta_el_consumo_de_tokens(monkeypatch):
+    """Permite ver el costo por comercio en vez de estimarlo o mirarlo agregado
+    en el panel de Google."""
+    _con_key(monkeypatch)
+    payload = {"productos": "x", "descripcion": "", "subcategoria": "",
+               "rubro_slugs": [], "confianza": 0.5}
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post", return_value=_respuesta(payload)):
+        out = analizar_fotos(["http://x/f.jpg"], RUBROS)
+
+    assert out["tokens"]["entrada"] == 1800
+    assert out["tokens"]["salida"] == 120
+    assert out["tokens"]["total"] == 1920
+
+
+def test_sin_usageMetadata_no_rompe(monkeypatch):
+    """Si la API deja de mandarlo, el análisis tiene que seguir funcionando."""
+    _con_key(monkeypatch)
+
+    class SinUso:
+        status_code = 200
+        def raise_for_status(self): pass
+        def json(self):
+            return {"candidates": [{"content": {"parts": [{"text": '{"confianza": 0.5}'}]}}]}
+
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post", return_value=SinUso()):
+        out = analizar_fotos(["http://x/f.jpg"], RUBROS)
+
+    assert out["tokens"]["total"] is None
+    assert out["confianza"] == 0.5
