@@ -6,6 +6,9 @@ import type { ComercioMapa } from "@/lib/data";
 import { abiertoAhora } from "@/lib/horario";
 import { rubroStyle, loadLeaflet, escapeHtml } from "@/lib/mapa-visual";
 
+import { adornoHTML, MEDIDAS, ZOOM_MIN_ADORNOS, type Adorno } from "@/lib/adornos";
+import { getAdornosMapa } from "@/lib/data";
+
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 
 type Tier = "gratis" | "pago" | "destacado";
@@ -41,6 +44,8 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
   const mapRef = useRef<any>(null);
   const clusterRef = useRef<any>(null);
   const polyLayerRef = useRef<any>(null);   // polígonos de las manzanas (mercados)
+  const adornoLayerRef = useRef<any>(null); // chalanas y lapachos (pura decoración)
+  const adornosRef = useRef<Adorno[]>([]);
   const markerByIdRef = useRef<Map<string, any>>(new Map());
   const LRef = useRef<any>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -79,6 +84,14 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
         obs.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
         (map as any)._themeObs = obs;
       }
+      // Panel propio para los adornos, por DEBAJO de todo lo demás y sordo al
+      // mouse: el mapa existe para mostrar comercios, así que una chalana nunca
+      // puede taparle el clic a un local ni robarle la atención.
+      map.createPane("adornos");
+      map.getPane("adornos").style.zIndex = "350";      // < overlayPane (400) < markerPane (600)
+      map.getPane("adornos").style.pointerEvents = "none";
+      adornoLayerRef.current = L.layerGroup().addTo(map);
+
       polyLayerRef.current = L.layerGroup().addTo(map);   // manzanas por debajo de los pines
       // Locales a la calle: pines INDIVIDUALES (sin agrupador, mapa lleno de puntos por
       // rubro). Los mercados/galerías se muestran como un pin 🏬 que abre el directorio.
@@ -89,7 +102,14 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
       map.on("move zoom moveend", drawConnector);
       // Las etiquetas de mercados aparecen y desaparecen según el zoom, así
       // que hay que repintar cuando termina de hacer zoom.
-      map.on("zoomend", () => pintar());
+      map.on("zoomend", () => { pintar(); pintarAdornos(); });
+
+      // Se cargan una sola vez y no bloquean nada: si fallan, el mapa queda sin
+      // decoración y con todos sus comercios, que es lo que importa.
+      getAdornosMapa().then((items) => {
+        adornosRef.current = items;
+        pintarAdornos();
+      }).catch(() => {});
       const ro = new ResizeObserver(() => { map.invalidateSize(); drawConnector(); });
       ro.observe(elRef.current);
       (map as any)._ro = ro;
@@ -144,6 +164,38 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
   // Con la píldora violeta tapaban el mapa y escondían justamente lo que la
   // persona vino a ver: los locales. Ahora sólo aparecen de cerca, y como texto
   // discreto.
+  /**
+   * Dibuja las chalanas y los lapachos. Van en su propio panel, por debajo de
+   * los pines y sin recibir clics, así que no pueden competir con un comercio.
+   *
+   * Por debajo de ZOOM_MIN_ADORNOS no se dibuja ninguno: de lejos el mapa tiene
+   * que ser comercios y nada más, porque es el momento en que el comprador está
+   * buscando y no mirando.
+   */
+  function pintarAdornos() {
+    const L = LRef.current, map = mapRef.current, capa = adornoLayerRef.current;
+    if (!L || !map || !capa) return;
+    capa.clearLayers();
+    if (map.getZoom() < ZOOM_MIN_ADORNOS) return;
+
+    adornosRef.current.forEach((a, i) => {
+      if (a.lat == null || a.lng == null) return;
+      const m = MEDIDAS[a.tipo] ?? MEDIDAS.lapacho;
+      const icono = L.divIcon({
+        className: "",
+        html: adornoHTML(a, i),
+        iconSize: [m.w, m.h],
+        iconAnchor: [m.w / 2, m.anclaY],
+      });
+      capa.addLayer(L.marker([a.lat, a.lng], {
+        icon: icono,
+        pane: "adornos",
+        interactive: false,       // no roba el clic al comercio que esté debajo
+        keyboard: false,
+      }));
+    });
+  }
+
   const ZOOM_MIN_LUGARES = 17;
 
   function iconoLugar(L: any, nombre: string) {

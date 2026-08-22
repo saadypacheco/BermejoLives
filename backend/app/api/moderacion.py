@@ -983,3 +983,81 @@ async def analizar_tanda(
         "resultados": resultados,
         "sin_mas": False,
     }
+
+
+class AdornoBody(BaseModel):
+    tipo: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+    giro: float | None = None
+    escala: float | None = None
+    ciudad_slug: str | None = None
+
+
+TIPOS_ADORNO = {"chalana", "lapacho"}
+
+
+@router.get("/admin/adornos")
+def admin_list_adornos(
+    ciudad_slug: str = Query(default="bermejo"),
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    ciudad_id = repo.get_ciudad_id(ciudad_slug) or repo.get_ciudad_id("bermejo")
+    return {"items": repo.list_adornos(ciudad_id)}
+
+
+@router.post("/admin/adornos")
+def admin_crear_adorno(
+    body: AdornoBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    tipo = (body.tipo or "").strip()
+    if tipo not in TIPOS_ADORNO:
+        raise HTTPException(status_code=400, detail=f"Tipo inválido: {tipo or '(vacío)'}")
+    if body.lat is None or body.lng is None:
+        raise HTTPException(status_code=400, detail="Falta la ubicación")
+
+    ciudad_id = repo.get_ciudad_id(body.ciudad_slug or "bermejo") or repo.get_ciudad_id("bermejo")
+    adorno = repo.crear_adorno({
+        "tipo": tipo, "lat": body.lat, "lng": body.lng, "ciudad_id": ciudad_id,
+        "giro": body.giro if body.giro is not None else 0,
+        "escala": body.escala if body.escala is not None else 1,
+    })
+    logger.info("admin.adorno_creado", tipo=tipo, by=admin["email"])
+    return {"ok": True, "adorno": adorno}
+
+
+@router.put("/admin/adornos/{adorno_id}")
+def admin_update_adorno(
+    adorno_id: str,
+    body: AdornoBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    patch: dict = {}
+    if body.tipo is not None:
+        if body.tipo not in TIPOS_ADORNO:
+            raise HTTPException(status_code=400, detail=f"Tipo inválido: {body.tipo}")
+        patch["tipo"] = body.tipo
+    for campo in ("lat", "lng", "giro", "escala"):
+        valor = getattr(body, campo)
+        if valor is not None:
+            patch[campo] = valor
+    if not patch:
+        raise HTTPException(status_code=400, detail="Nada para actualizar")
+    return {"ok": True, "adorno": repo.update_adorno(adorno_id, patch)}
+
+
+@router.delete("/admin/adornos/{adorno_id}")
+def admin_delete_adorno(
+    adorno_id: str,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    # Baja lógica, igual que los lugares: un adorno borrado por error se
+    # recupera con un update, y son datos puestos a mano que cuesta rehacer.
+    repo.update_adorno(adorno_id, {"activo": False})
+    logger.info("admin.adorno_borrado", adorno=adorno_id, by=admin["email"])
+    return {"ok": True}

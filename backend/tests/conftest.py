@@ -36,6 +36,7 @@ class FakeRepo:
 
     def __init__(self):
         self.comercios: dict[str, dict] = {}
+        self.adornos: dict[str, dict] = {}
         self.sinonimos: dict[str, str] = {}
         self.sinonimos_manuales: set[str] = set()
         self.usuarios: dict[str, dict] = {}          # email -> row
@@ -660,6 +661,19 @@ class FakeRepo:
 
     def get_diccionario_sinonimos(self):
         return dict(self.sinonimos)
+
+    def list_adornos(self, ciudad_id=None):
+        return [a for a in self.adornos.values() if a.get("activo", True)
+                and (not ciudad_id or a.get("ciudad_id") == ciudad_id)]
+
+    def crear_adorno(self, row):
+        aid = row.get("id") or f"adorno-{len(self.adornos) + 1}"
+        self.adornos[aid] = {**row, "id": aid, "activo": True}
+        return self.adornos[aid]
+
+    def update_adorno(self, adorno_id, patch):
+        self.adornos.setdefault(adorno_id, {"id": adorno_id}).update(patch)
+        return self.adornos[adorno_id]
 
     def list_comercio_rubros_todos(self):
         salida = []

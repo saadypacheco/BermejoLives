@@ -190,6 +190,34 @@ export async function adminDeleteLugar(id: string): Promise<void> {
   await authFetch(`/admin/lugares/${id}`, { method: "DELETE" });
 }
 
+// ── Adornos del mapa (chalanas y lapachos) ──────────────────────────────────
+// Pura decoración: no son comercios, no se buscan y no reciben clics. Dónde va
+// cada uno hay que decidirlo conociendo la ciudad, así que se marcan haciendo
+// clic en el mapa desde el admin en vez de quedar fijos en el código.
+export type AdornoAdmin = {
+  id: string; tipo: "chalana" | "lapacho";
+  lat: number; lng: number; giro?: number | null; escala?: number | null;
+};
+
+export async function adminListAdornos(ciudadSlug = "bermejo"): Promise<AdornoAdmin[]> {
+  const res = await authFetch(`/admin/adornos?ciudad_slug=${encodeURIComponent(ciudadSlug)}`);
+  return itemsDe<AdornoAdmin>(res, "los adornos");
+}
+
+export async function adminCrearAdorno(body: { tipo: string; lat: number; lng: number; giro?: number; escala?: number }): Promise<AdornoAdmin> {
+  const res = await authFetch(`/admin/adornos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return (await res.json()).adorno as AdornoAdmin;
+}
+
+export async function adminUpdateAdorno(id: string, body: { tipo?: string; lat?: number; lng?: number; giro?: number; escala?: number }): Promise<AdornoAdmin> {
+  const res = await authFetch(`/admin/adornos/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return (await res.json()).adorno as AdornoAdmin;
+}
+
+export async function adminDeleteAdorno(id: string): Promise<void> {
+  await authFetch(`/admin/adornos/${id}`, { method: "DELETE" });
+}
+
 // ── Suscripciones ──────────────────────────────────────────────────────────
 
 export type EstadoSuscripcion = "activo" | "por_vencer" | "vencido" | "suspendido" | "sin_plan";

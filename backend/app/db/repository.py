@@ -68,6 +68,9 @@ class Repo(Protocol):
     def get_diccionario_sinonimos(self) -> dict[str, str]: ...
     def revisar_sinonimos(self) -> str | None: ...
     def list_comercio_rubros_todos(self) -> list[dict]: ...
+    def list_adornos(self, ciudad_id: str | None) -> list[dict]: ...
+    def crear_adorno(self, row: dict) -> dict: ...
+    def update_adorno(self, adorno_id: str, patch: dict) -> dict: ...
     def guardar_sinonimos(self, entradas: dict[str, str], origen: str = "ia") -> int: ...
     def quitar_rubro_comercio(self, comercio_id: str, rubro_id: str) -> None: ...
     def get_comercio_rubros(self, comercio_id: str) -> list[str]: ...
@@ -619,6 +622,27 @@ class SupabaseRepo:
             return {r["termino"]: r["sinonimos"] for r in (res.data or []) if r.get("termino")}
         except Exception:  # noqa: BLE001 — el buscador funciona sin sinónimos
             return {}
+
+    def list_adornos(self, ciudad_id: str | None = None) -> list[dict]:
+        """Los adornos activos. Nunca falla hacia arriba: si la tabla no está o
+        PostgREST tiene el cache viejo, el mapa se dibuja sin decoración. Perder
+        un lapacho no puede dejar al comprador sin ver los comercios."""
+        try:
+            q = self._db.table("mapa_adornos").select("*").eq("activo", True)
+            if ciudad_id:
+                q = q.eq("ciudad_id", ciudad_id)
+            return list((q.execute().data) or [])
+        except Exception:  # noqa: BLE001
+            return []
+
+    def crear_adorno(self, row: dict) -> dict:
+        res = self._db.table("mapa_adornos").insert(row).execute()
+        return (res.data or [{}])[0]
+
+    def update_adorno(self, adorno_id: str, patch: dict) -> dict:
+        res = (self._db.table("mapa_adornos").update(patch)
+               .eq("id", adorno_id).execute())
+        return (res.data or [{}])[0]
 
     def list_comercio_rubros_todos(self) -> list[dict]:
         """Toda la tabla comercio_rubros de una, con el slug ya resuelto.

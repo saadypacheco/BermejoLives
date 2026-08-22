@@ -1,4 +1,5 @@
 import { supabase, hasSupabase } from "@/lib/supabase";
+import type { Adorno } from "@/lib/adornos";
 import type { Comercio, FeedItem, Producto, Zona, Rubro, Ciudad, ResultadoBusqueda, FiltrosBusqueda } from "@/lib/types";
 
 // Diagnóstico temporal (self-host, 2026-07-10): supabase-js a veces no
@@ -325,3 +326,23 @@ export const DEMO_FEED: FeedItem[] = [
   { id: "f3", tipo: "video", titulo: "Unboxing Smart TV", descripcion: "Mirá la review completa.", precio: null, moneda: "BOB", imagen_url: img("tvbox", 700, 440), tiktok_url: "https://tiktok.com/@tecnostore/video/123", approved_at: null, created_at: "", comercio_id: "c3", comercio_slug: "tecno-store", comercio_nombre: "Tecno Store", comercio_logo: img("teclogo", 80, 80), comercio_whatsapp: "59170000003", comercio_verificado: false, zona_nombre: "Zona Tecnología", descuento_pct: null, vence_el: null },
   { id: "f4", tipo: "oferta", titulo: "Perfume 212 VIP", descripcion: "Original importado.", precio: 250, moneda: "BOB", imagen_url: img("perfume", 700, 440), tiktok_url: null, approved_at: null, created_at: "", comercio_id: "c4", comercio_slug: "perfumeria-vip", comercio_nombre: "Perfumería VIP", comercio_logo: img("perflogo", 80, 80), comercio_whatsapp: "59170000004", comercio_verificado: true, zona_nombre: "Centro", descuento_pct: null, vence_el: null },
 ];
+
+/**
+ * Los adornos del mapa: chalanas y lapachos ubicados a mano desde el admin.
+ *
+ * Falla en silencio devolviendo lista vacía. Es decoración: si la tabla todavía
+ * no existe o la consulta se cae, el mapa tiene que dibujarse igual con sus
+ * comercios. Quedarse sin un lapacho no es un problema; quedarse sin el mapa sí.
+ */
+export async function getAdornosMapa(): Promise<Adorno[]> {
+  if (!hasSupabase) return [];
+  try {
+    const { data } = await supabase
+      .from("mapa_adornos")
+      .select("id, tipo, lat, lng, giro, escala")
+      .eq("activo", true);
+    return (data ?? []) as Adorno[];
+  } catch {
+    return [];
+  }
+}

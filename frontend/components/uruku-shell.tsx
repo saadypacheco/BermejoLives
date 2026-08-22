@@ -9,6 +9,7 @@ import { Ic, SocialLinks, money } from "@/components/uruku-ui";
 import { getClima, getCotizaciones, getRedes } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { versionLabel } from "@/lib/version";
+import { URUKU_SVG } from "@/lib/adornos";
 
 /**
  * Marco compartido del diseño URUKU: barra social + header (buscador, ciudad,
@@ -85,6 +86,10 @@ export async function UrukuShell({
 
       {showFoot && (
         <footer className="uk-footer">
+          {/* La vaina del uruku de fondo, muy tenue. Decorativa: sin clic y
+              oculta para lectores de pantalla. */}
+          <div className="uk-uruku-marca" aria-hidden="true"
+               dangerouslySetInnerHTML={{ __html: URUKU_SVG }} />
           <div className="uk-container">
             <div className="uk-foot-cols">
               <div className="uk-foot-col">

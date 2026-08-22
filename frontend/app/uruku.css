@@ -479,3 +479,45 @@
   .uk-foot-cols { grid-template-columns: 1fr; }
   .uk-foot-copy { margin-left: 0; width: 100%; }
 }
+
+/* ── Adornos del mapa: chalanas y lapachos ──────────────────────────────────
+   Van en su propio panel de Leaflet, por debajo de los pines. `pointer-events`
+   en none es lo que garantiza que nunca le roben el clic a un comercio: el
+   mapa existe para mostrar locales, y un adorno que estorba es un adorno de
+   más. Se atenúan un poco para que se lean como fondo y no como contenido. */
+.uk-adorno { pointer-events: none; opacity: .88; transform-origin: 50% 85%; }
+.uk-adorno svg { display: block; filter: drop-shadow(0 2px 3px rgb(0 0 0 / .25)); }
+/* Sobre el mapa oscuro los colores plenos encandilan; sobre el claro se
+   pierden. Un ajuste por tema en vez de dos juegos de dibujos. */
+[data-theme="light"] .uk-adorno { opacity: .95; }
+
+/* ── El uruku como marca de agua ────────────────────────────────────────────
+   La vaina del achiote es el logo. En el pie va grande y muy tenue: la marca
+   se sostiene mejor apareciendo de fondo que repitiendo el logotipo. Es
+   decorativa, así que no recibe clics ni la lee un lector de pantalla. */
+.uk-footer { position: relative; overflow: hidden; }
+.uk-uruku-marca {
+  position: absolute; right: -18px; bottom: -26px;
+  width: 190px; color: var(--uk-primary, #e11d48);
+  opacity: .06; pointer-events: none; user-select: none;
+}
+.uk-uruku-marca svg { width: 100%; height: auto; display: block; }
+[data-theme="light"] .uk-uruku-marca { opacity: .08; }
+/* En pantallas chicas el pie ya está apretado: el adorno se achica para no
+   quedar por detrás del texto. */
+@media (max-width: 640px) { .uk-uruku-marca { width: 120px; right: -10px; bottom: -16px; } }
+
+/* ── Editor de adornos (admin) ──────────────────────────────────────────── */
+.uk-adornos-mapa { height: 62vh; min-height: 380px; border-radius: 12px; overflow: hidden; border: 1px solid var(--uk-line); }
+.uk-adornos-barra { display: flex; align-items: center; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
+.uk-adornos-barra button { padding: 7px 14px; border-radius: 999px; border: 1px solid var(--uk-line); background: var(--uk-surface-2); cursor: pointer; }
+.uk-adornos-barra button.active { background: var(--uk-primary, #e11d48); color: #fff; border-color: transparent; }
+.uk-adornos-conteo { margin-left: auto; opacity: .7; font-size: 13px; }
+.uk-adornos-sel { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: var(--uk-surface-2); border: 1px solid var(--uk-line); }
+.uk-adornos-sel label { display: flex; align-items: center; gap: 8px; font-size: 13px; opacity: .85; }
+.uk-adornos-coords { font-family: ui-monospace, monospace; font-size: 12px; opacity: .6; }
+.uk-adornos-borrar { margin-left: auto; padding: 6px 14px; border-radius: 8px; border: 1px solid #ef4444; color: #ef4444; background: transparent; cursor: pointer; }
+/* El seleccionado se destaca sin cambiar de tamaño: si creciera, se vería
+   distinto de como va a quedar en el mapa público. */
+.uk-adorno-sel .uk-adorno svg { filter: drop-shadow(0 0 0 2px #fff) drop-shadow(0 0 6px var(--uk-primary, #e11d48)); }
+.uk-adornos-editor .leaflet-marker-draggable { cursor: grab; }
