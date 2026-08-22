@@ -315,7 +315,7 @@ def test_sin_usageMetadata_no_rompe(monkeypatch):
 
 
 # ───────────────────── errores transitorios de Gemini
-def _respuesta_error(status: int, retry_after: str | None = None):
+def _respuesta_error(status: int, retry_after: str | None = None, cuerpo: dict | None = None):
     class R:
         status_code = status
         headers = {"retry-after": retry_after} if retry_after else {}
@@ -323,8 +323,18 @@ def _respuesta_error(status: int, retry_after: str | None = None):
             import httpx as h
             raise h.HTTPStatusError(f"Server error '{status}'", request=None, response=None)
         def json(self):
-            return {"error": {"code": status}}
+            return cuerpo if cuerpo is not None else {"error": {"code": status}}
     return R()
+
+
+# El 429 real de Gemini cuando se agota la cuota gratuita: el tiempo de espera
+# viene en el CUERPO, no en la cabecera Retry-After.
+_CUOTA_AGOTADA = {"error": {
+    "code": 429, "status": "RESOURCE_EXHAUSTED",
+    "message": ("You exceeded your current quota. * Quota exceeded for metric: "
+                "generativelanguage.googleapis.com/generate_content_free_tier_requests, "
+                "limit: 20, model: gemini-3.6-flash Please retry in 34.288884339s."),
+}}
 
 
 def test_reintenta_ante_un_503_y_sale_bien(monkeypatch):
@@ -399,3 +409,32 @@ def test_se_respeta_el_retry_after_del_servidor(monkeypatch):
         analizar_fotos(["http://x/f.jpg"], RUBROS)
 
     assert esperas[0] == 30, "si el servidor dice cuánto esperar, se le hace caso"
+
+
+def test_no_insiste_cuando_la_cuota_esta_agotada(monkeypatch):
+    """Reintentar no repone la cuota, y cada intento gasta otra request de la
+    misma cuota agotada — o sea que empeora el problema que intenta resolver."""
+    _con_key(monkeypatch)
+    monkeypatch.setattr("app.services.vision.ESPERA_BASE", 0)
+    esperas = []
+    monkeypatch.setattr("app.services.vision.time.sleep", lambda s: esperas.append(s))
+
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post",
+               return_value=_respuesta_error(429, cuerpo=_CUOTA_AGOTADA)) as post:
+        out = analizar_fotos(["http://x/f.jpg"], RUBROS)
+
+    assert post.call_count == 1, "no tiene que gastar más requests de una cuota agotada"
+    assert esperas == []
+    assert "error" in out
+
+
+def test_lee_el_tiempo_de_espera_del_cuerpo(monkeypatch):
+    """Gemini no manda Retry-After en estos casos: el número está en el mensaje."""
+    from app.services.vision import _retry_after
+    assert _retry_after(_respuesta_error(429, cuerpo=_CUOTA_AGOTADA)) == 34.288884339
+
+
+def test_la_cabecera_tiene_prioridad_sobre_el_cuerpo(monkeypatch):
+    from app.services.vision import _retry_after
+    r = _respuesta_error(429, retry_after="5", cuerpo=_CUOTA_AGOTADA)
+    assert _retry_after(r) == 5

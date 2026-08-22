@@ -78,14 +78,43 @@ def _descargar(url: str) -> bytes | None:
 REINTENTOS = 3
 ESPERA_BASE = 1.5   # segundos; se duplica en cada intento
 _ESTADOS_REINTENTABLES = {429, 500, 502, 503, 504}
+# Más que esto y conviene devolver el error: el admin está esperando
+# frente a la pantalla y reintentar gasta cuota que ya está agotada.
+ESPERA_MAX_RAZONABLE = 20   # segundos
 
 
 def _retry_after(r: "httpx.Response") -> float:
-    """Segundos que pide esperar el servidor, si lo dice."""
+    """Segundos que pide esperar el servidor.
+
+    Gemini no siempre manda la cabecera Retry-After: en los 429 por cuota lo dice
+    dentro del cuerpo ("Please retry in 34.2s"). Ignorar ese número significa
+    reintentar antes de tiempo, fallar igual, y encima gastar otra request de la
+    misma cuota que ya está agotada.
+    """
     try:
-        return float(r.headers.get("retry-after") or 0)
+        cabecera = float(r.headers.get("retry-after") or 0)
+        if cabecera:
+            return cabecera
     except (TypeError, ValueError):
+        pass
+    try:
+        mensaje = str(r.json())
+    except Exception:  # noqa: BLE001
         return 0.0
+    m = re.search(r"retry in ([\d.]+)s", mensaje, re.IGNORECASE)
+    return float(m.group(1)) if m else 0.0
+
+
+def _cuota_agotada(r: "httpx.Response") -> bool:
+    """Distingue "estás yendo muy rápido" de "se te acabó la cuota".
+
+    Reintentar cuando la cuota se agotó no sirve —el límite no se repone en
+    segundos— y cada intento consume otra request de esa misma cuota.
+    """
+    try:
+        return "free_tier" in str(r.json()) or "RESOURCE_EXHAUSTED" in str(r.json())
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _post_con_reintentos(url: str, payload: dict) -> "httpx.Response":
@@ -101,7 +130,14 @@ def _post_con_reintentos(url: str, payload: dict) -> "httpx.Response":
             # los tres intentos se quemen dentro de la misma ventana bloqueada.
             espera = ESPERA_BASE * (2 ** intento)
             if r.status_code == 429:
-                espera = max(espera * 4, _retry_after(r))
+                sugerida = _retry_after(r)
+                # Si la cuota está agotada y el servidor pide esperar más de lo
+                # que un humano va a tolerar frente a la pantalla, se corta acá:
+                # insistir sólo quema requests de la cuota agotada.
+                if _cuota_agotada(r) and sugerida > ESPERA_MAX_RAZONABLE:
+                    logger.info("vision.cuota_agotada", espera_sugerida=sugerida)
+                    return r
+                espera = max(espera * 4, sugerida)
             logger.info("vision.reintento", intento=intento + 1, status=r.status_code,
                         espera=round(espera, 1))
             if intento < REINTENTOS - 1:
@@ -225,7 +261,12 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
         # Un 404 acá casi siempre es el nombre del modelo, no la key: conviene
         # decirlo, porque el mensaje crudo de httpx no lo sugiere.
         ayuda = ""
-        if "404" in detalle:
+        if "429" in detalle:
+            ayuda = (" — se agotó la cuota del modelo. Suele pasar cuando la API key "
+                     "pertenece a un proyecto SIN facturación asociada: ahí se aplica el "
+                     "límite gratuito (20 requests). Revisá que la key sea del mismo "
+                     "proyecto que la cuenta de facturación.")
+        elif "404" in detalle:
             ayuda = (f" — el modelo '{settings.gemini_model}' no existe para esta API key. "
                      "Verificá GEMINI_MODEL contra los modelos que la key tiene habilitados.")
         return {"productos": "", "descripcion": "", "subcategoria": "",
