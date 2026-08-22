@@ -67,3 +67,40 @@ def test_singular_casos_del_espanol():
     assert singular("bolsos") == singular("bolso")
     assert singular("lapices") == singular("lapiz")
     assert singular("pantalones") == singular("pantalon")
+
+
+# ── Nombres genéricos ───────────────────────────────────────────────────────
+# Después de dos salidas al campo hay 100 comercios sobre 203 sin nombre real.
+# De esta función depende poder ponerles el del cartel SIN pisar los que sí
+# tienen uno escrito por una persona.
+from app.services.normalizar import es_nombre_generico  # noqa: E402
+
+RUBROS = {"🏬 Moda y ropa", "👟 Calzado", "Ferretería y construcción"}
+
+
+def test_detecta_los_que_quedaron_sin_nombre():
+    for n in ("Comercio", "comercio", "COMERCIO", "Comercio 3", "comercio-2",
+              "local", "Tienda", "  ", "", None):
+        assert es_nombre_generico(n, RUBROS), n
+
+
+def test_un_rubro_no_es_un_nombre():
+    """Apareció en los datos: un comercio llamado "🏬 Moda y ropa". No distingue
+    ese local de los otros 110 que venden lo mismo."""
+    assert es_nombre_generico("🏬 Moda y ropa", RUBROS)
+    assert es_nombre_generico("moda y ropa", RUBROS)
+    assert es_nombre_generico("Calzado", RUBROS)
+
+
+def test_no_pisa_un_nombre_de_verdad():
+    """El riesgo real: que una lectura de foto reemplace lo que tipeó alguien
+    parado en la puerta del local."""
+    for n in ("COMERCIAL MARIA", "Bazar Lidia", "ZAPATILLERIA CRUZ", "HJ",
+              "Comercial Vásquez", "Comercio Fidel", "El mundo de lana"):
+        assert not es_nombre_generico(n, RUBROS), n
+
+
+def test_sin_lista_de_rubros_igual_funciona():
+    """Los rubros son opcionales: el caso común es sólo "Comercio"."""
+    assert es_nombre_generico("Comercio")
+    assert not es_nombre_generico("Bazar Lidia")

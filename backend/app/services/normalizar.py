@@ -79,3 +79,40 @@ def normalizar_subcategoria(texto: str | None) -> str:
     # "mochilas y bolsos" terminen en la misma clave. El resultado se lee raro
     # ("bolso mochila") y no importa: nadie lo ve, sólo agrupa.
     return " ".join(sorted(set(utiles)))
+
+
+# Los comercios que el agente carga sin nombre quedan como "Comercio". Después
+# de dos salidas al campo son 100 de 203: la mitad del catálogo aparece en las
+# búsquedas con la tarjeta en blanco.
+_GENERICOS = {"comercio", "negocio", "local", "tienda", "sin nombre", ""}
+
+
+def es_nombre_generico(nombre: str | None, rubros: set[str] | None = None) -> bool:
+    """¿Este comercio quedó sin nombre real?
+
+    Marca "Comercio", "Comercio 3", "local" y el vacío. Si se le pasan los
+    nombres de los rubros, marca además el caso que apareció en los datos: un
+    comercio llamado "🏬 Moda y ropa". Un rubro no es un nombre — no distingue
+    ese local de los otros 110 que venden lo mismo, y en una tarjeta de
+    resultados se lee como un error.
+
+    Se usa para decidir si se puede pisar el nombre con lo que dice el cartel.
+    Un nombre escrito por una persona no se toca nunca.
+    """
+    base = _limpio(nombre)
+    if not base:
+        return True
+    # "comercio", "comercio 2", "comercio-3"
+    if re.fullmatch(r"(comercio|negocio|local|tienda)( \d+)?", base):
+        return True
+    if base in _GENERICOS:
+        return True
+    if rubros and base in {_limpio(r) for r in rubros}:
+        return True
+    return False
+
+
+def _limpio(texto: str | None) -> str:
+    """Sin tildes, sin emojis ni puntuación, en minúsculas y con un solo espacio."""
+    base = re.sub(r"[^a-z0-9 ]+", " ", sin_tildes((texto or "").strip()).lower())
+    return " ".join(base.split())

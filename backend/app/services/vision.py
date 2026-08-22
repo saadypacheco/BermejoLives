@@ -161,6 +161,7 @@ Mirás fotos de la fachada o la vidriera de un local y decís qué vende.
 
 Devolvé SOLO un JSON, sin markdown, con esta forma exacta:
 {{
+  "nombre_cartel": "lo que dice el cartel del local, tal cual está escrito",
   "productos": "lista de 4 a 8 productos separados por coma, en singular y en la palabra que usaría un cliente",
   "descripcion": "una o dos frases sobre el negocio, en español rioplatense, sin adjetivos publicitarios",
   "subcategoria": "el tipo específico de negocio en 1 o 2 palabras (ej: peluches, celulares, ropa de bebé)",
@@ -179,6 +180,14 @@ Reglas:
   escribí acá el nombre que le pondrías (2 o 3 palabras, en singular). Si la
   lista lo cubre bien, dejalo vacío. Es para detectar qué categorías le faltan
   al sistema, así que no fuerces: sugerí sólo cuando de verdad falta algo.
+- `nombre_cartel`: leé el cartel, la marquesina o la vidriera y transcribí el
+  NOMBRE del negocio tal cual está escrito, respetando mayúsculas y
+  abreviaturas. Es el dato que no se puede deducir de ninguna otra forma: si no
+  está acá, hay que volver caminando hasta el local a copiarlo.
+  Poné "" si no se lee, si dudás, o si lo que ves es un rubro y no un nombre
+  ("ROPA", "BAZAR", "MODA Y ROPA" son lo que vende, no cómo se llama).
+  Un nombre inventado es peor que ninguno: queda escrito como si fuera cierto y
+  nadie vuelve a revisarlo. Ante la duda, vacío.
 - `productos`: SOLO lo que se ve en las fotos. No completes con lo que "suele"
   vender un negocio así.
 - `sinonimos`: Bermejo es frontera con Argentina, y cada producto se llama
@@ -254,6 +263,7 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
 
     if usadas == 0:
         return {"productos": "", "descripcion": "", "subcategoria": "", "sinonimos": "",
+                "nombre_cartel": "",
                 "rubro_slugs": [], "confianza": 0.0, "fotos_analizadas": 0,
                 "error": "No se pudo descargar ninguna foto"}
 
@@ -295,6 +305,7 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
             ayuda = (f" — el modelo '{settings.gemini_model}' no existe para esta API key. "
                      "Verificá GEMINI_MODEL contra los modelos que la key tiene habilitados.")
         return {"productos": "", "descripcion": "", "subcategoria": "", "sinonimos": "",
+                "nombre_cartel": "",
                 "rubro_slugs": [], "confianza": 0.0, "fotos_analizadas": usadas,
                 "error": f"El modelo falló: {detalle}{ayuda}", "crudo": crudo}
 
@@ -331,6 +342,7 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
                 modelo=settings.gemini_model, confianza=out.get("confianza"))
 
     return {
+        "nombre_cartel": (out.get("nombre_cartel") or "").strip(),
         "productos": (out.get("productos") or "").strip(),
         "descripcion": (out.get("descripcion") or "").strip(),
         "subcategoria": (out.get("subcategoria") or "").strip(),

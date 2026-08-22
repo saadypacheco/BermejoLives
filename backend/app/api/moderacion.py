@@ -12,7 +12,7 @@ from starlette.concurrency import run_in_threadpool
 from app.core.telefono import validar_whatsapp
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
-from app.services.normalizar import normalizar_subcategoria
+from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
 from app.services.sinonimos import desde_propuesta, sinonimos_para
 from app.services.rubros import SLUG_DESCARTE, aplicar_rubros, resolver_rubros
 from app.db.repository import Repo, get_repo
@@ -63,7 +63,8 @@ def _sinonimos(propuesta: dict, repo: Repo | None) -> str:
     return ", ".join(vistos)
 
 
-def _patch_ia(propuesta: dict, repo: Repo | None = None) -> dict:
+def _patch_ia(propuesta: dict, repo: Repo | None = None,
+              comercio: dict | None = None) -> dict:
     """Los campos que escribe el análisis por fotos, en un solo lugar.
 
     Estaba duplicado entre el análisis individual y el de tanda, y ya había
@@ -87,6 +88,20 @@ def _patch_ia(propuesta: dict, repo: Repo | None = None) -> dict:
     # había. Lo que escribe una persona vive en `prod_obs_human`, que no se toca.
     if propuesta.get("descripcion"):
         patch["descripcion"] = propuesta["descripcion"]
+
+    # El nombre del cartel SÓLO se escribe si el comercio no tiene uno de
+    # verdad. Es la diferencia con la descripción: el nombre lo pone una persona
+    # que estuvo parada en la puerta, y ninguna lectura de foto puede pisar eso.
+    #
+    # Sin esto, un nombre que se lee "COMERCIAL MARIA" en una foto con reflejo
+    # podría reemplazar al que el agente tipeó bien. Con esto, lo peor que pasa
+    # es que un comercio sin nombre siga sin nombre.
+    cartel = (propuesta.get("nombre_cartel") or "").strip()
+    if cartel and comercio is not None:
+        rubros = {r.get("nombre", "") for r in (repo.list_rubros() if repo else [])}
+        if es_nombre_generico(comercio.get("nombre"), rubros) and not es_nombre_generico(cartel, rubros):
+            # El slug se rearma solo al renombrar, si todavía era genérico.
+            patch["nombre"] = cartel
     return patch
 
 logger = structlog.get_logger()
@@ -868,7 +883,7 @@ async def analizar_comercio(
     }
 
     if aplicar and propuesta.get("confianza", 0) > 0:
-        actualizado = repo.update_comercio(comercio_id, _patch_ia(propuesta, repo), None)
+        actualizado = repo.update_comercio(comercio_id, _patch_ia(propuesta, repo, comercio), None)
         if propuesta["rubro_slugs"]:
             aplicar_rubros(repo, actualizado, propuesta["rubro_slugs"])
         resultado["aplicado"] = True
@@ -961,7 +976,7 @@ async def analizar_tanda(
             break
 
         if aplicar and propuesta.get("confianza", 0) > 0:
-            actualizado = repo.update_comercio(comercio["id"], _patch_ia(propuesta, repo), None)
+            actualizado = repo.update_comercio(comercio["id"], _patch_ia(propuesta, repo, comercio), None)
             if propuesta["rubro_slugs"]:
                 aplicar_rubros(repo, actualizado, propuesta["rubro_slugs"])
             fila["aplicado"] = True
