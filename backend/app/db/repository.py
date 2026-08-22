@@ -13,6 +13,21 @@ from app.db.session import get_supabase
 _SLUG_GENERICO = re.compile(r"^comercio(-\d+)?$")
 
 
+def _normalizar_rubro(texto: str) -> str:
+    """Agrupa variantes: 'Juguetería', 'jugueterias', '🧸 Juguetería' → 'jugueteria'."""
+    import unicodedata
+
+    sin_tildes = "".join(c for c in unicodedata.normalize("NFD", texto or "")
+                         if unicodedata.category(c) != "Mn")
+    limpio = re.sub(r"[^a-z0-9]+", " ", sin_tildes.lower()).strip()
+    # Singular grosero: sin esto "juguetería" y "jugueterías" cuentan como dos
+    # necesidades distintas y el ranking de lo que falta queda partido.
+    palabras = [p[:-2] if len(p) > 5 and p.endswith("es") else
+                p[:-1] if len(p) > 3 and p.endswith("s") else p
+                for p in limpio.split()]
+    return " ".join(palabras)
+
+
 class Repo(Protocol):
     def get_comercio_by_jid(self, wa_jid: str) -> dict | None: ...
     def upsert_comercio_by_jid(self, wa_jid: str, phone: str) -> dict: ...
@@ -45,6 +60,8 @@ class Repo(Protocol):
     def crear_comercio_usuario(self, row: dict) -> dict: ...
     def set_comercio_rubros(self, comercio_id: str, rubro_ids: list[str]) -> None: ...
     def list_rubros(self) -> list[dict]: ...
+    def registrar_rubros_propuestos(self, textos: list[str], comercio_id: str | None) -> None: ...
+    def resumen_rubros_propuestos(self, limite: int = 100) -> list[dict]: ...
     def sugerir_rubros_por_texto(self, texto: str) -> list[str]: ...
     def quitar_rubro_comercio(self, comercio_id: str, rubro_id: str) -> None: ...
     def get_comercio_rubros(self, comercio_id: str) -> list[str]: ...
@@ -516,6 +533,40 @@ class SupabaseRepo:
                .eq("activo", True).order("orden").execute())
         return res.data or []
 
+    def registrar_rubros_propuestos(self, textos: list[str], comercio_id: str | None) -> None:
+        """Guarda las categorías que la IA propuso y no existen todavía.
+
+        Es la evidencia para decidir qué rubro o subcategoría crear: sale de
+        locales reales, no de una lista pensada de antemano.
+        """
+        filas = []
+        for t in textos:
+            limpio = (t or "").strip()
+            if limpio:
+                filas.append({"texto": limpio, "normalizado": _normalizar_rubro(limpio),
+                              "comercio_id": comercio_id})
+        if filas:
+            self._db.table("rubros_propuestos").insert(filas).execute()
+
+    def resumen_rubros_propuestos(self, limite: int = 100) -> list[dict]:
+        """Agrupadas por variante normalizada y ordenadas por frecuencia: las de
+        arriba son las que más falta hacen."""
+        res = (self._db.table("rubros_propuestos")
+               .select("texto, normalizado, comercio_id").limit(5000).execute())
+        conteo: dict[str, dict] = {}
+        for fila in (res.data or []):
+            clave = fila["normalizado"]
+            item = conteo.setdefault(clave, {"normalizado": clave, "veces": 0,
+                                             "variantes": set(), "comercios": set()})
+            item["veces"] += 1
+            item["variantes"].add(fila["texto"])
+            if fila.get("comercio_id"):
+                item["comercios"].add(fila["comercio_id"])
+        salida = [{"normalizado": v["normalizado"], "veces": v["veces"],
+                   "variantes": sorted(v["variantes"]), "comercios": len(v["comercios"])}
+                  for v in conteo.values()]
+        return sorted(salida, key=lambda x: -x["veces"])[:limite]
+
     def sugerir_rubros_por_texto(self, texto: str) -> list[str]:
         """Rubros que se deducen de un texto libre, vía el diccionario en la base.
 
@@ -907,7 +958,7 @@ class SupabaseRepo:
     def list_todos_comercios(self, verificado: bool | None = None, limit: int = 300) -> list[dict]:
         q = (
             self._db.table("comercios")
-            .select("id, slug, nombre, whatsapp, telefono, modalidad, descripcion, prod_obs_human, prod_det_ia, subcategoria, codigo, direccion, lat, lng, "
+            .select("id, slug, nombre, whatsapp, telefono, modalidad, descripcion, notas, prod_obs_human, prod_det_ia, subcategoria, codigo, direccion, lat, lng, "
                     "verificado, suspendido, paga_hasta, portada_url, portada_thumb_url, cargado_por, created_at, lugar_id, puesto, "
                     "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), lugares(nombre, tipo, lat, lng, portada_thumb_url)")
             .eq("activo", True)

@@ -358,7 +358,7 @@ function Login({ onOk }: { onOk: () => void }) {
 }
 
 // ─────────────────────────────────────────────
-const EMPTY = { nombre: "", cel: "", modalidad: "mayorista", direccion: "", descripcion: "", prodObs: "" };
+const EMPTY = { nombre: "", cel: "", modalidad: "mayorista", direccion: "", notas: "", prodObs: "" };
 
 function toggle<T>(arr: T[], val: T): T[] {
   return arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val];
@@ -638,7 +638,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     };
     if (f.nombre.trim()) campos.nombre = f.nombre.trim();
     if (cel) campos.whatsapp = prefijo + cel;
-    if (f.descripcion.trim()) campos.descripcion = f.descripcion.trim();
+    if (f.notas.trim()) campos.notas = f.notas.trim();
     if (f.prodObs.trim()) campos.prod_obs_human = f.prodObs.trim();
     if (f.direccion.trim()) campos.direccion = f.direccion.trim();
     if (lugarId && lugarId !== "__nuevo__") campos.lugar_id = lugarId;
@@ -949,8 +949,8 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
         {/* ── Algo más del negocio ── */}
         <div>
           <label className="campo-lbl">Algo más del negocio (opcional)</label>
-          <textarea className="adm-input" rows={3} value={f.descripcion}
-            onChange={(e) => set("descripcion", e.target.value)}
+          <textarea className="adm-input" rows={3} value={f.notas}
+            onChange={(e) => set("notas", e.target.value)}
             placeholder="Ej: Importa desde China. Pedido mínimo 1 caja. Atiende sábados." style={{ resize: "vertical" }} />
         </div>
 

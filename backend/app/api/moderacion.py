@@ -153,6 +153,7 @@ class EditarComercioBody(BaseModel):
     whatsapp: str | None = None
     telefono: str | None = None
     descripcion: str | None = None
+    notas: str | None = None
     prod_obs_human: str | None = None
     modalidad: str | None = None
     direccion: str | None = None
@@ -774,6 +775,14 @@ async def analizar_comercio(
     except VisionNoConfigurada as exc:
         raise HTTPException(status_code=503, detail=f"{exc}. Cargá GEMINI_API_KEY en backend/.env") from exc
 
+    # Se registran aunque no se aplique la propuesta: que el modelo haya pedido
+    # una categoría inexistente es información válida por sí sola.
+    if propuesta.get("slugs_descartados"):
+        try:
+            repo.registrar_rubros_propuestos(propuesta["slugs_descartados"], comercio_id)
+        except Exception:  # noqa: BLE001 — nunca romper el análisis por el registro
+            logger.warning("vision.registro_propuestos_fallo", comercio=comercio_id, exc_info=True)
+
     resultado = {
         "comercio": {"slug": comercio.get("slug"), "nombre": comercio.get("nombre"),
                      "prod_obs_human": comercio.get("prod_obs_human")},
@@ -789,9 +798,10 @@ async def analizar_comercio(
             "subcategoria": propuesta["subcategoria"] or None,
             "ia_analizado_at": datetime.now(timezone.utc).isoformat(),
         }
-        # La descripción sólo se completa si NO hay una escrita: si una persona
-        # ya la redactó, la IA no la reemplaza.
-        if not (comercio.get("descripcion") or "").strip() and propuesta["descripcion"]:
+        # La descripción es de la IA: se regenera en cada análisis sin mirar lo
+        # que había. Lo que escribe una persona vive en `notas` y en
+        # `prod_obs_human`, que no se tocan nunca.
+        if propuesta["descripcion"]:
             patch["descripcion"] = propuesta["descripcion"]
         actualizado = repo.update_comercio(comercio_id, patch, None)
         if propuesta["rubro_slugs"]:
@@ -801,3 +811,19 @@ async def analizar_comercio(
                     rubros=propuesta.get("rubro_slugs"), by=admin["email"])
 
     return resultado
+
+
+@router.get("/admin/rubros/propuestos")
+def rubros_propuestos(
+    limite: int = Query(100, ge=1, le=500),
+    _admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Categorías que la IA propuso y no existen en la taxonomía.
+
+    Ordenadas por frecuencia: las de arriba son las que más falta hacen. Es la
+    forma de construir los rubros y subcategorías a partir de comercios reales
+    en vez de inventar una lista de antemano y descubrir después que no encaja.
+    """
+    items = repo.resumen_rubros_propuestos(limite)
+    return {"items": items, "total": len(items)}

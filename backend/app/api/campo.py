@@ -112,7 +112,7 @@ async def alta_campo(
     direccion: str | None = Form(None),
     lugar_id: str | None = Form(None),            # si está DENTRO de un mercado/galería
     puesto: str | None = Form(None),              # N° de puesto/local dentro del lugar
-    descripcion: str | None = Form(None),
+    notas: str | None = Form(None),          # observación del agente; la descripción la genera la IA
     prod_obs_human: str | None = Form(None),   # lo que VE el agente. Opcional: si no, lo detecta la IA de las fotos.
     email: str | None = Form(None),
     tiktok_url: str | None = Form(None),
@@ -168,7 +168,7 @@ async def alta_campo(
         {
             "slug": slug,
             "nombre": nombre_final,
-            "descripcion": _none(descripcion),
+            "notas": _none(notas),
             "prod_obs_human": _none(prod_obs_human),
             "whatsapp": _none(whatsapp),
             "telefono": _none(telefono),
@@ -345,7 +345,7 @@ class _EditarComercioBody(BaseModel):
     email: str | None = None
     modalidad: str | None = None
     direccion: str | None = None
-    descripcion: str | None = None
+    notas: str | None = None
     prod_obs_human: str | None = None
     rubro_slugs: list[str] | None = None
 

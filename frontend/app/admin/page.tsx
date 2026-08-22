@@ -1127,6 +1127,7 @@ function ModalEditar({
   const _rubroActual = (comercio.rubros as { slug: string } | undefined)?.slug;
   const [rubroSlugs, setRubroSlugs] = useState<string[]>(_rubroActual ? [_rubroActual] : []);
   const [prodObsHuman, setProdObsHuman] = useState(comercio.prod_obs_human ?? "");
+  const [notas, setNotas] = useState(comercio.notas ?? "");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
@@ -1145,6 +1146,7 @@ function ModalEditar({
     try {
       await editarComercio(comercio.id, {
         prod_obs_human: prodObsHuman || undefined,
+        notas: notas || undefined,
         nombre: nombre || undefined,
         whatsapp: whatsapp || undefined,
         telefono: telefono || undefined,
@@ -1207,8 +1209,13 @@ function ModalEditar({
                 </div>
               </div>
             )}
-            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Descripción / reseña
-              <textarea className="adm-input" style={{ marginTop: 4, minHeight: 70, resize: "vertical" }} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Qué vende o qué ofrece…" />
+            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>📝 Notas del relevamiento (dato humano — la IA no lo toca)
+              <textarea className="adm-input" style={{ marginTop: 4, minHeight: 56, resize: "vertical" }} value={notas}
+                onChange={(e) => setNotas(e.target.value)}
+                placeholder="Importa desde China · pedido mínimo 1 caja · atiende sábados" />
+            </label>
+            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>🤖 Descripción (la regenera la IA en cada análisis)
+              <textarea className="adm-input" style={{ marginTop: 4, minHeight: 70, resize: "vertical" }} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Se completa al analizar las fotos" />
             </label>
             <FotosComercio comercioId={comercio.id} portada={comercio.portada_url ?? null} />
 

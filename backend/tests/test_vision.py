@@ -138,17 +138,62 @@ def test_al_aplicar_no_toca_el_dato_humano(client, repo, admin_token, monkeypatc
     assert guardado["descripcion"] == "Zapatería del centro"   # estaba vacía
 
 
-def test_no_pisa_una_descripcion_escrita_por_una_persona(client, repo, admin_token, monkeypatch):
+def test_la_descripcion_se_regenera_siempre(client, repo, admin_token, monkeypatch):
+    """`descripcion` es de la IA: se rehace en cada análisis sin mirar lo que
+    había. Lo que escribe una persona vive en `notas` y `prod_obs_human`."""
     _con_key(monkeypatch)
     c = repo.seed_comercio(slug="x", nombre="Casa Pepe", portada_url="http://x/p.jpg",
-                           descripcion="Atiende de 8 a 12", activo=True)
+                           descripcion="Descripción vieja de la IA",
+                           notas="Atiende de 8 a 12", prod_obs_human="medias", activo=True)
     payload = {"productos": "zapatillas", "descripcion": "Zapatería del centro",
                "subcategoria": "zapatillas", "rubro_slugs": ["calzado"], "confianza": 0.9}
-    with patch("app.services.vision._descargar", return_value=b"jpg"), \
-         patch("app.services.vision.httpx.post", return_value=_respuesta(payload)):
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post", return_value=_respuesta(payload)):
         client.post(f"/admin/comercio/{c['id']}/analizar?aplicar=true", headers=_h(admin_token))
 
-    assert repo.comercios[c["id"]]["descripcion"] == "Atiende de 8 a 12"
+    guardado = repo.comercios[c["id"]]
+    assert guardado["descripcion"] == "Zapatería del centro"   # regenerada
+    assert guardado["notas"] == "Atiende de 8 a 12"            # de la persona: intacta
+    assert guardado["prod_obs_human"] == "medias"              # de la persona: intacta
+
+
+def test_los_rubros_descartados_quedan_registrados(client, repo, admin_token, monkeypatch):
+    """Es la evidencia para decidir qué categorías crear."""
+    _con_key(monkeypatch)
+    c = repo.seed_comercio(slug="x", nombre="Peluchería", portada_url="http://x/p.jpg", activo=True)
+    payload = {"productos": "peluches", "descripcion": "d", "subcategoria": "peluches",
+               "rubro_slugs": ["peluches y muñecos"], "confianza": 0.9}
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post", return_value=_respuesta(payload)):
+        client.post(f"/admin/comercio/{c['id']}/analizar", headers=_h(admin_token))
+
+    assert any(x["texto"] == "peluches y muñecos" for x in repo.rubros_propuestos)
+
+
+def test_los_descartados_se_registran_aunque_no_se_aplique(client, repo, admin_token, monkeypatch):
+    _con_key(monkeypatch)
+    c = repo.seed_comercio(slug="x", nombre="X", portada_url="http://x/p.jpg", activo=True)
+    payload = {"productos": "x", "descripcion": "", "subcategoria": "",
+               "rubro_slugs": ["categoria inventada"], "confianza": 0.2}
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post", return_value=_respuesta(payload)):
+        r = client.post(f"/admin/comercio/{c['id']}/analizar", headers=_h(admin_token))
+
+    assert r.json()["aplicado"] is False
+    assert len(repo.rubros_propuestos) == 1
+
+
+def test_reporte_agrupa_variantes_y_ordena_por_frecuencia(client, repo, admin_token):
+    """'Juguetería', 'jugueterias' y '🧸 Juguetería' son la misma necesidad."""
+    repo.registrar_rubros_propuestos(["Juguetería", "jugueterias", "🧸 Juguetería"], "c1")
+    repo.registrar_rubros_propuestos(["Floristería"], "c2")
+
+    items = client.get("/admin/rubros/propuestos", headers=_h(admin_token)).json()["items"]
+    assert items[0]["normalizado"] == "jugueteria"
+    assert items[0]["veces"] == 3
+    assert len(items[0]["variantes"]) == 3
+    assert items[1]["normalizado"] == "floristeria"
+
+
+def test_reporte_de_propuestos_requiere_admin(client, repo):
+    assert client.get("/admin/rubros/propuestos").status_code in (401, 403)
 
 
 def test_confianza_cero_no_escribe_nada(client, repo, admin_token, monkeypatch):

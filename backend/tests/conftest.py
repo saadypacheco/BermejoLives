@@ -51,6 +51,7 @@ class FakeRepo:
         self.comercio_numeros: list[dict] = []        # números autorizados a publicar
         self.reclamos: dict[str, dict] = {}           # id -> row
         self.solicitudes_numero: dict[str, dict] = {} # id -> row
+        self.rubros_propuestos: list[dict] = []       # categorías que la IA propuso y no existen
         self.comercio_videos: list[dict] = []
         self.cotizaciones: list[dict] = [
             {"clave": "usd_bob", "etiqueta": "Dólar", "detalle": "1 USD", "valor": 0, "unidad": "Bs", "orden": 1},
@@ -485,7 +486,7 @@ class FakeRepo:
     # con null si están vacías; el fake tiene que hacer lo mismo o los tests no
     # detectan que falte una en el select de producción (pasó con `codigo`).
     _COLS_LISTADO_ADMIN = (
-        "id", "slug", "nombre", "whatsapp", "telefono", "modalidad", "descripcion",
+        "id", "slug", "nombre", "whatsapp", "telefono", "modalidad", "descripcion", "notas",
         "prod_obs_human", "prod_det_ia", "subcategoria", "codigo", "direccion", "lat", "lng", "verificado", "suspendido",
         "paga_hasta", "portada_url", "portada_thumb_url", "cargado_por", "created_at",
         "lugar_id", "puesto",
@@ -611,6 +612,30 @@ class FakeRepo:
              "lugares": c.get("lugares_join")}
             for c in items[:limit]
         ]
+
+    def registrar_rubros_propuestos(self, textos, comercio_id):
+        from app.db.repository import _normalizar_rubro
+        for t in textos:
+            limpio = (t or "").strip()
+            if limpio:
+                self.rubros_propuestos.append(
+                    {"texto": limpio, "normalizado": _normalizar_rubro(limpio),
+                     "comercio_id": comercio_id})
+
+    def resumen_rubros_propuestos(self, limite=100):
+        conteo = {}
+        for fila in self.rubros_propuestos:
+            item = conteo.setdefault(fila["normalizado"],
+                                     {"normalizado": fila["normalizado"], "veces": 0,
+                                      "variantes": set(), "comercios": set()})
+            item["veces"] += 1
+            item["variantes"].add(fila["texto"])
+            if fila.get("comercio_id"):
+                item["comercios"].add(fila["comercio_id"])
+        salida = [{"normalizado": v["normalizado"], "veces": v["veces"],
+                   "variantes": sorted(v["variantes"]), "comercios": len(v["comercios"])}
+                  for v in conteo.values()]
+        return sorted(salida, key=lambda x: -x["veces"])[:limite]
 
     def list_rubros(self):
         return [{"slug": s, "nombre": s.title()} for s in self.rubros]
