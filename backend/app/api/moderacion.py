@@ -13,7 +13,7 @@ from app.core.telefono import validar_whatsapp
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import normalizar_subcategoria
-from app.services.sinonimos import sinonimos_para
+from app.services.sinonimos import desde_propuesta, sinonimos_para
 from app.services.rubros import SLUG_DESCARTE, aplicar_rubros, resolver_rubros
 from app.db.repository import Repo, get_repo
 from app.models.schemas import ModerarBody
@@ -32,8 +32,19 @@ def _sinonimos(propuesta: dict, repo: Repo | None) -> str:
     los relevamientos anteriores y de las correcciones a mano. Un comercio nuevo
     hereda así todo lo aprendido sin gastar una llamada extra.
     """
-    partes = [(propuesta.get("sinonimos") or "").strip()]
+    propios, aportes = desde_propuesta(propuesta.get("sinonimos"))
+    partes = [propios]
     if repo is not None:
+        # Lo que la IA descubrió en ESTA vidriera entra al diccionario compartido,
+        # así que a partir de ahora encuentra también a los demás locales que
+        # venden lo mismo. Sin este paso, cada hallazgo se quedaba en un solo
+        # comercio y el diccionario sólo crecía corriendo el script a mano.
+        # guardar_sinonimos no pisa lo cargado como 'manual'.
+        try:
+            if aportes:
+                repo.guardar_sinonimos(aportes, origen="ia")
+        except Exception:  # noqa: BLE001 — enriquecer no puede romper un análisis
+            logger.warning("sinonimos.aporte_fallido", terminos=len(aportes))
         try:
             desde_dicc = sinonimos_para(
                 {"prod_det_ia": propuesta.get("productos") or "",

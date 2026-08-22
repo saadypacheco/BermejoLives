@@ -192,3 +192,40 @@ def gemini_post(prompt: str) -> str:
     cuerpo = r.json()
     partes = cuerpo["candidates"][0]["content"]["parts"]
     return "".join(p.get("text", "") for p in partes)
+
+
+def desde_propuesta(valor) -> tuple[str, dict[str, str]]:
+    """Interpreta el campo `sinonimos` de un análisis por fotos.
+
+    Devuelve (texto_para_el_comercio, aportes_al_diccionario).
+
+    El modelo lo devuelve como objeto {producto: "sin1, sin2"}, y de ahí salen
+    las dos cosas: el texto plano que se indexa en ese comercio, y las entradas
+    que enriquecen el diccionario compartido. Ese segundo uso es el que importa
+    a largo plazo — sin él, lo que la IA aprende mirando UNA vidriera se queda en
+    ese local y los otros veinte que venden lo mismo no se enteran.
+
+    Acepta también el formato viejo (una lista suelta separada por comas). En ese
+    caso el texto sirve igual para indexar, pero NO aporta al diccionario: sin
+    saber a qué producto pertenece cada palabra, guardarla sería inventar una
+    relación que el modelo nunca afirmó.
+    """
+    if isinstance(valor, dict):
+        aportes: dict[str, str] = {}
+        for termino, sins in valor.items():
+            if isinstance(sins, list):
+                sins = ", ".join(str(x) for x in sins)
+            clave = _normalizar_termino(str(termino))
+            limpio = _limpiar(str(termino), str(sins or ""))
+            if clave and len(clave) >= 3 and limpio:
+                aportes[clave] = limpio
+
+        planos: list[str] = []
+        for v in aportes.values():
+            for s in v.split(","):
+                s = s.strip()
+                if s and s not in planos:
+                    planos.append(s)
+        return ", ".join(planos), aportes
+
+    return str(valor or "").strip(), {}

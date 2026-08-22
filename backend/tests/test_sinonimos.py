@@ -7,6 +7,7 @@ confianza en el buscador mucho más rápido que un resultado faltante.
 import json
 
 from app.services.sinonimos import (
+    desde_propuesta,
     MAX_SINONIMOS,
     _limpiar,
     _normalizar_termino,
@@ -118,3 +119,38 @@ def test_normalizar_termino_es_estable():
 def test_limpiar_descarta_basura():
     assert _limpiar("remera", "") == ""
     assert _limpiar("remera", "a, de, !!!") == ""
+
+
+def test_propuesta_alimenta_el_diccionario():
+    """Lo que la IA ve en UNA vidriera tiene que servirle a todos los locales que
+    venden lo mismo. Ese es el punto de pedirlo producto por producto."""
+    texto, aportes = desde_propuesta({"remeras": "polera, camiseta"})
+    assert aportes == {"remera": "polera, camiseta"}
+    assert "polera" in texto and "camiseta" in texto
+
+
+def test_propuesta_no_repite_en_el_texto_plano():
+    _, aportes = desde_propuesta({"remera": "polera", "camiseta": "polera"})
+    texto, _ = desde_propuesta({"remera": "polera", "camiseta": "polera"})
+    assert texto == "polera"
+    assert len(aportes) == 2
+
+
+def test_formato_viejo_indexa_pero_no_aporta():
+    """Una lista suelta sirve para indexar ese comercio, pero no se puede meter
+    al diccionario: sin saber a qué producto pertenece cada palabra, guardarla
+    sería inventar una relación que el modelo nunca afirmó."""
+    texto, aportes = desde_propuesta("polera, camiseta")
+    assert texto == "polera, camiseta"
+    assert aportes == {}
+
+
+def test_propuesta_vacia_no_rompe():
+    for valor in (None, "", {}, {"remera": ""}):
+        texto, aportes = desde_propuesta(valor)
+        assert texto == "" and aportes == {}
+
+
+def test_propuesta_acepta_listas_como_valor():
+    _, aportes = desde_propuesta({"remera": ["polera", "camiseta"]})
+    assert aportes["remera"] == "polera, camiseta"

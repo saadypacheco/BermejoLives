@@ -164,3 +164,39 @@ select nombre, round(rank::numeric,3) as rank
 \echo '--- ropa deportiva ---'
 select nombre, round(rank::numeric,3) as rank
   from buscar_comercios('ropa deportiva', null,null,null,null,null,null, 5, 0);
+
+\echo ''
+\echo '################ 9. VOCABULARIO QUE SE QUEDÓ ATRÁS ################'
+\echo 'Términos que aparecen en los comercios y NO están en el diccionario.'
+\echo 'Crece solo a medida que cargás locales nuevos. Mientras un término esté'
+\echo 'acá, el comprador que use la OTRA palabra no encuentra esos locales.'
+\echo ''
+\echo 'Se llena con:  construir_sinonimos.py con APLICAR=1  (sólo pregunta lo que falta)'
+with terminos as (
+  select trim(lower(unaccent(p))) as termino, count(*) as comercios
+    from comercios c,
+         lateral unnest(string_to_array(coalesce(c.prod_det_ia,'') || ',' ||
+                                        coalesce(c.subcategoria,''), ',')) as p
+   where c.activo and length(trim(p)) >= 3
+   group by 1
+)
+select t.termino, t.comercios
+  from terminos t
+ where not exists (select 1 from producto_sinonimos ps where ps.termino = t.termino)
+ order by t.comercios desc, t.termino
+ limit 40;
+
+\echo ''
+\echo 'Resumen: cuánto del vocabulario está cubierto.'
+with terminos as (
+  select distinct trim(lower(unaccent(p))) as termino
+    from comercios c,
+         lateral unnest(string_to_array(coalesce(c.prod_det_ia,'') || ',' ||
+                                        coalesce(c.subcategoria,''), ',')) as p
+   where c.activo and length(trim(p)) >= 3
+)
+select count(*) as terminos_en_uso,
+       count(*) filter (where exists (
+         select 1 from producto_sinonimos ps where ps.termino = t.termino)) as con_sinonimos,
+       (select count(*) from producto_sinonimos where origen = 'manual')    as corregidos_a_mano
+  from terminos t;
