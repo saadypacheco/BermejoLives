@@ -1356,10 +1356,10 @@ function AnalisisComercio({ comercioId, onAplicado }: { comercioId: string; onAp
           {p.descripcion && <div style={{ marginTop: 6 }}><b>Descripción:</b> {p.descripcion}</div>}
 
           <div style={{ color: "var(--txt-3)", marginTop: 8, fontSize: 11.5 }}>
-            Al aplicar se guardan en <b>prod_det_ia</b> y <b>subcategoría</b>.
+            Al aplicar se guardan en <b>prod_det_ia</b>, <b>subcategoría</b> y
+            se <b>reemplaza la descripción</b>.
             Tus productos observados no se tocan
             {res?.comercio.prod_obs_human ? ` (siguen siendo: "${res.comercio.prod_obs_human}")` : ""}.
-            La descripción sólo se completa si está vacía.
           </div>
 
           {p.crudo && (
