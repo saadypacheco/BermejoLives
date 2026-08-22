@@ -54,21 +54,31 @@ with reales as (
          -- decoración" se prueba como "hogar", no como "hogar blanco": nadie
          -- escribe eso, y al buscarlo como dos palabras el AND del FTS devuelve
          -- casi nada y el informe reporta un problema que no existe.
-         lower(unaccent(trim(split_part(
-           split_part(regexp_replace(r.nombre, '[^[:alnum:], áéíóúñÁÉÍÓÚÑ]', '', 'g'), ',', 1),
-           ' y ', 1)))) as termino,
+         -- La primera palabra util del nombre. "Hogar, blanco y decoración" se
+         -- prueba como "hogar" y "Gomería / Repuestos" como "gomeria": buscarlos
+         -- enteros los convierte en un AND que no devuelve nada, y el informe
+         -- reporta un problema inexistente.
+         lower(unaccent(trim(split_part(split_part(split_part(
+           regexp_replace(r.nombre, '[^[:alnum:],/ áéíóúñÁÉÍÓÚÑ]', '', 'g'),
+           ',', 1), '/', 1), ' y ', 1)))) as termino,
          count(cr.comercio_id) as tiene
     from rubros r
     join comercio_rubros cr on cr.rubro_id = r.id
     join comercios c on c.id = cr.comercio_id and c.activo
+   where r.slug <> 'otros'                 -- el descarte no es una búsqueda real
    group by 1, 2, 3
 )
 select re.nombre                        as rubro,
        re.termino                       as se_busca_como,
        re.tiene,
        b.encuentra,
-       case when b.encuentra >= re.tiene then 'ok'
-            when b.encuentra = 0        then 'NO ENCUENTRA NADA'
+       -- buscar_comercios devuelve 60 como máximo, así que un rubro con 86
+       -- comercios no puede "encontrarlos" a todos ni funcionando perfecto.
+       -- Marcarlo como incompleto era culpar al buscador por el tope de la
+       -- paginación.
+       case when b.encuentra >= least(re.tiene, 60) then
+              case when re.tiene > 60 then 'ok (tope 60)' else 'ok' end
+            when b.encuentra = 0 then 'NO ENCUENTRA NADA'
             else 'incompleto' end       as estado
   from reales re
   cross join lateral (
@@ -76,7 +86,7 @@ select re.nombre                        as rubro,
       from buscar_comercios(trim(re.termino), null,null,null,null,null,null, 60, 0)
   ) b
  where re.tiene > 0
- order by (b.encuentra < re.tiene) desc, re.tiene desc;
+ order by (b.encuentra < least(re.tiene, 60)) desc, re.tiene desc;
 
 \echo ''
 \echo '################ 4. COBERTURA POR SUBCATEGORÍA ################'
