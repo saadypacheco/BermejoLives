@@ -7,9 +7,15 @@
 -- Para comparar contra otro corte, cambiar la fecha de abajo:
 --   ... psql -U postgres -d postgres -v desde="'2026-08-22'" -f - < supabase/novedades.sql
 --
--- "Nuevo" significa analizado por la IA a partir de esa fecha. La sección 0
--- muestra cómo se reparten los análisis por día: si el corte quedó mal, se ve
--- ahí antes de sacar ninguna conclusión.
+-- "Nuevo" significa DADO DE ALTA a partir de esa fecha (`created_at`), no
+-- analizado. Es una distinción que ya rompió este informe una vez: el análisis
+-- por tandas vuelve a pasar sobre comercios viejos y les actualiza la fecha, así
+-- que cortar por `ia_analizado_at` marcaba los 202 como nuevos, dejaba "ya
+-- estaban" en cero, y entonces TODO parecía novedad — "remera" figuraba como
+-- producto nunca visto. La fecha de alta no la mueve nadie.
+--
+-- La sección 0 muestra cómo se reparten las altas por día: si el corte quedó
+-- mal, se ve ahí antes de sacar ninguna conclusión del resto.
 --
 -- Esta tanda es la PRIMERA analizada con el prompt que puede proponer
 -- categorías nuevas y devolver sinónimos por producto. Las 161 anteriores se
@@ -27,22 +33,25 @@
 
 \echo ''
 \echo '################ 0. EL CORTE ################'
-\echo 'Análisis por día. Si los "nuevos" no son los que esperabas, correr de'
-\echo 'nuevo con  -v desde="'"'"'AAAA-MM-DD'"'"'"'
-select ia_analizado_at::date as dia, count(*) as comercios
-  from comercios where activo and ia_analizado_at is not null
+\echo 'ALTAS por día (no análisis). Si los "nuevos" no son los que esperabas,'
+\echo 'correr de nuevo con  -v desde="'"'"'AAAA-MM-DD'"'"'"'
+select created_at::date as dia_de_alta, count(*) as comercios,
+       count(*) filter (where ia_analizado_at is not null) as analizados
+  from comercios where activo
  group by 1 order by 1 desc limit 10;
 
 \echo ''
 \echo '################ 1. CUÁNTO ENTRÓ ################'
-select count(*) filter (where ia_analizado_at::date >= :desde)          as nuevos,
-       count(*) filter (where ia_analizado_at::date <  :desde)          as ya_estaban,
-       count(*) filter (where ia_analizado_at::date >= :desde
+select count(*) filter (where created_at::date >= :desde)          as nuevos,
+       count(*) filter (where created_at::date <  :desde)          as ya_estaban,
+       count(*) filter (where created_at::date >= :desde
                           and prod_det_ia is not null)                  as con_productos,
-       count(*) filter (where ia_analizado_at::date >= :desde
+       count(*) filter (where created_at::date >= :desde
                           and coalesce(sinonimos,'') <> '')             as con_sinonimos,
-       count(*) filter (where ia_analizado_at::date >= :desde
-                          and prod_det_ia is null)                      as foto_sin_mercaderia
+       count(*) filter (where created_at::date >= :desde
+                          and prod_det_ia is null)                      as foto_sin_mercaderia,
+       count(*) filter (where created_at::date >= :desde
+                          and nombre ilike 'comercio%')                 as sin_nombre
   from comercios where activo;
 
 \echo ''
@@ -65,12 +74,12 @@ select rp.normalizado,
 with nuevas as (
   select distinct subcategoria_norm as s
     from comercios
-   where activo and ia_analizado_at::date >= :desde
+   where activo and created_at::date >= :desde
      and coalesce(subcategoria_norm,'') <> ''
 ), viejas as (
   select distinct subcategoria_norm as s
     from comercios
-   where activo and ia_analizado_at::date < :desde
+   where activo and created_at::date < :desde
      and coalesce(subcategoria_norm,'') <> ''
 )
 select n.s as subcategoria_nueva,
@@ -88,13 +97,13 @@ with terminos_nuevos as (
   select trim(lower(unaccent(p))) as t, count(*) as veces
     from comercios c,
          lateral unnest(string_to_array(coalesce(c.prod_det_ia,''), ',')) as p
-   where c.activo and c.ia_analizado_at::date >= :desde and length(trim(p)) >= 3
+   where c.activo and c.created_at::date >= :desde and length(trim(p)) >= 3
    group by 1
 ), terminos_viejos as (
   select distinct trim(lower(unaccent(p))) as t
     from comercios c,
          lateral unnest(string_to_array(coalesce(c.prod_det_ia,''), ',')) as p
-   where c.activo and c.ia_analizado_at::date < :desde and length(trim(p)) >= 3
+   where c.activo and c.created_at::date < :desde and length(trim(p)) >= 3
 )
 select tn.t as producto_nuevo, tn.veces
   from terminos_nuevos tn
@@ -109,7 +118,7 @@ select r.nombre as rubro, count(*) as comercios
   from comercio_rubros cr
   join rubros r    on r.id = cr.rubro_id
   join comercios c on c.id = cr.comercio_id
- where c.activo and c.ia_analizado_at::date >= :desde
+ where c.activo and c.created_at::date >= :desde
  group by 1 order by 2 desc;
 
 \echo ''
@@ -136,7 +145,7 @@ with en_uso as (
     from comercios c,
          lateral unnest(string_to_array(coalesce(c.prod_det_ia,'') || ',' ||
                                         coalesce(c.subcategoria,''), ',')) as p
-   where c.activo and c.ia_analizado_at::date >= :desde and length(trim(p)) >= 3
+   where c.activo and c.created_at::date >= :desde and length(trim(p)) >= 3
 )
 select count(*) as terminos_de_los_nuevos,
        count(*) filter (where exists (
@@ -153,6 +162,6 @@ select 'URUKU-' || codigo as codigo, left(nombre, 26) as nombre,
             when prod_det_ia is null      then 'foto sin mercaderia'
             else 'sin whatsapp' end       as falta
   from comercios
- where activo and ia_analizado_at::date >= :desde
+ where activo and created_at::date >= :desde
    and (nombre ilike 'comercio%' or prod_det_ia is null or coalesce(whatsapp,'') = '')
  order by 3, 2;
