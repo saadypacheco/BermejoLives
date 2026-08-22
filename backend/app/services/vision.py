@@ -80,6 +80,14 @@ ESPERA_BASE = 1.5   # segundos; se duplica en cada intento
 _ESTADOS_REINTENTABLES = {429, 500, 502, 503, 504}
 
 
+def _retry_after(r: "httpx.Response") -> float:
+    """Segundos que pide esperar el servidor, si lo dice."""
+    try:
+        return float(r.headers.get("retry-after") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _post_con_reintentos(url: str, payload: dict) -> "httpx.Response":
     ultimo = None
     for intento in range(REINTENTOS):
@@ -88,12 +96,22 @@ def _post_con_reintentos(url: str, payload: dict) -> "httpx.Response":
             if r.status_code not in _ESTADOS_REINTENTABLES:
                 return r
             ultimo = r
-            logger.info("vision.reintento", intento=intento + 1, status=r.status_code)
-        except httpx.TimeoutException as exc:
-            ultimo, _ = None, exc
+            # El 429 es límite de frecuencia, no saturación: hay que esperar más,
+            # y el servidor suele decir cuánto en Retry-After. Ignorarlo hace que
+            # los tres intentos se quemen dentro de la misma ventana bloqueada.
+            espera = ESPERA_BASE * (2 ** intento)
+            if r.status_code == 429:
+                espera = max(espera * 4, _retry_after(r))
+            logger.info("vision.reintento", intento=intento + 1, status=r.status_code,
+                        espera=round(espera, 1))
+            if intento < REINTENTOS - 1:
+                time.sleep(espera)
+            continue
+        except httpx.TimeoutException:
+            ultimo = None
             logger.info("vision.reintento", intento=intento + 1, motivo="timeout")
-        if intento < REINTENTOS - 1:
-            time.sleep(ESPERA_BASE * (2 ** intento))
+            if intento < REINTENTOS - 1:
+                time.sleep(ESPERA_BASE * (2 ** intento))
     if ultimo is not None:
         return ultimo
     # Todos los intentos fueron timeout: se deja que el caller lo trate como fallo.

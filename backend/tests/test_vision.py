@@ -315,9 +315,10 @@ def test_sin_usageMetadata_no_rompe(monkeypatch):
 
 
 # ───────────────────── errores transitorios de Gemini
-def _respuesta_error(status: int):
+def _respuesta_error(status: int, retry_after: str | None = None):
     class R:
         status_code = status
+        headers = {"retry-after": retry_after} if retry_after else {}
         def raise_for_status(self):
             import httpx as h
             raise h.HTTPStatusError(f"Server error '{status}'", request=None, response=None)
@@ -366,3 +367,35 @@ def test_si_falla_en_todos_los_intentos_lo_reporta(monkeypatch):
     assert post.call_count == 3
     assert out["confianza"] == 0.0
     assert "error" in out
+
+
+def test_el_429_espera_mas_que_un_503(monkeypatch):
+    """Un 429 es límite de frecuencia: reintentar enseguida quema los tres
+    intentos dentro de la misma ventana bloqueada."""
+    _con_key(monkeypatch)
+    monkeypatch.setattr("app.services.vision.ESPERA_BASE", 1)
+    esperas = []
+    monkeypatch.setattr("app.services.vision.time.sleep", lambda s: esperas.append(s))
+
+    payload = {"productos": "x", "descripcion": "", "subcategoria": "",
+               "rubro_slugs": [], "confianza": 0.5}
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post",
+               side_effect=[_respuesta_error(429), _respuesta(payload)]):
+        analizar_fotos(["http://x/f.jpg"], RUBROS)
+
+    assert esperas[0] >= 4, "el 429 tiene que esperar bastante más que la base"
+
+
+def test_se_respeta_el_retry_after_del_servidor(monkeypatch):
+    _con_key(monkeypatch)
+    monkeypatch.setattr("app.services.vision.ESPERA_BASE", 1)
+    esperas = []
+    monkeypatch.setattr("app.services.vision.time.sleep", lambda s: esperas.append(s))
+
+    payload = {"productos": "x", "descripcion": "", "subcategoria": "",
+               "rubro_slugs": [], "confianza": 0.5}
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post",
+               side_effect=[_respuesta_error(429, retry_after="30"), _respuesta(payload)]):
+        analizar_fotos(["http://x/f.jpg"], RUBROS)
+
+    assert esperas[0] == 30, "si el servidor dice cuánto esperar, se le hace caso"
