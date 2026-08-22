@@ -95,7 +95,12 @@ class Settings(BaseSettings):
     # Clasificación de productos por IA (Gemini Flash, solo texto).
     #  - Si gemini_api_key vacío → fallback gratis (categoría = rubro del comercio).
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    # Alias, NO una versión fija: los modelos concretos se retiran y el endpoint
+    # empieza a devolver 404. Pasó con gemini-2.0-flash, que estaba acá clavado y
+    # dejó de existir — el análisis por fotos falló sin que nada lo avisara hasta
+    # que se leyó el error crudo. El alias sigue apuntando al flash vigente.
+    # Para fijar una versión concreta, setear GEMINI_MODEL en el .env.
+    gemini_model: str = "gemini-flash-latest"
 
     # Frontend (CORS)
     frontend_url: str = "http://localhost:3000"
