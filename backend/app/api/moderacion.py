@@ -153,7 +153,6 @@ class EditarComercioBody(BaseModel):
     whatsapp: str | None = None
     telefono: str | None = None
     descripcion: str | None = None
-    notas: str | None = None
     prod_obs_human: str | None = None
     modalidad: str | None = None
     direccion: str | None = None

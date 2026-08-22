@@ -486,7 +486,7 @@ class FakeRepo:
     # con null si están vacías; el fake tiene que hacer lo mismo o los tests no
     # detectan que falte una en el select de producción (pasó con `codigo`).
     _COLS_LISTADO_ADMIN = (
-        "id", "slug", "nombre", "whatsapp", "telefono", "modalidad", "descripcion", "notas",
+        "id", "slug", "nombre", "whatsapp", "telefono", "modalidad", "descripcion",
         "prod_obs_human", "prod_det_ia", "subcategoria", "codigo", "direccion", "lat", "lng", "verificado", "suspendido",
         "paga_hasta", "portada_url", "portada_thumb_url", "cargado_por", "created_at",
         "lugar_id", "puesto",

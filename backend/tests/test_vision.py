@@ -140,11 +140,11 @@ def test_al_aplicar_no_toca_el_dato_humano(client, repo, admin_token, monkeypatc
 
 def test_la_descripcion_se_regenera_siempre(client, repo, admin_token, monkeypatch):
     """`descripcion` es de la IA: se rehace en cada análisis sin mirar lo que
-    había. Lo que escribe una persona vive en `notas` y `prod_obs_human`."""
+    había. Lo que escribió una persona vive en `prod_obs_human`, que no se toca."""
     _con_key(monkeypatch)
     c = repo.seed_comercio(slug="x", nombre="Casa Pepe", portada_url="http://x/p.jpg",
                            descripcion="Descripción vieja de la IA",
-                           notas="Atiende de 8 a 12", prod_obs_human="medias", activo=True)
+                           prod_obs_human="medias", activo=True)
     payload = {"productos": "zapatillas", "descripcion": "Zapatería del centro",
                "subcategoria": "zapatillas", "rubro_slugs": ["calzado"], "confianza": 0.9}
     with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post", return_value=_respuesta(payload)):
@@ -152,7 +152,6 @@ def test_la_descripcion_se_regenera_siempre(client, repo, admin_token, monkeypat
 
     guardado = repo.comercios[c["id"]]
     assert guardado["descripcion"] == "Zapatería del centro"   # regenerada
-    assert guardado["notas"] == "Atiende de 8 a 12"            # de la persona: intacta
     assert guardado["prod_obs_human"] == "medias"              # de la persona: intacta
 
 

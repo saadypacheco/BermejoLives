@@ -113,7 +113,6 @@ export type ComercioPorVerificar = {
   telefono: string | null;
   modalidad: string;
   descripcion: string | null;
-  notas: string | null;
   prod_obs_human: string | null;
   prod_det_ia: string | null;
   subcategoria: string | null;
