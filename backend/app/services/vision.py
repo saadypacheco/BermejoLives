@@ -165,6 +165,7 @@ Devolvé SOLO un JSON, sin markdown, con esta forma exacta:
   "descripcion": "una o dos frases sobre el negocio, en español rioplatense, sin adjetivos publicitarios",
   "subcategoria": "el tipo específico de negocio en 1 o 2 palabras (ej: peluches, celulares, ropa de bebé)",
   "rubro_slugs": ["slug1", "slug2"],
+  "categoria_sugerida": "",
   "confianza": 0.0
 }}
 
@@ -172,6 +173,11 @@ Reglas:
 - `rubro_slugs`: SOLO slugs de la lista de abajo. Todos los que apliquen — un local
   que vende neumáticos y también zapatillas lleva los dos. Si no podés determinar
   ninguno, devolvé [].
+- `categoria_sugerida`: si el negocio NO encaja bien en ninguno de los rubros de
+  la lista, o si merecería una categoría más específica que la que elegiste,
+  escribí acá el nombre que le pondrías (2 o 3 palabras, en singular). Si la
+  lista lo cubre bien, dejalo vacío. Es para detectar qué categorías le faltan
+  al sistema, así que no fuerces: sugerí sólo cuando de verdad falta algo.
 - `productos`: SOLO lo que se ve en las fotos. No completes con lo que "suele"
   vender un negocio así.
 - `confianza`: 0.0 a 1.0. Cuánto de lo que decís está realmente visible.
@@ -309,6 +315,7 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
         "productos": (out.get("productos") or "").strip(),
         "descripcion": (out.get("descripcion") or "").strip(),
         "subcategoria": (out.get("subcategoria") or "").strip(),
+        "categoria_sugerida": (out.get("categoria_sugerida") or "").strip(),
         "rubro_slugs": propuestos,
         "confianza": float(out.get("confianza") or 0),
         "fotos_analizadas": usadas,

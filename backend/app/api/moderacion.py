@@ -776,9 +776,16 @@ async def analizar_comercio(
 
     # Se registran aunque no se aplique la propuesta: que el modelo haya pedido
     # una categoría inexistente es información válida por sí sola.
-    if propuesta.get("slugs_descartados"):
+    # Se registran los rubros que el modelo inventó Y la categoría que sugiere
+    # cuando ninguno de los 42 le encaja. Sin lo segundo el reporte queda vacío
+    # aunque falten categorías: el prompt obliga a elegir de la lista, así que un
+    # modelo obediente nunca "descarta" nada.
+    propuestos = list(propuesta.get("slugs_descartados") or [])
+    if propuesta.get("categoria_sugerida"):
+        propuestos.append(propuesta["categoria_sugerida"])
+    if propuestos:
         try:
-            repo.registrar_rubros_propuestos(propuesta["slugs_descartados"], comercio_id)
+            repo.registrar_rubros_propuestos(propuestos, comercio_id)
         except Exception:  # noqa: BLE001 — nunca romper el análisis por el registro
             logger.warning("vision.registro_propuestos_fallo", comercio=comercio_id, exc_info=True)
 
@@ -876,9 +883,12 @@ async def analizar_tanda(
                 "tokens": propuesta.get("tokens", {}).get("total"),
                 "error": propuesta.get("error")}
 
-        if propuesta.get("slugs_descartados"):
+        propuestos = list(propuesta.get("slugs_descartados") or [])
+        if propuesta.get("categoria_sugerida"):
+            propuestos.append(propuesta["categoria_sugerida"])
+        if propuestos:
             try:
-                repo.registrar_rubros_propuestos(propuesta["slugs_descartados"], comercio["id"])
+                repo.registrar_rubros_propuestos(propuestos, comercio["id"])
             except Exception:  # noqa: BLE001
                 logger.warning("vision.registro_propuestos_fallo", comercio=comercio["id"])
 

@@ -438,3 +438,40 @@ def test_la_cabecera_tiene_prioridad_sobre_el_cuerpo(monkeypatch):
     from app.services.vision import _retry_after
     r = _respuesta_error(429, retry_after="5", cuerpo=_CUOTA_AGOTADA)
     assert _retry_after(r) == 5
+
+
+def test_se_devuelve_la_categoria_sugerida(monkeypatch):
+    """El prompt obliga a elegir de la lista de 42, así que un modelo obediente
+    nunca "descarta" nada y el reporte de faltantes queda vacío aunque falten
+    categorías. Este campo es el que le da voz para pedir una nueva."""
+    _con_key(monkeypatch)
+    payload = {"productos": "peluches", "descripcion": "", "subcategoria": "peluches",
+               "rubro_slugs": ["jugueteria"], "categoria_sugerida": "peluchería",
+               "confianza": 0.9}
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post", return_value=_respuesta(payload)):
+        out = analizar_fotos(["http://x/f.jpg"], RUBROS)
+
+    assert out["categoria_sugerida"] == "peluchería"
+    assert out["rubro_slugs"] == ["jugueteria"], "sugerir no reemplaza al rubro elegido"
+
+
+def test_sin_sugerencia_el_campo_queda_vacio(monkeypatch):
+    _con_key(monkeypatch)
+    payload = {"productos": "x", "descripcion": "", "subcategoria": "",
+               "rubro_slugs": ["calzado"], "confianza": 0.8}
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post", return_value=_respuesta(payload)):
+        out = analizar_fotos(["http://x/f.jpg"], RUBROS)
+    assert out["categoria_sugerida"] == ""
+
+
+def test_la_categoria_sugerida_se_registra(client, repo, admin_token, monkeypatch):
+    _con_key(monkeypatch)
+    c = repo.seed_comercio(slug="x", nombre="Peluchería Luli",
+                           portada_url="http://x/p.jpg", activo=True)
+    payload = {"productos": "peluches", "descripcion": "d", "subcategoria": "peluches",
+               "rubro_slugs": ["jugueteria"], "categoria_sugerida": "peluchería",
+               "confianza": 0.9}
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post", return_value=_respuesta(payload)):
+        client.post(f"/admin/comercio/{c['id']}/analizar", headers=_h(admin_token))
+
+    assert any(x["texto"] == "peluchería" for x in repo.rubros_propuestos)
