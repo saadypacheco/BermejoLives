@@ -60,12 +60,31 @@ def main() -> int:
     for c in comercios:
         frecuencia.update(terminos_de_comercio(c))
 
+    # Antes de contar nada: ¿la tabla se puede leer? Una migración sin aplicar o
+    # un PostgREST con el cache viejo devuelven un diccionario vacío, que se ve
+    # idéntico a "primera corrida" — y ahí se pagarían las 16 llamadas para que
+    # la escritura falle recién al final.
+    if not repo.sinonimos_disponibles():
+        print("ERROR: no se puede leer producto_sinonimos.")
+        print("")
+        print("  Falta aplicar la migración, o PostgREST tiene el cache viejo:")
+        print("")
+        print("    docker compose -f docker-compose.prod.yml exec -T postgres \\")
+        print("      psql -U postgres -d postgres -f - "
+              "< supabase/migrations/0050_producto_sinonimos.sql")
+        print("    docker compose -f docker-compose.prod.yml restart postgrest")
+        print("")
+        print("  Se corta acá a propósito: sin la tabla, el diccionario se vería")
+        print("  vacío y se gastarían las llamadas a la IA para nada.")
+        return 1
+
     conocidos = repo.get_diccionario_sinonimos()
     faltantes = [t for t, _ in frecuencia.most_common() if t not in conocidos]
 
     print(f"Comercios activos:            {len(comercios)}")
     print(f"Términos distintos:           {len(frecuencia)}")
-    print(f"Ya en el diccionario:         {len(conocidos)}")
+    print(f"Ya en el diccionario:         {len(conocidos)}"
+          + ("   (tabla vacía: primera corrida)" if not conocidos else ""))
     print(f"Faltan preguntar:             {len(faltantes)}")
     print(f"Llamadas a la IA que implica: {-(-len(faltantes) // TERMINOS_POR_LOTE)}")
     print("\nLos 20 más repetidos:")
