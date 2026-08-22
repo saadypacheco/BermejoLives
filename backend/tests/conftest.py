@@ -613,6 +613,15 @@ class FakeRepo:
             for c in items[:limit]
         ]
 
+    def comercios_sin_analizar(self, limite):
+        pend = [c for c in self.comercios.values()
+                if c.get("activo", True) and not c.get("ia_analizado_at") and c.get("portada_url")]
+        return sorted(pend, key=lambda c: c.get("created_at") or "")[:limite]
+
+    def contar_sin_analizar(self):
+        return len([c for c in self.comercios.values()
+                    if c.get("activo", True) and not c.get("ia_analizado_at") and c.get("portada_url")])
+
     def registrar_rubros_propuestos(self, textos, comercio_id):
         from app.db.repository import _normalizar_rubro
         for t in textos:

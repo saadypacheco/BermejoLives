@@ -826,3 +826,99 @@ def rubros_propuestos(
     """
     items = repo.resumen_rubros_propuestos(limite)
     return {"items": items, "total": len(items)}
+
+
+# ---- Análisis por fotos en tanda ----
+@router.get("/admin/comercios/pendientes-analisis")
+def pendientes_analisis(
+    _admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    return {"pendientes": repo.contar_sin_analizar()}
+
+
+@router.post("/admin/comercios/analizar-tanda")
+async def analizar_tanda(
+    limite: int = Query(5, ge=1, le=20),
+    aplicar: bool = Query(True),
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Analiza un puñado de comercios pendientes y devuelve el avance.
+
+    De a pocos y no todos de una: 161 comercios a varios segundos cada uno
+    superan cualquier timeout de HTTP, y sobre todo chocan con el límite de
+    frecuencia de Gemini. El panel llama a esto en bucle, así el progreso se ve
+    y el proceso se puede cortar en cualquier momento sin perder lo hecho.
+    """
+    pendientes = repo.comercios_sin_analizar(limite)
+    if not pendientes:
+        return {"procesados": 0, "restantes": 0, "resultados": [], "sin_mas": True}
+
+    rubros = repo.list_rubros()
+    resultados = []
+
+    for comercio in pendientes:
+        urls = [f["url"] for f in repo.list_fotos_comercio(comercio["id"]) if f.get("url")]
+        if comercio.get("portada_url"):
+            urls.insert(0, comercio["portada_url"])
+
+        try:
+            propuesta = await run_in_threadpool(analizar_fotos, urls, rubros)
+        except VisionNoConfigurada as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+        fila = {"slug": comercio.get("slug"), "nombre": comercio.get("nombre"),
+                "confianza": propuesta.get("confianza", 0),
+                "productos": propuesta.get("productos", ""),
+                "subcategoria": propuesta.get("subcategoria", ""),
+                "rubros": propuesta.get("rubro_slugs", []),
+                "tokens": propuesta.get("tokens", {}).get("total"),
+                "error": propuesta.get("error")}
+
+        if propuesta.get("slugs_descartados"):
+            try:
+                repo.registrar_rubros_propuestos(propuesta["slugs_descartados"], comercio["id"])
+            except Exception:  # noqa: BLE001
+                logger.warning("vision.registro_propuestos_fallo", comercio=comercio["id"])
+
+        if propuesta.get("error"):
+            # No se marca como analizado: el fallo puede ser transitorio y
+            # conviene reintentarlo en una tanda posterior. Se corta acá para no
+            # gastar el resto de la tanda contra un problema que ya se repite.
+            resultados.append(fila)
+            logger.warning("vision.tanda_cortada", comercio=comercio.get("slug"),
+                           error=propuesta.get("error"))
+            break
+
+        if aplicar and propuesta.get("confianza", 0) > 0:
+            from datetime import datetime, timezone
+            patch = {
+                "prod_det_ia": propuesta["productos"] or None,
+                "subcategoria": propuesta["subcategoria"] or None,
+                "ia_analizado_at": datetime.now(timezone.utc).isoformat(),
+            }
+            if propuesta["descripcion"]:
+                patch["descripcion"] = propuesta["descripcion"]
+            actualizado = repo.update_comercio(comercio["id"], patch, None)
+            if propuesta["rubro_slugs"]:
+                aplicar_rubros(repo, actualizado, propuesta["rubro_slugs"])
+            fila["aplicado"] = True
+        else:
+            # Confianza 0 con respuesta válida: el modelo miró y no reconoció
+            # nada. Se marca igual para que la tanda avance — si se dejara sin
+            # marcar, cada corrida volvería a tropezar con los mismos.
+            from datetime import datetime, timezone
+            repo.update_comercio(comercio["id"],
+                                 {"ia_analizado_at": datetime.now(timezone.utc).isoformat()}, None)
+            fila["aplicado"] = False
+
+        resultados.append(fila)
+
+    logger.info("vision.tanda", procesados=len(resultados), by=admin["email"])
+    return {
+        "procesados": len(resultados),
+        "restantes": repo.contar_sin_analizar(),
+        "resultados": resultados,
+        "sin_mas": False,
+    }

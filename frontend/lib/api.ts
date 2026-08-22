@@ -382,6 +382,35 @@ export async function analizarComercio(comercioId: string, aplicar = false): Pro
   return res.json();
 }
 
+export type ResultadoTanda = {
+  slug: string; nombre: string; confianza: number; productos: string;
+  subcategoria: string; rubros: string[]; tokens: number | null;
+  error?: string; aplicado?: boolean;
+};
+
+export type Tanda = {
+  procesados: number;
+  restantes: number;
+  resultados: ResultadoTanda[];
+  sin_mas: boolean;
+};
+
+export async function pendientesAnalisis(): Promise<number> {
+  const res = await authFetch("/admin/comercios/pendientes-analisis");
+  if (!res.ok) throw new Error("No se pudo consultar los pendientes");
+  return (await res.json()).pendientes ?? 0;
+}
+
+export async function analizarTanda(limite = 3, aplicar = true): Promise<Tanda> {
+  const res = await authFetch(
+    `/admin/comercios/analizar-tanda?limite=${limite}&aplicar=${aplicar}`, { method: "POST" });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail ?? "No se pudo analizar la tanda");
+  }
+  return res.json();
+}
+
 export type FotoComercio = { id: string; url: string; thumb_url: string | null };
 
 export async function adminListarFotos(comercioId: string): Promise<FotoComercio[]> {

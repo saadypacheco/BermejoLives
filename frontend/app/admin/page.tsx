@@ -11,6 +11,7 @@ import {
   setConfiable as setConfiable_, listarNumeros, agregarNumero, type NumeroComercio,
   adminListarFotos, adminSubirFoto, adminBorrarFoto, type FotoComercio,
   analizarComercio, type AnalisisIA,
+  pendientesAnalisis, analizarTanda, type ResultadoTanda,
   type ComercioSuscripcion, type EstadoSuscripcion,
   listPagosPendientes, confirmarPago, type PagoPendiente,
   enviarMensajeComercio,
@@ -975,6 +976,10 @@ function TabComercios({
         })}
       </div>
 
+      {/* Clasificación masiva: arriba de la lista, porque con 161 comercios sin
+          categoría es la acción más útil de esta pantalla. */}
+      <AnalisisMasivo onTerminado={onEdited} />
+
       {/* Vista MAPA (D): tocar un pin abre el editor; ideal para los sin nombre */}
       {vista === "mapa" ? (
         <div style={{ padding: 12 }}>
@@ -1257,6 +1262,99 @@ function ModalEditar({
 }
 
 // ── Modal Pago ────────────────────────────────────────────────────────────────
+
+/** Clasificación por fotos de todos los comercios pendientes.
+ *
+ * Va de a pocos y en bucle desde el navegador, no en una sola llamada: cada
+ * análisis tarda varios segundos, y 161 seguidos superan cualquier timeout y
+ * chocan con el límite de frecuencia de Gemini. Así además el avance se ve y se
+ * puede cortar en cualquier momento sin perder lo hecho.
+ */
+function AnalisisMasivo({ onTerminado }: { onTerminado: () => void }) {
+  const [pendientes, setPendientes] = useState<number | null>(null);
+  const [corriendo, setCorriendo] = useState(false);
+  const [hechos, setHechos] = useState(0);
+  const [ultimos, setUltimos] = useState<ResultadoTanda[]>([]);
+  const [err, setErr] = useState("");
+  const cancelar = useRef(false);
+
+  useEffect(() => { pendientesAnalisis().then(setPendientes).catch(() => setPendientes(null)); }, []);
+
+  async function correr() {
+    setErr(""); setHechos(0); setUltimos([]); setCorriendo(true);
+    cancelar.current = false;
+    try {
+      for (;;) {
+        if (cancelar.current) break;
+        const t = await analizarTanda(3, true);
+        if (t.sin_mas || t.procesados === 0) { setPendientes(0); break; }
+        setHechos((n) => n + t.procesados);
+        setPendientes(t.restantes);
+        setUltimos((prev) => [...t.resultados, ...prev].slice(0, 12));
+
+        const fallo = t.resultados.find((r) => r.error);
+        if (fallo) { setErr(`Se detuvo en "${fallo.nombre}": ${fallo.error}`); break; }
+        if (t.restantes === 0) break;
+        // Respiro entre tandas: el límite de Gemini es por ventana de tiempo, y
+        // encadenar sin pausa es lo que dispara el 429.
+        await new Promise((r) => setTimeout(r, 2500));
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Falló el análisis");
+    } finally {
+      setCorriendo(false);
+      onTerminado();
+    }
+  }
+
+  if (pendientes === null) return null;
+  if (pendientes === 0 && !corriendo && hechos === 0) return null;
+
+  return (
+    <div style={{ border: "1px solid var(--neon)", background: "rgba(57,255,158,.06)",
+                  borderRadius: 12, padding: 14, margin: "0 16px 12px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>🤖 Clasificar por fotos</div>
+          <div style={{ fontSize: 12.5, color: "var(--txt-3)", marginTop: 2 }}>
+            {corriendo
+              ? `Analizando… ${hechos} listos · ${pendientes} por delante`
+              : hechos > 0
+                ? `${hechos} clasificados${pendientes ? ` · quedan ${pendientes}` : " · no queda ninguno"}`
+                : `${pendientes} comercios con foto sin clasificar`}
+          </div>
+        </div>
+        {corriendo ? (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { cancelar.current = true; }}>
+            Detener
+          </button>
+        ) : (
+          <button type="button" className="btn btn-primary btn-sm" onClick={correr} disabled={!pendientes}>
+            Analizar {pendientes} pendientes
+          </button>
+        )}
+      </div>
+
+      {err && <div style={{ color: "var(--pink)", fontSize: 12.5, marginTop: 8 }}>{err}</div>}
+
+      {ultimos.length > 0 && (
+        <div style={{ marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 8, fontSize: 12 }}>
+          {ultimos.map((r, i) => (
+            <div key={`${r.slug}-${i}`} style={{ display: "flex", gap: 8, padding: "3px 0" }}>
+              <span style={{ color: r.error ? "var(--pink)" : r.confianza >= 0.7 ? "var(--neon)" : "var(--amber)" }}>
+                {r.error ? "✕" : `${Math.round(r.confianza * 100)}%`}
+              </span>
+              <b style={{ minWidth: 120 }}>{r.nombre}</b>
+              <span style={{ color: "var(--txt-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {r.error ?? `${r.subcategoria || "—"} · ${r.productos || "nada detectado"}`}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Saca el contenido al <body>.
  *

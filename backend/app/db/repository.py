@@ -60,6 +60,8 @@ class Repo(Protocol):
     def crear_comercio_usuario(self, row: dict) -> dict: ...
     def set_comercio_rubros(self, comercio_id: str, rubro_ids: list[str]) -> None: ...
     def list_rubros(self) -> list[dict]: ...
+    def comercios_sin_analizar(self, limite: int) -> list[dict]: ...
+    def contar_sin_analizar(self) -> int: ...
     def registrar_rubros_propuestos(self, textos: list[str], comercio_id: str | None) -> None: ...
     def resumen_rubros_propuestos(self, limite: int = 100) -> list[dict]: ...
     def sugerir_rubros_por_texto(self, texto: str) -> list[str]: ...
@@ -532,6 +534,28 @@ class SupabaseRepo:
         res = (self._db.table("rubros").select("slug, nombre")
                .eq("activo", True).order("orden").execute())
         return res.data or []
+
+    def comercios_sin_analizar(self, limite: int) -> list[dict]:
+        """Comercios con foto que todavía no pasaron por el análisis.
+
+        Se ordenan por antigüedad para que el recorrido más viejo —el que lleva
+        más tiempo sin clasificar— se procese primero.
+        """
+        res = (self._db.table("comercios").select("*")
+               .eq("activo", True)
+               .is_("ia_analizado_at", "null")
+               .not_.is_("portada_url", "null")
+               .order("created_at")
+               .limit(limite).execute())
+        return res.data or []
+
+    def contar_sin_analizar(self) -> int:
+        res = (self._db.table("comercios").select("id", count="exact")
+               .eq("activo", True)
+               .is_("ia_analizado_at", "null")
+               .not_.is_("portada_url", "null")
+               .limit(1).execute())
+        return res.count or 0
 
     def registrar_rubros_propuestos(self, textos: list[str], comercio_id: str | None) -> None:
         """Guarda las categorías que la IA propuso y no existen todavía.
