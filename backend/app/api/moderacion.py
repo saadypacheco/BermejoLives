@@ -13,6 +13,7 @@ from app.core.telefono import validar_whatsapp
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import normalizar_subcategoria
+from app.services.sinonimos import sinonimos_para
 from app.services.rubros import SLUG_DESCARTE, aplicar_rubros, resolver_rubros
 from app.db.repository import Repo, get_repo
 from app.models.schemas import ModerarBody
@@ -22,7 +23,36 @@ from app.services.reservalo_sync import ReservaloSyncClient, get_reservalo_sync_
 router = APIRouter()
 
 
-def _patch_ia(propuesta: dict) -> dict:
+def _sinonimos(propuesta: dict, repo: Repo | None) -> str:
+    """Los sinónimos del comercio: los que escribió la IA más los que ya están
+    en el diccionario.
+
+    Las dos fuentes se suman porque cubren huecos distintas. La IA aporta lo que
+    ve en ESA vidriera; el diccionario aporta el vocabulario acumulado de todos
+    los relevamientos anteriores y de las correcciones a mano. Un comercio nuevo
+    hereda así todo lo aprendido sin gastar una llamada extra.
+    """
+    partes = [(propuesta.get("sinonimos") or "").strip()]
+    if repo is not None:
+        try:
+            desde_dicc = sinonimos_para(
+                {"prod_det_ia": propuesta.get("productos") or "",
+                 "subcategoria": propuesta.get("subcategoria") or ""},
+                repo.get_diccionario_sinonimos())
+            partes.append(desde_dicc)
+        except Exception:  # noqa: BLE001 — sin diccionario el análisis sigue
+            pass
+
+    vistos: list[str] = []
+    for parte in partes:
+        for s in parte.split(","):
+            s = s.strip()
+            if s and s.lower() not in [v.lower() for v in vistos]:
+                vistos.append(s)
+    return ", ".join(vistos)
+
+
+def _patch_ia(propuesta: dict, repo: Repo | None = None) -> dict:
     """Los campos que escribe el análisis por fotos, en un solo lugar.
 
     Estaba duplicado entre el análisis individual y el de tanda, y ya había
@@ -39,7 +69,7 @@ def _patch_ia(propuesta: dict) -> dict:
         # Se recalcula siempre junto a la subcategoría: si quedara la anterior,
         # el agrupado mentiría y es peor que no tener nada.
         "subcategoria_norm": normalizar_subcategoria(subcategoria) or None,
-        "sinonimos": propuesta.get("sinonimos") or None,
+        "sinonimos": _sinonimos(propuesta, repo) or None,
         "ia_analizado_at": datetime.now(timezone.utc).isoformat(),
     }
     # La descripción es de la IA: se regenera en cada análisis sin mirar lo que
@@ -827,7 +857,7 @@ async def analizar_comercio(
     }
 
     if aplicar and propuesta.get("confianza", 0) > 0:
-        actualizado = repo.update_comercio(comercio_id, _patch_ia(propuesta), None)
+        actualizado = repo.update_comercio(comercio_id, _patch_ia(propuesta, repo), None)
         if propuesta["rubro_slugs"]:
             aplicar_rubros(repo, actualizado, propuesta["rubro_slugs"])
         resultado["aplicado"] = True
@@ -920,7 +950,7 @@ async def analizar_tanda(
             break
 
         if aplicar and propuesta.get("confianza", 0) > 0:
-            actualizado = repo.update_comercio(comercio["id"], _patch_ia(propuesta), None)
+            actualizado = repo.update_comercio(comercio["id"], _patch_ia(propuesta, repo), None)
             if propuesta["rubro_slugs"]:
                 aplicar_rubros(repo, actualizado, propuesta["rubro_slugs"])
             fila["aplicado"] = True

@@ -65,6 +65,8 @@ class Repo(Protocol):
     def registrar_rubros_propuestos(self, textos: list[str], comercio_id: str | None) -> None: ...
     def resumen_rubros_propuestos(self, limite: int = 100) -> list[dict]: ...
     def sugerir_rubros_por_texto(self, texto: str) -> list[str]: ...
+    def get_diccionario_sinonimos(self) -> dict[str, str]: ...
+    def guardar_sinonimos(self, entradas: dict[str, str], origen: str = "ia") -> int: ...
     def quitar_rubro_comercio(self, comercio_id: str, rubro_id: str) -> None: ...
     def get_comercio_rubros(self, comercio_id: str) -> list[str]: ...
     def insert_lead(self, row: dict) -> None: ...
@@ -606,6 +608,43 @@ class SupabaseRepo:
             return list(res.data or [])
         except Exception:  # noqa: BLE001 — nunca bloquear un alta por esto
             return []
+
+    def get_diccionario_sinonimos(self) -> dict[str, str]:
+        """Todo el diccionario de una. Son cientos de filas de texto corto: leerlo
+        entero y resolver en memoria es más barato que una consulta por término."""
+        try:
+            res = self._db.table("producto_sinonimos").select("termino, sinonimos").execute()
+            return {r["termino"]: r["sinonimos"] for r in (res.data or []) if r.get("termino")}
+        except Exception:  # noqa: BLE001 — el buscador funciona sin sinónimos
+            return {}
+
+    def guardar_sinonimos(self, entradas: dict[str, str], origen: str = "ia") -> int:
+        """Guarda o actualiza términos del diccionario. Devuelve cuántos escribió.
+
+        Lo escrito a mano no se pisa con lo que devuelve la IA: si alguien
+        corrigió un sinónimo porque traía resultados equivocados, la próxima
+        corrida no puede volver a romperlo.
+        """
+        from datetime import datetime, timezone
+
+        if not entradas:
+            return 0
+        protegidos = set()
+        if origen != "manual":
+            try:
+                res = (self._db.table("producto_sinonimos").select("termino")
+                       .eq("origen", "manual").execute())
+                protegidos = {r["termino"] for r in (res.data or [])}
+            except Exception:  # noqa: BLE001
+                protegidos = set()
+
+        filas = [{"termino": t, "sinonimos": v, "origen": origen,
+                  "actualizado_at": datetime.now(timezone.utc).isoformat()}
+                 for t, v in entradas.items() if t and v and t not in protegidos]
+        if not filas:
+            return 0
+        self._db.table("producto_sinonimos").upsert(filas, on_conflict="termino").execute()
+        return len(filas)
 
     def quitar_rubro_comercio(self, comercio_id: str, rubro_id: str) -> None:
         (self._db.table("comercio_rubros").delete()

@@ -36,6 +36,8 @@ class FakeRepo:
 
     def __init__(self):
         self.comercios: dict[str, dict] = {}
+        self.sinonimos: dict[str, str] = {}
+        self.sinonimos_manuales: set[str] = set()
         self.usuarios: dict[str, dict] = {}          # email -> row
         self.compradores: dict[str, dict] = {}       # id -> row (usuarios/favoritos: comprador, no comercio)
         self.favoritos: list[dict] = []               # {usuario_id, comercio_id}
@@ -655,6 +657,24 @@ class FakeRepo:
         t = texto.lower()
         return sorted({slug for slug, palabras in self._PALABRAS_FAKE.items()
                        if any(p in t for p in palabras)})
+
+    def get_diccionario_sinonimos(self):
+        return dict(self.sinonimos)
+
+    def guardar_sinonimos(self, entradas, origen="ia"):
+        escritos = 0
+        for t, v in (entradas or {}).items():
+            if not t or not v:
+                continue
+            # Lo cargado a mano no se pisa desde la IA: es la regla que protege
+            # las correcciones de quien revisa.
+            if origen != "manual" and t in self.sinonimos_manuales:
+                continue
+            self.sinonimos[t] = v
+            if origen == "manual":
+                self.sinonimos_manuales.add(t)
+            escritos += 1
+        return escritos
 
     def quitar_rubro_comercio(self, comercio_id, rubro_id):
         c = self.comercios.get(comercio_id)
