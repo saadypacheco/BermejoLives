@@ -67,11 +67,17 @@ def aplicar_rubros(repo: Repo, comercio: dict, elegidos: list[str] | None = None
         if id_otros:
             repo.quitar_rubro_comercio(comercio["id"], id_otros)
 
-    # El rubro PRINCIPAL (comercios.rubro_id) es el que se ve en la ficha y en el
-    # color del pin. Si el agente no eligió ninguno, queda el primero deducido:
-    # sin esto el comercio se clasifica bien para el buscador pero se sigue
-    # mostrando como "Otros" en pantalla.
-    if not comercio.get("rubro_id") and slugs != [SLUG_DESCARTE]:
+    # El rubro PRINCIPAL (comercios.rubro_id) es el que se ve en la ficha, en el
+    # color del pin y en el filtro por categoría.
+    #
+    # La condición mira "otros" además de NULL, y eso es el punto: en el alta
+    # TODOS los comercios reciben rubro_id = otros como descarte, así que
+    # preguntar sólo por NULL no se cumplía nunca. Resultado: 160 comercios
+    # quedaron bien clasificados en comercio_rubros —el buscador los
+    # encontraba— pero en pantalla seguían diciendo "Otros (a clasificar)".
+    id_descarte = repo.get_rubro_id(SLUG_DESCARTE)
+    sin_principal_real = (not comercio.get("rubro_id")) or comercio.get("rubro_id") == id_descarte
+    if sin_principal_real and slugs != [SLUG_DESCARTE]:
         principal = repo.get_rubro_id(slugs[0])
         if principal:
             repo.update_comercio(comercio["id"], {"rubro_id": principal}, None)

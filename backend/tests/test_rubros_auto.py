@@ -72,6 +72,17 @@ def test_aplicar_setea_el_rubro_principal_si_estaba_vacio(repo):
     assert repo.comercios[c["id"]]["rubro_id"] == repo.rubros["calzado"]
 
 
+def test_reemplaza_el_principal_cuando_es_el_descarte(repo):
+    """En el alta TODOS reciben rubro_id = otros. Si sólo se mirara NULL, la
+    condición no se cumpliría nunca y el comercio quedaría clasificado por
+    dentro pero mostrándose como "Otros" — que fue justo lo que pasó con los 160
+    del primer análisis por fotos."""
+    c = repo.seed_comercio(slug="x", nombre="Casa Pepe", prod_obs_human="zapatillas",
+                           rubro_id=repo.rubros["otros"])
+    aplicar_rubros(repo, c)
+    assert repo.comercios[c["id"]]["rubro_id"] == repo.rubros["calzado"]
+
+
 def test_no_pisa_el_rubro_principal_ya_elegido(repo):
     c = repo.seed_comercio(slug="x", nombre="Casa Pepe", prod_obs_human="zapatillas",
                            rubro_id=repo.rubros["ropa"])
