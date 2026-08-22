@@ -66,7 +66,7 @@ class Repo(Protocol):
     def resumen_rubros_propuestos(self, limite: int = 100) -> list[dict]: ...
     def sugerir_rubros_por_texto(self, texto: str) -> list[str]: ...
     def get_diccionario_sinonimos(self) -> dict[str, str]: ...
-    def sinonimos_disponibles(self) -> bool: ...
+    def revisar_sinonimos(self) -> str | None: ...
     def guardar_sinonimos(self, entradas: dict[str, str], origen: str = "ia") -> int: ...
     def quitar_rubro_comercio(self, comercio_id: str, rubro_id: str) -> None: ...
     def get_comercio_rubros(self, comercio_id: str) -> list[str]: ...
@@ -619,8 +619,8 @@ class SupabaseRepo:
         except Exception:  # noqa: BLE001 — el buscador funciona sin sinónimos
             return {}
 
-    def sinonimos_disponibles(self) -> bool:
-        """¿Se puede leer el diccionario de verdad?
+    def revisar_sinonimos(self) -> str | None:
+        """None si el diccionario se puede leer; si no, POR QUÉ no.
 
         get_diccionario_sinonimos() se traga los errores a propósito —el buscador
         tiene que seguir andando sin sinónimos— pero ese mismo silencio hace que
@@ -628,12 +628,17 @@ class SupabaseRepo:
         {}. Sin distinguirlas, una migración sin aplicar o un cache de PostgREST
         viejo se leen como "el diccionario está vacío, hay que preguntar todo", y
         se pagan las llamadas a la IA para que la escritura falle al final.
+
+        Devuelve el error y no sólo un booleano porque las causas posibles se
+        arreglan de formas distintas —migración, cache, permisos— y un "no pude"
+        pelado manda a probar las tres a ciegas. Ya nos costó dos vueltas
+        buscando un cache viejo cuando lo que faltaba era un grant.
         """
         try:
             self._db.table("producto_sinonimos").select("termino").limit(1).execute()
-            return True
-        except Exception:  # noqa: BLE001
-            return False
+            return None
+        except Exception as e:  # noqa: BLE001
+            return str(e)[:300]
 
     def guardar_sinonimos(self, entradas: dict[str, str], origen: str = "ia") -> int:
         """Guarda o actualiza términos del diccionario. Devuelve cuántos escribió.

@@ -36,4 +36,9 @@ alter table producto_sinonimos enable row level security;
 drop policy if exists prod_sin_lectura on producto_sinonimos;
 create policy prod_sin_lectura on producto_sinonimos for select using (true);
 
-grant select on producto_sinonimos to anon, authenticated;
+-- El backend escribe con service_role. Sin este grant la tabla existe, psql la
+-- lee sin problema —habla con Postgres directo— pero el backend recibe un error
+-- que, desde afuera, es indistinguible de "la tabla no existe". Es el grant que
+-- faltaba acá y que todas las demás tablas sí tienen (ver rubro_palabras).
+grant all    on public.producto_sinonimos to service_role;
+grant select on public.producto_sinonimos to anon, authenticated;

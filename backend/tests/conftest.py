@@ -661,8 +661,8 @@ class FakeRepo:
     def get_diccionario_sinonimos(self):
         return dict(self.sinonimos)
 
-    def sinonimos_disponibles(self):
-        return True
+    def revisar_sinonimos(self):
+        return None
 
     def guardar_sinonimos(self, entradas, origen="ia"):
         escritos = 0

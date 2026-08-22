@@ -64,15 +64,26 @@ def main() -> int:
     # un PostgREST con el cache viejo devuelven un diccionario vacío, que se ve
     # idéntico a "primera corrida" — y ahí se pagarían las 16 llamadas para que
     # la escritura falle recién al final.
-    if not repo.sinonimos_disponibles():
+    problema = repo.revisar_sinonimos()
+    if problema:
         print("ERROR: no se puede leer producto_sinonimos.")
         print("")
-        print("  Falta aplicar la migración, o PostgREST tiene el cache viejo:")
+        print(f"  El backend responde: {problema}")
         print("")
-        print("    docker compose -f docker-compose.prod.yml exec -T postgres \\")
-        print("      psql -U postgres -d postgres -f - "
+        print("  Tres causas posibles, y se arreglan distinto. Mirá el mensaje de")
+        print("  arriba antes de probar a ciegas:")
+        print("")
+        print("    - permission denied  -> falta el grant a service_role.")
+        print("      Volvé a aplicar la migración (es idempotente):")
+        print("        docker compose -f docker-compose.prod.yml exec -T postgres \\")
+        print("          psql -U postgres -d postgres -f - "
               "< supabase/migrations/0050_producto_sinonimos.sql")
-        print("    docker compose -f docker-compose.prod.yml restart postgrest")
+        print("")
+        print("    - PGRST205 / no encuentra la tabla -> cache viejo de PostgREST:")
+        print("        docker compose -f docker-compose.prod.yml restart postgrest")
+        print("")
+        print("    - does not exist -> la migración nunca se aplicó (comprobalo con")
+        print("      psql, que habla con Postgres directo y no pasa por PostgREST).")
         print("")
         print("  Se corta acá a propósito: sin la tabla, el diccionario se vería")
         print("  vacío y se gastarían las llamadas a la IA para nada.")
