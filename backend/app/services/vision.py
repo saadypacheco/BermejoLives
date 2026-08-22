@@ -13,6 +13,7 @@ from __future__ import annotations
 import base64
 import json
 import re
+import time
 
 import httpx
 import structlog
@@ -69,6 +70,34 @@ def _descargar(url: str) -> bytes | None:
     except Exception as exc:  # noqa: BLE001
         logger.warning("vision.descarga_fallo", url=url, error=str(exc))
         return None
+
+
+# Los 503 y 429 de Gemini son transitorios: el modelo está saturado y la misma
+# llamada funciona segundos después. Sin reintento, el admin ve un error y tiene
+# que volver a apretar el botón por algo que se resuelve solo.
+REINTENTOS = 3
+ESPERA_BASE = 1.5   # segundos; se duplica en cada intento
+_ESTADOS_REINTENTABLES = {429, 500, 502, 503, 504}
+
+
+def _post_con_reintentos(url: str, payload: dict) -> "httpx.Response":
+    ultimo = None
+    for intento in range(REINTENTOS):
+        try:
+            r = httpx.post(url, json=payload, timeout=TIMEOUT_MODELO)
+            if r.status_code not in _ESTADOS_REINTENTABLES:
+                return r
+            ultimo = r
+            logger.info("vision.reintento", intento=intento + 1, status=r.status_code)
+        except httpx.TimeoutException as exc:
+            ultimo, _ = None, exc
+            logger.info("vision.reintento", intento=intento + 1, motivo="timeout")
+        if intento < REINTENTOS - 1:
+            time.sleep(ESPERA_BASE * (2 ** intento))
+    if ultimo is not None:
+        return ultimo
+    # Todos los intentos fueron timeout: se deja que el caller lo trate como fallo.
+    raise httpx.TimeoutException(f"El modelo no respondió tras {REINTENTOS} intentos")
 
 
 def _prompt(rubros: list[dict]) -> str:
@@ -153,7 +182,7 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
                f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}")
     r = None
     try:
-        r = httpx.post(url_api, json={"contents": [{"parts": partes}]}, timeout=TIMEOUT_MODELO)
+        r = _post_con_reintentos(url_api, {"contents": [{"parts": partes}]})
         r.raise_for_status()
         cuerpo = r.json()
         texto = cuerpo["candidates"][0]["content"]["parts"][0]["text"]

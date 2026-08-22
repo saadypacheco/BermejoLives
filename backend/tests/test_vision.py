@@ -312,3 +312,57 @@ def test_sin_usageMetadata_no_rompe(monkeypatch):
 
     assert out["tokens"]["total"] is None
     assert out["confianza"] == 0.5
+
+
+# ───────────────────── errores transitorios de Gemini
+def _respuesta_error(status: int):
+    class R:
+        status_code = status
+        def raise_for_status(self):
+            import httpx as h
+            raise h.HTTPStatusError(f"Server error '{status}'", request=None, response=None)
+        def json(self):
+            return {"error": {"code": status}}
+    return R()
+
+
+def test_reintenta_ante_un_503_y_sale_bien(monkeypatch):
+    """Gemini devuelve 503 cuando está saturado; la misma llamada anda segundos
+    después. Sin reintento el admin ve un error por algo que se resuelve solo."""
+    _con_key(monkeypatch)
+    monkeypatch.setattr("app.services.vision.ESPERA_BASE", 0)   # sin esperas en test
+    payload = {"productos": "zapatillas", "descripcion": "", "subcategoria": "",
+               "rubro_slugs": ["calzado"], "confianza": 0.9}
+    respuestas = [_respuesta_error(503), _respuesta_error(503), _respuesta(payload)]
+
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post", side_effect=respuestas) as post:
+        out = analizar_fotos(["http://x/f.jpg"], RUBROS)
+
+    assert post.call_count == 3
+    assert out["confianza"] == 0.9
+    assert out["productos"] == "zapatillas"
+
+
+def test_no_reintenta_un_error_del_cliente(monkeypatch):
+    """Un 404 (modelo inexistente) o un 401 no se arreglan reintentando: sólo
+    gastan tiempo y hacen esperar al admin."""
+    _con_key(monkeypatch)
+    monkeypatch.setattr("app.services.vision.ESPERA_BASE", 0)
+
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post", return_value=_respuesta_error(404)) as post:
+        out = analizar_fotos(["http://x/f.jpg"], RUBROS)
+
+    assert post.call_count == 1
+    assert "error" in out
+
+
+def test_si_falla_en_todos_los_intentos_lo_reporta(monkeypatch):
+    _con_key(monkeypatch)
+    monkeypatch.setattr("app.services.vision.ESPERA_BASE", 0)
+
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post", return_value=_respuesta_error(503)) as post:
+        out = analizar_fotos(["http://x/f.jpg"], RUBROS)
+
+    assert post.call_count == 3
+    assert out["confianza"] == 0.0
+    assert "error" in out
