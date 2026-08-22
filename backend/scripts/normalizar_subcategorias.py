@@ -29,6 +29,7 @@ def main() -> int:
 
     comercios = [c for c in repo.list_todos_comercios(None, 5000) if c.get("activo", True)]
     grupos: dict[str, set[str]] = defaultdict(set)
+    con_subcategoria = 0
     escritos = 0
 
     for c in comercios:
@@ -39,6 +40,7 @@ def main() -> int:
         if not norm:
             continue
         grupos[norm].add(sub)
+        con_subcategoria += 1
         if c.get("subcategoria_norm") != norm:
             escritos += 1
             if aplicar:
@@ -46,10 +48,13 @@ def main() -> int:
 
     fusionados = {k: v for k, v in grupos.items() if len(v) > 1}
 
-    print(f"Comercios con subcategoría: {sum(len(v) for v in grupos.values())}")
-    print(f"  variantes escritas distintas: {sum(len(v) for v in grupos.values())}")
+    # Tres números distintos, y confundirlos lleva a conclusiones equivocadas:
+    # cuántos LOCALES tienen subcategoría, de cuántas FORMAS se escribió, y
+    # cuántas categorías REALES son una vez agrupadas las variantes.
+    print(f"Comercios con subcategoría:     {con_subcategoria}")
+    print(f"  formas distintas escritas:    {sum(len(v) for v in grupos.values())}")
     print(f"  categorías reales (agrupadas): {len(grupos)}")
-    print(f"  filas a escribir: {escritos}")
+    print(f"  filas a escribir:             {escritos}")
 
     print(f"\nGRUPOS QUE SE FUSIONAN ({len(fusionados)}) — esto es lo que el "
           f"comprador dejaba de encontrar:")
