@@ -86,6 +86,9 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
       clusterRef.current = layer;
       pintar();
       map.on("move zoom moveend", drawConnector);
+      // Las etiquetas de mercados aparecen y desaparecen según el zoom, así
+      // que hay que repintar cuando termina de hacer zoom.
+      map.on("zoomend", () => pintar());
       const ro = new ResizeObserver(() => { map.invalidateSize(); drawConnector(); });
       ro.observe(elRef.current);
       (map as any)._ro = ro;
@@ -136,10 +139,15 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
     return m;
   }
 
-  function iconoLugar(L: any, nombre: string, n: number, portada?: string | null) {
-    const head = portada ? `<img class="ukpinlugar-foto" src="${portada}" alt="" loading="lazy" />` : `<span>🏬</span>`;
-    const html = `<div class="ukpinlugar">${head}<b>${escapeHtml(nombre)}</b><i>${n}</i></div>`;
-    return L.divIcon({ className: "", html, iconSize: null as any, iconAnchor: [15, 16] });
+  // Los mercados y galerías son una REFERENCIA para ubicarse, no el contenido.
+  // Con la píldora violeta tapaban el mapa y escondían justamente lo que la
+  // persona vino a ver: los locales. Ahora sólo aparecen de cerca, y como texto
+  // discreto.
+  const ZOOM_MIN_LUGARES = 17;
+
+  function iconoLugar(L: any, nombre: string) {
+    const html = `<div class="ukpinlugar">${escapeHtml(nombre)}</div>`;
+    return L.divIcon({ className: "", html, iconSize: null as any, iconAnchor: [0, 8] });
   }
 
   function pintar() {
@@ -180,7 +188,9 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
       if (g.poligono && g.poligono.length >= 3 && polyLayerRef.current) {
         L.polygon(g.poligono, { color: "#8b5cf6", weight: 2, fillColor: "#8b5cf6", fillOpacity: 0.12 }).addTo(polyLayerRef.current);
       }
-      const m = L.marker([lat, lng], { icon: iconoLugar(L, g.nombre, items.length, g.portada), zIndexOffset: 500 });
+      // Por debajo del zoom mínimo no se dibuja: de lejos sólo se ven los locales.
+      if ((mapRef.current?.getZoom() ?? 0) < ZOOM_MIN_LUGARES) continue;
+      const m = L.marker([lat, lng], { icon: iconoLugar(L, g.nombre), zIndexOffset: 400 });
       m.__data = items[0];
       // Tocar el mercado ENCUADRA sus locales en vez de abrir un listado: los
       // pines ya están en el mapa, así que lo útil es acercarse y verlos.

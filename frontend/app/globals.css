@@ -340,11 +340,11 @@
 .ukpinlab > b { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
 .ukpinlab.incompleto { background: #7a5a12; color: #fff; border: 2px dashed #FFC94D; }
 /* Pin de LUGAR (mercado/galería): pill destacado con nombre + contador de puestos */
-.ukpinlugar { display: inline-flex; align-items: center; gap: 5px; background: #6d28d9; color: #fff; font-weight: 700; font-size: 12px; line-height: 1; padding: 5px 6px 5px 8px; border-radius: 999px; border: 2px solid #fff; box-shadow: 0 3px 10px rgba(0,0,0,.55); white-space: nowrap; }
-.ukpinlugar > span { font-size: 14px; }
-.ukpinlugar > b { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
-.ukpinlugar > i { font-style: normal; background: rgba(255,255,255,.25); border-radius: 999px; padding: 1px 7px; font-size: 11px; }
-.ukpinlugar-foto { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255,255,255,.5); flex-shrink: 0; }
+/* Referencia sutil, NO un pin: el mercado sirve para ubicarse ("está en el
+   Mercado Central"), pero lo que la persona vino a ver son los locales. Antes
+   era una píldora violeta que tapaba el mapa y escondía los puntos. Sólo se
+   dibuja con zoom alto (ver ZOOM_MIN_LUGARES en home-map.tsx). */
+.ukpinlugar { display: inline-block; color: #c4b5fd; font-weight: 600; font-size: 10.5px; letter-spacing: .02em; line-height: 1.1; white-space: nowrap; text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 6px rgba(0,0,0,.7); pointer-events: none; }
 /* Hoja (bottom sheet) de "comercios acá" para los que caen en el mismo punto */
 .mapa-hoja { position: absolute; left: 8px; right: 8px; bottom: 8px; max-height: 58%; z-index: 600; display: flex; flex-direction: column; background: rgba(10,13,20,.96); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--stroke); border-radius: 14px; box-shadow: 0 -8px 30px rgba(0,0,0,.5); overflow: hidden; }
 .mapa-hoja-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--stroke); font-size: 13.5px; }
