@@ -1325,7 +1325,18 @@ function AnalisisComercio({ comercioId, onAplicado }: { comercioId: string; onAp
             Confianza <b style={{ color: colorConf }}>{etiquetaConf} ({Math.round(conf * 100)}%)</b>
             <span style={{ color: "var(--txt-3)" }}> · {p.fotos_analizadas} foto(s) analizada(s)</span>
             {p.tokens?.total != null && (
-              <span style={{ color: "var(--txt-3)" }}> · {p.tokens.total.toLocaleString("es-BO")} tokens</span>
+              // Entrada y salida por separado: la salida cuesta ~8 veces más y
+              // en los modelos que razonan incluye los tokens de pensamiento.
+              // Con el total solo no se ve si el costo se fue por ese lado.
+              <span style={{ color: "var(--txt-3)" }}>
+                {" · "}{p.tokens.total.toLocaleString("es-BO")} tokens
+                {p.tokens.entrada != null && p.tokens.salida != null && (
+                  <> ({p.tokens.entrada.toLocaleString("es-BO")} entrada +{" "}
+                  <b style={{ color: p.tokens.salida > 1000 ? "var(--amber)" : "inherit" }}>
+                    {p.tokens.salida.toLocaleString("es-BO")} salida
+                  </b>)</>
+                )}
+              </span>
             )}
           </div>
 
