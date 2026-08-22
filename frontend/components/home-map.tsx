@@ -85,6 +85,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
       const layer = L.layerGroup().addTo(map);
       clusterRef.current = layer;
       pintar();
+      encuadrarTodo(map, L);
       map.on("move zoom moveend", drawConnector);
       // Las etiquetas de mercados aparecen y desaparecen según el zoom, así
       // que hay que repintar cuando termina de hacer zoom.
@@ -148,6 +149,27 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
   function iconoLugar(L: any, nombre: string) {
     const html = `<div class="ukpinlugar">${escapeHtml(nombre)}</div>`;
     return L.divIcon({ className: "", html, iconSize: null as any, iconAnchor: [0, 8] });
+  }
+
+  /** Encuadra el mapa para que entren TODOS los locales.
+   *
+   * La primera impresión tiene que ser "acá hay muchos negocios". Con un centro
+   * y zoom fijos se veía un pedazo de Bermejo con cuatro pines, aunque hubiera
+   * 161 cargados: el trabajo del recorrido quedaba invisible.
+   *
+   * maxZoom evita el efecto contrario — que con dos comercios muy juntos el mapa
+   * se acerque tanto que se pierda la referencia de dónde está uno parado.
+   */
+  function encuadrarTodo(map: any, L: any) {
+    const puntos = comercios
+      .filter((c) => c.lat != null && c.lng != null)
+      .map((c) => [c.lat as number, c.lng as number] as [number, number]);
+    if (puntos.length < 2) return;   // con uno solo, el centro por defecto sirve
+    try {
+      map.fitBounds(L.latLngBounds(puntos), { padding: [36, 36], maxZoom: 16, animate: false });
+    } catch {
+      /* si las coordenadas son inválidas se queda con la vista por defecto */
+    }
   }
 
   function pintar() {
