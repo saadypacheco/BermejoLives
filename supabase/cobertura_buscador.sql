@@ -50,9 +50,13 @@ select subcategoria_norm                       as categoria_real,
 \echo 'Si encuentra < tiene, hay comercios cargados que el comprador no ve.'
 with reales as (
   select r.id, r.nombre,
-         -- Se busca por la palabra sola, sin el emoji ni el "y construcción":
-         -- es lo que la gente escribe de verdad.
-         lower(unaccent(split_part(regexp_replace(r.nombre, '[^[:alnum:] áéíóúñÁÉÍÓÚÑ]', '', 'g'), ' y ', 1))) as termino,
+         -- La palabra sola, sin emoji ni coletillas. "Hogar, blanco y
+         -- decoración" se prueba como "hogar", no como "hogar blanco": nadie
+         -- escribe eso, y al buscarlo como dos palabras el AND del FTS devuelve
+         -- casi nada y el informe reporta un problema que no existe.
+         lower(unaccent(trim(split_part(
+           split_part(regexp_replace(r.nombre, '[^[:alnum:], áéíóúñÁÉÍÓÚÑ]', '', 'g'), ',', 1),
+           ' y ', 1)))) as termino,
          count(cr.comercio_id) as tiene
     from rubros r
     join comercio_rubros cr on cr.rubro_id = r.id
@@ -182,7 +186,8 @@ with terminos as (
 )
 select t.termino, t.comercios
   from terminos t
- where not exists (select 1 from producto_sinonimos ps where ps.termino = t.termino)
+ where not exists (select 1 from producto_sinonimos ps
+                    where ps.termino = termino_normalizado(t.termino))
  order by t.comercios desc, t.termino
  limit 40;
 
@@ -197,6 +202,7 @@ with terminos as (
 )
 select count(*) as terminos_en_uso,
        count(*) filter (where exists (
-         select 1 from producto_sinonimos ps where ps.termino = t.termino)) as con_sinonimos,
+         select 1 from producto_sinonimos ps
+          where ps.termino = termino_normalizado(t.termino))) as con_sinonimos,
        (select count(*) from producto_sinonimos where origen = 'manual')    as corregidos_a_mano
   from terminos t;
