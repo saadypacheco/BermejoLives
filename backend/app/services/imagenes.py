@@ -70,7 +70,12 @@ def subir_foto_galeria(slug: str, data: bytes) -> tuple[str | None, str | None]:
     abre la foto en pantalla completa; el mapa/tarjetas usan siempre el thumb."""
     try:
         grande = procesar_imagen(data, 1280, 80)
-        chica = procesar_imagen(data, 400, 80)
+        # 200px, no 400: la miniatura se muestra a 22px en el pin del mapa, 34px
+        # en la lista, 84px en la tarjeta. A 400px se mandaba seis veces más
+        # resolución de la que se ve, y el mapa de Bermejo abre 160 de estas a la
+        # vez — 5 MB para dibujar pines diminutos. A 200px cubre el doble del
+        # tamaño de pantalla más grande (retina) y pesa un tercio.
+        chica = procesar_imagen(data, 200, 72)
     except Exception as exc:  # noqa: BLE001
         raise ValueError("El archivo no es una imagen válida") from exc
     token = secrets.token_hex(8)
