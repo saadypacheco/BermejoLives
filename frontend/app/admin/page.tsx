@@ -1342,6 +1342,14 @@ function AnalisisComercio({ comercioId, onAplicado }: { comercioId: string; onAp
           <div><b>Productos:</b> {p.productos || <i style={{ color: "var(--txt-3)" }}>nada detectado</i>}</div>
           <div><b>Subcategoría:</b> {p.subcategoria || <i style={{ color: "var(--txt-3)" }}>—</i>}</div>
           <div><b>Categorías:</b> {p.rubro_slugs.length ? p.rubro_slugs.join(", ") : <i style={{ color: "var(--txt-3)" }}>ninguna</i>}</div>
+          {/* Sin esto, un rubro descartado se ve igual que un rubro no propuesto:
+              "ninguna", sin explicación. Saber QUÉ propuso el modelo es lo que
+              permite corregir la taxonomía o el prompt. */}
+          {p.slugs_descartados && p.slugs_descartados.length > 0 && (
+            <div style={{ color: "var(--amber)" }}>
+              Propuso categorías que no existen y se descartaron: {p.slugs_descartados.join(", ")}
+            </div>
+          )}
           {p.descripcion && <div style={{ marginTop: 6 }}><b>Descripción:</b> {p.descripcion}</div>}
 
           <div style={{ color: "var(--txt-3)", marginTop: 8, fontSize: 11.5 }}>

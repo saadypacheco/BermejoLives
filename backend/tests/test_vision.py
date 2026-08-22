@@ -5,7 +5,8 @@ import pytest
 
 from app.services.vision import VisionNoConfigurada, _parsear, analizar_fotos
 
-RUBROS = [{"slug": "calzado", "nombre": "Calzado"}, {"slug": "ropa", "nombre": "Moda y ropa"}]
+RUBROS = [{"slug": "calzado", "nombre": "Calzado"}, {"slug": "ropa", "nombre": "Moda y ropa"},
+          {"slug": "jugueteria", "nombre": "🧸 Juguetería, librería y escolar"}]
 
 
 def _con_key(monkeypatch):
@@ -201,3 +202,35 @@ def test_el_error_del_endpoint_llega_sin_la_key(monkeypatch):
 
     assert "AQ.Ab8RN6secretisimo" not in out["error"]
     assert "AQ.Ab8RN6secretisimo" not in out.get("crudo", "")
+
+
+# ────────────── el modelo devuelve nombres, no siempre slugs
+@pytest.mark.parametrize("devuelto,esperado", [
+    (["calzado"],                              ["calzado"]),
+    (["Calzado"],                              ["calzado"]),
+    (["CALZADO"],                              ["calzado"]),
+    (["Juguetería"],                           ["jugueteria"]),
+    (["jugueteria"],                           ["jugueteria"]),
+    (["🧸 Juguetería, librería y escolar"],     ["jugueteria"]),
+    (["Moda y ropa"],                          ["ropa"]),
+    (["calzado", "Calzado"],                   ["calzado"]),   # sin duplicar
+])
+def test_acepta_el_nombre_del_rubro_ademas_del_slug(monkeypatch, devuelto, esperado):
+    """Exigir el slug exacto descartaba todo y el comercio quedaba sin categorías,
+    sin que se viera por qué."""
+    _con_key(monkeypatch)
+    payload = {"productos": "x", "descripcion": "", "subcategoria": "",
+               "rubro_slugs": devuelto, "confianza": 0.8}
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post", return_value=_respuesta(payload)):
+        out = analizar_fotos(["http://x/f.jpg"], RUBROS)
+    assert out["rubro_slugs"] == esperado
+
+
+def test_lo_que_no_matchea_con_nada_se_reporta(monkeypatch):
+    _con_key(monkeypatch)
+    payload = {"productos": "x", "descripcion": "", "subcategoria": "",
+               "rubro_slugs": ["calzado", "peluqueria canina"], "confianza": 0.8}
+    with patch("app.services.vision._descargar", return_value=b"jpg"),          patch("app.services.vision.httpx.post", return_value=_respuesta(payload)):
+        out = analizar_fotos(["http://x/f.jpg"], RUBROS)
+    assert out["rubro_slugs"] == ["calzado"]
+    assert out["slugs_descartados"] == ["peluqueria canina"]

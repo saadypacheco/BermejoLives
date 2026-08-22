@@ -180,11 +180,32 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
                 "rubro_slugs": [], "confianza": 0.0, "fotos_analizadas": usadas,
                 "error": f"El modelo falló: {detalle}{ayuda}", "crudo": crudo}
 
-    # El modelo puede devolver slugs que no existen: se descartan en vez de
-    # crear rubros fantasma.
-    validos = {r["slug"] for r in rubros if r.get("slug")}
-    propuestos = [s for s in (out.get("rubro_slugs") or []) if s in validos]
-    descartados = [s for s in (out.get("rubro_slugs") or []) if s not in validos]
+    # El modelo devuelve seguido el NOMBRE del rubro ("Juguetería", "🧸 Juguetería,
+    # librería y escolar") en vez del slug, aunque el prompt pida el slug. Exigir
+    # coincidencia exacta descartaba todo y el comercio quedaba sin categorías sin
+    # que se viera por qué. Se acepta slug o nombre, sin tildes ni mayúsculas.
+    def _clave(t: str) -> str:
+        import unicodedata
+        sin_tildes = "".join(c for c in unicodedata.normalize("NFD", t or "")
+                             if unicodedata.category(c) != "Mn")
+        return re.sub(r"[^a-z0-9]+", "", sin_tildes.lower())
+
+    equivalencias: dict[str, str] = {}
+    for r in rubros:
+        slug = r.get("slug")
+        if not slug:
+            continue
+        equivalencias[_clave(slug)] = slug
+        if r.get("nombre"):
+            equivalencias[_clave(r["nombre"])] = slug
+
+    propuestos, descartados = [], []
+    for crudo_slug in (out.get("rubro_slugs") or []):
+        real = equivalencias.get(_clave(str(crudo_slug)))
+        if real and real not in propuestos:
+            propuestos.append(real)
+        elif not real:
+            descartados.append(str(crudo_slug))
     if descartados:
         logger.info("vision.slugs_invalidos", descartados=descartados)
 
