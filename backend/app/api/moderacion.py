@@ -12,6 +12,7 @@ from starlette.concurrency import run_in_threadpool
 from app.core.telefono import validar_whatsapp
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
+from app.services.normalizar import normalizar_subcategoria
 from app.services.rubros import SLUG_DESCARTE, aplicar_rubros, resolver_rubros
 from app.db.repository import Repo, get_repo
 from app.models.schemas import ModerarBody
@@ -19,6 +20,34 @@ from app.services.clasificador import moderar_publicacion
 from app.services.reservalo_sync import ReservaloSyncClient, get_reservalo_sync_client
 
 router = APIRouter()
+
+
+def _patch_ia(propuesta: dict) -> dict:
+    """Los campos que escribe el análisis por fotos, en un solo lugar.
+
+    Estaba duplicado entre el análisis individual y el de tanda, y ya había
+    empezado a divergir. Con los sinónimos y la subcategoría normalizada son
+    cinco campos: si se agrega uno y se olvida una de las dos copias, la mitad
+    de los comercios queda sin ese dato y no lo avisa nadie.
+    """
+    from datetime import datetime, timezone
+
+    subcategoria = propuesta.get("subcategoria") or None
+    patch = {
+        "prod_det_ia": propuesta.get("productos") or None,
+        "subcategoria": subcategoria,
+        # Se recalcula siempre junto a la subcategoría: si quedara la anterior,
+        # el agrupado mentiría y es peor que no tener nada.
+        "subcategoria_norm": normalizar_subcategoria(subcategoria) or None,
+        "sinonimos": propuesta.get("sinonimos") or None,
+        "ia_analizado_at": datetime.now(timezone.utc).isoformat(),
+    }
+    # La descripción es de la IA: se regenera en cada análisis sin mirar lo que
+    # había. Lo que escribe una persona vive en `prod_obs_human`, que no se toca.
+    if propuesta.get("descripcion"):
+        patch["descripcion"] = propuesta["descripcion"]
+    return patch
+
 logger = structlog.get_logger()
 
 _ESTADOS = {"aprobado", "rechazado", "cambios"}
@@ -798,18 +827,7 @@ async def analizar_comercio(
     }
 
     if aplicar and propuesta.get("confianza", 0) > 0:
-        from datetime import datetime, timezone
-        patch = {
-            "prod_det_ia": propuesta["productos"] or None,
-            "subcategoria": propuesta["subcategoria"] or None,
-            "ia_analizado_at": datetime.now(timezone.utc).isoformat(),
-        }
-        # La descripción es de la IA: se regenera en cada análisis sin mirar lo
-        # que había. Lo que escribe una persona vive en `notas` y en
-        # `prod_obs_human`, que no se tocan nunca.
-        if propuesta["descripcion"]:
-            patch["descripcion"] = propuesta["descripcion"]
-        actualizado = repo.update_comercio(comercio_id, patch, None)
+        actualizado = repo.update_comercio(comercio_id, _patch_ia(propuesta), None)
         if propuesta["rubro_slugs"]:
             aplicar_rubros(repo, actualizado, propuesta["rubro_slugs"])
         resultado["aplicado"] = True
@@ -902,15 +920,7 @@ async def analizar_tanda(
             break
 
         if aplicar and propuesta.get("confianza", 0) > 0:
-            from datetime import datetime, timezone
-            patch = {
-                "prod_det_ia": propuesta["productos"] or None,
-                "subcategoria": propuesta["subcategoria"] or None,
-                "ia_analizado_at": datetime.now(timezone.utc).isoformat(),
-            }
-            if propuesta["descripcion"]:
-                patch["descripcion"] = propuesta["descripcion"]
-            actualizado = repo.update_comercio(comercio["id"], patch, None)
+            actualizado = repo.update_comercio(comercio["id"], _patch_ia(propuesta), None)
             if propuesta["rubro_slugs"]:
                 aplicar_rubros(repo, actualizado, propuesta["rubro_slugs"])
             fila["aplicado"] = True

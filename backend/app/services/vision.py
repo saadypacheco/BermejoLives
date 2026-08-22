@@ -164,6 +164,7 @@ Devolvé SOLO un JSON, sin markdown, con esta forma exacta:
   "productos": "lista de 4 a 8 productos separados por coma, en singular y en la palabra que usaría un cliente",
   "descripcion": "una o dos frases sobre el negocio, en español rioplatense, sin adjetivos publicitarios",
   "subcategoria": "el tipo específico de negocio en 1 o 2 palabras (ej: peluches, celulares, ropa de bebé)",
+  "sinonimos": "otras formas de nombrar esos mismos productos, separadas por coma",
   "rubro_slugs": ["slug1", "slug2"],
   "categoria_sugerida": "",
   "confianza": 0.0
@@ -180,6 +181,18 @@ Reglas:
   al sistema, así que no fuerces: sugerí sólo cuando de verdad falta algo.
 - `productos`: SOLO lo que se ve en las fotos. No completes con lo que "suele"
   vender un negocio así.
+- `sinonimos`: Bermejo es frontera con Argentina, y cada producto se llama
+  distinto de un lado y del otro. Por cada producto que pusiste, agregá las
+  otras palabras con las que un comprador podría buscarlo: el término argentino,
+  el boliviano, el genérico y el de marca si se usa como genérico.
+  Ejemplos: remera / polera / camiseta · zapatilla / tenis / championes ·
+  campera / casaca / chamarra · pollera / falda · frazada / cobija / manta.
+  Va sólo la palabra, sin explicar. Esto es lo que hace que alguien encuentre el
+  local escribiendo con SU vocabulario y no con el nuestro.
+- `subcategoria`: en SINGULAR y con la palabra más común. Si se te ocurren dos
+  términos unidos ("bolsos y mochilas"), elegí uno solo y mandá el otro en
+  `sinonimos` — dos comercios iguales con la subcategoría escrita al revés
+  quedan contados como categorías distintas y ninguna sirve de filtro.
 - `confianza`: 0.0 a 1.0. Cuánto de lo que decís está realmente visible.
   Si la persiana está cerrada, hay poca luz, o sólo se ve un cartel sin
   mercadería, la confianza es BAJA (menos de 0.4) aunque el cartel diga el rubro.
@@ -234,7 +247,7 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
         usadas += 1
 
     if usadas == 0:
-        return {"productos": "", "descripcion": "", "subcategoria": "",
+        return {"productos": "", "descripcion": "", "subcategoria": "", "sinonimos": "",
                 "rubro_slugs": [], "confianza": 0.0, "fotos_analizadas": 0,
                 "error": "No se pudo descargar ninguna foto"}
 
@@ -275,7 +288,7 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
         elif "404" in detalle:
             ayuda = (f" — el modelo '{settings.gemini_model}' no existe para esta API key. "
                      "Verificá GEMINI_MODEL contra los modelos que la key tiene habilitados.")
-        return {"productos": "", "descripcion": "", "subcategoria": "",
+        return {"productos": "", "descripcion": "", "subcategoria": "", "sinonimos": "",
                 "rubro_slugs": [], "confianza": 0.0, "fotos_analizadas": usadas,
                 "error": f"El modelo falló: {detalle}{ayuda}", "crudo": crudo}
 
@@ -315,6 +328,7 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
         "productos": (out.get("productos") or "").strip(),
         "descripcion": (out.get("descripcion") or "").strip(),
         "subcategoria": (out.get("subcategoria") or "").strip(),
+        "sinonimos": (out.get("sinonimos") or "").strip(),
         "categoria_sugerida": (out.get("categoria_sugerida") or "").strip(),
         "rubro_slugs": propuestos,
         "confianza": float(out.get("confianza") or 0),

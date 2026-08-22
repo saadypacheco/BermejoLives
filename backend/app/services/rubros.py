@@ -37,6 +37,9 @@ def texto_para_rubros(comercio: dict) -> str:
         comercio.get("prod_obs_human"),
         comercio.get("prod_det_ia"),
         comercio.get("subcategoria"),
+        # Los sinónimos que escribió la IA también disparan rubros: si detectó
+        # "polera" donde el diccionario sólo conoce "remera", igual clasifica.
+        comercio.get("sinonimos"),
         comercio.get("descripcion"),
     )))
 

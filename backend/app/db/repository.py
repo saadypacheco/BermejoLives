@@ -982,7 +982,7 @@ class SupabaseRepo:
     def list_todos_comercios(self, verificado: bool | None = None, limit: int = 300) -> list[dict]:
         q = (
             self._db.table("comercios")
-            .select("id, slug, nombre, whatsapp, telefono, modalidad, descripcion, prod_obs_human, prod_det_ia, subcategoria, codigo, direccion, lat, lng, "
+            .select("id, slug, nombre, whatsapp, telefono, modalidad, descripcion, prod_obs_human, prod_det_ia, subcategoria, sinonimos, codigo, direccion, lat, lng, "
                     "verificado, suspendido, paga_hasta, portada_url, portada_thumb_url, cargado_por, created_at, lugar_id, puesto, "
                     "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), lugares(nombre, tipo, lat, lng, portada_thumb_url)")
             .eq("activo", True)
