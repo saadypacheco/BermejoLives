@@ -21,6 +21,12 @@ Traefik enruta por dominio y emite los certificados (Let's Encrypt). La base es
 
 ---
 
+> **Si el cambio trae una migración**: después de correrla hay que reiniciar
+> PostgREST (`docker compose -f docker-compose.prod.yml restart postgrest`).
+> Cachea el esquema al arrancar y, sin ese reinicio, toda consulta que use la
+> columna o tabla nueva falla — a veces disfrazado de error de CORS o de "sin
+> internet". Ver la sección 4f del runbook de prod.
+
 ## 1) Deploy de un cambio de código (lo habitual)
 
 > **Siempre** con el prefijo `GIT_SHA=… APP_ENV=qa` — así el build hornea la versión

@@ -226,6 +226,29 @@ curl -s https://uruku.bo/version   # → {"commit":"<sha>","env":"prod",...}
 ```
 La versión semántica (`1.0.0`) se sube a mano en `frontend/package.json` en cada hito.
 
+### 4f · Si el deploy incluye una MIGRACIÓN — recargar PostgREST
+
+**Obligatorio** cuando la migración agrega, renombra o rehace una columna o una
+tabla. PostgREST cachea el esquema al arrancar y no se entera solo: hasta que se
+reinicie, toda consulta que use lo nuevo falla.
+
+```bash
+cd /docker/uruku
+docker compose -f docker-compose.prod.yml exec -T postgres   psql -U postgres -d postgres -f - < supabase/migrations/00XX_lo_que_sea.sql
+docker compose -f docker-compose.prod.yml restart postgrest     # ← el paso que se olvida
+GIT_SHA=$(git rev-parse --short HEAD) APP_ENV=prod   docker compose -f docker-compose.prod.yml --env-file .env up -d --build frontend backend
+```
+
+Cómo se ve cuando falta: el backend devuelve `PGRST204 · Could not find the 'X'
+column of 'Y' in the schema cache`, o un 500 en cualquier endpoint que use
+selects embebidos (`comercios(nombre, slug)`), porque la caché de relaciones
+también quedó vieja. Desde el navegador puede aparecer disfrazado de error de
+CORS o, en la app de campo, como "no tenés internet".
+
+Nos pasó tres veces: con `comercio_numeros`, con `comercios.codigo` y con el
+rehecho de `busqueda`. Cada una costó entre media hora y una hora de diagnóstico
+buscando el problema en el lugar equivocado.
+
 ## Paso 5 · Stack Reservalo (path `/tienda`, base self-host, SIN Supabase)
 
 > ✅ **Estado 2026-08-16:** Reservalo ya **no usa Supabase Cloud**. Trae su **propia base
