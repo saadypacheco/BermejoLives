@@ -661,6 +661,13 @@ class FakeRepo:
     def get_diccionario_sinonimos(self):
         return dict(self.sinonimos)
 
+    def list_comercio_rubros_todos(self):
+        salida = []
+        for cid, c in self.comercios.items():
+            for slug in (c.get("rubros") or []):
+                salida.append({"comercio_id": cid, "slug": slug, "nombre": slug})
+        return salida
+
     def revisar_sinonimos(self):
         return None
 

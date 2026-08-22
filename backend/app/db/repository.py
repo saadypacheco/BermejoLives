@@ -67,6 +67,7 @@ class Repo(Protocol):
     def sugerir_rubros_por_texto(self, texto: str) -> list[str]: ...
     def get_diccionario_sinonimos(self) -> dict[str, str]: ...
     def revisar_sinonimos(self) -> str | None: ...
+    def list_comercio_rubros_todos(self) -> list[dict]: ...
     def guardar_sinonimos(self, entradas: dict[str, str], origen: str = "ia") -> int: ...
     def quitar_rubro_comercio(self, comercio_id: str, rubro_id: str) -> None: ...
     def get_comercio_rubros(self, comercio_id: str) -> list[str]: ...
@@ -618,6 +619,26 @@ class SupabaseRepo:
             return {r["termino"]: r["sinonimos"] for r in (res.data or []) if r.get("termino")}
         except Exception:  # noqa: BLE001 — el buscador funciona sin sinónimos
             return {}
+
+    def list_comercio_rubros_todos(self) -> list[dict]:
+        """Toda la tabla comercio_rubros de una, con el slug ya resuelto.
+
+        Auditar la taxonomía necesita saber qué rubros tiene CADA comercio.
+        Pedirlo de a uno son 161 consultas para armar un informe; la relación
+        entera son unos cientos de filas de dos columnas.
+        """
+        try:
+            res = (self._db.table("comercio_rubros")
+                   .select("comercio_id, rubros(slug, nombre)").execute())
+        except Exception:  # noqa: BLE001
+            return []
+        salida = []
+        for fila in (res.data or []):
+            rubro = fila.get("rubros") or {}
+            if rubro.get("slug"):
+                salida.append({"comercio_id": fila["comercio_id"],
+                               "slug": rubro["slug"], "nombre": rubro.get("nombre")})
+        return salida
 
     def revisar_sinonimos(self) -> str | None:
         """None si el diccionario se puede leer; si no, POR QUÉ no.
