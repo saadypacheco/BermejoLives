@@ -400,13 +400,22 @@ def eliminar_mi_comercio(
 class _LeadIn(BaseModel):
     comercio_id: str
     tipo: str = "whatsapp"
+    # De qué búsqueda salió este contacto. Vacío si llegó por el mapa, la home
+    # o un link compartido: son caminos igual de válidos, no un dato faltante.
+    busqueda_id: str | None = None
 
 
 @router.post("/lead")
 def registrar_lead(body: _LeadIn, repo: Repo = Depends(get_repo)) -> dict:
     """Registra un click de contacto (WhatsApp, teléfono, email…) o una vista de ficha."""
     tipo = body.tipo if body.tipo in _TIPOS_LEAD else "whatsapp"
-    repo.insert_lead({"comercio_id": body.comercio_id, "tipo": tipo})
+    fila = {"comercio_id": body.comercio_id, "tipo": tipo}
+    # Si el contacto salió de una búsqueda, se guarda cuál. Es lo que permite
+    # medir después si el buscador acertó: qué se mostró contra qué se eligió.
+    # Viene vacío cuando llegan por el mapa, la home o un link compartido.
+    if body.busqueda_id:
+        fila["busqueda_id"] = body.busqueda_id
+    repo.insert_lead(fila)
     return {"ok": True}
 
 
@@ -418,11 +427,17 @@ class _BusquedaIn(BaseModel):
 
 @router.post("/busquedas/log")
 def log_busqueda(body: _BusquedaIn, repo: Repo = Depends(get_repo)) -> dict:
-    """Loguea una búsqueda (KPIs: qué se busca, qué no da resultados y a quién encontró)."""
+    """Loguea una búsqueda (KPIs: qué se busca, qué no da resultados y a quién encontró).
+
+    Devuelve el id para que el front pueda atarle el click posterior: sin ese
+    puente se sabe qué se mostró y qué se contactó, pero no si una cosa llevó a
+    la otra — que es justo lo que dice si el buscador sirve.
+    """
     q = (body.query or "").strip()
-    if len(q) >= 2:
-        repo.insert_busqueda(q, max(0, int(body.resultados)), body.comercios)
-    return {"ok": True}
+    if len(q) < 2:
+        return {"ok": True}
+    bid = repo.insert_busqueda(q, max(0, int(body.resultados)), body.comercios)
+    return {"ok": True, "busqueda_id": bid}
 
 
 class _ReclamoIn(BaseModel):

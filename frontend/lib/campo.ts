@@ -206,23 +206,36 @@ export async function eliminarComercioAgente(id: string): Promise<void> {
 }
 
 /** Registra un click de contacto (WhatsApp, teléfono, etc.) para un comercio. */
-export async function registrarLead(comercio_id: string, tipo: "whatsapp" | "telefono" | "email" | "web" | "vista" = "whatsapp"): Promise<void> {
+export async function registrarLead(comercio_id: string, tipo: "whatsapp" | "telefono" | "email" | "web" | "vista" = "whatsapp", busqueda_id?: string | null): Promise<void> {
   // Fire-and-forget: no bloqueamos la navegación del usuario
   fetch(`${API}/lead`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ comercio_id, tipo }),
+    // `busqueda_id` ata el contacto a la búsqueda que lo produjo. Sin ese
+    // puente se sabe qué se mostró y qué se contactó, pero no si una cosa llevó
+    // a la otra — que es justo lo que dice si el buscador acierta.
+    body: JSON.stringify(busqueda_id ? { comercio_id, tipo, busqueda_id } : { comercio_id, tipo }),
   }).catch(() => undefined);
 }
 
 /** Loguea una búsqueda para los KPIs (qué se busca / qué no da / a quién encontró). Fire-and-forget. */
-export function logBusqueda(query: string, resultados: number, comercios?: string[]): void {
-  if (!query || query.trim().length < 2) return;
-  fetch(`${API}/busquedas/log`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: query.trim(), resultados, comercios: comercios?.slice(0, 10) }),
-  }).catch(() => undefined);
+/** Loguea una búsqueda y devuelve su id, para poder atarle el contacto que
+ *  venga después. Nunca falla hacia arriba ni bloquea: si el registro se cae, la
+ *  persona igual busca y contacta — perder una métrica no puede costar una
+ *  venta. */
+export async function logBusqueda(query: string, resultados: number, comercios?: string[]): Promise<string | null> {
+  if (!query || query.trim().length < 2) return null;
+  try {
+    const res = await fetch(`${API}/busquedas/log`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: query.trim(), resultados, comercios: comercios?.slice(0, 10) }),
+    });
+    if (!res.ok) return null;
+    return (await res.json()).busqueda_id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Deja un reclamo público (sobre un comercio, o sobre la plataforma si comercio_id es undefined). */

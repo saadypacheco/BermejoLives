@@ -766,6 +766,7 @@ class FakeRepo:
                 self.busqueda_comercios.append(
                     {"busqueda_id": bid, "comercio_id": cid, "posicion": i, "query": query}
                 )
+        return bid
 
     def terminos_de_comercio(self, comercio_id, dias=30, limit=8):
         from collections import Counter

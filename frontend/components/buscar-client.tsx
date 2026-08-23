@@ -29,6 +29,8 @@ export function BuscarClient() {
   const [cargandoMas, setCargandoMas] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout>>();
   const sp = useSearchParams();
+  // Última búsqueda logueada: se le atan los contactos que salgan de ella.
+  const [busquedaId, setBusquedaId] = useState<string | null>(null);
   const PAGE = 30;
 
   const filtros = { q, rubro, modalidad, zona, ciudad, precioMax: precioMax ? Number(precioMax) : undefined };
@@ -67,7 +69,13 @@ export function BuscarClient() {
     debounce.current = setTimeout(async () => {
       const r = await buscarComercios(filtros, PAGE, 0);
       setResults(r);
-      if (q.trim()) logBusqueda(q, r.length, r.map((c) => c.id));
+      // Se guarda el id de la búsqueda para atárselo al contacto si la persona
+      // termina escribiéndole a alguno de estos comercios.
+      if (q.trim()) {
+        logBusqueda(q, r.length, r.map((c) => c.id)).then(setBusquedaId);
+      } else {
+        setBusquedaId(null);
+      }
       setHayMas(r.length === PAGE);
       setLoading(false);
     }, 280);
@@ -160,7 +168,7 @@ export function BuscarClient() {
                   </div>
                   {r.direccion && <div className="uk-resdir"><Pin style={{ width: 13, height: 13 }} />{r.direccion}</div>}
                   <div className="uk-resact">
-                    <a className="uk-btn-wa" href={waLink(r.whatsapp, `Hola, te vi en URUKU`)} target="_blank" rel="noopener" onClick={() => registrarLead(r.id)}>
+                    <a className="uk-btn-wa" href={waLink(r.whatsapp, `Hola, te vi en URUKU`)} target="_blank" rel="noopener" onClick={() => registrarLead(r.id, "whatsapp", busquedaId)}>
                       <WhatsApp style={{ width: 15, height: 15 }} /> WhatsApp
                     </a>
                     <a className="uk-btn-ghost" href={comoLlegarHref(r)} target="_blank" rel="noopener">

@@ -80,7 +80,7 @@ class Repo(Protocol):
     def estadisticas_admin(self) -> dict: ...
     def insert_busqueda(
         self, query: str, resultados: int, comercios: list[str] | None = None
-    ) -> None: ...
+    ) -> str | None: ...
     def terminos_de_comercio(
         self, comercio_id: str, dias: int = 30, limit: int = 8
     ) -> list[dict]: ...
@@ -1339,7 +1339,10 @@ class SupabaseRepo:
 
     def insert_busqueda(
         self, query: str, resultados: int, comercios: list[str] | None = None
-    ) -> None:
+    ) -> str | None:
+        """Guarda la búsqueda y devuelve su id, para poder atarle el click que
+        venga después. Sin ese puente se sabe qué se mostró y qué se contactó,
+        pero no si una cosa llevó a la otra."""
         res = (
             self._db.table("busquedas")
             .insert({"query": query, "resultados": resultados})
@@ -1354,6 +1357,7 @@ class SupabaseRepo:
             ]
             if rows:
                 self._db.table("busqueda_comercios").insert(rows).execute()
+        return bid
 
     def terminos_de_comercio(
         self, comercio_id: str, dias: int = 30, limit: int = 8
