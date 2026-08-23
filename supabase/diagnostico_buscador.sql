@@ -57,7 +57,10 @@ select
 from consultas co
 cross join lateral (
   select * from buscar_comercios(co.q, null,null,null,null,null,null, 12, 0)
-) c
+) res
+-- buscar_comercios() no devuelve `busqueda` (es interna), así que para saber si
+-- el match fue por texto hay que volver a la tabla por id.
+join comercios c on c.id = res.id
 order by co.q, 3, 4 desc;
 
 \echo ''
@@ -82,7 +85,8 @@ with consultas as (
   from consultas co
   cross join lateral (
     select * from buscar_comercios(co.q, null,null,null,null,null,null, 60, 0)
-  ) c
+  ) res
+  join comercios c on c.id = res.id
 )
 select q as consulta,
        count(*)                                   as total,
@@ -113,11 +117,35 @@ select co.q as consulta, c.nombre as trae,
 \echo 'Cada filtro contra el total. Un filtro que no cambia el número, o que'
 \echo 'deja todo en cero, no le sirve a nadie.'
 select 'sin filtro'          as filtro, count(*) from buscar_comercios(null,null,null,null,null,null,null,60,0)
-union all select 'rubro=calzado',   count(*) from buscar_comercios(null,'calzado',null,null,null,null,null,60,0)
-union all select 'rubro=moda-y-ropa', count(*) from buscar_comercios(null,'moda-y-ropa',null,null,null,null,null,60,0)
 union all select 'modalidad=mayorista', count(*) from buscar_comercios(null,null,'mayorista',null,null,null,null,60,0)
 union all select 'modalidad=minorista', count(*) from buscar_comercios(null,null,'minorista',null,null,null,null,60,0)
 union all select 'ciudad=bermejo',  count(*) from buscar_comercios(null,null,null,null,null,null,'bermejo',60,0);
+
+\echo ''
+\echo '################ CADA FILTRO DE CATEGORÍA, UNO POR UNO ################'
+\echo 'tiene    = comercios con ese rubro'
+\echo 'devuelve = lo que trae el filtro con ese slug'
+\echo 'Un rubro con comercios cuyo filtro devuelve 0 es un chip que el comprador'
+\echo 'toca y le vacía la pantalla. Se prueban TODOS los slugs y no uno elegido'
+\echo 'a mano, que fue el error de la corrida anterior: probé "moda-y-ropa", dio'
+\echo 'cero, y el cero era mío por inventar el slug — no del filtro.'
+select r.slug,
+       left(r.nombre, 26)                                   as rubro,
+       count(cr.comercio_id)                                 as tiene,
+       f.devuelve,
+       case when f.devuelve = 0 and count(cr.comercio_id) > 0 then 'ROTO'
+            when f.devuelve >= least(count(cr.comercio_id), 60) then 'ok'
+            else 'incompleto' end                            as estado
+  from rubros r
+  left join comercio_rubros cr on cr.rubro_id = r.id
+  left join comercios c on c.id = cr.comercio_id and c.activo
+  cross join lateral (
+    select count(*) as devuelve
+      from buscar_comercios(null, r.slug, null,null,null,null,null, 60, 0)
+  ) f
+ group by r.slug, r.nombre, f.devuelve
+having count(cr.comercio_id) > 0
+ order by 5 desc, 3 desc;
 
 \echo ''
 \echo '################ LAS "OFERTAS" DE LAS TARJETAS ################'
