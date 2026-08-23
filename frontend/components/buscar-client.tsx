@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { MapResults } from "@/components/map-results";
 import { buscarComercios, getRubros, getZonas } from "@/lib/data";
@@ -27,6 +28,7 @@ export function BuscarClient() {
   const [hayMas, setHayMas] = useState(false);
   const [cargandoMas, setCargandoMas] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout>>();
+  const sp = useSearchParams();
   const PAGE = 30;
 
   const filtros = { q, rubro, modalidad, zona, ciudad, precioMax: precioMax ? Number(precioMax) : undefined };
@@ -34,13 +36,30 @@ export function BuscarClient() {
   useEffect(() => {
     getRubros().then(setRubros);
     getZonas().then(setZonas);
-    const sp = new URLSearchParams(window.location.search);
-    if (sp.get("ciudad")) setCiudad(sp.get("ciudad")!);
-    if (sp.get("q")) setQ(sp.get("q")!);
-    if (sp.get("rubro")) setRubro(sp.get("rubro")!);
-    if (sp.get("zona")) setZona(sp.get("zona")!);
-    if (sp.get("precio_max")) setPrecioMax(sp.get("precio_max")!);
   }, []);
+
+  // Los parámetros se leen en CADA navegación, no sólo al montar.
+  //
+  // La barra de categorías de arriba navega a /buscar?rubro=X. Como ya estamos
+  // en /buscar, Next no vuelve a montar este componente: sólo cambia la URL. Con
+  // la lectura en un efecto de montaje, el estado se quedaba en el filtro
+  // anterior y tocar "Calzado" o "Bolsos" devolvía siempre lo mismo — parecía
+  // que los filtros no andaban cuando en realidad nunca se enteraban.
+  //
+  // Se escriben sólo los que vienen en la URL: los chips de acá abajo cambian el
+  // estado sin navegar, y pisarlos con un valor vacío los borraría al toque.
+  useEffect(() => {
+    const g = (k: string) => sp.get(k);
+    if (g("ciudad") !== null) setCiudad(g("ciudad")!);
+    if (g("zona") !== null) setZona(g("zona")!);
+    if (g("precio_max") !== null) setPrecioMax(g("precio_max")!);
+    // rubro y q son excluyentes entre sí en la navegación: entrar por una
+    // categoría limpia el texto anterior, y buscar texto sale de la categoría.
+    // Sin esto quedaba un filtro invisible activo y el resultado no cerraba con
+    // lo que la pantalla mostraba.
+    if (g("rubro") !== null) { setRubro(g("rubro")!); setQ(""); }
+    else if (g("q") !== null) { setQ(g("q")!); setRubro(""); }
+  }, [sp]);
 
   useEffect(() => {
     clearTimeout(debounce.current);
