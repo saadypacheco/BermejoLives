@@ -5,8 +5,12 @@ Patrón Protocol como en mentorcomercial para poder testear con un fake.
 import re
 from typing import Protocol
 
+import structlog
+
 from app.core.text import slugify, slug_unico
 from app.db.session import get_supabase
+
+logger = structlog.get_logger()
 
 # Slug "genérico" (sin nombre real al dar de alta): comercio, comercio-2, ...
 # Mientras el slug sea así, se rearma solo cuando le ponen un nombre de verdad.
@@ -1187,15 +1191,27 @@ class SupabaseRepo:
         return res.data[0]
 
     def list_reclamos(self, estado: str | None) -> list[dict]:
-        q = (
-            self._db.table("reclamos")
-            .select("*, comercios(nombre, slug)")
-            .order("created_at", desc=True)
-            .limit(500)
-        )
-        if estado:
-            q = q.eq("estado", estado)
-        return q.execute().data or []
+        """Los reclamos, con el nombre del comercio cuando hay uno.
+
+        El nombre viene de un select embebido, y eso lo resuelve PostgREST
+        leyendo la foreign key de su cache de esquema. Si el cache está viejo
+        —lo que pasa cada vez que corre una migración y nadie lo reinicia—, el
+        embed falla y se lleva puesto todo el listado.
+
+        Reintenta sin el embed: es preferible mostrar los reclamos sin el nombre
+        del comercio a no mostrar ninguno. Un reclamo sin responder es una
+        persona esperando.
+        """
+        def _consulta(select: str):
+            q = (self._db.table("reclamos").select(select)
+                 .order("created_at", desc=True).limit(500))
+            return (q.eq("estado", estado) if estado else q).execute().data or []
+
+        try:
+            return _consulta("*, comercios(nombre, slug)")
+        except Exception:  # noqa: BLE001
+            logger.warning("reclamos.embed_fallo", exc_info=True)
+            return _consulta("*")
 
     def responder_reclamo(self, reclamo_id: str, respuesta: str, by: str) -> dict | None:
         from datetime import datetime, timezone
@@ -1229,15 +1245,19 @@ class SupabaseRepo:
         return res.data[0]
 
     def list_solicitudes_cambio_numero(self, estado: str | None) -> list[dict]:
-        q = (
-            self._db.table("solicitudes_cambio_numero")
-            .select("*, comercios(nombre, slug, portada_url, whatsapp)")
-            .order("created_at", desc=True)
-            .limit(200)
-        )
-        if estado:
-            q = q.eq("estado", estado)
-        return q.execute().data or []
+        """Igual que list_reclamos: el embed puede caerse con el cache viejo de
+        PostgREST, y una solicitud de cambio de número sin atender deja a un
+        comercio sin poder recibir reservas."""
+        def _consulta(select: str):
+            q = (self._db.table("solicitudes_cambio_numero").select(select)
+                 .order("created_at", desc=True).limit(200))
+            return (q.eq("estado", estado) if estado else q).execute().data or []
+
+        try:
+            return _consulta("*, comercios(nombre, slug, portada_url, whatsapp)")
+        except Exception:  # noqa: BLE001
+            logger.warning("solicitudes.embed_fallo", exc_info=True)
+            return _consulta("*")
 
     def aprobar_solicitud_cambio_numero(self, solicitud_id: str, by: str) -> dict | None:
         from datetime import datetime, timezone

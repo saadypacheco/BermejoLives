@@ -132,11 +132,20 @@ export default function AdminPage() {
   }
 
   async function actComercio(id: string, accion: "verificar" | "rechazar") {
-    setComercios((prev) => prev.filter((c) => c.id !== id)); // optimista
+    // La lista que se ve en pantalla se pinta desde `todosLosComercios`, NO desde
+    // `comercios` (que son sólo los pendientes, y hoy alimenta el contador del tab).
+    // Actualizar una sola era el bug: el backend guardaba el cambio pero la tarjeta
+    // seguía ahí, así que el botón parecía no hacer nada.
+    setComercios((prev) => prev.filter((c) => c.id !== id));
+    setTodosLosComercios((prev) => accion === "rechazar"
+      // rechazar = activo:false en la BD, y el listado trae sólo activos → desaparece
+      ? prev.filter((c) => c.id !== id)
+      // verificar = el negocio sigue en la lista, cambia de estado (mueve los chips)
+      : prev.map((c) => (c.id === id ? { ...c, verificado: true } : c)));
     try {
       accion === "verificar" ? await verificarComercio(id) : await rechazarComercio(id);
     } catch {
-      loadComercios();
+      loadComercios();   // falló el server: volvemos a la verdad de la BD
     }
   }
 

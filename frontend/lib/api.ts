@@ -153,14 +153,25 @@ export async function editarComercio(id: string, patch: Record<string, unknown>)
   return res.json();
 }
 
+/** Igual que `itemsDe` pero para acciones: `authFetch` sólo lanza en 401, así que
+ *  un 404/500 devolvía {"detail": "..."} sin lanzar y el catch del componente
+ *  nunca corría — el error del server quedaba invisible y la UI mentía. */
+async function okDe(res: Response, que: string) {
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail ?? `No se pudo ${que} (HTTP ${res.status})`);
+  }
+  return res.json().catch(() => ({}));
+}
+
 export async function verificarComercio(id: string) {
   const res = await authFetch(`/moderacion/comercios/${id}/verificar`, { method: "POST" });
-  return res.json();
+  return okDe(res, "verificar el negocio");
 }
 
 export async function rechazarComercio(id: string) {
   const res = await authFetch(`/moderacion/comercios/${id}/rechazar`, { method: "POST" });
-  return res.json();
+  return okDe(res, "rechazar el negocio");
 }
 
 // ── Lugares (mercados / galerías / referencias): ABM desde el admin ──────────
