@@ -21,6 +21,7 @@ export async function UrukuShell({
   activeCat = "Todos",
   activeNav,
   showCatnav = true,
+  showSearch = true,
   showFooter = true,
   mainClass,
   fill = false,
@@ -30,6 +31,10 @@ export async function UrukuShell({
   activeCat?: string;
   activeNav?: string;
   showCatnav?: boolean;
+  /** El buscador del header. Se apaga en /buscar, que tiene el suyo propio y
+   *  en vivo: dos cajas de texto en la misma pantalla, una que navega y otra
+   *  que filtra mientras escribís, no se entienden. */
+  showSearch?: boolean;
   showFooter?: boolean;
   mainClass?: string;
   fill?: boolean;   // llena la pantalla (ej. mapa): flex column, sin footer, main flex-1
@@ -72,11 +77,13 @@ export async function UrukuShell({
             </div>
           </div>
 
+          {showSearch && (
           <form className="uk-search" action="/buscar" method="get">
             <Ic d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3" />
             <input name="q" placeholder="¿Qué estás buscando?" aria-label="Buscar" />
             <button type="submit">Buscar</button>
           </form>
+          )}
         </div>
 
         {showCatnav && <CatNav active={activeCat} />}

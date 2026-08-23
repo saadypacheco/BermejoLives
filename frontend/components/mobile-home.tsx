@@ -7,8 +7,8 @@ import { HomeMap } from "@/components/home-map";
 import { CitySelector } from "@/components/city-selector";
 import { ThemeToggle } from "@/components/uruku-theme";
 import { WhatsApp, Phone, Send, User, Search } from "@/components/icons";
-import { type ComercioMapa } from "@/lib/data";
-import { type Ciudad } from "@/lib/types";
+import { type ComercioMapa, getRubros } from "@/lib/data";
+import { type Ciudad, type Rubro } from "@/lib/types";
 import { type FeedItem, precioFmt, vencimientoFmt } from "@/lib/types";
 import { registrarLead } from "@/lib/campo";
 import { distanciaMetros, formatDistancia } from "@/lib/distancia";
@@ -17,19 +17,38 @@ import { GuardarBoton } from "@/components/guardar-boton";
 import { HorarioBadge } from "@/components/horario-badge";
 import { ImageLightbox } from "@/components/image-lightbox";
 
-const CHIPS: { label: string; rubro: string }[] = [
-  { label: "Todos", rubro: "" },
-  { label: "Talleres", rubro: "gomeria" },
-  { label: "Farmacias", rubro: "farmacia" },
-  { label: "Restaurantes", rubro: "gastronomia" },
-  { label: "Mercados", rubro: "mercado" },
-  { label: "Tecnología", rubro: "tecnologia" },
-];
+// Los chips salen de los comercios que hay EN EL MAPA, no de una lista fija.
+//
+// La lista fija tenía cinco y tres estaban muertas: "gastronomia", "mercado" y
+// "tecnologia" no son slugs de ningún rubro (los reales son "restaurantes",
+// "alimentos" y "computacion"). Tocarlas vaciaba la pantalla.
+//
+// Derivarlos de lo cargado tiene una garantía que una lista escrita a mano no
+// puede dar: ningún chip puede devolver cero, porque sólo aparece si hay
+// comercios de ese rubro a la vista.
+const MAX_CHIPS = 6;
+
+function chipsDe(comercios: ComercioMapa[], rubros: Rubro[]): { label: string; rubro: string }[] {
+  const cuenta = new Map<string, number>();
+  for (const c of comercios) {
+    if (!c.rubro_slug || c.rubro_slug === "otros") continue;
+    cuenta.set(c.rubro_slug, (cuenta.get(c.rubro_slug) ?? 0) + 1);
+  }
+  const nombre = new Map(rubros.map((r) => [r.slug, r.nombre.replace(/^[^\p{L}\p{N}]+/u, "").trim()]));
+  const top = [...cuenta.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, MAX_CHIPS)
+    .map(([slug]) => ({ label: nombre.get(slug) || slug, rubro: slug }));
+  return [{ label: "Todos", rubro: "" }, ...top];
+}
 const wa = (s?: string | null) => (s || "").replace(/\D/g, "");
 
 export function MobileHome({ comercios, feed, soloOfertas = false, center, ciudad, ciudades, embedded = false }: { comercios: ComercioMapa[]; feed: FeedItem[]; soloOfertas?: boolean; center?: [number, number] | null; ciudad?: Ciudad | null; ciudades?: Ciudad[]; embedded?: boolean }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
+  const [rubros, setRubros] = useState<Rubro[]>([]);
+  useEffect(() => { getRubros().then(setRubros).catch(() => {}); }, []);
+  const chips = chipsDe(comercios, rubros);
   const [soloAbiertos, setSoloAbiertos] = useState(false);
   const [sel, setSel] = useState<ComercioMapa | null>(null);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
@@ -98,7 +117,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
         <button type="button" className={`mchip mchip-open ${soloAbiertos ? "active" : ""}`} onClick={() => { setSoloAbiertos((v) => !v); setSel(null); }}>
           🟢 Abierto ahora
         </button>
-        {CHIPS.map((c) => (
+        {chips.map((c) => (
           <button type="button" key={c.label} className={`mchip ${cat === c.rubro ? "active" : ""}`} onClick={() => { setCat(c.rubro); setSel(null); }}>
             {c.label}
           </button>
