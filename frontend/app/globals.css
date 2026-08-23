@@ -686,3 +686,37 @@
    distinto de como va a quedar en el mapa público. */
 .uk-adorno-sel .uk-adorno svg { filter: drop-shadow(0 0 0 2px #fff) drop-shadow(0 0 6px var(--uk-primary, #e11d48)); }
 .uk-adornos-editor .leaflet-marker-draggable { cursor: grab; }
+
+/* ── Panel de catálogo (admin) ──────────────────────────────────────────────
+   El resto del panel muestra lo que existe; esta vista existe para mostrar lo
+   que FALTA. De ahí que los vacíos vayan resaltados en ámbar en vez de pasar
+   desapercibidos como una fila más con un cero. */
+.cat-resumen { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.cat-resumen > div { flex: 1 1 120px; padding: 12px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--stroke); }
+.cat-resumen b { display: block; font-size: 22px; line-height: 1.1; }
+.cat-resumen span { font-size: 12px; opacity: .7; }
+.cat-resumen .alerta { border-color: #f59e0b; }
+.cat-resumen .alerta b { color: #f59e0b; }
+
+.cat-bloque { margin-bottom: 26px; }
+.cat-bloque h3 { margin: 0 0 4px; font-size: 16px; }
+.cat-head { display: flex; align-items: center; gap: 12px; }
+.cat-head button { margin-left: auto; padding: 6px 13px; border-radius: 999px; border: 1px solid var(--stroke); background: var(--panel); color: inherit; font-size: 13px; cursor: pointer; }
+.cat-head button.active { background: #f59e0b; border-color: transparent; color: #1a1206; }
+
+/* La demanda sin cubrir va destacada: es la única lista del panel que sale de
+   personas reales y no de lo que cargamos nosotros. */
+.cat-demanda { padding: 14px; border-radius: 14px; border: 1px solid rgb(245 158 11 / .4); background: rgb(245 158 11 / .06); }
+
+.cat-tabla { width: 100%; border-collapse: collapse; margin-top: 10px; }
+.cat-tabla th { text-align: left; font-size: 12px; opacity: .6; padding: 6px 8px; font-weight: 600; }
+.cat-tabla td { padding: 7px 8px; border-top: 1px solid var(--stroke); font-size: 14px; }
+.cat-tabla td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.cat-tabla tr.vacio td { background: rgb(245 158 11 / .09); }
+.cat-tabla em { font-size: 11px; opacity: .5; font-style: normal; }
+.cat-cero { color: #f59e0b; font-size: 12px; }
+
+.cat-chips { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 7px; }
+.cat-chips li { display: inline-flex; align-items: center; gap: 7px; padding: 5px 6px 5px 11px; border-radius: 999px; background: var(--panel); border: 1px solid var(--stroke); font-size: 13px; }
+.cat-chips i { font-style: normal; font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--stroke); opacity: .85; }
+.cat-vacio { font-size: 13px; opacity: .7; margin: 8px 0 0; }

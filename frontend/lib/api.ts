@@ -190,6 +190,23 @@ export async function adminDeleteLugar(id: string): Promise<void> {
   await authFetch(`/admin/lugares/${id}`, { method: "DELETE" });
 }
 
+// ── Catálogo: qué hay cargado y qué falta ───────────────────────────────────
+export type Catalogo = {
+  comercios: number;
+  rubros: { slug: string; nombre: string; comercios: number; descarte: boolean }[];
+  rubros_vacios: number;
+  productos: { termino: string; comercios: number }[];
+  productos_distintos: number;
+  productos_unicos: number;
+  buscado_sin_resultado: { query: string; n: number }[];
+};
+
+export async function adminCatalogo(): Promise<Catalogo> {
+  const res = await authFetch(`/admin/catalogo`);
+  if (!res.ok) throw new Error("No se pudo cargar el catálogo");
+  return res.json();
+}
+
 // ── Adornos del mapa (chalanas y lapachos) ──────────────────────────────────
 // Pura decoración: no son comercios, no se buscan y no reciben clics. Dónde va
 // cada uno hay que decidirlo conociendo la ciudad, así que se marcan haciendo

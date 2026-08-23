@@ -1076,3 +1076,21 @@ def admin_delete_adorno(
     repo.update_adorno(adorno_id, {"activo": False})
     logger.info("admin.adorno_borrado", adorno=adorno_id, by=admin["email"])
     return {"ok": True}
+
+
+@router.get("/admin/catalogo")
+def admin_catalogo(
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Rubros y productos con cuántos comercios tiene cada uno, y los huecos.
+
+    Los huecos son de dos tipos distintos y el panel los muestra por separado
+    porque se resuelven distinto: un rubro sin comercios puede ser una categoría
+    que sobra o un relevamiento que falta —sólo lo sabe quien camina la ciudad—,
+    mientras que un término buscado sin resultado es demanda medida y ya dice a
+    qué salir a buscar.
+    """
+    from app.services.catalogo import informe
+
+    return informe(repo)
