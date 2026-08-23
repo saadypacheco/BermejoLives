@@ -359,7 +359,7 @@ function Login({ onOk }: { onOk: () => void }) {
 }
 
 // ─────────────────────────────────────────────
-const EMPTY = { nombre: "", cel: "", modalidad: "mayorista", direccion: "", prodObs: "" };
+const EMPTY = { nombre: "", modalidad: "mayorista", direccion: "", prodObs: "" };
 
 function toggle<T>(arr: T[], val: T): T[] {
   return arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val];
@@ -511,7 +511,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   // tener número cargado, sin login y sin haber pagado.
   const [doneCodigo,  setDoneCodigo]  = useState<string | null>(null);
   const [altaId,      setAltaId]      = useState<string | null>(null);
-  // Si el agente ya cargó el número en el formulario, no se vuelve a pedir.
+  // Queda en true una vez que se guardó el número en la pantalla siguiente.
   const [whatsappCargado, setWhatsappCargado] = useState(false);
   const [count,       setCount]       = useState(0);
   const [err,         setErr]         = useState("");
@@ -628,9 +628,9 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
-    const cel = f.cel.replace(/\D/g, "");
-    // Alta mínima: solo la ubicación es obligatoria. Nombre, WhatsApp, descripción y
-    // foto son opcionales (locales sin contacto → quedan como punto en el mapa).
+    // Alta mínima: solo la ubicación es obligatoria. Nombre, descripción y foto
+    // son opcionales (locales sin contacto → quedan como punto en el mapa). El
+    // WhatsApp ya no se pide acá: va en la pantalla siguiente.
     if (!coords) { setErr("Falta la ubicación — tocá \"Usar mi ubicación actual\"."); return; }
     if (comprimiendo) { setErr("Esperá a que termine de comprimir la foto."); return; }
 
@@ -640,7 +640,6 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       lat: String(coords.lat), lng: String(coords.lng), consentimiento: String(consent),
     };
     if (f.nombre.trim()) campos.nombre = f.nombre.trim();
-    if (cel) campos.whatsapp = prefijo + cel;
     if (f.prodObs.trim()) campos.prod_obs_human = f.prodObs.trim();
     if (f.direccion.trim()) campos.direccion = f.direccion.trim();
     if (lugarId && lugarId !== "__nuevo__") campos.lugar_id = lugarId;
@@ -661,7 +660,6 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       setDone(r.comercio.nombre);
       setDoneCodigo(r.comercio.codigo_formateado ?? null);
       setAltaId(r.comercio.id);
-      setWhatsappCargado(Boolean(campos.whatsapp));
       setCount((c) => c + 1);
       setSubioLugar(lugarActual ? { id: lugarActual.id, nombre: lugarActual.nombre } : null);
       setUltimoPuesto(puesto);
@@ -881,19 +879,11 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
         {/* ── Nombre ── */}
         <input className="adm-input" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre del comercio (opcional — si no, queda 'Comercio')" />
 
-        {/* ── WhatsApp ── */}
-        <div>
-          <label className="campo-lbl">WhatsApp del comercio (opcional)</label>
-          <div className="cel-wrap">
-            <button type="button" className="cel-flag" title="Tocar para cambiar de país"
-              onClick={() => setPrefijo((p) => (p === "591" ? "549" : "591"))}
-              style={{ cursor: "pointer", border: "none" }}>
-              {prefijo === "549" ? "🇦🇷" : "🇧🇴"} +{prefijo} ⇄
-            </button>
-            <input className="adm-input" type="tel" inputMode="numeric" value={f.cel}
-              onChange={(e) => set("cel", e.target.value)} placeholder={prefijo === "549" ? "3514XXXXXX" : "7XXXXXXX"} />
-          </div>
-        </div>
+        {/* El WhatsApp NO va acá. Se pide en la pantalla siguiente, después de
+            guardar: el agente releva el local primero y recién después se pone a
+            hablar con la persona, así que el número aparece al final de esa
+            charla. Tenerlo en este formulario obligaba a volver a un campo que
+            ya había quedado atrás. Se pide en CapturaWhatsapp. */}
 
         {/* ── Modalidad ── */}
         <div>
