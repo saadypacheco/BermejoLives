@@ -12,13 +12,14 @@ import { registrarLead, logBusqueda } from "@/lib/campo";
 
 const RESERVALO_URL = "/tienda";
 
-export function BuscarClient() {
+export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string }) {
   const [q, setQ] = useState("");
   const [rubro, setRubro] = useState("");
   const [modalidad, setModalidad] = useState("");
   const [zona, setZona] = useState("");
   const [precioMax, setPrecioMax] = useState("");
-  const [ciudad, setCiudad] = useState("");
+  // Arranca en la ciudad del selector; el parámetro ?ciudad= de la URL la pisa.
+  const [ciudad, setCiudad] = useState(ciudadInicial);
   const [soloOfertas, setSoloOfertas] = useState(false);
   const [vista, setVista] = useState<"lista" | "mapa">("lista");
   const [results, setResults] = useState<ResultadoBusqueda[]>([]);

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ciudadActual } from "@/lib/ciudad-server";
 import { Nav } from "@/components/nav";
 import { WhatsApp, Store, Pin, Search, Send, Play, Verified, TikTok, Arrow, Check } from "@/components/icons";
 
@@ -8,7 +9,7 @@ export const metadata = {
 };
 
 const FEATURES = [
-  { Icon: Pin, t: "En el mapa", d: "Tu comercio aparece en el mapa de Bermejo con foto, ubicación y cómo llegar." },
+  { Icon: Pin, t: "En el mapa", d: "Tu comercio aparece en el mapa con foto, ubicación y cómo llegar." },
   { Icon: WhatsApp, t: "Contacto directo", d: "El comprador te escribe por WhatsApp con un toque — sin intermediarios ni comisiones." },
   { Icon: Send, t: "Ofertas en vivo", d: "Publicás tus ofertas y aparecen al instante en el feed que ve toda la ciudad." },
   { Icon: Search, t: "Buscador por rubro", d: "Te encuentran buscando lo que vendés: mayorista, minorista, rubro, zona y precio." },
@@ -30,18 +31,23 @@ const ADDONS = [
   { Icon: Send, t: "Campañas de pauta", d: "Avisos en redes y medios de Salta, Orán, Tucumán y más." },
 ];
 
-export default function SoftwarePage() {
+export default async function SoftwarePage() {
+  // Esta página le habla a un comerciante de una ciudad concreta: "el mapa de
+  // Santa Cruz" convence donde "el mapa de Bermejo" desconcierta. El título de
+  // metadata queda fijo porque se resuelve antes de conocer la cookie.
+  const { ciudad } = await ciudadActual();
+  const nombre = ciudad?.nombre ?? "tu ciudad";
   return (
     <>
       <Nav />
       <section className="hero" style={{ paddingBottom: 20 }}>
         <div className="wrap" style={{ display: "block", textAlign: "center", maxWidth: 820, margin: "0 auto" }}>
-          <span className="eyebrow" style={{ justifyContent: "center" }}><span className="dot-live" /> Para comercios de Bermejo</span>
+          <span className="eyebrow" style={{ justifyContent: "center" }}><span className="dot-live" /> Para comercios de {nombre}</span>
           <h1 className="hero-title" style={{ fontSize: "clamp(40px,6vw,72px)" }}>
             Poné tu comercio<br /><span className="green">en el mapa</span>
           </h1>
           <p className="hero-sub" style={{ margin: "22px auto 30px" }}>
-            La plataforma que muestra todo lo que se vende en Bermejo, en tiempo real. Más clientes, contacto directo por WhatsApp, sin comisiones por venta.
+            La plataforma que muestra todo lo que se vende en {nombre}, en tiempo real. Más clientes, contacto directo por WhatsApp, sin comisiones por venta.
           </p>
           <div className="hero-cta" style={{ justifyContent: "center" }}>
             <a href="https://wa.me/59170000000?text=Quiero%20sumar%20mi%20comercio%20a%20Bermejo" target="_blank" rel="noopener" className="btn btn-primary">
@@ -128,7 +134,7 @@ export default function SoftwarePage() {
       <section className="section" style={{ paddingTop: 0 }}>
         <div className="wrap">
           <div className="cta">
-            <div><h2>¿Sumamos tu comercio?</h2><p>Escribinos y en minutos estás en el mapa de Bermejo.</p></div>
+            <div><h2>¿Sumamos tu comercio?</h2><p>Escribinos y en minutos estás en el mapa de {nombre}.</p></div>
             <a className="btn btn-primary" href="https://wa.me/59170000000?text=Quiero%20sumar%20mi%20comercio" target="_blank" rel="noopener">
               <WhatsApp style={{ width: 18, height: 18 }} /> Hablar por WhatsApp
             </a>

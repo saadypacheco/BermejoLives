@@ -1,6 +1,10 @@
+import { ciudadActual } from "@/lib/ciudad-server";
+
 export const metadata = { title: "Muy pronto — URUKU" };
 
-export default function Proximamente() {
+export default async function Proximamente() {
+  const { ciudad } = await ciudadActual();
+  const nombre = ciudad?.nombre ?? "tu ciudad";
   return (
     <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24, textAlign: "center" }}>
       <div style={{ maxWidth: 480 }}>
@@ -12,7 +16,7 @@ export default function Proximamente() {
           URUKU en el mapa. Reservalo en la tienda.
         </p>
         <p style={{ color: "var(--txt-2)", fontSize: 16, marginTop: 12 }}>
-          Estamos relevando todos los comercios de Bermejo para mostrártelos en tiempo real.
+          Estamos relevando todos los comercios de {nombre} para mostrártelos en tiempo real.
         </p>
         <p style={{ color: "var(--txt-3)", fontSize: 14, marginTop: 14 }}>
           ¿Tenés un comercio? Pronto vas a poder publicar tus ofertas por WhatsApp.

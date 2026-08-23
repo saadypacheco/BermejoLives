@@ -12,6 +12,11 @@ export default async function InicioPage() {
     ciudadActual(), getFeed(12), getVideosPromo(8), getRedes(), getLugaresPublicos(12),
   ]);
   const nombre = ciudad?.nombre ?? "tu ciudad";
+  // Las fotos vienen de la ciudad elegida. Si todavía no tiene material propio
+  // se cae a las de Bermejo: una ciudad recién abierta se ve bien igual, en vez
+  // de quedar con el hero en blanco.
+  const heroImg = ciudad?.hero_url || "/bermejo-ciudad4.png";
+  const fotoImg = ciudad?.foto_url || "/Bermejo-plaza.png";
 
   const ofertas = feed.filter((f) => f.tipo === "oferta");
   const novedades = feed.filter((f) => f.tipo === "novedad");
@@ -21,7 +26,7 @@ export default async function InicioPage() {
   return (
     <UrukuShell activeCat="Todos" activeNav="Inicio">
       {/* ===== Hero ===== */}
-      <section className="uk-hero" style={{ backgroundImage: "url('/bermejo-ciudad4.png')" }}>
+      <section className="uk-hero" style={{ backgroundImage: `url('${heroImg}')` }}>
         <div className="uk-container uk-hero-grid">
           <div>
             <h1>Descubrí <span>{nombre}</span><br />como nunca antes</h1>
@@ -122,7 +127,7 @@ export default async function InicioPage() {
           <Link href="/mapa" className="uk-panel-btn">Explorá el mapa <span>→</span></Link>
         </article>
 
-        <article className="uk-panel uk-discover" style={{ backgroundImage: "url('/Bermejo-plaza.png')" }}>
+        <article className="uk-panel uk-discover" style={{ backgroundImage: `url('${fotoImg}')` }}>
           <h3>Descubrí más.<br /><span>Ahorrá siempre.</span></h3>
           <p>Compará precios, encontrá promociones y elegí lo mejor para vos.</p>
           <div className="uk-discover-icons">

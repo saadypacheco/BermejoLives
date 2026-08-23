@@ -69,6 +69,10 @@ export type Ciudad = {
   activa: boolean;
   orden: number;
   pais: string;
+  /** Fondo del hero y foto secundaria. NULL → el frontend usa las por defecto,
+   *  así una ciudad recién abierta se ve bien aunque todavía no tenga material. */
+  hero_url?: string | null;
+  foto_url?: string | null;
 };
 
 export type ResultadoBusqueda = {
