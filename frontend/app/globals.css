@@ -604,3 +604,53 @@
 .ini-red { display: inline-flex; align-items: center; gap: 6px; padding: 9px 13px; border-radius: 999px; background: var(--panel); border: 1px solid var(--stroke); color: var(--txt-2); font-size: 13px; font-weight: 600; }
 .ini-red:hover { border-color: var(--neon); color: var(--neon); }
 .ini-red-ic { font-size: 16px; }
+
+/* ── Captura del WhatsApp (segunda pantalla del alta) ───────────────────────
+   Se usa parado en la vereda, con sol, con una mano y con el dueño del local
+   mirando la pantalla mientras dicta su número. De ahí las decisiones: campos
+   grandes, contraste alto, y una previsualización que muestre para qué es el
+   dato en vez de pedirlo a secas.
+
+   El verde es el de WhatsApp porque es el destino real del mensaje, no un
+   disfraz: la tarjeta dice URUKU en todo momento. Fingir ser otra aplicación
+   generaría justo la desconfianza que esto viene a evitar. */
+.wa-card {
+  text-align: left; margin-bottom: 18px; padding: 16px;
+  border-radius: 16px; background: var(--panel);
+  border: 1px solid rgb(37 211 102 / .35);
+  box-shadow: 0 0 0 1px rgb(37 211 102 / .08) inset;
+}
+.wa-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+.wa-ic { flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%; background: #25d366; color: #fff; display: grid; place-items: center; }
+.wa-ic svg { width: 22px; height: 22px; }
+.wa-head b { display: block; font-size: 15.5px; }
+.wa-head p { margin: 2px 0 0; font-size: 13px; color: var(--txt-2); }
+
+.wa-input-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.wa-prefijo { flex: 0 0 auto; padding: 13px 8px; border-radius: 11px; border: 1px solid var(--stroke); background: var(--bg); color: inherit; font-size: 15px; }
+/* 17px o más: abajo de eso iOS hace zoom al enfocar y descoloca la pantalla
+   justo cuando la persona está mirando. */
+.wa-numero { flex: 1 1 auto; min-width: 0; padding: 13px 14px; border-radius: 11px; border: 1px solid var(--stroke); background: var(--bg); color: inherit; font-size: 17px; letter-spacing: .5px; }
+.wa-numero:focus { outline: none; border-color: #25d366; box-shadow: 0 0 0 3px rgb(37 211 102 / .18); }
+
+/* La previsualización. Fondo distinto para que se lea como "esto es un ejemplo
+   de lo que va a pasar" y no como un campo más del formulario. */
+.wa-preview { border-radius: 13px; padding: 12px; background: rgb(37 211 102 / .07); border: 1px dashed rgb(37 211 102 / .3); margin-bottom: 12px; }
+.wa-preview[aria-hidden="true"] { opacity: .5; }
+.wa-preview-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.wa-preview-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--panel); display: grid; place-items: center; font-size: 17px; }
+.wa-preview-top b { display: block; font-size: 14px; }
+.wa-preview-top span { font-size: 12.5px; color: var(--txt-2); font-variant-numeric: tabular-nums; }
+.wa-burbuja { position: relative; background: #fff; color: #111; border-radius: 12px 12px 12px 3px; padding: 9px 12px 7px; font-size: 13.5px; line-height: 1.35; max-width: 92%; box-shadow: 0 1px 2px rgb(0 0 0 / .18); }
+.wa-hora { display: block; text-align: right; font-style: normal; font-size: 10.5px; color: #667781; margin-top: 2px; }
+.wa-nota { margin: 10px 0 0; font-size: 12px; line-height: 1.4; color: var(--txt-2); }
+
+.wa-guardar { width: 100%; padding: 14px; border: none; border-radius: 12px; background: #25d366; color: #06281a; font-weight: 700; font-size: 15.5px; cursor: pointer; }
+.wa-guardar:disabled { background: var(--stroke); color: var(--txt-2); cursor: default; }
+.wa-saltar { margin: 10px 0 0; font-size: 12px; line-height: 1.4; color: var(--txt-2); }
+.wa-err { margin: 0 0 10px; font-size: 13px; color: #f87171; }
+
+.wa-card--ok { display: flex; align-items: center; gap: 12px; border-color: rgb(37 211 102 / .55); }
+.wa-ok-ic { width: 32px; height: 32px; border-radius: 50%; background: #25d366; color: #06281a; display: grid; place-items: center; font-weight: 800; }
+.wa-ok-num { font-size: 13.5px; color: var(--txt-2); font-variant-numeric: tabular-nums; }
+.wa-editar { margin-left: auto; background: none; border: 1px solid var(--stroke); color: inherit; border-radius: 9px; padding: 7px 13px; font-size: 13px; cursor: pointer; }

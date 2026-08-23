@@ -8,6 +8,7 @@ import {
   listarLugares, crearLugar, editarLugar, subirPortadaLugar, subirVideoLugar, type Lugar,
 } from "@/lib/campo";
 import { duracionVideo } from "@/lib/upload";
+import { CapturaWhatsapp } from "@/components/captura-whatsapp";
 import { getCiudades, getRubros } from "@/lib/data";
 import type { Ciudad, Rubro } from "@/lib/types";
 import { Pin, User, Arrow, Edit } from "@/components/icons";
@@ -510,6 +511,8 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   // tener número cargado, sin login y sin haber pagado.
   const [doneCodigo,  setDoneCodigo]  = useState<string | null>(null);
   const [altaId,      setAltaId]      = useState<string | null>(null);
+  // Si el agente ya cargó el número en el formulario, no se vuelve a pedir.
+  const [whatsappCargado, setWhatsappCargado] = useState(false);
   const [count,       setCount]       = useState(0);
   const [err,         setErr]         = useState("");
 
@@ -658,6 +661,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       setDone(r.comercio.nombre);
       setDoneCodigo(r.comercio.codigo_formateado ?? null);
       setAltaId(r.comercio.id);
+      setWhatsappCargado(Boolean(campos.whatsapp));
       setCount((c) => c + 1);
       setSubioLugar(lugarActual ? { id: lugarActual.id, nombre: lugarActual.nombre } : null);
       setUltimoPuesto(puesto);
@@ -693,7 +697,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   function limpiar() {
     setF({ ...EMPTY });
     setCoords(null); setGeoMsg(""); setFoto(null); setPreview(""); setConsent(true);
-    setNuevoLugar(""); setEditMercado(false); setDone(null); setDoneOffline(false); setDoneMotivo(""); setDoneCodigo(null); setAltaId(null); setErr("");
+    setNuevoLugar(""); setEditMercado(false); setDone(null); setDoneOffline(false); setDoneMotivo(""); setDoneCodigo(null); setAltaId(null); setWhatsappCargado(false); setErr("");
   }
   function otro() {
     limpiar();
@@ -746,6 +750,19 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
               Copiar mensaje para el dueño
             </button>
           </div>
+        )}
+
+        {/* El WhatsApp va ACÁ y no en el formulario: el agente releva el local
+            primero y recién después se pone a hablar con la persona, así que el
+            número aparece al final de esa charla. Va antes de la galería porque
+            es lo que se pide cara a cara, mientras el otro está enfrente. */}
+        {altaId && !whatsappCargado && (
+          <CapturaWhatsapp
+            comercioId={altaId}
+            nombre={done}
+            prefijoInicial={prefijo}
+            onGuardado={() => setWhatsappCargado(true)}
+          />
         )}
 
         {altaId && (
