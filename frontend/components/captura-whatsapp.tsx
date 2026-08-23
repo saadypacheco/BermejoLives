@@ -1,11 +1,17 @@
 "use client";
 
-// Pedir el número de WhatsApp DESPUÉS de registrar el local, no durante.
+// Pedir el número de WhatsApp también DESPUÉS de registrar el local.
 //
-// Así trabaja el agente en la calle: primero relevó el local —foto, ubicación,
-// lo que ve en la vidriera— y recién después se pone a hablar con la persona. El
-// número aparece al final de esa charla, no al principio, y hasta ahora había
-// que volver a un campo del formulario que ya había quedado atrás.
+// El campo sigue estando en el formulario de alta, y esto no lo reemplaza: son
+// dos momentos distintos de la misma visita. A veces el dueño está ahí y lo
+// dicta enseguida —ese es el camino corto, el formulario—; otras veces el
+// agente releva el local primero —foto, ubicación, lo que ve en la vidriera— y
+// recién después se pone a hablar, y el número aparece al final de esa charla,
+// cuando el formulario ya quedó atrás.
+//
+// Si vino cargado desde el alta, esto lo muestra guardado con opción de
+// corregirlo: el agente pudo tipearlo mal, o la persona puede dar otro número
+// cuando ve para qué se lo están pidiendo.
 //
 // EL PROBLEMA DE CONFIANZA
 //
@@ -40,17 +46,32 @@ function formatear(prefijo: string, cel: string): string {
   return `+${prefijo} ${grupos}`;
 }
 
+/** Parte un número guardado en prefijo + resto. Se guarda pegado (5917xxxxxxx),
+ *  pero para mostrarlo y para poder corregirlo hay que volver a separarlo. */
+function separar(numero: string, porDefecto: string): [string, string] {
+  const d = (numero || "").replace(/\D/g, "");
+  for (const [p] of PREFIJOS) {
+    if (d.startsWith(p)) return [p, d.slice(p.length)];
+  }
+  return [porDefecto, d];
+}
+
 export function CapturaWhatsapp({
-  comercioId, nombre, prefijoInicial = "591", onGuardado,
+  comercioId, nombre, prefijoInicial = "591", valorInicial, onGuardado,
 }: {
   comercioId: string;
   nombre?: string | null;
   prefijoInicial?: string;
+  /** Número ya cargado en el formulario de alta. Arranca mostrándolo guardado,
+   *  con la opción de corregirlo: el agente puede haberlo tipeado mal o la
+   *  persona puede dar otro cuando ve para qué es. */
+  valorInicial?: string | null;
   onGuardado?: (whatsapp: string) => void;
 }) {
-  const [prefijo, setPrefijo] = useState(prefijoInicial);
-  const [cel, setCel] = useState("");
-  const [guardado, setGuardado] = useState<string | null>(null);
+  const [pref0, cel0] = separar(valorInicial || "", prefijoInicial);
+  const [prefijo, setPrefijo] = useState(pref0);
+  const [cel, setCel] = useState(cel0);
+  const [guardado, setGuardado] = useState<string | null>(valorInicial || null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
