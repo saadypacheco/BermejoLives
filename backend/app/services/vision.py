@@ -175,6 +175,13 @@ Reglas:
 - `rubro_slugs`: SOLO slugs de la lista de abajo. Todos los que apliquen — un local
   que vende neumáticos y también zapatillas lleva los dos. Si no podés determinar
   ninguno, devolvé [].
+  Cada rubro tiene que corresponder a algo que se VE en la foto. No agregues uno
+  amplio "por las dudas" encima de otro más específico que ya lo cubre: un local
+  de ollas y sartenes es "bazar", NO "bazar" + "hogar"; una lencería es "moda",
+  NO "moda" + "alimentos". Un rubro de más no es un dato extra, es un local
+  apareciendo en una búsqueda que no le corresponde — el comprador filtra por
+  esa categoría y recibe algo que no tiene nada que ver.
+  Entre dos rubros que se solapan, elegí el más específico y dejá el otro.
 - `categoria_sugerida`: si el negocio NO encaja bien en ninguno de los rubros de
   la lista, o si merecería una categoría más específica que la que elegiste,
   escribí acá el nombre que le pondrías (2 o 3 palabras, en singular). Si la
