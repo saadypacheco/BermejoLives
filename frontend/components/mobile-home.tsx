@@ -26,13 +26,19 @@ import { ImageLightbox } from "@/components/image-lightbox";
 // Derivarlos de lo cargado tiene una garantía que una lista escrita a mano no
 // puede dar: ningún chip puede devolver cero, porque sólo aparece si hay
 // comercios de ese rubro a la vista.
-const MAX_CHIPS = 6;
+const MAX_CHIPS = 8;
 
 function chipsDe(comercios: ComercioMapa[], rubros: Rubro[]): { label: string; rubro: string }[] {
   const cuenta = new Map<string, number>();
   for (const c of comercios) {
-    if (!c.rubro_slug || c.rubro_slug === "otros") continue;
-    cuenta.set(c.rubro_slug, (cuenta.get(c.rubro_slug) ?? 0) + 1);
+    // Cuenta por TODOS sus rubros. Contando sólo el principal, categorías
+    // grandes como "Deportes y fitness" —55 comercios— no llegaban a los
+    // primeros puestos porque casi ninguno la tiene como principal.
+    const suyos = c.rubro_slugs?.length ? c.rubro_slugs : (c.rubro_slug ? [c.rubro_slug] : []);
+    for (const slug of suyos) {
+      if (!slug || slug === "otros") continue;
+      cuenta.set(slug, (cuenta.get(slug) ?? 0) + 1);
+    }
   }
   const nombre = new Map(rubros.map((r) => [r.slug, r.nombre.replace(/^[^\p{L}\p{N}]+/u, "").trim()]));
   const top = [...cuenta.entries()]
@@ -69,7 +75,13 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
     : null;
   // Negocios que tienen al menos una oferta en el feed
   const offerSlugs = new Set(feed.map((f) => f.comercio_slug));
-  let filtered = cat ? comercios.filter((c) => c.rubro_slug === cat) : comercios;
+  // Se mira TODA la lista de rubros, no sólo el principal. Filtrar por
+  // "Calzado" dejaba afuera a los locales que venden calzado pero tienen otro
+  // rubro como principal — o sea, la mayoría: el promedio es 2,69 rubros por
+  // comercio y sólo uno puede ser el principal.
+  let filtered = cat
+    ? comercios.filter((c) => c.rubro_slugs?.includes(cat) || c.rubro_slug === cat)
+    : comercios;
   if (soloOfertas) filtered = filtered.filter((c) => offerSlugs.has(c.slug));
   if (soloAbiertos) filtered = filtered.filter((c) => abiertoAhora(c.horario).estado === "abierto");
   const ofertasNegocio = sel ? feed.filter((f) => f.comercio_slug === sel.slug) : [];

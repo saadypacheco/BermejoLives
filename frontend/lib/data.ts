@@ -104,6 +104,10 @@ export type ComercioMapa = {
   telefono: string | null; verificado: boolean; destacado: boolean; rating: number;
   direccion: string | null; descripcion: string | null; prod_obs_human: string | null; prod_det_ia: string | null; subcategoria: string | null; horario: string | null;
   como_llegar: string | null; rubro_slug: string | null; plan: string | null;
+  /** TODOS los rubros del comercio, no sólo el principal. El mapa filtra por
+   *  acá: un local que vende neumáticos Y zapatillas tiene que aparecer en las
+   *  dos categorías, que es el motivo de existir de `comercio_rubros`. */
+  rubro_slugs: string[];
   ficha_activa: boolean;   // muestra "Más información": suscripción al día (paga_hasta vigente, no suspendido)
   // Lugar (mercado/galería) al que pertenece, si está adentro de uno
   lugar_id: string | null; puesto: string | null;
@@ -128,7 +132,7 @@ export async function getComerciosMapa(
     ? bboxCiudad(ciudad.lat, ciudad.lng)
     : { latMin: -22.90, latMax: -22.58, lngMin: -64.52, lngMax: -64.16 }; // Bermejo por defecto
   if (hasSupabase) {
-    const [{ data, error }, { data: rubros, error: errorRubros }, { data: lugs }] = await Promise.all([
+    const [{ data, error }, { data: rubros, error: errorRubros }, { data: lugs }, { data: rels }] = await Promise.all([
       supabase
         .from("comercios")
         .select("id, slug, nombre, lat, lng, logo_url, portada_url, portada_thumb_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, plan, paga_hasta, suspendido, rubro_id, lugar_id, puesto, prod_obs_human, prod_det_ia, subcategoria")
@@ -139,12 +143,24 @@ export async function getComerciosMapa(
         .limit(250),
       supabase.from("rubros").select("id, slug"),
       supabase.from("lugares").select("id, nombre, tipo, lat, lng, portada_thumb_url, video_url, poligono").eq("activo", true),
+      // Todos los rubros de cada comercio. Sin esto el mapa sólo conoce el
+      // principal, y filtrar por "Calzado" dejaba afuera a los locales que
+      // venden calzado pero tienen otro rubro como principal.
+      supabase.from("comercio_rubros").select("comercio_id, rubro_id").limit(5000),
     ]);
     if (error) logSupaError("getComerciosMapa (comercios)", error);
     if (errorRubros) logSupaError("getComerciosMapa (rubros)", errorRubros);
     if (data) {
       const slugById = new Map((rubros ?? []).map((r: any) => [r.id, r.slug]));
       const lugById = new Map((lugs ?? []).map((l: any) => [l.id, l]));
+      const rubrosDe = new Map<string, string[]>();
+      for (const r of (rels ?? []) as any[]) {
+        const slug = slugById.get(r.rubro_id);
+        if (!slug || slug === "otros") continue;
+        const lista = rubrosDe.get(r.comercio_id) ?? [];
+        lista.push(slug);
+        rubrosDe.set(r.comercio_id, lista);
+      }
       // Gracia de 10 días: tras vencer el pago, la ficha sigue 10 días antes de pasar a "solo mapa".
       const graceISO = new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10);
       return (data as any[]).map((c) => {
@@ -155,6 +171,7 @@ export async function getComerciosMapa(
           verificado: c.verificado, destacado: c.destacado, rating: c.rating,
           direccion: c.direccion, descripcion: c.descripcion, prod_obs_human: c.prod_obs_human ?? null, prod_det_ia: c.prod_det_ia ?? null, subcategoria: c.subcategoria ?? null, horario: c.horario, como_llegar: c.como_llegar,
           rubro_slug: slugById.get(c.rubro_id) ?? null, plan: c.plan ?? null,
+          rubro_slugs: rubrosDe.get(c.id) ?? [],
           ficha_activa: !c.suspendido && !!c.paga_hasta && String(c.paga_hasta).slice(0, 10) >= graceISO,
           lugar_id: c.lugar_id ?? null, puesto: c.puesto ?? null,
           lugar_nombre: lg?.nombre ?? null, lugar_lat: lg?.lat ?? null, lugar_lng: lg?.lng ?? null,
@@ -172,6 +189,7 @@ export async function getComerciosMapa(
     verificado: c.verificado, destacado: c.destacado, rating: c.rating,
     direccion: c.direccion, descripcion: c.descripcion, prod_obs_human: null, prod_det_ia: null, subcategoria: null, horario: c.horario, como_llegar: c.como_llegar,
     rubro_slug: null, plan: c.plan, ficha_activa: c.plan !== "gratis",
+    rubro_slugs: [],
     lugar_id: null, puesto: null, lugar_nombre: null, lugar_lat: null, lugar_lng: null,
     lugar_portada_thumb_url: null, lugar_video_url: null, lugar_poligono: null,
   }));
