@@ -90,6 +90,27 @@ def main() -> int:
         print("      falló o vino incompleta. NO apliques nada con este resultado.")
     print()
 
+    # DEBUG=URUKU-EJD6 imprime todo lo que el script ve de ese comercio y corta.
+    # La prueba en SQL demostró que rubros_sugeridos() NO sugiere "alimentos"
+    # para él, así que debería aparecer en la lista y no aparece: hay que mirar
+    # los datos exactos con los que trabaja el script, no deducirlos.
+    debug = (os.environ.get("DEBUG") or "").replace("URUKU-", "").strip().upper()
+    if debug:
+        for cid, c in comercios.items():
+            if (c.get("codigo") or "").upper() != debug:
+                continue
+            texto = " ".join(filter(None, (
+                c.get("prod_det_ia"), c.get("subcategoria"),
+                c.get("sinonimos"), c.get("nombre"))))
+            print(f"comercio:   {c.get('nombre')}  (id {cid})")
+            print(f"rubros que tiene:  {por_comercio.get(cid)}")
+            print(f"objetivo:          {objetivo}")
+            print(f"texto ({len(texto)} chars): {texto[:300]}")
+            print(f"sugeridos:         {repo.sugerir_rubros_por_texto(texto)}")
+            return 0
+        print(f"No se encontró ningún comercio activo con código {debug}.")
+        return 1
+
     quitar: list[tuple[dict, str, list[str]]] = []
     salteados = 0
 
