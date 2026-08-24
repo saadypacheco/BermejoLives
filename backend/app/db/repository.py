@@ -655,15 +655,28 @@ class SupabaseRepo:
         Pedirlo de a uno son 161 consultas para armar un informe; la relación
         entera son unos cientos de filas de dos columnas.
         """
+        # Dos consultas planas en vez de un select embebido, y se cruzan acá.
+        #
+        # El embed lo resuelve PostgREST leyendo la foreign key de su cache de
+        # esquema, que queda viejo cada vez que corre una migración. Cuando falla
+        # devolvía [] en silencio, y quien lo llama no puede distinguir "este
+        # comercio no tiene rubros" de "no pude leer la tabla". El script de
+        # limpieza informó "0 asignaciones sin respaldo" cuando el informe SQL
+        # encontraba 37 — un resultado tranquilizador y falso, que es el peor.
         try:
-            res = (self._db.table("comercio_rubros")
-                   .select("comercio_id, rubros(slug, nombre)").execute())
+            rels = (self._db.table("comercio_rubros")
+                    .select("comercio_id, rubro_id").limit(20000).execute().data) or []
+            rubros = (self._db.table("rubros").select("id, slug, nombre")
+                      .execute().data) or []
         except Exception:  # noqa: BLE001
+            logger.warning("comercio_rubros.lectura_fallo", exc_info=True)
             return []
+
+        por_id = {r["id"]: r for r in rubros}
         salida = []
-        for fila in (res.data or []):
-            rubro = fila.get("rubros") or {}
-            if rubro.get("slug"):
+        for fila in rels:
+            rubro = por_id.get(fila.get("rubro_id"))
+            if rubro and rubro.get("slug"):
                 salida.append({"comercio_id": fila["comercio_id"],
                                "slug": rubro["slug"], "nombre": rubro.get("nombre")})
         return salida

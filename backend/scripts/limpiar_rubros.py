@@ -79,7 +79,16 @@ def main() -> int:
             por_comercio.setdefault(rel["comercio_id"], []).append(rel["slug"])
 
     print(f"Revisando: {', '.join(objetivo)}")
-    print(f"Comercios activos: {len(comercios)}\n")
+    print(f"Comercios activos: {len(comercios)}")
+    print(f"Asignaciones de rubro leídas: {len(relaciones)}")
+    if len(relaciones) < len(comercios):
+        # El promedio es 2,69 rubros por comercio: menos relaciones que comercios
+        # significa que la lectura vino cortada. Sin este aviso el script informa
+        # "0 sin respaldo" y eso se lee como "está todo bien", que es la peor
+        # forma de fallar — ya pasó una vez.
+        print("  ⚠️  Son menos que los comercios: la lectura de comercio_rubros")
+        print("      falló o vino incompleta. NO apliques nada con este resultado.")
+    print()
 
     quitar: list[tuple[dict, str, list[str]]] = []
     salteados = 0

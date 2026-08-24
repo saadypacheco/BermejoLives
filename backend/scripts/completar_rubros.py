@@ -91,6 +91,11 @@ def main() -> int:
             por_rubro[s] += 1
 
     print(f"Comercios activos:        {len(comercios)}")
+    print(f"Asignaciones leídas:      {len(relaciones)}")
+    if len(relaciones) < len(comercios):
+        print("  ⚠️  La lectura de comercio_rubros vino incompleta. Sin ella este")
+        print("      script cree que TODOS los comercios están sin rubros y")
+        print("      propondría agregarles de todo. NO apliques nada.")
     print(f"Comercios a completar:    {len(agregar)}")
     print(f"Rubros a agregar:         {total}")
     if saltados:
