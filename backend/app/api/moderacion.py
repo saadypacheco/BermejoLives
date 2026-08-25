@@ -692,6 +692,74 @@ def agregar_numero(
     return {"ok": True, "numero": fila}
 
 
+# ---- Grupo de WhatsApp del comercio ----
+#
+# El canal por el que el comerciante manda sus ofertas: un grupo con su celular,
+# uno de URUKU y el testigo. Vive en el perfil del comercio porque es parte de
+# cómo se llega a ese local — igual que el código o los números autorizados.
+class GrupoBody(BaseModel):
+    grupo_jid: str
+    nombre: str | None = None
+
+
+@router.get("/admin/comercio/{comercio_id}/grupos")
+def listar_grupos(
+    comercio_id: str,
+    _admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    items = repo.list_grupos_comercio(comercio_id)
+    return {"items": items, "total": len(items)}
+
+
+@router.post("/admin/comercio/{comercio_id}/grupos")
+def atar_grupo(
+    comercio_id: str,
+    body: GrupoBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Ata un grupo a mano, para cuando no se puede usar el código.
+
+    El camino normal es mandar `URUKU-XXXX` adentro del grupo y que se ate solo.
+    Esto es la salida para cuando el grupo se rehízo, o el comerciante no tiene
+    el papel con el código a mano.
+    """
+    jid = (body.grupo_jid or "").strip()
+    # Sin esta validación se puede atar un chat 1-a-1 por error, y ahí el
+    # comercio empezaría a recibir como propio lo que le escriba cualquiera a
+    # ese número.
+    if not jid.endswith("@g.us"):
+        raise HTTPException(
+            status_code=400,
+            detail="El ID de un grupo de WhatsApp termina en @g.us. Ese no es un grupo.")
+
+    ya = repo.get_comercio_por_grupo(jid)
+    if ya and ya.get("id") != comercio_id:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Ese grupo ya es de «{ya.get('nombre') or ya.get('slug')}». "
+                   "Hay que soltarlo de ahí antes de atarlo acá.")
+
+    repo.vincular_grupo_comercio(jid, comercio_id, body.nombre, "admin", admin["email"])
+    logger.info("comercio.grupo_atado", comercio=comercio_id, grupo=jid, by=admin["email"])
+    return {"ok": True, "grupos": repo.list_grupos_comercio(comercio_id)}
+
+
+@router.delete("/admin/comercio/{comercio_id}/grupos/{grupo_jid}")
+def soltar_grupo(
+    comercio_id: str,
+    grupo_jid: str,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Suelta el grupo. Las publicaciones que ya entraron por ahí quedan: son
+    ofertas que existieron, y borrarlas sería perder historia."""
+    repo.desvincular_grupo(grupo_jid)
+    logger.info("comercio.grupo_soltado", comercio=comercio_id, grupo=grupo_jid, by=admin["email"])
+    return {"ok": True, "grupos": repo.list_grupos_comercio(comercio_id)}
+
+
 # ---- Bajas del mapa: disparo manual ----
 @router.post("/admin/bajas/ejecutar")
 def ejecutar_bajas(

@@ -136,6 +136,9 @@ class FakeRepo:
     def list_grupos_comercio(self, comercio_id):
         return [g for g in self.wa_grupos.values() if g["comercio_id"] == comercio_id]
 
+    def desvincular_grupo(self, grupo_jid):
+        self.wa_grupos.pop(grupo_jid, None)
+
     def agregar_numero_comercio(self, comercio_id, numero, etiqueta, by):
         from app.core.telefono import normalizar_whatsapp
         num = normalizar_whatsapp(numero)

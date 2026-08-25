@@ -9,6 +9,7 @@ import {
   editarComercio, type ComercioPorVerificar,
   listSuscripciones, registrarPago, suspenderComercio, activarComercio,
   setConfiable as setConfiable_, listarNumeros, agregarNumero, type NumeroComercio,
+  listarGrupos, atarGrupo, soltarGrupo, type GrupoComercio,
   adminListarFotos, adminSubirFoto, adminBorrarFoto, type FotoComercio,
   analizarComercio, type AnalisisIA,
   pendientesAnalisis, analizarTanda, type ResultadoTanda,
@@ -1637,13 +1638,41 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
   const [etiqueta, setEtiqueta] = useState("");
   const [err, setErr] = useState("");
   const [cargando, setCargando] = useState(true);
+  const [grupos, setGrupos] = useState<GrupoComercio[]>([]);
+  const [grupoNuevo, setGrupoNuevo] = useState("");
+  const [errGrupo, setErrGrupo] = useState("");
 
   useEffect(() => {
     listarNumeros(comercio.id)
       .then((r) => setNumeros(r.items ?? []))
       .catch(() => setErr("No se pudieron cargar los números"))
       .finally(() => setCargando(false));
+    listarGrupos(comercio.id)
+      .then((r) => setGrupos(r.items ?? []))
+      .catch(() => setErrGrupo("No se pudieron cargar los grupos"));
   }, [comercio.id]);
+
+  async function atar(e: React.FormEvent) {
+    e.preventDefault();
+    setErrGrupo("");
+    try {
+      const r = await atarGrupo(comercio.id, grupoNuevo.trim());
+      setGrupos(r.grupos ?? []);
+      setGrupoNuevo("");
+    } catch (e2) {
+      setErrGrupo(e2 instanceof Error ? e2.message : "No se pudo atar");
+    }
+  }
+
+  async function soltar(jid: string) {
+    setErrGrupo("");
+    try {
+      const r = await soltarGrupo(comercio.id, jid);
+      setGrupos(r.grupos ?? []);
+    } catch {
+      setErrGrupo("No se pudo soltar el grupo");
+    }
+  }
 
   async function toggleConfiable() {
     const valor = !confiable;
@@ -1696,6 +1725,62 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
               </div>
             </div>
           </label>
+
+          {/* Grupo de WhatsApp: el canal por el que llegan las ofertas.
+              Se ata solo cuando alguien manda URUKU-XXXX adentro del grupo;
+              esto es para verlo, y para atarlo a mano si hizo falta rehacerlo. */}
+          <div style={{ marginTop: 16, paddingBottom: 16, borderBottom: "1px solid var(--border)" }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Grupo de WhatsApp</div>
+            <div style={{ fontSize: 12, color: "var(--txt-3)", marginBottom: 10 }}>
+              El grupo del comercio con URUKU y el testigo. Lo que se manda ahí entra como oferta.
+            </div>
+
+            {grupos.length === 0 && (
+              <div style={{ fontSize: 13, color: "var(--txt-3)", padding: "8px 0" }}>
+                Sin grupo. Se ata solo cuando alguien escribe{" "}
+                <span style={{ fontFamily: "monospace", color: "var(--neon)" }}>
+                  URUKU-{comercio.codigo ?? "XXXX"}
+                </span>{" "}
+                adentro del grupo.
+              </div>
+            )}
+
+            {grupos.map((g) => (
+              <div key={g.grupo_jid}
+                   style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: "monospace", fontSize: 12, overflow: "hidden",
+                                textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {g.nombre || g.grupo_jid}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--txt-3)" }}>
+                    {g.origen === "codigo" ? "se ató con el código" : "atado a mano"}
+                  </div>
+                </div>
+                <button onClick={() => soltar(g.grupo_jid)}
+                        style={{ background: "none", border: "1px solid var(--border)",
+                                 borderRadius: 8, padding: "4px 10px", fontSize: 12,
+                                 color: "var(--txt-3)", cursor: "pointer" }}>
+                  Soltar
+                </button>
+              </div>
+            ))}
+
+            <form onSubmit={atar} style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <input value={grupoNuevo} onChange={(e) => setGrupoNuevo(e.target.value)}
+                     placeholder="1203630...@g.us"
+                     style={{ flex: 1, minWidth: 0, padding: "8px 10px", borderRadius: 8,
+                              border: "1px solid var(--border)", background: "var(--panel)",
+                              color: "var(--txt-1)", fontSize: 13, fontFamily: "monospace" }} />
+              <button type="submit" disabled={!grupoNuevo.trim()}
+                      style={{ padding: "8px 14px", borderRadius: 8, border: "none",
+                               background: "var(--neon)", color: "#000", fontSize: 13,
+                               fontWeight: 600, cursor: "pointer" }}>
+                Atar
+              </button>
+            </form>
+            {errGrupo && <div style={{ color: "salmon", fontSize: 12, marginTop: 6 }}>{errGrupo}</div>}
+          </div>
 
           {/* Números */}
           <div style={{ marginTop: 16 }}>

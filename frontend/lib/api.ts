@@ -520,6 +520,38 @@ export async function agregarNumero(comercioId: string, numero: string, etiqueta
   return res.json();
 }
 
+// El grupo de WhatsApp por el que el comerciante manda sus ofertas.
+export type GrupoComercio = {
+  grupo_jid: string; nombre: string | null; origen: string;
+  created_at?: string; created_by?: string | null;
+};
+
+export async function listarGrupos(comercioId: string): Promise<{ items: GrupoComercio[] }> {
+  const res = await authFetch(`/admin/comercio/${comercioId}/grupos`);
+  return res.json();
+}
+
+export async function atarGrupo(comercioId: string, grupoJid: string, nombre?: string) {
+  const res = await authFetch(`/admin/comercio/${comercioId}/grupos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ grupo_jid: grupoJid, nombre: nombre || null }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "No se pudo atar el grupo");
+  }
+  return res.json();
+}
+
+export async function soltarGrupo(comercioId: string, grupoJid: string) {
+  const res = await authFetch(
+    `/admin/comercio/${comercioId}/grupos/${encodeURIComponent(grupoJid)}`,
+    { method: "DELETE" });
+  if (!res.ok) throw new Error("No se pudo soltar el grupo");
+  return res.json();
+}
+
 export async function suspenderComercio(id: string) {
   const res = await authFetch(`/admin/comercio/${id}/suspender`, { method: "POST" });
   return res.json();

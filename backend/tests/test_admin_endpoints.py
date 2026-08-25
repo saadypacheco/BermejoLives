@@ -18,6 +18,50 @@ def _fecha(dias: int) -> str:
     return (date.today() + timedelta(days=dias)).isoformat()
 
 
+# ══════════════════════════════════════════════════════ grupo de WhatsApp
+def test_el_grupo_aparece_en_el_perfil_del_comercio(client, repo, admin_token):
+    c = repo.seed_comercio(slug="mendo", nombre="Mendo")
+    repo.vincular_grupo_comercio("120363@g.us", c["id"], "Ofertas Mendo", "codigo", "ingest")
+
+    r = client.get(f"/admin/comercio/{c['id']}/grupos", headers=_h(admin_token))
+    assert r.status_code == 200, r.text
+    assert r.json()["total"] == 1
+    assert r.json()["items"][0]["grupo_jid"] == "120363@g.us"
+
+
+def test_atar_un_chat_directo_como_si_fuera_grupo_se_rechaza(client, repo, admin_token):
+    """Un JID de persona termina en @c.us. Si se atara uno, el comercio pasaría
+    a recibir como propio todo lo que le escriba cualquiera a ese número."""
+    c = repo.seed_comercio(slug="mendo", nombre="Mendo")
+    r = client.post(f"/admin/comercio/{c['id']}/grupos",
+                    json={"grupo_jid": "59170000007@c.us"}, headers=_h(admin_token))
+    assert r.status_code == 400
+    assert "@g.us" in r.json()["detail"]
+
+
+def test_no_se_puede_robar_el_grupo_de_otro_comercio(client, repo, admin_token):
+    a = repo.seed_comercio(slug="a", nombre="Comercial A")
+    b = repo.seed_comercio(slug="b", nombre="Comercial B")
+    repo.vincular_grupo_comercio("120363@g.us", a["id"], None, "codigo", "ingest")
+
+    r = client.post(f"/admin/comercio/{b['id']}/grupos",
+                    json={"grupo_jid": "120363@g.us"}, headers=_h(admin_token))
+    assert r.status_code == 409
+    assert "Comercial A" in r.json()["detail"]
+    assert repo.wa_grupos["120363@g.us"]["comercio_id"] == a["id"]
+
+
+def test_soltar_el_grupo_no_borra_lo_ya_publicado(client, repo, admin_token):
+    c = repo.seed_comercio(slug="mendo", nombre="Mendo")
+    repo.vincular_grupo_comercio("120363@g.us", c["id"], None, "admin", "yo")
+    repo.insert_publicacion({"comercio_id": c["id"], "tipo": "oferta", "estado": "aprobado"})
+
+    r = client.delete(f"/admin/comercio/{c['id']}/grupos/120363%40g.us", headers=_h(admin_token))
+    assert r.status_code == 200, r.text
+    assert r.json()["grupos"] == []
+    assert len(repo.publicaciones) == 1      # la oferta existió: no se borra
+
+
 # ══════════════════════════════════════════════════════════ reclamos
 def test_listar_reclamos_vacio_no_rompe(client, repo, admin_token):
     r = client.get("/admin/reclamos", headers=_h(admin_token))

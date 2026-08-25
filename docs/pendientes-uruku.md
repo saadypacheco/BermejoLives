@@ -112,39 +112,33 @@ recorte no. Sólo afecta al conteo, no a lo que se muestra.
 
 - [ ] Mirar `subcategoria_norm`: parece un stemmer demasiado agresivo.
 
-### Ofertas por WhatsApp — grupos (en diseño)
-El canal de WhatsApp **ya existe** en el código (WAHA + webhook con HMAC +
-`ingest.py` → publicación `pendiente` + moderación). Lo que falta es adaptarlo al
-modelo de **grupos** y llenar el hueco de las imágenes.
+### Ofertas por WhatsApp — grupos ✅ construido
+El modelo de **un grupo por comerciante** está hecho y probado: el grupo
+identifica al comercio, los números de URUKU no publican, la foto se baja a
+disco propio y el grupo se ve en el perfil del comercio (Admin › el comercio ›
+Grupo de WhatsApp). Detalle completo en
+**[grupos-whatsapp-uruku.md](grupos-whatsapp-uruku.md)**.
 
-Modelo pedido: un grupo por comerciante con **uno de los 3 números operativos** de
-URUKU + **2 testigos** (principal y backup). El número principal de la marca **no
-entra a ningún grupo**. También se usan grupos ya existentes de comerciantes,
-metiendo uno de los operativos, para juntar volumen al principio.
+Falta de este canal: **verificar que la sesión de WAHA esté vinculada** (paso
+cero), la retención de `waha_media`, y decidir lo de los **grupos compartidos de
+captación** — analizado en la §2 de ese documento, con una recomendación.
 
-Lo que hay que construir:
-- [ ] **Identificar por grupo, no por remitente.** Hoy `ingest.py` identifica al
-      comercio por el teléfono de quien manda. En un grupo el remitente es una
-      persona cualquiera y el `from` es el ID del grupo. Hace falta detectar
-      `@g.us`, sacar el remitente real de `_data.key.participant`, y una tabla
-      `comercio_wa_grupos` (grupo → comercio). **Ventaja sobre el número:** el
-      comerciante cambia de celular sin perder nada y pueden publicar varias
-      personas del mismo local.
-- [ ] **Ignorar a los propios.** Los mensajes de los 3 operativos y los 2 testigos
-      no pueden generar ofertas, o cada vez que alguien de URUKU escriba en el
-      grupo se crea una publicación fantasma.
-- [ ] **Bajar la imagen a storage propio.** 🚨 Hoy `imagen_url = payload.media_url`,
-      que es la URL **interna y efímera** de WAHA. Acá **la foto es la oferta**:
-      sin esto las ofertas llegan con la imagen rota. Es el pendiente que el otro
-      proyecto (MentorComercial) marca como el hueco a llenar. Ya existen
-      `procesar_imagen()` y `guardar_foto_local()` para reusar.
-- [ ] **Retención de `waha_media`.** El volumen crece sin límite; con video llena
-      el disco.
-- [ ] **Decidir cómo se ata el grupo al comercio:** por código `URUKU-XXXX` mandado
-      adentro del grupo (reusa lo que ya funciona) o a mano desde el admin.
+### Lo que quedó pendiente de este canal
 - [ ] **Verificar que la sesión de WAHA esté vinculada** (`/api/sessions`). Con 1
-      publicación en toda la base, es probable que nunca se escaneara el QR — y eso
-      explicaría el cero sin que falte una línea de código.
+      publicación en toda la base, es probable que nunca se escaneara el QR — y
+      eso explicaría el cero sin que falte una línea de código. **Es el paso
+      cero**: hasta que esto no esté, nada del canal se ejercita.
+- [ ] **Retención de `waha_media`.** El volumen crece sin límite; con video llena
+      el disco. Importa menos desde que la foto se copia a disco propio.
+- [ ] **Los grupos compartidos de captación** (donde se metió a URUKU en grupos
+      ya existentes de comerciantes para juntar volumen al principio). Analizado
+      en la §2 de [grupos-whatsapp-uruku.md](grupos-whatsapp-uruku.md): un grupo
+      compartido **no identifica a nadie**, así que el remitente vuelve a ser el
+      único dato — que es justo lo que el modelo de grupos vino a reemplazar. Hay
+      recomendación y no está decidido.
+- [ ] **Decidir cuándo se enciende `ingesta_requiere_plan`**, que es lo que
+      convierte "publicar por WhatsApp" en una función que se paga. Hoy está
+      apagado a propósito para que el catálogo tenga volumen.
 
 ### Ofertas por los otros dos canales
 - [x] **Panel del comercio** → `origen: "panel"`, publica directo si es confiable.

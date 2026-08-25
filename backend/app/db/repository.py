@@ -100,6 +100,7 @@ class Repo(Protocol):
     def vincular_grupo_comercio(self, grupo_jid: str, comercio_id: str,
                                 nombre: str | None, origen: str, by: str) -> None: ...
     def list_grupos_comercio(self, comercio_id: str) -> list[dict]: ...
+    def desvincular_grupo(self, grupo_jid: str) -> None: ...
     def agregar_numero_comercio(self, comercio_id: str, numero: str, etiqueta: str | None, by: str) -> dict: ...
     def list_numeros_comercio(self, comercio_id: str) -> list[dict]: ...
     def asegurar_comercio_usuario(self, comercio_id: str) -> dict: ...
@@ -230,6 +231,11 @@ class SupabaseRepo:
             .select("*").eq("comercio_id", comercio_id).execute()
         )
         return res.data or []
+
+    def desvincular_grupo(self, grupo_jid: str) -> None:
+        """Suelta el grupo. Lo ya publicado NO se toca: son ofertas que
+        existieron, y borrarlas por soltar un grupo sería perder historia."""
+        self._db.table("comercio_wa_grupos").delete().eq("grupo_jid", grupo_jid).execute()
 
     def agregar_numero_comercio(self, comercio_id: str, numero: str, etiqueta: str | None, by: str) -> dict:
         from app.core.telefono import normalizar_whatsapp
