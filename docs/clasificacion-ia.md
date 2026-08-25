@@ -3,8 +3,9 @@
 > Documento vivo. Cada vez que se toque el prompt de `backend/app/services/vision.py`,
 > **se actualiza la copia de acá abajo** y se anota qué se cambió y por qué.
 >
-> Última actualización: **2026-08-24** · 273 comercios (70 de la tercera salida,
-> sin analizar todavía).
+> Última actualización: **2026-08-25** · 270 comercios activos, los 270
+> analizados. La tercera salida (67 comercios del 24/8) fue la primera con el
+> prompt completo: ver §2.7.
 
 ---
 
@@ -145,10 +146,76 @@ vereda.
 | 2026-08-23 | `nombre_cartel` | El nombre es el único dato que no se deduce de nada más. 100 de 203 comercios sin nombre |
 | 2026-08-23 | Regla contra rubros amplios redundantes | El problema de §2.1 |
 
-El prompt **no cambió desde el 2026-08-23**. Los 70 comercios de la tercera
-salida son los primeros que se van a analizar con él completo — lee el cartel,
-propone categorías y devuelve sinónimos por producto— y ya con los cuatro rubros
-nuevos disponibles, así que no habrá que corregirlos después.
+El prompt **no cambió desde el 2026-08-23**.
+
+### 2.7 El prompt completo, medido: la tercera salida
+
+Los 67 comercios del 24/8 fueron los primeros analizados con el prompt entero, y
+el resultado se puede comparar contra las dos tandas anteriores:
+
+| | Antes | Tercera salida |
+|---|---|---|
+| Sin nombre real | ~100 de 203 | **3 de 67** |
+| Fotos sin mercadería detectada | — | **0** |
+| Comercios en "Otros" | — | **0** (36 rubros repartidos) |
+| Términos nuevos con sinónimos | — | 253 de 258 |
+
+**`nombre_cartel` era el cambio que más valía y se confirmó.** El nombre es el
+único dato que no se deduce de nada más: sin él hay que volver caminando hasta el
+local. Pasó de faltar en la mitad de la base a faltar en tres locales.
+
+Lo que NO resolvió: **ocho comercios quedaron llamados "Zapatillas Americanas"**,
+nueve "Kiosko", y hay "Ropa", "Licoreria", "Muebleria". La regla está escrita en
+el prompt —si lo que se ve es un rubro y no un nombre, va vacío— y aun así
+entraron. Es peor que el nombre vacío: parece un dato bueno, así que nadie
+vuelve a revisarlo, y en la lista de resultados los ocho son indistinguibles.
+
+Y quedó a la vista un pendiente que no es de la IA: **43 de los 67 sin
+WhatsApp**. La ficha existe y no lleva a ningún lado.
+
+### 2.8 El diccionario de rubros: dos errores de fondo (2026-08-25)
+
+Medido con `supabase/auditar_diccionario.sql`, que muestra **qué patrón** disparó
+cada propuesta de `completar_rubros.py` y **con qué fragmento de texto**. El
+script decía a quién y qué rubro, pero no por qué — y un patrón es una alternancia
+de veinte términos, así que corregir el diccionario sin eso era adivinar.
+
+**(a) Partir un rubro es MOVER el vocabulario, no copiarlo.** La 0057 creó
+`lenceria`, `marroquineria` y `blanqueria` para descongestionar `ropa` (110
+comercios), `bolsos` y `hogar` — pero no les sacó esas palabras a los rubros
+padres. El patrón de `hogar` seguía siendo, palabra por palabra, el de
+`blanqueria`. Cada blanquería disparaba hogar y cada marroquinería disparaba
+bolsos: los rubros nuevos no descongestionaron, **duplicaron**. Corregido en la
+**0061**, que además arregló `calza` (matcheaba "calzado" por falta de cierre de
+palabra) y sumó `fedex`/`dhl` a `envios` — el único courier de la base figuraba
+como marroquinería, por "morral".
+
+**(b) Una palabra que también es adjetivo no alcanza para clasificar.** Con el
+fragmento al lado de lo que el comercio vende, los errores se leen solos:
+
+| Comercio | Le agregaba | Por | Vende |
+|---|---|---|---|
+| Perfumería Arabia | ferretería | `led` | perfume… **aro de luz** |
+| Comercio 5G57 | ferretería + juguetería | `pintura`, `lapiz` | **pintura** de uñas, **lápiz** labial |
+| MAREN IMPORTADORA | ferretería | `construccion` | bloques **de construcción** |
+| Comercio W24Q | motos | `casco` | **casco** de soldar |
+| Farmacia popular | blanquería | `toalla` | **toallita** higiénica |
+
+`led` no nombra una ferretería: es el adjetivo de "aro de luz LED", y todo local
+de accesorios de celular tiene uno — cuatro de las nueve propuestas de ferretería
+salían de ahí. Corregido en la **0062**: o la palabra va acompañada ("foco led",
+"material de construcción", "casco de moto"), o se la cierra con `\M`.
+
+**Lo que queda pendiente antes de aplicar nada**, en
+[pendientes-uruku.md](pendientes-uruku.md): medir cuánto ruido mete el blob de
+sinónimos al clasificar, y el umbral de ≥4 palabras para los rubros de
+especialización. **`completar_rubros.py` sigue sin aplicarse**: el diccionario
+está corregido pero no movió un solo rubro de un solo comercio.
+
+**Cómo no volver a caer:** `rubro_palabras` no lo lee el sitio —ni el buscador,
+ni el mapa, ni las fichas—, sólo los informes y `completar_rubros.py`. Eso lo
+hace barato de corregir, y también explica por qué estos dos errores convivieron
+meses sin que nadie los notara: no rompen nada hasta que alguien corre el script.
 
 ---
 
@@ -275,7 +342,10 @@ filtros y las búsquedas de todos los comercios a la vez.
 |---|---|---|
 | Análisis por fotos (1 comercio) | ~$0,003 | Modelo `gemini-flash-latest` |
 | Los 203 comercios | ~$0,60 | |
+| La tercera salida (67) | ~$0,20 | |
 | Diccionario de sinónimos (697 términos) | centavos | Sin imágenes, 16 llamadas |
+| Ampliarlo a 847 términos | centavos | **2 llamadas**: sólo pregunta lo que falta |
+| Auditar el diccionario de rubros | **$0** | `auditar_diccionario.sql`, texto contra texto |
 | Revisión de taxonomía | centavos | 1 llamada |
 | Verificar rubros / cobertura / novedades | **$0** | SQL contra lo ya cargado |
 

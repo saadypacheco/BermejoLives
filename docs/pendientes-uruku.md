@@ -5,19 +5,26 @@
 > La **tienda (Reservalo)** tiene su propio plan: [plan-tienda-reservalo.md](plan-tienda-reservalo.md).
 > La **clasificación por IA** y el prompt vigente: [clasificacion-ia.md](clasificacion-ia.md).
 
-## 📍 Situación al 2026-08-24
+## 📍 Situación al 2026-08-25
 
 | | |
 |---|---|
-| Comercios cargados | **273** (tres salidas al campo) |
-| **Sin analizar** | **70** — la tercera salida, todavía sin pasar por la IA |
-| Analizados | 202 de los 203 anteriores · sólo 1 sin ningún rubro real |
+| Comercios activos | **270** (tres salidas al campo) |
+| Tercera salida | **67 comercios, los 67 analizados** · 0 pendientes |
+| Analizados | 269 de 270 · sólo 1 sin ningún rubro real |
 | Rubros por comercio | 2,51 promedio · multi-rubro funcionando |
 | Rubros en la taxonomía | 4 nuevos (marroquinería, lencería, blanquería, kiosco) · 19 apagados |
-| Diccionario de sinónimos | 697 términos · todos los comercios con sinónimos |
-| Sin nombre real | ~100 de 203 — **es normal en Bermejo**, no es error de carga |
+| Diccionario de sinónimos | **847 términos** · los 270 comercios con sinónimos · 253 de 258 términos nuevos ya cubiertos |
+| **Sin WhatsApp** | **43 de los 67 nuevos** — el número más caro de la tanda |
+| Sin nombre real | **3 de 67** en la tercera salida (eran ~100 de 203 antes de `nombre_cartel`) |
 | Publicaciones (ofertas) | **1 en total, 0 aprobadas** → el canal está construido y apagado |
 | Búsquedas registradas | Muy pocas: la analítica todavía es anécdota |
+
+**La tercera salida cerró bien.** 67 de 67 con productos detectados, **cero fotos
+sin mercadería**, ningún comercio en "Otros" y 36 rubros repartidos. Fue la
+primera tanda analizada con el prompt completo y se nota justo donde tenía que
+notarse: el nombre leído del cartel bajó los "sin nombre" de la mitad de la base
+a tres casos.
 
 **El buscador quedó cerrado**: sinónimos de frontera, tolerancia a errores de
 tipeo, búsqueda por varias palabras, y los 36 filtros de categoría verificados
@@ -48,27 +55,55 @@ lugar equivocado. Si algo no aparece después de un pull, comparar el hash con
 
 ## 🔴 Ahora / alta prioridad
 
-### Procesar los 70 de la tercera salida
-Son los primeros que se analizan con el prompt completo —lee el cartel, propone
-categorías, devuelve sinónimos por producto— y con los cuatro rubros nuevos ya
-creados, así que no habría que corregirlos después.
+### 43 de los 67 nuevos no tienen WhatsApp
+Es lo más caro que dejó la tanda. Sin WhatsApp el comercio no tiene canal de
+contacto ni puede recibir ofertas, así que queda en el mapa como una ficha que
+no lleva a ningún lado. Son las **4 farmacias**, los **9 kioscos** y las **8
+zapatillerías** entre otros — la lista completa con los códigos sale de la §8 de
+`novedades.sql`.
 
-```bash
-cd /docker/uruku && git pull
-docker compose -f docker-compose.prod.yml up -d --build backend frontend
+- [ ] Definir cómo se completan: ¿segunda pasada al campo sólo por el número?
+      ¿se busca en las fotos del cartel (muchos lo tienen pintado)? Lo segundo
+      es barato: la IA ya mira esas fotos.
 
-curl -s -X POST "$API/admin/comercios/analizar-tanda?aplicar=true"   -H "Authorization: Bearer $TOKEN_ADMIN"                      # ~$0.20
+### Ocho comercios se llaman "Zapatillas Americanas"
+Más nueve "Kiosko", y "Ropa", "Licoreria", "Muebleria". El prompt dice que si lo
+que se ve es un rubro y no un nombre va vacío ("ROPA", "BAZAR" son lo que vende,
+no cómo se llama) y aun así entraron. **Es peor que no tener nombre**: en la
+lista de resultados los ocho son indistinguibles entre sí y parece un dato bueno,
+así que nadie vuelve a revisarlo.
 
-docker compose -f docker-compose.prod.yml exec -T -e APLICAR=1 backend   python /app/scripts/construir_sinonimos.py                   # sólo lo que falta
+- [ ] Decidir si se corrigen a mano o si el prompt necesita ser más duro. Ojo con
+      la segunda opción: puede haber locales que de verdad se llamen así.
 
-docker compose -f docker-compose.prod.yml exec -T backend   python /app/scripts/completar_rubros.py                      # simula primero
+### Decisiones de taxonomía que quedaron abiertas
+La IA pidió 9 categorías nuevas en los 67 (§2 de `novedades.sql`). **No se creó
+ninguna**, por la misma razón que se decidió con licorería: partir una categoría
+para uno o dos comercios deja dos filtros que no filtran.
 
-docker compose -f docker-compose.prod.yml exec -T postgres   psql -U postgres -d postgres -f - < supabase/novedades.sql
-```
+- [ ] **ropa de fiesta** (2 comercios) es la que primero va a pasar el umbral.
+- [ ] **gimnasio** (1) es la que más incomoda: no es un negocio de venta y hoy
+      está en "Deportes y fitness" junto a los que venden pelotas. Se arregla
+      igual de bien sacándolo de ahí que creándole un rubro.
+- [ ] **pinturería** (1) hoy cae en ferretería, que la cubre.
+- [ ] Las otras seis ya están cubiertas (`pollería` → comida rápida, `calzado de
+      trabajo` → calzado, `artículos de plástico` → bazar) o no son un rubro
+      (`polirrubro` es la ausencia de uno). Y **`lencería` la pidió de nuevo**:
+      confirma que la 0057 acertó.
+- [ ] **Licorería**: sigue en "Bebidas y licorería". La tercera salida trajo una
+      (`URUKU-BHH6`), así que el conteo va subiendo pero todavía no justifica
+      partir la categoría.
+- [ ] **"Deportes y fitness" se llevó 19 de 67.** Sospechoso para una ciudad de
+      frontera: lo más probable es que esté absorbiendo *ropa deportiva*. Mismo
+      patrón que `ropa` con 110. Verificar antes de que crezca más.
 
-- [ ] Decidir con el dato a la vista si **licorería** merece rubro propio. Hoy
-      cae en "Bebidas y licorería" (4 comercios): partir una categoría de cuatro
-      deja dos que no filtran nada.
+### El normalizador de subcategorías corta la última sílaba
+En la §3 de `novedades.sql` aparecen `muebl` y `cepillo de dient`. El reordenado
+alfabético (`americana ropa`, `mujer ropa`) **es a propósito** —así "bolsos y
+mochilas" y "mochilas y bolsos" cuentan como uno solo, arreglo del 22/8— pero el
+recorte no. Sólo afecta al conteo, no a lo que se muestra.
+
+- [ ] Mirar `subcategoria_norm`: parece un stemmer demasiado agresivo.
 
 ### Ofertas por WhatsApp — grupos (en diseño)
 El canal de WhatsApp **ya existe** en el código (WAHA + webhook con HMAC +
@@ -120,15 +155,23 @@ Lo que hay que construir:
 ### Datos que quedan por revisar
 - [x] ~~Limpiar los rubros cajón de sastre~~ — hecho y verificado (§2 de
       clasificacion-ia.md).
-- [ ] `completar_rubros.py`: quedan pendientes los rubros PREEXISTENTES
-      (regalería 16, deportes 12, ropa 9, ferretería 9). Ahí está el ruido —
-      ~10 de 131 propuestas son claramente erróneas (`masa para moldear` →
-      panadería, una perfumería → ferretería). **Conviene arreglar el
-      diccionario antes que agregar los rubros.**
-- [ ] `nombrar_desde_cartel.py` — leer el nombre del cartel en las fotos ya
-      sacadas. Sin correr.
-- [ ] Revisar las categorías que la IA proponga en `rubros_propuestos` después
-      de analizar los 70.
+- [x] ~~Procesar la tercera salida~~ — 67 de 67 analizados, con sinónimos y
+      clasificados. Cero en "Otros".
+- [x] ~~`nombrar_desde_cartel.py`~~ — **ya no hace falta**: el prompt lee el
+      cartel desde el 23/8 y quedaron 3 comercios sin nombre en toda la tanda.
+      Se resuelven a mano.
+- [x] ~~Revisar las categorías propuestas~~ — hecho, ver arriba.
+- [ ] **`completar_rubros.py` sigue SIN APLICAR.** El diccionario ya está
+      corregido (migraciones 0061 y 0062, ver §2.8 de clasificacion-ia.md) pero
+      falta lo último antes de dar el `APLICAR=1`:
+      - medir cuánto ruido mete el blob de sinónimos al clasificar (§8 de
+        `auditar_diccionario.sql`, sin correr todavía);
+      - decidir el umbral para los rubros de especialización. Con corte en
+        **≥4 palabras distintas**, lencería + marroquinería + blanquería pasan
+        de 244 propuestas a 23, y los que quedan afuera no pierden nada:
+        siguen en `ropa`, que es donde el comprador los busca.
+      **Nada de esto tocó un solo comercio todavía**: `rubro_palabras` no lo lee
+      ni el buscador ni el mapa ni las fichas, sólo los informes y ese script.
 
 ### Ciudades
 - [ ] **Habilitar Santa Cruz, La Paz y Tarija** en el selector. Ya existen en la
