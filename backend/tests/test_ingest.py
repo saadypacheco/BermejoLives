@@ -193,6 +193,26 @@ def test_mensaje_de_un_numero_de_uruku_no_publica(repo, monkeypatch):
     assert len(repo.publicaciones) == 0
 
 
+def test_el_placeholder_del_env_no_bloquea_a_nadie_y_avisa(repo, monkeypatch):
+    """`591XXXXXXXX` sin reemplazar normaliza a `591`: las X se descartan como
+    cualquier separador. La variable queda "puesta", la lista tiene un elemento,
+    y no coincide con ningún teléfono real — la guarda existe y no protege nada.
+
+    Se acepta que quede apagada (el .env es del operador), pero NO en silencio:
+    tiene que avisar, y sobre todo no puede bloquear a un comerciante real por
+    haber quedado con un valor de mentira.
+    """
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "wa_numeros_propios", "591XXXXXXXX", raising=False)
+    repo.seed_comercio(id="com-g", slug="mendo", nombre="Mendo", whatsapp="59170000007")
+    repo.vincular_grupo_comercio(GRUPO, "com-g", None, "admin", "test")
+
+    res = ingest.handle_message(_evento_grupo(wamid="wa-ph"), repo)
+    assert res["estado"] == "pendiente"       # el comerciante publica igual
+    assert len(repo.publicaciones) == 1
+
+
 def test_un_cuarto_participante_no_publica_directo(repo):
     """El grupo dice de qué comercio es; el remitente dice si es él. Si aparece
     un número que no es del comercio ni nuestro, alguien sumó a alguien: no se

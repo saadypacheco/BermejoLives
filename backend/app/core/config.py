@@ -1,4 +1,6 @@
 """Configuración central (pydantic-settings, lee de .env)."""
+from functools import lru_cache
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -47,16 +49,12 @@ class Settings(BaseSettings):
     wa_numeros_propios: str = ""
 
     def es_numero_propio(self, numero: str | None) -> bool:
-        from app.core.telefono import normalizar_whatsapp
-
         if not numero:
             return False
+        from app.core.telefono import normalizar_whatsapp
+
         objetivo = normalizar_whatsapp(numero)
-        if not objetivo:
-            return False
-        propios = {normalizar_whatsapp(n.strip())
-                   for n in self.wa_numeros_propios.split(",") if n.strip()}
-        return objetivo in propios - {None}
+        return bool(objetivo) and objetivo in _numeros_propios(self.wa_numeros_propios)
 
     # Auth del panel (JWT self-contained, igual patrón que mentorcomercial)
     jwt_secret: str = "bermejo-dev-secret-change-in-prod"
@@ -139,6 +137,50 @@ class Settings(BaseSettings):
 
     def public_photo_url(self, path: str) -> str:
         return f"{self.fotos_public_base_url.rstrip('/')}/{path}"
+
+
+@lru_cache(maxsize=4)
+def _numeros_propios(crudo: str) -> frozenset[str]:
+    """Los números de URUKU del .env, validados y avisando de los que no sirven.
+
+    POR QUÉ VALIDA EN VEZ DE NORMALIZAR Y LISTO
+    ===========================================
+
+    Porque el placeholder no da error, da basura. `591XXXXXXXX` —que es lo que
+    queda si nadie reemplaza el ejemplo— normaliza a `591`: las X se descartan
+    igual que un guión o un espacio. La variable queda "puesta", la lista tiene
+    un elemento, y no coincide con ningún teléfono real. La guarda existe y no
+    protege nada.
+
+    Es la misma forma de fallar que ya costó horas en este proyecto: un embed
+    roto que devuelve [] y se lee como "no hay datos", un script que informa
+    "0 sin respaldo" cuando hay 37. Lo que no se puede es quedarse callado.
+
+    Se descartan los inválidos y se avisa cuáles: mejor la guarda apagada y
+    dicha, que apagada y en silencio.
+    """
+    import structlog
+
+    from app.core.telefono import normalizar_whatsapp, validar_whatsapp
+
+    log = structlog.get_logger()
+    validos: set[str] = set()
+    for bruto in (n.strip() for n in crudo.split(",")):
+        if not bruto:
+            continue
+        error = validar_whatsapp(bruto)
+        if error:
+            log.warning("config.wa_numero_propio_invalido", valor=bruto, motivo=error)
+            continue
+        numero = normalizar_whatsapp(bruto)
+        if numero:
+            validos.add(numero)
+
+    if crudo.strip() and not validos:
+        log.warning("config.wa_numeros_propios_vacio",
+                    detalle="WA_NUMEROS_PROPIOS está seteado pero ningún número es válido: "
+                            "los mensajes de URUKU en los grupos van a generar publicaciones")
+    return frozenset(validos)
 
 
 settings = Settings()
