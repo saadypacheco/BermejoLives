@@ -34,12 +34,40 @@ _TIMEOUT = 20.0
 _MAX_BYTES = 12 * 1024 * 1024   # 12 MB: arriba de eso no es una foto de vidriera
 
 
+def _url_alcanzable(url: str) -> str:
+    """Reescribe el host del mediaUrl al que el backend sí puede alcanzar.
+
+    El `mediaUrl` lo arma WAHA con el host que tiene configurado, no con el que
+    usa quien lo consume. Si nadie le setea `WHATSAPP_FILES_URL`, publica algo
+    como `http://localhost:3000/api/files/...` — y ese `localhost` es el del
+    contenedor de WAHA. El backend, que corre en otro contenedor, lo interpreta
+    como el suyo, no encuentra nada, y la publicación entra sin imagen.
+
+    Sería un error mudo: la ingesta sigue, la oferta se crea, y el síntoma
+    aparece recién cuando alguien mira el feed y ve ofertas vacías. Por eso se
+    corrige acá en vez de confiar en la configuración de WAHA: el backend ya
+    sabe cómo llegar (`WAHA_BASE_URL`), y es el único que tiene que llegar.
+    """
+    from urllib.parse import urlparse, urlunparse
+
+    base = urlparse(settings.waha_base_url)
+    if not base.netloc:
+        return url
+    actual = urlparse(url)
+    if actual.netloc == base.netloc:
+        return url
+    logger.info("wa_media.host_reescrito", de=actual.netloc, a=base.netloc)
+    return urlunparse(actual._replace(scheme=base.scheme or actual.scheme,
+                                      netloc=base.netloc))
+
+
 def descargar_media(url: str | None) -> bytes | None:
     """Trae el archivo de WAHA. Devuelve None si no se puede (nunca lanza)."""
     if not url:
         return None
     import httpx
 
+    url = _url_alcanzable(url)
     try:
         # La API key va igual que en whatsapp_client.py: WAHA protege /api y
         # también los archivos que sirve.
