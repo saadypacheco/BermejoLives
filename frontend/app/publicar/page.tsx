@@ -733,34 +733,40 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   if (done) {
     const ciudadActual = ciudades.find((c) => c.slug === ciudadSlug);
     return (
-      <div className="campo-wrap" style={{ textAlign: "center", paddingTop: 60 }}>
-        <div style={{ fontSize: 48 }}>{doneOffline ? "📴" : "✅"}</div>
-        <h1 style={{ fontSize: 24, margin: "10px 0 4px" }}>¡{done} {doneOffline ? "guardado sin conexión" : "cargado"}!</h1>
-        <p style={{ color: "var(--txt-3)", marginBottom: 6 }}>
+      // Compacta a propósito: el agente está parado en la vereda con el dueño
+      // enfrente, y todo lo que quede abajo del pliegue es algo que no va a
+      // hacer. Se achicó el aire (padding 60→14, emoji 48→30, títulos), NO el
+      // contenido: el código, el WhatsApp y la galería siguen todos acá.
+      <div className="campo-wrap" style={{ textAlign: "center", paddingTop: 14 }}>
+        <div style={{ fontSize: 30, lineHeight: 1 }}>{doneOffline ? "📴" : "✅"}</div>
+        <h1 style={{ fontSize: 19, margin: "6px 0 2px" }}>¡{done} {doneOffline ? "guardado sin conexión" : "cargado"}!</h1>
+        {/* Las dos líneas de estado en una: decían poco cada una y ocupaban
+            dos renglones enteros. */}
+        <p style={{ color: "var(--txt-3)", fontSize: 12.5, lineHeight: 1.4, marginBottom: 12 }}>
           {doneOffline
             ? (doneMotivo
-                ? `Quedó guardado en el celular, pero NO por falta de señal: ${doneMotivo}`
-                : "Se sube solo cuando haya señal. Las fotos las agregás después desde \"mis comercios\".")
+                ? `Guardado en el celular, pero NO por falta de señal: ${doneMotivo}`
+                : "Se sube solo cuando haya señal.")
             : `${ciudadActual ? `${ciudadActual.nombre} · ` : ""}Pendiente de verificar.`}
+          {` · Llevás ${count}`}{pendientes > 0 ? ` · ${pendientes} sin subir` : ""}
         </p>
-        <p style={{ color: "var(--txt-3)", marginBottom: 18 }}>Llevás {count} en este recorrido.{pendientes > 0 ? ` · ${pendientes} sin subir` : ""}</p>
 
         {doneCodigo && (
-          <div style={{ marginBottom: 18, padding: 16, borderRadius: 14, background: "var(--panel)", border: "2px solid var(--neon)" }}>
-            <p style={{ color: "var(--txt-2)", fontSize: 13.5, marginBottom: 8 }}>
-              📝 Dejale este código al dueño:
-            </p>
-            <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: 3, color: "var(--neon)", fontFamily: "monospace", marginBottom: 10 }}>
-              {doneCodigo}
+          <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 12, background: "var(--panel)", border: "2px solid var(--neon)" }}>
+            {/* El código y su explicación en una fila: el número grande manda y
+                el texto va al lado, no debajo. Gana un bloque de tres renglones. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, textAlign: "left" }}>
+              <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: 2, color: "var(--neon)", fontFamily: "monospace", whiteSpace: "nowrap" }}>
+                {doneCodigo}
+              </div>
+              <p style={{ color: "var(--txt-3)", fontSize: 11.5, lineHeight: 1.35, margin: 0 }}>
+                Dejáselo al dueño: con esto manda ofertas por WhatsApp desde
+                cualquier celular, sin cuenta.
+              </p>
             </div>
-            <p style={{ color: "var(--txt-3)", fontSize: 12.5, lineHeight: 1.5, marginBottom: 10 }}>
-              Con este código puede mandar sus ofertas por WhatsApp desde cualquier
-              celular, sin cuenta y sin cargar su número. Sólo tiene que escribirlo
-              en el mensaje.
-            </p>
             <button
               className="btn btn-ghost"
-              style={{ width: "100%" }}
+              style={{ width: "100%", marginTop: 8, padding: "7px 12px", fontSize: 13 }}
               onClick={() => {
                 const texto = `Tu código de URUKU es ${doneCodigo}. Mandá tus ofertas por WhatsApp escribiendo ese código en el mensaje.`;
                 navigator.clipboard?.writeText(texto).catch(() => {});
@@ -786,8 +792,8 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
         )}
 
         {altaId && (
-          <div style={{ textAlign: "left", marginBottom: 18, padding: 14, borderRadius: 14, background: "var(--panel)", border: "1px solid var(--stroke)" }}>
-            <p style={{ color: "var(--txt-2)", fontSize: 13.5, marginBottom: 12 }}>📸 Sumá fotos y videos del local (mejora la ficha y sirve de material para redes):</p>
+          <div style={{ textAlign: "left", marginBottom: 12, padding: 10, borderRadius: 12, background: "var(--panel)", border: "1px solid var(--stroke)" }}>
+            <p style={{ color: "var(--txt-2)", fontSize: 12.5, marginBottom: 8 }}>📸 Fotos y videos del local</p>
             <GaleriaUploader api={{
               cargarFotos: () => listarFotosCampo(altaId),
               subirFoto: (f, onP) => subirFotoCampo(altaId, f, onP),
@@ -800,11 +806,11 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
         )}
 
         {subioLugar && (
-          <button className="btn btn-primary" style={{ width: "100%", marginBottom: 10, background: "#6d28d9", borderColor: "#6d28d9", color: "#fff" }} onClick={otroPuestoAca}>
+          <button className="btn btn-primary" style={{ width: "100%", marginBottom: 8, padding: "9px 12px", background: "#6d28d9", borderColor: "#6d28d9", color: "#fff" }} onClick={otroPuestoAca}>
             ➕ Otro puesto en {subioLugar.nombre}
           </button>
         )}
-        <button className={subioLugar ? "btn btn-ghost" : "btn btn-primary"} style={{ width: "100%", marginBottom: 10 }} onClick={otro}>Cargar otro comercio {subioLugar ? "(a la calle / otro)" : ""}</button>
+        <button className={subioLugar ? "btn btn-ghost" : "btn btn-primary"} style={{ width: "100%", marginBottom: 8, padding: "9px 12px" }} onClick={otro}>Cargar otro comercio {subioLugar ? "(a la calle / otro)" : ""}</button>
         <button className="link-more" onClick={onVerMisComercios}>Ver mis comercios cargados</button>
       </div>
     );

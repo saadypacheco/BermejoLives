@@ -50,8 +50,7 @@ export async function encolarAlta(campos: Record<string, string>, rubro_slugs: s
   // celular porque hay que estar parado en el local. Encolar un alta así es
   // guardar basura que reintenta eternamente y le hace creer al agente que su
   // trabajo está a salvo. Mejor fallar acá, mientras todavía está en el local.
-  const lat = Number(campos.lat), lng = Number(campos.lng);
-  if (!campos.lat || !campos.lng || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+  if (coordenada(campos.lat) === null || coordenada(campos.lng) === null) {
     throw new Error("Sin ubicación no se puede guardar: volvé a tocar \"Usar mi ubicación actual\".");
   }
   const rec: AltaPendiente = {
@@ -67,8 +66,10 @@ export async function descartarPendiente(id: string): Promise<void> {
 
 /** Las que nunca van a entrar: sin coordenadas el backend las rechaza siempre. */
 export function esIrrecuperable(rec: AltaPendiente): boolean {
-  const lat = Number(rec.campos.lat), lng = Number(rec.campos.lng);
-  return !rec.campos.lat || !rec.campos.lng || !Number.isFinite(lat) || !Number.isFinite(lng);
+  // Misma lectura que usa armarFd. Antes cada uno interpretaba la coordenada a
+  // su manera, así que la cola podía marcar un alta como recuperable y el envío
+  // mandarla sin ubicación — o al revés. Un solo criterio, en un solo lugar.
+  return coordenada(rec.campos.lat) === null || coordenada(rec.campos.lng) === null;
 }
 
 export async function listarPendientes(): Promise<AltaPendiente[]> {
@@ -84,12 +85,65 @@ async function borrar(id: string): Promise<void> {
   await run("readwrite", (s) => s.delete(id));
 }
 
+/** Una coordenada utilizable, o null. Tolera lo que puede haber quedado
+ *  guardado: número, texto, coma decimal, espacios.
+ *
+ *  El 0 se descarta a propósito: no es una ubicación de Bermejo sino el valor
+ *  que queda cuando el GPS no llegó a fijar. Un alta en 0,0 cae en el Atlántico
+ *  y en el mapa se ve como un pin perdido en el océano, no como un error. */
+export function coordenada(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : Number(String(v).trim().replace(",", "."));
+  return Number.isFinite(n) && n !== 0 ? n : null;
+}
+
 function armarFd(rec: AltaPendiente): FormData {
   const fd = new FormData();
-  for (const [k, v] of Object.entries(rec.campos)) fd.append(k, v);
+  for (const [k, v] of Object.entries(rec.campos)) {
+    // Un valor nulo o vacío se enviaba igual, como el texto "null" o "": el
+    // backend lo recibe como un dato presente e inválido y responde 422, no
+    // como un campo que no vino. Para los opcionales la diferencia es
+    // justamente ésa — y para lat/lng convertía un alta buena en un rechazo.
+    if (k === "lat" || k === "lng") continue;      // van aparte, normalizadas
+    if (v === null || v === undefined) continue;
+    const s = String(v);
+    if (s === "" || s === "null" || s === "undefined") continue;
+    fd.append(k, s);
+  }
+
+  // Las coordenadas se re-arman desde el registro en formato canónico, en vez
+  // de reenviar el texto que quedó guardado.
+  //
+  // El backend responde "Falta la ubicación" (400) tanto si `lat` no viene como
+  // si viene VACÍO — para él son lo mismo. Y responde 422 si viene con coma
+  // decimal o con la palabra "null". O sea: tres formas distintas de tener la
+  // coordenada guardada y que el alta rebote igual, mientras el detalle de la
+  // cola la muestra ahí, escrita. Es el peor lugar para ser frágil: el agente
+  // ya caminó hasta el local y no puede volver.
+  const lat = coordenada(rec.campos.lat);
+  const lng = coordenada(rec.campos.lng);
+  if (lat !== null) fd.append("lat", String(lat));
+  if (lng !== null) fd.append("lng", String(lng));
+
   rec.rubro_slugs.forEach((r) => fd.append("rubro_slugs", r));
   if (rec.foto) fd.append("foto", rec.foto, rec.fotoName);
   return fd;
+}
+
+/** Lo que se mandó, para poder leerlo cuando el servidor dice que faltaba algo.
+ *
+ * El detalle de la cola ya muestra las coordenadas guardadas. Si el servidor
+ * igual responde "Falta la ubicación", el problema está entre el registro y el
+ * pedido — y sin ver qué salió de acá, eso es imposible de ubicar desde el
+ * celular de un agente parado en la calle.
+ */
+function loQueSeMando(fd: FormData): string {
+  const partes: string[] = [];
+  for (const clave of ["lat", "lng", "ciudad_slug", "modalidad"]) {
+    const v = fd.get(clave);
+    partes.push(`${clave}=${v === null ? "(no vino)" : String(v)}`);
+  }
+  return partes.join(" ");
 }
 
 export type ResultadoSync = {
@@ -111,14 +165,24 @@ export async function sincronizarPendientes(onCambio?: () => void): Promise<Resu
   let subidas = 0, fallas = 0;
   const errores: string[] = [];
   for (const rec of pend) {
+    const fd = armarFd(rec);
     try {
-      await altaComercioCampo(armarFd(rec));
+      await altaComercioCampo(fd);
       await borrar(rec.id);
       subidas += 1;
       onCambio?.();
     } catch (ex) {
       fallas += 1;   // queda en la cola; se reintenta la próxima vez que haya señal
-      const motivo = ex instanceof Error ? ex.message : String(ex);
+      const base = ex instanceof Error ? ex.message : String(ex);
+      const status = (ex as Error & { status?: number })?.status;
+      // Con el motivo solo no se puede actuar: "Falta la ubicación" mientras el
+      // detalle muestra las coordenadas deja al agente sin nada que hacer. Se
+      // adjunta lo que efectivamente salió en el pedido, que es donde está la
+      // diferencia — y el nombre, para saber CUÁL de las seis es.
+      const nombre = rec.campos.nombre || "(sin nombre)";
+      const motivo = status === 400 || status === 422
+        ? `${nombre}: ${base} — se mandó ${loQueSeMando(fd)}`
+        : `${nombre}: ${base}`;
       if (!errores.includes(motivo)) errores.push(motivo);
     }
   }

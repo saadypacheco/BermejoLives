@@ -53,6 +53,31 @@ def test_alta_campo_crea_comercio_pendiente(client, repo):
     assert com["lat"] == -22.7361
 
 
+def test_lat_vacia_y_lat_ausente_son_lo_mismo_para_el_backend(client):
+    """La trampa que retuvo seis altas de campo en la cola offline.
+
+    El agente veía las coordenadas guardadas en el detalle de la cola y el
+    servidor igual respondía "Falta la ubicación": para el backend, un `lat`
+    VACÍO y un `lat` que no vino son indistinguibles. Queda fijado acá para que
+    nadie "arregle" el mensaje sin darse cuenta de que son dos casos distintos
+    del lado del cliente — uno es un dato perdido y el otro un dato mal enviado.
+    """
+    token = _agente_token(client)
+    h = {"Authorization": f"Bearer {token}"}
+    base = {"nombre": "X", "modalidad": "minorista", "lng": "-64.3433"}
+
+    vacia = client.post("/campo/comercio", headers=h, data={**base, "lat": ""})
+    ausente = client.post("/campo/comercio", headers=h, data=base)
+    assert vacia.status_code == 400 and ausente.status_code == 400
+    assert vacia.json()["detail"] == ausente.json()["detail"] == "Falta la ubicación"
+
+    # Y con coma decimal no es 400 sino 422, con el detalle como LISTA — que en
+    # la pantalla del agente llegaba como "[object Object]".
+    coma = client.post("/campo/comercio", headers=h, data={**base, "lat": "-22,7361"})
+    assert coma.status_code == 422
+    assert isinstance(coma.json()["detail"], list)
+
+
 def test_mis_comercios_lista_solo_los_del_agente(client, repo):
     token = _agente_token(client)
     client.post(

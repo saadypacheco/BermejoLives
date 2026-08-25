@@ -132,7 +132,18 @@ export async function altaComercioCampo(form: FormData): Promise<AltaCampoResult
   }
   if (!res.ok) {
     const d = await res.json().catch(() => ({}));
-    throw new Error(d.detail ?? "No se pudo guardar");
+    // El `detail` de FastAPI es un string en los 400 y una LISTA de objetos en
+    // los 422 (validación). Sin distinguirlos, un 422 llegaba a la pantalla como
+    // "[object Object]" y no se podía saber qué campo estaba mal.
+    const detalle = Array.isArray(d.detail)
+      ? d.detail.map((e: { loc?: unknown[]; msg?: string }) =>
+          `${(e.loc ?? []).slice(1).join(".")}: ${e.msg ?? "inválido"}`).join(", ")
+      : (typeof d.detail === "string" ? d.detail : "");
+    const err = new Error(detalle || `No se pudo guardar (HTTP ${res.status})`);
+    // El status viaja aparte para que la cola offline pueda decidir: un 400 es
+    // un dato que nunca va a entrar, un 500 se reintenta.
+    (err as Error & { status?: number }).status = res.status;
+    throw err;
   }
   return res.json();
 }
