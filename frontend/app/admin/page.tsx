@@ -27,6 +27,7 @@ import { AdminMap } from "@/components/admin-map";
 import { LugaresEditor } from "@/components/lugares-editor";
 import { AdornosEditor } from "@/components/adornos-editor";
 import { CatalogoPanel } from "@/components/catalogo-panel";
+import { ImageLightbox } from "@/components/image-lightbox";
 import type { Rubro } from "@/lib/types";
 import { precioFmt, MODALIDAD_LABEL, comoLlegarHref } from "@/lib/types";
 import { Check, X, Edit, Pin, WhatsApp, Verified } from "@/components/icons";
@@ -907,6 +908,9 @@ function TabComercios({
   const [filtro, setFiltro] = useState<FiltroComercio>("todos");
   const [q, setQ] = useState("");
   const [orden, setOrden] = useState<OrdenComercio>("recientes");
+  // Foto ampliada. Vive acá y no en cada tarjeta: el overlay va a pantalla
+  // completa, así que sólo puede haber uno abierto a la vez.
+  const [fotoGrande, setFotoGrande] = useState<{ src: string; alt: string } | null>(null);
   const [vista, setVista] = useState<VistaComercio>("lista");
   const [limitVis, setLimitVis] = useState(50);
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -951,6 +955,17 @@ function TabComercios({
 
   return (
     <div className="panel-card glass">
+      {/* Por Portal: `.glass` tiene backdrop-filter y eso vuelve al contenedor
+          el marco de referencia de `position: fixed`. Sin esto el overlay se
+          centraría sobre la tarjeta de la lista, no sobre la pantalla — el
+          mismo bug que ya nos escondió los modales. */}
+      {fotoGrande && (
+        <Portal>
+          <ImageLightbox src={fotoGrande.src} alt={fotoGrande.alt}
+                         onClose={() => setFotoGrande(null)} />
+        </Portal>
+      )}
+
       <div className="ph">
         <h3>Negocios</h3>
         <span style={{ color: "var(--txt-3)", fontSize: 13 }}>{filtradas.length} resultado(s) · click para editar</span>
@@ -1024,12 +1039,29 @@ function TabComercios({
         // no cedían espacio (flex-shrink: 0) y aplastaban el texto hasta dejar
         // una palabra por renglón. Ahora las acciones bajan a otra línea.
         <div key={c.id} style={{ display: "flex", gap: 12, padding: "14px 16px", borderBottom: "1px solid var(--border)", alignItems: "flex-start", flexWrap: "wrap" }}>
-          {/* Foto */}
-          <img
-            src={c.portada_thumb_url ?? c.portada_url ?? "https://picsum.photos/seed/" + c.id + "/80/80"}
-            alt=""
-            style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 10, flexShrink: 0 }}
-          />
+          {/* Foto — se agranda al tocarla.
+              La miniatura son 64px: alcanza para ubicar la tarjeta, no para
+              ver QUÉ vende el local. Y eso es lo que hay que decidir antes de
+              mandar la ficha a la IA o de corregir lo que propuso. La versión
+              grande es `portada_url`; la miniatura pesa 31KB y se ve borrosa
+              ampliada. */}
+          <button
+            type="button"
+            onClick={() => setFotoGrande({
+              src: c.portada_url ?? c.portada_thumb_url ?? "",
+              alt: c.nombre || "Comercio",
+            })}
+            disabled={!c.portada_url && !c.portada_thumb_url}
+            title="Ver la foto en grande"
+            style={{ padding: 0, border: "none", background: "none", flexShrink: 0,
+                     cursor: (c.portada_url || c.portada_thumb_url) ? "zoom-in" : "default" }}
+          >
+            <img
+              src={c.portada_thumb_url ?? c.portada_url ?? "https://picsum.photos/seed/" + c.id + "/80/80"}
+              alt=""
+              style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 10, display: "block" }}
+            />
+          </button>
 
           {/* Info */}
           <div style={{ flex: "1 1 200px", minWidth: 0 }}>
