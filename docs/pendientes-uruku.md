@@ -5,26 +5,70 @@
 > La **tienda (Reservalo)** tiene su propio plan: [plan-tienda-reservalo.md](plan-tienda-reservalo.md).
 > La **clasificación por IA** y el prompt vigente: [clasificacion-ia.md](clasificacion-ia.md).
 
-## 📍 Situación al 2026-08-23
+## 📍 Situación al 2026-08-24
 
 | | |
 |---|---|
-| Comercios cargados | **203** (dos salidas al campo) |
-| Analizados por IA | 202 · sólo 1 sin ningún rubro real |
-| Rubros por comercio | 2,69 promedio · multi-rubro funcionando |
-| Diccionario de sinónimos | 697 términos · 203 de 203 comercios con sinónimos |
+| Comercios cargados | **273** (tres salidas al campo) |
+| **Sin analizar** | **70** — la tercera salida, todavía sin pasar por la IA |
+| Analizados | 202 de los 203 anteriores · sólo 1 sin ningún rubro real |
+| Rubros por comercio | 2,51 promedio · multi-rubro funcionando |
+| Rubros en la taxonomía | 4 nuevos (marroquinería, lencería, blanquería, kiosco) · 19 apagados |
+| Diccionario de sinónimos | 697 términos · todos los comercios con sinónimos |
 | Sin nombre real | ~100 de 203 — **es normal en Bermejo**, no es error de carga |
-| Sin WhatsApp | ~49 con nombre |
 | Publicaciones (ofertas) | **1 en total, 0 aprobadas** → el canal está construido y apagado |
-| Búsquedas registradas | Muy pocas: los informes de analítica todavía son anécdota |
+| Búsquedas registradas | Muy pocas: la analítica todavía es anécdota |
 
-**El buscador quedó cerrado esta semana:** sinónimos de frontera (remera/polera/
-camiseta devuelven lo mismo), tolerancia a errores de tipeo, búsqueda por varias
-palabras, y los 36 filtros de categoría verificados uno por uno.
+**El buscador quedó cerrado**: sinónimos de frontera, tolerancia a errores de
+tipeo, búsqueda por varias palabras, y los 36 filtros de categoría verificados
+uno por uno. **El mapa también**: filtraba sólo por el rubro principal, así que
+mostraba menos pines de los que corresponden.
+
+**La limpieza de rubros está hecha y verificada**: `alimentos` pasó de 25
+asignaciones a 4 y `hogar` de 25 a 10, sin que ningún otro rubro perdiera una
+sola. Ver [clasificacion-ia.md](clasificacion-ia.md) §2.
+
+---
+
+## ⚠️ Dos trampas que ya costaron horas
+
+**El cache de esquema de PostgREST.** Cada migración lo deja viejo. Síntomas: 500
+en endpoints con selects embebidos, `PGRST204`, "la tabla no existe" aunque psql
+la lea. **Siempre `docker compose restart postgrest` después de migrar.** Y un
+embed que falla devuelve `[]` en silencio: quien lo llama no puede distinguir
+"no hay datos" de "no pude leer". Un script informó "0 asignaciones sin
+respaldo" cuando había 37, y eso se lee como "está todo bien".
+
+**Pushear antes de dar comandos de `git pull`.** Pasó dos veces: el commit estaba
+hecho, el pull no traía nada, y el rato siguiente se fue buscando el bug en el
+lugar equivocado. Si algo no aparece después de un pull, comparar el hash con
+`git log --oneline -3` en el servidor antes de seguir.
 
 ---
 
 ## 🔴 Ahora / alta prioridad
+
+### Procesar los 70 de la tercera salida
+Son los primeros que se analizan con el prompt completo —lee el cartel, propone
+categorías, devuelve sinónimos por producto— y con los cuatro rubros nuevos ya
+creados, así que no habría que corregirlos después.
+
+```bash
+cd /docker/uruku && git pull
+docker compose -f docker-compose.prod.yml up -d --build backend frontend
+
+curl -s -X POST "$API/admin/comercios/analizar-tanda?aplicar=true"   -H "Authorization: Bearer $TOKEN_ADMIN"                      # ~$0.20
+
+docker compose -f docker-compose.prod.yml exec -T -e APLICAR=1 backend   python /app/scripts/construir_sinonimos.py                   # sólo lo que falta
+
+docker compose -f docker-compose.prod.yml exec -T backend   python /app/scripts/completar_rubros.py                      # simula primero
+
+docker compose -f docker-compose.prod.yml exec -T postgres   psql -U postgres -d postgres -f - < supabase/novedades.sql
+```
+
+- [ ] Decidir con el dato a la vista si **licorería** merece rubro propio. Hoy
+      cae en "Bebidas y licorería" (4 comercios): partir una categoría de cuatro
+      deja dos que no filtran nada.
 
 ### Ofertas por WhatsApp — grupos (en diseño)
 El canal de WhatsApp **ya existe** en el código (WAHA + webhook con HMAC +
@@ -73,13 +117,18 @@ Lo que hay que construir:
       abierto/cerrado) y en [monetizacion-planes-uruku]. **Sin definirlo no se
       puede estimar.**
 
-### Limpieza de datos (scripts listos, falta correr y revisar)
-- [ ] `limpiar_rubros.py` — saca los rubros amplios sin respaldo (alimentos, hogar).
-- [ ] `completar_rubros.py` — agrega los 78 rubros que los productos piden.
-- [ ] `nombrar_desde_cartel.py` — lee el nombre del cartel en las fotos ya sacadas.
-- [ ] Revisar las 4 categorías que la IA propuso: `artículos de plástico`,
-      `calzado de trabajo`, `lencería`, `ropa de fiesta`. Sólo **lencería** tiene
-      respaldo (3 comercios con esa subcategoría).
+### Datos que quedan por revisar
+- [x] ~~Limpiar los rubros cajón de sastre~~ — hecho y verificado (§2 de
+      clasificacion-ia.md).
+- [ ] `completar_rubros.py`: quedan pendientes los rubros PREEXISTENTES
+      (regalería 16, deportes 12, ropa 9, ferretería 9). Ahí está el ruido —
+      ~10 de 131 propuestas son claramente erróneas (`masa para moldear` →
+      panadería, una perfumería → ferretería). **Conviene arreglar el
+      diccionario antes que agregar los rubros.**
+- [ ] `nombrar_desde_cartel.py` — leer el nombre del cartel en las fotos ya
+      sacadas. Sin correr.
+- [ ] Revisar las categorías que la IA proponga en `rubros_propuestos` después
+      de analizar los 70.
 
 ### Ciudades
 - [ ] **Habilitar Santa Cruz, La Paz y Tarija** en el selector. Ya existen en la
@@ -102,6 +151,14 @@ Lo que hay que construir:
 - [ ] **Adornos del mapa:** el editor ya está (Admin › Adornos). Falta **ubicar**
       las chalanas y los lapachos, y revisar si los dibujos convencen antes de
       cargar veinte.
+- [ ] **Imágenes por ciudad:** el campo existe (`ciudades.hero_url`, `foto_url`)
+      y Santa Cruz / La Paz / Tarija usan las de Bermejo hasta que haya fotos
+      propias. `update ciudades set hero_url = '...' where slug = '...'`.
+- [ ] **`<title>` de /software** sigue diciendo "Bermejo" fijo: Next resuelve
+      metadata antes de conocer la cookie de ciudad.
+- [ ] **Dar contexto a la IA antes de analizar:** hoy el análisis mira sólo las
+      fotos. `prod_obs_human` entra en la deducción de rubros pero NO llega al
+      prompt. Un campo "el relevador dice que…" sería un cambio chico.
 
 ## 🟠 Redirects de los dominios secundarios
 
@@ -149,6 +206,19 @@ Lo que hay que construir:
   el marketplace de contenido para creadores. Ver [[monetizacion-planes-uruku]].
 
 ## ✅ Hecho
+- [x] **Taxonomía revisada (2026-08-24):** 4 rubros creados con su vocabulario,
+      19 apagados (eran ciudades argentinas y duplicados del modelo viejo).
+      Diccionario corregido: kiosco vs comida rápida, variantes de "kiosquito",
+      licorería.
+- [x] **El mapa respeta multi-rubro:** filtraba por el rubro principal, así que
+      "Calzado" dejaba afuera a los que venden calzado con otro principal. Los
+      chips salen de los comercios cargados: ninguno puede devolver cero.
+- [x] **Un solo buscador en /buscar** (había dos cajas de texto y dos filas de
+      chips) y los filtros reaccionan a la URL.
+- [x] **Cambiar de ciudad cambia el sitio**, no sólo el título: imágenes desde
+      la base, buscador parado en esa ciudad, textos sin "Bermejo" fijo.
+- [x] **Ver la foto en grande desde el admin** (por Portal: `.glass` rompe
+      `position: fixed`).
 - [x] **Buscador (2026-08-22/23):** diccionario de sinónimos de frontera (la IA los
       aporta sola al analizar), subcategorías normalizadas, `pg_trgm` para errores de
       tipeo, búsqueda por varias palabras (entra por O, ordena por Y), y el índice

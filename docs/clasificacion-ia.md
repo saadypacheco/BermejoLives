@@ -3,7 +3,8 @@
 > Documento vivo. Cada vez que se toque el prompt de `backend/app/services/vision.py`,
 > **se actualiza la copia de acá abajo** y se anota qué se cambió y por qué.
 >
-> Última actualización: **2026-08-23** · 203 comercios relevados · 202 analizados.
+> Última actualización: **2026-08-24** · 273 comercios (70 de la tercera salida,
+> sin analizar todavía).
 
 ---
 
@@ -56,7 +57,14 @@ búsqueda que no le corresponde. El comprador filtra por "alimentos", recibe una
 lencería, y deja de confiar en el filtro — más caro que no encontrar nada.
 
 **Corregido en el prompt** (ver §4, regla de `rubro_slugs`) el 2026-08-23.
-**Lo ya cargado** se limpia con `backend/scripts/limpiar_rubros.py`.
+
+**Y ya está limpio en los datos.** Verificado el 24/8 comparando contra el
+informe: `alimentos` pasó de 25 asignaciones (22 sin respaldo) a **4**, y `hogar`
+de 25 (15 sin respaldo) a **10** — y **ningún otro rubro perdió una sola
+asignación**. El total bajó de 542 a 507: exactamente los dos cajones de sastre.
+
+Esa verificación importó por algo más: confirmó que `set_comercio_rubros()`, que
+REEMPLAZA el conjunto entero, no se había llevado puesta clasificación buena.
 
 ### 2.2 El falso positivo: los servicios
 
@@ -87,7 +95,47 @@ Bermejo es frontera y la IA leyó el cartel de compra y venta de pesos. Por eso
   No ensucian búsquedas, dejan al local afuera de un filtro. Se completan con
   `backend/scripts/completar_rubros.py`.
 
-### 2.4 Historial de cambios del prompt
+### 2.4 La taxonomía: cuatro rubros que faltaban y 19 que sobraban
+
+Revisado el **2026-08-24** cruzando tres fuentes que coincidieron: la revisión a
+mano de los comercios, lo que la IA venía pidiendo en `categoria_sugerida`, y las
+subcategorías que ella misma escribió.
+
+**Creados** (migración 0057), cada uno con sus palabras en `rubro_palabras` — sin
+eso `rubros_sugeridos()` nunca los devuelve y quedan como filtros vacíos:
+
+| Nuevo | Antes caían en |
+|---|---|
+| 🧳 Marroquinería y equipaje | `bolsos` — valija y cartera son lo mismo sólo si uno no viaja |
+| 🍬 Kiosco y golosinas | `alimentos`, junto a los supermercados |
+| 🩲 Lencería, medias y ropa interior | `ropa` (110 comercios: un filtro que no filtra) |
+| 🛏️ Blanquería y textil de hogar | `hogar`, mezclado con muebles y decoración |
+
+**NO se crearon** aunque estaban propuestos, porque ya existen con otro nombre:
+"Bazar y Electrohogar" son `bazar` + `electrodomesticos` (dos rubros, no uno),
+"Cotillón" es `regaleria`, "Herramientas" es `ferreteria`, "Ropa Deportiva" es
+`ropa` + `deportes`. **Un rubro que duplica a otro es peor que no tenerlo:** el
+comprador no sabe cuál tocar y los locales se reparten entre los dos.
+
+**Apagados**: los 19 rubros sin comercios no eran categorías faltantes sino
+basura del modelo anterior a URUKU — ocho son **ciudades argentinas** usadas como
+rubro (`la-quiaca`, `oran`, `jujuy`, `salta`…) y el resto duplica rubros
+vigentes. Se desactivan, no se borran, y sólo los que no tienen ni un comercio.
+
+### 2.5 Correcciones del diccionario
+
+| Fecha | Cambio | Por qué |
+|---|---|---|
+| 24/8 | Sacar `papas fritas` y `snack` de `kiosco` | Pertenecen a comida rápida. Metían a las rotiserías en kiosco. Acertó una vez —Sandwich dioni ES un kiosco— y por la razón equivocada, que es lo que hace que nadie lo revise |
+| 24/8 | `sanguche`, `sanguchería`, `sandwichería` → comida rápida | Es como se escribe acá; el patrón sólo tenía "sandwich" |
+| 24/8 | `quiosco`, `kiosquito`, `kioskito`, `kiosquería` → kiosco | "El Kiosquito de Ana" no clasificaba, y ése es el caso más frecuente |
+| 24/8 | Rubro `bebidas` renombrado a **"Bebidas y licorería"** | `licor` ya clasificaba, pero buscar "licorería" no devolvía la categoría: el buscador matchea contra el NOMBRE del rubro y ese nombre no la nombraba |
+
+**El mapa de kioscos vale por sí solo**: son los comercios más repartidos, los
+que están abiertos cuando no hay nada más, y los que alguien busca parado en la
+vereda.
+
+### 2.6 Historial de cambios del prompt
 
 | Fecha | Cambio | Por qué |
 |---|---|---|
@@ -96,6 +144,11 @@ Bermejo es frontera y la IA leyó el cartel de compra y venta de pesos. Por eso
 | 2026-08-22 | `subcategoria` en singular y sin "X y Y" | "bolsos y mochilas" y "mochilas y bolsos" se contaban como dos categorías |
 | 2026-08-23 | `nombre_cartel` | El nombre es el único dato que no se deduce de nada más. 100 de 203 comercios sin nombre |
 | 2026-08-23 | Regla contra rubros amplios redundantes | El problema de §2.1 |
+
+El prompt **no cambió desde el 2026-08-23**. Los 70 comercios de la tercera
+salida son los primeros que se van a analizar con él completo — lee el cartel,
+propone categorías y devuelve sinónimos por producto— y ya con los cuatro rubros
+nuevos disponibles, así que no habrá que corregirlos después.
 
 ---
 
