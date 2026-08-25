@@ -52,6 +52,7 @@ class FakeRepo:
         self.mensajes: dict[str, dict] = {}          # id -> row
         self.comercio_fotos: list[dict] = []          # galería
         self.comercio_numeros: list[dict] = []        # números autorizados a publicar
+        self.wa_grupos: dict[str, dict] = {}          # grupo_jid -> {comercio_id, ...}
         self.reclamos: dict[str, dict] = {}           # id -> row
         self.solicitudes_numero: dict[str, dict] = {} # id -> row
         self.rubros_propuestos: list[dict] = []       # categorías que la IA propuso y no existen
@@ -120,6 +121,20 @@ class FakeRepo:
     def vincular_wa_jid(self, comercio_id, wa_jid):
         if comercio_id in self.comercios:
             self.comercios[comercio_id]["wa_jid"] = wa_jid
+
+    def get_comercio_por_grupo(self, grupo_jid):
+        fila = self.wa_grupos.get(grupo_jid)
+        return self.comercios.get(fila["comercio_id"]) if fila else None
+
+    def vincular_grupo_comercio(self, grupo_jid, comercio_id, nombre, origen, by):
+        # ignore_duplicates: el primero que ata el grupo se queda con él.
+        self.wa_grupos.setdefault(grupo_jid, {
+            "grupo_jid": grupo_jid, "comercio_id": comercio_id,
+            "nombre": nombre, "origen": origen, "created_by": by,
+        })
+
+    def list_grupos_comercio(self, comercio_id):
+        return [g for g in self.wa_grupos.values() if g["comercio_id"] == comercio_id]
 
     def agregar_numero_comercio(self, comercio_id, numero, etiqueta, by):
         from app.core.telefono import normalizar_whatsapp

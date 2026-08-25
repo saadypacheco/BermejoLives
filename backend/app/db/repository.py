@@ -96,6 +96,10 @@ class Repo(Protocol):
     def ocultar_comercios_vencidos(self, dias: int = 40, dias_gracia: int | None = None) -> int: ...
     def get_comercio_por_numero(self, numero: str) -> dict | None: ...
     def vincular_wa_jid(self, comercio_id: str, wa_jid: str) -> None: ...
+    def get_comercio_por_grupo(self, grupo_jid: str) -> dict | None: ...
+    def vincular_grupo_comercio(self, grupo_jid: str, comercio_id: str,
+                                nombre: str | None, origen: str, by: str) -> None: ...
+    def list_grupos_comercio(self, comercio_id: str) -> list[dict]: ...
     def agregar_numero_comercio(self, comercio_id: str, numero: str, etiqueta: str | None, by: str) -> dict: ...
     def list_numeros_comercio(self, comercio_id: str) -> list[dict]: ...
     def asegurar_comercio_usuario(self, comercio_id: str) -> dict: ...
@@ -201,6 +205,31 @@ class SupabaseRepo:
 
     def vincular_wa_jid(self, comercio_id: str, wa_jid: str) -> None:
         self._db.table("comercios").update({"wa_jid": wa_jid}).eq("id", comercio_id).execute()
+
+    # ---- grupos de WhatsApp (uno por comerciante) ----
+    def get_comercio_por_grupo(self, grupo_jid: str) -> dict | None:
+        res = (
+            self._db.table("comercio_wa_grupos")
+            .select("comercio_id").eq("grupo_jid", grupo_jid).limit(1).execute()
+        )
+        return self.get_comercio(res.data[0]["comercio_id"]) if res.data else None
+
+    def vincular_grupo_comercio(self, grupo_jid: str, comercio_id: str,
+                                nombre: str | None, origen: str, by: str) -> None:
+        """Ata un grupo a un comercio. Idempotente: si el grupo ya estaba atado
+        NO se repisa — un mensaje con un código de otro local no puede robarle
+        el grupo a nadie."""
+        self._db.table("comercio_wa_grupos").upsert({
+            "grupo_jid": grupo_jid, "comercio_id": comercio_id,
+            "nombre": nombre, "origen": origen, "created_by": by,
+        }, on_conflict="grupo_jid", ignore_duplicates=True).execute()
+
+    def list_grupos_comercio(self, comercio_id: str) -> list[dict]:
+        res = (
+            self._db.table("comercio_wa_grupos")
+            .select("*").eq("comercio_id", comercio_id).execute()
+        )
+        return res.data or []
 
     def agregar_numero_comercio(self, comercio_id: str, numero: str, etiqueta: str | None, by: str) -> dict:
         from app.core.telefono import normalizar_whatsapp

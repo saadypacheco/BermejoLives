@@ -35,6 +35,48 @@ class IngestError(Exception):
     """Error recuperable de ingesta."""
 
 
+def _identificar_por_grupo(repo: Repo, payload) -> tuple[dict | None, str, str | None]:
+    """Resuelve el comercio cuando el mensaje vino de un grupo.
+
+    El modelo: UN grupo por comerciante, con tres participantes — el celular del
+    comercio, un celular de URUKU y el testigo (el vinculado a WAHA). El grupo
+    es lo estable: el comerciante puede cambiar de teléfono, o publicar desde el
+    celular del hijo, y el contenido sigue llegando al local correcto.
+
+    A diferencia del chat 1-a-1, acá **no se crea un comercio si no se sabe de
+    quién es el grupo**. En 1-a-1 un número desconocido es un comerciante nuevo
+    que escribió, y crear el borrador tiene sentido. Un grupo desconocido no es
+    nadie: crear un comercio por cada grupo llenaría la base de fichas fantasma
+    llamadas "Comercio 1234" que nadie cargó ni visitó.
+    """
+    from app.core.codigo import extraer_codigo
+
+    grupo = payload.grupo_jid or ""
+
+    atado = repo.get_comercio_por_grupo(grupo)
+    if atado:
+        return atado, "grupo", None
+
+    # Grupo nuevo: se ata con el código del local, mandado adentro del grupo.
+    # Reusa lo que ya funciona en el chat directo — un papel en el mostrador con
+    # URUKU-XXXX — y evita tener que cargar el JID a mano en el admin.
+    codigo = extraer_codigo(payload.body)
+    if codigo:
+        comercio = repo.get_comercio_por_codigo(codigo)
+        if comercio:
+            try:
+                repo.vincular_grupo_comercio(
+                    grupo, comercio["id"], None, "codigo", "ingest-grupo")
+            except Exception:  # noqa: BLE001 — la publicación importa más que el vínculo
+                logger.warning("ingest.vincular_grupo_fallo", grupo=grupo, exc_info=True)
+            logger.info("ingest.grupo_vinculado", comercio=comercio["slug"], codigo=codigo)
+            return comercio, "codigo", codigo
+        logger.info("ingest.codigo_desconocido", codigo=codigo)
+
+    logger.info("ingest.grupo_sin_comercio", grupo=grupo)
+    return None, "grupo_desconocido", codigo
+
+
 def _identificar_comercio(repo: Repo, payload) -> tuple[dict, str, str | None]:
     """Resuelve de qué comercio es este mensaje.
 
@@ -160,12 +202,32 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         logger.info("ingest.duplicado", wa_message_id=payload.id)
         return {"captured": True, "duplicate": True}
 
+    # 1.b) En un grupo, los mensajes de los NUESTROS no son ofertas.
+    #      El testigo ya está cubierto por fromMe (es el número vinculado a
+    #      WAHA), pero el celular de URUKU es otro teléfono y entra como
+    #      cualquier participante: sin esto, cada "buen día" que escriba alguien
+    #      de URUKU se publica a nombre del comerciante.
+    if payload.es_grupo and settings.es_numero_propio(payload.phone):
+        logger.info("ingest.mensaje_propio", grupo=payload.grupo_jid)
+        return {"captured": True, "publicada": False, "motivo": "mensaje de un número de URUKU"}
+
     # 2) Identificar al comercio.
-    #    Primero por número (registrado o ya visto). Si el número es desconocido,
-    #    se busca el CÓDIGO en el texto: es lo que le permite a un comercio sin
-    #    número propio, sin login y sin pagar, mandar ofertas desde el celular de
-    #    quien sea. Sin código, recién ahí se crea el borrador "Comercio 1234".
-    comercio, identidad_origen, codigo_recibido = _identificar_comercio(repo, payload)
+    #    En un GRUPO manda el grupo: está atado a un comercio y no cambia aunque
+    #    el comerciante cambie de celular. En un chat 1-a-1 manda el número
+    #    (registrado o ya visto) y, si es desconocido, el CÓDIGO del texto — es
+    #    lo que le permite a un comercio sin número propio, sin login y sin
+    #    pagar, mandar ofertas desde el celular de quien sea.
+    if payload.es_grupo:
+        comercio, identidad_origen, codigo_recibido = _identificar_por_grupo(repo, payload)
+        if comercio is None:
+            # El crudo ya quedó en wa_inbox, así que nada se pierde: cuando
+            # alguien mande el código en ese grupo, o lo ate desde el admin, se
+            # sabe qué llegó antes. Lo que NO se hace es inventar un comercio.
+            return {"captured": True, "publicada": False,
+                    "motivo": "el grupo no está asociado a ningún comercio",
+                    "grupo": payload.grupo_jid}
+    else:
+        comercio, identidad_origen, codigo_recibido = _identificar_comercio(repo, payload)
     # Sólo para logs y respuesta: un comercio identificado por código puede venir
     # de una fila parcial, y una línea de log no puede tumbar la ingesta.
     slug = comercio.get("slug") or comercio.get("id") or "?"
@@ -197,14 +259,40 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     # código está en un papel en el local y cualquiera que lo vea podría publicar
     # en nombre del comercio. La primera vez pasa por moderación siempre.
     confiable = bool(comercio.get("confiable")) and identidad_origen != "codigo"
+
+    # En un grupo hay tres participantes y sólo uno publica. Si el mensaje vino
+    # de un número que no es el del comercio ni uno nuestro, alguien agregó a un
+    # cuarto: no se descarta en silencio —podría ser el mismo comerciante con
+    # otro celular— pero no se publica solo. Va a moderación, que es donde una
+    # persona puede mirar quién es.
+    if payload.es_grupo:
+        duenio = repo.get_comercio_por_numero(payload.phone)
+        if not (duenio and duenio.get("id") == comercio["id"]):
+            logger.info("ingest.remitente_ajeno", grupo=payload.grupo_jid, comercio=slug)
+            confiable = False
+
     now = datetime.now(timezone.utc).isoformat()
     tipo = _classify_tipo(payload)
+
+    # La imagen se baja a disco propio ACÁ, no se referencia la de WAHA: esa URL
+    # es interna (el navegador del comprador no la alcanza) y efímera. Y en una
+    # oferta la foto no es un adorno, es el contenido.
+    imagen_url = None
+    if payload.type == "image" or payload.has_media:
+        from app.services.wa_media import guardar_imagen_publicacion
+
+        imagen_url = guardar_imagen_publicacion(slug, payload.media_url)
+
     row = {
         "comercio_id": comercio["id"],
         "tipo": tipo,
-        "titulo": (payload.body or "").split("\n")[0][:120] or None,
+        # Con imagen no se inventa un título: la oferta ES la foto y el texto
+        # que vino va de descripción. Un "200 bs" de título no ayuda a nadie.
+        # Sin imagen sí se usa la primera línea, o la fila queda en blanco en la
+        # cola de moderación y no se puede saber qué es sin abrirla.
+        "titulo": None if imagen_url else ((payload.body or "").split("\n")[0][:120] or None),
         "descripcion": payload.body,
-        "imagen_url": payload.media_url if payload.type == "image" else None,
+        "imagen_url": imagen_url,
         "tiktok_url": _extract_tiktok(payload.body),
         "estado": "aprobado" if confiable else "pendiente",
         "approved_at": now if confiable else None,

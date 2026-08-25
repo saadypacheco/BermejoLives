@@ -35,6 +35,29 @@ class Settings(BaseSettings):
     def wa_link_confirmar(self, codigo: str) -> str:
         return f"https://wa.me/{self.bot_whatsapp_numero}?text=CONFIRMAR-{codigo}"
 
+    # Los números de URUKU que están dentro de los grupos de comerciantes,
+    # separados por coma. En cada grupo hay tres participantes: el comercio, un
+    # número de URUKU y el testigo.
+    #
+    # El testigo es el número vinculado a WAHA, así que sus mensajes llegan con
+    # fromMe=true y la ingesta ya los descarta. El de URUKU NO: es otro
+    # teléfono, entra como cualquier participante, y sin esta lista cada vez que
+    # alguien de URUKU escriba "buen día" en el grupo se crea una publicación a
+    # nombre del comerciante.
+    wa_numeros_propios: str = ""
+
+    def es_numero_propio(self, numero: str | None) -> bool:
+        from app.core.telefono import normalizar_whatsapp
+
+        if not numero:
+            return False
+        objetivo = normalizar_whatsapp(numero)
+        if not objetivo:
+            return False
+        propios = {normalizar_whatsapp(n.strip())
+                   for n in self.wa_numeros_propios.split(",") if n.strip()}
+        return objetivo in propios - {None}
+
     # Auth del panel (JWT self-contained, igual patrón que mentorcomercial)
     jwt_secret: str = "bermejo-dev-secret-change-in-prod"
     jwt_ttl_hours: int = 168           # 7 días
