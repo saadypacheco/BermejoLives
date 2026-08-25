@@ -4,7 +4,11 @@
    - Estáticos de Next / iconos / fuentes: stale-while-revalidate.
    - Navegación (HTML): network-first con fallback a caché / home.
    Bump VERSION para invalidar cachés viejas en cada deploy importante. */
-const VERSION = "uruku-v2";
+// v3 (2026-08-25): arreglos de memoria del recolector y de la cola offline. Es
+// justo el caso que amerita el bump — si el celular del agente sigue sirviendo
+// el bundle viejo desde la caché, los arreglos no llegan y parece que no
+// funcionaron.
+const VERSION = "uruku-v3";
 const SHELL = `${VERSION}-shell`;
 const STATIC = `${VERSION}-static`;
 const TILES = `${VERSION}-tiles`;
