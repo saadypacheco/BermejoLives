@@ -27,9 +27,45 @@
 --
 -- El texto que se arma acá es el MISMO que arma completar_rubros.py
 -- (prod_det_ia + subcategoria + sinonimos + nombre). Si allá cambia, acá también.
+--
+-- ACOTAR A UNA SALIDA AL CAMPO
+-- ============================
+--
+--   ... psql -U postgres -d postgres -v desde="'2026-08-24'" -f - < supabase/auditar_diccionario.sql
+--
+-- Sin `desde` mira los comercios activos TODOS. Con `desde`, sólo los dados de
+-- alta a partir de esa fecha — para leer lo que trajo una tanda sin que se
+-- mezcle con lo que ya venía de antes.
+--
+-- El corte va por `created_at` y NO por `ia_analizado_at`, por la misma razón
+-- que lo explica novedades.sql: el análisis por tandas vuelve a pasar sobre
+-- comercios viejos y les mueve la fecha de análisis, así que cortar por ahí
+-- marca a todos como nuevos y el informe entero miente. La fecha de alta no la
+-- mueve nadie.
+--
+-- OJO CON LEER EL DICCIONARIO EN UNA TANDA SOLA: los patrones son compartidos
+-- por los 273 comercios. Que una palabra no falle en 70 no dice que esté bien,
+-- y una que falla una vez acá puede estar fallando diez veces afuera del corte.
+-- Para decidir si un patrón sobra, mirar la base entera; el corte sirve para
+-- ver qué trajo la salida, no para juzgar el diccionario.
 
 \pset border 2
 \pset pager off
+
+\if :{?desde}
+\else
+  \set desde '1970-01-01'
+\endif
+
+\echo ''
+\echo '########## EL CORTE ##########'
+\echo 'Altas por día. Si el corte no agarra la tanda que esperabas, correr de'
+\echo 'nuevo con  -v desde="'"'"'AAAA-MM-DD'"'"'"'
+select created_at::date as dia_de_alta,
+       count(*)                                                as comercios,
+       count(*) filter (where created_at::date >= :desde)      as dentro_del_corte
+  from comercios where activo
+ group by 1 order by 1 desc limit 10;
 
 drop view if exists _audit_match;
 drop view if exists _audit_texto;
@@ -42,7 +78,8 @@ create temp view _audit_texto as
          unaccent(lower(concat_ws(' ', c.prod_det_ia, c.subcategoria,
                                        c.sinonimos, c.nombre))) as t
     from comercios c
-   where c.activo;
+   where c.activo
+     and c.created_at::date >= :desde;
 
 -- Cada (comercio, patrón) que matchea, con el pedazo de texto que lo disparó y
 -- si el comercio YA tiene ese rubro. Lo que no tiene es lo que se propondría.
@@ -108,6 +145,8 @@ select codigo,
 \echo 'No hacen daño, pero mienten: el rubro parece cubierto por el diccionario'
 \echo 'y en realidad ninguna de esas palabras aparece en ningún comercio. Si un'
 \echo 'rubro entero está acá, sus comercios no se van a clasificar solos nunca.'
+\echo 'CON `desde` PUESTO ESTA SECCIÓN NO SIRVE PARA BORRAR NADA: un patrón que'
+\echo 'no matchea en 70 comercios puede estar matcheando en los otros 200.'
 select rp.rubro_slug, rp.patron
   from rubro_palabras rp
   left join _audit_match m on m.patron = rp.patron and m.rubro_slug = rp.rubro_slug
@@ -196,7 +235,8 @@ create temp view _audit_sin_sin as
   select c.id,
          unaccent(lower(concat_ws(' ', c.prod_det_ia, c.subcategoria, c.nombre))) as t
     from comercios c
-   where c.activo;
+   where c.activo
+     and c.created_at::date >= :desde;
 
 with limpio as (
   select rp.rubro_slug, s.id
