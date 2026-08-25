@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { comprimirImagen } from "@/lib/imagen";
+import { useObjectUrls } from "@/lib/object-url";
 import { duracionVideo } from "@/lib/upload";
 import { encolarMedia, listarMedia, sincronizarMedia, type MediaPendiente } from "@/lib/offline-media";
 
@@ -41,7 +42,12 @@ export function GaleriaUploader({ api, comercioId }: { api: GaleriaApi; comercio
   const videoInput = useRef<HTMLInputElement>(null);
 
   const offlineOn = !!comercioId;
-  const pendFotos = pendientes.filter((p) => p.kind === "foto");
+  const pendFotos = useMemo(() => pendientes.filter((p) => p.kind === "foto"), [pendientes]);
+  // Una URL por pendiente, revocadas juntas. Estaba `URL.createObjectURL(p.blob)`
+  // adentro del JSX: eso crea una URL NUEVA cada vez que React redibuja —y
+  // redibuja en cada tick del progreso de subida— sin revocar ninguna. Cada una
+  // deja la foto anclada en memoria hasta cerrar la pestaña.
+  const pendFotoUrls = useObjectUrls(pendFotos, (p) => p.blob);
   const pendVideos = pendientes.filter((p) => p.kind === "video");
 
   async function refrescarPend() {
@@ -158,9 +164,9 @@ export function GaleriaUploader({ api, comercioId }: { api: GaleriaApi; comercio
             <button type="button" className="galup-del" onClick={() => delFoto(f.id)} aria-label="Borrar">✕</button>
           </div>
         ))}
-        {pendFotos.map((p) => (
+        {pendFotos.map((p, i) => (
           <div key={p.id} className="galup-item galup-penditem" title="Se sube cuando haya señal">
-            <img src={URL.createObjectURL(p.blob)} alt="" />
+            <img src={pendFotoUrls[i]} alt="" />
             <span className="galup-clock">📴</span>
           </div>
         ))}

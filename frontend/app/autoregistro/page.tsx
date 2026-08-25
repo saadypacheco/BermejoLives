@@ -11,6 +11,7 @@ import {
 } from "@/lib/comercio";
 import { RUBROS } from "@/lib/types";
 import { comprimirImagen } from "@/lib/imagen";
+import { useObjectUrl } from "@/lib/object-url";
 import { geoErrorMsg } from "@/lib/geo";
 
 type Msg = { from: "bot" | "user"; text: string };
@@ -248,7 +249,9 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [geoMsg, setGeoMsg] = useState("");
   const [foto, setFoto] = useState<File | null>(null);
-  const [preview, setPreview] = useState("");
+  // El File, no la URL: el hook la revoca solo (ver lib/object-url.ts).
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const preview = useObjectUrl(previewFile);
   const [comprimiendo, setComprimiendo] = useState(false);
 
   const [err, setErr] = useState("");
@@ -277,12 +280,13 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
 
   async function onFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
-    if (!file) { setFoto(null); setPreview(""); return; }
-    setPreview(URL.createObjectURL(file));
+    if (!file) { setFoto(null); setPreviewFile(null); return; }
+    setPreviewFile(file);
     setComprimiendo(true);
     const comprimida = await comprimirImagen(file);
     setComprimiendo(false);
     setFoto(comprimida);
+    setPreviewFile(comprimida);   // se suelta la original de 12 MP
   }
 
   async function submit(e: React.FormEvent) {

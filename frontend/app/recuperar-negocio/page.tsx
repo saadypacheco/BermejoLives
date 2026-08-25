@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { buscarComercioPorNombre, solicitarCambioNumero, type ComercioBusqueda } from "@/lib/comercio";
 import { comprimirImagen } from "@/lib/imagen";
+import { useObjectUrl } from "@/lib/object-url";
 import { geoErrorMsg } from "@/lib/geo";
 
 export default function RecuperarNegocioPage() {
@@ -84,7 +85,9 @@ function SolicitudForm({ comercio, onEnviado, onVolver }: { comercio: ComercioBu
   const [whatsapp, setWhatsapp] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [foto, setFoto] = useState<File | null>(null);
-  const [preview, setPreview] = useState("");
+  // El File, no la URL: el hook la revoca solo (ver lib/object-url.ts).
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const preview = useObjectUrl(previewFile);
   const [comprimiendo, setComprimiendo] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [geoMsg, setGeoMsg] = useState("");
@@ -93,12 +96,13 @@ function SolicitudForm({ comercio, onEnviado, onVolver }: { comercio: ComercioBu
 
   async function onFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
-    if (!file) { setFoto(null); setPreview(""); return; }
-    setPreview(URL.createObjectURL(file));
+    if (!file) { setFoto(null); setPreviewFile(null); return; }
+    setPreviewFile(file);
     setComprimiendo(true);
     const comprimida = await comprimirImagen(file);
     setComprimiendo(false);
     setFoto(comprimida);
+    setPreviewFile(comprimida);   // se suelta la original de 12 MP
   }
 
   function ubicar() {

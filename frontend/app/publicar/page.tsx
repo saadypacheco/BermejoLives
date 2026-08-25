@@ -13,6 +13,8 @@ import { getCiudades, getRubros } from "@/lib/data";
 import type { Ciudad, Rubro } from "@/lib/types";
 import { Pin, User, Arrow, Edit } from "@/components/icons";
 import { comprimirImagen } from "@/lib/imagen";
+import { useObjectUrl } from "@/lib/object-url";
+import { medirMemoria } from "@/lib/memoria";
 import { GaleriaUploader } from "@/components/galeria-uploader";
 import { AdminMap } from "@/components/admin-map";
 import { geoErrorMsg } from "@/lib/geo";
@@ -498,7 +500,11 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   const [coords,      setCoords]      = useState<{ lat: number; lng: number; acc: number } | null>(null);
   const [geoMsg,      setGeoMsg]      = useState("");
   const [foto,        setFoto]        = useState<File | null>(null);
-  const [preview,     setPreview]     = useState("");
+  // El File a previsualizar, no la URL: el hook la crea y la REVOCA sola. Antes
+  // era un string y `setPreview("")` borraba el string pero dejaba la URL viva,
+  // anclando la foto original en memoria hasta cerrar la pestaña.
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const preview = useObjectUrl(previewFile);
   const [comprimiendo,setComprimiendo]= useState(false);
   const [consent,     setConsent]     = useState(true);
   const [saving,      setSaving]      = useState(false);
@@ -618,12 +624,16 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
 
   async function onFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
-    if (!file) { setFoto(null); setPreview(""); return; }
-    setPreview(URL.createObjectURL(file)); // vista previa inmediata, sin esperar la compresión
+    if (!file) { setFoto(null); setPreviewFile(null); return; }
+    setPreviewFile(file);          // vista previa inmediata, sin esperar la compresión
     setComprimiendo(true);
     const comprimida = await comprimirImagen(file);
     setComprimiendo(false);
     setFoto(comprimida);
+    // Se pasa a previsualizar la COMPRIMIDA y se suelta la original. Mostrar la
+    // de 12 MP obliga al navegador a decodificarla entera para dibujar una
+    // miniatura: son otros ~48 MB además de los del archivo, por foto.
+    setPreviewFile(comprimida);
   }
 
   async function guardar(e: React.FormEvent) {
@@ -664,6 +674,10 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       setAltaId(r.comercio.id);
       setWhatsappCargado(campos.whatsapp ?? null);
       setCount((c) => c + 1);
+      // Con ?debugmem=1 imprime el heap después de cada alta. Es la única forma
+      // de saber si "quedó estable" en el celular del agente y no en una laptop
+      // con 16 GB, que es donde nunca falló.
+      medirMemoria("comercio guardado");
       setSubioLugar(lugarActual ? { id: lugarActual.id, nombre: lugarActual.nombre } : null);
       setUltimoPuesto(puesto);
       listarLugares(ciudadSlug).then(setLugares).catch(() => {});   // refresca el conteo del mercado
@@ -683,6 +697,10 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           setDoneOffline(true);
           setDoneMotivo(esRed ? "" : motivo);
           setCount((c) => c + 1);
+          // Con ?debugmem=1 imprime el heap después de cada alta. Es la única forma
+          // de saber si "quedó estable" en el celular del agente y no en una laptop
+          // con 16 GB, que es donde nunca falló.
+          medirMemoria("comercio guardado");
           setSubioLugar(lugarActual ? { id: lugarActual.id, nombre: lugarActual.nombre } : null);
           setUltimoPuesto(puesto);
           refrescarPend();
@@ -697,7 +715,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
 
   function limpiar() {
     setF({ ...EMPTY });
-    setCoords(null); setGeoMsg(""); setFoto(null); setPreview(""); setConsent(true);
+    setCoords(null); setGeoMsg(""); setFoto(null); setPreviewFile(null); setConsent(true);
     setNuevoLugar(""); setEditMercado(false); setDone(null); setDoneOffline(false); setDoneMotivo(""); setDoneCodigo(null); setAltaId(null); setWhatsappCargado(null); setErr("");
   }
   function otro() {
