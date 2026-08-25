@@ -33,6 +33,7 @@
 
 drop view if exists _audit_match;
 drop view if exists _audit_texto;
+drop view if exists _audit_sin_sin;
 
 create temp view _audit_texto as
   select c.id,
@@ -177,6 +178,47 @@ select distinct
    and m.fragmento in ('led', 'pintura', 'construccion', 'masita', 'casco',
                        'jugo', 'fruta', 'toalla', 'lapiz', 'termo', 'olla')
  order by 3, 1;
+
+\echo ''
+\echo '########## 8. ¿CUÁNTO RUIDO METE EL BLOB DE SINÓNIMOS? ##########'
+\echo 'El texto que se matchea incluye comercios.sinonimos, que son las OTRAS'
+\echo 'formas de decir lo que vende — y ahí entran palabras que el local no'
+\echo 'vende: "bolso matero" arrastra `termo`, "licuado" arrastra `jugo`, un'
+\echo '"juego de cocina" de juguete arrastra `olla`.'
+\echo ''
+\echo 'Los sinónimos existen para que el COMPRADOR encuentre (busca "polera" y'
+\echo 'aparece el que vende remeras). Clasificar es otra cosa: ahí la pregunta'
+\echo 'es qué vende, y la respuesta ya está escrita en prod_det_ia.'
+\echo ''
+\echo 'Esta tabla compara las propuestas con y sin el blob. La diferencia es'
+\echo 'exactamente lo que se ganaría sacándolo de completar_rubros.py.'
+create temp view _audit_sin_sin as
+  select c.id,
+         unaccent(lower(concat_ws(' ', c.prod_det_ia, c.subcategoria, c.nombre))) as t
+    from comercios c
+   where c.activo;
+
+with limpio as (
+  select rp.rubro_slug, s.id
+    from _audit_sin_sin s
+    join rubro_palabras rp on s.t ~ rp.patron
+   where rp.rubro_slug <> 'otros'
+     and not exists (select 1 from comercio_rubros cr
+                       join rubros r on r.id = cr.rubro_id
+                      where cr.comercio_id = s.id and r.slug = rp.rubro_slug)
+),
+con as (
+  select rubro_slug, count(distinct id) as n
+    from _audit_match where not ya_lo_tiene group by 1
+)
+select coalesce(con.rubro_slug, l.rubro_slug)       as rubro_slug,
+       coalesce(con.n, 0)                            as con_sinonimos,
+       coalesce(count(distinct l.id), 0)             as solo_lo_que_vende,
+       coalesce(con.n, 0) - coalesce(count(distinct l.id), 0) as se_caen
+  from con
+  full join limpio l on l.rubro_slug = con.rubro_slug
+ group by 1, con.n
+ order by 4 desc, 2 desc;
 
 \echo ''
 \echo 'Nada de esto escribió una sola fila. Ver la cabecera para el orden de trabajo.'
