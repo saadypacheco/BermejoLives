@@ -164,11 +164,12 @@ el resultado se puede comparar contra las dos tandas anteriores:
 único dato que no se deduce de nada más: sin él hay que volver caminando hasta el
 local. Pasó de faltar en la mitad de la base a faltar en tres locales.
 
-Lo que NO resolvió: **ocho comercios quedaron llamados "Zapatillas Americanas"**,
-nueve "Kiosko", y hay "Ropa", "Licoreria", "Muebleria". La regla está escrita en
-el prompt —si lo que se ve es un rubro y no un nombre, va vacío— y aun así
-entraron. Es peor que el nombre vacío: parece un dato bueno, así que nadie
-vuelve a revisarlo, y en la lista de resultados los ocho son indistinguibles.
+**Los nombres genéricos NO son un fallo del prompt.** Ocho comercios se llaman
+"Zapatillas Americanas" y nueve "Kiosko", pero los escribió el relevador y son
+los nombres que se quieren: muchos locales de Bermejo no tienen otro. La regla
+del prompt ("ROPA" o "BAZAR" es lo que vende, no cómo se llama) aplica a lo que
+la IA lee del cartel, no a lo que tipeó una persona — y el prompt nunca pisa un
+nombre humano. Se anotó acá como error de clasificación por un rato y no lo era.
 
 Y quedó a la vista un pendiente que no es de la IA: **43 de los 67 sin
 WhatsApp**. La ficha existe y no lleva a ningún lado.

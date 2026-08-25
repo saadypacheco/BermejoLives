@@ -66,15 +66,22 @@ zapatillerías** entre otros — la lista completa con los códigos sale de la �
       ¿se busca en las fotos del cartel (muchos lo tienen pintado)? Lo segundo
       es barato: la IA ya mira esas fotos.
 
-### Ocho comercios se llaman "Zapatillas Americanas"
-Más nueve "Kiosko", y "Ropa", "Licoreria", "Muebleria". El prompt dice que si lo
-que se ve es un rubro y no un nombre va vacío ("ROPA", "BAZAR" son lo que vende,
-no cómo se llama) y aun así entraron. **Es peor que no tener nombre**: en la
-lista de resultados los ocho son indistinguibles entre sí y parece un dato bueno,
-así que nadie vuelve a revisarlo.
+### Los nombres genéricos son a propósito
+Ocho comercios se llaman "Zapatillas Americanas", nueve "Kiosko", y hay "Ropa",
+"Licoreria", "Muebleria". **No es un error de carga ni una falla del prompt: los
+puso el relevador y es el nombre que se quiere.** En Bermejo muchos locales no
+tienen otro, y el genérico describe lo que son.
 
-- [ ] Decidir si se corrigen a mano o si el prompt necesita ser más duro. Ojo con
-      la segunda opción: puede haber locales que de verdad se llamen así.
+Lo que sí importaba —que el comprador los encuentre— **ya funciona**: el buscador
+matchea contra el nombre del comercio. Lo que estaba roto era el filtro por
+categoría, y era un bug del diccionario, no del nombre: el patrón de
+`calzado-usado` decía `zapatilla americana` en singular y no llegaba a
+"Zapatillas Americanas". Arreglado en la **0063**.
+
+- [ ] Queda una decisión de interfaz, no de datos: ocho fichas con el mismo
+      nombre son indistinguibles en la lista de resultados. Si molesta, se
+      resuelve mostrando la calle o una referencia al lado del nombre — no
+      renombrando los locales.
 
 ### Decisiones de taxonomía que quedaron abiertas
 La IA pidió 9 categorías nuevas en los 67 (§2 de `novedades.sql`). **No se creó
