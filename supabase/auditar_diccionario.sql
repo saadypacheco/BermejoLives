@@ -138,4 +138,45 @@ select codigo, left(nombre, 30) as comercio, tiene, sumaria,
  order by 5 desc;
 
 \echo ''
+\echo '########## 6. ¿CUÁNTAS PALABRAS DISTINTAS RESPALDAN CADA PROPUESTA? ##########'
+\echo 'La pregunta que decide el umbral: ¿vender ropa interior alcanza para SER'
+\echo 'una lencería? Un local dedicado matchea diez o doce palabras del rubro;'
+\echo 'uno que la tiene de paso matchea una o dos. Si la distribución se parte'
+\echo 'en dos grupos, el corte está donde se parte y no hace falta discutirlo.'
+select rubro_slug,
+       palabras                                as palabras_distintas,
+       count(*)                                as comercios,
+       left(string_agg(nombre, ' · '), 70)     as ejemplos
+  from (
+    select rubro_slug, id, max(nombre) as nombre,
+           count(distinct patron) as palabras
+      from _audit_match
+     where not ya_lo_tiene
+     group by 1, 2
+  ) q
+ where rubro_slug in ('lenceria', 'marroquineria', 'blanqueria')
+ group by 1, 2
+ order by 1, 2 desc;
+
+\echo ''
+\echo '########## 7. EL TEXTO COMPLETO DE LOS CASOS DUDOSOS ##########'
+\echo 'Los que hay que leer enteros antes de tocar el diccionario: una propuesta'
+\echo 'de ferretería disparada por `led` o `pintura` puede ser una ferretería de'
+\echo 'verdad o una perfumería con luces en la vidriera, y el fragmento solo no'
+\echo 'lo distingue.'
+select distinct
+       x.codigo,
+       left(x.nombre, 24)                as comercio,
+       m.rubro_slug                      as le_agregaria,
+       m.fragmento                       as por_la_palabra,
+       left(coalesce(c.prod_det_ia, ''), 150) as vende
+  from _audit_match m
+  join _audit_texto x on x.id = m.id
+  join comercios    c on c.id = m.id
+ where not m.ya_lo_tiene
+   and m.fragmento in ('led', 'pintura', 'construccion', 'masita', 'casco',
+                       'jugo', 'fruta', 'toalla', 'lapiz', 'termo', 'olla')
+ order by 3, 1;
+
+\echo ''
 \echo 'Nada de esto escribió una sola fila. Ver la cabecera para el orden de trabajo.'
