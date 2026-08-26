@@ -760,6 +760,111 @@ def soltar_grupo(
     return {"ok": True, "grupos": repo.list_grupos_comercio(comercio_id)}
 
 
+# ---- Comercios importados de fuentes externas ----
+#
+# No son comercios de URUKU todavía: son una lista de qué existe y dónde. Pasan
+# al mapa de a uno, cuando una persona los mira. Un registro de OpenStreetMap
+# puede estar cerrado hace dos años y desde acá no hay forma de saberlo.
+class PromoverBody(BaseModel):
+    nombre: str | None = None          # se puede corregir al promover
+    rubro_slug: str | None = None      # obligatorio si el importado no trae uno
+    whatsapp: str | None = None
+
+
+@router.get("/admin/importados")
+def listar_importados(
+    estado: str = "nuevo",
+    ciudad_id: str | None = None,
+    q: str | None = None,
+    limite: int = 200,
+    _admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    items = repo.list_importados(estado or None, ciudad_id, q, min(limite, 500))
+    return {"items": items, "total": len(items), "resumen": repo.resumen_importados()}
+
+
+@router.post("/admin/importados/{importado_id}/promover")
+def promover_importado(
+    importado_id: str,
+    body: PromoverBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Crea el comercio de URUKU a partir del importado.
+
+    El comercio nace **sin verificar** y sin foto: lo que vino de la API es
+    nombre, punto y a veces teléfono. La foto de la vidriera —que es lo que hace
+    útil a la ficha— la saca alguien parado enfrente, y ninguna API la da: de
+    19.861 negocios medidos, 91 tenían imagen.
+    """
+    imp = repo.get_importado(importado_id)
+    if not imp:
+        raise HTTPException(status_code=404, detail="No existe ese importado")
+    if imp["estado"] == "promovido":
+        raise HTTPException(status_code=409, detail="Ya está en el mapa")
+
+    nombre = (body.nombre or imp.get("nombre") or "").strip()
+    if not nombre:
+        raise HTTPException(status_code=400, detail="Sin nombre no se puede crear el comercio")
+    if imp.get("lat") is None or imp.get("lng") is None:
+        raise HTTPException(status_code=400, detail="Sin coordenadas no va al mapa")
+
+    rubro_slug = body.rubro_slug or imp.get("rubro_slug") or "otros"
+    from app.core.text import slugify
+
+    comercio = repo.crear_comercio({
+        "nombre": nombre,
+        "slug": slugify(nombre),
+        "ciudad_id": imp.get("ciudad_id"),
+        "lat": imp["lat"], "lng": imp["lng"],
+        "direccion": imp.get("direccion"),
+        "whatsapp": body.whatsapp or imp.get("whatsapp") or imp.get("telefono"),
+        "horario": imp.get("horario"),
+        "sitio_web": imp.get("website"),
+        "verificado": False,
+        "activo": True,
+        # De dónde salió, escrito en la ficha. Sin esto, en seis meses nadie
+        # puede distinguir un local caminado de uno traído de un mapa abierto —
+        # y la diferencia importa para la licencia y para la confianza.
+        "cargado_por": f"import:{imp.get('fuente', 'osm')}",
+    })
+    rid = repo.get_rubro_id(rubro_slug)
+    if rid:
+        repo.set_comercio_rubros(comercio["id"], [rid])
+
+    repo.marcar_importado(importado_id, {
+        "estado": "promovido", "comercio_id": comercio["id"],
+        "revisado_por": admin["email"], "revisado_at": _ahora(),
+    })
+    logger.info("importado.promovido", importado=importado_id,
+                comercio=comercio["id"], by=admin["email"])
+    return {"ok": True, "comercio": comercio}
+
+
+@router.post("/admin/importados/{importado_id}/descartar")
+def descartar_importado(
+    importado_id: str,
+    motivo: str = "",
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Descarta sin borrar: la fila queda para que la próxima importación no lo
+    vuelva a proponer. Borrarlo lo haría reaparecer en cada corrida."""
+    if not repo.get_importado(importado_id):
+        raise HTTPException(status_code=404, detail="No existe ese importado")
+    fila = repo.marcar_importado(importado_id, {
+        "estado": "descartado", "motivo": motivo or None,
+        "revisado_por": admin["email"], "revisado_at": _ahora(),
+    })
+    return {"ok": True, "importado": fila}
+
+
+def _ahora() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
 # ---- Bajas del mapa: disparo manual ----
 @router.post("/admin/bajas/ejecutar")
 def ejecutar_bajas(

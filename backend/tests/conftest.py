@@ -53,6 +53,8 @@ class FakeRepo:
         self.comercio_fotos: list[dict] = []          # galería
         self.comercio_numeros: list[dict] = []        # números autorizados a publicar
         self.wa_grupos: dict[str, dict] = {}          # grupo_jid -> {comercio_id, ...}
+        self.importados: dict[str, dict] = {}         # id -> fila de comercios_importados
+        self._importados_por_clave: dict[tuple, dict] = {}
         self.reclamos: dict[str, dict] = {}           # id -> row
         self.solicitudes_numero: dict[str, dict] = {} # id -> row
         self.rubros_propuestos: list[dict] = []       # categorías que la IA propuso y no existen
@@ -138,6 +140,58 @@ class FakeRepo:
 
     def desvincular_grupo(self, grupo_jid):
         self.wa_grupos.pop(grupo_jid, None)
+
+    # ---- comercios importados ----
+    def upsert_importado(self, row):
+        clave = (row["fuente"], row["fuente_id"])
+        if clave in self._importados_por_clave:
+            fila = self._importados_por_clave[clave]
+            # No pisa estado ni revisión: reimportar no puede resucitar lo
+            # descartado ni deshacer lo promovido.
+            for k, v in row.items():
+                if k not in ("estado", "comercio_id", "motivo", "revisado_por", "revisado_at"):
+                    fila[k] = v
+            return False
+        fila = {"id": f"imp-{len(self.importados) + 1}", "estado": "nuevo",
+                "comercio_id": None, "motivo": None, "revisado_por": None,
+                "revisado_at": None, **row}
+        self.importados[fila["id"]] = fila
+        self._importados_por_clave[clave] = fila
+        return True
+
+    def list_importados(self, estado, ciudad_id, q, limite=200):
+        out = list(self.importados.values())
+        if estado:
+            out = [i for i in out if i["estado"] == estado]
+        if ciudad_id:
+            out = [i for i in out if i.get("ciudad_id") == ciudad_id]
+        if q:
+            out = [i for i in out if q.lower() in (i.get("nombre") or "").lower()]
+        return out[:limite]
+
+    def get_importado(self, importado_id):
+        return self.importados.get(importado_id)
+
+    def marcar_importado(self, importado_id, patch):
+        fila = self.importados.get(importado_id)
+        if fila:
+            fila.update(patch)
+        return fila
+
+    def resumen_importados(self):
+        cuenta = {}
+        for i in self.importados.values():
+            k = (i.get("ciudad_id"), i["estado"])
+            cuenta[k] = cuenta.get(k, 0) + 1
+        return [{"ciudad_id": c, "estado": e, "n": n} for (c, e), n in cuenta.items()]
+
+    def comercios_con_coords(self, ciudad_id):
+        return [{"id": c["id"], "nombre": c.get("nombre"), "lat": c.get("lat"), "lng": c.get("lng")}
+                for c in self.comercios.values() if c.get("lat") is not None]
+
+    def get_ciudad(self, slug):
+        return {"id": f"ciudad-{slug}", "slug": slug, "nombre": slug.title(),
+                "lat": -22.7361, "lng": -64.3433}
 
     def agregar_numero_comercio(self, comercio_id, numero, etiqueta, by):
         from app.core.telefono import normalizar_whatsapp

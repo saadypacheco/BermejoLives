@@ -27,6 +27,7 @@ import { getRubros } from "@/lib/data";
 import { AdminMap } from "@/components/admin-map";
 import { LugaresEditor } from "@/components/lugares-editor";
 import { AdornosEditor } from "@/components/adornos-editor";
+import { ImportadosPanel } from "@/components/importados-panel";
 import { CatalogoPanel } from "@/components/catalogo-panel";
 import { ImageLightbox } from "@/components/image-lightbox";
 import type { Rubro } from "@/lib/types";
@@ -38,7 +39,7 @@ export default function AdminPage() {
   const [email, setEmail] = useState("admin@bermejolive.com");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"publicaciones" | "comercios" | "lugares" | "adornos" | "catalogo" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero">("comercios");
+  const [tab, setTab] = useState<"publicaciones" | "comercios" | "lugares" | "adornos" | "catalogo" | "importados" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero">("comercios");
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [items, setItems] = useState<PendingPub[]>([]);
   const [comercios, setComercios] = useState<ComercioPorVerificar[]>([]);
@@ -253,6 +254,9 @@ export default function AdminPage() {
         <button className={tab === "catalogo" ? "active" : ""} onClick={() => setTab("catalogo")}>
           Catálogo
         </button>
+        <button className={tab === "importados" ? "active" : ""} onClick={() => setTab("importados")}>
+          Importados
+        </button>
         <button className={tab === "adornos" ? "active" : ""} onClick={() => setTab("adornos")}>
           Adornos
         </button>
@@ -285,6 +289,7 @@ export default function AdminPage() {
       {tab === "lugares" && <LugaresEditor />}
       {tab === "adornos" && <AdornosEditor />}
       {tab === "catalogo" && <CatalogoPanel />}
+      {tab === "importados" && <ImportadosPanel rubros={rubros} />}
 
       {tab === "comercios" && (
         <TabComercios

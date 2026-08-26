@@ -552,6 +552,50 @@ export async function soltarGrupo(comercioId: string, grupoJid: string) {
   return res.json();
 }
 
+// Comercios traídos de fuentes externas (OpenStreetMap). NO son comercios de
+// URUKU: son una lista de qué existe y dónde, que pasa al mapa de a uno.
+export type ComercioImportado = {
+  id: string; fuente: string; fuente_id: string; nombre: string | null;
+  categoria: string | null; rubro_slug: string | null;
+  lat: number | null; lng: number | null;
+  telefono: string | null; whatsapp: string | null; website: string | null;
+  horario: string | null; direccion: string | null;
+  estado: "nuevo" | "promovido" | "descartado";
+  duplicado_de: string | null; comercio_id: string | null; motivo: string | null;
+};
+
+export async function listarImportados(
+  estado = "nuevo", q?: string, ciudadId?: string,
+): Promise<{ items: ComercioImportado[]; total: number; resumen: { ciudad_id: string | null; estado: string; n: number }[] }> {
+  const p = new URLSearchParams({ estado });
+  if (q) p.set("q", q);
+  if (ciudadId) p.set("ciudad_id", ciudadId);
+  const res = await authFetch(`/admin/importados?${p}`);
+  return res.json();
+}
+
+export async function promoverImportado(
+  id: string, body: { nombre?: string; rubro_slug?: string; whatsapp?: string },
+) {
+  const res = await authFetch(`/admin/importados/${id}/promover`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.detail || "No se pudo promover");
+  }
+  return res.json();
+}
+
+export async function descartarImportado(id: string, motivo: string) {
+  const res = await authFetch(
+    `/admin/importados/${id}/descartar?motivo=${encodeURIComponent(motivo)}`, { method: "POST" });
+  if (!res.ok) throw new Error("No se pudo descartar");
+  return res.json();
+}
+
 export async function suspenderComercio(id: string) {
   const res = await authFetch(`/admin/comercio/${id}/suspender`, { method: "POST" });
   return res.json();

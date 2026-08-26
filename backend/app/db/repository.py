@@ -59,6 +59,7 @@ class Repo(Protocol):
     def get_rubro_id(self, slug: str) -> str | None: ...
     def get_rubro_nombre(self, slug: str) -> str | None: ...
     def get_ciudad_id(self, slug: str) -> str | None: ...
+    def get_ciudad(self, slug: str) -> dict | None: ...
     def crear_comercio(self, row: dict) -> dict: ...
     def get_comercio_por_codigo(self, codigo: str) -> dict | None: ...
     def crear_comercio_usuario(self, row: dict) -> dict: ...
@@ -101,6 +102,14 @@ class Repo(Protocol):
                                 nombre: str | None, origen: str, by: str) -> None: ...
     def list_grupos_comercio(self, comercio_id: str) -> list[dict]: ...
     def desvincular_grupo(self, grupo_jid: str) -> None: ...
+    # ---- comercios importados de fuentes externas ----
+    def upsert_importado(self, row: dict) -> bool: ...
+    def list_importados(self, estado: str | None, ciudad_id: str | None,
+                        q: str | None, limite: int) -> list[dict]: ...
+    def get_importado(self, importado_id: str) -> dict | None: ...
+    def marcar_importado(self, importado_id: str, patch: dict) -> dict | None: ...
+    def resumen_importados(self) -> list[dict]: ...
+    def comercios_con_coords(self, ciudad_id: str | None) -> list[dict]: ...
     def agregar_numero_comercio(self, comercio_id: str, numero: str, etiqueta: str | None, by: str) -> dict: ...
     def list_numeros_comercio(self, comercio_id: str) -> list[dict]: ...
     def asegurar_comercio_usuario(self, comercio_id: str) -> dict: ...
@@ -236,6 +245,68 @@ class SupabaseRepo:
         """Suelta el grupo. Lo ya publicado NO se toca: son ofertas que
         existieron, y borrarlas por soltar un grupo sería perder historia."""
         self._db.table("comercio_wa_grupos").delete().eq("grupo_jid", grupo_jid).execute()
+
+    # ---- comercios importados ----
+    def upsert_importado(self, row: dict) -> bool:
+        """Guarda un importado sin pisar la revisión humana.
+
+        Reimportar una ciudad tiene que poder hacerse cuantas veces haga falta:
+        si el upsert pisara `estado`, cada corrida resucitaría los descartados y
+        el trabajo de revisión se perdería entero.
+        """
+        clave = {"fuente": row["fuente"], "fuente_id": row["fuente_id"]}
+        existe = (
+            self._db.table("comercios_importados")
+            .select("id").eq("fuente", clave["fuente"]).eq("fuente_id", clave["fuente_id"])
+            .limit(1).execute()
+        )
+        datos = {k: v for k, v in row.items()
+                 if k not in ("estado", "comercio_id", "motivo", "revisado_por", "revisado_at")}
+        if existe.data:
+            self._db.table("comercios_importados").update(datos).eq("id", existe.data[0]["id"]).execute()
+            return False
+        self._db.table("comercios_importados").insert(row).execute()
+        return True
+
+    def list_importados(self, estado: str | None, ciudad_id: str | None,
+                        q: str | None, limite: int = 200) -> list[dict]:
+        sel = self._db.table("comercios_importados").select("*")
+        if estado:
+            sel = sel.eq("estado", estado)
+        if ciudad_id:
+            sel = sel.eq("ciudad_id", ciudad_id)
+        if q:
+            sel = sel.ilike("nombre", f"%{q}%")
+        res = sel.order("nombre").limit(limite).execute()
+        return res.data or []
+
+    def get_importado(self, importado_id: str) -> dict | None:
+        res = (self._db.table("comercios_importados")
+               .select("*").eq("id", importado_id).limit(1).execute())
+        return res.data[0] if res.data else None
+
+    def marcar_importado(self, importado_id: str, patch: dict) -> dict | None:
+        res = (self._db.table("comercios_importados")
+               .update(patch).eq("id", importado_id).execute())
+        return res.data[0] if res.data else None
+
+    def resumen_importados(self) -> list[dict]:
+        """Cuántos hay por ciudad y estado, para la cabecera del panel."""
+        res = (self._db.table("comercios_importados")
+               .select("ciudad_id, estado").limit(20000).execute())
+        cuenta: dict[tuple, int] = {}
+        for r in res.data or []:
+            k = (r.get("ciudad_id"), r.get("estado"))
+            cuenta[k] = cuenta.get(k, 0) + 1
+        return [{"ciudad_id": c, "estado": e, "n": n} for (c, e), n in cuenta.items()]
+
+    def comercios_con_coords(self, ciudad_id: str | None) -> list[dict]:
+        """Los que ya están cargados, para detectar duplicados al importar."""
+        sel = (self._db.table("comercios")
+               .select("id, nombre, lat, lng").not_.is_("lat", "null"))
+        if ciudad_id:
+            sel = sel.eq("ciudad_id", ciudad_id)
+        return sel.limit(20000).execute().data or []
 
     def agregar_numero_comercio(self, comercio_id: str, numero: str, etiqueta: str | None, by: str) -> dict:
         from app.core.telefono import normalizar_whatsapp
@@ -493,6 +564,12 @@ class SupabaseRepo:
     def get_ciudad_id(self, slug: str) -> str | None:
         res = self._db.table("ciudades").select("id").eq("slug", slug).limit(1).execute()
         return res.data[0]["id"] if res.data else None
+
+    def get_ciudad(self, slug: str) -> dict | None:
+        """La fila entera, con lat/lng: el importador necesita el centro de la
+        ciudad para saber alrededor de dónde buscar."""
+        res = self._db.table("ciudades").select("*").eq("slug", slug).limit(1).execute()
+        return res.data[0] if res.data else None
 
     def crear_comercio(self, row: dict) -> dict:
         """Alta de comercio. Siempre sale con código: es lo que le permite

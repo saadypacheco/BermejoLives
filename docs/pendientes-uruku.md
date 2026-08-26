@@ -296,3 +296,33 @@ captación** — analizado en la §2 de ese documento, con una recomendación.
       (`lib/horario.ts`, parser heurístico de texto libre, hora local) en ficha + tarjeta del
       mapa; **botón Compartir** (Web Share + fallback copiar); filtro **"Abierto ahora"** en el mapa.
 - [x] **Captura de referidos:** `?ref=` se guarda (first-touch) y viaja al alta del comprador.
+
+## 🌍 Comercios importados de fuentes externas (2026-08-26)
+
+**Construido**: tabla `comercios_importados`, importador desde OpenStreetMap
+(`backend/scripts/importar_osm.py`) y panel **Admin › Importados** donde se
+revisan y se promueven **de a uno** al mapa.
+
+**Lo que la fuente da, medido** (19.861 negocios de las cinco ciudades):
+
+| Ciudad | Total | Con nombre | Teléfono | WhatsApp | Foto |
+|---|---|---|---|---|---|
+| Bermejo | 20 | 18 | 2 | 0 | **0** |
+| Tarija | 808 | 535 | 35 | 0 | **0** |
+| Cochabamba | 5.892 | 3.389 | 724 | 207 | **2** |
+| La Paz | 8.103 | 6.581 | 646 | 1 | **87** |
+| Santa Cruz | 5.038 | 4.697 | 387 | 4 | **2** |
+
+- **Bermejo no vale importarlo**: 20 registros (bancos y gasolineras) contra 270
+  relevados a pie. Ahí el equipo de campo le gana a la API por catorce a uno.
+- **Foto 0,5% · WhatsApp 1% · teléfono 9%.** Lo que se obtiene es nombre,
+  ubicación y categoría. **La foto de vidriera no la da ninguna API** — es el
+  dato que sólo se consigue caminando, y es el que hace útil a la ficha.
+- **Google Places / HERE / Mapbox quedan afuera**, y no por precio: sus términos
+  prohíben almacenar los datos y mostrarlos fuera de su mapa, en cualquier plan.
+
+- [ ] Correr `importar_osm.py` para La Paz y Cochabamba, que son las que traen
+      dato utilizable. Tarija con expectativa baja. Bermejo no.
+- [ ] Decidir qué se hace con los ~4.600 sin nombre que se descartan al importar.
+- [ ] **Atribución a OpenStreetMap** en el pie del mapa cuando haya promovidos:
+      la licencia ODbL la exige y hoy no está puesta.
