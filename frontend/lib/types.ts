@@ -69,6 +69,12 @@ export type Ciudad = {
   activa: boolean;
   orden: number;
   pais: string;
+  /** De dónde saca el mapa base ESTA ciudad. NULL → la del código.
+   *  Se cambia con un `update`, sin deploy: es lo que faltó el día que CARTO
+   *  cortó y hubo que tocar ocho archivos. */
+  tiles_url?: string | null;
+  tiles_atribucion?: string | null;
+  tiles_tipo?: string | null;
   /** Fondo del hero y foto secundaria. NULL → el frontend usa las por defecto,
    *  así una ciudad recién abierta se ve bien aunque todavía no tenga material. */
   hero_url?: string | null;

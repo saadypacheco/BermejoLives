@@ -43,11 +43,21 @@ export const TILE_HOST = "tile.openstreetmap.org";
  * proveedor mantenga las dos variantes.
  */
 export function agregarTiles(
-  L: any, map: any, opciones: { oscuro?: boolean; maxZoom?: number } = {},
+  L: any, map: any,
+  opciones: {
+    oscuro?: boolean;
+    maxZoom?: number;
+    /** La ciudad que se está mostrando. Si trae `tiles_url`, manda esa. */
+    ciudad?: { tiles_url?: string | null; tiles_atribucion?: string | null } | null;
+  } = {},
 ) {
-  const capa = L.tileLayer(TILE_URL, {
+  // La ciudad manda sobre el valor por defecto. Si no dice nada, sigue el del
+  // código — así una ciudad nueva tiene mapa sin que nadie la configure.
+  const url = opciones.ciudad?.tiles_url || TILE_URL;
+  const atribucion = opciones.ciudad?.tiles_atribucion || TILE_ATRIBUCION;
+  const capa = L.tileLayer(url, {
     maxZoom: opciones.maxZoom ?? 19,
-    attribution: TILE_ATRIBUCION,
+    attribution: atribucion,
     className: opciones.oscuro ? "uk-tiles-oscuro" : "",
     updateWhenIdle: true,
     keepBuffer: 2,

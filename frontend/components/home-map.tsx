@@ -37,9 +37,11 @@ function pinHtml(c: ComercioMapa, tier: Tier, isSel: boolean, cerrado: boolean, 
   return `<div class="${cls}" style="--pc:${style.color}">${ring}${badge}${inner}</div>`;
 }
 
-export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, center }: {
+export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, center, ciudad }: {
   comercios: ComercioMapa[]; onSelect?: (c: ComercioMapa) => void; selectedId?: string | null;
   descuentoPorId?: Record<string, number>; center?: [number, number] | null;
+  /** La ciudad mostrada: decide de dónde salen los tiles (columna en `ciudades`). */
+  ciudad?: { tiles_url?: string | null; tiles_atribucion?: string | null } | null;
 }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -90,7 +92,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
       mapRef.current = map;
       L.control.zoom({ position: "topleft" }).addTo(map);
       const isDark = () => document.getElementById("ukroot")?.getAttribute("data-theme") !== "light";
-      const tiles = agregarTiles(L, map, { oscuro: isDark() });
+      const tiles = agregarTiles(L, map, { oscuro: isDark(), ciudad });
       // El tema ya no cambia la URL del tile sino una CLASE: OSM publica un
       // solo estilo y el oscuro sale de un filtro CSS. Cambiar la clase no
       // vuelve a descargar nada; cambiar la URL descargaba el mapa entero de

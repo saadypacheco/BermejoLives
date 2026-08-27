@@ -152,7 +152,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
 
       {/* Mapa: crece y llena el espacio disponible */}
       <div className="mmap">
-        <HomeMap comercios={filtered} onSelect={setSel} selectedId={sel?.id} descuentoPorId={descuentoPorId} center={center} />
+        <HomeMap comercios={filtered} onSelect={setSel} selectedId={sel?.id} descuentoPorId={descuentoPorId} center={center} ciudad={ciudad ?? null} />
         <Link href="/buscar" className="mmapbtn">⛶ Ver mapa completo</Link>
 
       {/* Tarjeta flotante sobre el mapa, conectada al pin por la flecha */}
