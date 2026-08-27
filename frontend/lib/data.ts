@@ -118,6 +118,42 @@ export type ComercioMapa = {
 
 // Bbox alrededor del centro de una ciudad (±grados). Usado para acotar el mapa
 // a la ciudad seleccionada sin traer todo el país.
+/**
+ * Trae TODAS las filas de una consulta, de a páginas.
+ *
+ * POR QUÉ EXISTE
+ * ==============
+ *
+ * El mapa pedía `.limit(250)` con 270 comercios activos: veinte no aparecían
+ * nunca y nada lo decía. No hay error, no hay hueco visible — devuelve 250 y se
+ * lee como la lista completa. Es la misma forma de fallar que el embed roto que
+ * devuelve [] y el script que informaba "0 sin respaldo" cuando había 37.
+ *
+ * Subir el número no arregla la clase de error, sólo mueve el techo: al llegar
+ * a 500 vuelve a pasar y nadie se entera. Por eso se pagina hasta que la
+ * consulta se queda sin filas, y si además hay un tope del servidor
+ * (PostgREST tiene su propio max-rows) el aviso queda en la consola.
+ */
+async function traerTodo<T>(
+  hacerConsulta: (desde: number, hasta: number) => any,
+  que: string,
+  porPagina = 1000,
+  techo = 20000,
+): Promise<T[]> {
+  const todo: T[] = [];
+  for (let desde = 0; desde < techo; desde += porPagina) {
+    const { data, error } = await hacerConsulta(desde, desde + porPagina - 1);
+    if (error) { logSupaError(`traerTodo (${que})`, error); break; }
+    const lote = (data ?? []) as T[];
+    todo.push(...lote);
+    if (lote.length < porPagina) return todo;      // se acabaron las filas
+  }
+  console.warn(
+    `traerTodo (${que}): se alcanzó el techo de ${techo} filas. ` +
+    `Puede haber datos sin traer — revisar antes de confiar en esta lista.`);
+  return todo;
+}
+
 export function bboxCiudad(lat: number, lng: number, dLat = 0.16, dLng = 0.20) {
   return { latMin: lat - dLat, latMax: lat + dLat, lngMin: lng - dLng, lngMax: lng + dLng };
 }
@@ -132,23 +168,29 @@ export async function getComerciosMapa(
     ? bboxCiudad(ciudad.lat, ciudad.lng)
     : { latMin: -22.90, latMax: -22.58, lngMin: -64.52, lngMax: -64.16 }; // Bermejo por defecto
   if (hasSupabase) {
-    const [{ data, error }, { data: rubros, error: errorRubros }, { data: lugs }, { data: rels }] = await Promise.all([
-      supabase
+    const [data, { data: rubros, error: errorRubros }, { data: lugs }, rels] = await Promise.all([
+      traerTodo<any>((desde, hasta) => supabase
         .from("comercios")
         .select("id, slug, nombre, lat, lng, logo_url, portada_url, portada_thumb_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, plan, paga_hasta, suspendido, rubro_id, lugar_id, puesto, prod_obs_human, prod_det_ia, subcategoria")
         .eq("activo", true)
         .not("lat", "is", null)
         .gte("lat", c0.latMin).lte("lat", c0.latMax)
         .gte("lng", c0.lngMin).lte("lng", c0.lngMax)
-        .limit(250),
+        .order("id")
+        .range(desde, hasta), "comercios del mapa"),
       supabase.from("rubros").select("id, slug"),
       supabase.from("lugares").select("id, nombre, tipo, lat, lng, portada_thumb_url, video_url, poligono").eq("activo", true),
       // Todos los rubros de cada comercio. Sin esto el mapa sólo conoce el
       // principal, y filtrar por "Calzado" dejaba afuera a los locales que
       // venden calzado pero tienen otro rubro como principal.
-      supabase.from("comercio_rubros").select("comercio_id, rubro_id").limit(5000),
+      //
+      // Paginado por lo mismo que los comercios: con un tope fijo, pasarlo no
+      // rompe el mapa sino los FILTROS, que es peor — el local aparece pero
+      // desaparece al tocar su categoría, y eso no se lee como un error.
+      traerTodo<any>((desde, hasta) => supabase
+        .from("comercio_rubros").select("comercio_id, rubro_id")
+        .order("comercio_id").range(desde, hasta), "rubros por comercio"),
     ]);
-    if (error) logSupaError("getComerciosMapa (comercios)", error);
     if (errorRubros) logSupaError("getComerciosMapa (rubros)", errorRubros);
     if (data) {
       const slugById = new Map((rubros ?? []).map((r: any) => [r.id, r.slug]));

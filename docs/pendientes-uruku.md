@@ -46,6 +46,15 @@ embed que falla devuelve `[]` en silencio: quien lo llama no puede distinguir
 "no hay datos" de "no pude leer". Un script informó "0 asignaciones sin
 respaldo" cuando había 37, y eso se lee como "está todo bien".
 
+**Los topes fijos en las consultas.** El mapa pedía `.limit(250)` con 270
+comercios activos: veinte no aparecían nunca y **nada lo decía** — no hay error,
+devuelve 250 y se lee como la lista completa. Subir el número no arregla la
+clase de error, sólo mueve el techo. Las consultas que traen un conjunto
+COMPLETO se paginan (`traerTodo` en `lib/data.ts`); un `.limit()` sólo vale
+cuando el recorte es a propósito, como el feed de 8 o los destacados de 10.
+Es la tercera vez que aparece la misma forma de fallar: el embed roto que
+devuelve `[]`, el script que informó "0 sin respaldo" con 37, y esto.
+
 **Pushear antes de dar comandos de `git pull`.** Pasó dos veces: el commit estaba
 hecho, el pull no traía nada, y el rato siguiente se fue buscando el bug en el
 lugar equivocado. Si algo no aparece después de un pull, comparar el hash con
