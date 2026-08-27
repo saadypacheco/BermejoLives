@@ -154,3 +154,117 @@ NOTIFY pgrst, 'reload schema';
 ```
 **Prod NO necesita esto**: arranca con volumen vacío → corre el `postgres-init`
 actual completo (016 + `99-grants.sql` ya incluidos).
+
+---
+
+## Clonar la base de PRODUCCIÓN en QA
+
+Para probar con volumen real (y de paso **verificar que el backup restaura**,
+que es la única forma de saber que sirve). Reemplaza la base de QA entera.
+
+> **Antes de empezar.** QA queda con los datos reales: nombres, teléfonos y
+> ubicaciones de comercios de verdad. Dos consecuencias:
+> - Si alguien toca "WhatsApp" en QA, **le escribe a un comerciante real**.
+> - QA no se indexa desde `app/robots.ts` (bloquea salvo `APP_ENV=prod`), así
+>   que asegurate de que el frontend de QA esté construido **sin** ese prefijo.
+
+### 1. Backup fresco en prod
+
+```bash
+# en PROD
+/docker/backup.sh
+ls -lh /docker/backups/buscadonde-postgres-*.sql.gz | tail -1
+md5sum /docker/backups/buscadonde-postgres-<STAMP>.sql.gz    # anotar
+```
+
+### 2. Averiguar las IPs
+
+Los nombres `srv…` son internos de Hostinger y los dominios pueden estar detrás
+de Cloudflare (ahí SSH no llega, porque el dominio resuelve a Cloudflare y no al
+VPS). Se usan las IPs:
+
+```bash
+curl -s ifconfig.me      # correr en PROD y anotar
+curl -s ifconfig.me      # correr en QA y anotar
+```
+
+### 3. Copiar el archivo
+
+**Opción A — directo de prod a QA** (una sola orden, desde la consola de prod):
+
+```bash
+# en PROD
+scp /docker/backups/buscadonde-postgres-<STAMP>.sql.gz root@<IP_QA>:/tmp/
+```
+
+Pide la contraseña de root de QA. Si el servidor rechaza la contraseña es porque
+QA tiene el login por clave desactivado: usar la opción B.
+
+**Opción B — haciendo escala en tu máquina:**
+
+```bash
+# en TU MÁQUINA
+scp root@<IP_PROD>:/docker/backups/buscadonde-postgres-<STAMP>.sql.gz .
+scp buscadonde-postgres-<STAMP>.sql.gz root@<IP_QA>:/tmp/
+```
+
+**Verificar que llegó entero** — un archivo cortado restaura una base a medias
+sin avisar:
+
+```bash
+# en QA
+md5sum /tmp/buscadonde-postgres-<STAMP>.sql.gz     # tiene que dar igual que en prod
+gunzip -t /tmp/buscadonde-postgres-<STAMP>.sql.gz && echo "gzip íntegro"
+```
+
+### 4. Restaurar
+
+```bash
+# en QA
+cd /docker/buscadonde
+docker compose -f docker-compose.prod.yml stop frontend backend postgrest
+
+# La base se borra y se crea de cero. `template1` es la conexión de
+# mantenimiento: no se puede borrar la base a la que uno está conectado.
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  psql -U postgres -d template1 -c "drop database postgres;"
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  psql -U postgres -d template1 -c "create database postgres;"
+
+gunzip -c /tmp/buscadonde-postgres-<STAMP>.sql.gz | \
+  docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -d postgres
+
+docker compose -f docker-compose.prod.yml start postgrest backend frontend
+docker compose -f docker-compose.prod.yml restart postgrest   # cachea el esquema al arrancar
+```
+
+Los roles (`service_role`, `anon`, `authenticated`) son del CLÚSTER, no de la
+base, así que sobreviven al borrado y no hay que recrearlos.
+
+### 5. Verificar
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -d postgres -c \
+"select (select count(*) from comercios where activo)      as comercios,
+        (select count(*) from rubro_palabras)              as palabras,
+        (select count(*) from mapa_adornos)                as adornos,
+        (select count(*) from producto_sinonimos)          as sinonimos;"
+```
+
+Los números tienen que coincidir con los de prod. Después, abrir
+`encontralo.store` y ver el mapa con los comercios.
+
+**Las fotos NO viajan en el dump**: viven en el volumen `comercio_fotos`, no en
+la base. Las fichas de QA van a quedar sin imagen. Para probar el mapa alcanza;
+si hacen falta:
+
+```bash
+# en PROD
+docker run --rm -v uruku_comercio_fotos:/d -v /tmp:/b alpine \
+  tar czf /b/fotos.tgz -C /d .
+# copiar fotos.tgz a QA y, en QA:
+docker run --rm -v buscadonde_comercio_fotos:/d -v /tmp:/b alpine \
+  tar xzf /b/fotos.tgz -C /d
+```
+
+(El nombre real del volumen sale de `docker volume ls | grep fotos`.)
