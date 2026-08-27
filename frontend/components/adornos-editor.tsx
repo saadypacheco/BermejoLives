@@ -20,6 +20,7 @@ import {
   type AdornoAdmin,
 } from "@/lib/api";
 import { BANDERAS, LAPACHOS } from "@/lib/adornos";
+import { agregarTiles } from "@/lib/mapa-tiles";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 const TIPOS: [Adorno["tipo"], string][] = [
@@ -58,10 +59,9 @@ export function AdornosEditor() {
     loadLeaflet().then((L) => {
       if (cancelled || !elRef.current || mapRef.current) return;
       LRef.current = L;
-      const map = L.map(elRef.current, { attributionControl: false }).setView(BERMEJO, 15);
+      const map = L.map(elRef.current, { attributionControl: true }).setView(BERMEJO, 15);
       mapRef.current = map;
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-        { maxZoom: 19, updateWhenIdle: true, keepBuffer: 2 }).addTo(map);
+      agregarTiles(L, map, { oscuro: true });
 
       fondoRef.current = L.layerGroup().addTo(map);
       capaRef.current = L.layerGroup().addTo(map);

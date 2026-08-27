@@ -730,3 +730,17 @@
 .cat-chips li { display: inline-flex; align-items: center; gap: 7px; padding: 5px 6px 5px 11px; border-radius: 999px; background: var(--panel); border: 1px solid var(--stroke); font-size: 13px; }
 .cat-chips i { font-style: normal; font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--stroke); opacity: .85; }
 .cat-vacio { font-size: 13px; opacity: .7; margin: 8px 0 0; }
+
+
+/* Mapa base oscuro sin depender de que el proveedor publique una variante
+   oscura. OpenStreetMap tiene un solo estilo, claro; invertirlo y rotar el
+   tono devuelve un mapa oscuro con los verdes y azules en su lugar (sin la
+   rotación, el agua sale naranja). El brillo bajo evita que el blanco del
+   papel quede gris lavado. */
+.uk-tiles-oscuro { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.92) saturate(.85); }
+
+/* La atribución de OpenStreetMap: obligatoria por licencia, pero no tiene que
+   competir con el mapa. Chica, translúcida y sin el prefijo de Leaflet. */
+.leaflet-control-attribution { font-size: 10px; background: rgba(0,0,0,.45) !important;
+  color: #d8d8d8 !important; padding: 1px 6px; border-radius: 6px 0 0 0; }
+.leaflet-control-attribution a { color: #eaeaea !important; }

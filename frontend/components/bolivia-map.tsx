@@ -1,5 +1,6 @@
 "use client";
 
+import { agregarTiles } from "@/lib/mapa-tiles";
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { Ciudad } from "@/lib/types";
@@ -42,7 +43,7 @@ export function BoliviaMap({ ciudades }: { ciudades: Ciudad[] }) {
         doubleClickZoom: false,
       }).setView(BOLIVIA, 5);
       mapRef.current = map;
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom: 12 }).addTo(map);
+      agregarTiles(L, map, { oscuro: true, maxZoom: 12 });
 
       for (const c of ciudades) {
         if (c.lat == null || c.lng == null) continue;

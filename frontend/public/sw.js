@@ -1,14 +1,14 @@
 /* Encontralo PWA service worker — resiliencia para internet malo.
    Estrategia:
-   - Tiles del mapa (CartoDB) + Leaflet (unpkg): cache-first (lo más pesado).
+   - Tiles del mapa (OpenStreetMap) + Leaflet (unpkg): cache-first (lo más pesado).
    - Estáticos de Next / iconos / fuentes: stale-while-revalidate.
    - Navegación (HTML): network-first con fallback a caché / home.
    Bump VERSION para invalidar cachés viejas en cada deploy importante. */
-// v3 (2026-08-25): arreglos de memoria del recolector y de la cola offline. Es
-// justo el caso que amerita el bump — si el celular del agente sigue sirviendo
-// el bundle viejo desde la caché, los arreglos no llegan y parece que no
-// funcionaron.
-const VERSION = "uruku-v3";
+// v4 (2026-08-27): cambio de proveedor de mapa base. El bump es obligatorio
+// acá: la caché vieja tiene los tiles de CARTO con el cartel "API key
+// required" estampado encima, y sin invalidarla el celular seguiría mostrando
+// el mapa roto aunque el código ya apunte a otro lado.
+const VERSION = "uruku-v4";
 const SHELL = `${VERSION}-shell`;
 const STATIC = `${VERSION}-static`;
 const TILES = `${VERSION}-tiles`;
@@ -36,7 +36,7 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
 
   // Tiles del mapa + Leaflet CDN → cache-first (no se vuelven a descargar)
-  if (url.hostname.endsWith("basemaps.cartocdn.com") || url.hostname === "unpkg.com") {
+  if (url.hostname === "tile.openstreetmap.org" || url.hostname === "unpkg.com") {
     e.respondWith((async () => {
       const c = await caches.open(TILES);
       const hit = await c.match(req);

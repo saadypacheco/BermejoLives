@@ -3,6 +3,7 @@
 // ABM de "lugares" (mercados / galerías / paseos / referencias) desde el admin, con
 // mapa: tocás el mapa para UBICAR uno nuevo o MOVER el seleccionado. Sirve para
 // pre-cargar los ~20 puntos conocidos de Bermejo antes de salir al campo.
+import { agregarTiles } from "@/lib/mapa-tiles";
 import { useEffect, useRef, useState } from "react";
 import { loadLeaflet, escapeHtml } from "@/lib/mapa-visual";
 import { adminListLugares, adminCrearLugar, adminUpdateLugar, adminDeleteLugar, type LugarAdmin } from "@/lib/api";
@@ -41,7 +42,7 @@ export function LugaresEditor() {
       LRef.current = L;
       const map = L.map(elRef.current, { attributionControl: false }).setView(BERMEJO, 15);
       mapRef.current = map;
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom: 19, updateWhenIdle: true, keepBuffer: 2 }).addTo(map);
+      agregarTiles(L, map, { oscuro: true });
       layerRef.current = L.layerGroup().addTo(map);
       map.on("click", (e: any) => {
         if (dibujandoRef.current) setPoly((p) => [...p, [e.latlng.lat, e.latlng.lng]]);

@@ -1,5 +1,6 @@
 "use client";
 
+import { agregarTiles } from "@/lib/mapa-tiles";
 import { useEffect, useRef } from "react";
 import { type ResultadoBusqueda, comoLlegarHref, waLink, MODALIDAD_LABEL } from "@/lib/types";
 import { registrarLead } from "@/lib/campo";
@@ -25,10 +26,8 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
     loadLeaflet().then((L) => {
       if (cancelled || !elRef.current) return;
       if (!mapRef.current) {
-        mapRef.current = L.map(elRef.current, { zoomControl: true, attributionControl: false }).setView(BERMEJO, 15);
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-          maxZoom: 19, updateWhenIdle: true, keepBuffer: 2,
-        }).addTo(mapRef.current);
+        mapRef.current = L.map(elRef.current, { zoomControl: true, attributionControl: true }).setView(BERMEJO, 15);
+        agregarTiles(L, mapRef.current, { oscuro: true });
         // Sin agrupador: mapa lleno de puntos individuales por rubro.
         clusterRef.current = L.layerGroup().addTo(mapRef.current);
       }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { agregarTiles } from "@/lib/mapa-tiles";
 import Link from "next/link";
 import type { ComercioMapa } from "@/lib/data";
 import { abiertoAhora } from "@/lib/horario";
@@ -83,18 +84,23 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
     loadLeaflet().then((L) => {
       if (cancelled || !elRef.current || mapRef.current) return;
       LRef.current = L;
-      const map = L.map(elRef.current, { zoomControl: false, attributionControl: false, scrollWheelZoom: false }).setView(center ?? BERMEJO, 15);
+      // La atribución vuelve a estar: la licencia de OpenStreetMap la exige
+      // donde se muestren sus tiles, y no es negociable.
+      const map = L.map(elRef.current, { zoomControl: false, attributionControl: true, scrollWheelZoom: false }).setView(center ?? BERMEJO, 15);
       mapRef.current = map;
       L.control.zoom({ position: "topleft" }).addTo(map);
-      const tileUrl = (dark: boolean) =>
-        `https://{s}.basemaps.cartocdn.com/${dark ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`;
       const isDark = () => document.getElementById("ukroot")?.getAttribute("data-theme") !== "light";
-      const tiles = L.tileLayer(tileUrl(isDark()), {
-        maxZoom: 19, updateWhenIdle: true, updateWhenZooming: false, keepBuffer: 2, crossOrigin: true,
-      }).addTo(map);
+      const tiles = agregarTiles(L, map, { oscuro: isDark() });
+      // El tema ya no cambia la URL del tile sino una CLASE: OSM publica un
+      // solo estilo y el oscuro sale de un filtro CSS. Cambiar la clase no
+      // vuelve a descargar nada; cambiar la URL descargaba el mapa entero de
+      // nuevo en cada cambio de tema.
       const root = document.getElementById("ukroot");
       if (root) {
-        const obs = new MutationObserver(() => tiles.setUrl(tileUrl(isDark())));
+        const obs = new MutationObserver(() => {
+          const el = tiles.getContainer();
+          if (el) el.classList.toggle("uk-tiles-oscuro", isDark());
+        });
         obs.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
         (map as any)._themeObs = obs;
       }

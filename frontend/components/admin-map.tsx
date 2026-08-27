@@ -7,6 +7,7 @@
 //  - Los de la calle: pin normal. Tocar un GRUPO por GPS → ZOOM FUERTE (sin patitas).
 //  - Al acercar (zoom alto) los pines se agrandan y muestran el nombre → fáciles de tocar.
 //  - Si quedan EXACTO en el mismo punto → HOJA con la lista para elegir.
+import { agregarTiles } from "@/lib/mapa-tiles";
 import { useEffect, useRef, useState } from "react";
 import { rubroStyle, loadLeaflet, opcionesCluster, manejarClusterClick, escapeHtml } from "@/lib/mapa-visual";
 
@@ -110,7 +111,7 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
       if (!mapRef.current) {
         const map = L.map(elRef.current, { attributionControl: false }).setView(BERMEJO, 15);
         mapRef.current = map;
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { maxZoom: 19, updateWhenIdle: true, keepBuffer: 2 }).addTo(map);
+        agregarTiles(L, map, { oscuro: true });
         const cluster = L.markerClusterGroup(opcionesCluster(L)).addTo(map);
         clusterRef.current = cluster;
         cluster.on("clusterclick", (e: any) => {
