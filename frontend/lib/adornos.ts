@@ -91,23 +91,57 @@ function chalanaSVG(i: number): string {
  */
 
 /**
- * Los colores reales, de las fotos: rosa, rosa fuerte, amarillo y blanco.
- * En Bermejo florecen de varios, y verlos todos iguales sería menos cierto que
- * verlos distintos.
+ * Las variedades de lapacho, con su color y —si existe— su FOTO.
  *
- * El blanco lleva un borde apenas visible: sin él, un lapacho blanco sobre el
- * fondo claro del mapa desaparece — el adorno estaría puesto y no se vería, que
- * es lo que acaba de pasar con el combo de banderas.
+ * FOTO O DIBUJO
+ * =============
+ *
+ * Si la variedad tiene `foto`, el mapa muestra la foto. Si no, cae al dibujo.
+ * No es un plan B teórico: mientras no estén las cuatro imágenes, el mapa tiene
+ * que seguir funcionando con lo que hay, y una foto que falta no puede dejar un
+ * ícono roto sobre el mapa.
+ *
+ * Las fotos viven en `public/adornos/` como archivos estáticos del repo: son
+ * cuatro, no cambian nunca, y así el service worker las cachea con el resto del
+ * sitio en vez de pedirlas por red cada vez.
+ *
+ * EL COLOR ES ESTABLE, NO POR ORDEN
+ * =================================
+ *
+ * Antes la variedad salía de la POSICIÓN del adorno en la lista, así que borrar
+ * un lapacho le cambiaba el color a todos los que venían después. Ahora se elige
+ * en el editor (`variante`) y, si no se eligió, sale del id — que no cambia.
  */
-const FLORES: { flor: string; borde?: string }[] = [
-  { flor: "#e8559b" },                        // rosa, el más común
-  { flor: "#f2b705" },                        // amarillo
-  { flor: "#c92f7c" },                        // rosa fuerte / magenta
-  { flor: "#fbeff3", borde: "#e9c9d6" },      // blanco
-];
+export type Lapacho = { nombre: string; flor: string; borde?: string; foto?: string };
 
-function lapachoSVG(i: number): string {
-  const { flor, borde } = FLORES[i % FLORES.length];
+export const LAPACHOS: Record<string, Lapacho> = {
+  rosa:     { nombre: "Rosa",        flor: "#e8559b" },
+  amarillo: { nombre: "Amarillo",    flor: "#f2b705" },
+  magenta:  { nombre: "Rosa fuerte", flor: "#c92f7c" },
+  // El blanco lleva un borde apenas visible: sin él desaparece sobre el fondo
+  // claro del mapa — puesto y no visible, como pasó con el combo de banderas.
+  blanco:   { nombre: "Blanco",      flor: "#fbeff3", borde: "#e9c9d6" },
+};
+
+const CLAVES_LAPACHO = Object.keys(LAPACHOS);
+
+/** La variedad de ESTE lapacho: la elegida, o una estable derivada del id. */
+function variedadLapacho(a: Adorno): Lapacho {
+  if (a.variante && LAPACHOS[a.variante]) return LAPACHOS[a.variante];
+  let h = 0;
+  for (const c of a.id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return LAPACHOS[CLAVES_LAPACHO[h % CLAVES_LAPACHO.length]];
+}
+
+function lapachoSVG(a: Adorno): string {
+  const v = variedadLapacho(a);
+  // La foto manda cuando está. Se dibuja con el mismo alto que el SVG para que
+  // el ancla siga cayendo en la base del tronco y el árbol no quede flotando.
+  if (v.foto) {
+    return `<img src="${v.foto}" width="48" height="40" alt="" aria-hidden="true"
+                 style="display:block;object-fit:contain;object-position:bottom">`;
+  }
+  const { flor, borde } = v;
   const trazo = borde ? ` stroke="${borde}" stroke-width=".6"` : "";
   return `<svg viewBox="0 0 48 40" width="48" height="40" fill="none" aria-hidden="true">
     <g fill="${flor}" opacity=".45">
@@ -199,7 +233,7 @@ function banderaSVG(variante: string | null | undefined): string {
 export function adornoHTML(a: Adorno, i: number): string {
   const svg = a.tipo === "chalana" ? chalanaSVG(i)
             : a.tipo === "bandera" ? banderaSVG(a.variante)
-            : lapachoSVG(i);
+            : lapachoSVG(a);
   const t = [`scale(${a.escala ?? 1})`, a.giro ? `rotate(${a.giro}deg)` : ""]
     .filter(Boolean).join(" ");
   return `<div class="uk-adorno" style="transform:${t}">${svg}</div>`;

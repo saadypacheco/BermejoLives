@@ -19,7 +19,7 @@ import {
   adminListAdornos, adminCrearAdorno, adminUpdateAdorno, adminDeleteAdorno,
   type AdornoAdmin,
 } from "@/lib/api";
-import { BANDERAS } from "@/lib/adornos";
+import { BANDERAS, LAPACHOS } from "@/lib/adornos";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 const TIPOS: [Adorno["tipo"], string][] = [
@@ -125,7 +125,9 @@ export function AdornosEditor() {
       const nuevo = await adminCrearAdorno({
         tipo: tipoRef.current, lat, lng,
         // Sólo las banderas la usan; en los demás va null y la base la ignora.
-        variante: tipoRef.current === "bandera" ? varianteRef.current : null,
+        // Las chalanas no tienen variedad. En lapacho, vacío significa "al
+        // azar" y se guarda como null para que el color salga del id.
+        variante: tipoRef.current === "chalana" ? null : (varianteRef.current || null),
       });
       setItems((xs) => [...xs, nuevo]);
       setSelId(nuevo.id);
@@ -151,6 +153,12 @@ export function AdornosEditor() {
     catch (e: any) { setErr(String(e?.message || e)); cargar(); }
   }
 
+  // Chalanas no tienen variedad; banderas y lapachos sí, y usan el mismo campo.
+  const opciones = (t: Adorno["tipo"]): [string, string][] =>
+    t === "bandera" ? Object.entries(BANDERAS).map(([k, b]) => [k, b.nombre])
+    : t === "lapacho" ? Object.entries(LAPACHOS).map(([k, l]) => [k, l.nombre])
+    : [];
+
   const nChalanas = items.filter((a) => a.tipo === "chalana").length;
   const nLapachos = items.filter((a) => a.tipo === "lapacho").length;
   const nBanderas = items.filter((a) => a.tipo === "bandera").length;
@@ -165,18 +173,27 @@ export function AdornosEditor() {
 
       <div className="uk-adornos-barra">
         {TIPOS.map(([t, etiqueta]) => (
-          <button key={t} className={tipo === t ? "active" : ""} onClick={() => setTipo(t)}>
+          <button key={t} className={tipo === t ? "active" : ""}
+                  onClick={() => {
+                    setTipo(t);
+                    // La variante es de OTRO tipo: si no se resetea, el combo
+                    // muestra una clave que su lista no tiene y el navegador
+                    // elige la primera opción por su cuenta, sin avisar — se
+                    // pondría una bandera de Bolivia creyendo elegir otra cosa.
+                    setVariante(t === "bandera" ? "bo" : "");
+                  }}>
             {etiqueta}
           </button>
         ))}
         {/* CUÁL bandera, antes de ponerla. Sin este control la variante existía
             en el estado pero no había forma de elegirla: todas salían Bolivia y
             había que corregirlas de a una después de puestas. */}
-        {tipo === "bandera" && (
+        {opciones(tipo).length > 0 && (
           <select value={variante} onChange={(e) => setVariante(e.target.value)}
-                  className="uk-adornos-variante" aria-label="Qué bandera poner">
-            {Object.entries(BANDERAS).map(([k, b]) => (
-              <option key={k} value={k}>{b.nombre}</option>
+                  className="uk-adornos-variante" aria-label="Cuál poner">
+            {tipo === "lapacho" && <option value="">Al azar</option>}
+            {opciones(tipo).map(([k, nombre]) => (
+              <option key={k} value={k}>{nombre}</option>
             ))}
           </select>
         )}
@@ -195,6 +212,7 @@ export function AdornosEditor() {
           <b>
             {sel.tipo === "chalana" ? "⛵ Chalana"
              : sel.tipo === "bandera" ? `🏳 ${BANDERAS[sel.variante || "bo"]?.nombre ?? "Bandera"}`
+             : sel.tipo === "lapacho" ? `🌳 Lapacho${sel.variante ? ` ${LAPACHOS[sel.variante]?.nombre ?? ""}` : ""}`
              : "🌳 Lapacho"}
           </b>
           <span className="uk-adornos-coords">
@@ -203,18 +221,19 @@ export function AdornosEditor() {
 
           <label>
             Tamaño
-            <input type="range" min={0.6} max={1.6} step={0.05}
+            <input type="range" min={0.4} max={3} step={0.05}
                    value={sel.escala ?? 1}
                    onChange={(e) => guardar(sel.id, { escala: Number(e.target.value) })} />
           </label>
 
-          {sel.tipo === "bandera" && (
+          {opciones(sel.tipo).length > 0 && (
             <label>
               Cuál
-              <select value={sel.variante ?? "bo"} className="uk-adornos-variante"
-                      onChange={(e) => guardar(sel.id, { variante: e.target.value })}>
-                {Object.entries(BANDERAS).map(([k, b]) => (
-                  <option key={k} value={k}>{b.nombre}</option>
+              <select value={sel.variante ?? ""} className="uk-adornos-variante"
+                      onChange={(e) => guardar(sel.id, { variante: e.target.value || null })}>
+                {sel.tipo === "lapacho" && <option value="">Al azar</option>}
+                {opciones(sel.tipo).map(([k, nombre]) => (
+                  <option key={k} value={k}>{nombre}</option>
                 ))}
               </select>
             </label>
