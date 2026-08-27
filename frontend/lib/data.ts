@@ -346,7 +346,8 @@ export const DEMO_FEED: FeedItem[] = [
 ];
 
 /**
- * Los adornos del mapa: chalanas y lapachos ubicados a mano desde el admin.
+ * Los adornos del mapa: chalanas, lapachos y banderas ubicados a mano desde el
+ * admin.
  *
  * Falla en silencio devolviendo lista vacía. Es decoración: si la tabla todavía
  * no existe o la consulta se cae, el mapa tiene que dibujarse igual con sus
@@ -357,7 +358,10 @@ export async function getAdornosMapa(): Promise<Adorno[]> {
   try {
     const { data } = await supabase
       .from("mapa_adornos")
-      .select("id, tipo, lat, lng, giro, escala")
+      // `variante` NO es opcional acá aunque sólo la usen las banderas: sin
+      // ella todas se dibujarían con el color por defecto y el mapa mostraría
+      // la bandera equivocada, que es peor que no mostrar ninguna.
+      .select("id, tipo, variante, lat, lng, giro, escala")
       .eq("activo", true);
     return (data ?? []) as Adorno[];
   } catch {

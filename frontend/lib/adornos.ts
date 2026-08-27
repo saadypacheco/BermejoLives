@@ -22,7 +22,9 @@
  * clic en el mapa desde el admin y se corrigen sin deploy. */
 export type Adorno = {
   id: string;
-  tipo: "chalana" | "lapacho";
+  tipo: "chalana" | "lapacho" | "bandera";
+  /** Sólo para `bandera`: cuál. La clave de BANDERAS ('ar', 'bo', …). */
+  variante?: string | null;
   lat: number;
   lng: number;
   /** Grados. Las chalanas quedan mejor si no están todas alineadas. */
@@ -45,10 +47,22 @@ export const ZOOM_MIN_ADORNOS = 15;
  */
 const TOLDOS = ["#e11d48", "#2563eb", "#f59e0b"];
 
+/**
+ * Las chalanas se dibujan a un CUARTO del tamaño con el que nacieron (64×40 →
+ * 16×10). Eran demasiado grandes al lado de un pin de comercio, y eso rompía la
+ * regla que gobierna los adornos: el mapa existe para mostrar comercios, así
+ * que un adorno que compite por la atención es un adorno que sobra.
+ *
+ * El viewBox NO cambia — el dibujo es el mismo, sólo se muestra más chico. Y el
+ * ancla de MEDIDAS baja en la misma proporción, si no la chalana quedaría
+ * flotando lejos del punto donde la pusieron.
+ */
+const CHALANA_W = 16, CHALANA_H = 10;
+
 /** Chalana vista de costado: casco, toldo a rayas y su reflejo en el agua. */
 function chalanaSVG(i: number): string {
   const toldo = TOLDOS[i % TOLDOS.length];
-  return `<svg viewBox="0 0 64 40" width="64" height="40" fill="none" aria-hidden="true">
+  return `<svg viewBox="0 0 64 40" width="${CHALANA_W}" height="${CHALANA_H}" fill="none" aria-hidden="true">
     <path d="M6 26c6 5 14 7 26 7s20-2 26-7l-4 8c-5 3-13 4-22 4s-17-1-22-4z" fill="#0f172a" opacity=".18"/>
     <path d="M8 20h48l-5 9c-4 2-11 3-19 3s-15-1-19-3z" fill="#8b5e34"/>
     <path d="M8 20h48l-1.5 2.6H9.5z" fill="#a4703f"/>
@@ -78,8 +92,54 @@ function lapachoSVG(i: number): string {
   </svg>`;
 }
 
+
+/* ─────────────────────────── Banderas ───────────────────────────
+ *
+ * Bermejo es frontera: el puente cruza a Aguas Blancas y media ciudad compra
+ * de los dos lados. Una bandera en el paso dice eso mejor que un cartel.
+ *
+ * Se declaran como DATO —franjas de color y un emblema opcional— y no como SVG
+ * escrito a mano. Dos razones: una bandera mal dibujada es peor que ninguna
+ * (queda como si fuera cierta y nadie la revisa, igual que un nombre inventado
+ * en la ficha de un comercio), y así corregir un color es cambiar una línea en
+ * vez de reescribir un dibujo.
+ */
+export type Bandera = { nombre: string; franjas: string[]; emblema?: "sol" };
+
+export const BANDERAS: Record<string, Bandera> = {
+  bo: { nombre: "Bolivia", franjas: ["#D52B1E", "#F9E300", "#007934"] },
+  ar: { nombre: "Argentina", franjas: ["#75AADB", "#FFFFFF", "#75AADB"], emblema: "sol" },
+};
+
+const BANDERA_W = 26, BANDERA_H = 17;
+
+function banderaSVG(variante: string | null | undefined): string {
+  const b = BANDERAS[variante || "bo"] ?? BANDERAS.bo;
+  const alto = BANDERA_H / b.franjas.length;
+  const franjas = b.franjas
+    .map((c, i) => `<rect x="3" y="${(i * alto).toFixed(2)}" width="${BANDERA_W - 3}" height="${alto.toFixed(2)}" fill="${c}"/>`)
+    .join("");
+  // El sol de mayo, simplificado: a 26 px de ancho los treinta y dos rayos son
+  // una mancha. Un disco con ocho puntas se lee como sol y no como error.
+  const sol = b.emblema === "sol"
+    ? `<g transform="translate(${(3 + (BANDERA_W - 3) / 2).toFixed(1)},${(BANDERA_H / 2).toFixed(1)})">
+         <circle r="2.6" fill="#F6B40E"/>
+         <path d="M0-4.6 0.9-2.6 3.3-3.3 2.6-0.9 4.6 0 2.6 0.9 3.3 3.3 0.9 2.6 0 4.6 -0.9 2.6 -3.3 3.3 -2.6 0.9 -4.6 0 -2.6-0.9 -3.3-3.3 -0.9-2.6z"
+               fill="#F6B40E" opacity=".85"/>
+       </g>`
+    : "";
+  return `<svg viewBox="0 0 ${BANDERA_W} ${BANDERA_H + 6}" width="${BANDERA_W}" height="${BANDERA_H + 6}" fill="none" aria-hidden="true">
+    <rect x="0" y="0" width="2.2" height="${BANDERA_H + 6}" rx="1.1" fill="#7a6a55"/>
+    ${franjas}
+    <rect x="3" y="0" width="${BANDERA_W - 3}" height="${BANDERA_H}" fill="none" stroke="#0f172a" stroke-width=".6" opacity=".25"/>
+    ${sol}
+  </svg>`;
+}
+
 export function adornoHTML(a: Adorno, i: number): string {
-  const svg = a.tipo === "chalana" ? chalanaSVG(i) : lapachoSVG(i);
+  const svg = a.tipo === "chalana" ? chalanaSVG(i)
+            : a.tipo === "bandera" ? banderaSVG(a.variante)
+            : lapachoSVG(i);
   const t = [`scale(${a.escala ?? 1})`, a.giro ? `rotate(${a.giro}deg)` : ""]
     .filter(Boolean).join(" ");
   return `<div class="uk-adorno" style="transform:${t}">${svg}</div>`;
@@ -88,8 +148,9 @@ export function adornoHTML(a: Adorno, i: number): string {
 /** Tamaño del ícono en pantalla, para anclarlo bien. Las chalanas se apoyan
  *  sobre el agua y los lapachos sobre su tronco, así que ninguno se centra. */
 export const MEDIDAS = {
-  chalana: { w: 64, h: 40, anclaY: 30 },
+  chalana: { w: CHALANA_W, h: CHALANA_H, anclaY: 7.5 },   // era 64×40 / ancla 30
   lapacho: { w: 44, h: 52, anclaY: 50 },
+  bandera: { w: BANDERA_W, h: BANDERA_H + 6, anclaY: BANDERA_H + 6 },
 } as const;
 
 /**

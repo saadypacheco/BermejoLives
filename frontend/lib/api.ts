@@ -223,7 +223,9 @@ export async function adminCatalogo(): Promise<Catalogo> {
 // cada uno hay que decidirlo conociendo la ciudad, así que se marcan haciendo
 // clic en el mapa desde el admin en vez de quedar fijos en el código.
 export type AdornoAdmin = {
-  id: string; tipo: "chalana" | "lapacho";
+  id: string; tipo: "chalana" | "lapacho" | "bandera";
+  /** Sólo para banderas: cuál ('ar', 'bo', …). Ver BANDERAS en lib/adornos.ts. */
+  variante?: string | null;
   lat: number; lng: number; giro?: number | null; escala?: number | null;
 };
 
@@ -232,12 +234,12 @@ export async function adminListAdornos(ciudadSlug = "bermejo"): Promise<AdornoAd
   return itemsDe<AdornoAdmin>(res, "los adornos");
 }
 
-export async function adminCrearAdorno(body: { tipo: string; lat: number; lng: number; giro?: number; escala?: number }): Promise<AdornoAdmin> {
+export async function adminCrearAdorno(body: { tipo: string; lat: number; lng: number; giro?: number; escala?: number; variante?: string | null }): Promise<AdornoAdmin> {
   const res = await authFetch(`/admin/adornos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   return (await res.json()).adorno as AdornoAdmin;
 }
 
-export async function adminUpdateAdorno(id: string, body: { tipo?: string; lat?: number; lng?: number; giro?: number; escala?: number }): Promise<AdornoAdmin> {
+export async function adminUpdateAdorno(id: string, body: { tipo?: string; lat?: number; lng?: number; giro?: number; escala?: number; variante?: string | null }): Promise<AdornoAdmin> {
   const res = await authFetch(`/admin/adornos/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   return (await res.json()).adorno as AdornoAdmin;
 }

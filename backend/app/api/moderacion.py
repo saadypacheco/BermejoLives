@@ -1180,9 +1180,12 @@ class AdornoBody(BaseModel):
     giro: float | None = None
     escala: float | None = None
     ciudad_slug: str | None = None
+    # Sólo para tipo='bandera': cuál ('ar', 'bo', …). Los colores viven en el
+    # frontend (lib/adornos.ts); acá viaja sólo la clave.
+    variante: str | None = None
 
 
-TIPOS_ADORNO = {"chalana", "lapacho"}
+TIPOS_ADORNO = {"chalana", "lapacho", "bandera"}
 
 
 @router.get("/admin/adornos")
@@ -1212,6 +1215,9 @@ def admin_crear_adorno(
         "tipo": tipo, "lat": body.lat, "lng": body.lng, "ciudad_id": ciudad_id,
         "giro": body.giro if body.giro is not None else 0,
         "escala": body.escala if body.escala is not None else 1,
+        # Una bandera sin variante se dibujaría como la de Bolivia por defecto,
+        # que sería adivinar cuál quiso poner. Mejor guardar lo que mandó.
+        "variante": body.variante,
     })
     logger.info("admin.adorno_creado", tipo=tipo, by=admin["email"])
     return {"ok": True, "adorno": adorno}
@@ -1229,7 +1235,7 @@ def admin_update_adorno(
         if body.tipo not in TIPOS_ADORNO:
             raise HTTPException(status_code=400, detail=f"Tipo inválido: {body.tipo}")
         patch["tipo"] = body.tipo
-    for campo in ("lat", "lng", "giro", "escala"):
+    for campo in ("lat", "lng", "giro", "escala", "variante"):
         valor = getattr(body, campo)
         if valor is not None:
             patch[campo] = valor

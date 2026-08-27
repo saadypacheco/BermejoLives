@@ -19,9 +19,12 @@ import {
   adminListAdornos, adminCrearAdorno, adminUpdateAdorno, adminDeleteAdorno,
   type AdornoAdmin,
 } from "@/lib/api";
+import { BANDERAS } from "@/lib/adornos";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
-const TIPOS: [Adorno["tipo"], string][] = [["chalana", "⛵ Chalana"], ["lapacho", "🌳 Lapacho"]];
+const TIPOS: [Adorno["tipo"], string][] = [
+  ["chalana", "⛵ Chalana"], ["lapacho", "🌳 Lapacho"], ["bandera", "🏳 Bandera"],
+];
 
 export function AdornosEditor() {
   const elRef = useRef<HTMLDivElement>(null);
@@ -30,13 +33,18 @@ export function AdornosEditor() {
   const capaRef = useRef<any>(null);
   const fondoRef = useRef<any>(null);
   const tipoRef = useRef<Adorno["tipo"]>("chalana");
+  // Qué bandera se pone al hacer clic. Vive en un ref por lo mismo que el tipo:
+  // el handler del mapa se registra una sola vez y no ve el estado nuevo.
+  const varianteRef = useRef<string>("bo");
 
   const [items, setItems] = useState<AdornoAdmin[]>([]);
   const [tipo, setTipo] = useState<Adorno["tipo"]>("chalana");
+  const [variante, setVariante] = useState<string>("bo");
   const [selId, setSelId] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   tipoRef.current = tipo;
+  varianteRef.current = variante;
 
   const sel = items.find((a) => a.id === selId) || null;
 
@@ -114,7 +122,11 @@ export function AdornosEditor() {
   async function crear(lat: number, lng: number) {
     setErr(""); setBusy(true);
     try {
-      const nuevo = await adminCrearAdorno({ tipo: tipoRef.current, lat, lng });
+      const nuevo = await adminCrearAdorno({
+        tipo: tipoRef.current, lat, lng,
+        // Sólo las banderas la usan; en los demás va null y la base la ignora.
+        variante: tipoRef.current === "bandera" ? varianteRef.current : null,
+      });
       setItems((xs) => [...xs, nuevo]);
       setSelId(nuevo.id);
     } catch (e: any) { setErr(String(e?.message || e)); }
@@ -141,6 +153,7 @@ export function AdornosEditor() {
 
   const nChalanas = items.filter((a) => a.tipo === "chalana").length;
   const nLapachos = items.filter((a) => a.tipo === "lapacho").length;
+  const nBanderas = items.filter((a) => a.tipo === "bandera").length;
 
   return (
     <div className="uk-adornos-editor">
@@ -158,6 +171,7 @@ export function AdornosEditor() {
         ))}
         <span className="uk-adornos-conteo">
           {nChalanas} chalana{nChalanas === 1 ? "" : "s"} · {nLapachos} lapacho{nLapachos === 1 ? "" : "s"}
+          {nBanderas > 0 && ` · ${nBanderas} bandera${nBanderas === 1 ? "" : "s"}`}
         </span>
       </div>
 
@@ -167,7 +181,11 @@ export function AdornosEditor() {
 
       {sel && (
         <div className="uk-adornos-sel">
-          <b>{sel.tipo === "chalana" ? "⛵ Chalana" : "🌳 Lapacho"}</b>
+          <b>
+            {sel.tipo === "chalana" ? "⛵ Chalana"
+             : sel.tipo === "bandera" ? `🏳 ${BANDERAS[sel.variante || "bo"]?.nombre ?? "Bandera"}`
+             : "🌳 Lapacho"}
+          </b>
           <span className="uk-adornos-coords">
             {sel.lat.toFixed(5)}, {sel.lng.toFixed(5)}
           </span>
@@ -178,6 +196,18 @@ export function AdornosEditor() {
                    value={sel.escala ?? 1}
                    onChange={(e) => guardar(sel.id, { escala: Number(e.target.value) })} />
           </label>
+
+          {sel.tipo === "bandera" && (
+            <label>
+              Cuál
+              <select value={sel.variante ?? "bo"}
+                      onChange={(e) => guardar(sel.id, { variante: e.target.value })}>
+                {Object.entries(BANDERAS).map(([k, b]) => (
+                  <option key={k} value={k}>{b.nombre}</option>
+                ))}
+              </select>
+            </label>
+          )}
 
           {sel.tipo === "chalana" && (
             <label>
