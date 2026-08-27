@@ -190,7 +190,10 @@ export const BANDERAS: Record<string, Bandera> = {
 
   // Departamentales y municipales, sacadas de las fotos que pasó el equipo.
   // Si alguna está mal, se corrige acá y en ningún otro lado.
-  bermejo: { nombre: "Bermejo", franjas: ["#009739", "#FFFFFF", "#009739"] },
+  // Verde y blanco, mitad y mitad. Estaba con tres franjas (verde/blanco/verde)
+  // por una lectura mía de una foto lejana, y así quedaba IDÉNTICA a la de
+  // Santa Cruz. Confirmado por el equipo el 2026-08-27.
+  bermejo: { nombre: "Bermejo", franjas: ["#009739", "#FFFFFF"] },
   tarija: { nombre: "Tarija", franjas: ["#DA121A", "#FFFFFF"] },
   "santa-cruz": { nombre: "Santa Cruz", franjas: ["#009739", "#FFFFFF", "#009739"] },
   "la-paz": { nombre: "La Paz", franjas: ["#D52B1E", "#007934"], emblema: "escudo" },
