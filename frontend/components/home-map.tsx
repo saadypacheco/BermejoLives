@@ -50,12 +50,26 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
   const LRef = useRef<any>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const pathRef = useRef<SVGPathElement>(null);
+  // Los comercios y los descuentos VIGENTES, en refs.
+  //
+  // `pintar()` se llama desde dos lados: un efecto que corre con cada cambio de
+  // props, y el manejador de "zoomend", que se registra UNA sola vez al crear
+  // el mapa. Ese manejador se queda con el `pintar` de aquel primer render, y
+  // ese `pintar` se quedó con la lista de comercios de entonces — la completa,
+  // sin filtrar. Resultado: filtrás por categoría, hacés zoom, y vuelven todos.
+  //
+  // El adorno ya usaba este patrón (`adornosRef`) por la misma razón; a los
+  // comercios les faltaba. Leyendo del ref, las dos vías dibujan lo mismo.
+  const comerciosRef = useRef(comercios);
+  const descuentosRef = useRef(descuentoPorId);
   const selIdRef = useRef<string | null | undefined>(selectedId);
   const selRadiusRef = useRef(18);
   const onSelRef = useRef(onSelect);
   const [hoja, setHoja] = useState<Hoja | null>(null);
   const hojaRef = useRef<(h: Hoja) => void>(() => {});
   onSelRef.current = onSelect;
+  comerciosRef.current = comercios;
+  descuentosRef.current = descuentoPorId;
   selIdRef.current = selectedId;
   hojaRef.current = setHoja;
 
@@ -139,7 +153,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
 
   function marcador(L: any, c: ComercioMapa, tier: Tier, isSel: boolean) {
     const cerrado = abiertoAhora(c.horario).estado === "cerrado";
-    const pct = descuentoPorId?.[c.id];
+    const pct = descuentosRef.current?.[c.id];
     const size = sizeDe(tier, isSel);
     const icon = L.divIcon({
       className: "", html: pinHtml(c, tier, isSel, cerrado, pct),
@@ -234,7 +248,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
     // resto se dibujan como pines INDIVIDUALES (sin agrupador).
     const grupos = new Map<string, { nombre: string; lat: number | null; lng: number | null; sumLat: number; sumLng: number; n: number; portada: string | null; video: string | null; poligono: [number, number][] | null; items: ComercioMapa[] }>();
 
-    for (const c of comercios) {
+    for (const c of comerciosRef.current) {
       if (c.lat == null || c.lng == null) continue;
       if (c.lugar_id) {
         let g = grupos.get(c.lugar_id);
@@ -247,7 +261,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
         // debajo de cierto zoom.
       }
       const tier = tierDe(c);
-      const isSel = c.id === selectedId;
+      const isSel = c.id === selIdRef.current;
       const m = marcador(L, c, tier, isSel);
       markerByIdRef.current.set(c.id, m);
       if (isSel) selRadiusRef.current = sizeDe(tier, true) / 2;
