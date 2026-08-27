@@ -104,11 +104,18 @@ function lapachoSVG(i: number): string {
  * en la ficha de un comercio), y así corregir un color es cambiar una línea en
  * vez de reescribir un dibujo.
  */
-export type Bandera = { nombre: string; franjas: string[]; emblema?: "sol" };
+export type Bandera = { nombre: string; franjas: string[]; emblema?: "sol" | "escudo" };
 
 export const BANDERAS: Record<string, Bandera> = {
   bo: { nombre: "Bolivia", franjas: ["#D52B1E", "#F9E300", "#007934"] },
   ar: { nombre: "Argentina", franjas: ["#75AADB", "#FFFFFF", "#75AADB"], emblema: "sol" },
+
+  // Departamentales y municipales, sacadas de las fotos que pasó el equipo.
+  // Si alguna está mal, se corrige acá y en ningún otro lado.
+  bermejo: { nombre: "Bermejo", franjas: ["#009739", "#FFFFFF", "#009739"] },
+  tarija: { nombre: "Tarija", franjas: ["#DA121A", "#FFFFFF"] },
+  "santa-cruz": { nombre: "Santa Cruz", franjas: ["#009739", "#FFFFFF", "#009739"] },
+  "la-paz": { nombre: "La Paz", franjas: ["#D52B1E", "#007934"], emblema: "escudo" },
 };
 
 const BANDERA_W = 26, BANDERA_H = 17;
@@ -121,6 +128,15 @@ function banderaSVG(variante: string | null | undefined): string {
     .join("");
   // El sol de mayo, simplificado: a 26 px de ancho los treinta y dos rayos son
   // una mancha. Un disco con ocho puntas se lee como sol y no como error.
+  // El escudo de La Paz, a 26 px de ancho, es una mancha de cuatro píxeles: se
+  // dibuja un blasón dorado que se LEE como escudo. Fingir el detalle real sería
+  // dibujar mal algo que nadie después revisa.
+  const escudo = b.emblema === "escudo"
+    ? `<g transform="translate(${(3 + (BANDERA_W - 3) / 2).toFixed(1)},${(BANDERA_H / 2).toFixed(1)})">
+         <path d="M-3-3.4h6v3.2c0 2.2-1.4 3.6-3 4.4-1.6-.8-3-2.2-3-4.4z"
+               fill="#E8B33A" stroke="#8a6a12" stroke-width=".5"/>
+       </g>`
+    : "";
   const sol = b.emblema === "sol"
     ? `<g transform="translate(${(3 + (BANDERA_W - 3) / 2).toFixed(1)},${(BANDERA_H / 2).toFixed(1)})">
          <circle r="2.6" fill="#F6B40E"/>
@@ -132,7 +148,7 @@ function banderaSVG(variante: string | null | undefined): string {
     <rect x="0" y="0" width="2.2" height="${BANDERA_H + 6}" rx="1.1" fill="#7a6a55"/>
     ${franjas}
     <rect x="3" y="0" width="${BANDERA_W - 3}" height="${BANDERA_H}" fill="none" stroke="#0f172a" stroke-width=".6" opacity=".25"/>
-    ${sol}
+    ${sol}${escudo}
   </svg>`;
 }
 
