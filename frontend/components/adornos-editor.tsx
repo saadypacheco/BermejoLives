@@ -211,7 +211,7 @@ export function AdornosEditor() {
           {sel.tipo === "bandera" && (
             <label>
               Cuál
-              <select value={sel.variante ?? "bo"}
+              <select value={sel.variante ?? "bo"} className="uk-adornos-variante"
                       onChange={(e) => guardar(sel.id, { variante: e.target.value })}>
                 {Object.entries(BANDERAS).map(([k, b]) => (
                   <option key={k} value={k}>{b.nombre}</option>
