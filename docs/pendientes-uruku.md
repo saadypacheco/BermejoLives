@@ -5,16 +5,16 @@
 > La **tienda (Reservalo)** tiene su propio plan: [plan-tienda-reservalo.md](plan-tienda-reservalo.md).
 > La **clasificación por IA** y el prompt vigente: [clasificacion-ia.md](clasificacion-ia.md).
 
-## 📍 Situación al 2026-08-25
+## 📍 Situación al 2026-08-27
 
 | | |
 |---|---|
-| Comercios activos | **270** (tres salidas al campo) |
+| Comercios activos | **588** (medido el 27/8 en la base) |
 | Tercera salida | **67 comercios, los 67 analizados** · 0 pendientes |
-| Analizados | 269 de 270 · sólo 1 sin ningún rubro real |
+| Analizados | pendiente de recontar: crecieron 318 desde el 25/8 |
 | Rubros por comercio | 2,51 promedio · multi-rubro funcionando |
 | Rubros en la taxonomía | 4 nuevos (marroquinería, lencería, blanquería, kiosco) · 19 apagados |
-| Diccionario de sinónimos | **847 términos** · los 270 comercios con sinónimos · 253 de 258 términos nuevos ya cubiertos |
+| Diccionario de sinónimos | **1.172 términos** (eran 847 el 25/8) |
 | **Sin WhatsApp** | **43 de los 67 nuevos** — el número más caro de la tanda |
 | Sin nombre real | **3 de 67** en la tercera salida (eran ~100 de 203 antes de `nombre_cartel`) |
 | Publicaciones (ofertas) | **1 en total, 0 aprobadas** → el canal está construido y apagado |
@@ -54,6 +54,11 @@ COMPLETO se paginan (`traerTodo` en `lib/data.ts`); un `.limit()` sólo vale
 cuando el recorte es a propósito, como el feed de 8 o los destacados de 10.
 Es la tercera vez que aparece la misma forma de fallar: el embed roto que
 devuelve `[]`, el script que informó "0 sin respaldo" con 37, y esto.
+
+**El mapa mostraba 250 de 588.** El tope de la consulta escondía el 58% de los
+comercios y no lo decía. Ver la trampa de arriba: cada vez que un número de este
+documento se use para decidir algo, conviene recontarlo contra la base — el 25/8
+decía 270 y dos días después eran 588.
 
 **Pushear antes de dar comandos de `git pull`.** Pasó dos veces: el commit estaba
 hecho, el pull no traía nada, y el rato siguiente se fue buscando el bug en el
