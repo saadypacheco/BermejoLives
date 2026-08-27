@@ -74,24 +74,68 @@ function chalanaSVG(i: number): string {
 }
 
 /**
- * Lapacho en flor. El color varía porque en Bermejo florecen rosados, amarillos
- * y blancos, y verlos todos iguales sería menos cierto que verlos distintos.
+ * Lapacho en flor, dibujado mirando fotos y no de memoria.
+ *
+ * El dibujo anterior era un tronco con cinco círculos encima: leía como
+ * chupetín. Un lapacho de verdad tiene tres rasgos que lo hacen reconocible de
+ * lejos, y son los que se dibujan acá:
+ *
+ *   1. La copa es MÁS ANCHA QUE ALTA y en domo. Casi ningún otro árbol de la
+ *      calle tiene esa proporción; es lo primero que lo delata.
+ *   2. El tronco es oscuro y se abre en ramas gruesas que se ven ENTRE las
+ *      flores. Una copa maciza parece un arbusto.
+ *   3. Los pétalos caídos alfombran el piso alrededor. En la foto es la mitad
+ *      del efecto: el suelo se tiñe del mismo color que el árbol.
+ *
+ * Por eso el viewBox pasó de 44×52 (más alto que ancho) a 48×40.
  */
-const FLORES = ["#ec4899", "#f59e0b", "#e879f9", "#f472b6"];
+
+/**
+ * Los colores reales, de las fotos: rosa, rosa fuerte, amarillo y blanco.
+ * En Bermejo florecen de varios, y verlos todos iguales sería menos cierto que
+ * verlos distintos.
+ *
+ * El blanco lleva un borde apenas visible: sin él, un lapacho blanco sobre el
+ * fondo claro del mapa desaparece — el adorno estaría puesto y no se vería, que
+ * es lo que acaba de pasar con el combo de banderas.
+ */
+const FLORES: { flor: string; borde?: string }[] = [
+  { flor: "#e8559b" },                        // rosa, el más común
+  { flor: "#f2b705" },                        // amarillo
+  { flor: "#c92f7c" },                        // rosa fuerte / magenta
+  { flor: "#fbeff3", borde: "#e9c9d6" },      // blanco
+];
 
 function lapachoSVG(i: number): string {
-  const flor = FLORES[i % FLORES.length];
-  return `<svg viewBox="0 0 44 52" width="44" height="52" fill="none" aria-hidden="true">
-    <path d="M21 50v-16" stroke="#6b4423" stroke-width="3.2" stroke-linecap="round"/>
-    <path d="M21 38l-6-6M21 40l7-7" stroke="#6b4423" stroke-width="2.4" stroke-linecap="round"/>
-    <circle cx="22" cy="16" r="11" fill="${flor}" opacity=".9"/>
-    <circle cx="12" cy="22" r="7" fill="${flor}" opacity=".8"/>
-    <circle cx="32" cy="22" r="7.5" fill="${flor}" opacity=".8"/>
-    <circle cx="17" cy="9" r="5.5" fill="${flor}" opacity=".95"/>
-    <circle cx="29" cy="11" r="5" fill="${flor}" opacity=".95"/>
+  const { flor, borde } = FLORES[i % FLORES.length];
+  const trazo = borde ? ` stroke="${borde}" stroke-width=".6"` : "";
+  return `<svg viewBox="0 0 48 40" width="48" height="40" fill="none" aria-hidden="true">
+    <g fill="${flor}" opacity=".45">
+      <ellipse cx="14" cy="37.5" rx="4.5" ry="1.1"/>
+      <ellipse cx="24" cy="38.6" rx="7" ry="1.3"/>
+      <ellipse cx="35" cy="37.2" rx="4" ry="1"/>
+    </g>
+    <path d="M24 40V27" stroke="#4a3324" stroke-width="2.8" stroke-linecap="round"/>
+    <path d="M24 28c-4-2-7-4-9.5-6.5M24 28c4-2 7-4 9.5-6M24 29V19"
+          stroke="#4a3324" stroke-width="1.9" stroke-linecap="round"/>
+    <path d="M17 23c-2.5-1.5-4-3-5-4.5M31 23c2.5-1.5 4-3 5-4.5"
+          stroke="#4a3324" stroke-width="1.2" stroke-linecap="round" opacity=".8"/>
+    <g fill="${flor}"${trazo}>
+      <ellipse cx="24" cy="14" rx="11.5" ry="9"/>
+      <circle cx="11" cy="18" r="7"/>
+      <circle cx="37" cy="17.5" r="7.5"/>
+      <circle cx="16" cy="8" r="6"/>
+      <circle cx="32" cy="8.5" r="5.5"/>
+      <circle cx="24" cy="5.5" r="5"/>
+      <circle cx="6" cy="22" r="4.5"/>
+      <circle cx="42" cy="21.5" r="4.5"/>
+    </g>
+    <g fill="#000" opacity=".07">
+      <circle cx="13" cy="22" r="5"/>
+      <circle cx="35" cy="21.5" r="5"/>
+    </g>
   </svg>`;
 }
-
 
 /* ─────────────────────────── Banderas ───────────────────────────
  *
@@ -165,7 +209,7 @@ export function adornoHTML(a: Adorno, i: number): string {
  *  sobre el agua y los lapachos sobre su tronco, así que ninguno se centra. */
 export const MEDIDAS = {
   chalana: { w: CHALANA_W, h: CHALANA_H, anclaY: 7.5 },   // era 64×40 / ancla 30
-  lapacho: { w: 44, h: 52, anclaY: 50 },
+  lapacho: { w: 48, h: 40, anclaY: 39 },   // era 44×52: la copa real es más ancha que alta
   bandera: { w: BANDERA_W, h: BANDERA_H + 6, anclaY: BANDERA_H + 6 },
 } as const;
 
