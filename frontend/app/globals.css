@@ -677,6 +677,10 @@
 .uk-adornos-barra { display: flex; align-items: center; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
 .uk-adornos-barra button { padding: 7px 14px; border-radius: 999px; border: 1px solid var(--uk-line); background: var(--uk-surface-2); cursor: pointer; }
 .uk-adornos-barra button.active { background: var(--uk-primary, #e11d48); color: #fff; border-color: transparent; }
+/* El selector de qué bandera poner. Va en la misma barra que los tipos porque
+   se elige ANTES de tocar el mapa, no después. */
+.uk-adornos-variante { padding: 7px 10px; border-radius: 999px; border: 1px solid var(--uk-line);
+  background: var(--uk-surface-2); color: inherit; cursor: pointer; font: inherit; }
 .uk-adornos-conteo { margin-left: auto; opacity: .7; font-size: 13px; }
 .uk-adornos-sel { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: var(--uk-surface-2); border: 1px solid var(--uk-line); }
 .uk-adornos-sel label { display: flex; align-items: center; gap: 8px; font-size: 13px; opacity: .85; }

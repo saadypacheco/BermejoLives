@@ -169,6 +169,17 @@ export function AdornosEditor() {
             {etiqueta}
           </button>
         ))}
+        {/* CUÁL bandera, antes de ponerla. Sin este control la variante existía
+            en el estado pero no había forma de elegirla: todas salían Bolivia y
+            había que corregirlas de a una después de puestas. */}
+        {tipo === "bandera" && (
+          <select value={variante} onChange={(e) => setVariante(e.target.value)}
+                  className="uk-adornos-variante" aria-label="Qué bandera poner">
+            {Object.entries(BANDERAS).map(([k, b]) => (
+              <option key={k} value={k}>{b.nombre}</option>
+            ))}
+          </select>
+        )}
         <span className="uk-adornos-conteo">
           {nChalanas} chalana{nChalanas === 1 ? "" : "s"} · {nLapachos} lapacho{nLapachos === 1 ? "" : "s"}
           {nBanderas > 0 && ` · ${nBanderas} bandera${nBanderas === 1 ? "" : "s"}`}
