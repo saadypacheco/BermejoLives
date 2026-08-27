@@ -192,9 +192,33 @@ captación** — analizado en la §2 de ese documento, con una recomendación.
 - [ ] **Barra de redes / clima / cotización en escritorio:** queda pegada debajo
       del logo y se ve rara. En móvil está bien; el problema es el ancho grande.
 - [ ] **Puntos del mapa:** sigue sin convencer (pendiente de la sesión del 2026-08-22).
-- [ ] **Adornos del mapa:** el editor ya está (Admin › Adornos). Falta **ubicar**
-      las chalanas y los lapachos, y revisar si los dibujos convencen antes de
-      cargar veinte.
+- [ ] **Adornos del mapa:** el editor ya está (Admin › Adornos) y ahora pone
+      chalanas, lapachos y **banderas** (Bolivia, Argentina, Bermejo, Tarija,
+      Santa Cruz, La Paz). Falta **ubicarlos** en el mapa. Las chalanas quedaron
+      a un cuarto del tamaño original y el lapacho se redibujó mirando fotos
+      reales (copa ancha en domo, ramas visibles, pétalos caídos).
+- [ ] **Fotos reales de lapacho (decidido el 2026-08-27: las saca el equipo).**
+      El código ya las acepta: si `LAPACHOS[<variedad>].foto` existe, el mapa
+      muestra la foto; si no, dibuja el vector. Van en `public/adornos/`, una
+      por variedad (rosa, amarillo, rosa fuerte, blanco).
+
+      **Por qué propias y no de un banco:** se probó con Pngtree y su "gratis"
+      es gratis de DESCARGAR, no libre de usar — el uso comercial pide plan
+      pago, y URUKU cobra planes. Es el mismo criterio con el que se descartó
+      Google Places. Además una foto del equipo es un lapacho **de Bermejo**,
+      que es la misma lógica que hace valer la foto de vidriera contra el pin
+      importado sin foto.
+
+      **Cómo tienen que ser:** el árbol contra cielo despejado, sin cables
+      cruzando, sin casas detrás, tronco entero hasta el piso. El recorte lo
+      hace el código/quien programe — el cielo parejo se separa bien.
+
+      **No bloquea nada:** sin fotos el mapa dibuja el vector. Se suman de a una.
+
+      Ojo con el tamaño: el adorno se dibuja a 48 px de ancho y ahí una foto
+      pierde el detalle. Si se quiere que se lea, hay que agrandarlo a 80-96 px
+      — y a ese tamaño empieza a competir con los pines de comercio, que es lo
+      único que el mapa existe para mostrar. Decisión pendiente.
 - [ ] **Imágenes por ciudad:** el campo existe (`ciudades.hero_url`, `foto_url`)
       y Santa Cruz / La Paz / Tarija usan las de Bermejo hasta que haya fotos
       propias. `update ciudades set hero_url = '...' where slug = '...'`.
