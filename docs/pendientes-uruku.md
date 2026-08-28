@@ -60,6 +60,22 @@ comercios y no lo decía. Ver la trampa de arriba: cada vez que un número de es
 documento se use para decidir algo, conviene recontarlo contra la base — el 25/8
 decía 270 y dos días después eran 588.
 
+**Las migraciones se corren EN ORDEN, y se verifica que corrieron.** En prod se
+aplicó la 0070 sin haber aplicado la 0069, y como la 0070 recrea la misma
+función, la búsqueda quedó bien y una función de la 0069 nunca se creó. No hubo
+error: el frontend la pedía, no existía, y devolvía vacío en silencio — se veía
+una pantalla sin chips, no una falla. Para comprobar qué hay realmente:
+
+```sql
+select p.proname, pg_get_function_identity_arguments(p.oid),
+       pg_get_function_result(p.oid)
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.proname like 'buscar%' or p.proname like 'refinam%';
+```
+
+Y ojo con "corro la que falta": si una migración posterior ya recreó la misma
+función con otro tipo de retorno, correr la anterior falla o pisa el arreglo.
+
 **Pushear antes de dar comandos de `git pull`.** Pasó dos veces: el commit estaba
 hecho, el pull no traía nada, y el rato siguiente se fue buscando el bug en el
 lugar equivocado. Si algo no aparece después de un pull, comparar el hash con
