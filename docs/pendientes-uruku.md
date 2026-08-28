@@ -127,14 +127,12 @@ nada, que es la forma de romperse más difícil de ver.
 
 - [x] ~~Esconder el filtro~~ — hecho, y como REGLA y no como parche: un filtro
       sólo se dibuja si hay datos que pueda filtrar (`getFiltrosDisponibles`).
-      Aplica también a Zona, Precio, Tipo y Ofertas.
-- [ ] **Capturar el horario en el alta.** Es una pregunta más en la segunda
-      pantalla, donde el agente ya está hablando con el dueño. Los 680 ya
-      cargados quedan sin él hasta una segunda pasada — aunque la IA podría
-      leerlo del cartel, que ya mira esas fotos.
-
-      Cuando haya horarios, el filtro **reaparece solo**: no hay que acordarse
-      de volver a mostrarlo.
+      Aplica a Zona, Precio y Ofertas. **Tipo (mayorista/minorista) queda
+      siempre visible por decisión del producto**, aunque el reparto esté
+      desbalanceado: es un filtro que la gente entiende y busca.
+- [ ] **El horario se carga después** (decidido el 28/8: NO se agrega al alta
+      por ahora). Cuando haya horarios cargados, el filtro **reaparece solo** —
+      no hay que acordarse de volver a mostrarlo ni tocar código.
 
 ### El normalizador de subcategorías corta la última sílaba
 En la §3 de `novedades.sql` aparecen `muebl` y `cepillo de dient`. El reordenado
