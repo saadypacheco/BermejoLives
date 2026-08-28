@@ -95,6 +95,7 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
   const zonaNom = zonas.find((z) => z.slug === zona)?.nombre;
   const shown = soloOfertas ? results.filter((r) => r.ofertas > 0) : results;
   const catChips = [{ slug: "", nombre: "Todos" }, ...rubros];
+  const rubroElegido = rubro ? rubros.find((x) => x.slug === rubro)?.nombre ?? null : null;
 
   return (
     <div className="uk-container uk-buscar">
@@ -105,7 +106,8 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
 
       <div className="uk-chips">
         {catChips.map((c) => (
-          <button type="button" key={c.slug || "todos"} className={`uk-chip ${rubro === c.slug ? "active" : ""}`} onClick={() => setRubro(c.slug)}>
+          <button type="button" key={c.slug || "todos"} className={`uk-chip ${rubro === c.slug ? "active" : ""}`}
+                  onClick={() => { setRubro(c.slug); setQ(""); }}>
             {c.nombre}
           </button>
         ))}
@@ -164,7 +166,14 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
                   </h4>
                   <div className="uk-resmeta">
                     <span className="uk-pill blue">{MODALIDAD_LABEL[r.modalidad] ?? r.modalidad}</span>
-                    {r.rubro_nombre && <span className="uk-pill">{r.rubro_nombre}</span>}
+                    {/* Cuando hay una categoría elegida se muestra ÉSA, no el rubro
+                        principal del comercio. Los locales son multi-rubro: uno
+                        cuyo principal es "Calzado" puede tener también
+                        "Celulares", así que al filtrar por celulares la tarjeta
+                        decía "Calzado" y el filtro parecía roto estando bien. */}
+                    {rubroElegido
+                      ? <span className="uk-pill">{rubroElegido}</span>
+                      : r.rubro_nombre && <span className="uk-pill">{r.rubro_nombre}</span>}
                     {r.ofertas > 0 && <span className="uk-pill green">{r.ofertas} ofertas</span>}
                   </div>
                   {r.direccion && <div className="uk-resdir"><Pin style={{ width: 13, height: 13 }} />{r.direccion}</div>}

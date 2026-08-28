@@ -118,6 +118,18 @@ para uno o dos comercios deja dos filtros que no filtran.
       frontera: lo más probable es que esté absorbiendo *ropa deportiva*. Mismo
       patrón que `ropa` con 110. Verificar antes de que crezca más.
 
+### "Abierto ahora" no puede funcionar: NINGÚN comercio tiene horario
+Medido el 27/8: `count(*) filter (where horario <> '')` da **0** sobre los
+comercios activos. O sea que el indicador "Abierto/Cerrado ahora" de la ficha y
+el filtro "Abierto ahora" del mapa —los dos figuran como hechos— están
+construidos y **no tienen con qué decidir**. No fallan: simplemente no hacen
+nada, que es la forma de romperse más difícil de ver.
+
+- [ ] Decidir cuál de las dos: **capturar el horario** (es una pregunta más en
+      la segunda pantalla del alta, donde ya se pide el WhatsApp) o **esconder
+      el filtro** hasta que haya datos. Un filtro que no filtra es peor que uno
+      que no está: el comprador lo toca, no cambia nada, y deja de confiar.
+
 ### El normalizador de subcategorías corta la última sílaba
 En la §3 de `novedades.sql` aparecen `muebl` y `cepillo de dient`. El reordenado
 alfabético (`americana ropa`, `mujer ropa`) **es a propósito** —así "bolsos y
