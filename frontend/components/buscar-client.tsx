@@ -28,6 +28,11 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
   const [ciudad, setCiudad] = useState(ciudadInicial);
   const [soloOfertas, setSoloOfertas] = useState(false);
   const [vista, setVista] = useState<"lista" | "mapa">("lista");
+  // El mapa necesita TODOS los que coinciden, no la página cargada. La lista
+  // disimula el recorte porque tiene "Ver más"; el mapa no: se veían diez pines
+  // sobre un contador que decía 790.
+  const [resultsMapa, setResultsMapa] = useState<ResultadoBusqueda[] | null>(null);
+  const [cargandoMapa, setCargandoMapa] = useState(false);
   const [results, setResults] = useState<ResultadoBusqueda[]>([]);
   const [rubros, setRubros] = useState<Rubro[]>([]);
   // Qué filtros tienen datos detrás. Arranca en `false` y NO se dibuja ninguno
@@ -75,6 +80,7 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
     setRubro(g("rubro") ?? "");
     setSubcategoria(g("sub") ?? "");
     setModalidad(g("modalidad") ?? "");
+    if (g("vista") === "mapa") setVista("mapa");
   }, [sp]);
 
   // La URL refleja SIEMPRE lo que se está viendo. Sin esto, la dirección
@@ -91,6 +97,7 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
     if (zona) p.set("zona", zona);
     if (ciudad) p.set("ciudad", ciudad);
     if (precioMax) p.set("precio_max", precioMax);
+    if (vista === "mapa") p.set("vista", "mapa");
     const nueva = p.toString();
     // Sólo se escribe si de verdad cambió: si no, este efecto y el que LEE la
     // URL se despiertan mutuamente sin parar.
@@ -98,7 +105,7 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
       router.replace(nueva ? `/buscar?${nueva}` : "/buscar", { scroll: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, rubro, subcategoria, modalidad, zona, ciudad, precioMax]);
+  }, [q, rubro, subcategoria, modalidad, zona, ciudad, precioMax, vista]);
 
   useEffect(() => {
     clearTimeout(debounce.current);
@@ -125,6 +132,26 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
     return () => clearTimeout(debounce.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, rubro, subcategoria, modalidad, zona, ciudad, precioMax]);
+
+  // Se piden de a 500 (el tope de la función) hasta que se acaben. Con 790
+  // comercios son dos vueltas; el tope de 4000 es un freno de seguridad para
+  // que un filtro roto no descargue la base entera al celular de alguien.
+  useEffect(() => {
+    if (vista !== "mapa") return;
+    let cancelado = false;
+    (async () => {
+      setCargandoMapa(true);
+      const todo: ResultadoBusqueda[] = [];
+      for (let desde = 0; desde < 4000; desde += 500) {
+        const lote = await buscarComercios(filtros, 500, desde);
+        todo.push(...lote);
+        if (lote.length < 500) break;
+      }
+      if (!cancelado) { setResultsMapa(todo); setCargandoMapa(false); }
+    })().catch(() => { if (!cancelado) setCargandoMapa(false); });
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vista, q, rubro, subcategoria, modalidad, zona, ciudad, precioMax]);
 
   async function cargarMas() {
     setCargandoMas(true);
@@ -242,7 +269,18 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
       </div>
 
       {vista === "mapa" ? (
-        <MapResults results={shown} />
+        <>
+        {cargandoMapa && (
+          <div style={{ padding: "6px 0", fontSize: 12.5, color: "var(--uk-ink-soft)" }}>
+            Cargando los {total ?? ""} comercios en el mapa…
+          </div>
+        )}
+        <MapResults results={
+          soloOfertas
+            ? (resultsMapa ?? results).filter((r) => r.ofertas > 0)
+            : (resultsMapa ?? results)
+        } />
+        </>
       ) : (
         <div className="uk-res-grid">
           {!loading && shown.length === 0 && (
