@@ -94,6 +94,9 @@ export type ResultadoBusqueda = {
   lng: number | null;
   modalidad: "mayorista" | "minorista" | "ambos";
   rubro_slug: string | null;
+  /** Lo que la IA vio en la vidriera ("zapatilla urbana"). Es lo que distingue
+   *  a un resultado de otro dentro de la misma búsqueda. */
+  subcategoria: string | null;
   rubro_nombre: string | null;
   zona_nombre: string | null;
   rating: number;
@@ -105,6 +108,9 @@ export type ResultadoBusqueda = {
 export type FiltrosBusqueda = {
   q?: string;
   rubro?: string;
+  /** El chip de refinamiento elegido. Filtra sobre los resultados de la
+   *  búsqueda, no sobre el catálogo entero. */
+  subcategoria?: string;
   modalidad?: string;
   zona?: string;
   ciudad?: string;

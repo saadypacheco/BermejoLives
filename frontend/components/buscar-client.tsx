@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { MapResults } from "@/components/map-results";
-import { buscarComercios, getFiltrosDisponibles, getRubros, getZonas, type FiltrosDisponibles } from "@/lib/data";
+import { buscarComercios, getFiltrosDisponibles, getRefinamientos, getRubros, getZonas, type FiltrosDisponibles } from "@/lib/data";
 import { type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD_LABEL, comoLlegarHref, waLink } from "@/lib/types";
 import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
@@ -15,6 +15,10 @@ const RESERVALO_URL = "/tienda";
 export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string }) {
   const [q, setQ] = useState("");
   const [rubro, setRubro] = useState("");
+  // El chip de refinamiento elegido, y los que hay para ofrecer. Salen de los
+  // resultados de ESTA búsqueda, no de una lista fija.
+  const [subcategoria, setSubcategoria] = useState("");
+  const [refinamientos, setRefinamientos] = useState<{ subcategoria: string; n: number }[]>([]);
   const [modalidad, setModalidad] = useState("");
   const [zona, setZona] = useState("");
   const [precioMax, setPrecioMax] = useState("");
@@ -39,7 +43,7 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
   const [busquedaId, setBusquedaId] = useState<string | null>(null);
   const PAGE = 30;
 
-  const filtros = { q, rubro, modalidad, zona, ciudad, precioMax: precioMax ? Number(precioMax) : undefined };
+  const filtros = { q, rubro, subcategoria, modalidad, zona, ciudad, precioMax: precioMax ? Number(precioMax) : undefined };
 
   useEffect(() => {
     getRubros().then(setRubros);
@@ -65,8 +69,8 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
     // categoría limpia el texto anterior, y buscar texto sale de la categoría.
     // Sin esto quedaba un filtro invisible activo y el resultado no cerraba con
     // lo que la pantalla mostraba.
-    if (g("rubro") !== null) { setRubro(g("rubro")!); setQ(""); }
-    else if (g("q") !== null) { setQ(g("q")!); setRubro(""); }
+    if (g("rubro") !== null) { setRubro(g("rubro")!); setQ(""); setSubcategoria(""); }
+    else if (g("q") !== null) { setQ(g("q")!); setRubro(""); setSubcategoria(""); }
   }, [sp]);
 
   useEffect(() => {
@@ -75,6 +79,10 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
     debounce.current = setTimeout(async () => {
       const r = await buscarComercios(filtros, PAGE, 0);
       setResults(r);
+      // Los chips se piden SIN el refinamiento activo: si se pidieran con él,
+      // al tocar uno desaparecerían todos los demás y no habría forma de
+      // cambiar de opinión sin borrar la búsqueda.
+      getRefinamientos({ ...filtros, subcategoria: "" }).then(setRefinamientos).catch(() => {});
       // Se guarda el id de la búsqueda para atárselo al contacto si la persona
       // termina escribiéndole a alguno de estos comercios.
       if (q.trim()) {
@@ -87,7 +95,7 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
     }, 280);
     return () => clearTimeout(debounce.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, rubro, modalidad, zona, ciudad, precioMax]);
+  }, [q, rubro, subcategoria, modalidad, zona, ciudad, precioMax]);
 
   async function cargarMas() {
     setCargandoMas(true);
@@ -109,14 +117,37 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
         <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar locales o servicios…" aria-label="Buscar" />
       </form>
 
+      {/* Con una búsqueda escrita, los chips son las SUBCATEGORÍAS que hay entre
+          esos resultados. Sin búsqueda, son los rubros — ahí el chip es un menú
+          de secciones del sitio y tiene sentido que sea fijo.
+
+          El problema que arregla: buscabas "zapatillas americanas" y los chips
+          ofrecían "Óptica" y "Joyería", que son secciones del catálogo y no
+          formas de afinar lo que pediste. */}
+      {q.trim() && refinamientos.length > 0 ? (
+        <div className="uk-chips">
+          <button type="button" className={`uk-chip ${subcategoria === "" ? "active" : ""}`}
+                  onClick={() => setSubcategoria("")}>
+            Todos
+          </button>
+          {refinamientos.map((rf) => (
+            <button type="button" key={rf.subcategoria}
+                    className={`uk-chip ${subcategoria === rf.subcategoria ? "active" : ""}`}
+                    onClick={() => setSubcategoria(subcategoria === rf.subcategoria ? "" : rf.subcategoria)}>
+              {rf.subcategoria} <span style={{ opacity: .6 }}>{rf.n}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
       <div className="uk-chips">
         {catChips.map((c) => (
           <button type="button" key={c.slug || "todos"} className={`uk-chip ${rubro === c.slug ? "active" : ""}`}
-                  onClick={() => { setRubro(c.slug); setQ(""); }}>
+                  onClick={() => { setRubro(c.slug); setQ(""); setSubcategoria(""); }}>
             {c.nombre}
           </button>
         ))}
       </div>
+      )}
 
       <div className="uk-filters">
         {disp?.zona && <FilterChip icon="📍" label="Zona" value={zonaNom} active={!!zona}>
@@ -178,9 +209,12 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
                         cuyo principal es "Calzado" puede tener también
                         "Celulares", así que al filtrar por celulares la tarjeta
                         decía "Calzado" y el filtro parecía roto estando bien. */}
-                    {rubroElegido
-                      ? <span className="uk-pill">{rubroElegido}</span>
-                      : r.rubro_nombre && <span className="uk-pill">{r.rubro_nombre}</span>}
+                    {rubroElegido && <span className="uk-pill">{rubroElegido}</span>}
+                    {/* La subcategoría dice mucho más que el rubro amplio:
+                        "zapatilla urbana" contra "Calzado". */}
+                    {r.subcategoria
+                      ? <span className="uk-pill">{r.subcategoria}</span>
+                      : !rubroElegido && r.rubro_nombre && <span className="uk-pill">{r.rubro_nombre}</span>}
                     {r.ofertas > 0 && <span className="uk-pill green">{r.ofertas} ofertas</span>}
                   </div>
                   {r.direccion && <div className="uk-resdir"><Pin style={{ width: 13, height: 13 }} />{r.direccion}</div>}

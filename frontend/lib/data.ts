@@ -32,6 +32,7 @@ export async function buscarComercios(f: FiltrosBusqueda, limit = 24, offset = 0
     p_ciudad: f.ciudad || null,
     p_limit: limit,
     p_offset: offset,
+    p_subcategoria: f.subcategoria || null,
   });
   if (error) {
     console.warn("buscar_comercios error:", error.message);
@@ -87,6 +88,24 @@ export async function getFiltrosDisponibles(): Promise<FiltrosDisponibles> {
     // sería peor que mostrar uno de más.
     return { horario: true, zona: true, ofertas: true };
   }
+}
+
+/**
+ * Los chips de refinamiento de una búsqueda: qué subcategorías hay entre sus
+ * resultados. Se calculan en la base, sobre el mismo filtro que trajo los
+ * resultados, así no pueden ofrecer algo que la búsqueda no muestra.
+ */
+export async function getRefinamientos(f: FiltrosBusqueda): Promise<{ subcategoria: string; n: number }[]> {
+  if (!hasSupabase) return [];
+  const { data, error } = await supabase.rpc("refinamientos_busqueda", {
+    q: f.q || null,
+    p_rubro: f.rubro || null,
+    p_modalidad: f.modalidad || null,
+    p_zona: f.zona || null,
+    p_ciudad: f.ciudad || null,
+  });
+  if (error) { console.warn("refinamientos_busqueda:", error.message); return []; }
+  return (data ?? []) as { subcategoria: string; n: number }[];
 }
 
 export async function getCiudades(): Promise<Ciudad[]> {
