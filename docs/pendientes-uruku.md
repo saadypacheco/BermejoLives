@@ -9,7 +9,7 @@
 
 | | |
 |---|---|
-| Comercios activos | **588** (medido el 27/8 en la base) |
+| Comercios activos | **680** (medido el 28/8; eran 588 el 27/8 y 270 el 25/8) |
 | Tercera salida | **67 comercios, los 67 analizados** · 0 pendientes |
 | Analizados | pendiente de recontar: crecieron 318 desde el 25/8 |
 | Rubros por comercio | 2,51 promedio · multi-rubro funcionando |
@@ -125,10 +125,16 @@ el filtro "Abierto ahora" del mapa —los dos figuran como hechos— están
 construidos y **no tienen con qué decidir**. No fallan: simplemente no hacen
 nada, que es la forma de romperse más difícil de ver.
 
-- [ ] Decidir cuál de las dos: **capturar el horario** (es una pregunta más en
-      la segunda pantalla del alta, donde ya se pide el WhatsApp) o **esconder
-      el filtro** hasta que haya datos. Un filtro que no filtra es peor que uno
-      que no está: el comprador lo toca, no cambia nada, y deja de confiar.
+- [x] ~~Esconder el filtro~~ — hecho, y como REGLA y no como parche: un filtro
+      sólo se dibuja si hay datos que pueda filtrar (`getFiltrosDisponibles`).
+      Aplica también a Zona, Precio, Tipo y Ofertas.
+- [ ] **Capturar el horario en el alta.** Es una pregunta más en la segunda
+      pantalla, donde el agente ya está hablando con el dueño. Los 680 ya
+      cargados quedan sin él hasta una segunda pasada — aunque la IA podría
+      leerlo del cartel, que ya mira esas fotos.
+
+      Cuando haya horarios, el filtro **reaparece solo**: no hay que acordarse
+      de volver a mostrarlo.
 
 ### El normalizador de subcategorías corta la última sílaba
 En la §3 de `novedades.sql` aparecen `muebl` y `cepillo de dient`. El reordenado

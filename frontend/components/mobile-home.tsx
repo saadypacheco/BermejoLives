@@ -56,6 +56,11 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
   useEffect(() => { getRubros().then(setRubros).catch(() => {}); }, []);
   const chips = chipsDe(comercios, rubros);
   const [soloAbiertos, setSoloAbiertos] = useState(false);
+  // "Abierto ahora" sólo se muestra si ALGÚN comercio tiene horario cargado.
+  // Medido el 27/8 sobre 680: ninguno lo tenía, así que el filtro estaba a la
+  // vista y no podía dar un resultado correcto nunca. Acá no hace falta
+  // consultar nada — los comercios ya están en memoria.
+  const hayHorarios = comercios.some((c) => (c.horario ?? "").trim() !== "");
   const [sel, setSel] = useState<ComercioMapa | null>(null);
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
   const [miUbicacion, setMiUbicacion] = useState<{ lat: number; lng: number } | null>(null);
@@ -126,9 +131,11 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
 
       {/* Chips de categoría (texto simple, filtran el mapa) */}
       <div className="mchips">
-        <button type="button" className={`mchip mchip-open ${soloAbiertos ? "active" : ""}`} onClick={() => { setSoloAbiertos((v) => !v); setSel(null); }}>
-          🟢 Abierto ahora
-        </button>
+        {hayHorarios && (
+          <button type="button" className={`mchip mchip-open ${soloAbiertos ? "active" : ""}`} onClick={() => { setSoloAbiertos((v) => !v); setSel(null); }}>
+            🟢 Abierto ahora
+          </button>
+        )}
         {chips.map((c) => (
           <button type="button" key={c.label} className={`mchip ${cat === c.rubro ? "active" : ""}`} onClick={() => { setCat(c.rubro); setSel(null); }}>
             {c.label}

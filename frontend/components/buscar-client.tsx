@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { MapResults } from "@/components/map-results";
-import { buscarComercios, getRubros, getZonas } from "@/lib/data";
+import { buscarComercios, getFiltrosDisponibles, getRubros, getZonas, type FiltrosDisponibles } from "@/lib/data";
 import { type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD_LABEL, comoLlegarHref, waLink } from "@/lib/types";
 import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
@@ -24,6 +24,11 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
   const [vista, setVista] = useState<"lista" | "mapa">("lista");
   const [results, setResults] = useState<ResultadoBusqueda[]>([]);
   const [rubros, setRubros] = useState<Rubro[]>([]);
+  // Qué filtros tienen datos detrás. Arranca en `false` y NO se dibuja ninguno
+  // hasta saberlo: mostrar un filtro y esconderlo medio segundo después es peor
+  // que mostrarlo un poco más tarde.
+  const [disp, setDisp] = useState<FiltrosDisponibles | null>(null);
+  useEffect(() => { getFiltrosDisponibles().then(setDisp).catch(() => {}); }, []);
   const [zonas, setZonas] = useState<Zona[]>([]);
   const [loading, setLoading] = useState(true);
   const [hayMas, setHayMas] = useState(false);
@@ -114,11 +119,11 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
       </div>
 
       <div className="uk-filters">
-        <FilterChip icon="📍" label="Zona" value={zonaNom} active={!!zona}>
+        {disp?.zona && <FilterChip icon="📍" label="Zona" value={zonaNom} active={!!zona}>
           {(close) => <OptionList items={[{ slug: "", nombre: "Todas las zonas" }, ...zonas]} sel={zona} onPick={(v) => { setZona(v); close(); }} />}
-        </FilterChip>
+        </FilterChip>}
 
-        <FilterChip icon="💰" label="Precio" value={precioMax ? `hasta ${precioMax}` : undefined} active={!!precioMax}>
+        {disp?.ofertas && <FilterChip icon="💰" label="Precio" value={precioMax ? `hasta ${precioMax}` : undefined} active={!!precioMax}>
           {(close) => (
             <div style={{ padding: 12, minWidth: 200 }}>
               <input className="adm-input" type="number" inputMode="numeric" value={precioMax} onChange={(e) => setPrecioMax(e.target.value)} placeholder="Precio máximo" />
@@ -126,13 +131,15 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
               {precioMax && <button className="uk-btn-ghost" style={{ marginTop: 6, width: "100%" }} onClick={() => { setPrecioMax(""); close(); }}>Quitar</button>}
             </div>
           )}
-        </FilterChip>
+        </FilterChip>}
 
-        <FilterChip icon="🏪" label="Tipo" value={modalidad ? MODALIDAD_LABEL[modalidad] : undefined} active={!!modalidad}>
+        {disp?.modalidad && <FilterChip icon="🏪" label="Tipo" value={modalidad ? MODALIDAD_LABEL[modalidad] : undefined} active={!!modalidad}>
           {(close) => <OptionList items={[{ slug: "", nombre: "Todos" }, { slug: "mayorista", nombre: "Mayorista" }, { slug: "minorista", nombre: "Minorista" }, { slug: "ambos", nombre: "Ambos" }]} sel={modalidad} onPick={(v) => { setModalidad(v); close(); }} />}
-        </FilterChip>
+        </FilterChip>}
 
-        <button type="button" className={`uk-chip ${soloOfertas ? "active" : ""}`} onClick={() => setSoloOfertas((v) => !v)}>Ofertas</button>
+        {disp?.ofertas && (
+          <button type="button" className={`uk-chip ${soloOfertas ? "active" : ""}`} onClick={() => setSoloOfertas((v) => !v)}>Ofertas</button>
+        )}
         <a className="uk-chip link" href={`${RESERVALO_URL}/productos${q ? `?search=${encodeURIComponent(q)}` : ""}`}>Productos ↗</a>
       </div>
 

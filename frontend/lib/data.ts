@@ -40,6 +40,62 @@ export async function buscarComercios(f: FiltrosBusqueda, limit = 24, offset = 0
   return (data ?? []) as ResultadoBusqueda[];
 }
 
+
+/**
+ * Qué filtros tienen datos detrás. Un filtro que no filtra es peor que uno que
+ * no está: la persona lo toca, no cambia nada, y deja de confiar en los demás.
+ *
+ * Medido el 27/8 sobre 680 comercios: **ninguno tenía horario cargado**, así
+ * que "Abierto ahora" —construido, visible y en la lista de hechos— no podía
+ * dar un resultado correcto nunca. No fallaba: no hacía nada, que es la forma
+ * de romperse más difícil de ver.
+ *
+ * Son consultas de conteo puro (`head: true`), sin traer filas. Van una vez al
+ * cargar la pantalla y cuestan prácticamente nada.
+ */
+export type FiltrosDisponibles = {
+  horario: boolean; zona: boolean; ofertas: boolean; modalidad: boolean;
+};
+
+const NINGUNO: FiltrosDisponibles = { horario: false, zona: false, ofertas: false, modalidad: false };
+
+export async function getFiltrosDisponibles(): Promise<FiltrosDisponibles> {
+  if (!hasSupabase) return NINGUNO;
+  const cuenta = async (armar: (q: any) => any): Promise<number> => {
+    try {
+      const { count } = await armar(
+        supabase.from("comercios").select("id", { count: "exact", head: true }).eq("activo", true));
+      return count ?? 0;
+    } catch { return 0; }
+  };
+  try {
+    const [conHorario, conZona, mayoristas, minoristas, ofertas] = await Promise.all([
+      cuenta((q) => q.not("horario", "is", null).neq("horario", "")),
+      cuenta((q) => q.not("zona_id", "is", null)),
+      cuenta((q) => q.eq("modalidad", "mayorista")),
+      cuenta((q) => q.eq("modalidad", "minorista")),
+      (async () => {
+        try {
+          const { count } = await supabase.from("publicaciones")
+            .select("id", { count: "exact", head: true }).eq("estado", "aprobado");
+          return count ?? 0;
+        } catch { return 0; }
+      })(),
+    ]);
+    return {
+      horario: conHorario > 0,
+      zona: conZona > 0,
+      ofertas: ofertas > 0,
+      // Con todos del mismo tipo, el filtro existe y no separa nada.
+      modalidad: mayoristas > 0 && minoristas > 0,
+    };
+  } catch {
+    // Ante un error se muestran todos: esconder filtros por una consulta caída
+    // sería peor que mostrar uno de más.
+    return { horario: true, zona: true, ofertas: true, modalidad: true };
+  }
+}
+
 export async function getCiudades(): Promise<Ciudad[]> {
   if (hasSupabase) {
     const { data } = await supabase.from("ciudades").select("*").order("orden");
