@@ -97,6 +97,9 @@ export type ResultadoBusqueda = {
   /** Lo que la IA vio en la vidriera ("zapatilla urbana"). Es lo que distingue
    *  a un resultado de otro dentro de la misma búsqueda. */
   subcategoria: string | null;
+  /** Cuántos coinciden EN TOTAL, no cuántos vinieron en esta página. Viaja
+   *  repetido en cada fila; es el mismo número en todas. */
+  total?: number;
   rubro_nombre: string | null;
   zona_nombre: string | null;
   rating: number;

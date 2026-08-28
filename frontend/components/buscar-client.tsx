@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { MapResults } from "@/components/map-results";
 import { buscarComercios, getFiltrosDisponibles, getRefinamientos, getRubros, getZonas, type FiltrosDisponibles } from "@/lib/data";
@@ -19,6 +19,8 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
   // resultados de ESTA búsqueda, no de una lista fija.
   const [subcategoria, setSubcategoria] = useState("");
   const [refinamientos, setRefinamientos] = useState<{ subcategoria: string; n: number }[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
+  const router = useRouter();
   const [modalidad, setModalidad] = useState("");
   const [zona, setZona] = useState("");
   const [precioMax, setPrecioMax] = useState("");
@@ -65,13 +67,38 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
     if (g("ciudad") !== null) setCiudad(g("ciudad")!);
     if (g("zona") !== null) setZona(g("zona")!);
     if (g("precio_max") !== null) setPrecioMax(g("precio_max")!);
-    // rubro y q son excluyentes entre sí en la navegación: entrar por una
-    // categoría limpia el texto anterior, y buscar texto sale de la categoría.
-    // Sin esto quedaba un filtro invisible activo y el resultado no cerraba con
-    // lo que la pantalla mostraba.
-    if (g("rubro") !== null) { setRubro(g("rubro")!); setQ(""); setSubcategoria(""); }
-    else if (g("q") !== null) { setQ(g("q")!); setRubro(""); setSubcategoria(""); }
+    // Texto y categoría SE COMBINAN: "zapatillas" dentro de "Calzado". Antes se
+    // borraban entre sí para que no quedara un filtro invisible activo; ahora
+    // eso lo resuelve la línea de pastillas, que muestra TODO lo que está
+    // filtrando y deja sacarlo de a uno.
+    setQ(g("q") ?? "");
+    setRubro(g("rubro") ?? "");
+    setSubcategoria(g("sub") ?? "");
+    setModalidad(g("modalidad") ?? "");
   }, [sp]);
+
+  // La URL refleja SIEMPRE lo que se está viendo. Sin esto, la dirección
+  // quedaba con la primera búsqueda para siempre: no se podía compartir ni
+  // guardar una búsqueda, el botón "atrás" sacaba de la pantalla en vez de
+  // deshacer un filtro, y al recargar volvía un estado que contradecía lo que
+  // había en la pantalla.
+  useEffect(() => {
+    const p = new URLSearchParams();
+    if (q.trim()) p.set("q", q.trim());
+    if (rubro) p.set("rubro", rubro);
+    if (subcategoria) p.set("sub", subcategoria);
+    if (modalidad) p.set("modalidad", modalidad);
+    if (zona) p.set("zona", zona);
+    if (ciudad) p.set("ciudad", ciudad);
+    if (precioMax) p.set("precio_max", precioMax);
+    const nueva = p.toString();
+    // Sólo se escribe si de verdad cambió: si no, este efecto y el que LEE la
+    // URL se despiertan mutuamente sin parar.
+    if (nueva !== sp.toString()) {
+      router.replace(nueva ? `/buscar?${nueva}` : "/buscar", { scroll: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, rubro, subcategoria, modalidad, zona, ciudad, precioMax]);
 
   useEffect(() => {
     clearTimeout(debounce.current);
@@ -79,6 +106,8 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
     debounce.current = setTimeout(async () => {
       const r = await buscarComercios(filtros, PAGE, 0);
       setResults(r);
+      // El total viaja en cada fila; sin resultados, es cero.
+      setTotal(r.length ? (r[0].total ?? r.length) : 0);
       // Los chips se piden SIN el refinamiento activo: si se pidieran con él,
       // al tocar uno desaparecerían todos los demás y no habría forma de
       // cambiar de opinión sin borrar la búsqueda.
@@ -110,6 +139,21 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
   const catChips = [{ slug: "", nombre: "Todos" }, ...rubros];
   const rubroElegido = rubro ? rubros.find((x) => x.slug === rubro)?.nombre ?? null : null;
 
+  function limpiarTodo() {
+    setQ(""); setRubro(""); setSubcategoria(""); setModalidad("");
+    setZona(""); setPrecioMax(""); setSoloOfertas(false);
+  }
+
+  const activos: { clave: string; texto: string; quitar: () => void }[] = [
+    q.trim() && { clave: "q", texto: `“${q.trim()}”`, quitar: () => setQ("") },
+    rubroElegido && { clave: "rubro", texto: rubroElegido, quitar: () => setRubro("") },
+    subcategoria && { clave: "sub", texto: subcategoria, quitar: () => setSubcategoria("") },
+    modalidad && { clave: "mod", texto: MODALIDAD_LABEL[modalidad] ?? modalidad, quitar: () => setModalidad("") },
+    zonaNom && { clave: "zona", texto: zonaNom, quitar: () => setZona("") },
+    precioMax && { clave: "precio", texto: `hasta ${precioMax}`, quitar: () => setPrecioMax("") },
+    soloOfertas && { clave: "ofertas", texto: "Con ofertas", quitar: () => setSoloOfertas(false) },
+  ].filter(Boolean) as { clave: string; texto: string; quitar: () => void }[];
+
   return (
     <div className="uk-container uk-buscar">
       <form className="uk-search-live" onSubmit={(e) => e.preventDefault()}>
@@ -124,12 +168,8 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
           El problema que arregla: buscabas "zapatillas americanas" y los chips
           ofrecían "Óptica" y "Joyería", que son secciones del catálogo y no
           formas de afinar lo que pediste. */}
-      {q.trim() && refinamientos.length > 0 ? (
+      {refinamientos.length > 0 ? (
         <div className="uk-chips">
-          <button type="button" className={`uk-chip ${subcategoria === "" ? "active" : ""}`}
-                  onClick={() => setSubcategoria("")}>
-            Todos
-          </button>
           {refinamientos.map((rf) => (
             <button type="button" key={rf.subcategoria}
                     className={`uk-chip ${subcategoria === rf.subcategoria ? "active" : ""}`}
@@ -138,18 +178,13 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
             </button>
           ))}
         </div>
-      ) : (
-      <div className="uk-chips">
-        {catChips.map((c) => (
-          <button type="button" key={c.slug || "todos"} className={`uk-chip ${rubro === c.slug ? "active" : ""}`}
-                  onClick={() => { setRubro(c.slug); setQ(""); setSubcategoria(""); }}>
-            {c.nombre}
-          </button>
-        ))}
-      </div>
-      )}
+      ) : null}
 
       <div className="uk-filters">
+        <FilterChip icon="🏷" label="Categoría" value={rubroElegido ?? undefined} active={!!rubro}>
+          {(close) => <OptionList items={catChips} sel={rubro} onPick={(v) => { setRubro(v); setSubcategoria(""); close(); }} />}
+        </FilterChip>
+
         {disp?.zona && <FilterChip icon="📍" label="Zona" value={zonaNom} active={!!zona}>
           {(close) => <OptionList items={[{ slug: "", nombre: "Todas las zonas" }, ...zonas]} sel={zona} onPick={(v) => { setZona(v); close(); }} />}
         </FilterChip>}
@@ -174,8 +209,32 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
         <a className="uk-chip link" href={`${RESERVALO_URL}/productos${q ? `?search=${encodeURIComponent(q)}` : ""}`}>Productos ↗</a>
       </div>
 
+      {/* Qué está filtrando, en un solo lugar y con la × para sacarlo.
+          Reemplaza al "Todos" ambiguo: había uno en la fila de rubros que
+          significaba "todas las categorías" y otro en la de refinamientos que
+          significaba "todas las subcategorías de esta búsqueda" — mismo texto,
+          mismo aspecto, mismo lugar, distinto efecto. */}
+      {activos.length > 0 && (
+        <div className="uk-activos">
+          <span className="uk-activos-tit">Mostrando</span>
+          {activos.map((a) => (
+            <button type="button" key={a.clave} className="uk-activo" onClick={a.quitar}>
+              {a.texto} <span aria-hidden>×</span>
+              <span className="sr-only">Quitar filtro {a.texto}</span>
+            </button>
+          ))}
+          {activos.length > 1 && (
+            <button type="button" className="uk-activos-limpiar" onClick={limpiarTodo}>
+              Limpiar todo
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="uk-resbar">
-        <b>{loading ? "Buscando…" : `${shown.length} comercio${shown.length === 1 ? "" : "s"}`}</b>
+        {/* El total REAL, no cuántos se cargaron. Antes decía "30 comercios"
+            habiendo 400, y pasaba a "60" al tocar "Ver más". */}
+        <b>{loading ? "Buscando…" : `${total ?? shown.length} comercio${(total ?? shown.length) === 1 ? "" : "s"}`}</b>
         <div className="uk-seg">
           <button className={vista === "lista" ? "active" : ""} onClick={() => setVista("lista")}>Lista</button>
           <button className={vista === "mapa" ? "active" : ""} onClick={() => setVista("mapa")}>Mapa</button>
