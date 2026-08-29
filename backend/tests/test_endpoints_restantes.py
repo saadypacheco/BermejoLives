@@ -76,16 +76,66 @@ def test_webhook_rechaza_sin_firma_si_hay_secreto(client, repo, monkeypatch):
     assert client.post("/ingest/webhook", json=_evento()).status_code == 401
 
 
-def test_webhook_acepta_firma_valida(client, repo, monkeypatch):
+def test_webhook_acepta_la_firma_como_la_manda_waha(client, repo, monkeypatch):
+    """WAHA firma con SHA-512, no con SHA-256.
+
+    Este test firmaba con SHA-256 y pasaba, porque el backend validaba con
+    SHA-256: el test confirmaba la suposición del código en vez de la realidad.
+    Los dos estaban equivocados y ninguno lo decía. En producción, WAHA mandaba
+    su firma sha512, el backend la rechazaba con 401 y NINGUNA oferta podía
+    entrar — sin un solo error visible del lado de URUKU.
+    """
     import json
     monkeypatch.setattr(settings, "webhook_secret", "s3cr3t")
     cuerpo = json.dumps(_evento()).encode()
-    firma = hmac.new(b"s3cr3t", cuerpo, hashlib.sha256).hexdigest()
+    firma = hmac.new(b"s3cr3t", cuerpo, hashlib.sha512).hexdigest()
+
+    r = client.post("/ingest/webhook", content=cuerpo,
+                    headers={"X-Webhook-Hmac": firma,
+                             "X-Webhook-Hmac-Algorithm": "sha512",
+                             "Content-Type": "application/json"})
+    assert r.status_code == 200, r.text
+    assert r.json()["ok"] is True
+
+
+def test_webhook_sin_cabecera_de_algoritmo_asume_sha512(client, repo, monkeypatch):
+    """Es lo que manda WAHA. Si algún día deja de declararlo, sigue andando."""
+    import json
+    monkeypatch.setattr(settings, "webhook_secret", "s3cr3t")
+    cuerpo = json.dumps(_evento("wa-sin-alg")).encode()
+    firma = hmac.new(b"s3cr3t", cuerpo, hashlib.sha512).hexdigest()
 
     r = client.post("/ingest/webhook", content=cuerpo,
                     headers={"X-Webhook-Hmac": firma, "Content-Type": "application/json"})
     assert r.status_code == 200, r.text
-    assert r.json()["ok"] is True
+
+
+def test_webhook_acepta_sha256_si_el_emisor_lo_declara(client, repo, monkeypatch):
+    """No se rompe con un emisor que use otro algoritmo, mientras lo diga."""
+    import json
+    monkeypatch.setattr(settings, "webhook_secret", "s3cr3t")
+    cuerpo = json.dumps(_evento("wa-256")).encode()
+    firma = hmac.new(b"s3cr3t", cuerpo, hashlib.sha256).hexdigest()
+
+    r = client.post("/ingest/webhook", content=cuerpo,
+                    headers={"X-Webhook-Hmac": firma,
+                             "X-Webhook-Hmac-Algorithm": "sha256",
+                             "Content-Type": "application/json"})
+    assert r.status_code == 200, r.text
+
+
+def test_webhook_rechaza_un_algoritmo_que_no_esta_en_la_lista(client, repo, monkeypatch):
+    """Sin lista blanca, cualquiera podría pedir un algoritmo débil por cabecera
+    y bajarle el piso a la validación."""
+    import json
+    monkeypatch.setattr(settings, "webhook_secret", "s3cr3t")
+    cuerpo = json.dumps(_evento("wa-md5")).encode()
+
+    r = client.post("/ingest/webhook", content=cuerpo,
+                    headers={"X-Webhook-Hmac": "loquesea",
+                             "X-Webhook-Hmac-Algorithm": "md5",
+                             "Content-Type": "application/json"})
+    assert r.status_code == 401
 
 
 def test_webhook_ignora_eventos_que_no_son_mensajes(client, repo, monkeypatch):

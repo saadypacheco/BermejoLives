@@ -77,6 +77,15 @@ select p.proname, pg_get_function_identity_arguments(p.oid),
 Y ojo con "corro la que falta": si una migración posterior ya recreó la misma
 función con otro tipo de retorno, correr la anterior falla o pisa el arreglo.
 
+**Un test puede confirmar tu error en vez de la realidad.** El webhook de WAHA
+validaba la firma con SHA-256 y había un test que firmaba con SHA-256 y pasaba
+— los dos de acuerdo, los dos equivocados: WAHA firma con **SHA-512**. En
+producción cada mensaje entrante se rechazaba con 401 y **ninguna oferta podía
+entrar**, sin un solo error del lado de URUKU. Se descubrió mirando los
+registros del OTRO lado (`docker logs buscadonde-waha`), que sí lo gritaba.
+Cuando algo integra con un sistema externo, el test tiene que copiar lo que ese
+sistema manda de verdad, no lo que nosotros suponemos.
+
 **Pushear antes de dar comandos de `git pull`.** Pasó dos veces: el commit estaba
 hecho, el pull no traía nada, y el rato siguiente se fue buscando el bug en el
 lugar equivocado. Si algo no aparece después de un pull, comparar el hash con
