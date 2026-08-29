@@ -10,7 +10,6 @@ import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
 import { registrarLead, logBusqueda } from "@/lib/campo";
 
-const RESERVALO_URL = "/tienda";
 
 export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string }) {
   const [q, setQ] = useState("");
@@ -233,7 +232,6 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
         {disp?.ofertas && (
           <button type="button" className={`uk-chip ${soloOfertas ? "active" : ""}`} onClick={() => setSoloOfertas((v) => !v)}>Ofertas</button>
         )}
-        <a className="uk-chip link" href={`${RESERVALO_URL}/productos${q ? `?search=${encodeURIComponent(q)}` : ""}`}>Productos ↗</a>
       </div>
 
       {/* Qué está filtrando, en un solo lugar y con la × para sacarlo.

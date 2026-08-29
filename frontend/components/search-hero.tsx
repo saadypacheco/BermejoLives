@@ -5,11 +5,9 @@ import { useRouter } from "next/navigation";
 import { Search, WhatsApp } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
 
-const RESERVALO_URL = "/tienda";
 type Opt = { slug: string; nombre: string };
 
 export function SearchHero({ rubros, zonas }: { rubros: Opt[]; zonas: Opt[] }) {
-  const [modo, setModo] = useState<"negocios" | "productos">("negocios");
   const [q, setQ] = useState("");
   const [rubro, setRubro] = useState("");
   const [zona, setZona] = useState("");
@@ -17,11 +15,6 @@ export function SearchHero({ rubros, zonas }: { rubros: Opt[]; zonas: Opt[] }) {
   const router = useRouter();
 
   function buscar(ov: { q?: string; rubro?: string; zona?: string; precio?: string } = {}) {
-    if (modo === "productos") {
-      const term = (ov.q ?? q).trim();
-      window.location.href = `${RESERVALO_URL}/productos${term ? `?search=${encodeURIComponent(term)}` : ""}`;
-      return;
-    }
     const p = new URLSearchParams();
     const term = (ov.q ?? q).trim(); if (term) p.set("q", term);
     const r = ov.rubro ?? rubro; if (r) p.set("rubro", r);
@@ -30,19 +23,12 @@ export function SearchHero({ rubros, zonas }: { rubros: Opt[]; zonas: Opt[] }) {
     router.push(`/buscar?${p.toString()}`);
   }
 
-  const ph = modo === "negocios"
-    ? "Ej: farmacia, mecánico, hotel, restaurante…"
-    : "Ej: zapatillas, iphone, perfume…";
+  const ph = "Ej: zapatillas, ferretería, farmacia, iPhone…";
   const rubroNom = rubros.find((r) => r.slug === rubro)?.nombre;
   const zonaNom = zonas.find((z) => z.slug === zona)?.nombre;
 
   return (
     <div className="search-hero">
-      <div className="modo-toggle">
-        <button type="button" className={modo === "negocios" ? "active" : ""} onClick={() => setModo("negocios")}>🗺️ Negocios <small>en el mapa</small></button>
-        <button type="button" className={modo === "productos" ? "active" : ""} onClick={() => setModo("productos")}>🛍️ Productos <small>en la tienda</small></button>
-      </div>
-
       <form onSubmit={(e) => { e.preventDefault(); buscar(); }} className="bigsearch">
         <Search style={{ width: 20, height: 20, color: "var(--txt-3)", flexShrink: 0 }} />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={ph} aria-label="Buscar" />
@@ -51,7 +37,7 @@ export function SearchHero({ rubros, zonas }: { rubros: Opt[]; zonas: Opt[] }) {
         </a>
       </form>
 
-      {modo === "negocios" ? (
+      {(
         <div className="chipbar" style={{ justifyContent: "center", marginTop: 12 }}>
           <FilterChip icon="🏷" label="Categoría" value={rubroNom} active={!!rubro}>
             {(close) => <OptionList items={[{ slug: "", nombre: "Todas las categorías" }, ...rubros]} sel={rubro} onPick={(v) => { setRubro(v); close(); buscar({ rubro: v }); }} />}
@@ -67,11 +53,6 @@ export function SearchHero({ rubros, zonas }: { rubros: Opt[]; zonas: Opt[] }) {
               </div>
             )}
           </FilterChip>
-        </div>
-      ) : (
-        <div className="reservalo-banner" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-          <span>🛍️ Tu búsqueda se abre en <b style={{ color: "var(--txt)" }}>Reservalo</b>, la tienda.</span>
-          <a className="btn btn-primary btn-sm" href={`${RESERVALO_URL}/productos`} style={{ whiteSpace: "nowrap" }}>Ir a la tienda →</a>
         </div>
       )}
     </div>

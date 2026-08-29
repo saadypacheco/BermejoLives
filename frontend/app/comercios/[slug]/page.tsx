@@ -137,8 +137,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
         {comercio.acepta_reservas !== false && productos.length > 0 && (
           <>
             <div className="uk-section-head" style={{ marginTop: 40 }}>
-              <h2>Ofertas y productos</h2>
-              <a href={`/tienda?q=${encodeURIComponent(comercio.nombre)}`}>Ver todas en la tienda →</a>
+              <h2>Ofertas</h2>
             </div>
             <div className="uk-product-grid">
               {productos.slice(0, 3).map((p) => (
@@ -158,9 +157,6 @@ export default async function ComercioPage({ params }: { params: { slug: string 
                 </article>
               ))}
             </div>
-            <a className="uk-btn uk-btn-primary" href={`/tienda?q=${encodeURIComponent(comercio.nombre)}`} style={{ marginTop: 18 }}>
-              Ver todas las ofertas de {comercio.nombre} en la tienda →
-            </a>
           </>
         )}
 

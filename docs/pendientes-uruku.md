@@ -2,7 +2,8 @@
 
 > Lista viva. Prod está **vivo** en uruku.bo. Ver
 > [estado-vps-prod-uruku.md](estado-vps-prod-uruku.md) y [deploy-prod-nuevo-vps.md](deploy-prod-nuevo-vps.md).
-> La **tienda (Reservalo)** tiene su propio plan: [plan-tienda-reservalo.md](plan-tienda-reservalo.md).
+> **Reservalo se deja de usar** (29/8): todo vive en URUKU. Ver
+> [decision-uruku-sin-reservalo.md](decision-uruku-sin-reservalo.md).
 > La **clasificación por IA** y el prompt vigente: [clasificacion-ia.md](clasificacion-ia.md).
 
 ## 📍 Situación al 2026-08-27
@@ -298,10 +299,25 @@ captación** — analizado en la §2 de ese documento, con una recomendación.
 - [ ] Redeploy de **Reservalo de QA** a `encontralo.store/tienda`.
 - [ ] Rotar los secretos expuestos (ver arriba).
 
-## 🛍️ Tienda (Reservalo) — proyecto aparte
-- [ ] Ver **[plan-tienda-reservalo.md](plan-tienda-reservalo.md)**: sacar Supabase de Reservalo
-      (imágenes al disco de URUKU, auth por token de URUKU, base self-host), reservas/carrito.
-      **Regla:** todo cambio que se haga en prod se replica en QA.
+## 🛒 Ofertas y reserva, dentro de URUKU
+
+Reemplaza a Reservalo. Decisión y fundamento en
+[decision-uruku-sin-reservalo.md](decision-uruku-sin-reservalo.md).
+
+- [x] ~~Sacar las puertas de entrada a Reservalo~~ — el modo "Productos" del
+      buscador, el chip "Productos ↗" y los enlaces de la ficha. El contenedor y
+      los datos quedan: la decisión es reversible mientras no se borre nada.
+- [ ] **Los dos bloques en el buscador**: "N ofertas con precio" arriba y
+      "N comercios que venden esto" abajo. Hoy el primero queda vacío y la
+      pantalla se ve igual que ahora — ésa es la gracia.
+- [ ] **La tarjeta de oferta con su comercio adentro**: foto, precio, nombre del
+      local, a cuántas cuadras, Cómo llegar, WhatsApp y Reservar.
+- [ ] **Reserva por comercio, varias abiertas a la vez.** En el celular, sin
+      login. Un mensaje de WhatsApp por local.
+- [ ] **La confirma el vendedor** respondiendo en su grupo de WhatsApp. Hasta
+      entonces la pantalla no puede decir "reservado": nada queda apartado.
+- [ ] Sacar del panel de admin el bloque que lee datos de Reservalo (hoy
+      muestra ceros).
 
 ## 💡 Ideas para explorar (registrar, pensar después)
 - **Producción de contenido automatizada desde WhatsApp** (ver abajo).
