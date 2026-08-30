@@ -86,6 +86,25 @@ registros del OTRO lado (`docker logs buscadonde-waha`), que sí lo gritaba.
 Cuando algo integra con un sistema externo, el test tiene que copiar lo que ese
 sistema manda de verdad, no lo que nosotros suponemos.
 
+**Dos proyectos de compose en la misma red comparten los nombres de servicio.**
+`backend` resolvía a DOS contenedores —el de URUKU y el de Reservalo— porque
+ambos proyectos tienen un servicio con ese nombre y comparten la red de Traefik.
+Docker repartía las peticiones entre los dos: la mitad de los avisos de WhatsApp
+terminaban en el backend equivocado y volvían 404. **Un canal que funciona una
+vez de cada dos es peor que uno roto**: parece intermitencia de red.
+
+Dentro de la red, usar siempre el `container_name` (único en todo Docker) y no
+el nombre del servicio. Para revisar si hay más colisiones:
+
+```bash
+for n in postgres postgrest backend frontend waha; do
+  echo -n "$n: "; docker exec buscadonde-waha getent hosts $n | tr '
+' ' '; echo
+done
+```
+
+Más de una dirección en cualquiera de esos = la misma trampa esperando.
+
 **Pushear antes de dar comandos de `git pull`.** Pasó dos veces: el commit estaba
 hecho, el pull no traía nada, y el rato siguiente se fue buscando el bug en el
 lugar equivocado. Si algo no aparece después de un pull, comparar el hash con

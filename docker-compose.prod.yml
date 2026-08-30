@@ -60,7 +60,19 @@ services:
     environment:
       - WAHA_API_KEY=${WAHA_API_KEY}
       - WHATSAPP_DEFAULT_ENGINE=NOWEB
-      - WHATSAPP_HOOK_URL=http://backend:8000/ingest/webhook
+      # Va al NOMBRE DEL CONTENEDOR, no al del servicio.
+      #
+      # `backend` resolvía a DOS contenedores: este proyecto y el de Reservalo
+      # tienen un servicio con ese nombre, y como comparten la red de Traefik
+      # los dos registraron el mismo alias. Docker repartía las peticiones entre
+      # ambos, así que la mitad de los avisos de WhatsApp llegaban al backend de
+      # Reservalo —que no tiene esta ruta— y volvían 404. La otra mitad llegaba
+      # bien. Un canal que funciona una vez de cada dos es peor que uno roto:
+      # parece intermitencia de red y no un error de configuración.
+      #
+      # `container_name` es único en todo el demonio de Docker, así que no puede
+      # colisionar con otro proyecto.
+      - WHATSAPP_HOOK_URL=http://buscadonde-backend:8000/ingest/webhook
       - WHATSAPP_HOOK_EVENTS=message,message.any,session.status
       - WHATSAPP_HOOK_HMAC_KEY=${WEBHOOK_SECRET}
       - WHATSAPP_DOWNLOAD_MEDIA=true
