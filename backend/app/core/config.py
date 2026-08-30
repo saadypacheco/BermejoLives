@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     # nombre del comerciante.
     wa_numeros_propios: str = ""
 
+    # Los números de URUKU que se AGREGAN a cada grupo nuevo: los respaldos que
+    # esperan el día del baneo. El operativo no va acá — es quien crea el grupo,
+    # así que ya queda adentro. Ver docs/numeros-whatsapp-uruku.md.
+    wa_numeros_grupo: str = ""
+
     def es_numero_propio(self, numero: str | None) -> bool:
         if not numero:
             return False

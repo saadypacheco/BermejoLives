@@ -9,7 +9,7 @@ import {
   editarComercio, type ComercioPorVerificar,
   listSuscripciones, registrarPago, suspenderComercio, activarComercio,
   setConfiable as setConfiable_, listarNumeros, agregarNumero, type NumeroComercio,
-  listarGrupos, atarGrupo, soltarGrupo, type GrupoComercio,
+  listarGrupos, atarGrupo, soltarGrupo, crearGrupoComercio, type GrupoComercio,
   adminListarFotos, adminSubirFoto, adminBorrarFoto, type FotoComercio,
   analizarComercio, type AnalisisIA,
   pendientesAnalisis, analizarTanda, type ResultadoTanda,
@@ -1669,6 +1669,20 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
     }
   }
 
+  async function crearGrupo() {
+    setErrGrupo("");
+    if (!window.confirm(
+      `Se va a crear un grupo de WhatsApp con ${comercio.nombre} y los números de URUKU. ` +
+      `El comerciante lo va a ver aparecer en su teléfono. ¿Seguimos?`)) return;
+    setGrupoNuevo("");
+    try {
+      const r = await crearGrupoComercio(comercio.id);
+      setGrupos(r.grupos ?? []);
+    } catch (e) {
+      setErrGrupo(e instanceof Error ? e.message : "No se pudo crear el grupo");
+    }
+  }
+
   async function soltar(jid: string) {
     setErrGrupo("");
     try {
@@ -1741,12 +1755,21 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
             </div>
 
             {grupos.length === 0 && (
-              <div style={{ fontSize: 13, color: "var(--txt-3)", padding: "8px 0" }}>
-                Sin grupo. Se ata solo cuando alguien escribe{" "}
-                <span style={{ fontFamily: "monospace", color: "var(--neon)" }}>
-                  URUKU-{comercio.codigo ?? "XXXX"}
-                </span>{" "}
-                adentro del grupo.
+              <div style={{ padding: "8px 0" }}>
+                {/* El camino corto: el sistema crea el grupo y, como lo crea él,
+                    sabe su identificador y lo ata en el mismo acto. Sin código,
+                    sin que nadie escriba nada. */}
+                <button className="btn btn-primary" style={{ width: "100%" }} onClick={crearGrupo}>
+                  Crear el grupo de WhatsApp
+                </button>
+                <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 8, lineHeight: 1.45 }}>
+                  Lo arma con {comercio.nombre} y los números de URUKU, y queda atado solo.
+                  {" "}También se ata si alguien escribe{" "}
+                  <span style={{ fontFamily: "monospace", color: "var(--neon)" }}>
+                    URUKU-{comercio.codigo ?? "XXXX"}
+                  </span>{" "}
+                  adentro de un grupo ya existente.
+                </div>
               </div>
             )}
 

@@ -44,6 +44,33 @@ ofertas. La lista se arma una vez y sobrevive a cualquier cambio.
 El número de la marca no hace falta (no entra a grupos), pero ponerlo no cuesta
 nada y cubre el día que alguien lo agregue "para consultar algo".
 
+## El grupo lo arma el sistema
+
+En **Admin › el comercio › Grupo de WhatsApp** hay un botón que crea el grupo y
+lo deja atado. Reemplaza cinco pasos manuales por comercio: crear, nombrar,
+agregar al comerciante, agregar los respaldos, y mandar `URUKU-XXXX` adentro
+para que la ingesta sepa de quién es.
+
+Y hay algo mejor que ahorrar tiempo: **como el grupo lo crea el sistema, el
+identificador vuelve en la respuesta y se ata en el mismo acto.** No existe la
+ventana en la que un grupo está creado y todavía no se sabe de quién es — que es
+justo cuando el comerciante manda su primera oferta.
+
+Los respaldos que se agregan salen de `WA_NUMEROS_GRUPO` en `backend/.env`:
+
+```
+WA_NUMEROS_GRUPO=591RESPALDO1,591RESPALDO2
+```
+
+El operativo no va acá: es quien crea el grupo, así que ya queda adentro y como
+administrador.
+
+Si WhatsApp crea el grupo pero no devuelve su identificador, el panel avisa y
+pide atarlo a mano. **No se devuelve un éxito falso**: un grupo creado y sin
+atar deja al comerciante mandando ofertas al vacío.
+
+El camino del código `URUKU-XXXX` sigue funcionando, para grupos que ya existen.
+
 ## El día que baneen el operativo
 
 **Lo que NO se puede hacer:** que el sistema agregue un número nuevo a los

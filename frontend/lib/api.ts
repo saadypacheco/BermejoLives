@@ -598,6 +598,16 @@ export async function descartarImportado(id: string, motivo: string) {
   return res.json();
 }
 
+/** Arma el grupo de WhatsApp del comercio y lo deja atado, en un solo acto. */
+export async function crearGrupoComercio(comercioId: string) {
+  const res = await authFetch(`/admin/comercio/${comercioId}/grupo`, { method: "POST" });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.detail || "No se pudo crear el grupo");
+  }
+  return res.json();
+}
+
 export async function suspenderComercio(id: string) {
   const res = await authFetch(`/admin/comercio/${id}/suspender`, { method: "POST" });
   return res.json();

@@ -865,6 +865,61 @@ def _ahora() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+@router.post("/admin/comercio/{comercio_id}/grupo")
+def crear_grupo_comercio(
+    comercio_id: str,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Arma el grupo de WhatsApp del comercio y lo deja atado.
+
+    Reemplaza los cinco pasos manuales (crear, nombrar, agregar al comerciante,
+    agregar los respaldos, mandar el código adentro). Y como el grupo lo crea el
+    sistema, el identificador vuelve en la respuesta y se ata acá mismo: no hay
+    ventana en la que el grupo exista sin saberse de quién es.
+    """
+    from app.services.wa_grupos import GrupoError, crear_grupo, id_del_grupo, numeros_de_grupo
+
+    comercio = repo.get_comercio(comercio_id)
+    if not comercio:
+        raise HTTPException(status_code=404, detail="No existe ese comercio")
+
+    ya = repo.list_grupos_comercio(comercio_id)
+    if ya:
+        raise HTTPException(
+            status_code=409,
+            detail="Este comercio ya tiene un grupo. Soltalo antes de crear otro.")
+
+    whatsapp = (comercio.get("whatsapp") or "").strip()
+    if not whatsapp:
+        # Sin el número del comerciante el grupo sería URUKU hablando sola.
+        raise HTTPException(
+            status_code=400,
+            detail="El comercio no tiene WhatsApp cargado: sin eso no hay a quién agregar.")
+
+    nombre = f"URUKU · {comercio.get('nombre') or 'Comercio'}"[:60]
+    try:
+        respuesta = crear_grupo(nombre, [whatsapp, *numeros_de_grupo()])
+    except GrupoError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    jid = id_del_grupo(respuesta)
+    if not jid:
+        # El grupo quedó creado en WhatsApp pero no sabemos su identificador.
+        # Se avisa fuerte: hay que atarlo a mano desde el panel, o queda un
+        # grupo huérfano en el que el comerciante va a mandar ofertas al vacío.
+        logger.error("wa_grupo.sin_id", comercio=comercio_id, respuesta=str(respuesta)[:300])
+        raise HTTPException(
+            status_code=502,
+            detail="El grupo se creó pero WhatsApp no devolvió su identificador. "
+                   "Buscalo en el teléfono y atalo a mano desde el panel.")
+
+    repo.vincular_grupo_comercio(jid, comercio_id, nombre, "auto", admin["email"])
+    logger.info("comercio.grupo_creado", comercio=comercio_id, grupo=jid, by=admin["email"])
+    return {"ok": True, "grupo_jid": jid, "nombre": nombre,
+            "grupos": repo.list_grupos_comercio(comercio_id)}
+
+
 # ---- Bajas del mapa: disparo manual ----
 @router.post("/admin/bajas/ejecutar")
 def ejecutar_bajas(
