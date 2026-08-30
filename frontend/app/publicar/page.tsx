@@ -334,7 +334,11 @@ function EditarComercioForm({ comercio, rubros, onCancel, onGuardado }: {
 
 // ─────────────────────────────────────────────
 function Login({ onOk }: { onOk: () => void }) {
-  const [email, setEmail] = useState("lobito@lobito.com");
+  // Vacío, no precargado. Había un correo de prueba fijo acá y el navegador lo
+  // mostraba como si fuera el del agente: se tipeaba la contraseña correcta
+  // sobre el usuario equivocado y el rechazo no decía cuál de los dos estaba
+  // mal. Con el campo vacío, el que entra pone los dos y sabe qué puso.
+  const [email, setEmail] = useState("");
   const [pass, setPass]   = useState("");
   const [err, setErr]     = useState("");
 
