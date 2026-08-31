@@ -29,7 +29,7 @@ _TIPOS_LEAD  = {"whatsapp", "telefono", "email", "web", "vista"}
 
 @router.post("/auth/campo/login")
 def campo_login(body: LoginBody) -> dict:
-    if body.email != settings.agente_email or body.password != settings.agente_password:
+    if not auth.mismo_email(body.email, settings.agente_email) or body.password != settings.agente_password:
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     return {"access_token": auth.make_agente_token(body.email), "agente": {"email": body.email}}
 

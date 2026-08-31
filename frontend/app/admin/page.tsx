@@ -224,7 +224,9 @@ export default function AdminPage() {
         <h1 style={{ fontSize: 26, marginBottom: 6 }}>Panel de moderación</h1>
         <p style={{ color: "var(--txt-3)", marginBottom: 24 }}>Ingresá para revisar las publicaciones que llegan por WhatsApp.</p>
         <form onSubmit={doLogin} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-          <input className="adm-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
+          <input className="adm-input" type="email" inputMode="email" autoCapitalize="none"
+                 autoCorrect="off" spellCheck={false} autoComplete="username"
+                 value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
           <input className="adm-input" type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Contraseña" />
           {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
           <button className="btn btn-primary" type="submit">Entrar</button>

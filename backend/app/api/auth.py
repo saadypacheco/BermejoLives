@@ -11,7 +11,7 @@ router = APIRouter()
 @router.post("/auth/login")
 def login(body: LoginBody) -> dict:
     # MVP: credencial única de admin desde config. En F-007 se mueve a tabla.
-    if body.email != settings.admin_email or body.password != settings.admin_password:
+    if not auth.mismo_email(body.email, settings.admin_email) or body.password != settings.admin_password:
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     token = auth.make_token(body.email, rol="admin")
     return {"access_token": token, "user": {"email": body.email, "rol": "admin"}}

@@ -22,7 +22,7 @@ _MAX_VIDEO_BYTES = 100 * 1024 * 1024  # promo puede pesar más que la galería
 
 @router.post("/auth/publicador/login")
 def publicador_login(body: LoginBody) -> dict:
-    if body.email != settings.publicador_email or body.password != settings.publicador_password:
+    if not auth.mismo_email(body.email, settings.publicador_email) or body.password != settings.publicador_password:
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     return {"access_token": auth.make_publicador_token(body.email), "publicador": {"email": body.email}}
 

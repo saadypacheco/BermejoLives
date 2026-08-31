@@ -166,3 +166,18 @@ def require_usuario(creds: HTTPAuthorizationCredentials | None = Depends(_bearer
     if claims.get("rol") != "usuario" or not claims.get("usuario_id"):
         raise HTTPException(status_code=403, detail="Requiere cuenta de usuario")
     return claims
+
+
+def mismo_email(escrito: str | None, esperado: str | None) -> bool:
+    """Compara dos correos sin distinguir mayúsculas ni espacios de más.
+
+    El teclado del celular pone mayúscula en la primera letra por su cuenta, así
+    que un agente parado en la calle tipea "Agente@uruku.bo" sin darse cuenta y
+    el ingreso lo rechaza. El error que ve es "credenciales incorrectas", que lo
+    manda a revisar la contraseña — la parte que estaba bien.
+
+    Los correos no distinguen mayúsculas en la práctica: nadie tiene dos cuentas
+    que sólo se diferencien por eso. Comparar el texto exacto no protege nada y
+    deja afuera a quien escribió bien.
+    """
+    return (escrito or "").strip().lower() == (esperado or "").strip().lower()

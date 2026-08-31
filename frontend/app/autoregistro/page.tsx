@@ -105,7 +105,9 @@ function LoginConEmail({ onVolver, onLogged }: { onVolver: () => void; onLogged:
 
   return (
     <form onSubmit={submit} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-      <input className="adm-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
+      <input className="adm-input" type="email" inputMode="email" autoCapitalize="none"
+                 autoCorrect="off" spellCheck={false} autoComplete="username"
+                 value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
       <input className="adm-input" type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Contraseña" />
       {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
       <button className="btn btn-primary" type="submit">Entrar</button>
