@@ -53,6 +53,26 @@ class Settings(BaseSettings):
     # así que ya queda adentro. Ver docs/numeros-whatsapp-uruku.md.
     wa_numeros_grupo: str = ""
 
+    # Los celulares con los que URUKU sale a fotografiar ofertas de locales que
+    # todavía no publican. Sus mensajes NO son ofertas propias: cada foto lleva
+    # el código del local y se publica a nombre de ÉSE. Ver
+    # docs/numeros-whatsapp-uruku.md.
+    wa_numeros_explorador: str = ""
+
+    # A quién le escribe el comprador por una oferta que subió el explorador,
+    # mientras el comercio no se haya sumado. Si queda vacío, las consultas van
+    # al comercio como siempre —que es el comportamiento seguro: nunca mandar a
+    # un número que no está escuchando.
+    wa_contacto_explorador: str = ""
+
+    def es_numero_explorador(self, numero: str | None) -> bool:
+        if not numero:
+            return False
+        from app.core.telefono import normalizar_whatsapp
+
+        objetivo = normalizar_whatsapp(numero)
+        return bool(objetivo) and objetivo in _numeros_propios(self.wa_numeros_explorador)
+
     def es_numero_propio(self, numero: str | None) -> bool:
         if not numero:
             return False

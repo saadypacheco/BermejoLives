@@ -11,7 +11,7 @@ import { CompartirBoton } from "@/components/compartir-boton";
 import { getComercioBySlug, getOfertasComercio, getGaleriaComercio } from "@/lib/data";
 import { GaleriaFicha } from "@/components/galeria-ficha";
 import { VistaLogger } from "@/components/vista-logger";
-import { precioFmt, vencimientoFmt, MODALIDAD_LABEL } from "@/lib/types";
+import { precioFmt, vencimientoFmt, contactoDeOferta, MODALIDAD_LABEL } from "@/lib/types";
 import {
   WhatsApp, Verified, Pin, Phone, Globe, Instagram, Facebook, TikTok, Arrow,
 } from "@/components/icons";
@@ -28,6 +28,13 @@ export default async function ComercioPage({ params }: { params: { slug: string 
     );
   }
   const [ofertas, galeria] = await Promise.all([getOfertasComercio(comercio.id), getGaleriaComercio(comercio.id)]);
+
+  /** Devuelve null si no hay a quién escribirle: sin número, el botón sería
+   *  un enlace roto con cara de funcionar. */
+  const contacto = (p: (typeof ofertas)[number]) =>
+    (p.contacto_whatsapp || comercio.whatsapp)
+      ? contactoDeOferta({ ...p, comercio_whatsapp: comercio.whatsapp ?? "" })
+      : null;
 
   const redes = [
     comercio.tiktok_url && { label: "TikTok", href: comercio.tiktok_url, Icon: TikTok },
@@ -151,7 +158,9 @@ export default async function ComercioPage({ params }: { params: { slug: string 
               </span>
             </div>
             <div className="uk-product-grid">
-              {ofertas.map((p) => (
+              {ofertas.map((p) => {
+                const wa = contacto(p);
+                return (
                 <article className="uk-product" key={p.id}>
                   {/* La foto es lo que decide en ropa, calzado y bazar, y es lo
                       único que SIEMPRE viene: el título puede faltar y el
@@ -169,16 +178,29 @@ export default async function ComercioPage({ params }: { params: { slug: string 
                       porque se les mueve con el cambio del día. */}
                   {p.precio != null && <div className="price">{precioFmt(p.precio, p.moneda)}</div>}
                   <ReservarBoton oferta={p} />
+                  {/* Que la foto la sacó URUKU se dice, no se esconde: el
+                      comerciante no la mandó y el comprador tiene que saber a
+                      quién le está escribiendo. */}
+                  {p.contacto_es_uruku && (
+                    <div style={{ fontSize: 11, color: "var(--uk-ink-soft)", marginTop: 6 }}>
+                      Foto tomada por URUKU · consultá con nosotros
+                    </div>
+                  )}
                   <div className="foot">
                     <span>{p.vence_el ? `Hasta el ${vencimientoFmt(p.vence_el)}` : comercio.nombre}</span>
-                    {comercio.whatsapp && (
-                      <WaLeadLink className="wa-mini" comercioId={comercio.id} whatsapp={comercio.whatsapp} mensaje={`Hola, me interesa ${p.titulo ?? "esta oferta"}`}>
+                    {/* El lead se registra como contacto DEL COMERCIO aunque
+                        lo reciba URUKU: es exactamente el número que hay que
+                        poder mostrarle cuando se le vaya a ofrecer un plan
+                        ("tenés 12 consultas esperándote"). */}
+                    {wa && (
+                      <LeadLink className="wa-mini" comercioId={comercio.id} href={wa.href} tipo="whatsapp">
                         <WhatsApp style={{ width: 17, height: 17, color: "#fff" }} />
-                      </WaLeadLink>
+                      </LeadLink>
                     )}
                   </div>
                 </article>
-              ))}
+                );
+              })}
             </div>
           </>
         )}

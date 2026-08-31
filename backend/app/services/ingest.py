@@ -169,6 +169,86 @@ def _handle_confirmacion(payload: WahaMessagePayload, codigo: str, repo: Repo) -
     return {"captured": True, "confirmacion": True, "confirmado": confirmado}
 
 
+def _sin_codigo(texto: str | None) -> str | None:
+    """Saca el código del texto para que no quede a la vista del comprador.
+
+    El explorador escribe "URUKU-AQP5 zapatilla urbana Bs 180": el código es
+    para el sistema, no para la oferta. Sin esto la descripción arrancaba con un
+    código que al comprador no le dice nada."""
+    if not texto:
+        return None
+    limpio = re.sub(r"\bURUKU[\s\-_.]*[A-Z0-9]{4}\b", "", texto, flags=re.IGNORECASE)
+    return re.sub(r"\s{2,}", " ", limpio).strip() or None
+
+
+def _publicar_del_explorador(payload, event, repo: Repo) -> dict:
+    """Una oferta que fotografió URUKU, publicada a nombre del comercio REAL.
+
+    Acá el CÓDIGO manda, siempre. En el resto de la ingesta gana el grupo (o el
+    número ya conocido) y el código sólo se mira cuando no hay nada atado — que
+    es correcto para un comerciante, porque su celular es siempre el mismo local.
+    Para el explorador es al revés: un mismo teléfono publica para cien locales
+    distintos en una tarde. Sin esta rama, la segunda foto y todas las
+    siguientes se habrían publicado bajo el comercio de la primera, sin ningún
+    error a la vista.
+
+    Nunca inventa ni adivina el comercio: sin código válido no publica. Adivinar
+    sería poner la foto y el precio de un local en la ficha de otro.
+    """
+    from datetime import datetime, timezone
+
+    from app.core.codigo import extraer_codigo
+
+    codigo = extraer_codigo(payload.body)
+    if not codigo:
+        logger.info("ingest.explorador_sin_codigo", phone=payload.phone)
+        return {"captured": True, "publicada": False,
+                "motivo": "el explorador mandó una oferta sin el código del local"}
+
+    comercio = repo.get_comercio_por_codigo(codigo)
+    if not comercio:
+        logger.info("ingest.explorador_codigo_desconocido", codigo=codigo)
+        return {"captured": True, "publicada": False,
+                "motivo": f"no hay ningún comercio con el código {codigo}", "codigo": codigo}
+
+    slug = comercio.get("slug") or comercio.get("id") or "?"
+
+    imagen_url = None
+    if payload.type == "image" or payload.has_media:
+        from app.services.wa_media import guardar_imagen_publicacion
+
+        imagen_url = guardar_imagen_publicacion(slug, payload.media_url)
+
+    texto = _sin_codigo(payload.body)
+
+    # Siempre a moderación, aunque el comercio sea confiable: acá URUKU está
+    # publicando el precio de un local que no lo pidió. La cola es donde una
+    # persona corrige el título, el precio, y decide si eso se muestra.
+    row = {
+        "comercio_id": comercio["id"],
+        "tipo": _classify_tipo(payload),
+        "titulo": None if imagen_url else ((texto or "").split(chr(10))[0][:120] or None),
+        "descripcion": texto,
+        "imagen_url": imagen_url,
+        "tiktok_url": _extract_tiktok(payload.body),
+        "estado": "pendiente",
+        "origen": "explorador",
+        # Mientras el comercio no se sume, la consulta la recibe URUKU. Si el
+        # número no está configurado queda NULL y el contacto va al comercio,
+        # que es lo seguro: nunca mandar al comprador a un número que no está
+        # escuchando.
+        "contacto_whatsapp": settings.wa_contacto_explorador.strip() or None,
+        "codigo_recibido": codigo,
+        "identidad_origen": "explorador",
+        "wa_message_id": payload.id,
+        "raw": event.payload,
+    }
+    repo.insert_publicacion(row)
+    logger.info("ingest.explorador_publicacion", comercio=slug, codigo=codigo, foto=bool(imagen_url))
+    return {"captured": True, "comercio": slug, "origen": "explorador",
+            "estado": "pendiente", "codigo": codigo}
+
+
 def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     repo = repo or get_repo()
     event = WahaEvent.model_validate(event_dict)
@@ -207,6 +287,15 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     #      WAHA), pero el celular de URUKU es otro teléfono y entra como
     #      cualquier participante: sin esto, cada "buen día" que escriba alguien
     #      de URUKU se publica a nombre del comerciante.
+    # 1.c) El EXPLORADOR: URUKU sale a fotografiar ofertas de locales que
+    #      todavía no publican. Va antes del descarte por número propio a
+    #      propósito — el explorador también está en WA_NUMEROS_PROPIOS (para
+    #      que siga siendo inofensivo el día que lo agreguen a un grupo de
+    #      comerciante), así que si esta rama fuera después, sus fotos se
+    #      tirarían como "mensaje de un número de URUKU".
+    if settings.es_numero_explorador(payload.phone):
+        return _publicar_del_explorador(payload, event, repo)
+
     if payload.es_grupo and settings.es_numero_propio(payload.phone):
         logger.info("ingest.mensaje_propio", grupo=payload.grupo_jid)
         return {"captured": True, "publicada": False, "motivo": "mensaje de un número de URUKU"}

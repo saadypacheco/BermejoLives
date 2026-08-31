@@ -233,3 +233,124 @@ def test_el_confiable_del_grupo_publica_directo(repo):
 
     res = ingest.handle_message(_evento_grupo(wamid="wa-g6"), repo)
     assert res["estado"] == "aprobado"
+
+
+# ── El explorador ────────────────────────────────────────────────────────────
+# URUKU sale a fotografiar ofertas de locales que todavía no publican. Un mismo
+# teléfono publica para cien locales distintos en una tarde, así que acá el
+# CÓDIGO tiene que ganarle a todo lo demás — al revés que para un comerciante,
+# cuyo celular es siempre el mismo local.
+
+EXPLORADOR = "59170000555"
+
+
+def _explorador(monkeypatch, contacto="59170000999"):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "wa_numeros_explorador", EXPLORADOR, raising=False)
+    monkeypatch.setattr(settings, "wa_contacto_explorador", contacto, raising=False)
+
+
+def _ev_explorador(wamid, body):
+    return _evento(wamid=wamid, body=body, jid=f"{EXPLORADOR}@c.us")
+
+
+def test_explorador_publica_a_nombre_del_comercio_del_codigo(repo, monkeypatch):
+    _explorador(monkeypatch)
+    repo.seed_comercio(id="com-e1", slug="am-calzados", nombre="A&M", codigo="AQP5")
+
+    res = ingest.handle_message(_ev_explorador("wa-e1", "URUKU-AQP5 zapatilla urbana Bs 180"), repo)
+
+    assert res["comercio"] == "am-calzados"
+    assert res["origen"] == "explorador"
+    pub = repo.publicaciones[0]
+    assert pub["comercio_id"] == "com-e1"
+    assert pub["origen"] == "explorador"
+    # Siempre a moderación: URUKU está publicando el precio de un local que no
+    # lo pidió, y la cola es donde una persona lo mira.
+    assert pub["estado"] == "pendiente"
+
+
+def test_explorador_no_queda_pegado_al_primer_comercio(repo, monkeypatch):
+    """La trampa que motivó todo esto.
+
+    Sin la rama del explorador, la primera publicación ata el número al comercio
+    y TODAS las siguientes se publican bajo ése — sin ningún error a la vista.
+    """
+    _explorador(monkeypatch)
+    repo.seed_comercio(id="com-a", slug="local-a", nombre="A", codigo="AAA2")
+    repo.seed_comercio(id="com-b", slug="local-b", nombre="B", codigo="BBB3")
+
+    ingest.handle_message(_ev_explorador("wa-a", "URUKU-AAA2 remera Bs 90"), repo)
+    ingest.handle_message(_ev_explorador("wa-b", "URUKU-BBB3 campera Bs 300"), repo)
+
+    assert [p["comercio_id"] for p in repo.publicaciones] == ["com-a", "com-b"]
+
+
+def test_explorador_sin_codigo_no_publica_nada(repo, monkeypatch):
+    """Adivinar sería poner la foto y el precio de un local en la ficha de otro."""
+    _explorador(monkeypatch)
+    repo.seed_comercio(id="com-a", slug="local-a", nombre="A", codigo="AAA2")
+
+    res = ingest.handle_message(_ev_explorador("wa-s", "zapatillas lindas Bs 200"), repo)
+
+    assert res["publicada"] is False
+    assert repo.publicaciones == []
+    assert repo.comercios.get("com-a") and len(repo.comercios) == 1  # tampoco inventa uno
+
+
+def test_explorador_codigo_de_comercio_inexistente_no_publica(repo, monkeypatch):
+    _explorador(monkeypatch)
+    res = ingest.handle_message(_ev_explorador("wa-x", "URUKU-ZZZ9 algo Bs 10"), repo)
+    assert res["publicada"] is False
+    assert repo.publicaciones == []
+
+
+def test_explorador_el_codigo_no_queda_a_la_vista_del_comprador(repo, monkeypatch):
+    _explorador(monkeypatch)
+    repo.seed_comercio(id="com-a", slug="local-a", nombre="A", codigo="AAA2")
+
+    ingest.handle_message(_ev_explorador("wa-t", "URUKU-AAA2 zapatilla urbana Bs 180"), repo)
+
+    assert repo.publicaciones[0]["descripcion"] == "zapatilla urbana Bs 180"
+
+
+def test_explorador_manda_la_consulta_al_numero_de_uruku(repo, monkeypatch):
+    _explorador(monkeypatch, contacto="59170000999")
+    repo.seed_comercio(id="com-a", slug="local-a", nombre="A", codigo="AAA2")
+
+    ingest.handle_message(_ev_explorador("wa-c", "URUKU-AAA2 remera Bs 90"), repo)
+
+    assert repo.publicaciones[0]["contacto_whatsapp"] == "59170000999"
+
+
+def test_sin_numero_de_contacto_la_consulta_va_al_comercio(repo, monkeypatch):
+    """Nunca mandar al comprador a un número que no está escuchando."""
+    _explorador(monkeypatch, contacto="")
+    repo.seed_comercio(id="com-a", slug="local-a", nombre="A", codigo="AAA2")
+
+    ingest.handle_message(_ev_explorador("wa-n", "URUKU-AAA2 remera Bs 90"), repo)
+
+    assert repo.publicaciones[0]["contacto_whatsapp"] is None
+
+
+def test_explorador_gana_al_descarte_por_numero_propio(repo, monkeypatch):
+    """El explorador también está en WA_NUMEROS_PROPIOS.
+
+    Es a propósito: así sigue siendo inofensivo el día que alguien lo agregue al
+    grupo de un comerciante. Pero si esa comprobación corriera primero, sus
+    fotos se tirarían como "mensaje de un número de URUKU".
+    """
+    from app.core.config import settings
+
+    _explorador(monkeypatch)
+    monkeypatch.setattr(settings, "wa_numeros_propios", EXPLORADOR, raising=False)
+    repo.seed_comercio(id="com-a", slug="local-a", nombre="A", codigo="AAA2")
+
+    ev = _ev_explorador("wa-g", "URUKU-AAA2 remera Bs 90")
+    ev["payload"]["from"] = "12036@g.us"
+    ev["payload"]["participant"] = f"{EXPLORADOR}@c.us"
+
+    res = ingest.handle_message(ev, repo)
+    assert res.get("origen") == "explorador"
+    assert repo.publicaciones[0]["comercio_id"] == "com-a"

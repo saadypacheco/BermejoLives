@@ -26,28 +26,73 @@ que eso se convierta en una oferta.
 sólo captura a través de la cuenta que tiene vinculada. Están en los grupos por
 una sola razón — que el día del baneo ya estén adentro.
 
-## El explorador (anotado, todavía sin definir)
+## El explorador
 
-Idea del 31/8: un número dedicado a **buscar** ofertas — "URUKU explorando
-ofertas en Bermejo". Queda escrito acá para que no se resuelva por descarte el
-día que haga falta.
+Un celular de URUKU que sale a la calle a **fotografiar ofertas** de locales que
+todavía no publican. Resuelve el arranque en frío: hay 813 comercios cargados y
+una sola publicación. Igual que el mapa se llenó caminando, el feed se llena
+caminando.
 
-No es el operativo con otro sombrero. El operativo **recibe**: los comerciantes
-ya están en un grupo y le mandan fotos. El explorador **sale**, y ésa es una
-actividad de riesgo distinto — escribirle a números que no te escribieron
-primero es el patrón que dispara el baneo de Meta.
+### Cómo se publica
 
-Por eso va separado desde el principio y no cuando crezca: si esa actividad vive
-en el operativo, el día del baneo se cae la captura de todos los grupos a la
-vez. En un número aparte, lo peor que pasa es que se pierde el explorador y los
-grupos siguen funcionando.
+El explorador manda la foto **con el código del local en el texto**:
 
-Falta decidir si le escribe a comercios o difunde a compradores, si lo maneja
-una persona o va automatizado, y si va por WAHA o por la API oficial de Meta —
-si difunde, tiene que ser la oficial, con plantillas aprobadas.
+    📷  URUKU-AQP5 zapatilla urbana Bs 180
 
-Cuando exista, su número va en `WA_NUMEROS_PROPIOS` como todos los demás, por si
-alguna vez lo agregan a un grupo.
+Y eso se publica **a nombre del comercio real**, no de un comercio ficticio de
+URUKU. La diferencia no es cosmética: una oferta firmada por "URUKU Ofertas" no
+tiene pin en el mapa, ni horario, ni "a 240 m" — le saca al comprador lo único
+que esta plataforma tiene y las otras no. Y publicar la foto y el precio de un
+local bajo otro nombre le deja el reclamo al comerciante el día que el precio
+cambie.
+
+Lo que sí cambia es **a quién le escribe el comprador**: mientras el comercio no
+se haya sumado, la consulta va al número explorador. El día que se suma, se
+vacía `contacto_whatsapp` de sus publicaciones y pasan a su WhatsApp. Sin
+migrar nada.
+
+Y deja el mejor argumento de venta que hay: llegar al local y decirle *"tenés 12
+consultas esperándote"*.
+
+### La regla que lo hace funcionar: el código gana
+
+Para un comerciante, el grupo (o su número) manda y el código sólo se mira si no
+hay nada atado. Es correcto: su celular es siempre el mismo local.
+
+**Para el explorador es al revés.** Un mismo teléfono publica para cien locales
+en una tarde, así que el código de cada mensaje decide, siempre. Sin esa rama,
+la segunda foto y todas las siguientes se habrían publicado bajo el comercio de
+la primera — sin ningún error a la vista.
+
+Dos cosas que NO hace, a propósito:
+
+- **Sin código válido no publica nada.** Adivinar sería poner la foto y el
+  precio de un local en la ficha de otro.
+- **No ata el número del explorador a ningún comercio.** Ese vínculo es
+  justamente lo que rompería la siguiente publicación.
+
+Todo lo del explorador entra **siempre a moderación**, aunque el comercio sea
+confiable: URUKU está publicando el precio de un local que no lo pidió, y la
+cola es donde una persona lo mira.
+
+### La configuración del explorador
+
+```
+WA_NUMEROS_EXPLORADOR=591EXPLORADOR
+WA_CONTACTO_EXPLORADOR=591EXPLORADOR
+```
+
+El primero es quién puede publicar así; el segundo, a qué número van las
+consultas. Suelen ser el mismo, pero se separan por si algún día conviene que
+atienda otro.
+
+`WA_CONTACTO_EXPLORADOR` vacío es seguro: las consultas van al comercio, como
+siempre. Nunca se manda al comprador a un número que no está escuchando.
+
+El explorador va **también** en `WA_NUMEROS_PROPIOS`, para que siga siendo
+inofensivo el día que alguien lo agregue al grupo de un comerciante. Por eso su
+rama corre ANTES del descarte por número propio: si corriera después, sus fotos
+se tirarían como "mensaje de un número de URUKU".
 
 ## La configuración
 

@@ -192,6 +192,13 @@ export type FeedItem = {
   zona_nombre: string | null;
   descuento_pct: number | null;
   vence_el: string | null;
+  /** 'explorador' = la foto la sacó URUKU en la calle, el comercio no la mandó. */
+  origen?: string | null;
+  /** A quién le escribe el comprador por ESTA oferta. La vista ya lo resuelve:
+   *  el del explorador si lo hay, el del comercio si no. La pantalla no tiene
+   *  que saber que existe un explorador, sólo a qué número mandar. */
+  contacto_whatsapp?: string | null;
+  contacto_es_uruku?: boolean | null;
 };
 
 /** "2026-07-31" → "31/07". Devuelve "" si no hay fecha válida. */
@@ -207,6 +214,26 @@ export function precioFmt(precio: number | null, moneda: string): string {
   if (precio == null) return "";
   const m = MONEDA_LABEL[moneda] ?? moneda;
   return m === "Bs" ? `${precio} Bs` : `${m} ${precio}`;
+}
+
+/** El WhatsApp al que va la consulta por una oferta, y qué decirle.
+ *
+ * Cuando la subió el explorador, la consulta la recibe URUKU y no el comercio:
+ * hay que nombrarle el local, porque del otro lado hay una sola persona
+ * atendiendo consultas de muchos negocios y "hola, ¿tenés esto?" no le alcanza
+ * para saber de qué está hablando.
+ */
+export function contactoDeOferta(o: {
+  titulo: string | null; comercio_nombre: string; comercio_whatsapp: string;
+  contacto_whatsapp?: string | null; contacto_es_uruku?: boolean | null;
+}): { href: string; esUruku: boolean } {
+  const que = o.titulo ?? "esta oferta";
+  const esUruku = Boolean(o.contacto_es_uruku);
+  const numero = o.contacto_whatsapp || o.comercio_whatsapp;
+  const mensaje = esUruku
+    ? `Hola URUKU, me interesa "${que}" de ${o.comercio_nombre}. ¿Sigue disponible?`
+    : `Hola, me interesa ${que}`;
+  return { href: waLink(numero, mensaje), esUruku };
 }
 
 export function waLink(numero: string, mensaje: string): string {
