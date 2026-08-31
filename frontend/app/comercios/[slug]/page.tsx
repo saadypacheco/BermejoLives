@@ -178,14 +178,11 @@ export default async function ComercioPage({ params }: { params: { slug: string 
                       porque se les mueve con el cambio del día. */}
                   {p.precio != null && <div className="price">{precioFmt(p.precio, p.moneda)}</div>}
                   <ReservarBoton oferta={p} />
-                  {/* Que la foto la sacó URUKU se dice, no se esconde: el
-                      comerciante no la mandó y el comprador tiene que saber a
-                      quién le está escribiendo. */}
-                  {p.contacto_es_uruku && (
-                    <div style={{ fontSize: 11, color: "var(--uk-ink-soft)", marginTop: 6 }}>
-                      Foto tomada por URUKU · consultá con nosotros
-                    </div>
-                  )}
+                  {/* La oferta va entre las del local como cualquier otra.
+                      Lo único que la distingue es la marca: el comprador tiene
+                      que poder saber a quién le está escribiendo, pero eso no
+                      necesita un párrafo. */}
+                  {p.contacto_es_uruku && <span className="uk-marca-uruku">URUKU</span>}
                   <div className="foot">
                     <span>{p.vence_el ? `Hasta el ${vencimientoFmt(p.vence_el)}` : comercio.nombre}</span>
                     {/* El lead se registra como contacto DEL COMERCIO aunque

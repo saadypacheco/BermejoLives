@@ -550,3 +550,10 @@
 .uk-linkbtn { background: none; border: none; padding: 2px 4px; cursor: pointer;
   color: var(--uk-ink-soft); font-size: 13px; }
 .uk-linkbtn:hover { color: var(--uk-ink); }
+
+/* La oferta que subió el explorador va entre las del local como cualquier otra.
+   Sólo lleva la marca: el comprador tiene que poder saber a quién le escribe,
+   pero eso no necesita una explicación al pie. */
+.uk-marca-uruku { display: inline-block; margin-top: 4px; padding: 1px 7px; border-radius: 999px;
+  background: rgba(57,255,158,.14); color: var(--uk-neon, #39ff9e);
+  font-size: 9.5px; font-weight: 800; letter-spacing: .06em; vertical-align: middle; }

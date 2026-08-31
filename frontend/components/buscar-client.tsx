@@ -364,6 +364,7 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
                             ? <img src={o.imagen_url} alt={o.titulo ?? ""} loading="lazy" decoding="async" />
                             : <span className="sinfoto" />}
                           <b>{o.titulo ?? "Oferta"}</b>
+                          {o.contacto_es_uruku && <span className="uk-marca-uruku">URUKU</span>}
                           {/* Sin precio no decimos "consultar": mandar a
                               preguntar por WhatsApp no es comparar. */}
                           {o.precio != null && <span className="precio">{precioFmt(o.precio, o.moneda)}</span>}

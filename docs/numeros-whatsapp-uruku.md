@@ -51,6 +51,11 @@ se haya sumado, la consulta va al número explorador. El día que se suma, se
 vacía `contacto_whatsapp` de sus publicaciones y pasan a su WhatsApp. Sin
 migrar nada.
 
+En la pantalla, la oferta aparece **entre las del local, como cualquier otra**,
+con una sola marca: `URUKU`. Alcanza para que el comprador sepa a quién le
+escribe, sin un párrafo explicando de dónde salió la foto — que además le
+restaría a la oferta en vez de sumarle.
+
 Y deja el mejor argumento de venta que hay: llegar al local y decirle *"tenés 12
 consultas esperándote"*.
 
