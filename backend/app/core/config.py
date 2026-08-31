@@ -71,7 +71,8 @@ class Settings(BaseSettings):
         from app.core.telefono import normalizar_whatsapp
 
         objetivo = normalizar_whatsapp(numero)
-        return bool(objetivo) and objetivo in _numeros_propios(self.wa_numeros_explorador)
+        return bool(objetivo) and objetivo in _numeros_propios(
+            self.wa_numeros_explorador, "WA_NUMEROS_EXPLORADOR")
 
     def es_numero_propio(self, numero: str | None) -> bool:
         if not numero:
@@ -165,7 +166,7 @@ class Settings(BaseSettings):
 
 
 @lru_cache(maxsize=4)
-def _numeros_propios(crudo: str) -> frozenset[str]:
+def _numeros_propios(crudo: str, variable: str = "WA_NUMEROS_PROPIOS") -> frozenset[str]:
     """Los números de URUKU del .env, validados y avisando de los que no sirven.
 
     POR QUÉ VALIDA EN VEZ DE NORMALIZAR Y LISTO
@@ -195,16 +196,18 @@ def _numeros_propios(crudo: str) -> frozenset[str]:
             continue
         error = validar_whatsapp(bruto)
         if error:
-            log.warning("config.wa_numero_propio_invalido", valor=bruto, motivo=error)
+            log.warning("config.wa_numero_invalido", variable=variable, valor=bruto, motivo=error)
             continue
         numero = normalizar_whatsapp(bruto)
         if numero:
             validos.add(numero)
 
     if crudo.strip() and not validos:
-        log.warning("config.wa_numeros_propios_vacio",
-                    detalle="WA_NUMEROS_PROPIOS está seteado pero ningún número es válido: "
-                            "los mensajes de URUKU en los grupos van a generar publicaciones")
+        # El nombre de la variable va en el aviso porque ahora son tres las que
+        # pasan por acá: un mensaje que siempre dice WA_NUMEROS_PROPIOS manda a
+        # revisar la variable equivocada.
+        log.warning("config.wa_numeros_vacio", variable=variable,
+                    detalle="está seteada pero ningún número es válido: la guarda queda apagada")
     return frozenset(validos)
 
 

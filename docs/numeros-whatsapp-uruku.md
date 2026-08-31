@@ -80,7 +80,29 @@ Todo lo del explorador entra **siempre a moderación**, aunque el comercio sea
 confiable: URUKU está publicando el precio de un local que no lo pidió, y la
 cola es donde una persona lo mira.
 
-### La configuración del explorador
+### Quién es quién (asignación real, 31/8/2026)
+
+| Número | Operadora | Rol | Dónde vive |
+|---|---|---|---|
+| **75314737** | Tigo | **Operativo** — vinculado a WAHA | Teléfono fijo en la oficina, cargado |
+| **64610187** | Entel | **Respaldo 1** | Cajón, sin usar |
+| **72900149** | Entel | **Respaldo 2** | Cajón, sin usar |
+| *(a comprar)* | — | **Marca** | El número público del sitio |
+| *(a comprar)* | — | **Explorador** | El celular que sale a la calle |
+
+El operativo es de **otra operadora que los dos respaldos**, a propósito: un
+problema de red o de portabilidad de Entel no se lleva puesto al operativo y a
+su reemplazo el mismo día.
+
+Los respaldos van al cajón y **no se usan para nada**. Un número que además
+manda mensajes personales se parece más a lo que Meta banea, y el respaldo tiene
+que estar sano justo el día que haga falta.
+
+El chip del explorador va en el celular que va a la calle. Si eso significa
+sacar el 72900149 de ahí, mejor: pasa al cajón, que es donde tiene que estar un
+respaldo.
+
+## La configuración del explorador
 
 ```
 WA_NUMEROS_EXPLORADOR=591EXPLORADOR
