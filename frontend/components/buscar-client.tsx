@@ -8,6 +8,7 @@ import { buscarComercios, getFiltrosDisponibles, getRefinamientos, getRubros, ge
 import { type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD_LABEL, comoLlegarHref, waLink } from "@/lib/types";
 import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
+import { HorarioBadge } from "@/components/horario-badge";
 import { registrarLead, logBusqueda } from "@/lib/campo";
 
 
@@ -311,6 +312,7 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
                       ? <span className="uk-pill">{r.subcategoria}</span>
                       : !rubroElegido && r.rubro_nombre && <span className="uk-pill">{r.rubro_nombre}</span>}
                     {r.ofertas > 0 && <span className="uk-pill green">{r.ofertas} ofertas</span>}
+                    {r.horario && <HorarioBadge horario={r.horario} />}
                   </div>
                   {r.direccion && <div className="uk-resdir"><Pin style={{ width: 13, height: 13 }} />{r.direccion}</div>}
                   <div className="uk-resact">
@@ -321,6 +323,15 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
                       <Pin style={{ width: 15, height: 15 }} /> Cómo llegar
                     </a>
                   </div>
+                  {/* A la ficha se llegaba sólo por la foto o por el nombre, sin
+                      que nada lo dijera. Los dos botones que sí se veían sacan
+                      del sitio (WhatsApp, Maps), así que lo único que muestra
+                      horario, redes y ofertas era lo único sin puerta.
+                      Cuando hay ofertas, el enlace las nombra: es lo que el
+                      comprador vino a ver, y lleva directo a esa sección. */}
+                  <Link className="uk-resficha" href={r.ofertas > 0 ? `/comercios/${r.slug}#ofertas` : `/comercios/${r.slug}`}>
+                    {r.ofertas > 0 ? `Ver ${r.ofertas} ${r.ofertas === 1 ? "oferta" : "ofertas"} y datos del negocio` : "Ver datos del negocio"} →
+                  </Link>
                 </div>
               </article>
             );

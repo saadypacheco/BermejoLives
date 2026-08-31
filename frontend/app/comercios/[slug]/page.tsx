@@ -5,10 +5,10 @@ import { WaLeadLink } from "@/components/wa-lead-link";
 import { GuardarBoton } from "@/components/guardar-boton";
 import { HorarioBadge } from "@/components/horario-badge";
 import { CompartirBoton } from "@/components/compartir-boton";
-import { getComercioBySlug, getProductos, getGaleriaComercio } from "@/lib/data";
+import { getComercioBySlug, getOfertasComercio, getGaleriaComercio } from "@/lib/data";
 import { GaleriaFicha } from "@/components/galeria-ficha";
 import { VistaLogger } from "@/components/vista-logger";
-import { precioFmt, MODALIDAD_LABEL } from "@/lib/types";
+import { precioFmt, vencimientoFmt, MODALIDAD_LABEL } from "@/lib/types";
 import {
   WhatsApp, Verified, Pin, Phone, Globe, Instagram, Facebook, TikTok, Arrow,
 } from "@/components/icons";
@@ -24,7 +24,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
       </UrukuShell>
     );
   }
-  const [productos, galeria] = await Promise.all([getProductos(comercio.id), getGaleriaComercio(comercio.id)]);
+  const [ofertas, galeria] = await Promise.all([getOfertasComercio(comercio.id), getGaleriaComercio(comercio.id)]);
 
   const redes = [
     comercio.tiktok_url && { label: "TikTok", href: comercio.tiktok_url, Icon: TikTok },
@@ -134,22 +134,38 @@ export default async function ComercioPage({ params }: { params: { slug: string 
           </div>
         </div>
 
-        {comercio.acepta_reservas !== false && productos.length > 0 && (
+        {/* El ancla `#ofertas` la usa el enlace del buscador: si el comercio
+            tiene ofertas, el comprador cae acá y no arriba de todo. */}
+        {ofertas.length > 0 && (
           <>
-            <div className="uk-section-head" style={{ marginTop: 40 }}>
+            <div className="uk-section-head" id="ofertas" style={{ marginTop: 40, scrollMarginTop: 80 }}>
               <h2>Ofertas</h2>
+              <span style={{ color: "var(--uk-ink-soft)", fontSize: 13 }}>
+                {ofertas.length} publicada{ofertas.length === 1 ? "" : "s"} por el negocio
+              </span>
             </div>
             <div className="uk-product-grid">
-              {productos.slice(0, 3).map((p) => (
+              {ofertas.map((p) => (
                 <article className="uk-product" key={p.id}>
-                  <a href={p.url ?? undefined} target="_blank" rel="noopener" style={{ color: "inherit" }}>
-                    <h4>{p.nombre}</h4>
-                  </a>
+                  {/* La foto es lo que decide en ropa, calzado y bazar, y es lo
+                      único que SIEMPRE viene: el título puede faltar y el
+                      precio es opcional a propósito. */}
+                  {p.imagen_url && (
+                    <img src={p.imagen_url} alt={p.titulo ?? ""} loading="lazy" decoding="async"
+                         style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", borderRadius: 10, marginBottom: 10 }} />
+                  )}
+                  <h4>{p.titulo ?? "Oferta"}</h4>
+                  {p.descripcion && (
+                    <p style={{ color: "var(--uk-ink-soft)", fontSize: 13, margin: "4px 0 0" }}>{p.descripcion}</p>
+                  )}
+                  {/* Sin precio no decimos "consultar precio" y listo: el precio
+                      lo pone el comerciante si quiere, y muchos acá no pueden
+                      porque se les mueve con el cambio del día. */}
                   {p.precio != null && <div className="price">{precioFmt(p.precio, p.moneda)}</div>}
                   <div className="foot">
-                    <span>{comercio.nombre}</span>
+                    <span>{p.vence_el ? `Hasta el ${vencimientoFmt(p.vence_el)}` : comercio.nombre}</span>
                     {comercio.whatsapp && (
-                      <WaLeadLink className="wa-mini" comercioId={comercio.id} whatsapp={comercio.whatsapp} mensaje={`Hola, me interesa ${p.nombre}`}>
+                      <WaLeadLink className="wa-mini" comercioId={comercio.id} whatsapp={comercio.whatsapp} mensaje={`Hola, me interesa ${p.titulo ?? "esta oferta"}`}>
                         <WhatsApp style={{ width: 17, height: 17, color: "#fff" }} />
                       </WaLeadLink>
                     )}

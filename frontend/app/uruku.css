@@ -496,3 +496,9 @@
    quedar por detrás del texto. */
 @media (max-width: 640px) { .uk-uruku-marca { width: 120px; right: -10px; bottom: -16px; } }
 
+
+/* Enlace a la ficha, debajo de los dos botones de acción: no compite con
+   WhatsApp (que es lo que cierra la venta) pero deja de ser invisible. */
+.uk-resficha { display: block; margin-top: 8px; padding: 8px 2px 0; font-size: 12.5px; font-weight: 700;
+  color: var(--uk-ink-2, #9aa4b2); text-align: center; border-top: 1px solid var(--uk-line); }
+.uk-resficha:hover { color: var(--uk-neon, #39ff9e); }

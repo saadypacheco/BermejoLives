@@ -154,6 +154,26 @@ export async function getFeed(limit = 8): Promise<FeedItem[]> {
   return DEMO_FEED.slice(0, limit);
 }
 
+/** Las ofertas de UN comercio: las que mandó por WhatsApp y están aprobadas.
+ *
+ * Sale de `feed_publico`, la misma vista que el feed de la portada, no de
+ * `producto_ref` — ésa es la tabla del catálogo de Reservalo, que quedó sin uso
+ * y además exige `url` no nula, así que filtraba justamente lo que llega por
+ * WhatsApp (que no tiene link a ningún lado).
+ *
+ * Sin Supabase devuelve vacío y no el feed de demostración: poner ofertas
+ * inventadas bajo el nombre de un comercio real es peor que no mostrar nada. */
+export async function getOfertasComercio(comercioId: string, limit = 24): Promise<FeedItem[]> {
+  if (!hasSupabase) return [];
+  const { data, error } = await supabase
+    .from("feed_publico")
+    .select("*")
+    .eq("comercio_id", comercioId)
+    .limit(limit);
+  if (error) { logSupaError("getOfertasComercio", error); return []; }
+  return (data ?? []) as FeedItem[];
+}
+
 export async function getComercios(): Promise<Comercio[]> {
   if (hasSupabase) {
     const { data, error } = await supabase.from("comercios").select("*").eq("destacado", true).limit(10);

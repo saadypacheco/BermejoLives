@@ -8,7 +8,10 @@ export function Nav({ active, mapOnly = false }: { active?: string; mapOnly?: bo
     { href: "/", label: "Inicio", key: "inicio" },
     { href: "/buscar", label: "Ofertas", key: "buscar" },
     { href: "/#mapa", label: "Mapa", key: "mapa" },
-    { href: "/comercios/importadora-abc", label: "Negocios", key: "negocios" },
+    // Apuntaba a /comercios/importadora-abc: un comercio de demo escrito a mano.
+    // Todo el que tocaba "Negocios" en el menú aterrizaba en la ficha de ese
+    // local — o en un 404, según si el slug sobrevivió a la carga real.
+    { href: "/buscar", label: "Negocios", key: "negocios" },
     { href: "/#zonas", label: "Categorías", key: "zonas" },
   ];
 

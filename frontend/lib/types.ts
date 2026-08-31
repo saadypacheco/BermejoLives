@@ -105,6 +105,10 @@ export type ResultadoBusqueda = {
   rating: number;
   verificado: boolean;
   ofertas: number;
+  /** `buscar_comercios` ya lo devolvía; el tipo no lo declaraba, así que el dato
+   *  llegaba a la pantalla y se tiraba. Sirve para decir "abierto ahora", que es
+   *  lo que decide si vale la pena caminar hasta ahí. */
+  horario: string | null;
   rank: number;
 };
 
