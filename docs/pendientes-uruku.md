@@ -113,9 +113,16 @@ el alta de campo, "Falta la ubicación". Dieciocho altas quedaron trabadas
 señalando el dato equivocado, con el celular mostrando en pantalla que sí había
 mandado las coordenadas.
 
-**Todo lo que sube archivos va por XHR** (`postFormData` en `lib/upload.ts`), no
-por `fetch`. La galería ya lo hacía por otro motivo —la barra de progreso— y por
-eso funcionaba en el mismo teléfono el mismo día, mientras el alta fallaba.
+**Y cambiar a XHR NO alcanzó**: con XHR el iPhone seguía mandando cero bytes. La
+solución que funcionó es **armar el multipart a mano y mandarlo como Blob**
+(`armarMultipart` en `lib/upload.ts`). Un Blob se manda o no se manda, pero no
+se manda vacío.
+
+**Antes de dar por fallado un arreglo en el celular, verificá que le llegó.** Se
+perdió una vuelta entera arreglando algo que ya estaba arreglado: el teléfono
+servía el bundle viejo desde la caché del service worker. Se comprueba abriendo
+`uruku.bo/version` en el teléfono y comparando el commit. Cada cambio que tenga
+que llegar al celular del agente lleva bump de `VERSION` en `public/sw.js`.
 
 **Pushear antes de dar comandos de `git pull`.** Pasó dos veces: el commit estaba
 hecho, el pull no traía nada, y el rato siguiente se fue buscando el bug en el
