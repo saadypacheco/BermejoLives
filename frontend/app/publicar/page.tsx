@@ -18,7 +18,7 @@ import { medirMemoria } from "@/lib/memoria";
 import { GaleriaUploader } from "@/components/galeria-uploader";
 import { AdminMap } from "@/components/admin-map";
 import { geoErrorMsg } from "@/lib/geo";
-import { encolarAlta, contarPendientes, sincronizarPendientes, listarPendientes,
+import { encolarAlta, sincronizarPendientes, listarPendientes,
          descartarPendiente, esIrrecuperable, type AltaPendiente } from "@/lib/offline-altas";
 
 // Prefijo telefónico según país
@@ -532,12 +532,27 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   // Cola offline: altas guardadas sin señal que se suben cuando vuelve internet.
   const [pendientes,   setPendientes]   = useState(0);
   const [sincronizando, setSincronizando] = useState(false);
-  const refrescarPend = () => contarPendientes().then(setPendientes).catch(() => {});
+  // Se cuenta LEYENDO la cola, no con una consulta aparte que puede fallar sola.
+  //
+  // Antes era `contarPendientes().then(setPendientes).catch(() => {})`: si esa
+  // consulta fallaba, el error se descartaba, el contador quedaba en cero y el
+  // bloque entero desaparecía de la pantalla — con las altas todavía guardadas
+  // en el celular. El agente veía una pantalla limpia y daba por hecho que se
+  // habían subido. En este lugar, no ver nada tiene que significar que no hay
+  // nada, y para eso hay que leer lo que hay.
+  const refrescarPend = () =>
+    listarPendientes()
+      .then((xs) => { setPendientes(xs.length); setErrCola(""); })
+      .catch((e) => {
+        setPendientes(-1);   // -1 = no se pudo saber. NO es cero.
+        setErrCola(e instanceof Error ? e.message : "No se pudo leer la cola del celular");
+      });
   // Resultado del último intento manual. Sin esto el botón falla en silencio: se
   // reintenta, todo rebota, el contador no baja y no hay nada en pantalla que
   // explique por qué.
   const [syncMsg, setSyncMsg] = useState("");
   const [detallePend, setDetallePend] = useState<AltaPendiente[] | null>(null);
+  const [errCola, setErrCola] = useState("");
 
   async function verPendientes() {
     if (detallePend) { setDetallePend(null); return; }
@@ -831,19 +846,44 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           {count > 0 && <div style={{ fontSize: 12, color: "var(--neon)" }}>{count} cargados hoy</div>}
         </div>
         <div style={{ display: "flex", gap: 4 }}>
+          {/* Siempre disponible, aunque el contador diga cero: es la única forma
+              de distinguir "no hay nada guardado" de "no pude leerlo". */}
+          <button className="link-more" onClick={verPendientes} style={{ padding: "6px 12px" }}
+                  title="Lo que quedó guardado en este celular sin subir">Sin subir</button>
           <button className="link-more" onClick={onVerMisComercios} style={{ padding: "6px 12px" }}>Mis comercios</button>
           <button className="link-more" onClick={onLogout} style={{ padding: "6px 12px" }}>Salir</button>
         </div>
       </div>
 
-      {pendientes > 0 && (
+      {detallePend !== null && pendientes === 0 && !errCola && (
+        <div style={{ background: "var(--panel)", border: "1px solid var(--stroke)", borderRadius: 12,
+                      padding: "10px 12px", marginBottom: 12, fontSize: 13 }}>
+          {detallePend.length === 0
+            ? "✅ No hay nada sin subir en este celular."
+            : `Hay ${detallePend.length} sin subir.`}
+          <button type="button" className="link-more" style={{ marginLeft: 8, padding: 0 }}
+                  onClick={() => setDetallePend(null)}>Ocultar</button>
+        </div>
+      )}
+
+      {(pendientes > 0 || pendientes === -1 || !!errCola) && (
         <div style={{ background: "rgba(240,160,40,.12)", border: "1px solid rgba(240,160,40,.45)", color: "var(--amber)", borderRadius: 12, padding: "10px 12px", marginBottom: 12, fontSize: 13 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <span>📴 {pendientes} guardado{pendientes > 1 ? "s" : ""} sin conexión — se sube{pendientes > 1 ? "n" : ""} con señal</span>
+            <span>
+              {pendientes === -1
+                ? "⚠️ No se pudo leer lo que hay guardado en este celular"
+                : `📴 ${pendientes} guardado${pendientes > 1 ? "s" : ""} sin conexión — se sube${pendientes > 1 ? "n" : ""} con señal`}
+            </span>
             <button type="button" className="btn btn-ghost" style={{ padding: "5px 12px", whiteSpace: "nowrap" }} disabled={sincronizando} onClick={() => sincronizar(true)}>
               {sincronizando ? "Subiendo…" : "Sincronizar"}
             </button>
           </div>
+          {errCola && (
+            <div style={{ marginTop: 8, fontSize: 12.5, lineHeight: 1.45 }}>
+              {errCola} · <b>No borres los datos del sitio</b>: las altas pueden
+              seguir guardadas y aún se pueden recuperar.
+            </div>
+          )}
           {syncMsg && (
             <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(240,160,40,.3)", fontSize: 12.5, lineHeight: 1.45, wordBreak: "break-word" }}>
               {syncMsg}
