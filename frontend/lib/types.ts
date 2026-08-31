@@ -105,6 +105,12 @@ export type ResultadoBusqueda = {
   rating: number;
   verificado: boolean;
   ofertas: number;
+  /** Lo que vende el local. `prod_obs_human` lo anotó una persona en el
+   *  recorrido y `prod_det_ia` lo leyó el modelo de la vidriera; los dos
+   *  alimentan el índice de búsqueda desde la 0047, pero recién la 0074 los
+   *  devuelve. Ver `productosDe` en lib/productos.ts. */
+  prod_obs_human: string | null;
+  prod_det_ia: string | null;
   /** `buscar_comercios` ya lo devolvía; el tipo no lo declaraba, así que el dato
    *  llegaba a la pantalla y se tiraba. Sirve para decir "abierto ahora", que es
    *  lo que decide si vale la pena caminar hasta ahí. */

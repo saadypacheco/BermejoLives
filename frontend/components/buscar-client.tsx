@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { MapResults } from "@/components/map-results";
-import { buscarComercios, getFiltrosDisponibles, getRefinamientos, getRubros, getZonas, type FiltrosDisponibles } from "@/lib/data";
-import { type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD_LABEL, comoLlegarHref, waLink } from "@/lib/types";
+import { buscarComercios, getFiltrosDisponibles, getOfertasDeComercios, getRefinamientos, getRubros, getZonas, type FiltrosDisponibles } from "@/lib/data";
+import { type FeedItem, type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD_LABEL, precioFmt, comoLlegarHref, waLink } from "@/lib/types";
+import { productosDe } from "@/lib/productos";
 import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
 import { HorarioBadge } from "@/components/horario-badge";
@@ -34,6 +35,9 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
   const [resultsMapa, setResultsMapa] = useState<ResultadoBusqueda[] | null>(null);
   const [cargandoMapa, setCargandoMapa] = useState(false);
   const [results, setResults] = useState<ResultadoBusqueda[]>([]);
+  // Las ofertas van aparte de la búsqueda: `buscar_comercios` da una fila por
+  // comercio y no tiene dónde meterlas salvo como contador.
+  const [ofertas, setOfertas] = useState<Map<string, FeedItem[]>>(new Map());
   const [rubros, setRubros] = useState<Rubro[]>([]);
   // Qué filtros tienen datos detrás. Arranca en `false` y NO se dibuja ninguno
   // hasta saberlo: mostrar un filtro y esconderlo medio segundo después es peor
@@ -163,6 +167,21 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
 
   const zonaNom = zonas.find((z) => z.slug === zona)?.nombre;
   const shown = soloOfertas ? results.filter((r) => r.ofertas > 0) : results;
+
+  // Se piden sólo las de los comercios que ya tienen ofertas: el contador viene
+  // en la misma búsqueda, así que preguntar por los 800 sería preguntar por 799
+  // vacíos. `join` en la dependencia y no el array: el array es nuevo en cada
+  // render y dispararía la consulta para siempre.
+  const conOfertas = shown.filter((r) => r.ofertas > 0).map((r) => r.id);
+  const claveOfertas = conOfertas.join(",");
+  useEffect(() => {
+    if (!claveOfertas) { setOfertas(new Map()); return; }
+    let vigente = true;
+    getOfertasDeComercios(claveOfertas.split(","))
+      .then((m) => { if (vigente) setOfertas(m); })
+      .catch(() => {});
+    return () => { vigente = false; };
+  }, [claveOfertas]);
   const catChips = [{ slug: "", nombre: "Todos" }, ...rubros];
   const rubroElegido = rubro ? rubros.find((x) => x.slug === rubro)?.nombre ?? null : null;
 
@@ -287,6 +306,8 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
           )}
           {shown.map((r) => {
             const cover = r.portada_url ?? r.logo_url;
+            const { terminos, resto } = productosDe([r.prod_obs_human, r.prod_det_ia], q);
+            const susOfertas = ofertas.get(r.id) ?? [];
             return (
               <article className="uk-rescard" key={r.id}>
                 <Link href={`/comercios/${r.slug}`} className="uk-rescover">
@@ -311,10 +332,48 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
                     {r.subcategoria
                       ? <span className="uk-pill">{r.subcategoria}</span>
                       : !rubroElegido && r.rubro_nombre && <span className="uk-pill">{r.rubro_nombre}</span>}
-                    {r.ofertas > 0 && <span className="uk-pill green">{r.ofertas} ofertas</span>}
                     {r.horario && <HorarioBadge horario={r.horario} />}
                   </div>
+                  {/* Qué vende: primero lo que coincide con lo buscado y
+                      resaltado. Contesta "¿por qué me aparece este local?" sin
+                      que el comprador tenga que entrar a averiguarlo. */}
+                  {terminos.length > 0 && (
+                    <p className="uk-resprod">
+                      {terminos.map((t, i) => (
+                        <span key={t.texto} className={t.coincide ? "coincide" : undefined}>
+                          {t.texto}{i < terminos.length - 1 ? ", " : ""}
+                        </span>
+                      ))}
+                      {resto > 0 && <span className="mas"> +{resto}</span>}
+                    </p>
+                  )}
                   {r.direccion && <div className="uk-resdir"><Pin style={{ width: 13, height: 13 }} />{r.direccion}</div>}
+                  {/* La tira sólo existe si el comercio publicó algo. Hoy no
+                      la ve casi nadie y va apareciendo a medida que publiquen —
+                      que es justamente lo que hace visible el premio de
+                      publicar, sin tener que explicárselo a nadie.
+                      Acá va "Reservar" cuando exista: se reserva una oferta, no
+                      un local. */}
+                  {susOfertas.length > 0 && (
+                    <div className="uk-resofertas">
+                      {susOfertas.map((o) => (
+                        <Link key={o.id} className="uk-resoferta" href={`/comercios/${r.slug}#ofertas`}>
+                          {o.imagen_url
+                            ? <img src={o.imagen_url} alt={o.titulo ?? ""} loading="lazy" decoding="async" />
+                            : <span className="sinfoto" />}
+                          <b>{o.titulo ?? "Oferta"}</b>
+                          {/* Sin precio no decimos "consultar": mandar a
+                              preguntar por WhatsApp no es comparar. */}
+                          {o.precio != null && <span className="precio">{precioFmt(o.precio, o.moneda)}</span>}
+                        </Link>
+                      ))}
+                      {r.ofertas > susOfertas.length && (
+                        <Link className="uk-resoferta mas" href={`/comercios/${r.slug}#ofertas`}>
+                          +{r.ofertas - susOfertas.length}<br />más
+                        </Link>
+                      )}
+                    </div>
+                  )}
                   <div className="uk-resact">
                     <a className="uk-btn-wa" href={waLink(r.whatsapp, `Hola, te vi en URUKU`)} target="_blank" rel="noopener" onClick={() => registrarLead(r.id, "whatsapp", busquedaId)}>
                       <WhatsApp style={{ width: 15, height: 15 }} /> WhatsApp

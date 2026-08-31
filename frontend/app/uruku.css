@@ -502,3 +502,27 @@
 .uk-resficha { display: block; margin-top: 8px; padding: 8px 2px 0; font-size: 12.5px; font-weight: 700;
   color: var(--uk-ink-2, #9aa4b2); text-align: center; border-top: 1px solid var(--uk-line); }
 .uk-resficha:hover { color: var(--uk-neon, #39ff9e); }
+
+/* Qué vende el local. Dos renglones y corta: es un renglón de apoyo, no el
+   título de la tarjeta. Lo que coincide con lo buscado va resaltado y primero
+   (ver `productosDe`), así se entiende de una por qué apareció este resultado. */
+.uk-resprod { margin: 2px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--uk-ink-soft);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.uk-resprod .coincide { color: var(--uk-ink); font-weight: 700; }
+.uk-resprod .mas { opacity: .65; }
+
+/* Tira de ofertas del comercio. Se desliza en lugar de partirse: la tarjeta
+   tiene que seguir midiendo lo mismo tenga una oferta o cinco. */
+.uk-resofertas { display: flex; gap: 8px; margin-top: 10px; padding-bottom: 2px;
+  overflow-x: auto; scrollbar-width: none; }
+.uk-resofertas::-webkit-scrollbar { display: none; }
+.uk-resoferta { flex: 0 0 96px; display: block; color: inherit; text-decoration: none;
+  border: 1px solid var(--uk-line); border-radius: 10px; padding: 6px; background: var(--uk-surface); }
+.uk-resoferta img, .uk-resoferta .sinfoto { display: block; width: 100%; aspect-ratio: 1;
+  object-fit: cover; border-radius: 7px; background: var(--uk-line); }
+.uk-resoferta b { display: block; margin-top: 5px; font-size: 11.5px; font-weight: 600; line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uk-resoferta .precio { display: block; font-size: 13px; font-weight: 800; color: var(--uk-neon, #39ff9e); }
+.uk-resoferta:hover { border-color: var(--uk-neon, #39ff9e); }
+.uk-resoferta.mas { display: grid; place-items: center; text-align: center; flex-basis: 62px;
+  font-size: 12px; font-weight: 700; color: var(--uk-ink-soft); }

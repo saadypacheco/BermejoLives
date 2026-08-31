@@ -174,6 +174,33 @@ export async function getOfertasComercio(comercioId: string, limit = 24): Promis
   return (data ?? []) as FeedItem[];
 }
 
+/** Las ofertas de VARIOS comercios de una sola consulta, agrupadas por comercio.
+ *
+ * Una consulta por tarjeta serían treinta pedidos por página de resultados. Y
+ * pedirlas junto con la búsqueda tampoco sirve: `buscar_comercios` devuelve una
+ * fila por comercio, así que las ofertas viajarían repetidas o aplastadas en un
+ * contador — que es lo que hay hoy y por eso no se pueden mostrar.
+ *
+ * Ante un error devuelve el mapa vacío: la tarjeta sin tira de ofertas se ve
+ * bien y sigue sirviendo. Que falle esto no puede vaciar el buscador. */
+export async function getOfertasDeComercios(ids: string[], porComercio = 3): Promise<Map<string, FeedItem[]>> {
+  const mapa = new Map<string, FeedItem[]>();
+  if (!hasSupabase || ids.length === 0) return mapa;
+  const { data, error } = await supabase
+    .from("feed_publico")
+    .select("*")
+    .in("comercio_id", ids);
+  if (error) { logSupaError("getOfertasDeComercios", error); return mapa; }
+  for (const o of (data ?? []) as FeedItem[]) {
+    const suyas = mapa.get(o.comercio_id) ?? [];
+    // El corte va acá y no en la consulta: un `limit` global se llevaría las
+    // primeras N ofertas de la página entera y dejaría comercios sin ninguna.
+    if (suyas.length < porComercio) suyas.push(o);
+    mapa.set(o.comercio_id, suyas);
+  }
+  return mapa;
+}
+
 export async function getComercios(): Promise<Comercio[]> {
   if (hasSupabase) {
     const { data, error } = await supabase.from("comercios").select("*").eq("destacado", true).limit(10);
