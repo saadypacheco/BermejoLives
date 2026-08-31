@@ -78,6 +78,7 @@ class Repo(Protocol):
     def update_adorno(self, adorno_id: str, patch: dict) -> dict: ...
     def guardar_sinonimos(self, entradas: dict[str, str], origen: str = "ia") -> int: ...
     def quitar_rubro_comercio(self, comercio_id: str, rubro_id: str) -> None: ...
+    def reemplazar_comercio_rubros(self, comercio_id: str, rubro_ids: list[str]) -> None: ...
     def get_comercio_rubros(self, comercio_id: str) -> list[str]: ...
     def insert_lead(self, row: dict) -> None: ...
     def list_leads_by_comercio(self, comercio_id: str, dias: int) -> list[dict]: ...
@@ -650,9 +651,35 @@ class SupabaseRepo:
         return res.data[0]
 
     def set_comercio_rubros(self, comercio_id: str, rubro_ids: list[str]) -> None:
+        """SUMA rubros. No saca los que ya tenía — para eso está
+        `reemplazar_comercio_rubros`.
+
+        (El comentario de `completar_rubros.py` decía que esto reemplazaba el
+        conjunto entero. No es así: sólo agrega. Ese script manda la unión, así
+        que el resultado era el correcto por otro camino, pero la creencia era
+        falsa y en algún momento iba a costar caro.)
+        """
         rows = [{"comercio_id": comercio_id, "rubro_id": rid} for rid in rubro_ids if rid]
         if rows:
             self._db.table("comercio_rubros").upsert(rows).execute()
+
+    def reemplazar_comercio_rubros(self, comercio_id: str, rubro_ids: list[str]) -> None:
+        """Deja EXACTAMENTE estos rubros: borra los que no están y agrega los que faltan.
+
+        Es lo que necesita la edición a mano. Hasta ahora no había forma de
+        QUITARLE un rubro mal puesto a un comercio desde el panel — sólo de
+        sumarle otro encima, que es justamente lo que ensucia los filtros.
+
+        El primero de la lista queda como principal (`comercios.rubro_id`): es el
+        que se muestra en la tarjeta cuando no hay una categoría elegida.
+        """
+        ids = [r for r in dict.fromkeys(rubro_ids) if r]
+        self._db.table("comercio_rubros").delete().eq("comercio_id", comercio_id).execute()
+        if ids:
+            self._db.table("comercio_rubros").insert(
+                [{"comercio_id": comercio_id, "rubro_id": r} for r in ids]).execute()
+        self._db.table("comercios").update(
+            {"rubro_id": ids[0] if ids else None}).eq("id", comercio_id).execute()
 
     def list_rubros(self) -> list[dict]:
         res = (self._db.table("rubros").select("slug, nombre")

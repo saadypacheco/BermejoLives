@@ -189,6 +189,13 @@ class FakeRepo:
         return [{"id": c["id"], "nombre": c.get("nombre"), "lat": c.get("lat"), "lng": c.get("lng")}
                 for c in self.comercios.values() if c.get("lat") is not None]
 
+    def reemplazar_comercio_rubros(self, comercio_id, rubro_ids):
+        ids = [r for r in dict.fromkeys(rubro_ids) if r]
+        c = self.comercios.get(comercio_id)
+        if c is not None:
+            c["rubros"] = ids
+            c["rubro_id"] = ids[0] if ids else None
+
     def altas_por_dia(self, dias=60):
         por_dia = {}
         for c in self.comercios.values():

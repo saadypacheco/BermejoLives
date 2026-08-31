@@ -608,6 +608,25 @@ export async function crearGrupoComercio(comercioId: string) {
   return res.json();
 }
 
+export async function rubrosDeComercio(comercioId: string): Promise<string[]> {
+  const res = await authFetch(`/admin/comercio/${comercioId}/rubros`);
+  return (await res.json()).rubro_slugs ?? [];
+}
+
+/** Deja el comercio con EXACTAMENTE estos rubros. El primero es el principal. */
+export async function editarRubrosComercio(comercioId: string, slugs: string[]) {
+  const res = await authFetch(`/admin/comercio/${comercioId}/rubros`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rubro_slugs: slugs }),
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.detail || "No se pudieron guardar los rubros");
+  }
+  return (await res.json()).rubro_slugs as string[];
+}
+
 export type AltasDia = {
   dia: string; altas: number; con_foto: number; con_whatsapp: number;
   analizados: number; con_nombre: number; agentes: number;

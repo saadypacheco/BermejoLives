@@ -264,3 +264,44 @@ def test_altas_por_dia_viene_del_dia_mas_nuevo_al_mas_viejo(client, repo, admin_
     repo.seed_comercio(slug="b", nombre="Y", created_at="2026-08-30T10:00:00+00:00")
     items = client.get("/admin/altas-por-dia", headers=_h(admin_token)).json()["items"]
     assert [d["dia"] for d in items] == ["2026-08-30", "2026-08-28"]
+
+
+# ══════════════════════════════════════════════ rubros de un comercio
+def test_editar_rubros_REEMPLAZA_en_vez_de_sumar(client, repo, admin_token):
+    """Lo que faltaba: hasta ahora sólo se podía agregar. Un rubro mal puesto no
+    se podía sacar desde ningún lado, y un rubro de más no es un dato extra —
+    es un local apareciendo en una búsqueda que no le corresponde."""
+    c = repo.seed_comercio(slug="x", nombre="X")
+    repo.reemplazar_comercio_rubros(c["id"], [repo.rubros["calzado"], repo.rubros["ropa"]])
+
+    r = client.put(f"/admin/comercio/{c['id']}/rubros",
+                   json={"rubro_slugs": ["calzado"]}, headers=_h(admin_token))
+    assert r.status_code == 200, r.text
+    assert r.json()["rubro_slugs"] == ["calzado"]
+
+
+def test_el_primero_de_la_lista_queda_como_principal(client, repo, admin_token):
+    c = repo.seed_comercio(slug="x", nombre="X")
+    client.put(f"/admin/comercio/{c['id']}/rubros",
+               json={"rubro_slugs": ["ropa", "calzado"]}, headers=_h(admin_token))
+    assert repo.comercios[c["id"]]["rubro_id"] == repo.rubros["ropa"]
+
+
+def test_un_rubro_que_no_existe_no_se_ignora_en_silencio(client, repo, admin_token):
+    """Ignorarlo dejaría al comercio con menos rubros de los que el panel
+    muestra como guardados."""
+    c = repo.seed_comercio(slug="x", nombre="X")
+    r = client.put(f"/admin/comercio/{c['id']}/rubros",
+                   json={"rubro_slugs": ["calzado", "no-existe"]}, headers=_h(admin_token))
+    assert r.status_code == 400
+    assert "no-existe" in r.json()["detail"]
+
+
+def test_se_puede_dejar_un_comercio_sin_rubros(client, repo, admin_token):
+    """Es una decisión válida: mejor sin rubro que con uno inventado."""
+    c = repo.seed_comercio(slug="x", nombre="X")
+    repo.reemplazar_comercio_rubros(c["id"], [repo.rubros["calzado"]])
+    r = client.put(f"/admin/comercio/{c['id']}/rubros",
+                   json={"rubro_slugs": []}, headers=_h(admin_token))
+    assert r.status_code == 200
+    assert r.json()["rubro_slugs"] == []

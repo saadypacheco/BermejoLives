@@ -937,6 +937,53 @@ def admin_altas_por_dia(
     return {"items": items, "total": sum(d["altas"] for d in items)}
 
 
+class RubrosBody(BaseModel):
+    rubro_slugs: list[str]
+
+
+@router.get("/admin/comercio/{comercio_id}/rubros")
+def listar_rubros_comercio(
+    comercio_id: str,
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    return {"rubro_slugs": repo.get_comercio_rubros(comercio_id)}
+
+
+@router.put("/admin/comercio/{comercio_id}/rubros")
+def editar_rubros_comercio(
+    comercio_id: str,
+    body: RubrosBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Deja el comercio con EXACTAMENTE estos rubros.
+
+    Reemplaza en vez de sumar: hasta ahora sólo se podía agregar, y un rubro mal
+    puesto no se podía sacar de ningún lado. Un rubro de más no es un dato
+    extra — es un local apareciendo en una búsqueda que no le corresponde.
+
+    El primero de la lista queda como principal.
+    """
+    if not repo.get_comercio(comercio_id):
+        raise HTTPException(status_code=404, detail="No existe ese comercio")
+
+    ids, desconocidos = [], []
+    for slug in body.rubro_slugs:
+        rid = repo.get_rubro_id(slug)
+        (ids.append(rid) if rid else desconocidos.append(slug))
+    if desconocidos:
+        # Ignorarlos en silencio dejaría al comercio con menos rubros de los que
+        # el panel muestra como guardados.
+        raise HTTPException(status_code=400,
+                            detail=f"Rubros que no existen: {', '.join(desconocidos)}")
+
+    repo.reemplazar_comercio_rubros(comercio_id, ids)
+    logger.info("comercio.rubros_editados", comercio=comercio_id,
+                rubros=body.rubro_slugs, by=admin["email"])
+    return {"ok": True, "rubro_slugs": repo.get_comercio_rubros(comercio_id)}
+
+
 # ---- Bajas del mapa: disparo manual ----
 @router.post("/admin/bajas/ejecutar")
 def ejecutar_bajas(

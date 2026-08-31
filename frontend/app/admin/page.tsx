@@ -11,6 +11,7 @@ import {
   setConfiable as setConfiable_, listarNumeros, agregarNumero, type NumeroComercio,
   listarGrupos, atarGrupo, soltarGrupo, crearGrupoComercio, type GrupoComercio,
   altasPorDia, type AltasDia,
+  rubrosDeComercio, editarRubrosComercio,
   adminListarFotos, adminSubirFoto, adminBorrarFoto, type FotoComercio,
   analizarComercio, type AnalisisIA,
   pendientesAnalisis, analizarTanda, type ResultadoTanda,
@@ -1692,6 +1693,8 @@ function FotosComercio({ comercioId, portada }: { comercioId: string; portada: s
 
 function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscripcion; onClose: () => void }) {
   const [confiable, setConfiable] = useState(!!comercio.confiable);
+  const [rubros, setRubros] = useState<Rubro[]>([]);
+  useEffect(() => { getRubros().then(setRubros).catch(() => {}); }, []);
   const [numeros, setNumeros] = useState<NumeroComercio[]>([]);
   const [nuevo, setNuevo] = useState("");
   const [etiqueta, setEtiqueta] = useState("");
@@ -1700,6 +1703,8 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
   const [grupos, setGrupos] = useState<GrupoComercio[]>([]);
   const [grupoNuevo, setGrupoNuevo] = useState("");
   const [errGrupo, setErrGrupo] = useState("");
+  const [misRubros, setMisRubros] = useState<string[] | null>(null);
+  const [errRubros, setErrRubros] = useState("");
 
   useEffect(() => {
     listarNumeros(comercio.id)
@@ -1709,6 +1714,9 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
     listarGrupos(comercio.id)
       .then((r) => setGrupos(r.items ?? []))
       .catch(() => setErrGrupo("No se pudieron cargar los grupos"));
+    rubrosDeComercio(comercio.id)
+      .then(setMisRubros)
+      .catch(() => setErrRubros("No se pudieron cargar los rubros"));
   }, [comercio.id]);
 
   async function atar(e: React.FormEvent) {
@@ -1720,6 +1728,22 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
       setGrupoNuevo("");
     } catch (e2) {
       setErrGrupo(e2 instanceof Error ? e2.message : "No se pudo atar");
+    }
+  }
+
+  // Un toque agrega o saca. Se guarda al instante y se revierte si falla: en un
+  // trabajo de ir comercio por comercio, un botón "Guardar" por cada cambio es
+  // el doble de toques y una oportunidad más de olvidárselo.
+  async function toggleRubro(slug: string) {
+    if (misRubros === null) return;
+    const antes = misRubros;
+    const ahora = antes.includes(slug) ? antes.filter((s) => s !== slug) : [...antes, slug];
+    setMisRubros(ahora); setErrRubros("");
+    try {
+      setMisRubros(await editarRubrosComercio(comercio.id, ahora));
+    } catch (e) {
+      setMisRubros(antes);
+      setErrRubros(e instanceof Error ? e.message : "No se pudo guardar");
     }
   }
 
@@ -1798,6 +1822,40 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
               </div>
             </div>
           </label>
+
+          {/* Rubros: agregar y sacar de a un toque. Es el trabajo que hay que
+              hacer comercio por comercio, así que no lleva botón de guardar. */}
+          <div style={{ marginTop: 16, paddingBottom: 16, borderBottom: "1px solid var(--border)" }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Rubros</div>
+            <div style={{ fontSize: 12, color: "var(--txt-3)", marginBottom: 10 }}>
+              Tocá para agregar o sacar. El primero es el principal.
+            </div>
+            {misRubros === null ? (
+              <div style={{ fontSize: 13, color: "var(--txt-3)" }}>Cargando…</div>
+            ) : (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {rubros.map((r) => {
+                  const puesto = misRubros.indexOf(r.slug);
+                  return (
+                    <button key={r.slug} type="button" onClick={() => toggleRubro(r.slug)}
+                            style={{ padding: "5px 10px", borderRadius: 999, fontSize: 12,
+                                     cursor: "pointer", border: "1px solid var(--border)",
+                                     background: puesto >= 0 ? "var(--neon)" : "var(--panel)",
+                                     color: puesto >= 0 ? "#000" : "var(--txt-2)",
+                                     fontWeight: puesto === 0 ? 700 : 400 }}>
+                      {puesto === 0 && "★ "}{r.nombre}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {misRubros?.length === 0 && (
+              <div style={{ fontSize: 12, color: "var(--amber)", marginTop: 8 }}>
+                Sin rubros: no va a aparecer en ningún filtro de categoría.
+              </div>
+            )}
+            {errRubros && <div style={{ color: "salmon", fontSize: 12, marginTop: 6 }}>{errRubros}</div>}
+          </div>
 
           {/* Grupo de WhatsApp: el canal por el que llegan las ofertas.
               Se ata solo cuando alguien manda URUKU-XXXX adentro del grupo;
