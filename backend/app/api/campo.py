@@ -7,7 +7,7 @@ confirme. La foto va a Supabase Storage (bucket público 'comercios').
 """
 import httpx
 import structlog
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Request
 from pydantic import BaseModel
 
 from app.core import auth
@@ -103,6 +103,7 @@ def _subir_foto(slug: str, foto: UploadFile, data: bytes) -> tuple[str | None, s
 
 @router.post("/campo/comercio")
 async def alta_campo(
+    request: Request,
     nombre: str = Form(""),
     whatsapp: str | None = Form(None),
     telefono: str | None = Form(None),
@@ -137,6 +138,22 @@ async def alta_campo(
     if modalidad not in _MODALIDADES:
         raise HTTPException(status_code=400, detail=f"modalidad inválida: {modalidad}")
     if lat is None or lng is None:
+        # Qué llegó DE VERDAD. La cola offline del celular ya informa qué mandó;
+        # sin esto no hay forma de comparar las dos puntas, y quedan altas de
+        # campo trabadas con un error que apunta al dato equivocado: si el
+        # cuerpo llega incompleto, TODOS los campos quedan vacíos y el primer
+        # control que se cruza es el de la ubicación.
+        try:
+            recibidos = sorted((await request.form()).keys())
+        except Exception:  # noqa: BLE001
+            recibidos = ["(no se pudo leer el formulario)"]
+        logger.warning(
+            "campo.alta_sin_ubicacion",
+            campos_recibidos=recibidos,
+            content_type=(request.headers.get("content-type") or "")[:90],
+            largo=request.headers.get("content-length"),
+            agente=agente.get("email"),
+        )
         raise HTTPException(status_code=400, detail="Falta la ubicación")
     # Alta mínima: solo la ubicación es obligatoria; whatsapp/teléfono/descripción/foto opcionales.
     ciudad_id = repo.get_ciudad_id(ciudad_slug) or repo.get_ciudad_id("bermejo")
