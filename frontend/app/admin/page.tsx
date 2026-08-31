@@ -1253,6 +1253,20 @@ function TabComercios({
   );
 }
 
+/** Deja el campo como una URL que `href` pueda abrir.
+ *
+ * Lo que se copia de un celular es "@lobito" o "instagram.com/lobito", nunca la
+ * URL completa. La ficha pública pone el valor crudo en `href`, así que sin
+ * esto quedaba un enlace relativo — uruku.bo/@lobito, un 404 con cara de red
+ * social cargada. Devuelve undefined si está vacío para no pisar con "". */
+function normalizarRed(valor: string, base: string): string | undefined {
+  const v = valor.trim();
+  if (!v) return undefined;
+  if (/^https?:\/\//i.test(v)) return v;
+  if (v.includes(".") && !v.startsWith("@")) return `https://${v.replace(/^\/+/, "")}`;
+  return base + v.replace(/^@+/, "");
+}
+
 function ModalEditar({
   comercio, rubros, onClose, onDone,
   posicion = null, haySiguiente = false, hayAnterior = false, onSaltar,
@@ -1273,6 +1287,12 @@ function ModalEditar({
   const [modalidad, setModalidad] = useState(comercio.modalidad ?? "local");
   const [direccion, setDireccion] = useState(comercio.direccion ?? "");
   const [horario, setHorario] = useState((comercio as Record<string, unknown>).horario as string ?? "");
+  const _campo = (k: string) => (comercio as Record<string, unknown>)[k] as string ?? "";
+  const [instagram, setInstagram] = useState(_campo("instagram_url"));
+  const [facebook, setFacebook] = useState(_campo("facebook_url"));
+  const [tiktok, setTiktok] = useState(_campo("tiktok_url"));
+  const [sitioWeb, setSitioWeb] = useState(_campo("sitio_web"));
+  const [email, setEmail] = useState(_campo("email"));
   const _rubroActual = (comercio.rubros as { slug: string } | undefined)?.slug;
   const [rubroSlugs, setRubroSlugs] = useState<string[]>(_rubroActual ? [_rubroActual] : []);
   const [prodObsHuman, setProdObsHuman] = useState(comercio.prod_obs_human ?? "");
@@ -1300,6 +1320,11 @@ function ModalEditar({
         modalidad: modalidad || undefined,
         direccion: direccion || undefined,
         horario: horario || undefined,
+        instagram_url: normalizarRed(instagram, "https://instagram.com/"),
+        facebook_url: normalizarRed(facebook, "https://facebook.com/"),
+        tiktok_url: normalizarRed(tiktok, "https://tiktok.com/@"),
+        sitio_web: normalizarRed(sitioWeb, "https://"),
+        email: email || undefined,
         rubro_slugs: rubroSlugs.length ? rubroSlugs : undefined,
       });
       return true;
@@ -1443,6 +1468,20 @@ function ModalEditar({
             <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Horario
               <input className="adm-input" style={{ marginTop: 4 }} value={horario} onChange={(e) => setHorario(e.target.value)} placeholder="Lun-Sáb 9-20 · Dom 10-14" />
             </label>
+
+            {/* Las columnas y el endpoint existían desde el init; lo que no
+                había era dónde escribirlas, así que la ficha pública nunca
+                mostró una red social de nadie. Se puede pegar "@lobito" o el
+                link entero: lo de abajo lo normaliza. */}
+            <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Redes y contacto
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 6 }}>
+                <input className="adm-input" value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="Instagram: @usuario o link" />
+                <input className="adm-input" value={facebook} onChange={(e) => setFacebook(e.target.value)} placeholder="Facebook: usuario o link" />
+                <input className="adm-input" value={tiktok} onChange={(e) => setTiktok(e.target.value)} placeholder="TikTok: @usuario o link" />
+                <input className="adm-input" value={sitioWeb} onChange={(e) => setSitioWeb(e.target.value)} placeholder="Sitio web" />
+                <input className="adm-input" style={{ gridColumn: "1 / -1" }} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (opcional)" />
+              </div>
+            </div>
             {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
             <div style={{ display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
               <button type="button" className="btn btn-ghost" style={{ flex: 1, minWidth: 110 }} onClick={onClose}>Cancelar</button>
