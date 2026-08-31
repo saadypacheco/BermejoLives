@@ -10,6 +10,7 @@ import {
   listSuscripciones, registrarPago, suspenderComercio, activarComercio,
   setConfiable as setConfiable_, listarNumeros, agregarNumero, type NumeroComercio,
   listarGrupos, atarGrupo, soltarGrupo, crearGrupoComercio, type GrupoComercio,
+  altasPorDia, type AltasDia,
   adminListarFotos, adminSubirFoto, adminBorrarFoto, type FotoComercio,
   analizarComercio, type AnalisisIA,
   pendientesAnalisis, analizarTanda, type ResultadoTanda,
@@ -661,6 +662,9 @@ function TabMonitoreo({
   reservalo: ReservaloResumen | null;
   comercios: ComercioPorVerificar[];
 }) {
+  const [altas, setAltas] = useState<AltasDia[]>([]);
+  useEffect(() => { altasPorDia(60).then((r) => setAltas(r.items ?? [])).catch(() => {}); }, []);
+
   if (!data) return <div className="panel-card glass" style={{ padding: 24, textAlign: "center", color: "var(--txt-3)" }}>Cargando…</div>;
 
   const totalAlertas = data.alertas.vencido + data.alertas.suspendido;
@@ -668,6 +672,54 @@ function TabMonitoreo({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Altas por día. Las columnas se leen de a pares: `altas` contra `con
+          WhatsApp` es la diferencia entre un punto en el mapa y un local al que
+          se le puede escribir; contra `analizados`, lo que falta pasar por la
+          IA. Un total suelto no muestra ninguna de las dos. */}
+      {altas.length > 0 && (
+        <div className="panel-card glass" style={{ padding: 16 }}>
+          <h3 style={{ marginBottom: 4 }}>Altas por día</h3>
+          <p style={{ fontSize: 12, color: "var(--txt-3)", marginBottom: 12 }}>
+            Últimos 60 días · {altas.reduce((a, d) => a + d.altas, 0)} comercios
+          </p>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ color: "var(--txt-3)", fontSize: 11, textAlign: "right" }}>
+                  <th style={{ textAlign: "left", padding: "4px 8px" }}>Día</th>
+                  <th style={{ padding: "4px 8px" }}>Altas</th>
+                  <th style={{ padding: "4px 8px" }}>Con nombre</th>
+                  <th style={{ padding: "4px 8px" }}>Con foto</th>
+                  <th style={{ padding: "4px 8px" }}>Con WhatsApp</th>
+                  <th style={{ padding: "4px 8px" }}>Analizados</th>
+                  <th style={{ padding: "4px 8px" }}>Agentes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {altas.map((d) => {
+                  const falta = d.altas - d.con_whatsapp;
+                  return (
+                    <tr key={d.dia} style={{ borderTop: "1px solid var(--border)", textAlign: "right" }}>
+                      <td style={{ textAlign: "left", padding: "6px 8px", whiteSpace: "nowrap" }}>{d.dia}</td>
+                      <td style={{ padding: "6px 8px", fontWeight: 700 }}>{d.altas}</td>
+                      <td style={{ padding: "6px 8px" }}>{d.con_nombre}</td>
+                      <td style={{ padding: "6px 8px" }}>{d.con_foto}</td>
+                      {/* Lo que falta se resalta: es el número que decide si la
+                          ficha lleva a algún lado o es sólo un punto. */}
+                      <td style={{ padding: "6px 8px", color: falta > 0 ? "var(--amber)" : undefined }}>
+                        {d.con_whatsapp}{falta > 0 && <span style={{ fontSize: 11 }}> (−{falta})</span>}
+                      </td>
+                      <td style={{ padding: "6px 8px" }}>{d.analizados}</td>
+                      <td style={{ padding: "6px 8px", color: "var(--txt-3)" }}>{d.agentes}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
         <div className="panel-card glass" style={{ padding: 16, borderLeft: "3px solid var(--neon)" }}>

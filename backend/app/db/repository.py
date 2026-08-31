@@ -83,6 +83,7 @@ class Repo(Protocol):
     def list_leads_by_comercio(self, comercio_id: str, dias: int) -> list[dict]: ...
     def stats_admin(self) -> dict: ...
     def estadisticas_admin(self) -> dict: ...
+    def altas_por_dia(self, dias: int = 60) -> list[dict]: ...
     def insert_busqueda(
         self, query: str, resultados: int, comercios: list[str] | None = None
     ) -> str | None: ...
@@ -933,6 +934,61 @@ class SupabaseRepo:
             "leads_hoy":          leads_hoy.count or 0,
             "leads_ayer":         leads_ayer.count or 0,
         }
+
+    def altas_por_dia(self, dias: int = 60) -> list[dict]:
+        """Cuántos comercios se cargaron cada día, y en qué estado quedaron.
+
+        Se pagina en vez de pedir un tope alto: PostgREST corta en 1000 filas
+        (PGRST_DB_MAX_ROWS), así que un `.limit(2000)` devuelve mil y el informe
+        contaría de menos sin avisar. Con 800 comercios todavía entra; el día que
+        pase los mil, un reporte que miente es peor que uno que no está.
+        """
+        from datetime import datetime, timedelta, timezone
+
+        desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+        filas: list[dict] = []
+        pagina = 1000
+        for inicio in range(0, 50000, pagina):
+            lote = (
+                self._db.table("comercios")
+                .select("created_at, portada_url, whatsapp, ia_analizado_at, nombre, cargado_por")
+                .eq("activo", True)
+                .gte("created_at", desde)
+                .order("created_at")
+                .range(inicio, inicio + pagina - 1)
+                .execute()
+            ).data or []
+            filas.extend(lote)
+            if len(lote) < pagina:
+                break
+
+        por_dia: dict[str, dict] = {}
+        for c in filas:
+            dia = (c.get("created_at") or "")[:10]
+            if not dia:
+                continue
+            d = por_dia.setdefault(dia, {
+                "dia": dia, "altas": 0, "con_foto": 0, "con_whatsapp": 0,
+                "analizados": 0, "con_nombre": 0, "agentes": set(),
+            })
+            d["altas"] += 1
+            if c.get("portada_url"):
+                d["con_foto"] += 1
+            if (c.get("whatsapp") or "").strip():
+                d["con_whatsapp"] += 1
+            if c.get("ia_analizado_at"):
+                d["analizados"] += 1
+            # "Comercio 1234" es el nombre que pone el sistema cuando no hay uno
+            # real. Contarlo como nombre haría ver completo lo que no lo está.
+            if not (c.get("nombre") or "").lower().startswith("comercio"):
+                d["con_nombre"] += 1
+            if c.get("cargado_por"):
+                d["agentes"].add(c["cargado_por"])
+
+        salida = []
+        for d in sorted(por_dia.values(), key=lambda x: x["dia"], reverse=True):
+            salida.append({**d, "agentes": len(d["agentes"])})
+        return salida
 
     def estadisticas_admin(self) -> dict:
         """Monitoreo: usuarios/comercios nuevos, alertas de baja, ofertas y contactos."""

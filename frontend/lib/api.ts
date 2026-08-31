@@ -608,6 +608,16 @@ export async function crearGrupoComercio(comercioId: string) {
   return res.json();
 }
 
+export type AltasDia = {
+  dia: string; altas: number; con_foto: number; con_whatsapp: number;
+  analizados: number; con_nombre: number; agentes: number;
+};
+
+export async function altasPorDia(dias = 60): Promise<{ items: AltasDia[]; total: number }> {
+  const res = await authFetch(`/admin/altas-por-dia?dias=${dias}`);
+  return res.json();
+}
+
 export async function suspenderComercio(id: string) {
   const res = await authFetch(`/admin/comercio/${id}/suspender`, { method: "POST" });
   return res.json();

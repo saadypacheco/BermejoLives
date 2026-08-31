@@ -236,3 +236,31 @@ def test_buscar_ignora_mayusculas(client, repo):
 
 def test_buscar_exige_minimo_dos_letras(client, repo):
     assert client.get("/comercio/buscar?q=a").status_code == 422
+
+
+# ══════════════════════════════════════════════ altas por día
+def test_altas_por_dia_agrupa_y_cuenta_lo_que_falta(client, repo, admin_token):
+    repo.seed_comercio(slug="a", nombre="Ferretería Sur", whatsapp="59170000001",
+                       created_at="2026-08-30T10:00:00+00:00", portada_url="u", ia_analizado_at="x")
+    repo.seed_comercio(slug="b", nombre="Comercio 12", whatsapp=None,
+                       created_at="2026-08-30T11:00:00+00:00")
+    repo.seed_comercio(slug="c", nombre="Kiosko Ana", whatsapp="59170000002",
+                       created_at="2026-08-29T09:00:00+00:00")
+
+    r = client.get("/admin/altas-por-dia", headers=_h(admin_token))
+    assert r.status_code == 200, r.text
+    dias = {d["dia"]: d for d in r.json()["items"]}
+    assert dias["2026-08-30"]["altas"] == 2
+    assert dias["2026-08-30"]["con_whatsapp"] == 1
+    assert dias["2026-08-30"]["analizados"] == 1
+    # "Comercio 12" es el nombre que pone el sistema, no un nombre real:
+    # contarlo haría ver completo lo que no lo está.
+    assert dias["2026-08-30"]["con_nombre"] == 1
+    assert r.json()["total"] == 3
+
+
+def test_altas_por_dia_viene_del_dia_mas_nuevo_al_mas_viejo(client, repo, admin_token):
+    repo.seed_comercio(slug="a", nombre="X", created_at="2026-08-28T10:00:00+00:00")
+    repo.seed_comercio(slug="b", nombre="Y", created_at="2026-08-30T10:00:00+00:00")
+    items = client.get("/admin/altas-por-dia", headers=_h(admin_token)).json()["items"]
+    assert [d["dia"] for d in items] == ["2026-08-30", "2026-08-28"]

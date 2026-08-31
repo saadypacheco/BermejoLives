@@ -189,6 +189,26 @@ class FakeRepo:
         return [{"id": c["id"], "nombre": c.get("nombre"), "lat": c.get("lat"), "lng": c.get("lng")}
                 for c in self.comercios.values() if c.get("lat") is not None]
 
+    def altas_por_dia(self, dias=60):
+        por_dia = {}
+        for c in self.comercios.values():
+            if not c.get("activo", True):
+                continue
+            dia = (c.get("created_at") or "")[:10]
+            if not dia:
+                continue
+            d = por_dia.setdefault(dia, {"dia": dia, "altas": 0, "con_foto": 0,
+                                         "con_whatsapp": 0, "analizados": 0,
+                                         "con_nombre": 0, "agentes": set()})
+            d["altas"] += 1
+            if c.get("portada_url"): d["con_foto"] += 1
+            if (c.get("whatsapp") or "").strip(): d["con_whatsapp"] += 1
+            if c.get("ia_analizado_at"): d["analizados"] += 1
+            if not (c.get("nombre") or "").lower().startswith("comercio"): d["con_nombre"] += 1
+            if c.get("cargado_por"): d["agentes"].add(c["cargado_por"])
+        return [{**d, "agentes": len(d["agentes"])}
+                for d in sorted(por_dia.values(), key=lambda x: x["dia"], reverse=True)]
+
     def get_ciudad(self, slug):
         return {"id": f"ciudad-{slug}", "slug": slug, "nombre": slug.title(),
                 "lat": -22.7361, "lng": -64.3433}

@@ -920,6 +920,23 @@ def crear_grupo_comercio(
             "grupos": repo.list_grupos_comercio(comercio_id)}
 
 
+@router.get("/admin/altas-por-dia")
+def admin_altas_por_dia(
+    dias: int = Query(default=60, ge=1, le=365),
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Cuántos comercios se cargaron cada día y en qué estado quedaron.
+
+    Las columnas están elegidas para que se lean de a pares: `altas` contra
+    `con_whatsapp` es la diferencia entre un punto en el mapa y un local al que
+    se puede escribir; `altas` contra `analizados` dice qué falta pasar por la
+    IA. Un total suelto no muestra ninguna de las dos cosas.
+    """
+    items = repo.altas_por_dia(dias)
+    return {"items": items, "total": sum(d["altas"] for d in items)}
+
+
 # ---- Bajas del mapa: disparo manual ----
 @router.post("/admin/bajas/ejecutar")
 def ejecutar_bajas(
