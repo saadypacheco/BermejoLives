@@ -378,7 +378,12 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
                     <a className="uk-btn-wa" href={waLink(r.whatsapp, `Hola, te vi en URUKU`)} target="_blank" rel="noopener" onClick={() => registrarLead(r.id, "whatsapp", busquedaId)}>
                       <WhatsApp style={{ width: 15, height: 15 }} /> WhatsApp
                     </a>
-                    <a className="uk-btn-ghost" href={comoLlegarHref(r)} target="_blank" rel="noopener">
+                    {/* "Cómo llegar" también es un contacto: nadie pide
+                        indicaciones para un local al que no piensa ir. Sin
+                        registrarlo, el comercio que se descubre por el mapa y
+                        se visita caminando figuraba con cero. */}
+                    <a className="uk-btn-ghost" href={comoLlegarHref(r)} target="_blank" rel="noopener"
+                       onClick={() => registrarLead(r.id, "mapa", busquedaId)}>
                       <Pin style={{ width: 15, height: 15 }} /> Cómo llegar
                     </a>
                   </div>

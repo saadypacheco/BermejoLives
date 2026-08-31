@@ -196,7 +196,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
             <div className="mcard-icons">
               {wa(sel.whatsapp) && <a className="mab wa" href={`https://wa.me/${wa(sel.whatsapp)}`} target="_blank" rel="noopener" aria-label="WhatsApp" onClick={() => registrarLead(sel.id)}><WhatsApp style={{ width: 20, height: 20 }} /></a>}
               {sel.telefono && <a className="mab" href={`tel:${sel.telefono}`} aria-label="Llamar" onClick={() => registrarLead(sel.id, "telefono")}><Phone style={{ width: 18, height: 18 }} /></a>}
-              <a className="mab" href={sel.como_llegar ?? `https://www.google.com/maps/search/?api=1&query=${sel.lat},${sel.lng}`} target="_blank" rel="noopener" aria-label="Cómo llegar"><Send style={{ width: 18, height: 18 }} /></a>
+              <a className="mab" href={sel.como_llegar ?? `https://www.google.com/maps/search/?api=1&query=${sel.lat},${sel.lng}`} target="_blank" rel="noopener" aria-label="Cómo llegar" onClick={() => registrarLead(sel.id, "mapa")}><Send style={{ width: 18, height: 18 }} /></a>
             </div>
             {/* "Más información" (ficha completa) — visible para todos en el lanzamiento */}
             <Link className="btn btn-primary mver" href={`/comercios/${sel.slug}`}>Más información</Link>

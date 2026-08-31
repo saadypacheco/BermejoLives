@@ -24,7 +24,11 @@ router = APIRouter()
 logger = structlog.get_logger()
 
 _MODALIDADES = {"mayorista", "minorista", "ambos"}
-_TIPOS_LEAD  = {"whatsapp", "telefono", "email", "web", "vista"}
+# "mapa" = tocó "Cómo llegar". Es contacto igual que el WhatsApp: nadie pide
+# indicaciones para un local al que no piensa ir. Sin esto, el 400 del tipo
+# desconocido se comía la métrica en silencio — `registrarLead` es
+# fire-and-forget y no mira la respuesta.
+_TIPOS_LEAD  = {"whatsapp", "telefono", "email", "web", "vista", "mapa"}
 
 
 @router.post("/auth/campo/login")

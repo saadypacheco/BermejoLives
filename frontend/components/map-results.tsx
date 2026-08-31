@@ -3,7 +3,7 @@
 import { agregarTiles } from "@/lib/mapa-tiles";
 import { useEffect, useRef } from "react";
 import { type ResultadoBusqueda, comoLlegarHref, waLink, MODALIDAD_LABEL } from "@/lib/types";
-import { registrarLead } from "@/lib/campo";
+import { registrarLead, type TipoLead } from "@/lib/campo";
 import { rubroStyle, loadLeaflet } from "@/lib/mapa-visual";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
@@ -44,7 +44,10 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
     function onClick(e: MouseEvent) {
       const target = (e.target as HTMLElement)?.closest("[data-lead-comercio]");
       const comercioId = target?.getAttribute("data-lead-comercio");
-      if (comercioId) registrarLead(comercioId);
+      // Sin leer el tipo, los tres enlaces del popup se registraban como
+      // "whatsapp" — y "Cómo llegar" ni siquiera tenía el atributo.
+      const tipo = (target?.getAttribute("data-lead-tipo") as TipoLead) || "whatsapp";
+      if (comercioId) registrarLead(comercioId, tipo);
     }
     el.addEventListener("click", onClick);
     return () => el.removeEventListener("click", onClick);
@@ -66,8 +69,8 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
           <b>${r.nombre}</b>
           <span>${MODALIDAD_LABEL[r.modalidad] ?? r.modalidad}${r.rubro_nombre ? " · " + r.rubro_nombre : ""}</span>
           <div class="map-pop-act">
-            <a href="${waLink(r.whatsapp, "Hola, te vi en URUKU")}" target="_blank" rel="noopener" data-lead-comercio="${r.id}">WhatsApp</a>
-            <a href="${comoLlegarHref(r)}" target="_blank" rel="noopener">Cómo llegar</a>
+            <a href="${waLink(r.whatsapp, "Hola, te vi en URUKU")}" target="_blank" rel="noopener" data-lead-comercio="${r.id}" data-lead-tipo="whatsapp">WhatsApp</a>
+            <a href="${comoLlegarHref(r)}" target="_blank" rel="noopener" data-lead-comercio="${r.id}" data-lead-tipo="mapa">Cómo llegar</a>
             <a href="/comercios/${r.slug}">Ver comercio</a>
           </div>
         </div>`;

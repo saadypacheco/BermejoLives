@@ -280,6 +280,10 @@ export type EstadisticasAdmin = {
   ofertas_top_comercios: { comercio_id: string; nombre: string; count: number }[];
   contactos_30d: number;
   contactos_top_comercios: { comercio_id: string; nombre: string; count: number }[];
+  /** Cuántos de cada clase: whatsapp, mapa (tocó "Cómo llegar"), telefono,
+   *  vista. `contactos_30d` ya excluye las vistas. */
+  contactos_por_tipo: Record<string, number>;
+  vistas_30d: number;
 };
 
 export async function getEstadisticas(): Promise<EstadisticasAdmin> {

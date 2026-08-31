@@ -1065,15 +1065,36 @@ class SupabaseRepo:
             key=lambda x: -x["count"],
         )[:10]
 
-        leads = (
-            self._db.table("leads")
-            .select("comercio_id, created_at")
-            .gte("created_at", hace_30d)
-            .limit(5000)
-            .execute()
-        ).data or []
-        conteo_leads: dict[str, int] = {}
+        # Se pagina en vez de `.limit(5000)`: PostgREST corta en 1000
+        # (PGRST_DB_MAX_ROWS), así que el tope alto devolvía mil filas y el
+        # panel mostraba un número redondeado hacia abajo sin avisar. Con los
+        # leads eso pasa mucho antes que con los comercios: son varios por día.
+        leads: list[dict] = []
+        for inicio in range(0, 100000, 1000):
+            lote = (
+                self._db.table("leads")
+                .select("comercio_id, tipo, created_at")
+                .gte("created_at", hace_30d)
+                .order("created_at")
+                .range(inicio, inicio + 999)
+                .execute()
+            ).data or []
+            leads.extend(lote)
+            if len(lote) < 1000:
+                break
+
+        por_tipo: dict[str, int] = {}
         for l in leads:
+            t = l.get("tipo") or "otro"
+            por_tipo[t] = por_tipo.get(t, 0) + 1
+
+        # `vista` es una ficha abierta, no un contacto. Contarla acá inflaba
+        # `contactos_30d` con cada visita a una ficha —que dispara VistaLogger
+        # sola— y dejaba el número más importante del panel diciendo cualquier
+        # cosa. El top por comercio arrastraba el mismo error.
+        contactos = [l for l in leads if (l.get("tipo") or "") != "vista"]
+        conteo_leads: dict[str, int] = {}
+        for l in contactos:
             conteo_leads[l["comercio_id"]] = conteo_leads.get(l["comercio_id"], 0) + 1
         top_leads = sorted(
             ({"comercio_id": cid, "nombre": nombre_por_id.get(cid, "?"), "count": n} for cid, n in conteo_leads.items()),
@@ -1086,8 +1107,12 @@ class SupabaseRepo:
             "alertas": alertas,
             "ofertas_total": len(ofertas),
             "ofertas_top_comercios": top_ofertas,
-            "contactos_30d": len(leads),
+            "contactos_30d": len(contactos),
             "contactos_top_comercios": top_leads,
+            # Desglose: cuántos abrieron el WhatsApp del comercio, cuántos
+            # pidieron cómo llegar, cuántos sólo miraron la ficha.
+            "contactos_por_tipo": por_tipo,
+            "vistas_30d": por_tipo.get("vista", 0),
         }
 
 

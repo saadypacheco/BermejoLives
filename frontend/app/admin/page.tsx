@@ -736,9 +736,21 @@ function TabMonitoreo({
           <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Ofertas activas</div>
           <div style={{ fontSize: 26, fontWeight: 700 }}>{data.ofertas_total}</div>
         </div>
+        {/* Lo que la plataforma le lleva al comercio: no las visitas a la
+            ficha —que se cuentan solas— sino las veces que alguien salió de
+            URUKU hacia el local. Es el número que hay que poder mostrarle al
+            comerciante cuando pregunte para qué paga. */}
         <div className="panel-card glass" style={{ padding: 16, borderLeft: "3px solid var(--blue-soft)" }}>
           <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Contactos (30d)</div>
           <div style={{ fontSize: 26, fontWeight: 700 }}>{data.contactos_30d}</div>
+          <div style={{ fontSize: 11, color: "var(--txt-3)", marginTop: 4, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <span title="Abrieron el WhatsApp del comercio">💬 {data.contactos_por_tipo?.whatsapp ?? 0}</span>
+            <span title="Tocaron &quot;Cómo llegar&quot;">📍 {data.contactos_por_tipo?.mapa ?? 0}</span>
+            {(data.contactos_por_tipo?.telefono ?? 0) > 0 && <span title="Llamaron">📞 {data.contactos_por_tipo.telefono}</span>}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--txt-3)", marginTop: 2 }}>
+            {data.vistas_30d ?? 0} fichas vistas
+          </div>
         </div>
         <div className="panel-card glass" style={{ padding: 16, borderLeft: `3px solid ${totalAlertas > 0 ? "var(--pink)" : "var(--neon)"}` }}>
           <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Bajas / vencidos</div>

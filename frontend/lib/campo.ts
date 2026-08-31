@@ -198,7 +198,9 @@ export async function eliminarComercioAgente(id: string): Promise<void> {
 }
 
 /** Registra un click de contacto (WhatsApp, teléfono, etc.) para un comercio. */
-export async function registrarLead(comercio_id: string, tipo: "whatsapp" | "telefono" | "email" | "web" | "vista" = "whatsapp", busqueda_id?: string | null): Promise<void> {
+export type TipoLead = "whatsapp" | "telefono" | "email" | "web" | "vista" | "mapa";
+
+export async function registrarLead(comercio_id: string, tipo: TipoLead = "whatsapp", busqueda_id?: string | null): Promise<void> {
   // Fire-and-forget: no bloqueamos la navegación del usuario
   fetch(`${API}/lead`, {
     method: "POST",

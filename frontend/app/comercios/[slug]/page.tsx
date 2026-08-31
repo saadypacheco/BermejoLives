@@ -2,6 +2,7 @@ import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
 import { MensajeComercioForm } from "@/components/mensaje-comercio-form";
 import { WaLeadLink } from "@/components/wa-lead-link";
+import { LeadLink } from "@/components/lead-link";
 import { GuardarBoton } from "@/components/guardar-boton";
 import { HorarioBadge } from "@/components/horario-badge";
 import { CompartirBoton } from "@/components/compartir-boton";
@@ -75,7 +76,10 @@ export default async function ComercioPage({ params }: { params: { slug: string 
                 <Phone style={{ width: 18, height: 18 }} /> Llamar
               </a>
             ) : null}
-            <a className="uk-btn-ghost" href={mapsHref} target="_blank" rel="noopener"><Pin style={{ width: 16, height: 16 }} /> Cómo llegar</a>
+            {/* Página de servidor: el onClick necesita un componente cliente. */}
+            <LeadLink className="uk-btn-ghost" href={mapsHref} tipo="mapa" comercioId={comercio.id}>
+              <Pin style={{ width: 16, height: 16 }} /> Cómo llegar
+            </LeadLink>
             <GuardarBoton comercioId={comercio.id} className="uk-btn-ghost" />
             <CompartirBoton titulo={comercio.nombre} texto={`${comercio.nombre} en URUKU`} className="uk-btn-ghost" />
           </div>
