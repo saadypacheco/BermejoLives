@@ -92,6 +92,59 @@ export function postFormData<T = any>(
     };
     xhr.onerror = () => reject(new Error("Sin conexión"));
     xhr.ontimeout = () => reject(new Error("La subida tardó demasiado"));
-    xhr.send(fd);
+
+    // Se manda el cuerpo YA ARMADO, no el FormData. Ver `armarMultipart`.
+    const { blob, contentType } = armarMultipart(fd);
+    xhr.setRequestHeader("Content-Type", contentType);
+    xhr.send(blob);
   });
+}
+
+
+/**
+ * Arma el cuerpo multipart a mano y lo devuelve como Blob.
+ *
+ * POR QUÉ NO SE LE PASA EL `FormData` AL NAVEGADOR
+ * ================================================
+ *
+ * En el iPhone, tanto `fetch` como XHR mandaban el pedido con `Content-Length: 0`:
+ * el navegador ponía la cabecera con su delimitador y no escribía un solo byte
+ * del cuerpo. Del lado del servidor llegaban dieciocho altas de campo sin ningún
+ * campo, y el error que devolvía —"Falta la ubicación"— señalaba el dato
+ * equivocado, porque con el formulario vacío ése es el primer control que se
+ * cruza.
+ *
+ * Serializando nosotros, el cuerpo es un Blob común: no depende de que el
+ * navegador convierta el FormData en bytes. Un Blob se manda o no se manda; no
+ * se manda vacío.
+ *
+ * El formato es el del estándar y no tiene margen: cada parte abre con
+ * `--delimitador`, sigue con su cabecera, una línea en blanco, el contenido, y
+ * cierra con un salto. Al final va `--delimitador--`. Un salto de menos y el
+ * servidor lee basura.
+ */
+export function armarMultipart(fd: FormData): { blob: Blob; contentType: string } {
+  const CRLF = "\r\n";
+  // El delimitador tiene que ser una secuencia que NO aparezca en el contenido.
+  const limite = `----uruku${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+  const partes: BlobPart[] = [];
+
+  fd.forEach((valor, clave) => {
+    partes.push(`--${limite}${CRLF}`);
+    if (valor instanceof Blob) {
+      // Las comillas cierran el nombre del archivo en la cabecera: una comilla
+      // adentro del nombre parte el encabezado en dos y corrompe lo que sigue.
+      const nombre = ((valor as File).name || "archivo").replace(/["\r\n]/g, "'");
+      partes.push(`Content-Disposition: form-data; name="${clave}"; filename="${nombre}"${CRLF}`);
+      partes.push(`Content-Type: ${valor.type || "application/octet-stream"}${CRLF}${CRLF}`);
+      partes.push(valor);
+      partes.push(CRLF);
+    } else {
+      partes.push(`Content-Disposition: form-data; name="${clave}"${CRLF}${CRLF}`);
+      partes.push(`${valor}${CRLF}`);
+    }
+  });
+  partes.push(`--${limite}--${CRLF}`);
+
+  return { blob: new Blob(partes), contentType: `multipart/form-data; boundary=${limite}` };
 }

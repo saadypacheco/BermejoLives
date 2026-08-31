@@ -4,11 +4,12 @@
    - Estáticos de Next / iconos / fuentes: stale-while-revalidate.
    - Navegación (HTML): network-first con fallback a caché / home.
    Bump VERSION para invalidar cachés viejas en cada deploy importante. */
-// v4 (2026-08-27): cambio de proveedor de mapa base. El bump es obligatorio
-// acá: la caché vieja tiene los tiles de CARTO con el cartel "API key
-// required" estampado encima, y sin invalidarla el celular seguiría mostrando
-// el mapa roto aunque el código ya apunte a otro lado.
-const VERSION = "uruku-v4";
+// v5 (2026-08-31): el iPhone mandaba las altas de campo con el cuerpo vacío.
+// El bump acá NO es cosmético: mientras el celular sirva el bundle viejo desde
+// la caché, el arreglo no le llega y el agente sigue sin poder subir su
+// trabajo. Es lo primero que hay que descartar cuando un arreglo "no funciona"
+// en el teléfono y sí en el servidor.
+const VERSION = "uruku-v5";
 const SHELL = `${VERSION}-shell`;
 const STATIC = `${VERSION}-static`;
 const TILES = `${VERSION}-tiles`;
