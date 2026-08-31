@@ -77,10 +77,31 @@
 .side-link.active { background: rgba(57,255,158,.1); color: var(--neon); border: 1px solid rgba(57,255,158,.22); }
 .side-link .badge { margin-left: auto; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--pink); color: #fff; }
 
-.admin-main { padding: 26px 32px; }
-.admin-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; flex-wrap: wrap; gap: 14px; }
-.admin-top h1 { font-size: 24px; margin: 0; }
-.admin-top p { margin: 4px 0 0; color: var(--txt-3); font-size: 13.5px; }
+.admin-main { padding: 20px 32px 26px; }
+.admin-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 14px; }
+.admin-top h1 { font-size: 21px; margin: 0; }
+.admin-top p { margin: 3px 0 0; color: var(--txt-3); font-size: 13px; }
+
+/* Doce pestanas no entran estiradas: cada una ocupa lo suyo y la fila se
+   desliza. Estirarlas partia "Cambios de numero" en tres renglones y la barra
+   se comia media pantalla. */
+.admin-tabs { display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--stroke);
+  border-radius: 12px; padding: 4px; margin-bottom: 16px;
+  overflow-x: auto; scrollbar-width: thin; }
+.admin-tabs::-webkit-scrollbar { height: 6px; }
+.admin-tabs::-webkit-scrollbar-thumb { background: var(--stroke); border-radius: 999px; }
+.admin-tabs button { flex: 0 0 auto; white-space: nowrap; padding: 8px 12px; border-radius: 9px;
+  font-size: 13.5px; font-weight: 600; color: var(--txt-2); transition: .2s var(--ease);
+  display: inline-flex; align-items: center; gap: 6px; }
+.admin-tabs button:hover { color: var(--txt); }
+.admin-tabs button.active { background: rgba(57,255,158,.12); color: var(--neon); }
+/* El numero va en pastilla y no en texto suelto: asi el ojo lo encuentra sin
+   leer la pestana entera, y todas las pestanas miden parecido. */
+.admin-tabs .badge { font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 999px;
+  background: rgba(255,255,255,.08); color: var(--txt-2); }
+.admin-tabs button.active .badge { background: rgba(57,255,158,.18); color: var(--neon); }
+.admin-tabs .badge.alerta { background: rgba(255,176,32,.16); color: var(--amber); }
+.admin-tabs .badge.grave { background: rgba(255,77,141,.16); color: var(--pink); }
 .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 26px; }
 .kpi { padding: 20px; border-radius: var(--radius); }
 .kpi .ic { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; margin-bottom: 14px; }
@@ -144,3 +165,8 @@
   .mod-item { grid-template-columns: 1fr; }
   .mod-item img { width: 100%; height: 160px; }
 }
+
+/* La fila entera se ilumina al pasar por encima: con 813 comercios y el ojo
+   yendo y viniendo, ayuda a no perder el renglon en el que se estaba. */
+.adm-fila { transition: background .15s var(--ease); }
+.adm-fila:hover { background: rgba(255,255,255,.03); }

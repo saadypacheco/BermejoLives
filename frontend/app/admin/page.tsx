@@ -248,12 +248,13 @@ export default function AdminPage() {
         <Link className="btn btn-ghost btn-sm" href="/">Ver sitio</Link>
       </div>
 
-      <div className="auth-tabs" style={{ maxWidth: 640, marginBottom: 18 }}>
+      <div className="admin-tabs">
         <button className={tab === "comercios" ? "active" : ""} onClick={() => setTab("comercios")}>
-          Negocios ({todosLosComercios.length}) {comercios.length > 0 && <span style={{ color: "var(--amber)" }}>· {comercios.length} pendientes</span>}
+          Negocios <span className="badge">{todosLosComercios.length}</span>
+          {comercios.length > 0 && <span className="badge alerta">{comercios.length} pend.</span>}
         </button>
         <button className={tab === "lugares" ? "active" : ""} onClick={() => setTab("lugares")}>
-          🏬 Lugares
+          Lugares
         </button>
         <button className={tab === "catalogo" ? "active" : ""} onClick={() => setTab("catalogo")}>
           Catálogo
@@ -265,28 +266,31 @@ export default function AdminPage() {
           Adornos
         </button>
         <button className={tab === "publicaciones" ? "active" : ""} onClick={() => setTab("publicaciones")}>
-          Publicaciones {items.length > 0 && `(${items.length})`}
+          Publicaciones {items.length > 0 && <span className="badge">{items.length}</span>}
         </button>
         <button className={tab === "suscripciones" ? "active" : ""} onClick={() => { setTab("suscripciones"); loadSuscripciones(); }}>
-          Suscripciones {suscripciones.filter((c) => ["por_vencer","vencido","suspendido"].includes(c.suscripcion_estado)).length > 0 && "⚠️"}
+          Suscripciones {(() => {
+            const n = suscripciones.filter((c) => ["por_vencer", "vencido", "suspendido"].includes(c.suscripcion_estado)).length;
+            return n > 0 && <span className="badge alerta">{n}</span>;
+          })()}
         </button>
         <button className={tab === "pagos" ? "active" : ""} onClick={() => { setTab("pagos"); loadPagos(); }}>
-          Pagos {pagosPendientes.length > 0 && <span style={{ color: "var(--amber)" }}>· {pagosPendientes.length}</span>}
+          Pagos {pagosPendientes.length > 0 && <span className="badge alerta">{pagosPendientes.length}</span>}
         </button>
         <button className={tab === "monitoreo" ? "active" : ""} onClick={() => { setTab("monitoreo"); loadEstadisticas(); }}>
           Monitoreo {estadisticas && (estadisticas.alertas.vencido + estadisticas.alertas.suspendido) > 0 && (
-            <span style={{ color: "var(--pink)" }}>⚠️ {estadisticas.alertas.vencido + estadisticas.alertas.suspendido}</span>
+            <span className="badge grave">{estadisticas.alertas.vencido + estadisticas.alertas.suspendido}</span>
           )}
         </button>
         <button className={tab === "kpis" ? "active" : ""} onClick={() => { setTab("kpis"); loadKpis(); }}>KPIs</button>
         <button className={tab === "reclamos" ? "active" : ""} onClick={() => { setTab("reclamos"); loadReclamos(); }}>
           Reclamos {(() => {
             const n = reclamos.filter((r) => r.estado === "pendiente").length + consultasReservalo.filter((c) => c.estado === "pendiente").length;
-            return n > 0 && <span style={{ color: "var(--amber)" }}>· {n}</span>;
+            return n > 0 && <span className="badge alerta">{n}</span>;
           })()}
         </button>
         <button className={tab === "cambio-numero" ? "active" : ""} onClick={() => { setTab("cambio-numero"); loadSolicitudesCambioNumero(); }}>
-          Cambios de número {solicitudesCambioNumero.length > 0 && <span style={{ color: "var(--amber)" }}>· {solicitudesCambioNumero.length}</span>}
+          Cambios de número {solicitudesCambioNumero.length > 0 && <span className="badge alerta">{solicitudesCambioNumero.length}</span>}
         </button>
       </div>
 
@@ -1099,7 +1103,7 @@ function TabComercios({
         // flexWrap + minWidth en la info: en un celular los 5 botones de acción
         // no cedían espacio (flex-shrink: 0) y aplastaban el texto hasta dejar
         // una palabra por renglón. Ahora las acciones bajan a otra línea.
-        <div key={c.id} style={{ display: "flex", gap: 12, padding: "14px 16px", borderBottom: "1px solid var(--border)", alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div key={c.id} className="adm-fila" style={{ display: "flex", gap: 12, padding: "14px 16px", borderBottom: "1px solid var(--border)", alignItems: "flex-start", flexWrap: "wrap" }}>
           {/* Foto — se agranda al tocarla.
               La miniatura son 64px: alcanza para ubicar la tarjeta, no para
               ver QUÉ vende el local. Y eso es lo que hay que decidir antes de
@@ -1124,8 +1128,14 @@ function TabComercios({
             />
           </button>
 
-          {/* Info */}
-          <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+          {/* Info — clickeable entera. El encabezado dice "click para editar" y
+              hasta ahora sólo abría el botón del lápiz: apuntar a un ícono de
+              16px, 800 veces, es el doble de trabajo que tocar el nombre. */}
+          <div
+            onClick={() => setEditandoId(c.id)}
+            title="Editar este comercio"
+            style={{ flex: "1 1 200px", minWidth: 0, cursor: "pointer" }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span style={{ fontWeight: 600, fontSize: 15 }}>{c.nombre || "Sin nombre"}</span>
               {c.verificado
@@ -1146,17 +1156,17 @@ function TabComercios({
             {/* Productos primero: es el texto del que sale la clasificación, así
                 que es lo que hay que leer para decidir si el rubro está bien. */}
             {c.prod_obs_human && (
-              <div style={{ fontSize: 12, color: "var(--txt)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 460 }}>
+              <div style={{ fontSize: 12, color: "var(--txt)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 👤 {c.prod_obs_human}
               </div>
             )}
             {c.prod_det_ia && (
-              <div style={{ fontSize: 12, color: "var(--blue-soft, #7aa2f7)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 460 }}>
+              <div style={{ fontSize: 12, color: "var(--blue-soft, #7aa2f7)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 🤖 {c.prod_det_ia}{c.subcategoria ? ` · ${c.subcategoria}` : ""}
               </div>
             )}
             {c.descripcion && (
-              <div style={{ fontSize: 12, color: "var(--txt-2)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 460 }}>
+              <div style={{ fontSize: 12, color: "var(--txt-2)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {c.descripcion}
               </div>
             )}
@@ -1214,25 +1224,47 @@ function TabComercios({
       </>
       )}
 
-      {editando && (
-        <ModalEditar
-          comercio={editando}
-          rubros={rubros}
-          onClose={() => setEditandoId(null)}
-          onDone={() => { setEditandoId(null); onEdited(); }}
-        />
-      )}
+      {editando && (() => {
+        // El trabajo real es pasar comercio por comercio. Cerrar el modal,
+        // buscar el renglón siguiente y volver a abrirlo son tres gestos por
+        // ficha; multiplicado por 800, es lo que hace que la tarea se abandone
+        // a la mitad. El modal se mueve solo por la lista YA filtrada.
+        const i = filtradas.findIndex((c) => c.id === editando.id);
+        const saltar = (d: number) => {
+          const sig = filtradas[i + d];
+          if (sig) setEditandoId(sig.id);
+          else { setEditandoId(null); onEdited(); }
+        };
+        return (
+          <ModalEditar
+            key={editando.id}
+            comercio={editando}
+            rubros={rubros}
+            posicion={i >= 0 ? { actual: i + 1, total: filtradas.length } : null}
+            haySiguiente={i >= 0 && i + 1 < filtradas.length}
+            hayAnterior={i > 0}
+            onSaltar={saltar}
+            onClose={() => setEditandoId(null)}
+            onDone={() => { setEditandoId(null); onEdited(); }}
+          />
+        );
+      })()}
     </div>
   );
 }
 
 function ModalEditar({
   comercio, rubros, onClose, onDone,
+  posicion = null, haySiguiente = false, hayAnterior = false, onSaltar,
 }: {
   comercio: ComercioPorVerificar;
   rubros: Rubro[];
   onClose: () => void;
   onDone: () => void;
+  posicion?: { actual: number; total: number } | null;
+  haySiguiente?: boolean;
+  hayAnterior?: boolean;
+  onSaltar?: (delta: number) => void;
 }) {
   const [nombre, setNombre] = useState(comercio.nombre);
   const [whatsapp, setWhatsapp] = useState(comercio.whatsapp ?? "");
@@ -1255,8 +1287,7 @@ function ModalEditar({
     return () => document.removeEventListener("keydown", onEsc);
   }, [onClose]);
 
-  async function guardar(e: React.FormEvent) {
-    e.preventDefault();
+  async function persistir(): Promise<boolean> {
     setSaving(true);
     setErr("");
     try {
@@ -1271,12 +1302,26 @@ function ModalEditar({
         horario: horario || undefined,
         rubro_slugs: rubroSlugs.length ? rubroSlugs : undefined,
       });
-      onDone();
+      return true;
     } catch {
       setErr("No se pudo guardar. Verificá el backend.");
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+
+  async function guardar(e: React.FormEvent) {
+    e.preventDefault();
+    if (await persistir()) onDone();
+  }
+
+  /** Guarda y encadena con el siguiente sin cerrar el modal.
+   *
+   * Si el guardado falla NO avanza: pasar de largo dejaría el cambio perdido y
+   * el cartel de error tapado por la ficha siguiente. */
+  async function guardarYSeguir() {
+    if (await persistir()) onSaltar?.(1);
   }
 
   return (
@@ -1291,20 +1336,59 @@ function ModalEditar({
                         margin: "-24px -24px 14px", padding: "18px 24px 12px",
                         display: "flex", alignItems: "center", justifyContent: "space-between",
                         borderBottom: "1px solid var(--border)" }}>
-            <h3 style={{ margin: 0 }}>Editar negocio</h3>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+              <h3 style={{ margin: 0 }}>Editar negocio</h3>
+              {posicion && (
+                <span style={{ fontSize: 12, color: "var(--txt-3)", whiteSpace: "nowrap" }}>
+                  {posicion.actual} de {posicion.total}
+                </span>
+              )}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {onSaltar && (
+                <>
+                  <button type="button" className="mbtn" title="Anterior (sin guardar)"
+                    disabled={!hayAnterior} onClick={() => onSaltar(-1)}
+                    style={{ opacity: hayAnterior ? 1 : .35 }}>←</button>
+                  <button type="button" className="mbtn" title="Siguiente (sin guardar)"
+                    disabled={!haySiguiente} onClick={() => onSaltar(1)}
+                    style={{ opacity: haySiguiente ? 1 : .35 }}>→</button>
+                </>
+              )}
             <button type="button" onClick={onClose} aria-label="Cerrar"
               style={{ background: "none", border: "none", color: "var(--txt-2)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>
               ✕
             </button>
+            </div>
           </div>
           {/* Primero de todo: es la acción principal del trabajo de clasificación.
               Antes estaba después de las fotos y quedaba fuera de la vista. */}
           <AnalisisComercio comercioId={comercio.id} onAplicado={onDone} />
 
           <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
-            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Nombre
-              <input className="adm-input" style={{ marginTop: 4 }} value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre del negocio" />
-            </label>
+            {/* La foto al lado del campo, no 300px más abajo: el nombre se lee
+                del cartel de la propia foto, y tenerla que ir a buscar con el
+                scroll era el paso que hacía lento el ir uno por uno. */}
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+              {(comercio.portada_url || comercio.portada_thumb_url) && (
+                <a href={comercio.portada_url ?? comercio.portada_thumb_url ?? "#"}
+                   target="_blank" rel="noopener" title="Abrir la foto en grande"
+                   style={{ flexShrink: 0 }}>
+                  <img src={comercio.portada_url ?? comercio.portada_thumb_url ?? ""} alt=""
+                       style={{ width: 132, height: 132, objectFit: "cover", borderRadius: 12, display: "block" }} />
+                </a>
+              )}
+              <label style={{ fontSize: 12, color: "var(--txt-3)", flex: 1, minWidth: 0 }}>Nombre
+                <input className="adm-input" style={{ marginTop: 4, fontSize: 16, fontWeight: 600 }}
+                  value={nombre} onChange={(e) => setNombre(e.target.value)}
+                  autoFocus placeholder="Nombre del negocio" />
+                {comercio.codigo && (
+                  <div style={{ marginTop: 6, fontFamily: "monospace", color: "var(--neon)", fontSize: 12 }}>
+                    URUKU-{comercio.codigo}
+                  </div>
+                )}
+              </label>
+            </div>
             <label style={{ fontSize: 12, color: "var(--txt-3)" }}>WhatsApp (opcional)
               <input className="adm-input" style={{ marginTop: 4 }} value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="591XXXXXXXX" />
             </label>
@@ -1360,11 +1444,17 @@ function ModalEditar({
               <input className="adm-input" style={{ marginTop: 4 }} value={horario} onChange={(e) => setHorario(e.target.value)} placeholder="Lun-Sáb 9-20 · Dom 10-14" />
             </label>
             {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
-            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-              <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={onClose}>Cancelar</button>
-              <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={saving}>
+            <div style={{ display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
+              <button type="button" className="btn btn-ghost" style={{ flex: 1, minWidth: 110 }} onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" style={{ flex: 2, minWidth: 150 }} disabled={saving}>
                 {saving ? "Guardando…" : "Guardar cambios"}
               </button>
+              {haySiguiente && (
+                <button type="button" className="btn btn-primary" style={{ flex: 2, minWidth: 170 }}
+                  disabled={saving} onClick={guardarYSeguir}>
+                  {saving ? "Guardando…" : "Guardar y siguiente →"}
+                </button>
+              )}
             </div>
           </form>
         </div>
