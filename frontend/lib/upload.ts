@@ -42,3 +42,56 @@ export function duracionVideo(file: File): Promise<number> {
     v.src = URL.createObjectURL(file);
   });
 }
+
+
+/**
+ * Manda un FormData ya armado, por XHR.
+ *
+ * POR QUÉ NO `fetch`
+ * ==================
+ *
+ * En Safari de iOS, con un service worker registrado, `fetch` con un `FormData`
+ * **manda el pedido sin cuerpo**: el navegador arma el multipart con su
+ * delimitador y el servidor recibe `Content-Length: 0`. Es una falla conocida de
+ * WebKit y no hay forma de esquivarla desde el lado del pedido.
+ *
+ * Costó encontrarla porque no se parece a un error: el celular tiene los datos
+ * —los muestra en pantalla— y el servidor contesta que falta la ubicación,
+ * porque con el formulario vacío el primer control que se cruza es ése. Dieciocho
+ * altas de campo quedaron trabadas señalando el dato equivocado.
+ *
+ * XHR no está afectado. Ya se usaba para subir fotos con progreso —por eso la
+ * galería funcionaba en el mismo teléfono, el mismo día— y ahora lo usa también
+ * el alta.
+ */
+export function postFormData<T = any>(
+  url: string, fd: FormData, token: string | null,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    // NO se setea Content-Type: lo pone el navegador con su delimitador. Ponerlo
+    // a mano rompe el multipart, que es la otra forma de llegar a un cuerpo
+    // ilegible del lado del servidor.
+    xhr.onload = () => {
+      let cuerpo: any = {};
+      try { cuerpo = JSON.parse(xhr.responseText); } catch { /* respuesta vacía */ }
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(cuerpo as T);
+
+      // El `detail` de FastAPI es un texto en los 400 y una LISTA de objetos en
+      // los 422. Sin distinguirlos, un 422 llegaba a la pantalla como
+      // "[object Object]" y no se podía saber qué campo estaba mal.
+      const detalle = Array.isArray(cuerpo.detail)
+        ? cuerpo.detail.map((e: { loc?: unknown[]; msg?: string }) =>
+            `${(e.loc ?? []).slice(1).join(".")}: ${e.msg ?? "inválido"}`).join(", ")
+        : (typeof cuerpo.detail === "string" ? cuerpo.detail : "");
+      const err = new Error(detalle || `No se pudo guardar (HTTP ${xhr.status})`);
+      (err as Error & { status?: number }).status = xhr.status;
+      reject(err);
+    };
+    xhr.onerror = () => reject(new Error("Sin conexión"));
+    xhr.ontimeout = () => reject(new Error("La subida tardó demasiado"));
+    xhr.send(fd);
+  });
+}

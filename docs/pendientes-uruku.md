@@ -105,6 +105,18 @@ done
 
 Más de una dirección en cualquiera de esos = la misma trampa esperando.
 
+**En iPhone, `fetch` con `FormData` manda el pedido SIN CUERPO.** Es una falla
+conocida de Safari cuando hay un service worker registrado — y URUKU es una PWA,
+así que siempre lo hay. El servidor recibe `Content-Length: 0`, todos los campos
+del formulario quedan vacíos, y contesta por el primer control que se cruza: en
+el alta de campo, "Falta la ubicación". Dieciocho altas quedaron trabadas
+señalando el dato equivocado, con el celular mostrando en pantalla que sí había
+mandado las coordenadas.
+
+**Todo lo que sube archivos va por XHR** (`postFormData` en `lib/upload.ts`), no
+por `fetch`. La galería ya lo hacía por otro motivo —la barra de progreso— y por
+eso funcionaba en el mismo teléfono el mismo día, mientras el alta fallaba.
+
 **Pushear antes de dar comandos de `git pull`.** Pasó dos veces: el commit estaba
 hecho, el pull no traía nada, y el rato siguiente se fue buscando el bug en el
 lugar equivocado. Si algo no aparece después de un pull, comparar el hash con

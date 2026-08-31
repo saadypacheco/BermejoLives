@@ -1,5 +1,5 @@
 // Cliente del "modo agente de campo" (alta rápida de comercios).
-import { subirConProgreso } from "@/lib/upload";
+import { postFormData, subirConProgreso } from "@/lib/upload";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_agente_token";
 
@@ -24,16 +24,11 @@ export async function agenteLogin(email: string, password: string): Promise<void
 export async function transcribirAudio(blob: Blob): Promise<string> {
   const fd = new FormData();
   fd.append("audio", blob, "qvende.webm");
-  const res = await fetch(`${API}/campo/transcribir`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` },
-    body: fd,
-  });
-  if (!res.ok) {
-    const d = await res.json().catch(() => ({}));
-    throw new Error(d.detail ?? "No se pudo transcribir");
-  }
-  return (await res.json()).texto as string;
+  // XHR y no fetch: Safari de iOS con service worker manda el FormData sin
+  // cuerpo. Ver lib/upload.ts.
+  const d = await postFormData<{ texto: string }>(
+    `${API}/campo/transcribir`, fd, getAgenteToken());
+  return d.texto;
 }
 
 export async function sugerirRubros(descripcion: string, rubros: { slug: string; nombre: string }[]): Promise<string[]> {
@@ -90,16 +85,16 @@ export async function editarLugar(id: string, body: { nombre?: string; tipo?: st
 
 export async function subirPortadaLugar(id: string, foto: File): Promise<Lugar> {
   const fd = new FormData(); fd.append("foto", foto);
-  const res = await fetch(`${API}/campo/lugares/${id}/portada`, { method: "POST", headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` }, body: fd });
-  if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail ?? "No se pudo subir la foto"); }
-  return (await res.json()).lugar as Lugar;
+  const d = await postFormData<{ lugar: Lugar }>(
+    `${API}/campo/lugares/${id}/portada`, fd, getAgenteToken());
+  return d.lugar;
 }
 
 export async function subirVideoLugar(id: string, video: File): Promise<Lugar> {
   const fd = new FormData(); fd.append("video", video);
-  const res = await fetch(`${API}/campo/lugares/${id}/video`, { method: "POST", headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` }, body: fd });
-  if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail ?? "No se pudo subir el video"); }
-  return (await res.json()).lugar as Lugar;
+  const d = await postFormData<{ lugar: Lugar }>(
+    `${API}/campo/lugares/${id}/video`, fd, getAgenteToken());
+  return d.lugar;
 }
 
 export async function listarLugares(ciudadSlug = "bermejo"): Promise<Lugar[]> {
@@ -121,31 +116,18 @@ export async function crearLugar(body: { nombre: string; tipo?: string; ciudad_s
 }
 
 export async function altaComercioCampo(form: FormData): Promise<AltaCampoResult> {
-  const res = await fetch(`${API}/campo/comercio`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` },
-    body: form, // multipart; el browser pone el Content-Type con boundary
-  });
-  if (res.status === 401) {
-    clearAgente();
-    throw new Error("Sesión vencida, volvé a entrar");
+  // Va por XHR y no por fetch: en Safari de iOS, con un service worker
+  // registrado, fetch manda el FormData SIN CUERPO. Ver lib/upload.ts.
+  try {
+    return await postFormData<AltaCampoResult>(
+      `${API}/campo/comercio`, form, getAgenteToken());
+  } catch (e) {
+    if ((e as Error & { status?: number })?.status === 401) {
+      clearAgente();
+      throw new Error("Sesión vencida, volvé a entrar");
+    }
+    throw e;
   }
-  if (!res.ok) {
-    const d = await res.json().catch(() => ({}));
-    // El `detail` de FastAPI es un string en los 400 y una LISTA de objetos en
-    // los 422 (validación). Sin distinguirlos, un 422 llegaba a la pantalla como
-    // "[object Object]" y no se podía saber qué campo estaba mal.
-    const detalle = Array.isArray(d.detail)
-      ? d.detail.map((e: { loc?: unknown[]; msg?: string }) =>
-          `${(e.loc ?? []).slice(1).join(".")}: ${e.msg ?? "inválido"}`).join(", ")
-      : (typeof d.detail === "string" ? d.detail : "");
-    const err = new Error(detalle || `No se pudo guardar (HTTP ${res.status})`);
-    // El status viaja aparte para que la cola offline pueda decidir: un 400 es
-    // un dato que nunca va a entrar, un 500 se reintenta.
-    (err as Error & { status?: number }).status = res.status;
-    throw err;
-  }
-  return res.json();
 }
 
 export type ComercioAgente = {
@@ -192,18 +174,17 @@ export async function editarComercioAgente(id: string, body: EditarComercioBody)
 export async function actualizarFotoComercioAgente(id: string, foto: File): Promise<string | null> {
   const form = new FormData();
   form.append("foto", foto);
-  const res = await fetch(`${API}/campo/mis-comercios/${id}/foto`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` },
-    body: form,
-  });
-  if (res.status === 401) { clearAgente(); throw new Error("Sesión vencida, volvé a entrar"); }
-  if (!res.ok) {
-    const d = await res.json().catch(() => ({}));
-    throw new Error(d.detail ?? "No se pudo actualizar la foto");
+  try {
+    const data = await postFormData<{ comercio?: { portada_url?: string | null } }>(
+      `${API}/campo/mis-comercios/${id}/foto`, form, getAgenteToken());
+    return data.comercio?.portada_url ?? null;
+  } catch (e) {
+    if ((e as Error & { status?: number })?.status === 401) {
+      clearAgente();
+      throw new Error("Sesión vencida, volvé a entrar");
+    }
+    throw e;
   }
-  const data = await res.json();
-  return data.comercio?.portada_url ?? null;
 }
 
 /** Baja lógica (activo=false) — nunca se borra el registro real. */
