@@ -12,6 +12,7 @@
 | **Operativo** | Captura todo Y le habla a los comerciantes | Sí, en todos | **Sí** |
 | **Respaldo 1** | Callado. Espera el día del baneo | Sí, en todos | No |
 | **Respaldo 2** | Igual | Sí, en todos | No |
+| **Explorador** *(pendiente)* | Sale a **buscar** ofertas | No | A definir |
 
 **Marca y operativo van separados** porque el primero recibe compradores todo el
 día. Mezclarlo con cien grupos de comerciantes hace imposible atender los dos.
@@ -24,6 +25,29 @@ que eso se convierta en una oferta.
 **Los respaldos no mandan nada a la base** mientras no estén vinculados: WAHA
 sólo captura a través de la cuenta que tiene vinculada. Están en los grupos por
 una sola razón — que el día del baneo ya estén adentro.
+
+## El explorador (anotado, todavía sin definir)
+
+Idea del 31/8: un número dedicado a **buscar** ofertas — "URUKU explorando
+ofertas en Bermejo". Queda escrito acá para que no se resuelva por descarte el
+día que haga falta.
+
+No es el operativo con otro sombrero. El operativo **recibe**: los comerciantes
+ya están en un grupo y le mandan fotos. El explorador **sale**, y ésa es una
+actividad de riesgo distinto — escribirle a números que no te escribieron
+primero es el patrón que dispara el baneo de Meta.
+
+Por eso va separado desde el principio y no cuando crezca: si esa actividad vive
+en el operativo, el día del baneo se cae la captura de todos los grupos a la
+vez. En un número aparte, lo peor que pasa es que se pierde el explorador y los
+grupos siguen funcionando.
+
+Falta decidir si le escribe a comercios o difunde a compradores, si lo maneja
+una persona o va automatizado, y si va por WAHA o por la API oficial de Meta —
+si difunde, tiene que ser la oficial, con plantillas aprobadas.
+
+Cuando exista, su número va en `WA_NUMEROS_PROPIOS` como todos los demás, por si
+alguna vez lo agregan a un grupo.
 
 ## La configuración
 
