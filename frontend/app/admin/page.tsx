@@ -746,6 +746,11 @@ function TabMonitoreo({
           <div style={{ fontSize: 11, color: "var(--txt-3)", marginTop: 4, display: "flex", gap: 8, flexWrap: "wrap" }}>
             <span title="Abrieron el WhatsApp del comercio">💬 {data.contactos_por_tipo?.whatsapp ?? 0}</span>
             <span title="Tocaron &quot;Cómo llegar&quot;">📍 {data.contactos_por_tipo?.mapa ?? 0}</span>
+            {/* La reserva vale distinto que un WhatsApp suelto: no preguntó,
+                pidió algo concreto. Es el número que justifica un plan pago. */}
+            <span title="Mandaron una reserva" style={{ color: (data.contactos_por_tipo?.reserva ?? 0) > 0 ? "var(--neon)" : undefined }}>
+              🛒 {data.contactos_por_tipo?.reserva ?? 0}
+            </span>
             {(data.contactos_por_tipo?.telefono ?? 0) > 0 && <span title="Llamaron">📞 {data.contactos_por_tipo.telefono}</span>}
           </div>
           <div style={{ fontSize: 11, color: "var(--txt-3)", marginTop: 2 }}>

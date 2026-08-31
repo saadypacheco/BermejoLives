@@ -526,3 +526,27 @@
 .uk-resoferta:hover { border-color: var(--uk-neon, #39ff9e); }
 .uk-resoferta.mas { display: grid; place-items: center; text-align: center; flex-basis: 62px;
   font-size: 12px; font-weight: 700; color: var(--uk-ink-soft); }
+
+/* Reservar: sobre la oferta, no sobre el comercio. Se reserva una cosa. */
+.uk-reservar { display: block; width: 100%; margin-top: 5px; padding: 5px 6px; border-radius: 7px;
+  border: 1px solid var(--uk-line); background: transparent; color: var(--uk-ink-soft);
+  font-size: 11px; font-weight: 700; cursor: pointer; }
+.uk-reservar:hover { border-color: var(--uk-neon, #39ff9e); color: var(--uk-ink); }
+.uk-reservar.puesto { background: rgba(57,255,158,.14); border-color: var(--uk-neon, #39ff9e); color: var(--uk-neon, #39ff9e); }
+
+/* Barra flotante del carrito. Sólo existe si hay algo adentro: una barra
+   permanente vacía le come alto a todas las pantallas para no decir nada.
+   Va por encima de la nav de abajo, que en el celular ocupa los 62px del pie. */
+.uk-reserva-barra { position: fixed; left: 12px; right: 12px; bottom: 74px; z-index: 60;
+  display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 13px;
+  background: var(--uk-neon, #39ff9e); color: #06130c; text-decoration: none;
+  box-shadow: 0 8px 26px rgba(0,0,0,.34); font-size: 13.5px; font-weight: 700; }
+.uk-reserva-barra .n { display: grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px;
+  border-radius: 999px; background: rgba(0,0,0,.22); font-size: 12.5px; }
+.uk-reserva-barra .txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uk-reserva-barra .ver { flex-shrink: 0; opacity: .85; }
+
+/* Botón que parece enlace: quitar un ítem, vaciar el carrito. */
+.uk-linkbtn { background: none; border: none; padding: 2px 4px; cursor: pointer;
+  color: var(--uk-ink-soft); font-size: 13px; }
+.uk-linkbtn:hover { color: var(--uk-ink); }

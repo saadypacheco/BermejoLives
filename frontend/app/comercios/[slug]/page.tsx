@@ -3,6 +3,8 @@ import { UrukuShell } from "@/components/uruku-shell";
 import { MensajeComercioForm } from "@/components/mensaje-comercio-form";
 import { WaLeadLink } from "@/components/wa-lead-link";
 import { LeadLink } from "@/components/lead-link";
+import { ReservarBoton } from "@/components/reservar-boton";
+import { ReservaBarra } from "@/components/reserva-barra";
 import { GuardarBoton } from "@/components/guardar-boton";
 import { HorarioBadge } from "@/components/horario-badge";
 import { CompartirBoton } from "@/components/compartir-boton";
@@ -166,6 +168,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
                       lo pone el comerciante si quiere, y muchos acá no pueden
                       porque se les mueve con el cambio del día. */}
                   {p.precio != null && <div className="price">{precioFmt(p.precio, p.moneda)}</div>}
+                  <ReservarBoton oferta={p} />
                   <div className="foot">
                     <span>{p.vence_el ? `Hasta el ${vencimientoFmt(p.vence_el)}` : comercio.nombre}</span>
                     {comercio.whatsapp && (
@@ -180,6 +183,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
           </>
         )}
 
+        <ReservaBarra />
         <Link className="uk-back" href="/" style={{ marginTop: 24 }}><Arrow style={{ transform: "rotate(180deg)" }} /> Volver al inicio</Link>
       </div>
     </UrukuShell>

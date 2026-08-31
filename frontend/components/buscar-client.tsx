@@ -7,6 +7,8 @@ import { MapResults } from "@/components/map-results";
 import { buscarComercios, getFiltrosDisponibles, getOfertasDeComercios, getRefinamientos, getRubros, getZonas, type FiltrosDisponibles } from "@/lib/data";
 import { type FeedItem, type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD_LABEL, precioFmt, comoLlegarHref, waLink } from "@/lib/types";
 import { productosDe } from "@/lib/productos";
+import { ReservarBoton } from "@/components/reservar-boton";
+import { ReservaBarra } from "@/components/reserva-barra";
 import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
 import { HorarioBadge } from "@/components/horario-badge";
@@ -365,6 +367,7 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
                           {/* Sin precio no decimos "consultar": mandar a
                               preguntar por WhatsApp no es comparar. */}
                           {o.precio != null && <span className="precio">{precioFmt(o.precio, o.moneda)}</span>}
+                          <ReservarBoton oferta={o} />
                         </Link>
                       ))}
                       {r.ofertas > susOfertas.length && (
@@ -410,6 +413,8 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
           </button>
         </div>
       )}
+
+      <ReservaBarra />
     </div>
   );
 }

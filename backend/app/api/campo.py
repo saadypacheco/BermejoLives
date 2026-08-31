@@ -28,7 +28,10 @@ _MODALIDADES = {"mayorista", "minorista", "ambos"}
 # indicaciones para un local al que no piensa ir. Sin esto, el 400 del tipo
 # desconocido se comía la métrica en silencio — `registrarLead` es
 # fire-and-forget y no mira la respuesta.
-_TIPOS_LEAD  = {"whatsapp", "telefono", "email", "web", "vista", "mapa"}
+# "reserva" = mandó una reserva por WhatsApp desde el carrito. Es el contacto
+# que más vale: no preguntó, pidió algo concreto. Es LA métrica que
+# justifica un plan pago, así que va contada aparte del WhatsApp suelto.
+_TIPOS_LEAD  = {"whatsapp", "telefono", "email", "web", "vista", "mapa", "reserva"}
 
 
 @router.post("/auth/campo/login")

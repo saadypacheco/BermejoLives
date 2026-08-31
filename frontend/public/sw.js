@@ -4,12 +4,16 @@
    - Estáticos de Next / iconos / fuentes: stale-while-revalidate.
    - Navegación (HTML): network-first con fallback a caché / home.
    Bump VERSION para invalidar cachés viejas en cada deploy importante. */
+// v6 (2026-08-31): carrito de reservas, /reservas y las ofertas en la tarjeta
+// del buscador. Sin el bump, el celular sigue sirviendo el bundle viejo desde
+// la caché y el botón "Reservar" no aparece por más que el deploy haya salido
+// bien — lo primero que hay que descartar cuando algo "no llegó" al teléfono.
 // v5 (2026-08-31): el iPhone mandaba las altas de campo con el cuerpo vacío.
 // El bump acá NO es cosmético: mientras el celular sirva el bundle viejo desde
 // la caché, el arreglo no le llega y el agente sigue sin poder subir su
 // trabajo. Es lo primero que hay que descartar cuando un arreglo "no funciona"
 // en el teléfono y sí en el servidor.
-const VERSION = "uruku-v5";
+const VERSION = "uruku-v6";
 const SHELL = `${VERSION}-shell`;
 const STATIC = `${VERSION}-static`;
 const TILES = `${VERSION}-tiles`;
