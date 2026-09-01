@@ -30,6 +30,7 @@ export function MapResults({ results, hayFiltro = true }: {
   const clusterRef = useRef<any>(null);
   const adornoLayerRef = useRef<any>(null);
   const adornosRef = useRef<Adorno[]>([]);
+  const temaObsRef = useRef<MutationObserver | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,7 +38,22 @@ export function MapResults({ results, hayFiltro = true }: {
       if (cancelled || !elRef.current) return;
       if (!mapRef.current) {
         mapRef.current = L.map(elRef.current, { zoomControl: true, attributionControl: true }).setView(BERMEJO, 15);
-        agregarTiles(L, mapRef.current, { oscuro: true });
+        // El tema, no un valor fijo. Estaba clavado en oscuro, y al unificar las
+        // pantallas eso pasó a ser el único mapa del sitio: un sitio en claro
+        // con un mapa negro adentro. Antes /mapa lo respetaba y /buscar no.
+        const esOscuro = () => document.getElementById("ukroot")?.getAttribute("data-theme") !== "light";
+        const tiles = agregarTiles(L, mapRef.current, { oscuro: esOscuro() });
+        // El tema cambia una CLASE, no la URL: OSM publica un solo estilo y el
+        // oscuro sale de un filtro CSS. Cambiar la URL volvería a descargar el
+        // mapa entero en cada toque del interruptor.
+        const root = document.getElementById("ukroot");
+        if (root) {
+          const obs = new MutationObserver(() => {
+            tiles.getContainer()?.classList.toggle("uk-tiles-oscuro", esOscuro());
+          });
+          obs.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+          temaObsRef.current = obs;
+        }
         // Sin agrupador: mapa lleno de puntos individuales por rubro.
         clusterRef.current = L.layerGroup().addTo(mapRef.current);
 
@@ -66,7 +82,7 @@ export function MapResults({ results, hayFiltro = true }: {
       // se piden nunca más, porque el mapa no se entera de que creció.
       mapRef.current?.invalidateSize();
     });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; temaObsRef.current?.disconnect(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results]);
 

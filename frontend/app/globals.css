@@ -739,6 +739,31 @@
    papel quede gris lavado. */
 .uk-tiles-oscuro { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.92) saturate(.85); }
 
+/* LAS LÍNEAS BLANCAS DEL MAPA
+ *
+ * Leaflet coloca cada tile con un transform y el navegador redondea a píxeles
+ * enteros. Entre dos tiles vecinas queda una fracción de píxel sin cubrir, y
+ * por ese hueco se ve el fondo del contenedor. En un teléfono el mapa mide unos
+ * 550px: entran tres columnas y quedan exactamente dos junturas — las dos
+ * líneas verticales.
+ *
+ * En modo claro no se notaban porque el hueco era blanco sobre un mapa casi
+ * blanco. Con el filtro oscuro el mapa se volvió gris y el hueco siguió siendo
+ * blanco: recién ahí se ven.
+ *
+ * Dos arreglos, y hacen falta los dos:
+ *
+ * 1. Cada tile se dibuja media pixel más grande, así se solapa con la de al
+ *    lado y no queda hueco que mostrar. Media pixel no se nota en la imagen.
+ *    Va con !important porque Leaflet escribe el tamaño en el atributo style.
+ * 2. El contenedor deja de ser blanco. Es el cinturón: si en algún zoom o
+ *    densidad de pantalla el solapamiento no alcanza, lo que se asome es del
+ *    color del mapa y no una línea que salta a la vista.
+ */
+.leaflet-container { background: #e8e4dd; }
+#ukroot:not([data-theme="light"]) .leaflet-container { background: #1b1f24; }
+.leaflet-container .leaflet-tile { width: 256.5px !important; height: 256.5px !important; }
+
 /* La atribución de OpenStreetMap: obligatoria por licencia, pero no tiene que
    competir con el mapa. Chica, translúcida y sin el prefijo de Leaflet. */
 .leaflet-control-attribution { font-size: 10px; background: rgba(0,0,0,.45) !important;
