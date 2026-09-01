@@ -260,5 +260,48 @@ select coalesce(con.rubro_slug, l.rubro_slug)       as rubro_slug,
  group by 1, con.n
  order by 4 desc, 2 desc;
 
+
+\echo ''
+\echo '== 9. SINÓNIMOS DE VARIAS PALABRAS QUE ARRASTRAN A OTRO RUBRO =========='
+\echo 'Caso real: un bazar aparecía al buscar "surtidor" porque tenía el sinónimo'
+\echo '"surtidor de agua" (por el dispenser). El sinónimo es correcto; lo que'
+\echo 'falla es que to_tsvector parte la frase y "surtidor" solo queda como'
+\echo 'lexema suelto en el índice. Cada sinónimo de dos palabras puede hacer lo'
+\echo 'mismo, así que acá se listan los choques ANTES de que alguien los reporte.'
+\echo 'Se lee: el comercio X sale en búsquedas del rubro Y, y no es de ese rubro.'
+\echo ''
+
+with sin_frases as (
+  -- Sólo las frases: un sinónimo de una palabra no puede perder contexto.
+  select c.id, c.nombre, btrim(f) as frase
+    from comercios c
+    cross join lateral unnest(string_to_array(coalesce(c.sinonimos, ''), ',')) f
+   where c.activo and btrim(f) like '% %'
+),
+palabras as (
+  select sf.id, sf.nombre, sf.frase, lower(unaccent(w)) as palabra
+    from sin_frases sf
+    cross join lateral unnest(string_to_array(sf.frase, ' ')) w
+   -- Las palabras de enlace no arrastran a nadie.
+   where length(w) > 3 and lower(w) not in ('para','como','tipo','sobre','anti')
+),
+choques as (
+  select p.id, p.nombre, p.frase, p.palabra, rp.rubro_slug
+    from palabras p
+    join rubro_palabras rp on p.palabra ~ rp.patron
+   where rp.rubro_slug <> 'otros'
+     and not exists (
+       select 1 from comercio_rubros cr join rubros r on r.id = cr.rubro_id
+        where cr.comercio_id = p.id and r.slug = rp.rubro_slug)
+)
+select rubro_slug          as sale_en_busquedas_de,
+       palabra             as por_la_palabra,
+       count(*)            as comercios,
+       min(frase)          as ejemplo_de_sinonimo,
+       min(nombre)         as ejemplo_de_comercio
+  from choques
+ group by 1, 2
+ order by 3 desc, 1, 2;
+
 \echo ''
 \echo 'Nada de esto escribió una sola fila. Ver la cabecera para el orden de trabajo.'
