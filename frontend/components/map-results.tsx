@@ -5,6 +5,8 @@ import { useEffect, useRef } from "react";
 import { type ResultadoBusqueda, comoLlegarHref, waLink, MODALIDAD_LABEL } from "@/lib/types";
 import { registrarLead, type TipoLead } from "@/lib/campo";
 import { rubroStyle, loadLeaflet } from "@/lib/mapa-visual";
+import { adornoHTML, MEDIDAS, ZOOM_MIN_ADORNOS, type Adorno } from "@/lib/adornos";
+import { getAdornosMapa } from "@/lib/data";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 
@@ -16,10 +18,18 @@ function pinHtml(r: ResultadoBusqueda): string {
   return `<div class="${cls}" style="--pc:${style.color}">${ring}<span class="ukpin-emo">${style.emoji}</span></div>`;
 }
 
-export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
+export function MapResults({ results, hayFiltro = true }: {
+  results: ResultadoBusqueda[];
+  /** Sin filtro puesto el mapa muestra los adornos y nada más, salvo los
+   *  destacados y los que pagan. 887 pines sobre Bermejo no son un mapa, son
+   *  una mancha — y aparece justo cuando alguien todavía no sabe qué busca. */
+  hayFiltro?: boolean;
+}) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const clusterRef = useRef<any>(null);
+  const adornoLayerRef = useRef<any>(null);
+  const adornosRef = useRef<Adorno[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,8 +40,25 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
         agregarTiles(L, mapRef.current, { oscuro: true });
         // Sin agrupador: mapa lleno de puntos individuales por rubro.
         clusterRef.current = L.layerGroup().addTo(mapRef.current);
+
+        // Panel propio para los adornos, por DEBAJO de los pines y sordo al
+        // mouse: una chalana nunca puede robarle el clic a un comercio.
+        const map = mapRef.current;
+        map.createPane("adornos");
+        map.getPane("adornos").style.zIndex = "350";
+        map.getPane("adornos").style.pointerEvents = "none";
+        adornoLayerRef.current = L.layerGroup().addTo(map);
+        map.on("zoomend", () => pintarAdornos(L));
+
+        // Llegan después de la primera pintada, a propósito: el mapa se dibuja
+        // con los comercios y la decoración aparece cuando esté.
+        getAdornosMapa().then((items) => {
+          adornosRef.current = items;
+          pintarAdornos(L);
+        }).catch(() => { /* sin adornos el mapa sigue sirviendo */ });
       }
       renderPins(L);
+      pintarAdornos(L);
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -53,11 +80,31 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
     return () => el.removeEventListener("click", onClick);
   }, []);
 
+  function pintarAdornos(L: any) {
+    const map = mapRef.current, capa = adornoLayerRef.current;
+    if (!map || !capa) return;
+    capa.clearLayers();
+    if (map.getZoom() < ZOOM_MIN_ADORNOS) return;
+    adornosRef.current.forEach((a, i) => {
+      if (a.lat == null || a.lng == null) return;
+      const m = MEDIDAS[a.tipo] ?? MEDIDAS.lapacho;
+      capa.addLayer(L.marker([a.lat, a.lng], {
+        icon: L.divIcon({ className: "", html: adornoHTML(a, i), iconSize: [m.w, m.h], iconAnchor: [m.w / 2, m.anclaY] }),
+        pane: "adornos", interactive: false, keyboard: false,
+      }));
+    });
+  }
+
   function renderPins(L: any) {
     const layer = clusterRef.current;
     if (!layer) return;
     layer.clearLayers();
-    const withCoords = results.filter((r) => r.lat != null && r.lng != null);
+    const visibles = hayFiltro
+      ? results
+      // `plan` y `destacado` los agrega la 0077. Sin filtro, la primera vista
+      // es un lugar con cupo — y el cupo es lo que se vende.
+      : results.filter((r) => r.destacado || (r.plan && r.plan !== "gratis"));
+    const withCoords = visibles.filter((r) => r.lat != null && r.lng != null);
     const bounds: [number, number][] = [];
     for (const r of withCoords) {
       const size = r.verificado ? 34 : 22;
@@ -84,10 +131,17 @@ export function MapResults({ results }: { results: ResultadoBusqueda[] }) {
   }
 
   const sinCoords = results.filter((r) => r.lat == null || r.lng == null).length;
+  const ocultos = hayFiltro ? 0 : results.filter((r) => !r.destacado && (!r.plan || r.plan === "gratis")).length;
 
   return (
     <div style={{ position: "relative" }}>
       <div ref={elRef} className="map-canvas" />
+
+      {/* Sin esto, un mapa con dos pines sobre una ciudad se lee como "acá no
+          hay nada", que es lo contrario de lo que pasa. */}
+      {ocultos > 0 && (
+        <div className="hm-aviso">Buscá o elegí una categoría para ver {ocultos} negocios</div>
+      )}
 
       {sinCoords > 0 && (
         <p style={{ color: "var(--txt-3)", fontSize: 12.5, marginTop: 10 }}>

@@ -424,8 +424,6 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
           Buscá o elegí una categoría para ver {ocultos} negocios
         </div>
       )}
-
-      <Link href="/buscar" className="hm-btn hm-full">⛶ Ver mapa completo</Link>
     </div>
   );
 }

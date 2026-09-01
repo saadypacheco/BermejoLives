@@ -105,6 +105,11 @@ export type ResultadoBusqueda = {
   rating: number;
   verificado: boolean;
   ofertas: number;
+  /** Quién ocupa la primera vista del mapa cuando no hay filtro puesto. La
+   *  0077 los agregó al RPC; `destacado` se marca a mano y `plan` lo pone la
+   *  suscripción. */
+  destacado?: boolean;
+  plan?: string | null;
   /** Lo que vende el local. `prod_obs_human` lo anotó una persona en el
    *  recorrido y `prod_det_ia` lo leyó el modelo de la vidriera; los dos
    *  alimentan el índice de búsqueda desde la 0047, pero recién la 0074 los

@@ -32,11 +32,11 @@ export default async function InicioPage() {
             <h1>Descubrí <span>{nombre}</span><br />como nunca antes</h1>
             <p>Explorá comercios locales, ofertas increíbles y todo lo que necesitás cerca de vos.</p>
             <div className="uk-hero-actions">
-              <Link href="/mapa" className="uk-btn uk-btn-primary">
+              <Link href="/buscar?vista=mapa" className="uk-btn uk-btn-primary">
                 Explorá el mapa
                 <Ic d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3zM9 3v15M15 6v15" />
               </Link>
-              <Link href="/mapa?of=1" className="uk-btn uk-btn-secondary">
+              <Link href="/buscar?vista=mapa&of=1" className="uk-btn uk-btn-secondary">
                 <Ic d="M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" />
                 Ofertas del día
               </Link>
@@ -74,7 +74,7 @@ export default async function InicioPage() {
         <section className="uk-container uk-section">
           <div className="uk-section-head">
             <h2>Ofertas destacadas</h2>
-            <Link href="/mapa?of=1">Ver todas →</Link>
+            <Link href="/buscar?vista=mapa&of=1">Ver todas →</Link>
           </div>
           <div className="uk-offers">
             {cards.slice(0, 4).map((o) => (
@@ -98,11 +98,11 @@ export default async function InicioPage() {
         <section className="uk-container uk-section">
           <div className="uk-section-head">
             <h2>🏬 Mercados y galerías de {nombre}</h2>
-            <Link href="/mapa">Ver en el mapa →</Link>
+            <Link href="/buscar?vista=mapa">Ver en el mapa →</Link>
           </div>
           <div className="uk-rail">
             {lugares.map((l) => (
-              <Link key={l.id} href="/mapa" className="uk-lugar-card">
+              <Link key={l.id} href="/buscar?vista=mapa" className="uk-lugar-card">
                 <div className="uk-lugar-img" style={l.portada_thumb_url ? { backgroundImage: `url('${l.portada_thumb_url}')` } : undefined}>
                   {!l.portada_thumb_url && <span>🏬</span>}
                 </div>
@@ -124,7 +124,7 @@ export default async function InicioPage() {
           {ofertas.length === 0 && novedades.length === 0 && videos.length === 0 && (
             <p style={{ color: "var(--uk-ink-soft)", fontSize: 14, margin: "4px 0 0" }}>Explorá el mapa y descubrí los comercios de {nombre}.</p>
           )}
-          <Link href="/mapa" className="uk-panel-btn">Explorá el mapa <span>→</span></Link>
+          <Link href="/buscar?vista=mapa" className="uk-panel-btn">Explorá el mapa <span>→</span></Link>
         </article>
 
         <article className="uk-panel uk-discover" style={{ backgroundImage: `url('${fotoImg}')` }}>

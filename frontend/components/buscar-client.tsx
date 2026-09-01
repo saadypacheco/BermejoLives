@@ -87,6 +87,8 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
     setSubcategoria(g("sub") ?? "");
     setModalidad(g("modalidad") ?? "");
     if (g("vista") === "mapa") setVista("mapa");
+    // `of=1` es el enlace de "Ofertas" del menú, que antes iba a /mapa.
+    setSoloOfertas(g("of") === "1");
   }, [sp]);
 
   // La URL refleja SIEMPRE lo que se está viendo. Sin esto, la dirección
@@ -104,6 +106,7 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
     if (ciudad) p.set("ciudad", ciudad);
     if (precioMax) p.set("precio_max", precioMax);
     if (vista === "mapa") p.set("vista", "mapa");
+    if (soloOfertas) p.set("of", "1");
     const nueva = p.toString();
     // Sólo se escribe si de verdad cambió: si no, este efecto y el que LEE la
     // URL se despiertan mutuamente sin parar.
@@ -111,7 +114,7 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
       router.replace(nueva ? `/buscar?${nueva}` : "/buscar", { scroll: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, rubro, subcategoria, modalidad, zona, ciudad, precioMax, vista]);
+  }, [q, rubro, subcategoria, modalidad, zona, ciudad, precioMax, vista, soloOfertas]);
 
   useEffect(() => {
     clearTimeout(debounce.current);
@@ -295,11 +298,14 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
             Cargando los {total ?? ""} comercios en el mapa…
           </div>
         )}
-        <MapResults results={
-          soloOfertas
-            ? (resultsMapa ?? results).filter((r) => r.ofertas > 0)
-            : (resultsMapa ?? results)
-        } />
+        <MapResults
+          results={
+            soloOfertas
+              ? (resultsMapa ?? results).filter((r) => r.ofertas > 0)
+              : (resultsMapa ?? results)
+          }
+          hayFiltro={Boolean(q.trim() || rubro || subcategoria || modalidad || zona || precioMax || soloOfertas)}
+        />
         </>
       ) : (
         <div className="uk-res-grid">
