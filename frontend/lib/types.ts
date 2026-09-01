@@ -88,6 +88,11 @@ export type ResultadoBusqueda = {
   descripcion: string | null;
   logo_url: string | null;
   portada_url: string | null;
+  /** La versión de 200px. La tarjeta la dibuja a 300 y el globo del mapa a 220,
+   *  así que la grande —de 1280px y hasta 330 KB— era diez veces más peso para
+   *  verse igual. Con treinta resultados por página eso son varios megas de
+   *  datos móviles. La agrega la 0078. */
+  portada_thumb_url: string | null;
   whatsapp: string;
   direccion: string | null;
   lat: number | null;

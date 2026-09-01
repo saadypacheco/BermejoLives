@@ -10,6 +10,12 @@ import { getAdornosMapa } from "@/lib/data";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 
+/** El popup se arma con texto, no con React: una comilla en una URL rompía el
+ *  atributo y de ahí en adelante el HTML es del que puso la URL. */
+function escapeAttr(v: string): string {
+  return v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 // Pin del mapa de resultados: color por rubro; los verificados resaltan (anillo).
 function pinHtml(r: ResultadoBusqueda): string {
   const style = rubroStyle(r.rubro_slug);
@@ -145,8 +151,19 @@ export function MapResults({ results, hayFiltro = true }: {
       const icon = L.divIcon({
         className: "", html: pinHtml(r), iconSize: [size, size], iconAnchor: [size / 2, size / 2],
       });
+      // La foto va PRIMERO y adentro del globo.
+      //
+      // En el celular el globo del mapa es todo lo que se ve de un comercio: no
+      // hay tarjeta al costado como en la compu. Sin la foto, tocar un pin
+      // devolvía un nombre y dos enlaces — y en rubros como calzado o ropa la
+      // vidriera dice más que el nombre, que muchas veces es "Comercio".
+      //
+      // Se usa la miniatura si está: el globo la muestra a 220px de ancho y la
+      // grande pesa diez veces más para verse igual.
+      const foto = r.portada_thumb_url ?? r.portada_url ?? r.logo_url;
       const popup = `
         <div class="map-pop">
+          ${foto ? `<img class="map-pop-img" src="${escapeAttr(foto)}" alt="" loading="lazy">` : ""}
           <b>${r.nombre}</b>
           <span>${MODALIDAD_LABEL[r.modalidad] ?? r.modalidad}${r.rubro_nombre ? " · " + r.rubro_nombre : ""}</span>
           <div class="map-pop-act">

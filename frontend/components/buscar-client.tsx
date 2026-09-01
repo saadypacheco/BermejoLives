@@ -313,7 +313,8 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
             <p className="uk-empty">No encontramos comercios con esos filtros. Probá con otra palabra o quitá filtros.</p>
           )}
           {shown.map((r) => {
-            const cover = r.portada_url ?? r.logo_url;
+            // La miniatura, no la grande: la tarjeta la muestra a ~300px.
+            const cover = r.portada_thumb_url ?? r.portada_url ?? r.logo_url;
             const { terminos, resto } = productosDe([r.prod_obs_human, r.prod_det_ia], q);
             const susOfertas = ofertas.get(r.id) ?? [];
             return (
