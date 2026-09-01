@@ -31,7 +31,7 @@
 -- ACOTAR A UNA SALIDA AL CAMPO
 -- ============================
 --
---   ... psql -U postgres -d postgres -v desde="'2026-08-24'" -f - < supabase/auditar_diccionario.sql
+--   ... psql -U postgres -d postgres -v desde=2026-08-24 -f - < supabase/auditar_diccionario.sql
 --
 -- Sin `desde` mira los comercios activos TODOS. Con `desde`, sólo los dados de
 -- alta a partir de esa fecha — para leer lo que trajo una tanda sin que se
@@ -54,16 +54,16 @@
 
 \if :{?desde}
 \else
-  \set desde '1970-01-01'
+  \set desde 1970-01-01
 \endif
 
 \echo ''
 \echo '########## EL CORTE ##########'
 \echo 'Altas por día. Si el corte no agarra la tanda que esperabas, correr de'
-\echo 'nuevo con  -v desde="'"'"'AAAA-MM-DD'"'"'"'
+\echo 'nuevo con  -v desde=AAAA-MM-DD'
 select created_at::date as dia_de_alta,
        count(*)                                                as comercios,
-       count(*) filter (where created_at::date >= :desde)      as dentro_del_corte
+       count(*) filter (where created_at::date >= :'desde'::date)      as dentro_del_corte
   from comercios where activo
  group by 1 order by 1 desc limit 10;
 
@@ -79,7 +79,7 @@ create temp view _audit_texto as
                                        c.sinonimos, c.nombre))) as t
     from comercios c
    where c.activo
-     and c.created_at::date >= :desde;
+     and c.created_at::date >= :'desde'::date;
 
 -- Cada (comercio, patrón) que matchea, con el pedazo de texto que lo disparó y
 -- si el comercio YA tiene ese rubro. Lo que no tiene es lo que se propondría.
@@ -236,7 +236,7 @@ create temp view _audit_sin_sin as
          unaccent(lower(concat_ws(' ', c.prod_det_ia, c.subcategoria, c.nombre))) as t
     from comercios c
    where c.activo
-     and c.created_at::date >= :desde;
+     and c.created_at::date >= :'desde'::date;
 
 with limpio as (
   select rp.rubro_slug, s.id
@@ -266,9 +266,20 @@ select coalesce(con.rubro_slug, l.rubro_slug)       as rubro_slug,
 \echo 'Caso real: un bazar aparecía al buscar "surtidor" porque tenía el sinónimo'
 \echo '"surtidor de agua" (por el dispenser). El sinónimo es correcto; lo que'
 \echo 'falla es que to_tsvector parte la frase y "surtidor" solo queda como'
-\echo 'lexema suelto en el índice. Cada sinónimo de dos palabras puede hacer lo'
-\echo 'mismo, así que acá se listan los choques ANTES de que alguien los reporte.'
-\echo 'Se lee: el comercio X sale en búsquedas del rubro Y, y no es de ese rubro.'
+\echo 'lexema suelto en el índice.'
+\echo ''
+\echo 'La columna `tipo` separa DOS problemas que no se arreglan igual:'
+\echo ''
+\echo '  LISTA  -> el sinónimo es una enumeración ("bolso cartera"). Cada'
+\echo '           palabra vale por sí sola, así que aparecer NO es ruido: es'
+\echo '           que al comercio le falta ese rubro. Se arregla clasificando.'
+\echo ''
+\echo '  FRASE  -> el sinónimo tiene un conector ("surtidor DE agua", "mueble'
+\echo '           PARA zapatos", "repuesto DE celular"). Ahí la palabra suelta'
+\echo '           cambia de significado y sí es ruido. Se arregla en el sinónimo.'
+\echo ''
+\echo 'Ojo: FRASE no es ruido siempre ("juego de sabana" sí es blanquería). Es'
+\echo 'una pila para leer, no para borrar de una.'
 \echo ''
 
 with sin_frases as (
@@ -279,14 +290,16 @@ with sin_frases as (
    where c.activo and btrim(f) like '% %'
 ),
 palabras as (
-  select sf.id, sf.nombre, sf.frase, lower(unaccent(w)) as palabra
+  select sf.id, sf.nombre, sf.frase, lower(unaccent(w)) as palabra,
+         case when lower(sf.frase) ~ '\m(de|para|con|del|al)\M'
+              then 'FRASE' else 'LISTA' end as tipo
     from sin_frases sf
     cross join lateral unnest(string_to_array(sf.frase, ' ')) w
    -- Las palabras de enlace no arrastran a nadie.
    where length(w) > 3 and lower(w) not in ('para','como','tipo','sobre','anti')
 ),
 choques as (
-  select p.id, p.nombre, p.frase, p.palabra, rp.rubro_slug
+  select p.id, p.nombre, p.frase, p.palabra, p.tipo, rp.rubro_slug
     from palabras p
     join rubro_palabras rp on p.palabra ~ rp.patron
    where rp.rubro_slug <> 'otros'
@@ -294,14 +307,16 @@ choques as (
        select 1 from comercio_rubros cr join rubros r on r.id = cr.rubro_id
         where cr.comercio_id = p.id and r.slug = rp.rubro_slug)
 )
-select rubro_slug          as sale_en_busquedas_de,
+select tipo,
+       rubro_slug          as sale_en_busquedas_de,
        palabra             as por_la_palabra,
        count(*)            as comercios,
        min(frase)          as ejemplo_de_sinonimo,
        min(nombre)         as ejemplo_de_comercio
   from choques
- group by 1, 2
- order by 3 desc, 1, 2;
+ group by 1, 2, 3
+ -- Las FRASE primero: son la pila corta y la que de verdad hay que revisar.
+ order by (tipo = 'FRASE') desc, 4 desc, 2, 3;
 
 \echo ''
 \echo 'Nada de esto escribió una sola fila. Ver la cabecera para el orden de trabajo.'
