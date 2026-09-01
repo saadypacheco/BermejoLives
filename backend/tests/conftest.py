@@ -774,6 +774,9 @@ class FakeRepo:
         self.adornos.setdefault(adorno_id, {"id": adorno_id}).update(patch)
         return self.adornos[adorno_id]
 
+    def contar(self, tabla):
+        return len(getattr(self, tabla, []) or [])
+
     def list_comercio_rubros_todos(self):
         salida = []
         for cid, c in self.comercios.items():

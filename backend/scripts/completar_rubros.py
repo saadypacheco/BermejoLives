@@ -90,12 +90,26 @@ def main() -> int:
         for s in faltan:
             por_rubro[s] += 1
 
+    # El guard viejo comparaba las filas leídas contra la cantidad de COMERCIOS,
+    # y eso no verifica nada: la lectura vino cortada en 1000 —el tope de
+    # PostgREST— con 886 comercios, así que 1000 > 886 y el aviso no saltó. El
+    # informe salió con cara de completo proponiendo 1295 rubros, la mayoría
+    # sobre comercios que sí los tenían y se leyeron como vacíos.
+    #
+    # Ahora se compara contra el conteo REAL de la tabla. Es la única forma de
+    # saber si falta algo: cualquier heurística sobre el número leído vuelve a
+    # ser una suposición.
+    esperadas = repo.contar("comercio_rubros")
     print(f"Comercios activos:        {len(comercios)}")
-    print(f"Asignaciones leídas:      {len(relaciones)}")
-    if len(relaciones) < len(comercios):
-        print("  ⚠️  La lectura de comercio_rubros vino incompleta. Sin ella este")
-        print("      script cree que TODOS los comercios están sin rubros y")
-        print("      propondría agregarles de todo. NO apliques nada.")
+    print(f"Asignaciones leídas:      {len(relaciones)} de {esperadas} en la tabla")
+    if len(relaciones) < esperadas:
+        print()
+        print(f"  ⚠️  Faltan {esperadas - len(relaciones)} asignaciones. Los comercios que")
+        print("      quedaron afuera se leen como SIN RUBROS, así que este informe les")
+        print("      propone agregar de todo. NO apliques nada: el número de abajo")
+        print("      está inflado y aplicarlo ensucia el filtro de los que ya estaban")
+        print("      bien clasificados.")
+        return 1
     print(f"Comercios a completar:    {len(agregar)}")
     print(f"Rubros a agregar:         {total}")
     if saltados:

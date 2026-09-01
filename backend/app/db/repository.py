@@ -72,6 +72,7 @@ class Repo(Protocol):
     def sugerir_rubros_por_texto(self, texto: str) -> list[str]: ...
     def get_diccionario_sinonimos(self) -> dict[str, str]: ...
     def revisar_sinonimos(self) -> str | None: ...
+    def contar(self, tabla: str) -> int: ...
     def list_comercio_rubros_todos(self) -> list[dict]: ...
     def list_adornos(self, ciudad_id: str | None) -> list[dict]: ...
     def crear_adorno(self, row: dict) -> dict: ...
@@ -294,21 +295,24 @@ class SupabaseRepo:
 
     def resumen_importados(self) -> list[dict]:
         """Cuántos hay por ciudad y estado, para la cabecera del panel."""
-        res = (self._db.table("comercios_importados")
-               .select("ciudad_id, estado").limit(20000).execute())
+        # Con ~19.861 filas de OSM, `.limit(20000)` devolvía 1000 y la cabecera
+        # informaba el 5% de lo importado con cara de número exacto.
+        filas = self._traer_todo("comercios_importados", "ciudad_id, estado", "id")
         cuenta: dict[tuple, int] = {}
-        for r in res.data or []:
+        for r in filas:
             k = (r.get("ciudad_id"), r.get("estado"))
             cuenta[k] = cuenta.get(k, 0) + 1
         return [{"ciudad_id": c, "estado": e, "n": n} for (c, e), n in cuenta.items()]
 
     def comercios_con_coords(self, ciudad_id: str | None) -> list[dict]:
         """Los que ya están cargados, para detectar duplicados al importar."""
-        sel = (self._db.table("comercios")
-               .select("id, nombre, lat, lng").not_.is_("lat", "null"))
-        if ciudad_id:
-            sel = sel.eq("ciudad_id", ciudad_id)
-        return sel.limit(20000).execute().data or []
+        # Se usa para detectar duplicados al importar: leer de menos no da
+        # error, importa el duplicado.
+        def filtrar(q):
+            q = q.not_.is_("lat", "null")
+            return q.eq("ciudad_id", ciudad_id) if ciudad_id else q
+
+        return self._traer_todo("comercios", "id, nombre, lat, lng", "id", filtrar=filtrar)
 
     def agregar_numero_comercio(self, comercio_id: str, numero: str, etiqueta: str | None, by: str) -> dict:
         from app.core.telefono import normalizar_whatsapp
@@ -788,6 +792,43 @@ class SupabaseRepo:
                .eq("id", adorno_id).execute())
         return (res.data or [{}])[0]
 
+    def _traer_todo(self, tabla: str, columnas: str, orden: str | list[str],
+                    pagina: int = 1000, techo: int = 200_000,
+                    filtrar=None) -> list[dict]:
+        """Todas las filas, en páginas. NUNCA con `.limit(N)` grande.
+
+        PostgREST corta en `PGRST_DB_MAX_ROWS` (1000 acá) y NO avisa: un
+        `.limit(20000)` devuelve mil filas y una respuesta 200. Quien llama no
+        tiene forma de distinguir "eso es todo" de "te di lo que entraba", y el
+        resultado es un informe que miente con cara de estar completo.
+
+        Es la quinta vez que este mismo tope muerde en el proyecto. El patrón que
+        lo evita no es subir el número —eso sólo mueve el día en que vuelve a
+        pasar— es pedir de a páginas hasta que una venga incompleta.
+        """
+        # El orden tiene que ser TOTAL o el paginado se saltea filas: con un
+        # orden ambiguo, dos páginas consecutivas pueden traer la misma fila y
+        # perder otra, y nadie se entera. Por eso se aceptan varias columnas.
+        columnas_orden = [orden] if isinstance(orden, str) else list(orden)
+        filas: list[dict] = []
+        for inicio in range(0, techo, pagina):
+            q = self._db.table(tabla).select(columnas)
+            if filtrar:
+                q = filtrar(q)
+            for col in columnas_orden:
+                q = q.order(col)
+            lote = (q.range(inicio, inicio + pagina - 1).execute().data) or []
+            filas.extend(lote)
+            if len(lote) < pagina:
+                return filas
+        logger.warning("traer_todo.techo_alcanzado", tabla=tabla, techo=techo)
+        return filas
+
+    def contar(self, tabla: str) -> int:
+        """Cuántas filas hay de verdad, para poder cotejar contra lo leído."""
+        res = self._db.table(tabla).select("*", count="exact", head=True).execute()
+        return res.count or 0
+
     def list_comercio_rubros_todos(self) -> list[dict]:
         """Toda la tabla comercio_rubros de una, con el slug ya resuelto.
 
@@ -804,8 +845,11 @@ class SupabaseRepo:
         # limpieza informó "0 asignaciones sin respaldo" cuando el informe SQL
         # encontraba 37 — un resultado tranquilizador y falso, que es el peor.
         try:
-            rels = (self._db.table("comercio_rubros")
-                    .select("comercio_id, rubro_id").limit(20000).execute().data) or []
+            # `.limit(20000)` devolvía exactamente 1000: el tope de PostgREST.
+            # Con 886 comercios el guard del script no lo notaba (1000 > 886) y
+            # los comercios que quedaban afuera parecían no tener ningún rubro.
+            rels = self._traer_todo("comercio_rubros", "comercio_id, rubro_id",
+                                    ["comercio_id", "rubro_id"])
             rubros = (self._db.table("rubros").select("id, slug, nombre")
                       .execute().data) or []
         except Exception:  # noqa: BLE001
@@ -1026,13 +1070,11 @@ class SupabaseRepo:
         hoy = hoy_dt.date().isoformat()
         limite_aviso = (hoy_dt.date() + timedelta(days=5)).isoformat()
 
-        comercios = (
-            self._db.table("comercios")
-            .select("id, nombre, created_at, suspendido, paga_hasta")
-            .eq("activo", True)
-            .limit(2000)
-            .execute()
-        ).data or []
+        # Eran 886 activos contra un tope de 1000: faltaban semanas para que
+        # este panel empezara a contar de menos sin avisar.
+        comercios = self._traer_todo(
+            "comercios", "id, nombre, created_at, suspendido, paga_hasta", "id",
+            filtrar=lambda q: q.eq("activo", True))
 
         nuevos_7d = sum(1 for c in comercios if c["created_at"] >= hace_7d)
         nuevos_30d = sum(1 for c in comercios if c["created_at"] >= hace_30d)
@@ -1049,14 +1091,9 @@ class SupabaseRepo:
 
         nombre_por_id = {c["id"]: c["nombre"] for c in comercios}
 
-        ofertas = (
-            self._db.table("publicaciones")
-            .select("comercio_id")
-            .not_.is_("descuento_pct", "null")
-            .eq("activo", True)
-            .limit(5000)
-            .execute()
-        ).data or []
+        ofertas = self._traer_todo(
+            "publicaciones", "comercio_id", "id",
+            filtrar=lambda q: q.not_.is_("descuento_pct", "null").eq("activo", True))
         conteo_ofertas: dict[str, int] = {}
         for o in ofertas:
             conteo_ofertas[o["comercio_id"]] = conteo_ofertas.get(o["comercio_id"], 0) + 1
