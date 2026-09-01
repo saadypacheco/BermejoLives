@@ -69,9 +69,25 @@ def main() -> int:
     saltados = 0
 
     for cid, c in comercios.items():
-        texto = " ".join(filter(None, (
-            c.get("prod_det_ia"), c.get("subcategoria"),
-            c.get("sinonimos"), c.get("nombre"))))
+        # SIN `sinonimos`, y es la diferencia entre un informe usable y uno que
+        # hay que revisar entero.
+        #
+        # Los sinónimos existen para que el COMPRADOR encuentre: busca "polera"
+        # y aparece el que vende remeras. Clasificar es otra pregunta —qué
+        # vende— y la respuesta ya está escrita en `prod_det_ia`.
+        #
+        # Metidos acá, arrastran por una palabra suelta de una frase entera:
+        # "ciclismo indoor" hacía de un gimnasio una bicicletería, "repuesto de
+        # celular" lo mandaba a repuestos de auto, "copa de vino" convertía una
+        # heladería en bebidas, y "juego de lencería" —de cama— mandaba una
+        # blanquería a lencería. La §9 de auditar_diccionario.sql los lista.
+        #
+        # CON_SINONIMOS=1 restaura el comportamiento viejo, para comparar los
+        # dos informes en vez de creerle a este comentario.
+        campos = [c.get("prod_det_ia"), c.get("subcategoria"), c.get("nombre")]
+        if os.environ.get("CON_SINONIMOS") in {"1", "true", "si"}:
+            campos.append(c.get("sinonimos"))
+        texto = " ".join(filter(None, campos))
         sugeridos = {s for s in repo.sugerir_rubros_por_texto(texto) if s != "otros"}
         tiene = actuales.get(cid, set())
         faltan = sorted(sugeridos - tiene)
