@@ -13,7 +13,7 @@
 // la caché, el arreglo no le llega y el agente sigue sin poder subir su
 // trabajo. Es lo primero que hay que descartar cuando un arreglo "no funciona"
 // en el teléfono y sí en el servidor.
-const VERSION = "uruku-v10";
+const VERSION = "uruku-v11";
 const SHELL = `${VERSION}-shell`;
 const STATIC = `${VERSION}-static`;
 const TILES = `${VERSION}-tiles`;

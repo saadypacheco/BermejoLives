@@ -26,9 +26,15 @@ import { ImageLightbox } from "@/components/image-lightbox";
 // Derivarlos de lo cargado tiene una garantía que una lista escrita a mano no
 // puede dar: ningún chip puede devolver cero, porque sólo aparece si hay
 // comercios de ese rubro a la vista.
-const MAX_CHIPS = 8;
+// Sin tope. Estaba en 8 y se notaba: con el mapa vacío de pines, los chips son
+// la puerta de entrada, y esconder 30 categorías detrás de un número escrito a
+// mano deja al comprador creyendo que URUKU sólo tiene ocho rubros. La fila se
+// desliza, así que una categoría de más cuesta un gesto, no una pantalla.
+//
+// El orden es por cantidad y ahora el número se ve: sin mostrarlo, el orden
+// parecía arbitrario.
 
-function chipsDe(comercios: ComercioMapa[], rubros: Rubro[]): { label: string; rubro: string }[] {
+function chipsDe(comercios: ComercioMapa[], rubros: Rubro[]): { label: string; rubro: string; n: number }[] {
   const cuenta = new Map<string, number>();
   for (const c of comercios) {
     // Cuenta por TODOS sus rubros. Contando sólo el principal, categorías
@@ -42,10 +48,11 @@ function chipsDe(comercios: ComercioMapa[], rubros: Rubro[]): { label: string; r
   }
   const nombre = new Map(rubros.map((r) => [r.slug, r.nombre.replace(/^[^\p{L}\p{N}]+/u, "").trim()]));
   const top = [...cuenta.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, MAX_CHIPS)
-    .map(([slug]) => ({ label: nombre.get(slug) || slug, rubro: slug }));
-  return [{ label: "Todos", rubro: "" }, ...top];
+    // Empate por cantidad: alfabético, para que el orden no cambie entre
+    // recargas y la gente pueda acordarse de dónde estaba su categoría.
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([slug, n]) => ({ label: nombre.get(slug) || slug, rubro: slug, n }));
+  return [{ label: "Todos", rubro: "", n: comercios.length }, ...top];
 }
 const wa = (s?: string | null) => (s || "").replace(/\D/g, "");
 
@@ -138,7 +145,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
         )}
         {chips.map((c) => (
           <button type="button" key={c.label} className={`mchip ${cat === c.rubro ? "active" : ""}`} onClick={() => { setCat(c.rubro); setSel(null); }}>
-            {c.label}
+            {c.label} <span className="mchip-n">{c.n}</span>
           </button>
         ))}
       </div>
