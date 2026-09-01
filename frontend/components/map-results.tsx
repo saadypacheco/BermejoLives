@@ -59,10 +59,28 @@ export function MapResults({ results, hayFiltro = true }: {
       }
       renderPins(L);
       pintarAdornos(L);
+      // Leaflet mide el contenedor al crearse y pide sólo las tiles que entran
+      // en esa medida. Si el ancho todavía no era el definitivo —y no lo es:
+      // esta vista aparece al cambiar de Lista a Mapa, y /mapa llega por una
+      // redirección— las columnas que faltan quedan como franjas blancas y no
+      // se piden nunca más, porque el mapa no se entera de que creció.
+      mapRef.current?.invalidateSize();
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results]);
+
+  // Y si el contenedor cambia de tamaño después —girar el teléfono, abrir el
+  // teclado, el navegador escondiendo su barra al hacer scroll— hay que
+  // avisarle igual. Un solo `invalidateSize` al montar cubre el arranque, no la
+  // vida del mapa.
+  useEffect(() => {
+    const el = elRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const obs = new ResizeObserver(() => mapRef.current?.invalidateSize());
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   // Los popups son HTML crudo (fuera de React): tracking de leads por delegación.
   useEffect(() => {
