@@ -230,24 +230,22 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
     });
   }
 
-  // Los mercados y galerías son referencias de la ciudad, no un detalle: van
-  // desde el arranque. Estaban en 17 —o sea, sólo si ya te habías acercado— que
-  // es justo cuando ya no hacen falta para orientarse.
-  const ZOOM_MIN_LUGARES = 0;
-
-  /** A partir de acá se dibujan TODOS los comercios.
+  /** El mapa arranca vacío de comercios, a propósito.
    *
-   * Por debajo, sólo los destacados y los que pagan (más los adornos y los
-   * mercados). 886 pines sobre Bermejo entero no son un mapa: son una mancha, y
-   * el comprador que entra por primera vez no ve una ciudad con negocios, ve
-   * ruido.
+   * 886 pines sobre Bermejo no son un mapa, son una mancha — y la mancha
+   * aparece justo cuando alguien entra por primera vez y todavía no sabe qué
+   * busca. Mostrarlo todo no informa: satura.
    *
-   * Y esto no es sólo estético: la primera vista pasa a ser un lugar con cupo, y
-   * el cupo es lo que se vende. Hoy no lo ocupa casi nadie —`tierDe` ya sabe
-   * quién es destacado y quién paga— así que arranca casi vacío de comercios y
-   * se va llenando a medida que alguien contrate.
+   * No se revela por zoom. Se probó y no alcanza: acercarse no es decir qué se
+   * quiere, así que a zoom 16 volvía la misma mancha, sólo que de un barrio.
+   * Lo que revela los comercios es el FILTRO — buscar, elegir una categoría,
+   * pedir sólo ofertas. Recién ahí hay una pregunta que contestar.
+   *
+   * Mientras tanto quedan los adornos, y los destacados o los que pagan. Eso
+   * convierte a la primera vista en un lugar con cupo, que es lo que se vende:
+   * hoy está casi vacía y se llena sola a medida que alguien contrate.
    */
-  const ZOOM_TODOS = 16;
+  const ZOOM_MIN_LUGARES = 0;
 
   function iconoLugar(L: any, nombre: string) {
     const html = `<div class="ukpinlugar">${escapeHtml(nombre)}</div>`;
@@ -278,10 +276,10 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
   function pintar() {
     const L = LRef.current, layer = clusterRef.current, map = mapRef.current;
     if (!L || !layer || !map) return;
-    // Vista de descubrimiento: de lejos, sólo los destacados y los que pagan.
-    // Los mercados y los adornos se dibujan igual — son la referencia que hace
-    // que el mapa se lea como una ciudad y no como una lista despoblada.
-    const soloDestacados = !todosRef.current && map.getZoom() < ZOOM_TODOS;
+    // Sin filtro puesto: sólo los destacados y los que pagan. Los adornos van
+    // igual — son los que hacen que el mapa se lea como Bermejo y no como una
+    // grilla de calles vacía.
+    const descubrimiento = !todosRef.current;
     let saltados = 0;
     layer.clearLayers();
     polyLayerRef.current?.clearLayers();
@@ -306,7 +304,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
       // El seleccionado se dibuja siempre: si el comprador tocó un resultado y
       // su pin no aparece, el mapa parece roto.
       const isSel = c.id === selIdRef.current;
-      if (soloDestacados && tier === "gratis" && !isSel) { saltados++; continue; }
+      if (descubrimiento && tier === "gratis" && !isSel) { saltados++; continue; }
       const m = marcador(L, c, tier, isSel);
       markerByIdRef.current.set(c.id, m);
       if (isSel) selRadiusRef.current = sizeDe(tier, true) / 2;
@@ -322,6 +320,10 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
         L.polygon(g.poligono, { color: "#8b5cf6", weight: 2, fillColor: "#8b5cf6", fillOpacity: 0.12 }).addTo(polyLayerRef.current);
       }
       // Por debajo del zoom mínimo no se dibuja: de lejos sólo se ven los locales.
+      // El pin del mercado lleva su nombre escrito y ocupa más que un punto:
+      // con quince galerías la vista de arranque vuelve a llenarse de texto.
+      // También espera al filtro.
+      if (descubrimiento) continue;
       if ((mapRef.current?.getZoom() ?? 0) < ZOOM_MIN_LUGARES) continue;
       const m = L.marker([lat, lng], { icon: iconoLugar(L, g.nombre), zIndexOffset: 400 });
       m.__data = items[0];
@@ -416,9 +418,10 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
         </div>
       )}
 
+      {/* No dice "acercá": acercarse ya no muestra nada. Dice qué hacer. */}
       {ocultos > 0 && (
         <div className="hm-aviso">
-          Acercá el mapa para ver {ocultos} negocios más
+          Buscá o elegí una categoría para ver {ocultos} negocios
         </div>
       )}
 
