@@ -557,3 +557,10 @@
 .uk-marca-uruku { display: inline-block; margin-top: 4px; padding: 1px 7px; border-radius: 999px;
   background: rgba(57,255,158,.14); color: var(--uk-neon, #39ff9e);
   font-size: 9.5px; font-weight: 800; letter-spacing: .06em; vertical-align: middle; }
+
+/* Aviso de la vista de descubrimiento del mapa. Un mapa con seis pines sobre
+   una ciudad entera se lee como "no hay nada acá"; esto dice que sí hay. */
+.hm-aviso { position: absolute; left: 50%; transform: translateX(-50%); bottom: 62px; z-index: 500;
+  padding: 7px 14px; border-radius: 999px; pointer-events: none;
+  background: rgba(12,16,22,.86); color: #e8edf4; font-size: 12.5px; font-weight: 600;
+  border: 1px solid rgba(255,255,255,.12); backdrop-filter: blur(6px); white-space: nowrap; }

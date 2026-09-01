@@ -34,11 +34,17 @@ export type Adorno = {
 };
 
 /**
- * Debajo de este zoom no se dibuja ninguno. De lejos el mapa tiene que ser
- * comercios y nada más: es el momento en que el comprador está buscando, no
- * mirando.
+ * Debajo de este zoom no se dibuja ninguno.
+ *
+ * Estaba en 15 con el criterio de que de lejos el mapa tenía que ser comercios
+ * y nada más. Ese criterio cambió: de lejos ahora se muestran sólo los
+ * destacados, así que sin los adornos el primer mapa que ve alguien queda
+ * vacío. Son lo que lo hace Bermejo y no una grilla de calles.
+ *
+ * Se baja a 13, no a 0: en la vista de toda Bolivia una chalana sobre el río
+ * sería un dibujo del tamaño de la ciudad.
  */
-export const ZOOM_MIN_ADORNOS = 15;
+export const ZOOM_MIN_ADORNOS = 13;
 
 /**
  * Las chalanas del río llevan toldos a rayas de colores fuertes. Cada una toma

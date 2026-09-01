@@ -37,8 +37,11 @@ function pinHtml(c: ComercioMapa, tier: Tier, isSel: boolean, cerrado: boolean, 
   return `<div class="${cls}" style="--pc:${style.color}">${ring}${badge}${inner}</div>`;
 }
 
-export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, center, ciudad }: {
+export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, center, ciudad, mostrarTodos = false }: {
   comercios: ComercioMapa[]; onSelect?: (c: ComercioMapa) => void; selectedId?: string | null;
+  /** El comprador buscó o eligió una categoría: ahí quiere ver TODO lo que
+   *  coincide, esté donde esté el zoom. */
+  mostrarTodos?: boolean;
   descuentoPorId?: Record<string, number>; center?: [number, number] | null;
   /** La ciudad mostrada: decide de dónde salen los tiles (columna en `ciudades`). */
   ciudad?: { tiles_url?: string | null; tiles_atribucion?: string | null } | null;
@@ -64,14 +67,22 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
   // El adorno ya usaba este patrón (`adornosRef`) por la misma razón; a los
   // comercios les faltaba. Leyendo del ref, las dos vías dibujan lo mismo.
   const comerciosRef = useRef(comercios);
+  // Misma razón que `comerciosRef`: el manejador de `zoomend` se registra una
+  // sola vez y se queda con el valor del primer render.
+  const todosRef = useRef(mostrarTodos);
   const descuentosRef = useRef(descuentoPorId);
   const selIdRef = useRef<string | null | undefined>(selectedId);
   const selRadiusRef = useRef(18);
   const onSelRef = useRef(onSelect);
   const [hoja, setHoja] = useState<Hoja | null>(null);
+  // Cuántos comercios quedaron fuera de la vista de descubrimiento. Sin
+  // decirlo, un mapa con seis pines sobre una ciudad se lee como "no hay
+  // nada acá", que es lo contrario de lo que pasa.
+  const [ocultos, setOcultos] = useState(0);
   const hojaRef = useRef<(h: Hoja) => void>(() => {});
   onSelRef.current = onSelect;
   comerciosRef.current = comercios;
+  todosRef.current = mostrarTodos;
   descuentosRef.current = descuentoPorId;
   selIdRef.current = selectedId;
   hojaRef.current = setHoja;
@@ -157,7 +168,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { pintar(); /* eslint-disable-next-line */ }, [comercios, selectedId, descuentoPorId]);
+  useEffect(() => { pintar(); /* eslint-disable-next-line */ }, [comercios, selectedId, descuentoPorId, mostrarTodos]);
 
   function marcador(L: any, c: ComercioMapa, tier: Tier, isSel: boolean) {
     const cerrado = abiertoAhora(c.horario).estado === "cerrado";
@@ -190,9 +201,10 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
    * Dibuja las chalanas y los lapachos. Van en su propio panel, por debajo de
    * los pines y sin recibir clics, así que no pueden competir con un comercio.
    *
-   * Por debajo de ZOOM_MIN_ADORNOS no se dibuja ninguno: de lejos el mapa tiene
-   * que ser comercios y nada más, porque es el momento en que el comprador está
-   * buscando y no mirando.
+   * Se dibujan desde el arranque. Antes aparecían recién al acercarse, con el
+   * criterio de que de lejos el mapa tenía que ser comercios y nada más. Pero de
+   * lejos ya no hay 886 comercios —hay unos pocos destacados— y sin las chalanas
+   * y los lapachos ese primer mapa queda vacío. Son lo que lo hace Bermejo.
    */
   function pintarAdornos() {
     const L = LRef.current, map = mapRef.current, capa = adornoLayerRef.current;
@@ -218,7 +230,24 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
     });
   }
 
-  const ZOOM_MIN_LUGARES = 17;
+  // Los mercados y galerías son referencias de la ciudad, no un detalle: van
+  // desde el arranque. Estaban en 17 —o sea, sólo si ya te habías acercado— que
+  // es justo cuando ya no hacen falta para orientarse.
+  const ZOOM_MIN_LUGARES = 0;
+
+  /** A partir de acá se dibujan TODOS los comercios.
+   *
+   * Por debajo, sólo los destacados y los que pagan (más los adornos y los
+   * mercados). 886 pines sobre Bermejo entero no son un mapa: son una mancha, y
+   * el comprador que entra por primera vez no ve una ciudad con negocios, ve
+   * ruido.
+   *
+   * Y esto no es sólo estético: la primera vista pasa a ser un lugar con cupo, y
+   * el cupo es lo que se vende. Hoy no lo ocupa casi nadie —`tierDe` ya sabe
+   * quién es destacado y quién paga— así que arranca casi vacío de comercios y
+   * se va llenando a medida que alguien contrate.
+   */
+  const ZOOM_TODOS = 16;
 
   function iconoLugar(L: any, nombre: string) {
     const html = `<div class="ukpinlugar">${escapeHtml(nombre)}</div>`;
@@ -247,8 +276,13 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
   }
 
   function pintar() {
-    const L = LRef.current, layer = clusterRef.current;
-    if (!L || !layer) return;
+    const L = LRef.current, layer = clusterRef.current, map = mapRef.current;
+    if (!L || !layer || !map) return;
+    // Vista de descubrimiento: de lejos, sólo los destacados y los que pagan.
+    // Los mercados y los adornos se dibujan igual — son la referencia que hace
+    // que el mapa se lea como una ciudad y no como una lista despoblada.
+    const soloDestacados = !todosRef.current && map.getZoom() < ZOOM_TODOS;
+    let saltados = 0;
     layer.clearLayers();
     polyLayerRef.current?.clearLayers();
     markerByIdRef.current = new Map();
@@ -269,7 +303,10 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
         // debajo de cierto zoom.
       }
       const tier = tierDe(c);
+      // El seleccionado se dibuja siempre: si el comprador tocó un resultado y
+      // su pin no aparece, el mapa parece roto.
       const isSel = c.id === selIdRef.current;
+      if (soloDestacados && tier === "gratis" && !isSel) { saltados++; continue; }
       const m = marcador(L, c, tier, isSel);
       markerByIdRef.current.set(c.id, m);
       if (isSel) selRadiusRef.current = sizeDe(tier, true) / 2;
@@ -310,6 +347,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
     }
 
     drawConnector();
+    setOcultos(saltados);
   }
 
   function drawConnector() {
@@ -375,6 +413,12 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
               );
             })}
           </div>
+        </div>
+      )}
+
+      {ocultos > 0 && (
+        <div className="hm-aviso">
+          Acercá el mapa para ver {ocultos} negocios más
         </div>
       )}
 

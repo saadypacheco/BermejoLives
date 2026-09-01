@@ -159,7 +159,11 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
 
       {/* Mapa: crece y llena el espacio disponible */}
       <div className="mmap">
-        <HomeMap comercios={filtered} onSelect={setSel} selectedId={sel?.id} descuentoPorId={descuentoPorId} center={center} ciudad={ciudad ?? null} />
+        {/* Con un filtro puesto el mapa muestra TODO lo que coincide: el
+            comprador ya dijo qué busca, esconderle resultados por el zoom sería
+            contestarle a medias. Sin filtro, arranca con los destacados. */}
+        <HomeMap comercios={filtered} onSelect={setSel} selectedId={sel?.id} descuentoPorId={descuentoPorId} center={center} ciudad={ciudad ?? null}
+                 mostrarTodos={Boolean(cat || q.trim() || soloOfertas || soloAbiertos)} />
         <Link href="/buscar" className="mmapbtn">⛶ Ver mapa completo</Link>
 
       {/* Tarjeta flotante sobre el mapa, conectada al pin por la flecha */}
