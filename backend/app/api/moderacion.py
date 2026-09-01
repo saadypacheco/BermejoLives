@@ -1392,3 +1392,55 @@ def admin_catalogo(
     from app.services.catalogo import informe
 
     return informe(repo)
+
+
+# ── Peso de las fotos ─────────────────────────────────────────────────────────
+
+@router.get("/admin/fotos/peso")
+async def admin_fotos_peso(
+    _mod: dict = Depends(require_moderador),
+) -> dict:
+    """Cuánto ocupan las fotos y los videos, y cuáles son los archivos más pesados.
+
+    Va antes que cualquier botón de optimizar: todo lo que sube por el backend
+    ya pasa por `procesar_imagen`, así que lo probable es que las fotos estén
+    bien y el peso esté en los videos —que se guardan crudos— o en un puñado de
+    archivos que entraron por otro camino. Apretar "reducir" sin mirar esto es
+    trabajar sobre una suposición.
+    """
+    from app.services.peso_fotos import medir
+
+    # Recorrer miles de archivos bloquea el event loop y con él todas las
+    # demás peticiones del panel.
+    return await run_in_threadpool(medir, settings.fotos_dir)
+
+
+class OptimizarFotosBody(BaseModel):
+    # Sin default a propósito: la operación pisa el archivo original y no se
+    # puede deshacer. Que haya que escribir el umbral obliga a haber mirado la
+    # medición antes.
+    max_kb: int
+    limite: int = 50
+
+
+@router.post("/admin/fotos/optimizar")
+async def admin_fotos_optimizar(
+    body: OptimizarFotosBody,
+    admin: dict = Depends(require_admin),
+) -> dict:
+    """Recomprime las imágenes que pasan `max_kb`. Irreversible.
+
+    Pide admin y no moderador: pisa archivos sin vuelta atrás.
+    """
+    from app.services.peso_fotos import optimizar
+
+    if body.max_kb < 50:
+        # Por debajo de 50KB no hay nada que ganar y sí calidad que perder: la
+        # portada de una ficha a 30KB se ve mal en un celular moderno.
+        raise HTTPException(status_code=400, detail="El umbral mínimo es 50 KB")
+
+    res = await run_in_threadpool(
+        optimizar, settings.fotos_dir, body.max_kb, max(1, min(body.limite, 500)))
+    logger.info("admin.fotos_optimizadas", by=admin["email"], **{
+        k: v for k, v in res.items() if k != "detalle"})
+    return res

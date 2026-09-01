@@ -686,3 +686,33 @@ export async function enviarMensajeComercio(comercioId: string, cuerpo: string) 
   });
   return res.json();
 }
+
+export type PesoArchivo = { path: string; kb: number };
+export type PesoGrupo = { n: number; bytes: number; promedio_kb: number; top: PesoArchivo[] };
+export type PesoFotos = {
+  existe: boolean;
+  dir: string;
+  imagenes?: PesoGrupo;
+  videos?: PesoGrupo;
+  otros?: { n: number; bytes: number };
+  bytes_total?: number;
+};
+
+export async function getPesoFotos(): Promise<PesoFotos> {
+  const res = await authFetch("/admin/fotos/peso");
+  return res.json();
+}
+
+export type ResultadoOptimizar = {
+  revisados: number; optimizados: number; ahorro_bytes: number; restantes: number;
+  detalle: { path: string; antes_kb: number; despues_kb: number }[];
+};
+
+export async function optimizarFotos(max_kb: number, limite = 50): Promise<ResultadoOptimizar> {
+  const res = await authFetch("/admin/fotos/optimizar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ max_kb, limite }),
+  });
+  return okDe(res, "optimizar las fotos") as Promise<ResultadoOptimizar>;
+}

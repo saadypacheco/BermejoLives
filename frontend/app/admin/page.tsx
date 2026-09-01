@@ -20,6 +20,7 @@ import {
   enviarMensajeComercio,
   getEstadisticas, type EstadisticasAdmin,
   getKpis, type Kpis,
+  getPesoFotos, optimizarFotos, type PesoFotos, type ResultadoOptimizar,
   listReclamos, responderReclamo, type Reclamo,
   getReservaloResumen, type ReservaloResumen,
   getReservaloConsultas, responderReservaloConsulta, type ConsultaReservalo,
@@ -769,6 +770,8 @@ function TabMonitoreo({
           ⚠️ {data.alertas.vencido} comercio(s) vencido(s) y {data.alertas.suspendido} suspendido(s). Revisá la pestaña "Suscripciones".
         </div>
       )}
+
+      <PanelPesoFotos />
 
       {/* Top ofertas */}
       <div className="panel-card glass">
@@ -2212,5 +2215,151 @@ function ModalPago({ comercio, onClose, onDone }: { comercio: ComercioSuscripcio
         </div>
       </div>
     </Portal>
+  );
+}
+
+
+/** Cuánto pesan las fotos, y el botón para achicar las que se fueron de rango.
+ *
+ * La medición va primero y el botón queda apagado hasta verla. Todo lo que
+ * sube por el backend ya pasa por el procesador de imágenes, así que lo
+ * probable es que las fotos estén bien y el peso esté en los videos —que se
+ * guardan crudos, tal como salen del celular—. Apretar "reducir" sin haber
+ * mirado sería trabajar sobre una suposición.
+ */
+function PanelPesoFotos() {
+  const [peso, setPeso] = useState<PesoFotos | null>(null);
+  const [midiendo, setMidiendo] = useState(false);
+  const [maxKb, setMaxKb] = useState(250);
+  const [corriendo, setCorriendo] = useState(false);
+  const [res, setRes] = useState<ResultadoOptimizar | null>(null);
+  const [err, setErr] = useState("");
+
+  const mb = (b: number) => `${(b / 1024 / 1024).toFixed(1)} MB`;
+
+  async function medir() {
+    setMidiendo(true); setErr(""); setRes(null);
+    try { setPeso(await getPesoFotos()); }
+    catch { setErr("No se pudo medir. ¿El backend está arriba?"); }
+    finally { setMidiendo(false); }
+  }
+
+  async function optimizar() {
+    // Pisa el archivo original y no hay vuelta atrás: la confirmación dice
+    // exactamente eso, no un "¿estás seguro?" que nadie lee.
+    if (!confirm(`Se van a recomprimir las imágenes de más de ${maxKb} KB.
+
+` +
+                 `El archivo original se pierde: esto NO se puede deshacer.
+
+¿Seguimos?`)) return;
+    setCorriendo(true); setErr("");
+    try {
+      const r = await optimizarFotos(maxKb, 50);
+      setRes(r);
+      await medir();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "No se pudo optimizar");
+    } finally { setCorriendo(false); }
+  }
+
+  return (
+    <div className="panel-card glass">
+      <div className="ph">
+        <h3>Peso de las fotos</h3>
+        <button className="btn btn-ghost btn-sm" onClick={medir} disabled={midiendo}>
+          {midiendo ? "Midiendo…" : peso ? "Volver a medir" : "Medir"}
+        </button>
+      </div>
+
+      {!peso && !midiendo && (
+        <div style={{ padding: 20, color: "var(--txt-3)", fontSize: 13 }}>
+          Recorre el disco de fotos y dice cuánto ocupa cada cosa. Puede tardar unos segundos.
+        </div>
+      )}
+
+      {peso && peso.existe === false && (
+        <div style={{ padding: 20, color: "var(--amber)", fontSize: 13 }}>
+          No existe el directorio {peso.dir}. Si el backend está en otro contenedor, revisá el volumen.
+        </div>
+      )}
+
+      {peso?.existe && (
+        <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Imágenes</div>
+              <div style={{ fontSize: 20, fontWeight: 700 }}>{mb(peso.imagenes?.bytes ?? 0)}</div>
+              <div style={{ fontSize: 11, color: "var(--txt-3)" }}>
+                {peso.imagenes?.n ?? 0} archivos · {peso.imagenes?.promedio_kb ?? 0} KB promedio
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Videos (sin procesar)</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: (peso.videos?.bytes ?? 0) > (peso.imagenes?.bytes ?? 0) ? "var(--amber)" : undefined }}>
+                {mb(peso.videos?.bytes ?? 0)}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--txt-3)" }}>
+                {peso.videos?.n ?? 0} archivos · {peso.videos?.promedio_kb ?? 0} KB promedio
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Total en disco</div>
+              <div style={{ fontSize: 20, fontWeight: 700 }}>{mb(peso.bytes_total ?? 0)}</div>
+            </div>
+          </div>
+
+          {/* Si el peso está en los videos, el botón de abajo no los toca y
+              decirlo evita apretarlo esperando que resuelva algo. */}
+          {(peso.videos?.bytes ?? 0) > (peso.imagenes?.bytes ?? 0) && (
+            <div style={{ fontSize: 12.5, color: "var(--amber)", border: "1px solid var(--amber)",
+                          borderRadius: 8, padding: "8px 12px" }}>
+              El grueso del peso está en los videos, que se guardan crudos. Optimizar las
+              imágenes no los toca: si hay que bajar el disco, es ahí donde hay que mirar.
+            </div>
+          )}
+
+          {peso.imagenes && peso.imagenes.top.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, color: "var(--txt-3)", marginBottom: 6 }}>Las más pesadas</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                {peso.imagenes.top.slice(0, 8).map((f) => (
+                  <div key={f.path} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 12 }}>
+                    <span style={{ color: "var(--txt-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.path}</span>
+                    <b style={{ flexShrink: 0, color: f.kb > 400 ? "var(--amber)" : "var(--txt-2)" }}>{f.kb} KB</b>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, display: "flex",
+                        gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>
+              Achicar las que pasen de
+              <input className="adm-input" type="number" min={50} step={50} value={maxKb}
+                     onChange={(e) => setMaxKb(Number(e.target.value) || 250)}
+                     style={{ width: 90, marginLeft: 8 }} /> KB
+            </label>
+            <button className="btn btn-primary btn-sm" onClick={optimizar} disabled={corriendo}>
+              {corriendo ? "Achicando…" : "Reducir peso"}
+            </button>
+            <span style={{ fontSize: 11.5, color: "var(--txt-3)" }}>
+              De a 50 por vez · pisa el original, no se puede deshacer
+            </span>
+          </div>
+
+          {res && (
+            <div style={{ fontSize: 13 }}>
+              Se achicaron <b>{res.optimizados}</b> de {res.revisados} · ahorro <b>{mb(res.ahorro_bytes)}</b>
+              {res.restantes > 0 && (
+                <span style={{ color: "var(--amber)" }}> · quedan {res.restantes}, volvé a apretar</span>
+              )}
+            </div>
+          )}
+          {err && <div style={{ color: "var(--pink)", fontSize: 13 }}>{err}</div>}
+        </div>
+      )}
+    </div>
   );
 }
