@@ -126,7 +126,12 @@
 .resmeta .pill { font-size: 11px; padding: 4px 9px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--stroke); color: var(--txt-2); }
 .resdir { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--txt-3); margin-bottom: 12px; }
 .resact { display: flex; gap: 8px; }
-.map-canvas { height: 540px; border-radius: 18px; overflow: hidden; border: 1px solid var(--stroke-2); }
+/* El mapa toma el alto que sobra en vez de 540px fijos. En una pantalla de
+   compu quedaba una franja cortada con medio Bermejo afuera, que es justo lo
+   que el mapa tiene que mostrar. `dvh` y no `vh`: en el celular la barra del
+   navegador aparece y desaparece, y con `vh` el mapa queda tapado por ella. */
+.map-canvas { height: min(calc(100dvh - 250px), 820px); min-height: 380px;
+  border-radius: 18px; overflow: hidden; border: 1px solid var(--stroke-2); }
 .map-pin { width: 26px; height: 26px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: linear-gradient(135deg, #16a36a, #2bd17e); display: grid; place-items: center; color: #04130c; font-weight: 800; box-shadow: 0 6px 16px rgba(0,0,0,.5); border: 2px solid #04130c; }
 .map-pin > * { transform: rotate(45deg); }
 .leaflet-popup-content-wrapper { background: var(--bg-2); color: var(--txt); border: 1px solid var(--stroke-2); border-radius: 12px; }

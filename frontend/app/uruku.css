@@ -80,12 +80,24 @@
 /* ---- Header ---- */
 .uk-header { background: var(--uk-header); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--uk-line); }
 /* Header en filas: 1) logo + ciudad + Ingresar + tema · 2) redes + clima + cotización · 3) buscador */
-.uk-headwrap { display: flex; flex-direction: column; gap: 9px; padding: 8px 0 12px; }
-.uk-head-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.uk-headwrap { display: flex; flex-direction: column; gap: 8px; padding: 6px 0 10px; }
+.uk-head-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .uk-head-top .uk-brand { flex-shrink: 0; order: 0; }   /* logo primero (izquierda), sin comprimir */
-.uk-head-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.uk-head-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; order: 1; margin-left: auto; }
 .uk-head-strip { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-@media (min-width: 900px) { .uk-brand-full { height: 120px; } .uk-search { max-width: 680px; } }
+
+/* En el celular la tira de redes y cotizaciones baja a su propio renglón: al
+   lado del logo no entra y comprimiría el selector de ciudad. */
+.uk-head-strip { order: 2; flex-basis: 100%; }
+
+/* De tablet para arriba va en la MISMA fila que el logo, centrada entre el logo
+   y el selector de ciudad. Eran dos filas y la segunda estaba casi vacía,
+   empujando el mapa medio centenar de píxeles hacia abajo por nada. */
+@media (min-width: 820px) {
+  .uk-head-strip { order: 1; flex-basis: auto; flex: 1; justify-content: center; }
+  .uk-head-actions { order: 2; }
+}
+@media (min-width: 900px) { .uk-brand-full { height: 96px; } .uk-search { max-width: 680px; } }
 .uk-header-main { min-height: 96px; display: grid; grid-template-columns: 300px minmax(240px,1fr) auto; gap: 24px; align-items: center; }
 .uk-brand-word { display: inline-flex; align-items: center; gap: 3px; font-weight: 900; font-size: 46px; letter-spacing: .01em; line-height: 1; color: var(--uk-ink); }
 .uk-brand-logo { width: 46px; height: 46px; object-fit: contain; flex-shrink: 0; }
@@ -353,9 +365,17 @@
 .uk-chip.active { background: var(--uk-green); border-color: var(--uk-green); color: #fff; }
 .uk-chip.link { display: inline-flex; align-items: center; gap: 4px; }
 
-.uk-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+/* Los filtros viven adentro de la barra, en la misma fila que Lista/Mapa: son
+   una fila menos, y arriba del mapa cada fila se paga en mapa cortado.
+   `min-width: 0` + scroll: en un celular angosto se deslizan en vez de empujar
+   al interruptor fuera de la pantalla. */
+.uk-filters { display: flex; gap: 8px; align-items: center; min-width: 0;
+  overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.uk-filters::-webkit-scrollbar { display: none; }
+.uk-filters > * { flex-shrink: 0; }
 
-.uk-resbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+.uk-resbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+.uk-resbar .uk-seg { flex-shrink: 0; }
 .uk-resbar b { font-size: 15px; }
 .uk-seg { display: inline-flex; background: var(--uk-chip); border: 1px solid var(--uk-line); border-radius: 10px; overflow: hidden; }
 .uk-seg button { border: 0; background: transparent; color: var(--uk-ink-soft); padding: 7px 16px; cursor: pointer; font-size: 13px; font-weight: 600; }

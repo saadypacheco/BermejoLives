@@ -231,7 +231,37 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
         </div>
       ) : null}
 
-      <div className="uk-filters">
+
+      {/* Qué está filtrando, en un solo lugar y con la × para sacarlo.
+          Reemplaza al "Todos" ambiguo: había uno en la fila de rubros que
+          significaba "todas las categorías" y otro en la de refinamientos que
+          significaba "todas las subcategorías de esta búsqueda" — mismo texto,
+          mismo aspecto, mismo lugar, distinto efecto. */}
+      {activos.length > 0 && (
+        <div className="uk-activos">
+          <span className="uk-activos-tit">Mostrando</span>
+          {activos.map((a) => (
+            <button type="button" key={a.clave} className="uk-activo" onClick={a.quitar}>
+              {a.texto} <span aria-hidden>×</span>
+              <span className="sr-only">Quitar filtro {a.texto}</span>
+            </button>
+          ))}
+          {activos.length > 1 && (
+            <button type="button" className="uk-activos-limpiar" onClick={limpiarTodo}>
+              Limpiar todo
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Los filtros y el interruptor Lista/Mapa comparten fila: eran dos
+          renglones y arriba del mapa cada renglón se paga en mapa cortado.
+
+          El total de comercios se fue de acá. Decir "887" antes de que alguien
+          busque no le sirve al comprador —no le dice si ESTÁ lo que quiere— y
+          en la etapa de captación es un número que no conviene mostrar. */}
+      <div className="uk-resbar">
+        <div className="uk-filters">
         <FilterChip icon="🏷" label="Categoría" value={rubroElegido ?? undefined} active={!!rubro}>
           {(close) => <OptionList items={catChips} sel={rubro} onPick={(v) => { setRubro(v); setSubcategoria(""); close(); }} />}
         </FilterChip>
@@ -258,33 +288,6 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
           <button type="button" className={`uk-chip ${soloOfertas ? "active" : ""}`} onClick={() => setSoloOfertas((v) => !v)}>Ofertas</button>
         )}
       </div>
-
-      {/* Qué está filtrando, en un solo lugar y con la × para sacarlo.
-          Reemplaza al "Todos" ambiguo: había uno en la fila de rubros que
-          significaba "todas las categorías" y otro en la de refinamientos que
-          significaba "todas las subcategorías de esta búsqueda" — mismo texto,
-          mismo aspecto, mismo lugar, distinto efecto. */}
-      {activos.length > 0 && (
-        <div className="uk-activos">
-          <span className="uk-activos-tit">Mostrando</span>
-          {activos.map((a) => (
-            <button type="button" key={a.clave} className="uk-activo" onClick={a.quitar}>
-              {a.texto} <span aria-hidden>×</span>
-              <span className="sr-only">Quitar filtro {a.texto}</span>
-            </button>
-          ))}
-          {activos.length > 1 && (
-            <button type="button" className="uk-activos-limpiar" onClick={limpiarTodo}>
-              Limpiar todo
-            </button>
-          )}
-        </div>
-      )}
-
-      <div className="uk-resbar">
-        {/* El total REAL, no cuántos se cargaron. Antes decía "30 comercios"
-            habiendo 400, y pasaba a "60" al tocar "Ver más". */}
-        <b>{loading ? "Buscando…" : `${total ?? shown.length} comercio${(total ?? shown.length) === 1 ? "" : "s"}`}</b>
         <div className="uk-seg">
           <button className={vista === "lista" ? "active" : ""} onClick={() => setVista("lista")}>Lista</button>
           <button className={vista === "mapa" ? "active" : ""} onClick={() => setVista("mapa")}>Mapa</button>

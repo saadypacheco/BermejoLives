@@ -56,24 +56,30 @@ export async function UrukuShell({
           cotización · fila 3 = buscador */}
       <header className="uk-header">
         <div className="uk-container uk-headwrap">
+          {/* Una sola fila en compu y tablet: logo · redes y cotización al
+              centro · ciudad e Ingresar. Eran dos filas y la segunda estaba
+              casi vacía, empujando el mapa medio centenar de píxeles hacia
+              abajo por nada. En el celular la tira baja sola a su renglón (ver
+              el `flex-wrap` y el `order` en el CSS), que es donde entra. */}
           <div className="uk-head-top">
             <Link href="/" className="uk-brand"><img className="uk-brand-full" src="/logouruku-wordmark.png" alt="URUKU" /></Link>
+
+            <div className="uk-head-strip">
+              <SocialLinks redes={redes} cls="uk-social-links" />
+              <div className="uk-topinfo">
+                {clima?.temp_c != null && (
+                  <span className="uk-top-item">{clima.icono || "☀"} {Math.round(clima.temp_c)}°</span>
+                )}
+                {cot2.map((c) => (
+                  <span key={c.clave} className="uk-top-item"><b>{money(c.valor)}</b> {c.unidad} · {c.etiqueta}</span>
+                ))}
+              </div>
+            </div>
+
             <div className="uk-head-actions">
               <CitySelector actual={ciudad} ciudades={ciudades} />
               <IngresarMenu />
               <ThemeToggle iconOnly />
-            </div>
-          </div>
-
-          <div className="uk-head-strip">
-            <SocialLinks redes={redes} cls="uk-social-links" />
-            <div className="uk-topinfo">
-              {clima?.temp_c != null && (
-                <span className="uk-top-item">{clima.icono || "☀"} {Math.round(clima.temp_c)}°</span>
-              )}
-              {cot2.map((c) => (
-                <span key={c.clave} className="uk-top-item"><b>{money(c.valor)}</b> {c.unidad} · {c.etiqueta}</span>
-              ))}
             </div>
           </div>
 
