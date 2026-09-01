@@ -1051,16 +1051,23 @@ function TabComercios({
         </Portal>
       )}
 
-      <div className="ph">
-        <h3>Negocios</h3>
-        <span style={{ color: "var(--txt-3)", fontSize: 13 }}>{filtradas.length} resultado(s) · click para editar</span>
-      </div>
+      {/* Sin encabezado: el título repetía lo que ya dice la pestaña y se comía
+          un renglón entero de una pantalla donde lo que hace falta es ver
+          comercios. El único dato que valía —cuántos coincidieron— se movió al
+          lado del buscador, sin ocupar alto propio. */}
 
       {/* Buscador (A) + orden (G) + vista lista/mapa (D) */}
-      <div style={{ display: "flex", gap: 8, padding: "12px 16px 0", flexWrap: "wrap", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 8, padding: "16px 16px 0", flexWrap: "wrap", alignItems: "center" }}>
         <input className="adm-input" style={{ flex: 1, minWidth: 200 }} value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Buscar por nombre, código (URUKU-K7M2), productos, dirección, teléfono…" />
+        {/* Sólo cuando el número dice algo: sin búsqueda ni filtro repite el
+            "Todos (886)" del chip de abajo. */}
+        {(q.trim() || filtro !== "todos") && (
+          <span style={{ color: "var(--txt-3)", fontSize: 13, whiteSpace: "nowrap" }}>
+            {filtradas.length} de {todos.length}
+          </span>
+        )}
         <select className="adm-input" style={{ width: "auto" }} value={orden} onChange={(e) => setOrden(e.target.value as OrdenComercio)}>
           <option value="recientes">Más recientes</option>
           <option value="alfabetico">A → Z</option>

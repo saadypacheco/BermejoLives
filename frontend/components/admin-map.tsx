@@ -9,7 +9,7 @@
 //  - Si quedan EXACTO en el mismo punto → HOJA con la lista para elegir.
 import { agregarTiles } from "@/lib/mapa-tiles";
 import { useEffect, useRef, useState } from "react";
-import { rubroStyle, loadLeaflet, opcionesCluster, manejarClusterClick, escapeHtml } from "@/lib/mapa-visual";
+import { rubroStyle, loadLeaflet, escapeHtml } from "@/lib/mapa-visual";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 const ZOOM_LABEL = 17;   // desde acá los pines se agrandan y muestran el nombre
@@ -25,7 +25,10 @@ type Hoja = { titulo: string; items: AdminPin[] };
 export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSelect: (id: string) => void }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
-  const clusterRef = useRef<any>(null);
+  // Sin clusters: en el panel el mapa se usa para IR a un comercio concreto, y
+  // un globo que dice "17" obliga a un clic más para descubrir cuál es cuál.
+  // El costo es que en zoom bajo los pines se pisan.
+  const capaRef = useRef<any>(null);
   const comerciosRef = useRef<AdminPin[]>(comercios);
   const labelOnRef = useRef(false);
   const onSelRef = useRef(onSelect);
@@ -54,11 +57,11 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
   }
 
   function render(L: any, fit: boolean) {
-    const cluster = clusterRef.current, map = mapRef.current;
-    if (!cluster || !map) return;
+    const capa = capaRef.current, map = mapRef.current;
+    if (!capa || !map) return;
     const label = map.getZoom() >= ZOOM_LABEL;
     labelOnRef.current = label;
-    cluster.clearLayers();
+    capa.clearLayers();
     const bounds: [number, number][] = [];
     const markers: any[] = [];
 
@@ -91,13 +94,14 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
       if (lat == null || lng == null) continue;
       const items = g.items;
       const m = L.marker([lat, lng], { icon: iconoLugar(L, g.nombre, items.length, g.portada), zIndexOffset: 500 });
-      m.__data = items[0];   // fallback si llegara a caer en un cluster
+      m.__data = items[0];
       m.on("click", () => hojaRef.current({ titulo: `🏬 ${g.nombre}`, items }));
       markers.push(m);
       bounds.push([lat, lng]);
     }
 
-    cluster.addLayers(markers);
+    // `addLayers` (plural) es de markercluster; un LayerGroup agrega de a uno.
+    for (const m of markers) capa.addLayer(m);
     if (fit) {
       if (bounds.length > 1) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 });
       else if (bounds.length === 1) map.setView(bounds[0], 16);
@@ -112,12 +116,7 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
         const map = L.map(elRef.current, { attributionControl: false }).setView(BERMEJO, 15);
         mapRef.current = map;
         agregarTiles(L, map, { oscuro: true });
-        const cluster = L.markerClusterGroup(opcionesCluster(L)).addTo(map);
-        clusterRef.current = cluster;
-        cluster.on("clusterclick", (e: any) => {
-          const r = manejarClusterClick(map, e);
-          if (r.accion === "hoja") hojaRef.current({ titulo: `${r.comercios.length} comercios acá`, items: r.comercios as AdminPin[] });
-        });
+        capaRef.current = L.layerGroup().addTo(map);
         map.on("zoomend", () => {
           if ((map.getZoom() >= ZOOM_LABEL) !== labelOnRef.current) render(L, false);
         });
