@@ -58,7 +58,20 @@ export function agregarTiles(
   const capa = L.tileLayer(url, {
     maxZoom: opciones.maxZoom ?? 19,
     attribution: atribucion,
-    className: opciones.oscuro ? "uk-tiles-oscuro" : "",
+    // MAPA SIEMPRE CLARO, aunque el sitio esté en oscuro.
+    //
+    // El oscuro salía de un filtro CSS sobre las tiles de OSM, y ese filtro
+    // destapaba las costuras: entre dos tiles vecinas queda una fracción de
+    // píxel sin cubrir por el redondeo del navegador, y sobre un mapa gris ese
+    // hueco blanco se ve como una grilla de líneas. En claro el hueco es blanco
+    // sobre un mapa casi blanco y no lo ve nadie — por eso nunca apareció en
+    // los meses que el mapa fue claro.
+    //
+    // Es tapar el síntoma, dicho de frente: la costura sigue ahí. Pero el
+    // arreglo de verdad es pelearle al subpíxel del navegador, y no vale un
+    // mapa con líneas a días de arrancar. `opciones.oscuro` se conserva para
+    // el día que se quiera volver a intentar.
+    className: "",
     updateWhenIdle: true,
     keepBuffer: 2,
   });

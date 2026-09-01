@@ -761,7 +761,9 @@
  *    color del mapa y no una línea que salta a la vista.
  */
 .leaflet-container { background: #e8e4dd; }
-#ukroot:not([data-theme="light"]) .leaflet-container { background: #1b1f24; }
+/* Media pixel de solapamiento entre tiles, para que no quede hueco que mostrar.
+   Con el mapa claro esto ya casi no se nota, pero se deja: es lo que sostiene
+   el día que alguien vuelva a probar el filtro oscuro. */
 .leaflet-container .leaflet-tile { width: 256.5px !important; height: 256.5px !important; }
 
 /* La atribución de OpenStreetMap: obligatoria por licencia, pero no tiene que
