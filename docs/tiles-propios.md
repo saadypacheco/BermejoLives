@@ -69,6 +69,38 @@ GIT_SHA=$(git rev-parse --short HEAD) APP_ENV=prod \
 El paso 3 no es ceremonia: si el certificado no salió o el resolver no funciona,
 el mapa queda en blanco para todos y el síntoma no dice por qué.
 
+## Lo que costó la primera vez (2026-09-02)
+
+Anotado porque el mismo orden se va a repetir con cualquier subdominio nuevo.
+
+**El DNS iba primero y se saltó.** El frontend se reconstruyó apuntando a
+`tiles.uruku.bo` cuando ese dominio no existía, así que el mapa quedó sin cargar
+para todo el mundo. El documento decía "primero el DNS" pero la secuencia de
+comandos se podía correr entera sin que nada fallara hasta el final: **el paso 1
+debió ser imposible de saltear, no una advertencia.**
+
+Lo que lo salvó fue `ciudades.tiles_url`: un UPDATE devolvió el mapa a OSM en
+treinta segundos, sin deploy. Fue la primera vez que esa columna se usó de
+verdad, y justificó sola haberla hecho.
+
+**Cuatro cosas que confundieron el diagnóstico:**
+
+1. **El resolver del VPS cachea el NXDOMAIN.** Después de crear el registro,
+   `dig tiles.uruku.bo` desde el servidor seguía vacío mientras
+   `dig @1.1.1.1` ya devolvía la IP. No bloquea nada —Let's Encrypt y los
+   usuarios consultan con sus propios resolvers— pero hace parecer que el DNS no
+   está. Para probar desde el VPS:
+   `curl --resolve tiles.uruku.bo:443:<IP> https://tiles.uruku.bo/...`
+2. **Traefik NO está en `docker-compose.prod.yml`.** Corre en otro stack, así
+   que `docker compose ... restart traefik` responde "no such service". Se
+   reinicia con `docker restart traefik`.
+3. **Traefik loguea los fallos de ACME, no los éxitos.** Buscar "tiles" en los
+   logs y no encontrar nada se lee como "no está haciendo nada" y en realidad
+   era "ya salió bien". Lo que hay que mirar es el certificado, no el log:
+   `echo | openssl s_client -connect <IP>:443 -servername tiles.<dominio> 2>/dev/null | openssl x509 -noout -issuer -dates`
+4. **Chrome se guarda el certificado inválido.** Después de que salga el bueno
+   hay que recargar con Ctrl+Shift+R o sigue mostrando el error.
+
 ## Si algo sale mal
 
 **Volver atrás no necesita deploy.** Apuntá las ciudades de nuevo a OSM:
