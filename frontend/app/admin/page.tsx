@@ -21,6 +21,7 @@ import {
   getEstadisticas, type EstadisticasAdmin,
   getKpis, type Kpis,
   getPesoFotos, optimizarFotos, type PesoFotos, type ResultadoOptimizar,
+  getVencimientos,
   listReclamos, responderReclamo, type Reclamo,
   getReservaloResumen, type ReservaloResumen,
   getReservaloConsultas, responderReservaloConsulta, type ConsultaReservalo,
@@ -31,6 +32,7 @@ import { AdminMap } from "@/components/admin-map";
 import { LugaresEditor } from "@/components/lugares-editor";
 import { AdornosEditor } from "@/components/adornos-editor";
 import { ImportadosPanel } from "@/components/importados-panel";
+import { VencimientosPanel } from "@/components/vencimientos-panel";
 import { CatalogoPanel } from "@/components/catalogo-panel";
 import { ImageLightbox } from "@/components/image-lightbox";
 import type { Rubro } from "@/lib/types";
@@ -42,12 +44,15 @@ export default function AdminPage() {
   const [email, setEmail] = useState("admin@bermejolive.com");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"publicaciones" | "comercios" | "lugares" | "adornos" | "catalogo" | "importados" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero">("comercios");
+  const [tab, setTab] = useState<"publicaciones" | "comercios" | "lugares" | "adornos" | "catalogo" | "importados" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero" | "vencimientos">("comercios");
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [items, setItems] = useState<PendingPub[]>([]);
   const [comercios, setComercios] = useState<ComercioPorVerificar[]>([]);
   const [todosLosComercios, setTodosLosComercios] = useState<ComercioPorVerificar[]>([]);
   const [rubros, setRubros] = useState<Rubro[]>([]);
+  // Se carga al ABRIR el panel, no al entrar a la pestaña. Un aviso que sólo
+  // aparece cuando ya fuiste a mirar no avisa nada.
+  const [alertasVenc, setAlertasVenc] = useState(0);
   const [suscripciones, setSuscripciones] = useState<ComercioSuscripcion[]>([]);
   const [pagosPendientes, setPagosPendientes] = useState<PagoPendiente[]>([]);
   const [estadisticas, setEstadisticas] = useState<EstadisticasAdmin | null>(null);
@@ -69,6 +74,7 @@ export default function AdminPage() {
       loadReclamos();
       loadSolicitudesCambioNumero();
       getRubros().then(setRubros);
+      getVencimientos().then((v) => setAlertasVenc(v.alertas)).catch(() => {});
     }
   }, []);
 
@@ -290,6 +296,12 @@ export default function AdminPage() {
             return n > 0 && <span className="badge alerta">{n}</span>;
           })()}
         </button>
+        {/* Vencimientos va ÚLTIMA en la fila pero su número se calcula al abrir
+            el panel: si el dominio vence en tres días, tiene que verse sin que
+            nadie entre acá a buscarlo. */}
+        <button className={tab === "vencimientos" ? "active" : ""} onClick={() => setTab("vencimientos")}>
+          Vencimientos {alertasVenc > 0 && <span className="badge grave">{alertasVenc}</span>}
+        </button>
         <button className={tab === "cambio-numero" ? "active" : ""} onClick={() => { setTab("cambio-numero"); loadSolicitudesCambioNumero(); }}>
           Cambios de número {solicitudesCambioNumero.length > 0 && <span className="badge alerta">{solicitudesCambioNumero.length}</span>}
         </button>
@@ -324,6 +336,7 @@ export default function AdminPage() {
 
       {tab === "monitoreo" && <TabMonitoreo data={estadisticas} reservalo={reservaloResumen} comercios={todosLosComercios} />}
       {tab === "kpis" && <TabKpis data={kpis} />}
+      {tab === "vencimientos" && <VencimientosPanel />}
 
       {tab === "reclamos" && (
         <TabReclamos

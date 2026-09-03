@@ -73,6 +73,10 @@ class Repo(Protocol):
     def get_diccionario_sinonimos(self) -> dict[str, str]: ...
     def revisar_sinonimos(self) -> str | None: ...
     def contar(self, tabla: str) -> int: ...
+    def list_vencimientos(self) -> list[dict]: ...
+    def crear_vencimiento(self, row: dict) -> dict: ...
+    def update_vencimiento(self, vid: str, patch: dict) -> dict: ...
+    def borrar_vencimiento(self, vid: str) -> None: ...
     def list_comercio_rubros_todos(self) -> list[dict]: ...
     def list_adornos(self, ciudad_id: str | None) -> list[dict]: ...
     def crear_adorno(self, row: dict) -> dict: ...
@@ -828,6 +832,27 @@ class SupabaseRepo:
         """Cuántas filas hay de verdad, para poder cotejar contra lo leído."""
         res = self._db.table(tabla).select("*", count="exact", head=True).execute()
         return res.count or 0
+
+    # ---- vencimientos ----
+    def list_vencimientos(self) -> list[dict]:
+        return (self._db.table("vencimientos").select("*")
+                .eq("activo", True).order("vence_el").execute().data) or []
+
+    def crear_vencimiento(self, row: dict) -> dict:
+        res = self._db.table("vencimientos").insert(row).execute()
+        return res.data[0] if res.data else {}
+
+    def update_vencimiento(self, vid: str, patch: dict) -> dict:
+        from datetime import datetime, timezone
+
+        patch = {**patch, "updated_at": datetime.now(timezone.utc).isoformat()}
+        res = self._db.table("vencimientos").update(patch).eq("id", vid).execute()
+        return res.data[0] if res.data else {}
+
+    def borrar_vencimiento(self, vid: str) -> None:
+        # Baja lógica: si algo se deja de vigilar conviene saber que ALGUIEN lo
+        # decidió, no que la fila desapareció y nadie se acuerda de por qué.
+        self._db.table("vencimientos").update({"activo": False}).eq("id", vid).execute()
 
     def list_comercio_rubros_todos(self) -> list[dict]:
         """Toda la tabla comercio_rubros de una, con el slug ya resuelto.

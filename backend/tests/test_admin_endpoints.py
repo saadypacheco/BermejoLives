@@ -305,3 +305,47 @@ def test_se_puede_dejar_un_comercio_sin_rubros(client, repo, admin_token):
                    json={"rubro_slugs": []}, headers=_h(admin_token))
     assert r.status_code == 200
     assert r.json()["rubro_slugs"] == []
+
+
+# ── Vencimientos ─────────────────────────────────────────────────────────────
+
+def test_vencimiento_rechaza_tipo_inventado(client, admin_token, repo):
+    """Un tipo que la base no acepta explota en el insert con un 500 y la fila
+    no se guarda: mejor decir cuál es el problema."""
+    r = client.post("/admin/vencimientos",
+                    json={"nombre": "Algo", "tipo": "criptomoneda"}, headers=_h(admin_token))
+    assert r.status_code == 400
+    assert "criptomoneda" in r.json()["detail"]
+
+
+def test_vencimiento_sin_nombre_no_se_crea(client, admin_token):
+    r = client.post("/admin/vencimientos", json={"nombre": "  "}, headers=_h(admin_token))
+    assert r.status_code == 400
+
+
+def test_vencimiento_se_crea_sin_fecha(client, admin_token, repo):
+    """Una fila sin fecha es 'hay que averiguarla', y eso es informacion.
+    Obligar la fecha llevaria a inventar una, que es peor: deja de avisar
+    creyendo que avisa."""
+    r = client.post("/admin/vencimientos",
+                    json={"nombre": "Dominio nuevo", "tipo": "dominio"}, headers=_h(admin_token))
+    assert r.status_code == 200
+    assert len(repo.vencimientos) == 1
+
+
+def test_se_puede_borrar_la_fecha(client, admin_token, repo):
+    """Con `if v is not None` mandar null se leia como 'no lo toques', asi que
+    una fecha mal cargada no se podia sacar."""
+    v = repo.crear_vencimiento({"nombre": "X", "vence_el": "2026-12-01"})
+    r = client.put(f"/admin/vencimientos/{v['id']}", json={"vence_el": None}, headers=_h(admin_token))
+    assert r.status_code == 200
+    assert repo.vencimientos[v["id"]]["vence_el"] is None
+
+
+def test_borrar_es_baja_logica(client, admin_token, repo):
+    """Si algo se deja de vigilar conviene saber que ALGUIEN lo decidio, no que
+    la fila desaparecio y nadie se acuerda de por que."""
+    v = repo.crear_vencimiento({"nombre": "X"})
+    client.delete(f"/admin/vencimientos/{v['id']}", headers=_h(admin_token))
+    assert repo.vencimientos[v["id"]]["activo"] is False
+    assert repo.list_vencimientos() == []

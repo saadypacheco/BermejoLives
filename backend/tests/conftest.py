@@ -58,6 +58,7 @@ class FakeRepo:
         self.reclamos: dict[str, dict] = {}           # id -> row
         self.solicitudes_numero: dict[str, dict] = {} # id -> row
         self.rubros_propuestos: list[dict] = []       # categorías que la IA propuso y no existen
+        self.vencimientos: dict[str, dict] = {}       # id -> fecha que si se pasa tumba algo
         self.comercio_videos: list[dict] = []
         self.cotizaciones: list[dict] = [
             {"clave": "usd_bob", "etiqueta": "Dólar", "detalle": "1 USD", "valor": 0, "unidad": "Bs", "orden": 1},
@@ -773,6 +774,24 @@ class FakeRepo:
     def update_adorno(self, adorno_id, patch):
         self.adornos.setdefault(adorno_id, {"id": adorno_id}).update(patch)
         return self.adornos[adorno_id]
+
+    # ---- vencimientos ----
+    def list_vencimientos(self):
+        return [v for v in self.vencimientos.values() if v.get("activo", True)]
+
+    def crear_vencimiento(self, row):
+        vid = row.get("id") or self._id("ven")
+        fila = {"id": vid, "activo": True, "aviso_dias": 30, "tipo": "otro", **row}
+        self.vencimientos[vid] = fila
+        return fila
+
+    def update_vencimiento(self, vid, patch):
+        self.vencimientos.setdefault(vid, {"id": vid, "activo": True}).update(patch)
+        return self.vencimientos[vid]
+
+    def borrar_vencimiento(self, vid):
+        if vid in self.vencimientos:
+            self.vencimientos[vid]["activo"] = False
 
     def contar(self, tabla):
         return len(getattr(self, tabla, []) or [])

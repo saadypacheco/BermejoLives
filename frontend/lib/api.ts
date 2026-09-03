@@ -716,3 +716,38 @@ export async function optimizarFotos(max_kb: number, limite = 50): Promise<Resul
   });
   return okDe(res, "optimizar las fotos") as Promise<ResultadoOptimizar>;
 }
+
+export type Vencimiento = {
+  id: string; nombre: string; tipo: string; vence_el: string | null;
+  aviso_dias: number; proveedor: string | null; url: string | null; notas: string | null;
+  dias: number | null;
+  /** vencido · critico (≤7d) · por_vencer · sin_fecha · ok */
+  estado: string;
+};
+export type CertificadoTLS = {
+  host: string; que_sirve: string; ok?: boolean;
+  vence_el?: string; dias?: number; estado: string; error?: string;
+};
+export type PanelVencimientos = {
+  items: Vencimiento[]; certificados: CertificadoTLS[];
+  alertas: number; sin_fecha: number;
+};
+
+export async function getVencimientos(): Promise<PanelVencimientos> {
+  const res = await authFetch("/admin/vencimientos");
+  return res.json();
+}
+
+export async function guardarVencimiento(id: string | null, patch: Record<string, unknown>) {
+  const res = await authFetch(id ? `/admin/vencimientos/${id}` : "/admin/vencimientos", {
+    method: id ? "PUT" : "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  return okDe(res, "guardar el vencimiento");
+}
+
+export async function borrarVencimiento(id: string) {
+  const res = await authFetch(`/admin/vencimientos/${id}`, { method: "DELETE" });
+  return okDe(res, "borrar el vencimiento");
+}

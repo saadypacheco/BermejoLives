@@ -1444,3 +1444,95 @@ async def admin_fotos_optimizar(
     logger.info("admin.fotos_optimizadas", by=admin["email"], **{
         k: v for k, v in res.items() if k != "detalle"})
     return res
+
+
+# ── Vencimientos ──────────────────────────────────────────────────────────────
+
+class VencimientoBody(BaseModel):
+    nombre: str | None = None
+    tipo: str | None = None
+    vence_el: str | None = None
+    aviso_dias: int | None = None
+    proveedor: str | None = None
+    url: str | None = None
+    notas: str | None = None
+
+
+_TIPOS_VENC = {"dominio", "hosting", "servicio", "sim", "plan", "otro"}
+
+
+@router.get("/admin/vencimientos")
+async def admin_vencimientos(
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Lo que se vence, y los certificados medidos en vivo.
+
+    Van juntos en una sola respuesta porque el panel los muestra juntos: al que
+    mira le da igual si la fecha la cargó una persona o la midió el sistema, lo
+    que quiere saber es qué está por romperse.
+    """
+    from app.services.vencimientos import HOSTS_TLS, con_estado, vence_certificado
+
+    items = con_estado(repo.list_vencimientos())
+
+    # En hilo aparte y en paralelo: son cinco conexiones TLS con timeout, y
+    # secuenciales podrían tardar media pantalla de espera si un host no responde.
+    certs = await run_in_threadpool(
+        lambda: [{**vence_certificado(h), "que_sirve": q} for h, q in HOSTS_TLS])
+
+    return {
+        "items": items,
+        "certificados": certs,
+        # El número que va en la pestaña. Las `sin_fecha` NO cuentan como alerta
+        # —no son urgentes, son trabajo pendiente— pero sí se muestran aparte:
+        # mezclarlas volvería el aviso ruido y el ruido se aprende a ignorar.
+        "alertas": sum(1 for i in items if i["estado"] in {"vencido", "critico", "por_vencer"})
+                   + sum(1 for c in certs if c.get("estado") in {"vencido", "critico", "por_vencer"}),
+        "sin_fecha": sum(1 for i in items if i["estado"] == "sin_fecha"),
+    }
+
+
+@router.post("/admin/vencimientos")
+def admin_crear_vencimiento(
+    body: VencimientoBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    if not (body.nombre or "").strip():
+        raise HTTPException(status_code=400, detail="Falta el nombre")
+    if body.tipo and body.tipo not in _TIPOS_VENC:
+        raise HTTPException(status_code=400, detail=f"Tipo desconocido: {body.tipo}")
+    row = {k: v for k, v in body.model_dump().items() if v is not None}
+    creado = repo.crear_vencimiento(row)
+    logger.info("admin.vencimiento_creado", nombre=body.nombre, by=admin["email"])
+    return {"ok": True, "item": creado}
+
+
+@router.put("/admin/vencimientos/{vid}")
+def admin_editar_vencimiento(
+    vid: str,
+    body: VencimientoBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    if body.tipo and body.tipo not in _TIPOS_VENC:
+        raise HTTPException(status_code=400, detail=f"Tipo desconocido: {body.tipo}")
+    # `exclude_unset` y no `if v is not None`: sin eso, borrar una fecha
+    # mandando null sería imposible — se leería como "no lo toques".
+    patch = body.model_dump(exclude_unset=True)
+    if not patch:
+        raise HTTPException(status_code=400, detail="No hay nada que cambiar")
+    logger.info("admin.vencimiento_editado", id=vid, campos=list(patch), by=admin["email"])
+    return {"ok": True, "item": repo.update_vencimiento(vid, patch)}
+
+
+@router.delete("/admin/vencimientos/{vid}")
+def admin_borrar_vencimiento(
+    vid: str,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    repo.borrar_vencimiento(vid)
+    logger.info("admin.vencimiento_borrado", id=vid, by=admin["email"])
+    return {"ok": True}
