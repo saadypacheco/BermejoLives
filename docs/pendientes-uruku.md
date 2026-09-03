@@ -6,132 +6,122 @@
 > [decision-uruku-sin-reservalo.md](decision-uruku-sin-reservalo.md).
 > La **clasificación por IA** y el prompt vigente: [clasificacion-ia.md](clasificacion-ia.md).
 
-## 📍 Situación al 2026-08-27
+## 📍 Situación al 2026-09-03
 
 | | |
 |---|---|
-| Comercios activos | **680** (medido el 28/8; eran 588 el 27/8 y 270 el 25/8) |
-| Tercera salida | **67 comercios, los 67 analizados** · 0 pendientes |
-| Analizados | pendiente de recontar: crecieron 318 desde el 25/8 |
-| Rubros por comercio | 2,51 promedio · multi-rubro funcionando |
-| Rubros en la taxonomía | 4 nuevos (marroquinería, lencería, blanquería, kiosco) · 19 apagados |
-| Diccionario de sinónimos | **1.172 términos** (eran 847 el 25/8) |
-| **Sin WhatsApp** | **43 de los 67 nuevos** — el número más caro de la tanda |
-| Sin nombre real | **3 de 67** en la tercera salida (eran ~100 de 203 antes de `nombre_cartel`) |
-| Publicaciones (ofertas) | **1 en total, 0 aprobadas** → el canal está construido y apagado |
-| Búsquedas registradas | Muy pocas: la analítica todavía es anécdota |
+| Comercios activos | **888** (eran 680 el 28/8, 270 el 25/8) |
+| Asignaciones de rubro | **2.440** · `completar_rubros.py` aplicado |
+| **Con horario** | **0 de 888** — el dato que más diferencia, y el único que nadie puede deducir |
+| Publicaciones (ofertas) | **1 en total** → el canal está construido y apagado |
+| Canal de WhatsApp | WAHA emparejado, **sin grupos creados** · faltan 3 chips |
+| Mapa | tiles propios en `tiles.uruku.bo` · arranca sólo con adornos |
+| Pantallas | `/mapa` y `/buscar` **unificadas**; `/mapa` redirige |
 
-**La tercera salida cerró bien.** 67 de 67 con productos detectados, **cero fotos
-sin mercadería**, ningún comercio en "Otros" y 36 rubros repartidos. Fue la
-primera tanda analizada con el prompt completo y se nota justo donde tenía que
-notarse: el nombre leído del cartel bajó los "sin nombre" de la mitad de la base
-a tres casos.
+**Lo que falta no es código, es carga.** Los horarios son 888 y están a dos
+toques cada uno (filtro "Sin horario" + presets + "igual que el anterior"). Las
+ofertas necesitan que el canal de WhatsApp arranque. Las fechas del panel de
+Vencimientos las tiene que averiguar una persona.
 
-**El buscador quedó cerrado**: sinónimos de frontera, tolerancia a errores de
-tipeo, búsqueda por varias palabras, y los 36 filtros de categoría verificados
-uno por uno. **El mapa también**: filtraba sólo por el rubro principal, así que
-mostraba menos pines de los que corresponden.
-
-**La limpieza de rubros está hecha y verificada**: `alimentos` pasó de 25
-asignaciones a 4 y `hogar` de 25 a 10, sin que ningún otro rubro perdiera una
-sola. Ver [clasificacion-ia.md](clasificacion-ia.md) §2.
+**El buscador y el mapa quedaron cerrados**: una sola pantalla, resultados que
+dicen qué vende cada local con lo buscado resaltado, ofertas con foto y precio
+en la tarjeta, carrito de reservas sin cuenta, y el mapa servido desde el VPS
+propio.
 
 ---
 
-## ⚠️ Dos trampas que ya costaron horas
+## ⚠️ La forma en que este proyecto falla
+
+Hay UN error que apareció **siete veces** en una sola semana, siempre disfrazado
+de otra cosa. Vale más que cualquier lista de pendientes, porque es el que hace
+perder las horas:
+
+> **Una guarda que se lee como protección y no protege nada. No da error: devuelve
+> un resultado plausible.**
+
+Las siete, para reconocer la octava:
+
+| Dónde | Qué parecía | Qué era |
+|---|---|---|
+| `.limit(250)` en el mapa | la lista completa | 250 de 588; el 58% invisible |
+| `.limit(20000)` en `comercio_rubros` | todo | 1000 (tope de PostgREST). El informe propuso 1295 rubros para 599 comercios que ya los tenían |
+| `.limit(5000)` en `list_todos_comercios` | todo | entra hoy con 888; a los 1000 el panel muestra 1000 de 1100 |
+| `on conflict do nothing` sin índice único | idempotente | cada corrida duplicó el sembrado: 16 filas donde iban 8 |
+| `len(relaciones) < len(comercios)` | un guard | compara unidades distintas: 1000 > 886, nunca salta |
+| `WA_NUMEROS_PROPIOS=591XXXXXXXX` | configurado | normaliza a `591`: la guarda existe y no cubre a nadie |
+| fechas contra UTC | la fecha de hoy | Bolivia es UTC−4: lo que vence hoy figura vencido cuatro horas antes |
+
+Y la variante de la misma familia: **un dato que no llega y se lee como dato
+vacío.** Al select del panel le faltaba `horario`, así que el filtro "Sin
+horario" habría contado los 888 para siempre y el modal habría mostrado vacío
+incluso a los que ya tenían uno. No se notaba porque hoy no hay ninguno cargado:
+el bug esperaba a la primera pasada de carga.
+
+**La regla que sale de esto:** ante un número redondo (1000, 250, 500), un cero
+tranquilizador o un "está todo bien", medir contra la fuente antes de creerle.
+Y al escribir una guarda, preguntarse qué la haría saltar — si no hay respuesta,
+es decoración.
+
+### Y dos que son operativas
 
 **El cache de esquema de PostgREST.** Cada migración lo deja viejo. Síntomas: 500
 en endpoints con selects embebidos, `PGRST204`, "la tabla no existe" aunque psql
 la lea. **Siempre `docker compose restart postgrest` después de migrar.** Y un
 embed que falla devuelve `[]` en silencio: quien lo llama no puede distinguir
-"no hay datos" de "no pude leer". Un script informó "0 asignaciones sin
-respaldo" cuando había 37, y eso se lee como "está todo bien".
-
-**Los topes fijos en las consultas.** El mapa pedía `.limit(250)` con 270
-comercios activos: veinte no aparecían nunca y **nada lo decía** — no hay error,
-devuelve 250 y se lee como la lista completa. Subir el número no arregla la
-clase de error, sólo mueve el techo. Las consultas que traen un conjunto
-COMPLETO se paginan (`traerTodo` en `lib/data.ts`); un `.limit()` sólo vale
-cuando el recorte es a propósito, como el feed de 8 o los destacados de 10.
-Es la tercera vez que aparece la misma forma de fallar: el embed roto que
-devuelve `[]`, el script que informó "0 sin respaldo" con 37, y esto.
-
-**El mapa mostraba 250 de 588.** El tope de la consulta escondía el 58% de los
-comercios y no lo decía. Ver la trampa de arriba: cada vez que un número de este
-documento se use para decidir algo, conviene recontarlo contra la base — el 25/8
-decía 270 y dos días después eran 588.
+"no hay datos" de "no pude leer".
 
 **Las migraciones se corren EN ORDEN, y se verifica que corrieron.** En prod se
-aplicó la 0070 sin haber aplicado la 0069, y como la 0070 recrea la misma
-función, la búsqueda quedó bien y una función de la 0069 nunca se creó. No hubo
-error: el frontend la pedía, no existía, y devolvía vacío en silencio — se veía
-una pantalla sin chips, no una falla. Para comprobar qué hay realmente:
+aplicó la 0070 sin la 0069, y como la 0070 recrea la misma función, la búsqueda
+quedó bien y una función de la 0069 nunca se creó. No hubo error: el frontend la
+pedía, no existía, y devolvía vacío — se veía una pantalla sin chips, no una
+falla.
 
 ```sql
-select p.proname, pg_get_function_identity_arguments(p.oid),
-       pg_get_function_result(p.oid)
-  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
- where n.nspname = 'public' and p.proname like 'buscar%' or p.proname like 'refinam%';
+select proname from pg_proc where proname in ('buscar_comercios','refinamientos_busqueda');
 ```
-
-Y ojo con "corro la que falta": si una migración posterior ya recreó la misma
-función con otro tipo de retorno, correr la anterior falla o pisa el arreglo.
-
-**Un test puede confirmar tu error en vez de la realidad.** El webhook de WAHA
-validaba la firma con SHA-256 y había un test que firmaba con SHA-256 y pasaba
-— los dos de acuerdo, los dos equivocados: WAHA firma con **SHA-512**. En
-producción cada mensaje entrante se rechazaba con 401 y **ninguna oferta podía
-entrar**, sin un solo error del lado de URUKU. Se descubrió mirando los
-registros del OTRO lado (`docker logs buscadonde-waha`), que sí lo gritaba.
-Cuando algo integra con un sistema externo, el test tiene que copiar lo que ese
-sistema manda de verdad, no lo que nosotros suponemos.
-
-**Dos proyectos de compose en la misma red comparten los nombres de servicio.**
-`backend` resolvía a DOS contenedores —el de URUKU y el de Reservalo— porque
-ambos proyectos tienen un servicio con ese nombre y comparten la red de Traefik.
-Docker repartía las peticiones entre los dos: la mitad de los avisos de WhatsApp
-terminaban en el backend equivocado y volvían 404. **Un canal que funciona una
-vez de cada dos es peor que uno roto**: parece intermitencia de red.
-
-Dentro de la red, usar siempre el `container_name` (único en todo Docker) y no
-el nombre del servicio. Para revisar si hay más colisiones:
-
-```bash
-for n in postgres postgrest backend frontend waha; do
-  echo -n "$n: "; docker exec buscadonde-waha getent hosts $n | tr '
-' ' '; echo
-done
-```
-
-Más de una dirección en cualquiera de esos = la misma trampa esperando.
-
-**En iPhone, `fetch` con `FormData` manda el pedido SIN CUERPO.** Es una falla
-conocida de Safari cuando hay un service worker registrado — y URUKU es una PWA,
-así que siempre lo hay. El servidor recibe `Content-Length: 0`, todos los campos
-del formulario quedan vacíos, y contesta por el primer control que se cruza: en
-el alta de campo, "Falta la ubicación". Dieciocho altas quedaron trabadas
-señalando el dato equivocado, con el celular mostrando en pantalla que sí había
-mandado las coordenadas.
-
-**Y cambiar a XHR NO alcanzó**: con XHR el iPhone seguía mandando cero bytes. La
-solución que funcionó es **armar el multipart a mano y mandarlo como Blob**
-(`armarMultipart` en `lib/upload.ts`). Un Blob se manda o no se manda, pero no
-se manda vacío.
-
-**Antes de dar por fallado un arreglo en el celular, verificá que le llegó.** Se
-perdió una vuelta entera arreglando algo que ya estaba arreglado: el teléfono
-servía el bundle viejo desde la caché del service worker. Se comprueba abriendo
-`uruku.bo/version` en el teléfono y comparando el commit. Cada cambio que tenga
-que llegar al celular del agente lleva bump de `VERSION` en `public/sw.js`.
-
-**Pushear antes de dar comandos de `git pull`.** Pasó dos veces: el commit estaba
-hecho, el pull no traía nada, y el rato siguiente se fue buscando el bug en el
-lugar equivocado. Si algo no aparece después de un pull, comparar el hash con
-`git log --oneline -3` en el servidor antes de seguir.
 
 ---
 
 ## 🔴 Ahora / alta prioridad
+
+### Los 888 horarios (2026-09-03)
+**0 de 888 comercios tienen horario.** Es el dato que decide si alguien camina
+hasta el local, el que hace que la ficha diga "Abierto ahora", y lo único que
+URUKU puede tener y Facebook no. También es el único que no se puede deducir de
+una foto: hay que cargarlo.
+
+La herramienta está: **Admin › Negocios → filtro "Sin horario"**, presets de un
+toque y **"↩ Igual que el anterior"** —que es el que más rinde, porque viniendo
+de a uno con las flechas el anterior suele ser el vecino de la cuadra—. Con eso
+cada comercio son dos toques: repetir y "Guardar y siguiente".
+
+El modal muestra abajo **qué entendió el sitio** de lo escrito, y avisa en ámbar
+cuando no entiende. Un horario que el parser no interpreta es PEOR que ninguno:
+el comprador no ve "Abierto ahora" y nadie se entera de por qué.
+
+- [ ] Hacer la pasada. Es trabajo manual y no hay forma de evitarlo.
+
+### El canal de WhatsApp sigue apagado
+Todo lo que se construyó alrededor —el explorador, el carrito de reservas, las
+ofertas en la tarjeta— no tiene qué mostrar hasta que entre la primera oferta.
+
+- [ ] Emparejar WAHA con el **Tigo (75314737)**, que pasa a ser el operativo.
+- [ ] Comprar **3 chips**: marca, explorador y respaldo 2. Ver
+      [numeros-whatsapp-uruku.md](numeros-whatsapp-uruku.md).
+- [ ] Poner el perfil del operativo como **URUKU** (hoy dice "Juan"). Un
+      desconocido llamado Juan agregándote a un grupo es lo que la gente
+      reporta como spam, y el reporte es lo que dispara el baneo.
+- [ ] Los respaldos entran a los grupos **antes** de necesitarlos: una cuenta
+      baneada no puede agregar a nadie.
+
+### Las 8 fechas del panel de Vencimientos
+Están cargadas sin fecha a propósito — ése es el estado real, nadie las anotó
+nunca. La más urgente es **`uruku.bo`**: si vence no se cae "el sitio",
+desaparecen también todos los enlaces que los comerciantes ya mandaron por
+WhatsApp, y los `.bo` se renuevan con trámite y no con un clic.
+
+Los **chips prepagos** llevan fecha de recarga, no de vencimiento: es el único
+riesgo que se pudre solo mientras nadie mira.
 
 ### 43 de los 67 nuevos no tienen WhatsApp
 Es lo más caro que dejó la tanda. Sin WhatsApp el comercio no tiene canal de
@@ -383,6 +373,44 @@ Reemplaza a Reservalo. Decisión y fundamento en
   el marketplace de contenido para creadores. Ver [[monetizacion-planes-uruku]].
 
 ## ✅ Hecho
+
+### Semana del 2026-09-01 al 03
+- [x] **Una sola pantalla.** `/mapa` y `/buscar` estaban duplicadas y ninguna
+      completa: una tenía el mapa lindo sin buscador, la otra el buscador con un
+      mapa pelado, y el botón "Ver mapa completo" llevaba al menos completo de
+      los dos. `/mapa` queda como redirección — hay enlaces compartidos por
+      WhatsApp que no pueden romperse. `mobile-home.tsx` y `home-map.tsx`
+      quedaron **sin usar y sin borrar**, por si hay que volver atrás.
+- [x] **El mapa arranca sólo con los adornos.** Los comercios aparecen al
+      filtrar, no al hacer zoom: acercarse no es decir qué se quiere. Los
+      destacados y los que pagan sí se ven desde el arranque — esa primera vista
+      **es el cupo que se vende**, y `tierDe` ya sabía quién es quién.
+- [x] **Tiles propios** (`tiles.uruku.bo`, nginx cacheando OSM). Mil personas
+      mirando el centro son UN pedido a OSM. Ver
+      [tiles-propios.md](tiles-propios.md), incluido lo que costó levantarlo.
+- [x] **Mapa claro siempre.** El filtro oscuro destapaba las costuras entre
+      tiles (fracciones de píxel entre imágenes). Se tapó el síntoma a
+      conciencia: el arreglo real es pelearle al subpíxel del navegador y no
+      valía a días de arrancar.
+- [x] **Carrito de reservas** sin cuenta, por comercio, con el pedido armado
+      hacia el WhatsApp de ese local. Nada dice "reservado" hasta que el
+      vendedor conteste.
+- [x] **El explorador**: URUKU fotografía ofertas de locales que todavía no
+      publican y se publican **a nombre del comercio real**, marcadas `URUKU`,
+      con la consulta llegando a URUKU. Ver
+      [numeros-whatsapp-uruku.md](numeros-whatsapp-uruku.md).
+- [x] **Panel de Vencimientos**: dominios, VPS y chips cargados a mano;
+      certificados TLS medidos en vivo. "Falta la fecha" no cuenta como sano.
+- [x] **El resultado dice qué vende el local**, con lo buscado adelante y
+      resaltado; las ofertas van con foto y precio en la tarjeta.
+- [x] **"Cómo llegar" se registra como contacto** en los cuatro lugares donde
+      aparece. Y `contactos_30d` contaba las visitas a la ficha: el número que
+      se le iba a mostrar al comerciante estaba inflado.
+- [x] **Rubro de estación de servicio** (0076) y `completar_rubros.py` aplicado:
+      49 rubros en 48 comercios, con `sinonimos` fuera del texto que clasifica —
+      de ahí salía casi todo el ruido.
+
+### Antes
 - [x] **Taxonomía revisada (2026-08-24):** 4 rubros creados con su vocabulario,
       19 apagados (eran ciudades argentinas y duplicados del modelo viejo).
       Diccionario corregido: kiosco vs comida rápida, variantes de "kiosquito",
