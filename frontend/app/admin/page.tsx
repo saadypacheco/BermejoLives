@@ -1029,12 +1029,27 @@ function TabComercios({
 
   // 2) buscador multi-campo (A): nombre + qué vende + dirección + contacto + rubro + ciudad
   const nq = normTxt(q.trim());
-  const buscadas = !nq ? porEstado : porEstado.filter((c) =>
-    // El código se busca con o sin el prefijo: en el papel dice "URUKU-K7M2" pero
-    // en la base sólo está "K7M2".
-    [c.nombre, c.descripcion, c.prod_obs_human, c.prod_det_ia, c.subcategoria, c.direccion, c.whatsapp, c.telefono,
-     c.rubros?.nombre, c.ciudades?.nombre, c.codigo, c.codigo ? `uruku-${c.codigo}` : ""]
-      .map((x) => normTxt(x ?? "")).join(" ").includes(nq));
+  // Se busca por PALABRAS y todas tienen que estar, no la frase entera.
+  //
+  // Antes era `includes(nq)` sobre el texto pegado: "coca hoja" no encontraba a
+  // "hoja de coca" —está en otro orden— y "juguete niño" no encontraba a una
+  // juguetería que vende juguetes para niños. Escribir dos palabras devolvía
+  // menos que escribir una, que es lo contrario de lo que espera cualquiera.
+  //
+  // Esto NO tiene tolerancia a errores de tipeo, a diferencia del buscador
+  // público: acá se viene a encontrar un comercio que se sabe que existe, y
+  // adivinar sería peor. "decoca" no va a aparecer nunca porque en la base dice
+  // "de coca".
+  const palabras = nq.split(/\s+/).filter(Boolean);
+  const buscadas = !palabras.length ? porEstado : porEstado.filter((c) => {
+    // El código se busca con o sin el prefijo: en el papel dice "URUKU-K7M2"
+    // pero en la base sólo está "K7M2".
+    const texto = [c.nombre, c.descripcion, c.prod_obs_human, c.prod_det_ia, c.subcategoria,
+                   c.direccion, c.whatsapp, c.telefono, c.rubros?.nombre, c.ciudades?.nombre,
+                   c.codigo, c.codigo ? `uruku-${c.codigo}` : ""]
+      .map((x) => normTxt(x ?? "")).join(" ");
+    return palabras.every((p) => texto.includes(p));
+  });
 
   // 3) orden (G)
   const filtradas = [...buscadas].sort((a, b) => {
