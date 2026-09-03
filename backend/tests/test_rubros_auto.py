@@ -56,12 +56,15 @@ def test_otros_elegido_a_mano_no_sobrevive_si_hay_deduccion(repo):
 
 
 def test_aplicar_persiste_y_saca_otros(repo):
+    # El fake guarda SLUGS: `set_comercio_rubros` traduce los ids que le llegan.
+    # Antes guardaba lo que le mandaran, así que `list_comercio_rubros_todos`
+    # devolvía 'rub-cal' como si fuera un slug y eso escondía errores reales.
     c = repo.seed_comercio(slug="x", nombre="Casa Pepe", prod_obs_human="zapatillas",
-                           rubros=[repo.rubros["otros"]])
+                           rubros=["otros"])
     aplicar_rubros(repo, c)
     quedaron = repo.comercios[c["id"]]["rubros"]
-    assert repo.rubros["calzado"] in quedaron
-    assert repo.rubros["otros"] not in quedaron
+    assert "calzado" in quedaron
+    assert "otros" not in quedaron
 
 
 def test_aplicar_setea_el_rubro_principal_si_estaba_vacio(repo):
@@ -115,7 +118,7 @@ def test_reclasificar_aplica_cuando_se_pide(client, repo, admin_token):
     r = client.post("/admin/rubros/reclasificar?aplicar=true", headers=_headers(admin_token))
     assert r.status_code == 200, r.text
     assert r.json()["aplicado"] is True
-    assert repo.rubros["calzado"] in repo.comercios[c["id"]]["rubros"]
+    assert "calzado" in repo.comercios[c["id"]]["rubros"]
 
 
 def test_reclasificar_reporta_los_que_no_matchean(client, repo, admin_token):

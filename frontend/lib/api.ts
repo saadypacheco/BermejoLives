@@ -843,3 +843,15 @@ export async function analizarTandaOfertas(limite = 3): Promise<{
     procesados: number; restantes: number; sin_mas: boolean; resultados: ResultadoOferta[];
   }>;
 }
+
+export async function aplicarPatron(rubro_slug: string, palabras: string): Promise<{
+  agregados: number; salteados: { codigo: string | null; nombre: string | null; rubros: number }[];
+}> {
+  const res = await authFetch("/admin/rubros/aplicar-patron", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rubro_slug, palabras }),
+  });
+  return okDe(res, "aplicar el patrón") as Promise<{
+    agregados: number; salteados: { codigo: string | null; nombre: string | null; rubros: number }[];
+  }>;
+}

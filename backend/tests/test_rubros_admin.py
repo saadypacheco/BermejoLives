@@ -113,3 +113,63 @@ def test_sin_palabras_no_previsualiza(client, admin_token):
     r = client.post("/admin/rubros/previsualizar", json={"palabras": "  "},
                     headers=_h(admin_token))
     assert r.status_code == 400
+
+
+# ── Aplicar la palabra a los comercios que alcanza, sin paso aparte ──────────
+
+def test_aplicar_patron_le_agrega_el_rubro_a_los_que_alcanza(client, admin_token, repo):
+    """Cierra el hueco entre crear un rubro y que los comercios lo tengan.
+    Antes había que acordarse de correr 'Completar rubros' despues; si nadie lo
+    hacia, el rubro quedaba con cero comercios y parecia roto."""
+    repo.rubros.setdefault("funeraria", repo._id("rub"))
+    _comercio(repo, "f1", "San José", "cajon mortuorio, corona")
+    _comercio(repo, "k1", "Kiosko", "galletita", ["kiosco"])
+
+    r = client.post("/admin/rubros/aplicar-patron",
+                    json={"rubro_slug": "funeraria", "palabras": "cajon mortuorio"},
+                    headers=_h(admin_token))
+
+    assert r.json()["agregados"] == 1
+    suyos = {x["slug"] for x in repo.list_comercio_rubros_todos() if x["comercio_id"] == "f1"}
+    assert "funeraria" in suyos
+    # Y no toca al que no alcanza.
+    ajenos = {x["slug"] for x in repo.list_comercio_rubros_todos() if x["comercio_id"] == "k1"}
+    assert ajenos == {"kiosco"}
+
+
+def test_aplicar_patron_no_pisa_los_rubros_que_ya_tenia(client, admin_token, repo):
+    """Sólo SUMA: mandar únicamente el nuevo borraría los que ya tenía, porque
+    `set_comercio_rubros` reemplaza el conjunto entero."""
+    repo.rubros.setdefault("funeraria", repo._id("rub"))
+    _comercio(repo, "f1", "San José", "cajon mortuorio", ["regaleria", "floreria"])
+
+    client.post("/admin/rubros/aplicar-patron",
+                json={"rubro_slug": "funeraria", "palabras": "cajon mortuorio"},
+                headers=_h(admin_token))
+
+    suyos = {x["slug"] for x in repo.list_comercio_rubros_todos() if x["comercio_id"] == "f1"}
+    assert suyos == {"regaleria", "floreria", "funeraria"}
+
+
+def test_aplicar_patron_saltea_a_los_que_quedarian_con_demasiados(client, admin_token, repo):
+    """Un comercio en siete categorías no filtra en ninguna, y agregarle una
+    más lo empeora. Se saltea Y se informa: saltear en silencio deja al usuario
+    creyendo que se aplicó a todos."""
+    repo.rubros.setdefault("funeraria", repo._id("rub"))
+    muchos = ["ropa", "calzado", "bazar", "hogar", "regaleria", "floreria"]
+    for s in muchos:
+        repo.rubros.setdefault(s, repo._id("rub"))
+    _comercio(repo, "f1", "Polirubro", "cajon mortuorio", muchos)
+
+    d = client.post("/admin/rubros/aplicar-patron",
+                    json={"rubro_slug": "funeraria", "palabras": "cajon mortuorio"},
+                    headers=_h(admin_token)).json()
+
+    assert d["agregados"] == 0
+    assert d["salteados"][0]["nombre"] == "Polirubro"
+
+
+def test_aplicar_patron_a_un_rubro_inexistente(client, admin_token):
+    r = client.post("/admin/rubros/aplicar-patron",
+                    json={"rubro_slug": "no-existe", "palabras": "x"}, headers=_h(admin_token))
+    assert r.status_code == 400

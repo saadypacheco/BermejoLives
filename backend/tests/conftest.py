@@ -884,15 +884,26 @@ class FakeRepo:
         return escritos
 
     def quitar_rubro_comercio(self, comercio_id, rubro_id):
+        # Llega un id y la lista guarda slugs: hay que traducir, o el quitado no
+        # encuentra nada y falla en silencio — que es peor que fallar.
+        id_to_slug = {v: k for k, v in self.rubros.items()}
+        objetivo = id_to_slug.get(rubro_id, rubro_id)
         c = self.comercios.get(comercio_id)
         if c and c.get("rubros"):
-            c["rubros"] = [r for r in c["rubros"] if r != rubro_id]
+            c["rubros"] = [r for r in c["rubros"] if r != objetivo and r != rubro_id]
 
     def set_comercio_rubros(self, comercio_id, rubro_ids):
         # El repo real hace upsert: SUMA, no reemplaza. El fake tiene que hacer lo
         # mismo o los tests validarían un comportamiento que no existe.
+        #
+        # Y guarda SLUGS, traduciendo los ids que llegan: los tests siembran con
+        # slugs (`seed_comercio(rubros=["kiosco"])`) y el código real manda ids.
+        # Mezclados, `list_comercio_rubros_todos` devolvía 'rub-1' como si fuera
+        # un slug y el test fallaba por la forma del fake, no por el código.
+        id_to_slug = {v: k for k, v in self.rubros.items()}
+        nuevos = [id_to_slug.get(r, r) for r in rubro_ids]
         actuales = self.comercios[comercio_id].get("rubros") or []
-        self.comercios[comercio_id]["rubros"] = list(dict.fromkeys([*actuales, *rubro_ids]))
+        self.comercios[comercio_id]["rubros"] = list(dict.fromkeys([*actuales, *nuevos]))
 
     def get_comercio_rubros(self, comercio_id):
         id_to_slug = {v: k for k, v in self.rubros.items()}

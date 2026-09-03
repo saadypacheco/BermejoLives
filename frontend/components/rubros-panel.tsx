@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   getRubrosPropuestos, crearRubro, agregarPalabrasRubro, completarRubros,
-  previsualizarPalabras,
+  previsualizarPalabras, aplicarPatron,
   type PropuestaRubro, type RubroSimple, type InformeRubros, type PreviewPalabras,
 } from "@/lib/api";
 
@@ -209,11 +209,26 @@ function Resolver({ propuesta, rubros, onListo, onError }: {
     return () => clearTimeout(t);
   }, [palabras, destino, slug]);
 
+  // Crear el rubro y APLICARLO en el mismo acto, sobre los comercios que la
+  // vista previa acaba de mostrar.
+  //
+  // Antes había que acordarse de ir a "Completar rubros" después. Si nadie lo
+  // hacía, el rubro quedaba con cero comercios y parecía roto: el rubro
+  // existía, el diccionario existía, y en la fila de chips prometía algo que no
+  // había. Nada avisaba — es el mismo silencio de siempre.
   async function nuevo() {
     setOcupado(true);
     try {
       await crearRubro({ slug, nombre, icono: icono || undefined, comercial,
                          palabras, resolver: propuesta.normalizado });
+      if (prev && prev.nuevos > 0) {
+        const r = await aplicarPatron(slug, palabras);
+        if (r.salteados.length > 0) {
+          onError(`Rubro creado y aplicado a ${r.agregados}. ` +
+                  `${r.salteados.length} quedaron afuera por tener ya 6 rubros: ` +
+                  r.salteados.map((x) => x.nombre || x.codigo).join(", "));
+        }
+      }
       onListo();
     } catch (e) { onError(e instanceof Error ? e.message : "No se pudo crear"); }
     finally { setOcupado(false); }
@@ -224,6 +239,13 @@ function Resolver({ propuesta, rubros, onListo, onError }: {
     setOcupado(true);
     try {
       await agregarPalabrasRubro({ rubro_slug: destino, palabras, resolver: propuesta.normalizado });
+      if (prev && prev.nuevos > 0) {
+        const r = await aplicarPatron(destino, palabras);
+        if (r.salteados.length > 0) {
+          onError(`Palabras agregadas y aplicadas a ${r.agregados}. ` +
+                  `${r.salteados.length} quedaron afuera por tener ya 6 rubros.`);
+        }
+      }
       onListo();
     } catch (e) { onError(e instanceof Error ? e.message : "No se pudo guardar"); }
     finally { setOcupado(false); }
@@ -250,7 +272,7 @@ function Resolver({ propuesta, rubros, onListo, onError }: {
           <span>No es un negocio (baño, trámite, plaza): no se le pide WhatsApp ni productos</span>
         </label>
         <button className="btn btn-primary btn-sm" onClick={nuevo} disabled={ocupado || !nombre.trim()}>
-          Crear rubro
+          {prev && prev.nuevos > 0 ? `Crear y aplicar a ${prev.nuevos}` : "Crear rubro"}
         </button>
       </div>
 
@@ -264,7 +286,7 @@ function Resolver({ propuesta, rubros, onListo, onError }: {
           {rubros.map((r) => <option key={r.slug} value={r.slug}>{r.nombre}</option>)}
         </select>
         <button className="btn btn-ghost btn-sm" onClick={sinonimo} disabled={ocupado || !destino}>
-          Agregar como palabra
+          {prev && prev.nuevos > 0 ? `Agregar y aplicar a ${prev.nuevos}` : "Agregar como palabra"}
         </button>
       </div>
 

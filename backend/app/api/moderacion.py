@@ -1810,3 +1810,55 @@ async def admin_analizar_ofertas(
     restantes = len(repo.publicaciones_sin_analizar(500))
     return {"procesados": len(resultados), "resultados": resultados,
             "restantes": restantes, "sin_mas": restantes == 0}
+
+
+class AplicarPatronBody(BaseModel):
+    rubro_slug: str
+    palabras: str
+
+
+@router.post("/admin/rubros/aplicar-patron")
+async def admin_aplicar_patron(
+    body: AplicarPatronBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Le agrega el rubro a los comercios que esta palabra alcanza, ahora.
+
+    Cierra el hueco entre crear un rubro y que los comercios lo tengan. Antes
+    había que acordarse de correr "Completar rubros" después; si nadie lo hacía,
+    el rubro quedaba con cero comercios y parecía roto — el rubro existía, el
+    diccionario existía, y en la fila de chips prometía algo que no había.
+
+    Se aplica SOBRE LA MISMA LISTA que se acaba de ver en la vista previa, no
+    sobre un recálculo: lo que se escribe es exactamente lo que se miró.
+    """
+    if not any(r["slug"] == body.rubro_slug for r in repo.list_rubros()):
+        raise HTTPException(status_code=400, detail=f"No existe el rubro {body.rubro_slug}")
+
+    from app.services.rubros_auto import MAX_RUBROS
+
+    patron = _patron_de(body.palabras)
+    filas = await run_in_threadpool(repo.previsualizar_patron, patron, body.rubro_slug)
+    rubro_id = repo.get_rubro_id(body.rubro_slug)
+    if not rubro_id:
+        raise HTTPException(status_code=400, detail="El rubro no tiene id")
+
+    agregados, salteados = 0, []
+    for f in filas:
+        if f.get("ya_lo_tiene"):
+            continue
+        otros = list(f.get("otros_rubros") or [])
+        # El mismo tope que el completado masivo: un comercio en siete
+        # categorías no filtra en ninguna, y agregarle una más lo empeora.
+        if len(otros) + 1 > MAX_RUBROS:
+            salteados.append({"codigo": f.get("codigo"), "nombre": f.get("nombre"),
+                              "rubros": len(otros)})
+            continue
+        previos = [rid for rid in (repo.get_rubro_id(s) for s in otros) if rid]
+        repo.set_comercio_rubros(f["comercio_id"], list(dict.fromkeys(previos + [rubro_id])))
+        agregados += 1
+
+    logger.info("admin.patron_aplicado", rubro=body.rubro_slug, comercios=agregados,
+                by=admin["email"])
+    return {"ok": True, "agregados": agregados, "salteados": salteados}

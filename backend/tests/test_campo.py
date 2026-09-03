@@ -48,7 +48,10 @@ def test_alta_campo_crea_comercio_pendiente(client, repo):
     assert com["modalidad"] == "minorista"
     assert com["verificado"] is False
     assert com["rubro_id"] == "rub-3"          # gomeria (principal = primero)
-    assert com["rubros"] == ["rub-3", "rub-4"]  # gomeria + servicios
+    # El fake guarda SLUGS (`set_comercio_rubros` traduce los ids que recibe):
+    # antes guardaba lo que le mandaran y `list_comercio_rubros_todos` devolvía
+    # 'rub-3' como si fuera un slug, escondiendo errores reales.
+    assert com["rubros"] == ["gomeria", "servicios"]
     assert com["facebook_url"] == "https://facebook.com/gomeria"
     assert com["lat"] == -22.7361
 
