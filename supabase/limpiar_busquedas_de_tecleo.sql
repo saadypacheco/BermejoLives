@@ -23,16 +23,25 @@
 -- ── 1. Qué se borraría ───────────────────────────────────────────────────────
 --
 -- La regla: una fila es tecleo si su texto es prefijo ESTRICTO de otra búsqueda
--- registrada poco después. "surtu" antes de "surtidor" es tecleo; "ropa" antes
--- de "ropa deportiva" media hora más tarde son dos búsquedas distintas, por eso
--- la ventana de tiempo.
+-- registrada poco después.
+--
+-- La ventana es de 15 SEGUNDOS y no de minutos. Medido sobre los datos reales,
+-- todos los pares de tecleo caen dentro de segundos: "far" → "farmacias" en dos
+-- segundos, "su" → "surtidor" en el mismo tirón. Una ventana ancha empieza a
+-- barrer búsquedas de verdad: "ropa" media hora antes que "ropa deportiva" son
+-- dos personas distintas preguntando dos cosas distintas, y borrar la primera
+-- es perder demanda medida — que es justo lo que este informe existe para
+-- mostrar.
+--
+-- Ante la duda, esta consulta se equivoca dejando de más. Un fragmento que
+-- sobrevive ensucia un poco la lista; una búsqueda real borrada no vuelve.
 with tecleo as (
   select b.id, b.query as fragmento, b.created_at, s.query as termino_completo
     from busquedas b
     join busquedas s
       on s.query <> b.query
      and lower(s.query) like lower(b.query) || '%'
-     and s.created_at between b.created_at and b.created_at + interval '2 minutes'
+     and s.created_at between b.created_at and b.created_at + interval '15 seconds'
 )
 select fragmento, termino_completo, created_at
   from tecleo
@@ -45,7 +54,7 @@ select
      from busquedas b join busquedas s
        on s.query <> b.query
       and lower(s.query) like lower(b.query) || '%'
-      and s.created_at between b.created_at and b.created_at + interval '2 minutes'
+      and s.created_at between b.created_at and b.created_at + interval '15 seconds'
   ) as tecleo;
 
 -- ── 3. El borrado (descomentar después de mirar lo de arriba) ────────────────
@@ -55,4 +64,4 @@ select
 --    select 1 from busquedas s
 --     where s.query <> b.query
 --       and lower(s.query) like lower(b.query) || '%'
---       and s.created_at between b.created_at and b.created_at + interval '2 minutes');
+--       and s.created_at between b.created_at and b.created_at + interval '15 seconds');
