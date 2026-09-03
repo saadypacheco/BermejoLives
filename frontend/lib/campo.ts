@@ -218,7 +218,10 @@ export async function registrarLead(comercio_id: string, tipo: TipoLead = "whats
  *  persona igual busca y contacta — perder una métrica no puede costar una
  *  venta. */
 export async function logBusqueda(query: string, resultados: number, comercios?: string[]): Promise<string | null> {
-  if (!query || query.trim().length < 2) return null;
+  // Tres, no dos. Con dos entraban "re" y "om" —prefijos de "restaurante" y
+  // "comida"— y se leían como demanda. Ninguna búsqueda real de dos letras
+  // significa algo en este catálogo.
+  if (!query || query.trim().length < 3) return null;
   try {
     const res = await fetch(`${API}/busquedas/log`, {
       method: "POST",

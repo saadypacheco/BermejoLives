@@ -45,6 +45,9 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   // comercio y no tiene dónde meterlas salvo como contador.
   const [ofertas, setOfertas] = useState<Map<string, FeedItem[]>>(new Map());
   const [rubros, setRubros] = useState<Rubro[]>([]);
+  // Timer propio para el registro: el de la búsqueda es corto a propósito y el
+  // de la medición tiene que ser largo. Compartirlos obliga a elegir uno mal.
+  const logTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Qué filtros tienen datos detrás. Arranca en `false` y NO se dibuja ninguno
   // hasta saberlo: mostrar un filtro y esconderlo medio segundo después es peor
   // que mostrarlo un poco más tarde.
@@ -134,15 +137,30 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
       getRefinamientos({ ...filtros, subcategoria: "" }).then(setRefinamientos).catch(() => {});
       // Se guarda el id de la búsqueda para atárselo al contacto si la persona
       // termina escribiéndole a alguno de estos comercios.
-      if (q.trim()) {
-        logBusqueda(q, r.length, r.map((c) => c.id)).then(setBusquedaId);
+      // El registro NO va acá adentro, aunque los resultados ya estén.
+      //
+      // Este efecto corre a los 280ms de dejar de teclear, que es lo correcto
+      // para BUSCAR y desastroso para MEDIR: escribir "surtidor" dejaba cuatro
+      // búsquedas registradas —"surtidr", "surtu", "sutu", "surut"— y todas
+      // caían en "buscado sin resultado", que es la lista que dice a qué rubros
+      // salir a buscar comercios. La lista más valiosa del panel quedaba llena
+      // de tecleo.
+      //
+      // Se espera un segundo más. Si la persona seguía escribiendo, el efecto
+      // vuelve a correr, el cleanup cancela este timer y el fragmento no se
+      // registra nunca.
+      clearTimeout(logTimer.current);
+      if (q.trim().length >= 3) {
+        logTimer.current = setTimeout(() => {
+          logBusqueda(q, r.length, r.map((c) => c.id)).then(setBusquedaId);
+        }, 900);
       } else {
         setBusquedaId(null);
       }
       setHayMas(r.length === PAGE);
       setLoading(false);
     }, 280);
-    return () => clearTimeout(debounce.current);
+    return () => { clearTimeout(debounce.current); clearTimeout(logTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, rubro, subcategoria, modalidad, zona, ciudad, precioMax]);
 
