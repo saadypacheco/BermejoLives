@@ -56,6 +56,11 @@ export type Rubro = {
   slug: string;
   nombre: string;
   icono: string | null;
+  /** false = punto de la ciudad, no negocio (baños, taxis, trámites). No se le
+   *  reclama WhatsApp ni productos, y su ficha no ofrece "Ver ofertas".
+   *  Opcional: los rubros cargados antes de la 0083 no lo traen, y ausente
+   *  significa comercial — que es el caso de los 44 que ya existían. */
+  comercial?: boolean;
 };
 
 export type Ciudad = {

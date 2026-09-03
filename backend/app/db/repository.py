@@ -704,7 +704,9 @@ class SupabaseRepo:
             {"rubro_id": ids[0] if ids else None}).eq("id", comercio_id).execute()
 
     def list_rubros(self) -> list[dict]:
-        res = (self._db.table("rubros").select("slug, nombre")
+        # `comercial` viaja con el rubro porque de eso depende cómo se trata cada
+        # ficha: un baño público sin WhatsApp está completo, no incompleto.
+        res = (self._db.table("rubros").select("slug, nombre, icono, comercial")
                .eq("activo", True).order("orden").execute())
         return res.data or []
 

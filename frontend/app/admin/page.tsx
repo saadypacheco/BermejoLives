@@ -978,13 +978,24 @@ function normTxt(s: string): string {
 }
 
 // Motivos por los que un comercio está "incompleto" (para completarlo en tanda).
-function incompletoDe(c: ComercioPorVerificar): string[] {
+//
+// `noComerciales` son los slugs de rubros marcados `comercial = false` en la
+// base: baños, taxis, trámites. A un baño público no se le reclama WhatsApp ni
+// productos — está completo así. Sin esta excepción, cada punto de la ciudad
+// que se cargue queda para siempre en la cola de "incompletos", y una cola que
+// nunca baja se deja de mirar.
+function incompletoDe(c: ComercioPorVerificar, noComerciales?: Set<string>): string[] {
   const r: string[] = [];
   const nombre = (c.nombre ?? "").trim();
   const rubroNombre = (c.rubros?.nombre ?? "").trim();
   // "sin nombre" = vacío, el default 'Comercio', o quedó con el nombre del rubro.
   if (!nombre || nombre.toLowerCase() === "comercio" || (!!rubroNombre && nombre.toLowerCase() === rubroNombre.toLowerCase())) r.push("sin nombre");
   if (!c.portada_url) r.push("sin foto");
+  // La foto sí se le pide a todo: un baño sin foto en el mapa no se distingue
+  // de un pin cualquiera, y la foto es lo que hace que alguien lo reconozca al
+  // llegar.
+  const esPunto = !!noComerciales?.has(c.rubros?.slug ?? "");
+  if (esPunto) return r;
   if (!c.whatsapp && !c.telefono) r.push("sin contacto");
   // "otros" NO es un rubro: es el descarte. Un comercio ahí no aparece en
   // ninguna búsqueda por categoría, así que cuenta como sin clasificar. Antes
@@ -1014,7 +1025,8 @@ function TabComercios({
   const [limitVis, setLimitVis] = useState(50);
   const [editandoId, setEditandoId] = useState<string | null>(null);
 
-  const nIncompletos = todos.filter((c) => incompletoDe(c).length > 0).length;
+  const noComerciales = new Set(rubros.filter((r) => r.comercial === false).map((r) => r.slug));
+  const nIncompletos = todos.filter((c) => incompletoDe(c, noComerciales).length > 0).length;
   const nVerificados = todos.filter((c) => c.verificado).length;
   const sinHorario = (c: ComercioPorVerificar) =>
     !((c as Record<string, unknown>).horario as string ?? "").trim();
@@ -1025,7 +1037,7 @@ function TabComercios({
     : filtro === "pendientes" ? todos.filter((c) => !c.verificado)
     : filtro === "verificados" ? todos.filter((c) => c.verificado)
     : filtro === "sin-horario" ? todos.filter(sinHorario)
-    : todos.filter((c) => incompletoDe(c).length > 0);
+    : todos.filter((c) => incompletoDe(c, noComerciales).length > 0);
 
   // 2) buscador multi-campo (A): nombre + qué vende + dirección + contacto + rubro + ciudad
   const nq = normTxt(q.trim());
@@ -1149,7 +1161,7 @@ function TabComercios({
           <AdminMap
             comercios={filtradas.map((c) => ({
               id: c.id, nombre: c.nombre, lat: c.lat, lng: c.lng,
-              rubro_slug: c.rubros?.slug ?? null, incompleto: incompletoDe(c).length > 0,
+              rubro_slug: c.rubros?.slug ?? null, incompleto: incompletoDe(c, noComerciales).length > 0,
               lugar_id: c.lugar_id, lugar_nombre: c.lugares?.nombre ?? null, lugar_lat: c.lugares?.lat ?? null, lugar_lng: c.lugares?.lng ?? null, lugar_portada_thumb: c.lugares?.portada_thumb_url ?? null,
             }))}
             onSelect={setEditandoId}
@@ -1162,7 +1174,7 @@ function TabComercios({
       )}
 
       {visibles.map((c) => {
-        const motivos = incompletoDe(c);
+        const motivos = incompletoDe(c, noComerciales);
         return (
         // flexWrap + minWidth en la info: en un celular los 5 botones de acción
         // no cedían espacio (flex-shrink: 0) y aplastaban el texto hasta dejar
