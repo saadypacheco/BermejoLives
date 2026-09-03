@@ -93,7 +93,23 @@ export function abiertoAhora(horario: string | null | undefined, now: Date = new
     // Los días se toman del texto sin las horas.
     const soloDias = seg.replace(/\d{1,2}(?:[:.]\d{2})?/g, " ");
     const dias = diasDeTexto(soloDias) ?? new Set([1, 2, 3, 4, 5, 6, 7]); // sin día → asumimos todos
-    for (const h of horas) rangos.push({ dias, desde: h.desde, hasta: h.hasta });
+    for (const h of horas) {
+      if (h.hasta > h.desde) { rangos.push({ dias, desde: h.desde, hasta: h.hasta }); continue; }
+      // CRUZA LA MEDIANOCHE: "22-4" no es un rango vacío, es un boliche.
+      //
+      // Antes `ahora >= 22:00 && ahora < 04:00` no se cumplía nunca y el local
+      // figuraba CERRADO las veinticuatro horas, incluso a las dos de la
+      // mañana con la gente adentro. No se notaba porque ningún comercio tenía
+      // horario cargado; con bares y karaokes es el caso normal.
+      //
+      // Se parte en dos: de la hora de apertura a medianoche el día que abre, y
+      // de medianoche al cierre el día SIGUIENTE — un sábado a las 3 de la
+      // mañana pertenece al viernes a la noche, y contarlo como sábado dejaría
+      // abierto un local que ya cerró.
+      rangos.push({ dias, desde: h.desde, hasta: 24 * 60 });
+      const diaSiguiente = new Set([...dias].map((d) => (d % 7) + 1));
+      rangos.push({ dias: diaSiguiente, desde: 0, hasta: h.hasta });
+    }
   }
 
   if (rangos.length === 0) return { estado: "desconocido" };

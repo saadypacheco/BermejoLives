@@ -1363,6 +1363,10 @@ const HORARIOS_FRECUENTES: { label: string; texto: string }[] = [
   { label: "Corrido 9-21 (todos)", texto: "Todos los días 9:00-21:00" },
   { label: "9-13 · 15-19 (L-V)", texto: "Lun-Vie 9:00-13:00 y 15:00-19:00" },
   { label: "24 horas", texto: "Todos los días 0:00-24:00" },
+  // Los de la noche. Cruzan la medianoche, que el parser recién entiende desde
+  // que existen bares y boliches en la taxonomía.
+  { label: "Noche 21-4 (V y S)", texto: "Vie-Sáb 21:00-4:00" },
+  { label: "Noche 20-2 (Mié-Dom)", texto: "Mié-Dom 20:00-2:00" },
 ];
 
 function ModalEditar({
