@@ -69,4 +69,9 @@ insert into vencimientos (nombre, tipo, proveedor, aviso_dias, notas) values
   ('Chip respaldo 1', 'sim', 'Entel', 30,
    'En el cajón. Prepago sin usar: es JUSTO el que se recicla sin que nadie lo note, y se descubre el día del baneo.'),
   ('Chip respaldo 2', 'sim', 'Entel', 30, 'En el cajón. Mismo riesgo que el respaldo 1.')
+-- `on conflict (nombre)` y no `on conflict do nothing` pelado: sin una columna
+-- sobre la que colisionar, esa cláusula no protege nada y cada corrida vuelve a
+-- insertar las ocho. Pasó: quedaron 16. El índice único lo crea la 0080; en una
+-- base nueva las migraciones corren en orden, así que acá todavía no existe y
+-- por eso esta línea queda tolerante.
 on conflict do nothing;
