@@ -102,6 +102,10 @@ services:
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
         NEXT_PUBLIC_API_URL: https://api.${DOMAIN}
+        # El mapa base sale del caché propio (servicio `tiles`), no de OSM
+        # directo. Se puede pisar por ciudad desde `ciudades.tiles_url` sin
+        # tocar esto, que es para lo que existe esa columna.
+        NEXT_PUBLIC_TILES_URL: https://tiles.${DOMAIN}/{z}/{x}/{y}.png
         # "1" = sitio en modo captura: solo /bermejo y /admin; el resto muestra "Próximamente".
         # Para abrir el sitio público: poné "0" y reconstruí el frontend.
         NEXT_PUBLIC_MODO_CAPTURA: ${MODO_CAPTURA:-1}
@@ -123,6 +127,26 @@ services:
       - traefik.http.routers.buscadonde-fe.tls=true
       - traefik.http.routers.buscadonde-fe.tls.certresolver=letsencrypt
       - traefik.http.services.buscadonde-fe.loadbalancer.server.port=3003
+
+  # Tiles propios: un caché delante de OpenStreetMap. Ver selfhost/tiles/nginx.conf
+  # para el porqué. En resumen: mil personas mirando el centro de Bermejo pasan a
+  # ser UN pedido a OSM en vez de mil, y el mapa carga desde el mismo VPS.
+  tiles:
+    image: nginx:1.27-alpine
+    container_name: uruku-tiles
+    restart: unless-stopped
+    volumes:
+      - ./selfhost/tiles/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - tiles_cache:/var/cache/tiles
+    networks: [traefik]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik
+      - "traefik.http.routers.uruku-tiles.rule=Host(`tiles.${DOMAIN}`)"
+      - traefik.http.routers.uruku-tiles.entrypoints=websecure
+      - traefik.http.routers.uruku-tiles.tls=true
+      - traefik.http.routers.uruku-tiles.tls.certresolver=letsencrypt
+      - traefik.http.services.uruku-tiles.loadbalancer.server.port=80
 
   backend:
     build: ./backend
@@ -154,6 +178,7 @@ services:
       - traefik.http.services.buscadonde-be.loadbalancer.server.port=8000
 
 volumes:
+  tiles_cache:
   whisper_models:
   postgres_data:
   comercio_fotos:

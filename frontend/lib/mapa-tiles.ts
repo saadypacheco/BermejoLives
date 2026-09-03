@@ -22,17 +22,37 @@
  * crece, lo correcto es servir los tiles desde el VPS propio (ya se
  * self-hostean Postgres y PostgREST) o contratar un proveedor con clave.
  *
+ * SERVIRLOS DESDE EL VPS NO CAMBIA LA ATRIBUCIÓN. Los datos siguen siendo de
+ * OpenStreetMap: cachearlos no los hace nuestros. Sacar el crédito sería una
+ * violación de licencia, no un detalle de diseño.
+ *
  * LA ATRIBUCIÓN NO ES OPCIONAL. La licencia de OSM la exige, y además ya hacía
  * falta por los comercios importados con `importar_osm.py`.
  */
 
-export const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+/**
+ * Por defecto, el caché de tiles propio (ver selfhost/tiles/nginx.conf): un
+ * nginx en el mismo VPS que le pide a OSM la primera vez y después sirve él.
+ *
+ * Es variable de entorno y no una constante porque el dominio cambia entre QA y
+ * producción. Y si no está puesta cae a OSM directo: preferible un mapa que
+ * anda contra el servidor de otro, a ningún mapa.
+ */
+export const TILE_URL =
+  process.env.NEXT_PUBLIC_TILES_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 export const TILE_ATRIBUCION =
   '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
 
-/** El host, para el preconnect del layout y la caché del service worker. */
-export const TILE_HOST = "tile.openstreetmap.org";
+/** El host, para el preconnect del layout y la caché del service worker.
+ *  Se deriva de la URL en vez de repetirse: escritos por separado, el día que
+ *  cambie uno el otro queda apuntando al proveedor viejo y nadie lo nota —
+ *  el preconnect a un host que ya no se usa no rompe nada, sólo deja de
+ *  ayudar. */
+export const TILE_HOST = (() => {
+  try { return new URL(TILE_URL.replace(/\{[zxy]\}/g, "0")).hostname; }
+  catch { return "tile.openstreetmap.org"; }
+})();
 
 /**
  * Agrega el mapa base. `oscuro` invierte los colores por CSS.

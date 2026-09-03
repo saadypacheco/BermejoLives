@@ -41,7 +41,15 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
 
   // Tiles del mapa + Leaflet CDN → cache-first (no se vuelven a descargar)
-  if (url.hostname === "tile.openstreetmap.org" || url.hostname === "unpkg.com") {
+  //
+  // El host se reconoce por la forma de la URL y no por una lista escrita acá:
+  // los tiles pasaron a salir de tiles.uruku.bo (el caché propio) y pueden
+  // volver a cambiar por ciudad desde la base, sin deploy. Una lista de hosts
+  // en el service worker habría que recordar actualizarla en cada cambio, y el
+  // síntoma de olvidarse es un mapa que se rebaja de nuevo en cada pantalla,
+  // que es justo lo que nadie nota.
+  const esTile = /\/\d+\/\d+\/\d+\.png$/.test(url.pathname);
+  if (esTile || url.hostname === "unpkg.com") {
     e.respondWith((async () => {
       const c = await caches.open(TILES);
       const hit = await c.match(req);
