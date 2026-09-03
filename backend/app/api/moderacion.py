@@ -1727,3 +1727,86 @@ async def admin_previsualizar_palabras(
         # El tope de la función SQL. Sin decirlo, 200 se lee como "son 200".
         "recortado": len(filas) >= 200,
     }
+
+
+# ── Análisis de las fotos de las ofertas ─────────────────────────────────────
+
+@router.get("/admin/publicaciones/pendientes-analisis")
+def admin_pubs_pendientes_analisis(
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    return {"pendientes": len(repo.publicaciones_sin_analizar(500))}
+
+
+@router.post("/admin/publicaciones/analizar-tanda")
+async def admin_analizar_ofertas(
+    limite: int = Query(default=3, ge=1, le=10),
+    aplicar: bool = Query(default=True),
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Lee las fotos de las ofertas: qué son, con qué palabras se buscan y el
+    precio si está escrito en la imagen.
+
+    Existe por una razón concreta: el índice de búsqueda de `publicaciones` sale
+    del título y la descripción, y cuando la oferta trae foto el título queda en
+    NULL a propósito. Un comerciante apurado manda la foto sola — y esa oferta
+    no aparecía en ninguna búsqueda.
+
+    Va de a pocas y en bucle desde el navegador, igual que el análisis de
+    comercios: cada llamada tarda segundos y el avance se ve.
+    """
+    from app.services.vision import VisionNoConfigurada, analizar_oferta
+
+    pendientes = repo.publicaciones_sin_analizar(limite)
+    if not pendientes:
+        return {"procesados": 0, "sin_mas": True, "resultados": [], "restantes": 0}
+
+    from datetime import datetime, timezone
+
+    resultados = []
+    for pub in pendientes:
+        try:
+            out = await run_in_threadpool(analizar_oferta, pub["imagen_url"])
+        except VisionNoConfigurada as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+        fila = {"id": pub["id"], "titulo": out.get("titulo"), "precio": out.get("precio"),
+                "es_oferta": out.get("es_oferta"), "confianza": out.get("confianza"),
+                "error": out.get("error")}
+
+        if out.get("error"):
+            # No se marca como analizada: el fallo puede ser transitorio. Y se
+            # corta la tanda, para no gastarla contra un problema que se repite.
+            resultados.append(fila)
+            break
+
+        patch: dict = {"ia_analizado_at": datetime.now(timezone.utc).isoformat()}
+        if aplicar and out.get("confianza", 0) > 0 and out.get("es_oferta"):
+            patch["terminos_ia"] = out["terminos"]
+            # El título SÓLO si no hay uno: si el comerciante escribió algo, eso
+            # gana. Lo que él dijo con sus palabras vale más que lo que dedujo
+            # el modelo, y es la misma regla que separa `prod_obs_human` de
+            # `prod_det_ia` en los comercios.
+            if not (pub.get("titulo") or "").strip() and out.get("titulo"):
+                patch["titulo"] = out["titulo"]
+            # El precio también: sólo si falta Y si el modelo lo LEYÓ en la
+            # foto. Un precio inventado manda a alguien a caminar veinte cuadras
+            # para encontrar otro, y eso se paga con el comercio y el comprador.
+            if pub.get("precio") is None and out.get("precio") is not None:
+                patch["precio"] = out["precio"]
+                patch["moneda"] = out["moneda"]
+            fila["aplicado"] = True
+        else:
+            # Confianza 0 o "no es una oferta": se marca igual para que la cola
+            # avance. Si no, cada corrida vuelve a tropezar con las mismas.
+            fila["aplicado"] = False
+
+        repo.update_publicacion(pub["id"], patch)
+        resultados.append(fila)
+
+    logger.info("vision.ofertas_tanda", procesados=len(resultados), by=admin["email"])
+    restantes = len(repo.publicaciones_sin_analizar(500))
+    return {"procesados": len(resultados), "resultados": resultados,
+            "restantes": restantes, "sin_mas": restantes == 0}

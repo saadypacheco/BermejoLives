@@ -823,3 +823,23 @@ export async function previsualizarPalabras(palabras: string, rubro_slug?: strin
   });
   return okDe(res, "previsualizar") as Promise<PreviewPalabras>;
 }
+
+export type ResultadoOferta = {
+  id: string; titulo?: string | null; precio?: number | null;
+  es_oferta?: boolean; confianza?: number; aplicado?: boolean; error?: string;
+};
+
+export async function ofertasPendientesAnalisis(): Promise<number> {
+  const res = await authFetch("/admin/publicaciones/pendientes-analisis");
+  return (await res.json()).pendientes ?? 0;
+}
+
+export async function analizarTandaOfertas(limite = 3): Promise<{
+  procesados: number; restantes: number; sin_mas: boolean; resultados: ResultadoOferta[];
+}> {
+  const res = await authFetch(`/admin/publicaciones/analizar-tanda?limite=${limite}&aplicar=true`,
+                              { method: "POST" });
+  return okDe(res, "analizar las ofertas") as Promise<{
+    procesados: number; restantes: number; sin_mas: boolean; resultados: ResultadoOferta[];
+  }>;
+}

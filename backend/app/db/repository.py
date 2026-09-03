@@ -73,6 +73,8 @@ class Repo(Protocol):
     def crear_rubro(self, row: dict) -> dict: ...
     def agregar_palabras_rubro(self, slug: str, patron: str) -> None: ...
     def previsualizar_patron(self, patron: str, rubro: str | None) -> list[dict]: ...
+    def publicaciones_sin_analizar(self, limite: int) -> list[dict]: ...
+    def update_publicacion(self, pub_id: str, patch: dict) -> dict: ...
     def borrar_propuestas(self, normalizado: str) -> None: ...
     def get_diccionario_sinonimos(self) -> dict[str, str]: ...
     def revisar_sinonimos(self) -> str | None: ...
@@ -783,6 +785,25 @@ class SupabaseRepo:
         self._db.table("rubro_palabras").upsert(
             {"rubro_slug": slug, "patron": patron},
             on_conflict="rubro_slug,patron").execute()
+
+    def publicaciones_sin_analizar(self, limite: int = 10) -> list[dict]:
+        """Ofertas con foto que todavía no pasaron por el análisis.
+
+        Sólo las que tienen imagen: una publicación de sólo texto ya es
+        buscable por lo que escribió el comerciante, y gastarle una llamada al
+        modelo no agrega nada."""
+        res = (self._db.table("publicaciones")
+               .select("id, comercio_id, titulo, descripcion, imagen_url, precio")
+               .is_("ia_analizado_at", "null")
+               .not_.is_("imagen_url", "null")
+               .eq("activo", True)
+               .order("created_at")
+               .limit(limite).execute())
+        return res.data or []
+
+    def update_publicacion(self, pub_id: str, patch: dict) -> dict:
+        res = self._db.table("publicaciones").update(patch).eq("id", pub_id).execute()
+        return res.data[0] if res.data else {}
 
     def previsualizar_patron(self, patron: str, rubro: str | None = None) -> list[dict]:
         """A qué comercios alcanzaría este patrón, antes de guardarlo.

@@ -790,6 +790,18 @@ class FakeRepo:
     def agregar_palabras_rubro(self, slug, patron):
         self.rubro_palabras.append({"rubro_slug": slug, "patron": patron})
 
+    def publicaciones_sin_analizar(self, limite=10):
+        return [p for p in self.publicaciones
+                if p.get("imagen_url") and not p.get("ia_analizado_at")
+                and p.get("activo", True)][:limite]
+
+    def update_publicacion(self, pub_id, patch):
+        for p in self.publicaciones:
+            if p.get("id") == pub_id:
+                p.update(patch)
+                return p
+        return {}
+
     def previsualizar_patron(self, patron, rubro=None):
         """Mismo texto que usa la clasificación real: productos + subcategoría +
         nombre, sin tildes y en minúsculas."""

@@ -22,6 +22,7 @@ import {
   getKpis, type Kpis,
   getPesoFotos, optimizarFotos, type PesoFotos, type ResultadoOptimizar,
   getVencimientos,
+  ofertasPendientesAnalisis, analizarTandaOfertas, type ResultadoOferta,
   listReclamos, responderReclamo, type Reclamo,
   getReservaloResumen, type ReservaloResumen,
   getReservaloConsultas, responderReservaloConsulta, type ConsultaReservalo,
@@ -359,6 +360,7 @@ export default function AdminPage() {
         <TabCambioNumero items={solicitudesCambioNumero} onAprobar={doAprobarSolicitud} onRechazar={doRechazarSolicitud} />
       )}
 
+      {tab === "publicaciones" && <AnalisisOfertas />}
       {tab === "publicaciones" && (
       <div className="panel-card glass">
         <div className="ph" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
@@ -2492,6 +2494,102 @@ function PanelPesoFotos() {
             </div>
           )}
           {err && <div style={{ color: "var(--pink)", fontSize: 13 }}>{err}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+/** Lee las fotos de las ofertas: qué son, con qué palabras se buscan, y el
+ *  precio si está escrito en la imagen.
+ *
+ *  Existe por una razón concreta y no por completitud: el índice de búsqueda de
+ *  las publicaciones sale del título y la descripción, y cuando la oferta trae
+ *  foto el título queda en NULL a propósito —la oferta ES la foto—. Un
+ *  comerciante apurado manda la foto sola, y esa oferta no aparecía en ninguna
+ *  búsqueda: existía, se veía en la ficha, y era invisible para quien la
+ *  buscaba.
+ *
+ *  Va de a pocas y en bucle, igual que el análisis de comercios: cada llamada
+ *  tarda segundos, el avance se ve, y se puede cortar sin perder lo hecho. */
+function AnalisisOfertas() {
+  const [pendientes, setPendientes] = useState<number | null>(null);
+  const [corriendo, setCorriendo] = useState(false);
+  const [hechas, setHechas] = useState(0);
+  const [ultimas, setUltimas] = useState<ResultadoOferta[]>([]);
+  const [err, setErr] = useState("");
+  const cancelar = useRef(false);
+
+  useEffect(() => { ofertasPendientesAnalisis().then(setPendientes).catch(() => setPendientes(null)); }, []);
+
+  async function correr() {
+    setErr(""); setHechas(0); setUltimas([]); setCorriendo(true);
+    cancelar.current = false;
+    try {
+      for (;;) {
+        if (cancelar.current) break;
+        const t = await analizarTandaOfertas(3);
+        if (t.sin_mas || t.procesados === 0) { setPendientes(0); break; }
+        setHechas((n) => n + t.procesados);
+        setPendientes(t.restantes);
+        setUltimas((prev) => [...t.resultados, ...prev].slice(0, 10));
+        const fallo = t.resultados.find((r) => r.error);
+        if (fallo) { setErr(`Se detuvo: ${fallo.error}`); break; }
+        if (t.restantes === 0) break;
+        // Respiro: el límite de Gemini es por ventana de tiempo.
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "No se pudo analizar");
+    } finally { setCorriendo(false); }
+  }
+
+  if (pendientes === 0 && !hechas) return null;
+
+  return (
+    <div className="panel-card glass" style={{ padding: 16, marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 260px" }}>
+          <b style={{ fontSize: 14.5 }}>Leer las fotos de las ofertas</b>
+          <div style={{ fontSize: 12.5, color: "var(--txt-3)", marginTop: 3 }}>
+            Una oferta que llega como foto sin texto <b>no se puede buscar</b>: el buscador
+            mira el título y la descripción, y con foto el título queda vacío. Esto le pone
+            las palabras con las que un cliente la buscaría, y el precio si está escrito
+            en la imagen.
+          </div>
+          <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 4 }}>
+            No pisa lo que escribió el comerciante: si él puso título o precio, gana el suyo.
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>{pendientes ?? "—"}</div>
+          <div style={{ fontSize: 11.5, color: "var(--txt-3)" }}>sin analizar</div>
+        </div>
+        {corriendo ? (
+          <button className="btn btn-ghost btn-sm" onClick={() => { cancelar.current = true; }}>
+            Cortar ({hechas})
+          </button>
+        ) : (
+          <button className="btn btn-primary btn-sm" onClick={correr} disabled={!pendientes}>
+            Analizar
+          </button>
+        )}
+      </div>
+
+      {err && <div style={{ color: "var(--pink)", fontSize: 13, marginTop: 10 }}>{err}</div>}
+
+      {ultimas.length > 0 && (
+        <div style={{ marginTop: 12, fontSize: 12.5 }}>
+          {ultimas.map((r) => (
+            <div key={r.id} style={{ padding: "4px 0", borderTop: "1px solid var(--border)" }}>
+              {r.aplicado
+                ? <span style={{ color: "var(--neon)" }}>✓</span>
+                : <span style={{ color: "var(--amber)" }} title={r.es_oferta === false ? "La foto no muestra un producto" : "El modelo no reconoció nada"}>—</span>}
+              {" "}<b>{r.titulo || "(sin título)"}</b>
+              {r.precio != null && <span style={{ color: "var(--neon)" }}> · {r.precio}</span>}
+            </div>
+          ))}
         </div>
       )}
     </div>

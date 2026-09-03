@@ -109,6 +109,49 @@ miró.
 
 ---
 
+## Y las ofertas, que van por otro camino
+
+Una oferta NO pasa por nada de lo de arriba. Entra por WhatsApp, la foto se baja
+al disco propio y queda en la cola de moderación. Eso es todo.
+
+**El problema que eso deja:** el índice de búsqueda de las publicaciones sale
+del título y la descripción, y cuando la oferta trae foto el título se deja en
+NULL a propósito —la oferta ES la foto, y un "200 bs" de título no ayuda a
+nadie—. Así que **una foto mandada sin texto es una oferta invisible**: existe,
+se ve en la ficha del comercio y en la tarjeta del buscador, y no aparece jamás
+en una búsqueda.
+
+Y mandar la foto sola es exactamente lo que hace un comerciante apurado.
+
+### El paso que lo arregla — Admin › Publicaciones › "Analizar"
+
+Lee la foto y saca: **qué es**, **con qué palabras la buscaría un cliente**, y el
+**precio si está escrito en la imagen** (una etiqueta, un cartel, un papel).
+
+Tres reglas que lo hacen seguro:
+
+- **No pisa lo que escribió el comerciante.** Si él puso título o precio, gana el
+  suyo. Los términos van a una columna aparte (`terminos_ia`) que entra al
+  índice sin tocar su descripción. Es la misma regla que separa `prod_obs_human`
+  de `prod_det_ia` en los comercios.
+- **El precio no se estima nunca.** Sólo si el número está en la foto. Un precio
+  inventado manda a alguien a caminar veinte cuadras para encontrar otro, y eso
+  se paga con el comercio y con el comprador de una vez.
+- **Lo que no es una oferta** —una selfie, una captura de pantalla— se marca
+  analizado sin escribir nada, para que la cola avance.
+
+**Cuándo correrlo:** después de cada tanda de ofertas nuevas, antes de
+aprobarlas. Así el moderador ve la propuesta ya hecha y sólo confirma.
+
+### Lo que sigue faltando en las ofertas
+
+La oferta no tiene rubro propio: se busca por su texto y se muestra dentro del
+comercio, que sí lo tiene. Alcanza mientras las ofertas sean pocas; si un
+comercio publica cuarenta cosas de rubros distintos, va a hacer falta
+clasificarlas.
+
+---
+
 ## Después de cada tanda grande
 
 **La auditoría del diccionario** (`supabase/auditar_diccionario.sql`) dice qué

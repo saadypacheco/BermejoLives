@@ -249,6 +249,111 @@ def _parsear(texto: str) -> dict:
     return json.loads(m.group(0) if m else limpio)
 
 
+PROMPT_OFERTA = """Mirás la foto de una oferta que un comerciante de Bermejo, Bolivia
+mandó por WhatsApp para publicarla. Decís qué está vendiendo.
+
+Devolvé SOLO un JSON, sin markdown, con esta forma exacta:
+{
+  "titulo": "qué es, en 3 a 6 palabras, como lo diría un cliente",
+  "terminos": "6 a 10 palabras con las que alguien buscaría esto, separadas por coma, en singular",
+  "precio": null,
+  "moneda": "BOB",
+  "es_oferta": true,
+  "confianza": 0.0
+}
+
+REGLAS QUE IMPORTAN:
+
+- "precio": SOLO si el número está escrito en la foto (una etiqueta, un cartel,
+  un papel). Si no lo ves, va null. NUNCA lo estimes ni lo deduzcas: un precio
+  inventado hace que alguien camine veinte cuadras para encontrar otro, y eso
+  se paga con el comercio y con el comprador de una vez.
+- "moneda": "BOB" si dice Bs o bolivianos, "ARS" si dice pesos, "USD" si dice
+  dólares. Si hay precio y no se aclara la moneda, es BOB — estamos en Bolivia.
+- "es_oferta": false si la foto no muestra un producto en venta (una selfie, una
+  captura de pantalla, un logo, un texto sin producto). Con false, lo demás va
+  vacío.
+- "terminos": las palabras del CLIENTE, no las del catálogo. Si es una zapatilla
+  deportiva blanca, van "zapatilla, championes, calzado deportivo, blanca", no
+  "calzado urbano unisex".
+- "confianza": 0 si no distinguís el producto. Preferimos "no sé" a un dato
+  inventado: acá lo que se publica lo ve un comprador y lo firma un comercio.
+"""
+
+
+def analizar_oferta(url: str) -> dict:
+    """Lee la foto de una oferta: qué es, con qué palabras se busca y el precio
+    si está escrito en la imagen.
+
+    Existe porque una foto sin texto es una oferta invisible: el índice de
+    búsqueda de `publicaciones` sale del título y la descripción, y cuando la
+    oferta trae foto el título queda en NULL a propósito. Un comerciante apurado
+    manda la foto sola, y esa oferta no aparecía en ninguna búsqueda.
+
+    Nunca lanza salvo que falte la key. Cualquier otro fallo devuelve confianza
+    0 con el error adentro: una oferta sin analizar se publica igual, sólo que
+    encontrable únicamente por lo que escribió el comerciante.
+    """
+    if not settings.gemini_api_key:
+        raise VisionNoConfigurada("Falta GEMINI_API_KEY")
+
+    vacio = {"titulo": "", "terminos": "", "precio": None, "moneda": "BOB",
+             "es_oferta": False, "confianza": 0.0}
+
+    data = _descargar(url)
+    if not data:
+        return {**vacio, "error": "No se pudo descargar la foto"}
+
+    partes = [
+        {"text": PROMPT_OFERTA},
+        {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(data).decode()}},
+    ]
+    url_api = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+               f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}")
+    r = None
+    try:
+        r = _post_con_reintentos(url_api, {"contents": [{"parts": partes}]})
+        r.raise_for_status()
+        cuerpo = r.json()
+        out = _parsear(cuerpo["candidates"][0]["content"]["parts"][0]["text"])
+        uso = cuerpo.get("usageMetadata") or {}
+    except Exception as exc:  # noqa: BLE001
+        crudo = ""
+        if r is not None:
+            try:
+                crudo = str(r.json())[:600]
+            except Exception:  # noqa: BLE001
+                crudo = str(getattr(r, "text", ""))[:600]
+        logger.warning("vision.oferta_fallo", error=_sin_secretos(str(exc)), crudo=crudo[:200])
+        return {**vacio, "error": _sin_secretos(str(exc))}
+
+    # El precio se valida ACÁ y no se confía en el modelo: un precio negativo, de
+    # siete cifras o con texto adentro es más probable que sea una lectura mala
+    # de la foto que una oferta real, y va a la ficha de un comercio con su
+    # nombre encima.
+    precio = out.get("precio")
+    try:
+        precio = float(precio) if precio is not None else None
+    except (TypeError, ValueError):
+        precio = None
+    if precio is not None and not (0 < precio < 1_000_000):
+        precio = None
+
+    moneda = str(out.get("moneda") or "BOB").upper()
+    if moneda not in {"BOB", "USD", "ARS"}:
+        moneda = "BOB"
+
+    return {
+        "titulo": str(out.get("titulo") or "").strip()[:120],
+        "terminos": str(out.get("terminos") or "").strip()[:400],
+        "precio": precio,
+        "moneda": moneda,
+        "es_oferta": bool(out.get("es_oferta", True)),
+        "confianza": float(out.get("confianza") or 0),
+        "tokens": {"total": uso.get("totalTokenCount")},
+    }
+
+
 def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
     """Analiza hasta MAX_FOTOS y devuelve la propuesta.
 
