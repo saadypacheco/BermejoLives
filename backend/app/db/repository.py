@@ -177,6 +177,20 @@ class Repo(Protocol):
     def update_red(self, clave: str, url: str | None) -> dict | None: ...
 
 
+# Las columnas del listado del panel. En una constante porque la paginación
+# tiene que pedir EXACTAMENTE las mismas: escritas dos veces terminan
+# divergiendo, y el síntoma sería que las filas de la página 2 vienen sin algún
+# campo y nadie sabe por qué.
+_COLS_COMERCIO_ADMIN = (
+    "id, slug, nombre, whatsapp, telefono, modalidad, descripcion, prod_obs_human, "
+    "prod_det_ia, subcategoria, sinonimos, codigo, direccion, lat, lng, horario, "
+    "verificado, suspendido, paga_hasta, portada_url, portada_thumb_url, cargado_por, "
+    "created_at, lugar_id, puesto, "
+    "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), "
+    "lugares(nombre, tipo, lat, lng, portada_thumb_url)"
+)
+
+
 class SupabaseRepo:
     """Implementación real sobre Supabase self-hosted/cloud."""
 
@@ -1387,15 +1401,29 @@ class SupabaseRepo:
     def list_todos_comercios(self, verificado: bool | None = None, limit: int = 300) -> list[dict]:
         q = (
             self._db.table("comercios")
-            .select("id, slug, nombre, whatsapp, telefono, modalidad, descripcion, prod_obs_human, prod_det_ia, subcategoria, sinonimos, codigo, direccion, lat, lng, "
-                    "verificado, suspendido, paga_hasta, portada_url, portada_thumb_url, cargado_por, created_at, lugar_id, puesto, "
-                    "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), lugares(nombre, tipo, lat, lng, portada_thumb_url)")
+            .select(_COLS_COMERCIO_ADMIN)
             .eq("activo", True)
         )
         if verificado is not None:
             q = q.eq("verificado", verificado)
         res = q.order("created_at", desc=True).limit(limit).execute()
-        return res.data or []
+        filas = res.data or []
+        # PostgREST corta en 1000 (PGRST_DB_MAX_ROWS) sin avisar: un `limit(5000)`
+        # devuelve mil filas y un 200. Con 888 comercios todavía entra, pero
+        # faltan semanas — y el día que pase, el panel mostraría 1000 de 1100 y
+        # el catálogo contaría de menos, los dos con cara de estar completos.
+        if len(filas) >= 1000 and limit > 1000:
+            for inicio in range(1000, min(limit, 100_000), 1000):
+                q2 = (self._db.table("comercios").select(_COLS_COMERCIO_ADMIN)
+                      .eq("activo", True))
+                if verificado is not None:
+                    q2 = q2.eq("verificado", verificado)
+                lote = (q2.order("created_at", desc=True)
+                        .range(inicio, inicio + 999).execute().data) or []
+                filas.extend(lote)
+                if len(lote) < 1000:
+                    break
+        return filas
 
     def list_comercios_por_agente(self, email: str, limit: int = 200) -> list[dict]:
         """Comercios que este agente de campo dio de alta (para que vea su propio recorrido)."""

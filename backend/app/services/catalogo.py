@@ -36,15 +36,31 @@ SLUG_DESCARTE = "otros"
 UMBRAL_AVISO = 5000
 
 
-def _terminos(comercio: dict) -> list[str]:
-    """Los productos y la subcategoría de un comercio, normalizados."""
-    crudo = (comercio.get("prod_det_ia") or "") + "," + (comercio.get("subcategoria") or "")
+def _partir(crudo: str) -> list[str]:
     salida: list[str] = []
-    for parte in crudo.split(","):
+    for parte in (crudo or "").split(","):
         t = re.sub(r"\s+", " ", sin_tildes(parte).strip().lower())
         if len(t) >= 3 and t not in salida:
             salida.append(t)
     return salida
+
+
+def _terminos(comercio: dict) -> list[str]:
+    """Los productos y la subcategoría de un comercio, normalizados."""
+    return _partir((comercio.get("prod_det_ia") or "") + "," + (comercio.get("subcategoria") or ""))
+
+
+def _subcategorias(comercio: dict) -> list[str]:
+    """Sólo la subcategoría.
+
+    Va aparte de los productos aunque hasta ahora se contaban juntos, porque
+    responden preguntas distintas. Los productos dicen qué se vende en la
+    ciudad; la SUBCATEGORÍA es la que arma los chips de refinamiento del
+    buscador, así que una con un solo comercio es un chip que no refina nada —
+    tocarlo deja ese resultado solo, que es lo mismo que hacerle clic en la
+    lista.
+    """
+    return _partir(comercio.get("subcategoria") or "")
 
 
 def informe(repo: Repo, limite_productos: int = 120) -> dict:
@@ -71,8 +87,17 @@ def informe(repo: Repo, limite_productos: int = 120) -> dict:
     filas_rubros.sort(key=lambda x: (-x["comercios"], x["nombre"]))
 
     productos: Counter = Counter()
+    subcats: Counter = Counter()
+    sin_subcat = 0
+    sin_productos = 0
     for c in comercios:
         productos.update(_terminos(c))
+        propias = _subcategorias(c)
+        subcats.update(propias)
+        if not propias:
+            sin_subcat += 1
+        if not (c.get("prod_det_ia") or c.get("prod_obs_human") or "").strip():
+            sin_productos += 1
 
     # Lo que se buscó y no encontró. Es la única lista de este informe que sale
     # de gente real y no de lo que nosotros cargamos.
@@ -83,9 +108,25 @@ def informe(repo: Repo, limite_productos: int = 120) -> dict:
 
     vacios = [r for r in filas_rubros if r["comercios"] == 0 and not r["descarte"]]
 
+    # Las subcategorías van ENTERAS y de menor a mayor, al revés que los
+    # productos. Del top ya se sabe todo; lo que hay que ver es la cola: las que
+    # tienen uno o dos comercios son chips que no refinan y candidatas a
+    # fusionarse con otra ("zapatilla urbana" y "zapatillas urbanas").
+    filas_subcats = sorted(
+        ({"subcategoria": t, "comercios": n} for t, n in subcats.items()),
+        key=lambda x: (x["comercios"], x["subcategoria"]))
+
     return {
         "rubros": filas_rubros,
         "rubros_vacios": len(vacios),
+        "subcategorias": filas_subcats,
+        "subcategorias_distintas": len(subcats),
+        # Con un solo comercio detrás, la subcategoría no agrupa nada.
+        "subcategorias_unicas": sum(1 for n in subcats.values() if n == 1),
+        # Lo que FALTA cargar, que es la otra mitad de la pregunta: un comercio
+        # sin subcategoría no aparece en ningún chip de refinamiento.
+        "sin_subcategoria": sin_subcat,
+        "sin_productos": sin_productos,
         "productos": [{"termino": t, "comercios": n} for t, n in productos.most_common(limite_productos)],
         "productos_distintos": len(productos),
         # Un producto que aparece en un solo local no es un catálogo: es un dato

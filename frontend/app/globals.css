@@ -804,3 +804,8 @@
    "Comercio"— y dos enlaces. */
 .map-pop-img { display: block; width: 100%; height: 110px; object-fit: cover;
   border-radius: 8px; margin-bottom: 7px; background: var(--stroke); }
+
+/* La subcategoría de un solo comercio: es un chip del buscador que no refina
+   nada. Se marca para poder verlas de un vistazo entre las que sí agrupan. */
+.cat-chips li.cat-sola { border-color: rgba(245,158,11,.45); background: rgba(245,158,11,.07); }
+.cat-chips li.cat-sola i { color: #f59e0b; }

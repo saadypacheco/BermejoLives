@@ -209,6 +209,14 @@ export type Catalogo = {
   productos: { termino: string; comercios: number }[];
   productos_distintos: number;
   productos_unicos: number;
+  /** Las subcategorías ENTERAS y de menor a mayor: la cola es lo que se viene a
+   *  buscar acá. Son las que arman los chips de refinamiento del buscador. */
+  subcategorias: { subcategoria: string; comercios: number }[];
+  subcategorias_distintas: number;
+  subcategorias_unicas: number;
+  /** Lo que falta cargar. */
+  sin_subcategoria: number;
+  sin_productos: number;
   buscado_sin_resultado: { query: string; n: number }[];
 };
 

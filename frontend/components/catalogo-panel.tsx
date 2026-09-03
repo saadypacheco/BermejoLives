@@ -90,6 +90,33 @@ export function CatalogoPanel() {
         </table>
       </section>
 
+      {/* SUBCATEGORÍAS: la cola primero, al revés que los productos.
+          Son las que arman los chips de refinamiento del buscador, así que una
+          con un solo comercio es un chip que no refina nada — tocarlo deja ese
+          resultado solo, que es lo mismo que hacerle clic en la lista. Del top
+          ya se sabe todo; lo que hay que ver es lo que está abajo. */}
+      <section className="cat-bloque">
+        <h3>Subcategorías</h3>
+        <p className="uk-hint">
+          Son las que arman los chips del buscador. De {data.subcategorias_distintas} distintas,{" "}
+          <b>{data.subcategorias_unicas}</b> tienen un solo comercio: ésas no refinan nada —
+          tocarlas deja ese resultado solo. Conviene fusionarlas con otra parecida
+          (&ldquo;zapatilla urbana&rdquo; y &ldquo;zapatillas urbanas&rdquo; son la misma cosa escrita
+          de dos formas).
+          {data.sin_subcategoria > 0 && (
+            <> Y <b>{data.sin_subcategoria}</b> comercios no tienen ninguna: no aparecen
+            en ningún chip.</>
+          )}
+        </p>
+        <ul className="cat-chips">
+          {data.subcategorias.map((sc) => (
+            <li key={sc.subcategoria} className={sc.comercios === 1 ? "cat-sola" : undefined}>
+              <b>{sc.subcategoria}</b><i>{sc.comercios}</i>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <section className="cat-bloque">
         <h3>Productos</h3>
         <p className="uk-hint">
