@@ -15,7 +15,11 @@ import { HorarioBadge } from "@/components/horario-badge";
 import { registrarLead, logBusqueda } from "@/lib/campo";
 
 
-export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string }) {
+export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
+  ciudadInicial?: string;
+  /** De dónde saca el mapa base esta ciudad. NULL = la del código. */
+  tilesCiudad?: { tiles_url?: string | null; tiles_atribucion?: string | null } | null;
+}) {
   const [q, setQ] = useState("");
   const [rubro, setRubro] = useState("");
   // El chip de refinamiento elegido, y los que hay para ofrecer. Salen de los
@@ -308,6 +312,7 @@ export function BuscarClient({ ciudadInicial = "" }: { ciudadInicial?: string })
               : (resultsMapa ?? results)
           }
           hayFiltro={Boolean(q.trim() || rubro || subcategoria || modalidad || zona || precioMax || soloOfertas)}
+          ciudad={tilesCiudad}
         />
         </>
       ) : (

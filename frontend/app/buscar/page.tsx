@@ -19,7 +19,15 @@ export default async function BuscarPage() {
           reaccionar cuando la barra de categorías navega. El App Router exige
           un límite de Suspense alrededor de cualquier componente que lo use. */}
       <Suspense fallback={null}>
-        <BuscarClient ciudadInicial={ciudad?.slug ?? ""} />
+        {/* `tilesCiudad` va aparte del slug: es de dónde saca el mapa base ESTA
+            ciudad (migración 0068), el dato que permite cambiar de proveedor
+            con un UPDATE en vez de un deploy. Se perdió al unificar /mapa con
+            /buscar —el mapa viejo lo recibía y el de resultados no—, así que
+            durante unos días la columna existía y no la miraba nadie. */}
+        <BuscarClient
+          ciudadInicial={ciudad?.slug ?? ""}
+          tilesCiudad={ciudad ? { tiles_url: ciudad.tiles_url ?? null, tiles_atribucion: ciudad.tiles_atribucion ?? null } : null}
+        />
       </Suspense>
     </UrukuShell>
   );

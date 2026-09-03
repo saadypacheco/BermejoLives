@@ -24,8 +24,12 @@ function pinHtml(r: ResultadoBusqueda): string {
   return `<div class="${cls}" style="--pc:${style.color}">${ring}<span class="ukpin-emo">${style.emoji}</span></div>`;
 }
 
-export function MapResults({ results, hayFiltro = true }: {
+export function MapResults({ results, hayFiltro = true, ciudad = null }: {
   results: ResultadoBusqueda[];
+  /** El mapa base de esta ciudad, si tiene uno propio (migración 0068). Es lo
+   *  que permite cambiar de proveedor con un UPDATE y no con un deploy — que es
+   *  el arreglo que faltó el día que CARTO cortó. */
+  ciudad?: { tiles_url?: string | null; tiles_atribucion?: string | null } | null;
   /** Sin filtro puesto el mapa muestra los adornos y nada más, salvo los
    *  destacados y los que pagan. 887 pines sobre Bermejo no son un mapa, son
    *  una mancha — y aparece justo cuando alguien todavía no sabe qué busca. */
@@ -48,7 +52,7 @@ export function MapResults({ results, hayFiltro = true }: {
         // pantallas eso pasó a ser el único mapa del sitio: un sitio en claro
         // con un mapa negro adentro. Antes /mapa lo respetaba y /buscar no.
         const esOscuro = () => document.getElementById("ukroot")?.getAttribute("data-theme") !== "light";
-        const tiles = agregarTiles(L, mapRef.current, { oscuro: esOscuro() });
+        const tiles = agregarTiles(L, mapRef.current, { oscuro: esOscuro(), ciudad });
         // El tema cambia una CLASE, no la URL: OSM publica un solo estilo y el
         // oscuro sale de un filtro CSS. Cambiar la URL volvería a descargar el
         // mapa entero en cada toque del interruptor.
