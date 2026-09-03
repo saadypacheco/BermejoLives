@@ -13,6 +13,31 @@
   color: var(--txt); font-size: 14px; outline: none;
 }
 .adm-input:focus { border-color: var(--neon); }
+
+/* LOS DESPLEGABLES SE VEÍAN BLANCOS SOBRE BLANCO
+ *
+ * El `<select>` cerrado lo pinta el CSS y se veía bien. La lista que se abre al
+ * tocarlo NO: la dibuja el sistema operativo, y sin `color-scheme` la dibuja
+ * clara — con el `color` heredado, que acá es casi blanco. Resultado: texto
+ * blanco sobre fondo blanco, ilegible, en todos los combos del panel (orden de
+ * la lista, variante del adorno, tipo de vencimiento, modalidad).
+ *
+ * `color-scheme` es lo que arregla la clase entera de problema: no sólo los
+ * desplegables, también las barras de scroll, el calendario de los
+ * `input[type=date]` y los autocompletados. Los `option` explícitos van igual,
+ * porque en Windows con temas de alto contraste el color-scheme no alcanza.
+ *
+ * Va en `:root` porque el panel es siempre oscuro; el sitio público lo pisa a
+ * claro cuando corresponde (ver uruku.css). */
+:root { color-scheme: dark; }
+
+select.adm-input option,
+select.adm-input optgroup,
+.uk-filters select option,
+select option {
+  background: var(--panel, #12161d);
+  color: var(--txt, #e8edf4);
+}
 .vid-play-overlay {
   position: absolute; inset: 0; margin: auto; width: 46px; height: 46px; border-radius: 50%;
   background: rgba(255,255,255,.16); backdrop-filter: blur(8px); display: grid; place-items: center;

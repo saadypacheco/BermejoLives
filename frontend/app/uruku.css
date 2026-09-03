@@ -3,6 +3,41 @@
    scopeado bajo .uk y con dos temas (claro/oscuro) por variables CSS.
    Sin fuentes ni imágenes externas (conexión lenta en Bermejo → todo local).
    =========================================================================== */
+/* LAS VARIABLES --uk-* TAMBIÉN FUERA DE .uk
+ *
+ * Estaban definidas SÓLO dentro de `.uk`, que es el marco del sitio público. El
+ * panel de admin no está adentro de `.uk` pero usa varios componentes pintados
+ * con esas variables (el editor de adornos, importados, el catálogo). Ahí
+ * `var(--uk-ink)` no resolvía a nada, y una declaración con una variable que no
+ * existe se descarta entera: el color pasaba a heredarse —blanco, del panel— y
+ * el fondo quedaba transparente, que el sistema dibuja BLANCO.
+ *
+ * Resultado: los desplegables del panel eran texto blanco sobre fondo blanco.
+ * Y lo mismo, más disimulado, en cualquier borde o fondo que usara --uk-line o
+ * --uk-surface dentro del admin.
+ *
+ * Se declaran acá en su versión OSCURA, que es la que corresponde al panel. El
+ * sitio público las pisa con `.uk` (claro) y `.uk[data-theme="dark"]`, en ese
+ * orden — este bloque va primero a propósito, porque contra `.uk` empatan en
+ * especificidad y gana el que está después. */
+:root {
+  --uk-page: radial-gradient(circle at 20% -10%, rgba(20,152,94,.18), transparent 40%),
+             linear-gradient(180deg, #06171b 0%, #08222a 55%, #061418 100%);
+  --uk-surface: #0f2c33;
+  --uk-surface-2: #0b2027;
+  --uk-ink: #e9f3f0;
+  --uk-ink-soft: #9db4b3;
+  --uk-line: rgba(255,255,255,.09);
+  --uk-header: rgba(8,26,30,.92);
+  --uk-shadow: 0 16px 45px rgba(0,0,0,.42);
+  --uk-shadow-soft: 0 8px 24px rgba(0,0,0,.35);
+  --uk-chip: rgba(255,255,255,.06);
+  --uk-hero-fade: linear-gradient(90deg, rgba(6,20,24,.96) 0%, rgba(6,20,24,.82) 26%, rgba(6,20,24,.25) 58%, rgba(6,20,24,.05) 100%);
+  --uk-green: #177a49;
+  --uk-green-2: #0f5836;
+  --uk-green-grad: linear-gradient(135deg, #1f9256, #0f5b38);
+}
+
 .uk {
   /* Acentos de marca URUKU (verde pino + rojo llama, del logo). Iguales en ambos temas. */
   --uk-green: #177a49;
@@ -80,6 +115,13 @@
 /* ---- Header ---- */
 .uk-header { background: var(--uk-header); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--uk-line); }
 /* Header en filas: 1) logo + ciudad + Ingresar + tema · 2) redes + clima + cotización · 3) buscador */
+/* El sitio público sí cambia de tema, así que le dice al navegador cuál usar
+   para los controles nativos —desplegables, scrollbars, calendarios—. Sin esto
+   heredaría el `dark` del panel y en modo claro los combos saldrían oscuros
+   sobre una página blanca. */
+#ukroot[data-theme="light"] { color-scheme: light; }
+#ukroot:not([data-theme="light"]) { color-scheme: dark; }
+
 .uk-headwrap { display: flex; flex-direction: column; gap: 8px; padding: 6px 0 10px; }
 .uk-head-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .uk-head-top .uk-brand { flex-shrink: 0; order: 0; }   /* logo primero (izquierda), sin comprimir */
