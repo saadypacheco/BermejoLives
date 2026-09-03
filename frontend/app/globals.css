@@ -11,6 +11,11 @@
   width: 100%; padding: 12px 14px; border-radius: 11px;
   background: rgba(255,255,255,.04); border: 1px solid var(--stroke-2);
   color: var(--txt); font-size: 14px; outline: none;
+  /* En el elemento y no sólo en :root. El desplegable de un `<select>` lo
+     dibuja el sistema operativo en una ventana propia, fuera de la página, y
+     Chrome decide su color mirando el `color-scheme` DEL SELECT. Heredarlo del
+     root funciona a veces y depende de la versión; declararlo acá, siempre. */
+  color-scheme: dark;
 }
 .adm-input:focus { border-color: var(--neon); }
 
@@ -31,13 +36,16 @@
  * claro cuando corresponde (ver uruku.css). */
 :root { color-scheme: dark; }
 
-select.adm-input option,
-select.adm-input optgroup,
-.uk-filters select option,
-select option {
-  background: var(--panel, #12161d);
+/* Y los `option` con color explícito, por si el color-scheme no alcanza (temas
+   de alto contraste de Windows, versiones viejas). Los valores van con
+   FALLBACK: si la variable no existe en ese contexto —que es justo lo que
+   rompía esto— la declaración entera se descartaría y volveríamos al blanco. */
+select option,
+select optgroup {
+  background-color: var(--panel, #12161d);
   color: var(--txt, #e8edf4);
 }
+select:not(.adm-input) { color-scheme: dark; }
 .vid-play-overlay {
   position: absolute; inset: 0; margin: auto; width: 46px; height: 46px; border-radius: 50%;
   background: rgba(255,255,255,.16); backdrop-filter: blur(8px); display: grid; place-items: center;

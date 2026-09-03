@@ -119,7 +119,11 @@
    para los controles nativos —desplegables, scrollbars, calendarios—. Sin esto
    heredaría el `dark` del panel y en modo claro los combos saldrían oscuros
    sobre una página blanca. */
-#ukroot[data-theme="light"] { color-scheme: light; }
+/* El sitio público sí cambia de tema. `select` incluido, porque el
+   color-scheme declarado en `.adm-input` es fijo y ahí adentro tiene que
+   seguir al tema. */
+#ukroot[data-theme="light"], #ukroot[data-theme="light"] select { color-scheme: light; }
+#ukroot[data-theme="light"] select option { background-color: #fff; color: #143a2b; }
 #ukroot:not([data-theme="light"]) { color-scheme: dark; }
 
 .uk-headwrap { display: flex; flex-direction: column; gap: 8px; padding: 6px 0 10px; }
