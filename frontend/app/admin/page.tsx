@@ -37,6 +37,7 @@ import { CatalogoPanel } from "@/components/catalogo-panel";
 import { ImageLightbox } from "@/components/image-lightbox";
 import type { Rubro } from "@/lib/types";
 import { precioFmt, MODALIDAD_LABEL, comoLlegarHref } from "@/lib/types";
+import { abiertoAhora } from "@/lib/horario";
 import { Check, X, Edit, Pin, WhatsApp, Verified } from "@/components/icons";
 
 export default function AdminPage() {
@@ -968,7 +969,7 @@ function TabSuscripciones({
 
 // ── Tab Comercios ─────────────────────────────────────────────────────────────
 
-type FiltroComercio = "todos" | "pendientes" | "verificados" | "incompletos";
+type FiltroComercio = "todos" | "pendientes" | "verificados" | "incompletos" | "sin-horario";
 type OrdenComercio = "recientes" | "alfabetico" | "estado";
 type VistaComercio = "lista" | "mapa";
 
@@ -1015,11 +1016,15 @@ function TabComercios({
 
   const nIncompletos = todos.filter((c) => incompletoDe(c).length > 0).length;
   const nVerificados = todos.filter((c) => c.verificado).length;
+  const sinHorario = (c: ComercioPorVerificar) =>
+    !((c as Record<string, unknown>).horario as string ?? "").trim();
+  const nSinHorario = todos.filter(sinHorario).length;
 
   // 1) filtro por estado (B incluye "incompletos")
   const porEstado = filtro === "todos" ? todos
     : filtro === "pendientes" ? todos.filter((c) => !c.verificado)
     : filtro === "verificados" ? todos.filter((c) => c.verificado)
+    : filtro === "sin-horario" ? todos.filter(sinHorario)
     : todos.filter((c) => incompletoDe(c).length > 0);
 
   // 2) buscador multi-campo (A): nombre + qué vende + dirección + contacto + rubro + ciudad
@@ -1049,6 +1054,10 @@ function TabComercios({
     { key: "pendientes", label: "Pendientes", n: pendientes.length },
     { key: "verificados", label: "Verificados", n: nVerificados },
     { key: "incompletos", label: "Incompletos", n: nIncompletos, amber: true },
+    // Su propio filtro y no un motivo más de "incompleto": cargar horarios es
+    // una pasada aparte —se hace de corrido, con la foto al lado— y mezclada
+    // con los sin nombre y los sin foto no se puede hacer de corrido.
+    { key: "sin-horario", label: "Sin horario", n: nSinHorario, amber: true },
   ];
 
   return (
@@ -1307,6 +1316,28 @@ function normalizarRed(valor: string, base: string): string | undefined {
   return base + v.replace(/^@+/, "");
 }
 
+const ULTIMO_HORARIO = "uruku_ultimo_horario";
+
+function ultimoHorario(): string {
+  if (typeof window === "undefined") return "";
+  try { return localStorage.getItem(ULTIMO_HORARIO) ?? ""; } catch { return ""; }
+}
+
+/** Los horarios que de verdad se repiten en Bermejo.
+ *
+ *  El texto va en el formato que `abiertoAhora` entiende: los días de un lado y
+ *  los dos turnos en el mismo segmento, para que la tarde no se aplique también
+ *  al domingo. Un horario que el parser no entiende es peor que ninguno —el
+ *  comprador no ve "Abierto ahora" y nadie se entera de por qué. */
+const HORARIOS_FRECUENTES: { label: string; texto: string }[] = [
+  { label: "8-12 · 14:30-20 (L-S)", texto: "Lun-Sáb 8:00-12:00 y 14:30-20:00" },
+  { label: "8-12 · 14:30-20 + Dom AM", texto: "Lun-Sáb 8:00-12:00 y 14:30-20:00 · Dom 8:00-12:00" },
+  { label: "Corrido 8-20 (L-S)", texto: "Lun-Sáb 8:00-20:00" },
+  { label: "Corrido 9-21 (todos)", texto: "Todos los días 9:00-21:00" },
+  { label: "9-13 · 15-19 (L-V)", texto: "Lun-Vie 9:00-13:00 y 15:00-19:00" },
+  { label: "24 horas", texto: "Todos los días 0:00-24:00" },
+];
+
 function ModalEditar({
   comercio, rubros, onClose, onDone,
   posicion = null, haySiguiente = false, hayAnterior = false, onSaltar,
@@ -1367,6 +1398,11 @@ function ModalEditar({
         email: email || undefined,
         rubro_slugs: rubroSlugs.length ? rubroSlugs : undefined,
       });
+      // Se recuerda para el "igual que el anterior" de la ficha siguiente.
+      // En localStorage y no en estado: el modal se remonta con `key` en cada
+      // comercio, así que cualquier estado propio se pierde justo cuando hace
+      // falta.
+      if (horario.trim()) { try { localStorage.setItem(ULTIMO_HORARIO, horario.trim()); } catch { /* modo privado */ } }
       return true;
     } catch {
       setErr("No se pudo guardar. Verificá el backend.");
@@ -1505,9 +1541,49 @@ function ModalEditar({
             <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Dirección
               <input className="adm-input" style={{ marginTop: 4 }} value={direccion} onChange={(e) => setDireccion(e.target.value)} placeholder="Calle, número, referencia" />
             </label>
-            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Horario
-              <input className="adm-input" style={{ marginTop: 4 }} value={horario} onChange={(e) => setHorario(e.target.value)} placeholder="Lun-Sáb 9-20 · Dom 10-14" />
-            </label>
+            {/* HORARIO: el campo más caro del proyecto.
+                Son 886 comercios y ninguno lo tiene, y es el dato que decide si
+                alguien camina hasta el local o no. Escribirlo a mano 886 veces
+                no lo hace nadie, así que acá se toca en vez de escribirse.
+                "Igual que el anterior" es el que más rinde: en una cuadra los
+                locales abren casi todos a la misma hora, y viniendo de a uno
+                con las flechas, el anterior suele ser el vecino. */}
+            <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Horario
+              <input className="adm-input" style={{ marginTop: 4 }} value={horario}
+                onChange={(e) => setHorario(e.target.value)} placeholder="Lun-Sáb 9-20 · Dom 10-14" />
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                {ultimoHorario() && ultimoHorario() !== horario && (
+                  <button type="button" className="mchip" style={{ cursor: "pointer", borderColor: "var(--neon)", color: "var(--neon)" }}
+                    onClick={() => setHorario(ultimoHorario())}
+                    title={ultimoHorario()}>
+                    ↩ Igual que el anterior
+                  </button>
+                )}
+                {HORARIOS_FRECUENTES.map((h) => (
+                  <button type="button" key={h.texto} className={`mchip ${horario === h.texto ? "active" : ""}`}
+                    style={{ cursor: "pointer" }} title={h.texto}
+                    onClick={() => setHorario(horario === h.texto ? "" : h.texto)}>
+                    {h.label}
+                  </button>
+                ))}
+                {horario && (
+                  <button type="button" className="mchip" style={{ cursor: "pointer" }} onClick={() => setHorario("")}>
+                    Limpiar
+                  </button>
+                )}
+              </div>
+              {/* Lo que el sitio va a entender de lo que quedó escrito. Si dice
+                  "no se entiende", el comprador no va a ver "Abierto ahora" —
+                  y eso hay que saberlo ACÁ, no descubrirlo en la ficha. */}
+              {horario.trim() && (
+                <div style={{ marginTop: 6, fontSize: 11.5,
+                              color: abiertoAhora(horario).estado === "desconocido" ? "var(--amber)" : "var(--txt-3)" }}>
+                  {abiertoAhora(horario).estado === "desconocido"
+                    ? "⚠️ No se entiende: el sitio no va a poder decir si está abierto"
+                    : `Ahora mismo: ${abiertoAhora(horario).estado}`}
+                </div>
+              )}
+            </div>
 
             {/* Las columnas y el endpoint existían desde el init; lo que no
                 había era dónde escribirlas, así que la ficha pública nunca
