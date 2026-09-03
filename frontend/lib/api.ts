@@ -759,3 +759,52 @@ export async function borrarVencimiento(id: string) {
   const res = await authFetch(`/admin/vencimientos/${id}`, { method: "DELETE" });
   return okDe(res, "borrar el vencimiento");
 }
+
+export type PropuestaRubro = { normalizado: string; veces: number; ejemplo?: string };
+export type RubroSimple = { slug: string; nombre: string; icono?: string | null };
+
+export async function getRubrosPropuestos(): Promise<{ propuestas: PropuestaRubro[]; rubros: RubroSimple[] }> {
+  const res = await authFetch("/admin/rubros/propuestos");
+  return res.json();
+}
+
+export async function crearRubro(body: {
+  slug: string; nombre: string; icono?: string; comercial?: boolean;
+  palabras?: string; resolver?: string;
+}) {
+  const res = await authFetch("/admin/rubros", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  return okDe(res, "crear el rubro");
+}
+
+export async function agregarPalabrasRubro(body: {
+  rubro_slug: string; palabras: string; resolver?: string;
+}) {
+  const res = await authFetch("/admin/rubros/palabras", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  return okDe(res, "agregar las palabras");
+}
+
+export type InformeRubros = {
+  comercios: number;
+  asignaciones_leidas: number;
+  asignaciones_en_tabla: number;
+  comercios_a_completar: number;
+  rubros_a_agregar: number;
+  salteados: number;
+  por_rubro: { slug: string; comercios: number }[];
+  detalle: { codigo: string | null; nombre: string | null; vende: string;
+             tiene: string[]; agregar: string[] }[];
+  detalle_recortado: number;
+  aplicado: boolean;
+  rubros_agregados?: number;
+};
+
+export async function completarRubros(aplicar: boolean, rubros = ""): Promise<InformeRubros> {
+  const qs = new URLSearchParams({ aplicar: String(aplicar) });
+  if (rubros) qs.set("rubros", rubros);
+  const res = await authFetch(`/admin/rubros/completar?${qs}`, { method: "POST" });
+  return okDe(res, "completar los rubros") as Promise<InformeRubros>;
+}

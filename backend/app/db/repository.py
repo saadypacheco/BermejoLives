@@ -70,6 +70,9 @@ class Repo(Protocol):
     def registrar_rubros_propuestos(self, textos: list[str], comercio_id: str | None) -> None: ...
     def resumen_rubros_propuestos(self, limite: int = 100) -> list[dict]: ...
     def sugerir_rubros_por_texto(self, texto: str) -> list[str]: ...
+    def crear_rubro(self, row: dict) -> dict: ...
+    def agregar_palabras_rubro(self, slug: str, patron: str) -> None: ...
+    def borrar_propuestas(self, normalizado: str) -> None: ...
     def get_diccionario_sinonimos(self) -> dict[str, str]: ...
     def revisar_sinonimos(self) -> str | None: ...
     def contar(self, tabla: str) -> int: ...
@@ -765,6 +768,28 @@ class SupabaseRepo:
                    "variantes": sorted(v["variantes"]), "comercios": len(v["comercios"])}
                   for v in conteo.values()]
         return sorted(salida, key=lambda x: -x["veces"])[:limite]
+
+    def crear_rubro(self, row: dict) -> dict:
+        """Alta de un rubro. `on conflict` sobre el slug: reactiva en vez de
+        fallar, porque el caso común es recrear uno que se había apagado."""
+        res = (self._db.table("rubros")
+               .upsert({**row, "activo": True}, on_conflict="slug").execute())
+        return res.data[0] if res.data else {}
+
+    def agregar_palabras_rubro(self, slug: str, patron: str) -> None:
+        """Una fila del diccionario. El patrón se guarda tal cual: es una regex
+        de Postgres y normalizarla acá cambiaría lo que significa."""
+        self._db.table("rubro_palabras").upsert(
+            {"rubro_slug": slug, "patron": patron},
+            on_conflict="rubro_slug,patron").execute()
+
+    def borrar_propuestas(self, normalizado: str) -> None:
+        """Saca de la cola las propuestas ya resueltas.
+
+        Sin esto, una categoría que se creó o se mandó como sinónimo sigue
+        apareciendo en la lista para siempre, y una cola que no baja se deja de
+        mirar — que es exactamente lo que le pasó a esta tabla hasta hoy."""
+        self._db.table("rubros_propuestos").delete().eq("normalizado", normalizado).execute()
 
     def sugerir_rubros_por_texto(self, texto: str) -> list[str]:
         """Rubros que se deducen de un texto libre, vía el diccionario en la base.

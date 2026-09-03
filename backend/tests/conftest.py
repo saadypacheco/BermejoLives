@@ -59,6 +59,8 @@ class FakeRepo:
         self.solicitudes_numero: dict[str, dict] = {} # id -> row
         self.rubros_propuestos: list[dict] = []       # categorías que la IA propuso y no existen
         self.vencimientos: dict[str, dict] = {}       # id -> fecha que si se pasa tumba algo
+        self.rubro_palabras: list[dict] = []          # {rubro_slug, patron} del diccionario
+        self.rubros_meta: dict[str, dict] = {}        # slug -> fila completa del rubro
         self.comercio_videos: list[dict] = []
         self.cotizaciones: list[dict] = [
             {"clave": "usd_bob", "etiqueta": "Dólar", "detalle": "1 USD", "valor": 0, "unidad": "Bs", "orden": 1},
@@ -774,6 +776,23 @@ class FakeRepo:
     def update_adorno(self, adorno_id, patch):
         self.adornos.setdefault(adorno_id, {"id": adorno_id}).update(patch)
         return self.adornos[adorno_id]
+
+    # ---- rubros (alta y diccionario) ----
+    def crear_rubro(self, row):
+        # `self.rubros` es slug -> id, igual que en el resto del fake. Los
+        # metadatos del rubro se guardan aparte para no cambiar esa forma, que
+        # usan veinte tests.
+        slug = row["slug"]
+        self.rubros.setdefault(slug, self._id("rub"))
+        self.rubros_meta[slug] = {**row, "id": self.rubros[slug], "activo": True}
+        return self.rubros_meta[slug]
+
+    def agregar_palabras_rubro(self, slug, patron):
+        self.rubro_palabras.append({"rubro_slug": slug, "patron": patron})
+
+    def borrar_propuestas(self, normalizado):
+        self.rubros_propuestos = [r for r in self.rubros_propuestos
+                                  if r.get("normalizado") != normalizado]
 
     # ---- vencimientos ----
     def list_vencimientos(self):

@@ -2,6 +2,8 @@
 
 Escrituras con service_role (backend). Requiere JWT de admin.
 """
+import re
+
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
@@ -1536,3 +1538,142 @@ def admin_borrar_vencimiento(
     repo.borrar_vencimiento(vid)
     logger.info("admin.vencimiento_borrado", id=vid, by=admin["email"])
     return {"ok": True}
+
+
+# ── Rubros: crear, resolver propuestas y completar ────────────────────────────
+
+@router.get("/admin/rubros/propuestos")
+def admin_rubros_propuestos(
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Las categorías que la IA pidió y no existen, por frecuencia.
+
+    Es la lista de qué falta MEDIDA y no supuesta: sale de vidrieras reales de
+    Bermejo. Leerla bien es lo que evita repetir los 19 rubros vacíos que hubo
+    que apagar en agosto — cada fila puede ser un rubro que falta o simplemente
+    otra forma de decir uno que ya existe, y son cosas distintas.
+    """
+    return {
+        "propuestas": repo.resumen_rubros_propuestos(60),
+        "rubros": repo.list_rubros(),
+    }
+
+
+class RubroNuevoBody(BaseModel):
+    slug: str
+    nombre: str
+    icono: str | None = None
+    orden: int | None = None
+    comercial: bool = True
+    # Las palabras del diccionario, separadas por coma. Se arma un solo patrón:
+    # el matcheo es una regex de Postgres y una alternancia es más barata que
+    # veinte filas.
+    palabras: str | None = None
+    # De qué propuesta salió, para sacarla de la cola.
+    resolver: str | None = None
+
+
+_RE_SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+@router.post("/admin/rubros")
+def admin_crear_rubro(
+    body: RubroNuevoBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    if not _RE_SLUG.match(body.slug):
+        raise HTTPException(
+            status_code=400,
+            detail="El slug va en minúsculas, sin tildes ni espacios: 'taller-mecanico'")
+    if not body.nombre.strip():
+        raise HTTPException(status_code=400, detail="Falta el nombre")
+
+    rubro = repo.crear_rubro({
+        "slug": body.slug, "nombre": body.nombre.strip(),
+        "icono": body.icono, "orden": body.orden or 99,
+        "comercial": body.comercial,
+    })
+    if body.palabras and body.palabras.strip():
+        repo.agregar_palabras_rubro(body.slug, _patron_de(body.palabras))
+    if body.resolver:
+        repo.borrar_propuestas(body.resolver)
+    logger.info("admin.rubro_creado", slug=body.slug, by=admin["email"])
+    return {"ok": True, "rubro": rubro}
+
+
+class SinonimoBody(BaseModel):
+    """Una propuesta que NO es un rubro nuevo, sino otra forma de decir uno que
+    ya existe: 'lubricentro' es neumáticos, 'bijouterie' es joyería."""
+    rubro_slug: str
+    palabras: str
+    resolver: str | None = None
+
+
+@router.post("/admin/rubros/palabras")
+def admin_agregar_palabras(
+    body: SinonimoBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    if not any(r["slug"] == body.rubro_slug for r in repo.list_rubros()):
+        raise HTTPException(status_code=400, detail=f"No existe el rubro {body.rubro_slug}")
+    if not body.palabras.strip():
+        raise HTTPException(status_code=400, detail="Faltan las palabras")
+    repo.agregar_palabras_rubro(body.rubro_slug, _patron_de(body.palabras))
+    if body.resolver:
+        repo.borrar_propuestas(body.resolver)
+    logger.info("admin.palabras_agregadas", rubro=body.rubro_slug, by=admin["email"])
+    return {"ok": True}
+
+
+def _patron_de(palabras: str) -> str:
+    r"""'lubricentro, engrase' -> '\m(lubricentro|engrase)'.
+
+    `\m` es inicio de palabra en Postgres, y es lo que evita que "bar" matchee
+    dentro de "barbería". Los caracteres especiales de regex se escapan: alguien
+    va a escribir un paréntesis alguna vez, y sin escapar rompe el patrón entero
+    —o peor, matchea de más— sin dar ningún error.
+    """
+    partes = []
+    for p in palabras.split(","):
+        t = " ".join(p.strip().lower().split())
+        if not t:
+            continue
+        partes.append(re.escape(t))
+    return r"\m(" + "|".join(dict.fromkeys(partes)) + ")"
+
+
+@router.post("/admin/rubros/completar")
+async def admin_completar_rubros(
+    aplicar: bool = Query(default=False),
+    rubros: str = Query(default=""),
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Simula —o aplica— los rubros que los productos de cada comercio sugieren.
+
+    Lo mismo que corre `scripts/completar_rubros.py`: la lógica vive en un solo
+    lugar, porque dos copias de una regla de clasificación se separan en semanas
+    y después nadie sabe cuál informe creer.
+    """
+    from app.services.rubros_auto import LecturaIncompleta
+    from app.services.rubros_auto import analizar as _analizar
+    from app.services.rubros_auto import aplicar as _aplicar
+
+    filtro = {s.strip() for s in rubros.split(",") if s.strip()} or None
+    try:
+        informe = await run_in_threadpool(_analizar, repo, filtro)
+    except LecturaIncompleta as exc:
+        # 409 y no 200-con-aviso: un aviso adentro de un informe se lee por
+        # arriba y el número grande se cree igual.
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    if not aplicar:
+        return {**{k: v for k, v in informe.items() if k != "_todos"}, "aplicado": False}
+
+    hechos = await run_in_threadpool(_aplicar, repo, informe)
+    logger.info("admin.rubros_completados", rubros=hechos, by=admin["email"])
+    return {**{k: v for k, v in informe.items() if k != "_todos"},
+            "aplicado": True, "rubros_agregados": hechos}
