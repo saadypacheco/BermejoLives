@@ -59,3 +59,57 @@ def test_palabras_a_un_rubro_existente(client, admin_token, repo):
     assert any(p["rubro_slug"] == "neumaticos" and "lubricentro" in p["patron"]
                for p in repo.rubro_palabras)
     assert repo.rubros_propuestos == []
+
+
+# ── La vista previa: el arreglo que vale más que la IA ────────────────────────
+
+def _comercio(repo, cid, nombre, vende, rubros=()):
+    # El fake guarda los rubros del comercio en `rubros`, que es de donde los
+    # lee `list_comercio_rubros_todos`.
+    return repo.seed_comercio(id=cid, nombre=nombre, prod_det_ia=vende,
+                              activo=True, rubros=list(rubros))
+
+
+def test_la_vista_previa_avisa_cuando_la_palabra_arrastra(client, admin_token, repo):
+    """El caso "papa frita": describe bien la comida rápida y está en todos los
+    kioscos. La palabra es correcta y el alcance es el problema."""
+    _comercio(repo, "k1", "Kiosko", "galletita, papa frita, caramelo", ["kiosco"])
+    _comercio(repo, "k2", "Kiosko dos", "papa frita, chicle", ["kiosco"])
+    _comercio(repo, "cr", "Snack", "hamburguesa, papa frita", ["comida-rapida"])
+
+    r = client.post("/admin/rubros/previsualizar",
+                    json={"palabras": "papa frita", "rubro_slug": "comida-rapida"},
+                    headers=_h(admin_token))
+    d = r.json()
+
+    assert d["alcanza"] == 3
+    assert d["ya_lo_tienen"] == 1          # el snack, que ya es comida rápida
+    assert d["nuevos"] == 2                # los dos kioscos, que NO deberían entrar
+    # Y dice con qué rubro conviven, que es la señal de que arrastra.
+    assert {"slug": "kiosco", "comercios": 2} in d["conviven_con"]
+
+
+def test_la_vista_previa_de_una_palabra_limpia(client, admin_token, repo):
+    _comercio(repo, "f1", "Funeraria San José", "cajon mortuorio, corona")
+    _comercio(repo, "k1", "Kiosko", "galletita, caramelo", ["kiosco"])
+
+    d = client.post("/admin/rubros/previsualizar",
+                    json={"palabras": "cajon mortuorio"}, headers=_h(admin_token)).json()
+
+    assert d["alcanza"] == 1 and d["nuevos"] == 1
+    assert d["conviven_con"] == []          # no arrastra a nadie de otro rubro
+
+
+def test_la_vista_previa_usa_el_patron_real(client, admin_token, repo):
+    """Tiene que probar EXACTAMENTE lo que se va a guardar. Una vista previa que
+    mira otra cosa que el clasificador tranquiliza sobre algo que no se probó."""
+    d = client.post("/admin/rubros/previsualizar",
+                    json={"palabras": "cajon mortuorio, velatorio"},
+                    headers=_h(admin_token)).json()
+    assert d["patron"] == _patron_de("cajon mortuorio, velatorio")
+
+
+def test_sin_palabras_no_previsualiza(client, admin_token):
+    r = client.post("/admin/rubros/previsualizar", json={"palabras": "  "},
+                    headers=_h(admin_token))
+    assert r.status_code == 400

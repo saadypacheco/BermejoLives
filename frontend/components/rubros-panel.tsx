@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   getRubrosPropuestos, crearRubro, agregarPalabrasRubro, completarRubros,
-  type PropuestaRubro, type RubroSimple, type InformeRubros,
+  previsualizarPalabras,
+  type PropuestaRubro, type RubroSimple, type InformeRubros, type PreviewPalabras,
 } from "@/lib/api";
 
 /** "Carnicería y pollería" → "carniceria-y-polleria". */
@@ -189,7 +190,24 @@ function Resolver({ propuesta, rubros, onListo, onError }: {
   const [palabras, setPalabras] = useState(propuesta.normalizado);
   const [destino, setDestino] = useState("");
   const [ocupado, setOcupado] = useState(false);
+  const [prev, setPrev] = useState<PreviewPalabras | null>(null);
   const slug = aSlug(nombre);
+
+  // Se prueba la palabra ANTES de guardarla, y sola: el error que más caro
+  // salió del diccionario no fue de criterio sino de alcance — una palabra
+  // correcta que además aparece en otro lado. "papa frita" describe bien la
+  // comida rápida y está en todos los kioscos.
+  //
+  // Eso es contable, no opinable, así que lo cuenta una consulta y no un
+  // modelo: un modelo puede advertirlo o no; esto acierta siempre.
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      if (!palabras.trim()) { setPrev(null); return; }
+      try { setPrev(await previsualizarPalabras(palabras, destino || slug)); }
+      catch { setPrev(null); }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [palabras, destino, slug]);
 
   async function nuevo() {
     setOcupado(true);
@@ -257,12 +275,49 @@ function Resolver({ propuesta, rubros, onListo, onError }: {
                  onChange={(e) => setPalabras(e.target.value)} />
         </label>
         {/* La lección más cara del diccionario, dicha donde se escribe. */}
-        <div style={{ fontSize: 11.5, color: "var(--amber)", marginTop: 6 }}>
-          Evitá palabras que aparezcan en otros rubros. &ldquo;pollo&rdquo; lo vende media
-          comida rápida, &ldquo;detergente&rdquo; cualquier almacén, y &ldquo;bar&rdquo; está
-          dentro de &ldquo;barbería&rdquo;. Van las formas compuestas, que nombran el
-          negocio y no el producto suelto.
+        <div style={{ fontSize: 11.5, color: "var(--txt-3)", marginTop: 6 }}>
+          Van las formas compuestas, que nombran el negocio y no el producto suelto:
+          &ldquo;pollo&rdquo; lo vende media comida rápida y &ldquo;bar&rdquo; está dentro de
+          &ldquo;barbería&rdquo;.
         </div>
+
+        {prev && (
+          <div style={{ marginTop: 8, padding: "10px 12px", borderRadius: 10,
+                        border: "1px solid var(--border)", fontSize: 12.5 }}>
+            <div>
+              Alcanza <b>{prev.alcanza}</b> comercios
+              {prev.ya_lo_tienen > 0 && <> · {prev.ya_lo_tienen} ya lo tienen</>}
+              {" · "}<b style={{ color: "var(--neon)" }}>{prev.nuevos} nuevos</b>
+              {prev.recortado && <span style={{ color: "var(--txt-3)" }}> (tope de 200)</span>}
+            </div>
+
+            {/* Si los que alcanzaría son casi todos de OTRO rubro, la palabra
+                está arrastrando y no clasificando. Es la señal que buscamos. */}
+            {prev.conviven_con.length > 0 && (
+              <div style={{ marginTop: 6, color: "var(--amber)" }}>
+                ⚠️ De los nuevos, ya están en:{" "}
+                {prev.conviven_con.map((c) => `${c.slug} (${c.comercios})`).join(" · ")}
+                <div style={{ color: "var(--txt-3)", marginTop: 3 }}>
+                  Si son casi todos del mismo rubro ajeno, la palabra está arrastrando.
+                </div>
+              </div>
+            )}
+
+            {prev.ejemplos.length > 0 && (
+              <div style={{ marginTop: 8, maxHeight: 150, overflowY: "auto" }}>
+                {prev.ejemplos.map((e, i) => (
+                  <div key={`${e.codigo}-${i}`} style={{ padding: "3px 0", color: "var(--txt-2)" }}>
+                    <b>{e.nombre || "Comercio"}</b>
+                    {e.otros_rubros.length > 0 && (
+                      <span style={{ color: "var(--amber)" }}> [{e.otros_rubros.join(", ")}]</span>
+                    )}
+                    <span style={{ color: "var(--txt-3)" }}> — {e.vende}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

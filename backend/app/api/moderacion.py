@@ -1677,3 +1677,53 @@ async def admin_completar_rubros(
     logger.info("admin.rubros_completados", rubros=hechos, by=admin["email"])
     return {**{k: v for k, v in informe.items() if k != "_todos"},
             "aplicado": True, "rubros_agregados": hechos}
+
+
+class PreviewBody(BaseModel):
+    palabras: str
+    rubro_slug: str | None = None
+
+
+@router.post("/admin/rubros/previsualizar")
+async def admin_previsualizar_palabras(
+    body: PreviewBody,
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """A qué comercios alcanzaría esta palabra, antes de guardarla.
+
+    Es la respuesta a la pregunta que más caro salió del diccionario, y no es
+    de criterio sino de alcance: una palabra correcta que además aparece en otro
+    lado. "papa frita" describe bien la comida rápida y está en todos los
+    kioscos; "bar" está dentro de "barbería".
+
+    Eso es contable, no opinable — por eso lo cuenta una consulta y no un
+    modelo. Un modelo puede advertirlo o no; esto acierta siempre.
+    """
+    if not body.palabras.strip():
+        raise HTTPException(status_code=400, detail="Faltan las palabras")
+    patron = _patron_de(body.palabras)
+    filas = await run_in_threadpool(repo.previsualizar_patron, patron, body.rubro_slug)
+
+    nuevos = [f for f in filas if not f.get("ya_lo_tiene")]
+    # Con qué OTROS rubros conviven los que alcanzaría. Si los nuevos son todos
+    # de un mismo rubro ajeno, la palabra está arrastrando y no clasificando —
+    # que es exactamente lo que pasaba con "papa frita" y los kioscos.
+    ajenos: dict[str, int] = {}
+    for f in nuevos:
+        for slug in (f.get("otros_rubros") or []):
+            ajenos[slug] = ajenos.get(slug, 0) + 1
+
+    return {
+        "patron": patron,
+        "alcanza": len(filas),
+        "ya_lo_tienen": len(filas) - len(nuevos),
+        "nuevos": len(nuevos),
+        "conviven_con": sorted(({"slug": s, "comercios": n} for s, n in ajenos.items()),
+                               key=lambda x: -x["comercios"])[:8],
+        "ejemplos": [{"codigo": f.get("codigo"), "nombre": f.get("nombre"),
+                      "vende": f.get("vende"), "otros_rubros": f.get("otros_rubros") or []}
+                     for f in nuevos[:15]],
+        # El tope de la función SQL. Sin decirlo, 200 se lee como "son 200".
+        "recortado": len(filas) >= 200,
+    }

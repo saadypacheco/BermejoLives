@@ -790,6 +790,37 @@ class FakeRepo:
     def agregar_palabras_rubro(self, slug, patron):
         self.rubro_palabras.append({"rubro_slug": slug, "patron": patron})
 
+    def previsualizar_patron(self, patron, rubro=None):
+        """Mismo texto que usa la clasificación real: productos + subcategoría +
+        nombre, sin tildes y en minúsculas."""
+        import re as _re
+        import unicodedata as _ud
+
+        def norm(t):
+            t = "".join(ch for ch in _ud.normalize("NFD", t or "")
+                        if _ud.category(ch) != "Mn")
+            return t.lower()
+
+        salida = []
+        for c in self.comercios.values():
+            if not c.get("activo", True):
+                continue
+            texto = norm(" ".join(filter(None, [c.get("prod_det_ia"), c.get("subcategoria"),
+                                                c.get("nombre")])))
+            # \m y \M de Postgres (inicio y fin de palabra) son \b en Python.
+            py = patron.replace("\\m", "\\b").replace("\\M", "\\b")
+            if not _re.search(py, texto):
+                continue
+            suyos = [r["slug"] for r in self.list_comercio_rubros_todos()
+                     if r["comercio_id"] == c["id"]]
+            salida.append({
+                "comercio_id": c["id"], "codigo": c.get("codigo"),
+                "nombre": c.get("nombre"), "vende": (c.get("prod_det_ia") or "")[:90],
+                "ya_lo_tiene": bool(rubro and rubro in suyos),
+                "otros_rubros": [s for s in suyos if s != rubro],
+            })
+        return salida
+
     def borrar_propuestas(self, normalizado):
         self.rubros_propuestos = [r for r in self.rubros_propuestos
                                   if r.get("normalizado") != normalizado]

@@ -808,3 +808,18 @@ export async function completarRubros(aplicar: boolean, rubros = ""): Promise<In
   const res = await authFetch(`/admin/rubros/completar?${qs}`, { method: "POST" });
   return okDe(res, "completar los rubros") as Promise<InformeRubros>;
 }
+
+export type PreviewPalabras = {
+  patron: string; alcanza: number; ya_lo_tienen: number; nuevos: number;
+  conviven_con: { slug: string; comercios: number }[];
+  ejemplos: { codigo: string | null; nombre: string | null; vende: string; otros_rubros: string[] }[];
+  recortado: boolean;
+};
+
+export async function previsualizarPalabras(palabras: string, rubro_slug?: string): Promise<PreviewPalabras> {
+  const res = await authFetch("/admin/rubros/previsualizar", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ palabras, rubro_slug: rubro_slug || null }),
+  });
+  return okDe(res, "previsualizar") as Promise<PreviewPalabras>;
+}

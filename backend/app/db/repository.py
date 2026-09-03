@@ -72,6 +72,7 @@ class Repo(Protocol):
     def sugerir_rubros_por_texto(self, texto: str) -> list[str]: ...
     def crear_rubro(self, row: dict) -> dict: ...
     def agregar_palabras_rubro(self, slug: str, patron: str) -> None: ...
+    def previsualizar_patron(self, patron: str, rubro: str | None) -> list[dict]: ...
     def borrar_propuestas(self, normalizado: str) -> None: ...
     def get_diccionario_sinonimos(self) -> dict[str, str]: ...
     def revisar_sinonimos(self) -> str | None: ...
@@ -782,6 +783,22 @@ class SupabaseRepo:
         self._db.table("rubro_palabras").upsert(
             {"rubro_slug": slug, "patron": patron},
             on_conflict="rubro_slug,patron").execute()
+
+    def previsualizar_patron(self, patron: str, rubro: str | None = None) -> list[dict]:
+        """A qué comercios alcanzaría este patrón, antes de guardarlo.
+
+        Se delega a SQL y no se reimplementa acá porque tiene que usar la MISMA
+        normalización que `rubros_sugeridos`, que es la que clasifica de verdad.
+        Una vista previa que mira otra cosa que el clasificador tranquiliza
+        sobre algo que no se probó.
+        """
+        try:
+            res = self._db.rpc("previsualizar_patron",
+                               {"p_patron": patron, "p_rubro": rubro}).execute()
+            return list(res.data or [])
+        except Exception:  # noqa: BLE001
+            logger.warning("previsualizar_patron.fallo", patron=patron, exc_info=True)
+            return []
 
     def borrar_propuestas(self, normalizado: str) -> None:
         """Saca de la cola las propuestas ya resueltas.
