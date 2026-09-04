@@ -56,6 +56,69 @@ export async function buscarComercios(f: FiltrosBusqueda, limit = 24, offset = 0
  */
 export type FiltrosDisponibles = { horario: boolean; zona: boolean; ofertas: boolean };
 
+/** Cuánto hay de cada cosa que el home promete.
+ *
+ * POR QUÉ EXISTE
+ * ==============
+ * El home decía "Comercios verificados", "Locales destacados" y "Promos
+ * exclusivas" desde el primer día. Con cero verificados y cero destacados, eso
+ * no es una promesa: es una lista de lo que falta, firmada por nosotros. Y en
+ * la etapa de captación un comerciante que entra, lee "promos exclusivas" y no
+ * ve ninguna, aprende que la plataforma está vacía — que es exactamente lo que
+ * no queremos que aprenda.
+ *
+ * Así que cada bloque aparece cuando hay volumen detrás. Los umbrales están más
+ * abajo, en un solo lugar, y son altos a propósito: mostrar tres ofertas es
+ * peor que no mostrar la sección.
+ */
+export type Volumenes = {
+  ofertas: number;
+  verificados: number;
+  destacados: number;
+  promos: number;
+  lugares: number;
+};
+
+/** Desde cuánto vale la pena prometer cada cosa. Un solo lugar para cambiarlos.
+ *
+ *  No son redondeos: son el punto donde la sección deja de contar lo que falta
+ *  y empieza a contar lo que hay. */
+export const UMBRALES: Volumenes = {
+  ofertas: 100,
+  verificados: 300,
+  destacados: 50,
+  promos: 50,
+  lugares: 8,
+};
+
+const SIN_VOLUMEN: Volumenes = { ofertas: 0, verificados: 0, destacados: 0, promos: 0, lugares: 0 };
+
+export async function getVolumenes(): Promise<Volumenes> {
+  if (!hasSupabase) return SIN_VOLUMEN;
+  const contar = async (armar: () => any): Promise<number> => {
+    try { return (await armar()).count ?? 0; } catch { return 0; }
+  };
+  const pub = () => supabase.from("publicaciones")
+    .select("id", { count: "exact", head: true }).eq("estado", "aprobado").eq("activo", true);
+  const com = () => supabase.from("comercios")
+    .select("id", { count: "exact", head: true }).eq("activo", true);
+  try {
+    const [ofertas, verificados, destacados, promos, lugares] = await Promise.all([
+      contar(() => pub()),
+      contar(() => com().eq("verificado", true)),
+      contar(() => com().eq("destacado", true)),
+      contar(() => pub().not("descuento_pct", "is", null)),
+      contar(() => supabase.from("lugares")
+        .select("id", { count: "exact", head: true }).eq("activo", true)),
+    ]);
+    return { ofertas, verificados, destacados, promos, lugares };
+  } catch {
+    // Ante un error NO se muestra nada. Es al revés que en los filtros: allá
+    // esconder de más molesta, acá prometer de más miente.
+    return SIN_VOLUMEN;
+  }
+}
+
 const NINGUNO: FiltrosDisponibles = { horario: false, zona: false, ofertas: false };
 
 export async function getFiltrosDisponibles(): Promise<FiltrosDisponibles> {

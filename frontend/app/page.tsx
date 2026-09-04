@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
 import { Ic } from "@/components/uruku-ui";
-import { getFeed, getVideosPromo, getRedes, getLugaresPublicos } from "@/lib/data";
+import { getFeed, getVideosPromo, getRedes, getLugaresPublicos, getVolumenes, UMBRALES } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { precioFmt } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function InicioPage() {
-  const [{ ciudad }, feed, videos, redes, lugares] = await Promise.all([
+  const [{ ciudad }, feed, videos, redes, lugares, vol] = await Promise.all([
     ciudadActual(), getFeed(12), getVideosPromo(8), getRedes(), getLugaresPublicos(12),
+    getVolumenes(),
   ]);
   const nombre = ciudad?.nombre ?? "tu ciudad";
   // Las fotos vienen de la ciudad elegida. Si todavía no tiene material propio
@@ -53,27 +54,85 @@ export default async function InicioPage() {
             </div>
           </div>
 
+          {/* Lo que le hablaba al comerciante era genérico —"más visibilidad,
+              sin complicaciones"— y eso lo dice cualquier cartel. Lo que URUKU
+              tiene y la competencia no es concreto: el cliente lo encuentra
+              buscando lo que vende, y le escribe al WhatsApp directo. Sin
+              comisión, porque la plataforma no se mete en la venta. */}
           <aside className="uk-quote-card uk-hero-cta">
             <h3>¿Tenés un comercio?</h3>
-            <p>Sumate a Uruku y llegá a más personas en {nombre}.</p>
+            <p>En {nombre} te buscan por lo que vendés, no por el nombre del local.</p>
             <ul>
-              <li>Aparecé en el mapa</li>
-              <li>Fotos, videos y ofertas</li>
-              <li>Más visibilidad, sin complicaciones</li>
+              <li>Te encuentran buscando <b>tus productos</b></li>
+              <li>Te escriben al <b>WhatsApp</b>, directo y sin intermediarios</li>
+              <li>Tu local <b>en el mapa</b>, con fotos y horario</li>
+              <li><b>Sin comisión</b> por venta: cobrás vos, como siempre</li>
             </ul>
-            <Link href="/autoregistro" className="uk-panel-btn">Publicá tu negocio <span>→</span></Link>
+            <Link href="/autoregistro" className="uk-panel-btn">Publicá tu negocio gratis <span>→</span></Link>
           </aside>
         </div>
       </section>
 
-      {/* ===== Features (cards) ===== */}
-      <section className="uk-container uk-feats">
-        <div className="uk-feat"><span className="uk-feat-ic"><Ic d="M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" /></span><b>Ofertas<br />diarias</b></div>
-        <div className="uk-feat"><span className="uk-feat-ic"><Ic d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0" /></span><b>Comercios<br />verificados</b></div>
-        <div className="uk-feat"><span className="uk-feat-ic"><Ic d="M12 15a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8.2 13.9 7 22l5-3 5 3-1.2-8.1" /></span><b>Locales<br />destacados</b></div>
-        <div className="uk-feat"><span className="uk-feat-ic"><Ic d="M19 5 5 19M6.5 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM17.5 14.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" /></span><b>Promos<br />exclusivas</b></div>
-        <div className="uk-feat"><span className="uk-feat-ic"><Ic d="M4 12a8 8 0 0 1 16 0M4 12v3a2 2 0 0 0 2 2h1v-6H5a1 1 0 0 0-1 1zM20 12v3a2 2 0 0 1-2 2h-1v-6h2a1 1 0 0 1 1 1z" /></span><b>Atención<br />24/7</b></div>
-      </section>
+      {/* ===== Features (cards) =====
+          Cada una aparece cuando hay volumen detrás, y los umbrales son altos a
+          propósito ([data.ts] UMBRALES).
+
+          Decían "Comercios verificados · Locales destacados · Promos
+          exclusivas" desde el primer día, con cero de cada uno. Eso no es una
+          promesa: es la lista de lo que falta, firmada por nosotros. Y el que
+          más la lee no es el comprador — es el comerciante que estamos
+          tratando de sumar, que entra, no ve ninguna promo y aprende que la
+          plataforma está vacía.
+
+          "Atención 24/7" también se fue: no había nadie atendiendo a las tres
+          de la mañana, y era la única de las cinco que no se arregla cargando
+          datos. */}
+      {(() => {
+        const feats = [
+          vol.ofertas >= UMBRALES.ofertas && {
+            k: "of", d: "M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01",
+            t: <>Ofertas<br />diarias</> },
+          vol.verificados >= UMBRALES.verificados && {
+            k: "ver", d: "M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0",
+            t: <>Comercios<br />verificados</> },
+          vol.destacados >= UMBRALES.destacados && {
+            k: "des", d: "M12 15a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8.2 13.9 7 22l5-3 5 3-1.2-8.1",
+            t: <>Locales<br />destacados</> },
+          vol.promos >= UMBRALES.promos && {
+            k: "pro", d: "M19 5 5 19M6.5 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM17.5 14.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z",
+            t: <>Promos<br />exclusivas</> },
+        ].filter(Boolean) as { k: string; d: string; t: React.ReactNode }[];
+        if (feats.length === 0) return null;
+        return (
+          <section className="uk-container uk-feats">
+            {feats.map((f) => (
+              <div key={f.k} className="uk-feat">
+                <span className="uk-feat-ic"><Ic d={f.d} /></span><b>{f.t}</b>
+              </div>
+            ))}
+          </section>
+        );
+      })()}
+
+      {/* ===== Lo que gana cada uno, arriba de todo =====
+
+          Sube desde el pie, donde no lo veía nadie. Y es el canal de WhatsApp
+          que YA existe, no un registro nuevo: URUKU no tiene cuentas de
+          comprador —los guardados son locales del teléfono— así que ofrecer
+          "registrate" sería prometer una pantalla que no existe. El canal, en
+          cambio, es donde la gente de Bermejo ya mira las ofertas. */}
+      {canalWa && (
+        <section className="uk-container uk-canal">
+          <div>
+            <h3>📢 Enterate antes que nadie</h3>
+            <p>
+              Mercadería nueva, ofertas y comercios que abren en {nombre}, en tu WhatsApp.
+              Sin registrarte y sin dar tus datos.
+            </p>
+          </div>
+          <a href={canalWa} target="_blank" rel="noopener">Unirme al canal</a>
+        </section>
+      )}
 
       {/* ===== Ofertas destacadas ===== */}
       {cards.length > 0 && (
@@ -99,8 +158,10 @@ export default async function InicioPage() {
         </section>
       )}
 
-      {/* ===== Mercados y galerías (usa los lugares cargados) ===== */}
-      {lugares.length > 0 && (
+      {/* ===== Mercados y galerías =====
+          Con tres mercados cargados la sección cuenta lo que falta, igual que
+          las tarjetas de arriba. Aparece a partir de UMBRALES.lugares. */}
+      {lugares.length > 0 && vol.lugares >= UMBRALES.lugares && (
         <section className="uk-container uk-section">
           <div className="uk-section-head">
             <h2>🏬 Mercados y galerías de {nombre}</h2>
@@ -187,16 +248,6 @@ export default async function InicioPage() {
         </div>
       </section>
 
-      {/* ===== Canal de novedades ===== */}
-      {canalWa && (
-        <section className="uk-container uk-canal">
-          <div>
-            <h3>📢 Canal de novedades</h3>
-            <p>Recibí ofertas, nuevos comercios y eventos de {nombre}.</p>
-          </div>
-          <a href={canalWa} target="_blank" rel="noopener">Unirme al canal</a>
-        </section>
-      )}
     </UrukuShell>
   );
 }

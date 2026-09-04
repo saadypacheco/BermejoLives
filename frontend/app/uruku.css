@@ -152,6 +152,22 @@
 /* Logo completo URUKU (imagen transparente, sirve claro y oscuro). max-width evita
    que desborde su columna en pantallas intermedias (se achica solo). */
 .uk-brand-full { height: 72px; width: auto; max-width: 100%; display: block; }
+
+/* En el celular el logo baja a 46px, y NO es una decisión de estilo.
+   A 72px el wordmark mide unos 200px de ancho; el selector de ciudad, Ingresar
+   y el interruptor de tema piden otros 230. En una pantalla de 390 no entran,
+   así que la fila se partía y "Bermejo · Ingresar" caía un renglón más abajo,
+   con el logo solo arriba ocupando una franja vacía. Se veía en todo el sitio
+   porque el header es uno solo.
+   El `min-width: 0` es la otra mitad: sin él un hijo de flex no baja de su
+   ancho de contenido y sigue empujando la fila aunque el logo achique. */
+@media (max-width: 560px) {
+  .uk-brand-full { height: 46px; }
+  .uk-head-top { flex-wrap: wrap; gap: 8px; }
+  .uk-head-top .uk-brand { min-width: 0; }
+  .uk-head-actions { gap: 6px; min-width: 0; }
+  .uk-head-actions .uk-pill { padding: 5px 8px; font-size: 11.5px; }
+}
 .uk-footer-brand .uk-brand-full { height: 48px; }
 .uk-red { color: var(--uk-red); font-weight: 700; }
 
