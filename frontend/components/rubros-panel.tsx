@@ -226,7 +226,7 @@ function Resolver({ propuesta, rubros, onListo, onError }: {
   async function nuevo() {
     setOcupado(true);
     try {
-      await crearRubro({ slug, nombre, icono: icono || undefined, comercial,
+      await crearRubro({ slug, nombre, icono: icono.trim() || "🏷", comercial,
                          palabras, resolver: propuesta.normalizado });
       if (prev && prev.nuevos > 0) {
         const r = await aplicarPatron(slug, palabras);
@@ -265,9 +265,15 @@ function Resolver({ propuesta, rubros, onListo, onError }: {
         <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>Es un rubro nuevo</div>
         <input className="adm-input" value={nombre} onChange={(e) => setNombre(e.target.value)}
                placeholder="Nombre visible" style={{ marginBottom: 6 }} />
-        <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-          <input className="adm-input" style={{ width: 70 }} value={icono}
-                 onChange={(e) => setIcono(e.target.value)} placeholder="🥩" />
+        {/* El ejemplo del emoji era 🥩 y se leía como si el rubro ya viniera
+            marcado "carne": un placeholder con contenido propio no se distingue
+            de un valor cargado. Va 🏷, que es lo que un rubro ES y no confunde
+            con ninguno en particular. */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
+          <span style={{ fontSize: 11.5, color: "var(--txt-3)" }}>Emoji</span>
+          <input className="adm-input" style={{ width: 64 }} value={icono}
+                 aria-label="Emoji del rubro" title="Emoji del rubro (opcional)"
+                 onChange={(e) => setIcono(e.target.value)} placeholder="🏷" />
           <span style={{ alignSelf: "center", fontSize: 11.5, color: "var(--txt-3)",
                          fontFamily: "monospace" }}>{slug}</span>
         </div>
