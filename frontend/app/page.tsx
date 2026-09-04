@@ -31,12 +31,18 @@ export default async function InicioPage() {
           <div>
             <h1>Descubrí <span>{nombre}</span><br />como nunca antes</h1>
             <p>Explorá comercios locales, ofertas increíbles y todo lo que necesitás cerca de vos.</p>
+            {/* Se fue "Explorá el mapa". Prometía explorar y entregaba una
+                pantalla vacía: sin búsqueda el mapa dibuja sólo destacados y
+                los que pagan —la primera vista es el cupo que se vende— y hoy
+                no paga nadie, así que quedaba la ciudad sin un solo pin y otro
+                buscador pidiendo que escribas.
+
+                La puerta es el buscador de arriba: se escribe una vez y se cae
+                en los resultados, que arrancan en lista (más liviana en el
+                celular que el mapa, que baja la librería y cien tiles) con el
+                interruptor a mapa a un toque. */}
             <div className="uk-hero-actions">
-              <Link href="/buscar?vista=mapa" className="uk-btn uk-btn-primary">
-                Explorá el mapa
-                <Ic d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3zM9 3v15M15 6v15" />
-              </Link>
-              <Link href="/buscar?vista=mapa&of=1" className="uk-btn uk-btn-secondary">
+              <Link href="/buscar?of=1" className="uk-btn uk-btn-primary">
                 <Ic d="M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" />
                 Ofertas del día
               </Link>
@@ -74,7 +80,7 @@ export default async function InicioPage() {
         <section className="uk-container uk-section">
           <div className="uk-section-head">
             <h2>Ofertas destacadas</h2>
-            <Link href="/buscar?vista=mapa&of=1">Ver todas →</Link>
+            <Link href="/buscar?of=1">Ver todas →</Link>
           </div>
           <div className="uk-offers">
             {cards.slice(0, 4).map((o) => (
@@ -98,17 +104,18 @@ export default async function InicioPage() {
         <section className="uk-container uk-section">
           <div className="uk-section-head">
             <h2>🏬 Mercados y galerías de {nombre}</h2>
-            <Link href="/buscar?vista=mapa">Ver en el mapa →</Link>
           </div>
           <div className="uk-rail">
             {lugares.map((l) => (
-              <Link key={l.id} href="/buscar?vista=mapa" className="uk-lugar-card">
+              // Sin destino hasta que se pueda filtrar POR mercado: el enlace
+              // prometía "ver este mercado en el mapa" y abría el mapa general.
+              <div key={l.id} className="uk-lugar-card">
                 <div className="uk-lugar-img" style={l.portada_thumb_url ? { backgroundImage: `url('${l.portada_thumb_url}')` } : undefined}>
                   {!l.portada_thumb_url && <span>🏬</span>}
                 </div>
                 <b>{l.nombre}</b>
                 <small>{l.n_comercios} {l.n_comercios === 1 ? "local" : "locales"}</small>
-              </Link>
+              </div>
             ))}
           </div>
         </section>
@@ -122,9 +129,8 @@ export default async function InicioPage() {
           {novedades.length > 0 && <div className="uk-statrow"><span>✨ Novedades</span><strong>{novedades.length}</strong></div>}
           {videos.length > 0 && <div className="uk-statrow"><span>🎬 Recorridos</span><strong>{videos.length}</strong></div>}
           {ofertas.length === 0 && novedades.length === 0 && videos.length === 0 && (
-            <p style={{ color: "var(--uk-ink-soft)", fontSize: 14, margin: "4px 0 0" }}>Explorá el mapa y descubrí los comercios de {nombre}.</p>
+            <p style={{ color: "var(--uk-ink-soft)", fontSize: 14, margin: "4px 0 0" }}>Buscá lo que necesitás y descubrí los comercios de {nombre}.</p>
           )}
-          <Link href="/buscar?vista=mapa" className="uk-panel-btn">Explorá el mapa <span>→</span></Link>
         </article>
 
         <article className="uk-panel uk-discover" style={{ backgroundImage: `url('${fotoImg}')` }}>

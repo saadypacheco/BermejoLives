@@ -108,8 +108,7 @@ export async function UrukuShell({
               <div className="uk-foot-col">
                 <h4>Descubrí</h4>
                 <Link href="/" className="uk-foot-link"><Ic d="M3 11l9-8 9 8M5 10v10h14V10" /><span>Inicio</span><i>›</i></Link>
-                <Link href="/buscar?vista=mapa" className="uk-foot-link"><Ic d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3zM9 3v15M15 6v15" /><span>Mapa</span><i>›</i></Link>
-                <Link href="/buscar?vista=mapa&of=1" className="uk-foot-link"><Ic d="M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" /><span>Ofertas</span><i>›</i></Link>
+                <Link href="/buscar?of=1" className="uk-foot-link"><Ic d="M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" /><span>Ofertas</span><i>›</i></Link>
                 <Link href="/buscar" className="uk-foot-link"><Ic d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3" /><span>Buscar</span><i>›</i></Link>
                 <Link href="/guardados" className="uk-foot-link"><Ic d="M6 3h12v18l-6-4-6 4V3z" /><span>Guardados</span><i>›</i></Link>
               </div>
