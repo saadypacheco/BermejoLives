@@ -939,6 +939,10 @@ class FakeRepo:
                 "principal_nombre": (principal or "").title(),
                 "sugeridos": sug, "ya_tiene": self.get_comercio_rubros(cid),
                 "portada": c.get("portada_thumb_url"),
+                # Lo que el negocio dice que ES: nombre + subcategoría, sin los
+                # productos. De acá sale el principal.
+                "identidad": self.sugerir_rubros_por_texto(
+                    " ".join(filter(None, [c.get("nombre"), c.get("subcategoria")]))),
             })
         return salida[:limite]
 

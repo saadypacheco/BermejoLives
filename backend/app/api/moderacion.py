@@ -1865,9 +1865,23 @@ async def admin_recalcular_principal(
         tenia = list(f.get("ya_tiene") or [])
 
         if modo == "reemplazar":
-            # Más específico primero: es el criterio con el que está numerada la
-            # taxonomía, y el mismo que usa `reparar_rubro_principal`.
-            queda = sorted(sugeridos, key=lambda x: posicion.get(x, 999))
+            # El PRINCIPAL sale de lo que el negocio dice que ES —nombre y
+            # subcategoría— y no de la lista de productos. Un kiosco que vende
+            # gaseosa es un kiosco, no una bebida; elegir por el orden de la
+            # taxonomía lo dejaba en Bebidas, porque los rubros creados después
+            # quedaron al final de esa numeración y pierden con los genéricos
+            # viejos. La identidad es siempre un subconjunto de las sugerencias:
+            # no agrega rubros, sólo decide cuál manda.
+            identidad = [x for x in (f.get("identidad") or []) if x in sugeridos]
+            por_orden = sorted(sugeridos, key=lambda x: posicion.get(x, 999))
+            if identidad:
+                cabeza = sorted(identidad, key=lambda x: posicion.get(x, 999))[0]
+                queda = [cabeza] + [x for x in por_orden if x != cabeza]
+            else:
+                # Nombre genérico y sin subcategoría: no hay nada que diga qué
+                # es, así que se cae al orden de la taxonomía, que es lo que
+                # había. Estos son los que conviene mirar a mano.
+                queda = por_orden
         else:
             destino = sugeridos[0]
             queda = [destino] + [s for s in tenia if s != destino]

@@ -316,3 +316,50 @@ def test_reemplazar_alcanza_tambien_a_los_ambiguos(client, repo, admin_token):
 def test_un_modo_inventado_se_rechaza(client, admin_token):
     r = client.post("/admin/rubros/recalcular-principal?modo=magia", headers=_h(admin_token))
     assert r.status_code == 400
+
+
+def test_el_principal_sale_de_lo_que_el_negocio_ES_no_de_lo_que_vende(client, repo, admin_token):
+    """El caso que apareció en la vista previa real, ocho veces seguidas.
+
+    Un kiosco que vende gaseosa es un kiosco. Elegir el principal por el orden
+    de la taxonomía lo dejaba en Bebidas, porque los rubros creados después
+    —kiosco, hoja de coca, carnicería— quedaron al final de esa numeración y
+    pierden contra los genéricos viejos.
+
+    La subcategoría dice qué es el negocio, y está cargada en todos."""
+    c = repo.seed_comercio(slug="kiosquito", nombre="Comercio", subcategoria="zapatilla",
+                           prod_det_ia="remera, pantalon", activo=True)
+    repo.set_comercio_rubros(c["id"], [repo.rubros["ferreteria"]])
+
+    r = client.post("/admin/rubros/recalcular-principal?modo=reemplazar", headers=_h(admin_token))
+    fila = next(x for x in r.json()["detalle"] if x["comercio_id"] == c["id"])
+    # "zapatilla" está en la subcategoría → Calzado manda, aunque los productos
+    # digan ropa y la taxonomía la ponga antes.
+    assert fila["queda"][0] == "Calzado"
+    assert "Ropa" in fila["queda"]
+
+
+def test_sin_identidad_cae_al_orden_de_la_taxonomia(client, repo, admin_token):
+    """Nombre genérico y sin subcategoría: no hay nada que diga qué es. No se
+    inventa — se usa el orden de la taxonomía, y esos son los que conviene
+    mirar a mano."""
+    c = repo.seed_comercio(slug="gen", nombre="Comercio", subcategoria=None,
+                           prod_det_ia="zapatilla, remera", activo=True)
+    repo.set_comercio_rubros(c["id"], [repo.rubros["ferreteria"]])
+
+    r = client.post("/admin/rubros/recalcular-principal?modo=reemplazar", headers=_h(admin_token))
+    fila = next(x for x in r.json()["detalle"] if x["comercio_id"] == c["id"])
+    assert sorted(fila["queda"]) == ["Calzado", "Ropa"]
+
+
+def test_la_identidad_no_agrega_rubros_que_el_texto_no_dispara(client, repo, admin_token):
+    """Sólo decide cuál manda entre los que ya salieron. Si agregara, la vista
+    previa mostraría rubros que el diccionario no dedujo y nadie podría explicar
+    de dónde salieron."""
+    c = repo.seed_comercio(slug="ident", nombre="Zapatillas Rey", subcategoria="zapatilla",
+                           prod_det_ia="zapatilla", activo=True)
+    repo.set_comercio_rubros(c["id"], [repo.rubros["ferreteria"]])
+
+    r = client.post("/admin/rubros/recalcular-principal?modo=reemplazar", headers=_h(admin_token))
+    fila = next(x for x in r.json()["detalle"] if x["comercio_id"] == c["id"])
+    assert fila["queda"] == ["Calzado"]
