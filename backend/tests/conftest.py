@@ -38,6 +38,7 @@ class FakeRepo:
         self.comercios: dict[str, dict] = {}
         self.adornos: dict[str, dict] = {}
         self.sinonimos: dict[str, str] = {}
+        self.correcciones_rubro: list[dict] = []
         self.sinonimos_manuales: set[str] = set()
         self.usuarios: dict[str, dict] = {}          # email -> row
         self.compradores: dict[str, dict] = {}       # id -> row (usuarios/favoritos: comprador, no comercio)
@@ -909,6 +910,48 @@ class FakeRepo:
         id_to_slug = {v: k for k, v in self.rubros.items()}
         crudos = self.comercios.get(comercio_id, {}).get("rubros") or []
         return [id_to_slug.get(r, r) for r in crudos]
+
+    # ---- revisión humana de rubros ----
+    def rubros_a_revisar(self, estado="dudosos", limite=100):
+        """Mismo criterio que la función SQL: sin revisar, y el principal fuera
+        de lo que sugiere el diccionario."""
+        salida = []
+        for cid, c in self.comercios.items():
+            if not c.get("activo", True) or c.get("rubro_revisado_at"):
+                continue
+            texto = " ".join(filter(None, [c.get("nombre"), c.get("subcategoria"),
+                                           c.get("prod_det_ia")]))
+            sug = self.sugerir_rubros_por_texto(texto)
+            principal = (self.get_comercio_rubros(cid) or [None])[0]
+            if estado == "sin-datos":
+                if sug:
+                    continue
+            elif not sug or principal in sug:
+                continue
+            salida.append({
+                "comercio_id": cid, "codigo": c.get("codigo"), "nombre": c.get("nombre"),
+                "texto": texto, "principal": principal,
+                "principal_nombre": (principal or "").title(),
+                "sugeridos": sug, "ya_tiene": self.get_comercio_rubros(cid),
+                "portada": c.get("portada_thumb_url"),
+            })
+        return salida[:limite]
+
+    def rubros_revision_resumen(self):
+        activos = [c for c in self.comercios.values() if c.get("activo", True)]
+        return {
+            "total": len(activos),
+            "revisados": sum(1 for c in activos if c.get("rubro_revisado_at")),
+            "dudosos": len(self.rubros_a_revisar("dudosos", 9999)),
+            "sin_datos": len(self.rubros_a_revisar("sin-datos", 9999)),
+        }
+
+    def marcar_rubro_revisado(self, comercio_id, por):
+        self.comercios[comercio_id]["rubro_revisado_at"] = "2026-09-04T00:00:00+00:00"
+        self.comercios[comercio_id]["rubro_revisado_por"] = por
+
+    def registrar_correccion_rubro(self, row):
+        self.correcciones_rubro.append(row)
 
     # ---- alta self-service ----
     def slug_existe(self, slug):

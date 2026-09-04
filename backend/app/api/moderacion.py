@@ -1817,6 +1817,95 @@ class AplicarPatronBody(BaseModel):
     palabras: str
 
 
+class RevisionRubroBody(BaseModel):
+    """El veredicto de una persona sobre cómo quedó clasificado un comercio."""
+    veredicto: str                      # "ok" | "corregido"
+    rubro_slug: str | None = None       # el correcto, si estaba mal
+    # El rubro que la persona TENÍA A LA VISTA cuando decidió. Viaja desde el
+    # panel en vez de releerse acá: si entre que se dibujó la cola y se apretó
+    # el botón alguien más lo cambió, lo que queda anotado es sobre qué se
+    # opinó de verdad.
+    rubro_antes: str | None = None
+    # Palabra que lo hubiera clasificado bien. Opcional a propósito: se manda
+    # sólo si el que revisa ya vio la vista previa de a cuántos alcanza.
+    palabras: str | None = None
+
+
+@router.get("/admin/rubros/revision")
+async def admin_rubros_revision(
+    estado: str = Query(default="dudosos"),
+    limite: int = Query(default=100, le=300),
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """La cola de clasificaciones que no cierran, para mirarlas de a una.
+
+    Es la respuesta al tamaño real del problema: de 1080 comercios activos, 851
+    tienen el principal coherente con lo que el diccionario diría hoy. Revisar
+    "todo" son 229 fichas, no 1080 — y esa diferencia es la que decide si esto se
+    hace o se abandona a la semana.
+
+    No propone nada automático. Muestra el texto que se clasificó, el rubro que
+    está puesto y los que el diccionario deduce, y deja que una persona diga
+    cuál es. Lo que aprende el sistema es lo que esa persona escribe.
+    """
+    items = await run_in_threadpool(repo.rubros_a_revisar, estado, limite)
+    resumen = await run_in_threadpool(repo.rubros_revision_resumen)
+    return {"items": items, "resumen": resumen, "rubros": repo.list_rubros()}
+
+
+@router.post("/admin/rubros/revision/{comercio_id}")
+async def admin_revisar_rubro(
+    comercio_id: str,
+    body: RevisionRubroBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Guarda el veredicto y, si hubo corrección, la aplica.
+
+    Marca el comercio como revisado por una persona SIEMPRE, incluso cuando el
+    veredicto es "está bien". Ese es el punto: un comercio revisado sale de la
+    cola y ninguna corrida masiva lo vuelve a tocar. Sin la marca, el próximo
+    recálculo pisa las correcciones a mano y nadie se entera.
+    """
+    if body.veredicto not in {"ok", "corregido"}:
+        raise HTTPException(status_code=400, detail="Veredicto inválido")
+
+    comercio = repo.get_comercio(comercio_id)
+    if not comercio:
+        raise HTTPException(status_code=404, detail="No existe el comercio")
+
+    texto = " ".join(filter(None, [comercio.get("nombre"), comercio.get("subcategoria"),
+                                   comercio.get("prod_det_ia")]))
+
+    if body.veredicto == "corregido":
+        if not body.rubro_slug:
+            raise HTTPException(status_code=400, detail="Falta el rubro correcto")
+        if not any(r["slug"] == body.rubro_slug for r in repo.list_rubros()):
+            raise HTTPException(status_code=400, detail=f"No existe el rubro {body.rubro_slug}")
+        # El elegido va PRIMERO y los que ya tenía quedan detrás: `update_comercio`
+        # toma el primero como principal. Mandar sólo el nuevo borraría los demás,
+        # que es justo lo que hace que el buscador deje de encontrarlo.
+        otros = [s for s in repo.get_comercio_rubros(comercio_id) if s != body.rubro_slug]
+        repo.update_comercio(comercio_id, {}, [body.rubro_slug] + otros)
+        if body.palabras and body.palabras.strip():
+            repo.agregar_palabras_rubro(body.rubro_slug, _patron_de(body.palabras))
+
+    repo.marcar_rubro_revisado(comercio_id, admin["email"])
+    repo.registrar_correccion_rubro({
+        "comercio_id": comercio_id,
+        "veredicto": body.veredicto,
+        "rubro_antes": body.rubro_antes,
+        "rubro_nuevo": body.rubro_slug if body.veredicto == "corregido" else None,
+        "texto": texto[:2000],
+        "palabras": body.palabras,
+        "revisado_por": admin["email"],
+    })
+    logger.info("admin.rubro_revisado", comercio=comercio_id, veredicto=body.veredicto,
+                rubro=body.rubro_slug, by=admin["email"])
+    return {"ok": True}
+
+
 @router.post("/admin/rubros/aplicar-patron")
 async def admin_aplicar_patron(
     body: AplicarPatronBody,

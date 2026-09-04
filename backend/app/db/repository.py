@@ -84,6 +84,10 @@ class Repo(Protocol):
     def update_vencimiento(self, vid: str, patch: dict) -> dict: ...
     def borrar_vencimiento(self, vid: str) -> None: ...
     def list_comercio_rubros_todos(self) -> list[dict]: ...
+    def rubros_a_revisar(self, estado: str, limite: int) -> list[dict]: ...
+    def rubros_revision_resumen(self) -> dict: ...
+    def marcar_rubro_revisado(self, comercio_id: str, por: str) -> None: ...
+    def registrar_correccion_rubro(self, row: dict) -> None: ...
     def list_adornos(self, ciudad_id: str | None) -> list[dict]: ...
     def crear_adorno(self, row: dict) -> dict: ...
     def update_adorno(self, adorno_id: str, patch: dict) -> dict: ...
@@ -820,6 +824,52 @@ class SupabaseRepo:
         except Exception:  # noqa: BLE001
             logger.warning("previsualizar_patron.fallo", patron=patron, exc_info=True)
             return []
+
+    def rubros_a_revisar(self, estado: str = "dudosos", limite: int = 100) -> list[dict]:
+        """La cola de revisión humana: los que el diccionario contradice.
+
+        Se delega a la función SQL `rubros_a_revisar` (0089) y no se arma acá
+        porque calcularlo en Python significa una llamada a `rubros_sugeridos`
+        por comercio — 1080 idas y vueltas para dibujar una pantalla.
+        """
+        try:
+            res = self._db.rpc("rubros_a_revisar",
+                               {"p_estado": estado, "p_limite": limite}).execute()
+            return list(res.data or [])
+        except Exception:  # noqa: BLE001
+            logger.warning("rubros_a_revisar.fallo", estado=estado, exc_info=True)
+            return []
+
+    def rubros_revision_resumen(self) -> dict:
+        """Cuántos quedan. Devuelve {} si la función no está: el panel muestra la
+        cola igual y sin el contador, en vez de caerse entero."""
+        try:
+            res = self._db.rpc("rubros_revision_resumen", {}).execute()
+            filas = list(res.data or [])
+            return filas[0] if filas else {}
+        except Exception:  # noqa: BLE001
+            logger.warning("rubros_revision_resumen.fallo", exc_info=True)
+            return {}
+
+    def marcar_rubro_revisado(self, comercio_id: str, por: str) -> None:
+        """Una persona miró este comercio. Lo masivo tiene que saltearlo desde
+        acá en adelante: es lo único que separa las correcciones a mano de las
+        automáticas, y sin la marca la próxima corrida las pisa sin avisar."""
+        from datetime import datetime, timezone
+
+        self._db.table("comercios").update({
+            "rubro_revisado_at": datetime.now(timezone.utc).isoformat(),
+            "rubro_revisado_por": por,
+        }).eq("id", comercio_id).execute()
+
+    def registrar_correccion_rubro(self, row: dict) -> None:
+        """El veredicto, guardado. Los 'ok' también: sin los aciertos, el conteo
+        de errores no tiene contra qué medirse y siempre parece que empeora."""
+        try:
+            self._db.table("rubro_correcciones").insert(row).execute()
+        except Exception:  # noqa: BLE001 — la corrección ya se aplicó; perder la
+            # anotación no puede deshacerla ni bloquear al que está revisando.
+            logger.warning("registrar_correccion_rubro.fallo", exc_info=True)
 
     def borrar_propuestas(self, normalizado: str) -> None:
         """Saca de la cola las propuestas ya resueltas.

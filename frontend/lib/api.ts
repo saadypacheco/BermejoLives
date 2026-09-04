@@ -33,6 +33,21 @@ async function authFetch(path: string, opts: RequestInit = {}) {
     clearToken();
     throw new Error("No autenticado");
   }
+  // Un error del server LANZA acá, no más abajo.
+  //
+  // `itemsDe` y `okDe` ya arreglaban esto, pero de a una función, y quedaron 32
+  // que hacen `return res.json()` a secas. Ante un 500 el cuerpo es
+  // {"detail": "..."}: no lanza, el catch del componente nunca corre, y el
+  // panel se cae recién al leer `.length` de un campo que no vino — con un
+  // "Algo salió mal" que no dice cuál de las llamadas falló.
+  //
+  // Es la guarda que se lee como protección y no protege: el try/catch estaba
+  // puesto, no saltaba nunca. Se resuelve una vez en la puerta, así ninguna
+  // función nueva puede volver a olvidarse.
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({} as { detail?: string }));
+    throw new Error(d.detail ?? `Falló ${path} (HTTP ${res.status})`);
+  }
   return res;
 }
 
@@ -766,6 +781,44 @@ export type RubroSimple = { slug: string; nombre: string; icono?: string | null 
 export async function getRubrosPropuestos(): Promise<{ propuestas: PropuestaRubro[]; rubros: RubroSimple[] }> {
   const res = await authFetch("/admin/rubros/propuestos");
   return res.json();
+}
+
+export type FilaRevision = {
+  comercio_id: string;
+  codigo: string | null;
+  nombre: string | null;
+  /** El texto exacto que se clasificó: nombre + subcategoría + productos. */
+  texto: string | null;
+  principal: string | null;
+  principal_nombre: string | null;
+  sugeridos: string[];
+  ya_tiene: string[];
+  portada: string | null;
+};
+
+export type ResumenRevision = {
+  total?: number; revisados?: number; dudosos?: number; sin_datos?: number;
+};
+
+export async function getRevisionRubros(estado = "dudosos", limite = 100): Promise<{
+  items: FilaRevision[]; resumen: ResumenRevision; rubros: RubroSimple[];
+}> {
+  const res = await authFetch(`/admin/rubros/revision?estado=${estado}&limite=${limite}`);
+  return res.json();
+}
+
+export async function revisarRubro(comercioId: string, body: {
+  veredicto: "ok" | "corregido";
+  rubro_slug?: string;
+  rubro_antes?: string | null;
+  palabras?: string;
+}) {
+  const res = await authFetch(`/admin/rubros/revision/${comercioId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return okDe(res, "guardar la revisión");
 }
 
 export async function crearRubro(body: {
