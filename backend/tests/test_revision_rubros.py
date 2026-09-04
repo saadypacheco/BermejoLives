@@ -133,3 +133,44 @@ def test_el_resumen_cuenta_lo_que_falta(client, repo, admin_token):
     despues = client.get("/admin/rubros/revision", headers=_h(admin_token)).json()["resumen"]
     assert despues["revisados"] >= 1
     assert despues["dudosos"] == resumen["dudosos"] - 1
+
+
+def test_las_sugerencias_separan_diccionario_de_ia(client, repo, admin_token, monkeypatch):
+    """Van por separado a propósito: el diccionario es lo que clasifica de
+    verdad, la IA es una segunda opinión. Mezcladas, la de la IA taparía que el
+    diccionario no sabe — y ese hueco es el que dice qué palabra agregar."""
+    from app.services import clasificador
+
+    monkeypatch.setattr(clasificador, "sugerir_rubros_explicado",
+                        lambda nombre, texto, rubros: {"rubros": ["ropa"],
+                                                       "motivo": "el nombre dice boutique"})
+    c = repo.seed_comercio(slug="mix", nombre="Boutique Sur",
+                           prod_det_ia="zapatilla", activo=True)
+
+    r = client.post(f"/admin/comercio/{c['id']}/rubro/sugerencias", headers=_h(admin_token))
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert [x["slug"] for x in d["diccionario"]] == ["calzado"]
+    assert [x["slug"] for x in d["ia"]["rubros"]] == ["ropa"]
+    assert "zapatilla" in d["texto"]
+
+
+def test_sin_ia_configurada_las_sugerencias_siguen_saliendo(client, repo, admin_token, monkeypatch):
+    """El diccionario es la fuente. Si Gemini no está o falla, la pantalla tiene
+    que servir igual: sin esto, una clave vencida deja la revisión sin usar."""
+    from app.services import clasificador
+
+    monkeypatch.setattr(clasificador, "sugerir_rubros_explicado",
+                        lambda nombre, texto, rubros: None)
+    c = repo.seed_comercio(slug="solo-dicc", nombre="Gomería Norte",
+                           prod_det_ia="neumatico", activo=True)
+
+    r = client.post(f"/admin/comercio/{c['id']}/rubro/sugerencias", headers=_h(admin_token))
+    assert r.status_code == 200, r.text
+    assert r.json()["ia"] is None
+    assert [x["slug"] for x in r.json()["diccionario"]] == ["neumaticos"]
+
+
+def test_pedir_sugerencias_de_un_comercio_que_no_existe(client, admin_token):
+    r = client.post("/admin/comercio/no-existe/rubro/sugerencias", headers=_h(admin_token))
+    assert r.status_code == 404

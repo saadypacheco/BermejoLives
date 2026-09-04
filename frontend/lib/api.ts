@@ -807,6 +807,19 @@ export async function getRevisionRubros(estado = "dudosos", limite = 100): Promi
   return res.json();
 }
 
+export type SugerenciasRubro = {
+  /** El mismo texto con el que clasifica el sistema, no un resumen. */
+  texto: string;
+  ya_tiene: RubroSimple[];
+  diccionario: RubroSimple[];
+  ia: { rubros: RubroSimple[]; motivo: string } | null;
+};
+
+export async function sugerenciasDeRubro(comercioId: string): Promise<SugerenciasRubro> {
+  const res = await authFetch(`/admin/comercio/${comercioId}/rubro/sugerencias`, { method: "POST" });
+  return res.json();
+}
+
 export async function revisarRubro(comercioId: string, body: {
   veredicto: "ok" | "corregido";
   rubro_slug?: string;

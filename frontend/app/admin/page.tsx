@@ -36,6 +36,7 @@ import { ImportadosPanel } from "@/components/importados-panel";
 import { VencimientosPanel } from "@/components/vencimientos-panel";
 import { RubrosPanel } from "@/components/rubros-panel";
 import { RevisionRubros } from "@/components/revision-rubros";
+import { RubroRecalcular } from "@/components/rubro-recalcular";
 import { CatalogoPanel } from "@/components/catalogo-panel";
 import { ImageLightbox } from "@/components/image-lightbox";
 import type { Rubro } from "@/lib/types";
@@ -1038,6 +1039,11 @@ function TabComercios({
   const [vista, setVista] = useState<VistaComercio>("lista");
   const [limitVis, setLimitVis] = useState(50);
   const [editandoId, setEditandoId] = useState<string | null>(null);
+  // Qué fila tiene abierto el recálculo, y los rubros que se corrigieron sin
+  // recargar. Recargar los 1080 después de cada corrección hace perder el lugar
+  // donde ibas, que es lo que vuelve inusable una revisión larga.
+  const [recalcId, setRecalcId] = useState<string | null>(null);
+  const [rubroLocal, setRubroLocal] = useState<Record<string, string>>({});
 
   const noComerciales = new Set(rubros.filter((r) => r.comercial === false).map((r) => r.slug));
   const nIncompletos = todos.filter((c) => incompletoDe(c, noComerciales).length > 0).length;
@@ -1238,7 +1244,7 @@ function TabComercios({
             </div>
             <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 3 }}>
               {c.codigo && <span style={{ fontFamily: "monospace", color: "var(--neon)" }}>URUKU-{c.codigo} · </span>}
-              {c.rubros?.nombre ?? "Sin rubro"}
+              {rubroLocal[c.id] ?? c.rubros?.nombre ?? "Sin rubro"}
               {c.lugares?.nombre ? ` · 🏬 ${c.lugares.nombre}${c.puesto ? ` #${c.puesto}` : ""}` : ""}
               {c.ciudades?.nombre ? ` · ${c.ciudades.nombre}` : ""}
               {c.modalidad ? ` · ${MODALIDAD_LABEL[c.modalidad] ?? c.modalidad}` : ""}
@@ -1286,6 +1292,9 @@ function TabComercios({
                 <Pin style={{ width: 16, height: 16 }} />
               </a>
             )}
+            <button className="mbtn" title="Recalcular el rubro"
+                    onClick={() => setRecalcId(recalcId === c.id ? null : c.id)}
+                    style={{ fontSize: 15 }}>🏷</button>
             <button className="mbtn edit" title="Editar" onClick={() => setEditandoId(c.id)}>
               <Edit style={{ width: 16, height: 16 }} />
             </button>
@@ -1300,6 +1309,25 @@ function TabComercios({
               </>
             )}
           </div>
+
+          {/* El recálculo se abre DENTRO de la fila, a ancho completo: mandarlo
+              a un modal obligaría a cerrar y volver a encontrar dónde ibas, y
+              en una cola de doscientos eso es la mitad del trabajo. */}
+          {recalcId === c.id && (
+            <div style={{ flexBasis: "100%" }}>
+              <RubroRecalcular
+                comercioId={c.id}
+                nombre={c.nombre || "Comercio"}
+                rubroActual={c.rubros?.slug ?? null}
+                rubros={rubros.map((r) => ({ slug: r.slug, nombre: r.nombre }))}
+                onListo={(_slug, nombreNuevo) => {
+                  setRubroLocal((prev) => ({ ...prev, [c.id]: nombreNuevo }));
+                  setRecalcId(null);
+                }}
+                onCerrar={() => setRecalcId(null)}
+              />
+            </div>
+          )}
         </div>
         );
       })}

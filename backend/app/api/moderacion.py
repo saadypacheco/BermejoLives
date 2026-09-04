@@ -12,6 +12,7 @@ from app.core.auth import require_admin, require_moderador
 from app.core.config import settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import validar_whatsapp
+from app.services import clasificador
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
@@ -1815,6 +1816,56 @@ async def admin_analizar_ofertas(
 class AplicarPatronBody(BaseModel):
     rubro_slug: str
     palabras: str
+
+
+@router.post("/admin/comercio/{comercio_id}/rubro/sugerencias")
+async def admin_sugerencias_de_rubro(
+    comercio_id: str,
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Recalcular el rubro de UN comercio, ahora, sin cambiar nada.
+
+    Devuelve las dos opiniones por separado y no una mezclada, porque no valen
+    lo mismo:
+
+    - **El diccionario** es lo que clasifica de verdad. Si acá dice "hospedaje",
+      cualquier comercio nuevo con ese texto va a caer en hospedaje solo. Es la
+      respuesta que importa.
+    - **La IA** es una segunda opinión, y sirve sobre todo cuando el diccionario
+      no dice nada: son 56 rubros, y buscar a mano en esa lista es justo lo que
+      hace que revisar 200 comercios se abandone a la mitad.
+
+    Mezcladas en un solo número, la de la IA taparía que el diccionario no sabe
+    — y ese hueco es exactamente lo que hay que ver para saber qué palabra
+    agregar.
+
+    No escribe: el que aplica es el veredicto humano, en el endpoint de al lado.
+    """
+    comercio = repo.get_comercio(comercio_id)
+    if not comercio:
+        raise HTTPException(status_code=404, detail="No existe el comercio")
+
+    # El MISMO texto que arma la clasificación real (`rubros_auto._texto_de`).
+    # Mostrar otro sería tranquilizar sobre algo que no se probó.
+    texto = " ".join(filter(None, [comercio.get("nombre"), comercio.get("subcategoria"),
+                                   comercio.get("prod_det_ia")]))
+    rubros = repo.list_rubros()
+    nombres = {r["slug"]: r.get("nombre", r["slug"]) for r in rubros}
+
+    diccionario = await run_in_threadpool(repo.sugerir_rubros_por_texto, texto)
+    ia = await run_in_threadpool(
+        clasificador.sugerir_rubros_explicado, comercio.get("nombre") or "", texto, rubros)
+
+    def _con_nombre(slugs):
+        return [{"slug": s, "nombre": nombres.get(s, s)} for s in slugs if s in nombres]
+
+    return {
+        "texto": texto,
+        "ya_tiene": _con_nombre(repo.get_comercio_rubros(comercio_id)),
+        "diccionario": _con_nombre([s for s in diccionario if s != "otros"]),
+        "ia": ({"rubros": _con_nombre(ia["rubros"]), "motivo": ia["motivo"]} if ia else None),
+    }
 
 
 class RevisionRubroBody(BaseModel):

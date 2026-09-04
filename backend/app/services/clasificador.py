@@ -169,3 +169,62 @@ def sugerir_rubros(descripcion: str, rubros: list[dict]) -> list[str]:
 
     candidatos = data.get("rubro_slugs") or []
     return [s for s in candidatos if s in slugs][:3]
+
+
+def sugerir_rubros_explicado(nombre: str, texto: str, rubros: list[dict]) -> dict | None:
+    """1-3 rubros para UN comercio, con el motivo en una línea.
+
+    Es la misma pregunta que `sugerir_rubros`, con dos diferencias que sólo
+    importan cuando hay una persona mirando:
+
+    - **Dice por qué.** El que revisa no necesita que le adivinen el rubro:
+      necesita entender de dónde salió el error para no repetirlo. "Hotel Reina"
+      cayó en blanquería porque la foto describía sábanas y toallas; con esa
+      frase a la vista, la corrección se hace una vez y la palabra que se agrega
+      al diccionario es la correcta.
+    - **Se pide de a uno, a pedido.** No corre sola sobre 1080 comercios: la
+      dispara alguien que ya está mirando esa ficha, y paga una llamada.
+
+    Devuelve None si no hay `GEMINI_API_KEY` o si el modelo falla. El panel
+    muestra igual lo que dice el diccionario, que es lo que clasifica de verdad;
+    esto es una opinión más, no la fuente.
+    """
+    slugs = [r["slug"] for r in rubros if r.get("slug")]
+    if not slugs or not settings.gemini_api_key or not (nombre or texto).strip():
+        return None
+
+    lista = "\n".join(f"- {r['slug']}: {r.get('nombre', r['slug'])}"
+                      for r in rubros if r.get("slug"))
+    prompt = (
+        "Sos quien clasifica los negocios de URUKU, un directorio de comercios de "
+        "Bermejo (Bolivia). Elegí entre 1 y 3 rubros para este negocio, el más "
+        "adecuado primero.\n\n"
+        f"Nombre del negocio: {nombre}\n"
+        f"Lo que se sabe de él (productos vistos en la foto, categoría, nombre): {texto}\n\n"
+        f"Rubros disponibles:\n{lista}\n\n"
+        "IMPORTANTE: el nombre del negocio suele ser la señal más fuerte, y la "
+        "descripción de la foto confunde — un hotel cuya foto muestra sábanas y "
+        "toallas NO es una blanquería, y un taller cuya foto muestra una gaseosa en "
+        "el mostrador no es un almacén.\n\n"
+        'Devolvé SOLO un JSON (sin markdown): {"rubros": ["slug1"], '
+        '"motivo": "una frase de máximo 20 palabras que explique por qué"}'
+    )
+    try:
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
+        )
+        r = httpx.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=20)
+        r.raise_for_status()
+        crudo = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip().strip("`")
+        if crudo.lower().startswith("json"):
+            crudo = crudo[4:].strip()
+        data = json.loads(crudo)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("sugerir_rubros_explicado.error", error=str(exc))
+        return None
+
+    elegidos = [s for s in (data.get("rubros") or []) if s in slugs][:3]
+    if not elegidos:
+        return None
+    return {"rubros": elegidos, "motivo": str(data.get("motivo", ""))[:200]}
