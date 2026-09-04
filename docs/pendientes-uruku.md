@@ -8,9 +8,12 @@
 
 ## 📍 Situación al 2026-09-03
 
+> Handoff con el estado completo: [handoff-2026-09-03.md](handoff-2026-09-03.md)
+
 | | |
 |---|---|
 | Comercios activos | **888** (eran 680 el 28/8, 270 el 25/8) |
+| Rubros | **56** — 12 creados el 2 y 3/9 |
 | Asignaciones de rubro | **2.440** · `completar_rubros.py` aplicado |
 | **Con horario** | **0 de 888** — el dato que más diferencia, y el único que nadie puede deducir |
 | Publicaciones (ofertas) | **1 en total** → el canal está construido y apagado |
@@ -373,6 +376,41 @@ Reemplaza a Reservalo. Decisión y fundamento en
   el marketplace de contenido para creadores. Ver [[monetizacion-planes-uruku]].
 
 ## ✅ Hecho
+
+### 2026-09-02 y 03
+- [x] **URUKU pasa a ser el directorio de la CIUDAD.** Rubros nuevos: hoja de
+      coca, taller mecánico, taxis, baños, bares/boliches/karaoke, carpintería,
+      herrería, carnicería, limpieza, funeraria, telas, gimnasios. Y la bandera
+      `rubros.comercial`: un baño público no tiene WhatsApp ni productos y no
+      puede quedar en la cola de incompletos para siempre.
+- [x] **Los rubros se manejan desde el panel, no por SSH.** Admin › Rubros
+      muestra lo que la IA pidió y no existe, con DOS salidas por propuesta
+      —rubro nuevo o sinónimo de uno existente— porque confundirlas es cómo se
+      llegó a los 19 rubros vacíos de agosto. La lógica se sacó del script a
+      `services/rubros_auto.py`, así el botón y el script corren lo mismo.
+- [x] **Vista previa determinista antes de guardar una palabra**: a cuántos
+      comercios alcanza, cuántos son nuevos y con qué otros rubros conviven. El
+      error caro del diccionario nunca fue de criterio sino de ALCANCE —"papa
+      frita" describe bien la comida rápida y está en todos los kioscos— y eso
+      es contable, no opinable. Por eso lo cuenta una consulta y no un modelo.
+- [x] **Crear un rubro lo APLICA en el mismo acto**, sobre los comercios que la
+      vista previa acaba de mostrar. Antes el rubro quedaba con cero comercios
+      hasta que alguien se acordara de correr el completado.
+- [x] **Las fotos de las ofertas se analizan.** Una foto sin texto era una
+      oferta invisible: el índice sale de título+descripción y con foto el
+      título queda en NULL. No pisa lo que escribió el comerciante y el precio
+      sólo se LEE de la imagen, nunca se estima.
+- [x] **El horario que cruza la medianoche.** "22-4" no se cumplía nunca y el
+      local figuraba cerrado las 24 horas. Habría aparecido el primer sábado
+      con boliches cargados.
+- [x] **"Buscado sin resultado" estaba lleno de tecleo.** El registro vivía en
+      el debounce de 280ms de la búsqueda: escribir "surtidor" dejaba cuatro
+      filas. La lista que dice a qué rubros salir a buscar era ruido.
+- [x] **Los desplegables del panel eran blanco sobre blanco.** Las variables
+      `--uk-*` sólo existían dentro de `.uk` y el admin no está adentro; una
+      declaración con una variable inexistente se descarta ENTERA.
+- [x] Buscador del panel por palabras y no por la frase pegada; catálogo con las
+      subcategorías de menor a mayor; `otros` deja de convivir con rubros reales.
 
 ### Semana del 2026-09-01 al 03
 - [x] **Una sola pantalla.** `/mapa` y `/buscar` estaban duplicadas y ninguna
