@@ -187,7 +187,12 @@ def test_reporte_agrupa_variantes_y_ordena_por_frecuencia(client, repo, admin_to
     repo.registrar_rubros_propuestos(["Juguetería", "jugueterias", "🧸 Juguetería"], "c1")
     repo.registrar_rubros_propuestos(["Floristería"], "c2")
 
-    items = client.get("/admin/rubros/propuestos", headers=_h(admin_token)).json()["items"]
+    # El campo es `propuestas`, que es el que lee el panel. Este test pedía
+    # `items` y pasaba: había DOS rutas con este path, y la primera —muerta para
+    # el panel— devolvía esa forma. El test verde tapaba el /admin caído.
+    cuerpo = client.get("/admin/rubros/propuestos", headers=_h(admin_token)).json()
+    items = cuerpo["propuestas"]
+    assert cuerpo["rubros"], "el panel también necesita la lista de rubros para resolver una propuesta"
     assert items[0]["normalizado"] == "jugueteria"
     assert items[0]["veces"] == 3
     assert len(items[0]["variantes"]) == 3

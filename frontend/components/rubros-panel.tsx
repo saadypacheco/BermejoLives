@@ -21,7 +21,14 @@ export function RubrosPanel() {
   const [corriendo, setCorriendo] = useState(false);
 
   const cargar = useCallback(async () => {
-    try { setData(await getRubrosPropuestos()); setErr(""); }
+    // `?? []` a propósito: si la respuesta viene sin el campo —una ruta
+    // duplicada devolviendo otra forma, como pasó— el panel se dibuja vacío en
+    // vez de tirar abajo el /admin entero al leer `.length` de undefined.
+    try {
+      const d = await getRubrosPropuestos();
+      setData({ propuestas: d.propuestas ?? [], rubros: d.rubros ?? [] });
+      setErr("");
+    }
     catch (e) { setErr(e instanceof Error ? e.message : "No se pudo cargar"); }
   }, []);
   useEffect(() => { cargar(); }, [cargar]);

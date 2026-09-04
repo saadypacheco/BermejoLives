@@ -1188,21 +1188,20 @@ async def analizar_comercio(
     return resultado
 
 
-@router.get("/admin/rubros/propuestos")
-def rubros_propuestos(
-    limite: int = Query(100, ge=1, le=500),
-    _admin: dict = Depends(require_admin),
-    repo: Repo = Depends(get_repo),
-) -> dict:
-    """Categorías que la IA propuso y no existen en la taxonomía.
-
-    Ordenadas por frecuencia: las de arriba son las que más falta hacen. Es la
-    forma de construir los rubros y subcategorías a partir de comercios reales
-    en vez de inventar una lista de antemano y descubrir después que no encaja.
-    """
-    items = repo.resumen_rubros_propuestos(limite)
-    return {"items": items, "total": len(items)}
-
+# La ruta /admin/rubros/propuestos estaba declarada DOS VECES.
+#
+# La primera devolvía {"items": [...], "total": n}; la segunda —la que el panel
+# espera— devuelve {"propuestas": [...], "rubros": [...]}. FastAPI se queda con
+# la primera que encuentra, así que la segunda nunca corrió y el panel recibía
+# un 200 con un cuerpo que no tenía `propuestas`. Al leer `.length` de eso, la
+# pantalla entera se caía con "Algo salió mal".
+#
+# No dio error en ningún lado: ni al arrancar (FastAPI permite duplicados sin
+# chistar), ni en la red (200 OK), ni en los tests (ninguno pedía esta ruta).
+# Un resultado plausible, que es la forma en que este proyecto falla.
+#
+# La guarda está en test_rutas_unicas.py: ninguna ruta puede repetir método y
+# path. Una regla que se cumple sola no sirve; ésta ahora salta.
 
 # ---- Análisis por fotos en tanda ----
 @router.get("/admin/comercios/pendientes-analisis")
