@@ -1341,7 +1341,7 @@ function TabComercios({
                 comercioId={c.id}
                 nombre={c.nombre || "Comercio"}
                 rubroActual={c.rubros?.slug ?? null}
-                rubros={rubros.map((r) => ({ slug: r.slug, nombre: r.nombre }))}
+                rubros={rubros.map((r) => ({ slug: r.slug, nombre: r.nombre, icono: r.icono }))}
                 onListo={(resumen) => {
                   setRubroLocal((prev) => ({ ...prev, [c.id]: resumen }));
                   setRecalcId(null);

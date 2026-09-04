@@ -112,15 +112,26 @@ export function RubroRecalcular({ comercioId, nombre, rubroActual, rubros, onLis
     }
   }
 
+  // Sin texto, la lista es TODA. El filtro acota; no es la única puerta.
   const filtrados = filtro.trim()
     ? rubros.filter((r) => r.nombre.toLowerCase().includes(filtro.trim().toLowerCase()))
-    : [];
+    : rubros;
+
+  /** Los que alguien propuso —diccionario o IA—, para que el ojo vaya ahí
+   *  primero dentro de la lista larga. */
+  const propuestos = new Set<string>([
+    ...(d?.diccionario ?? []).map((r) => r.slug),
+    ...(d?.ia?.rubros ?? []).map((r) => r.slug),
+  ]);
 
   /** Un rubro proponible: tocarlo lo suma o lo saca de la selección. */
-  const Chip = ({ slug, icono }: { slug: string; icono?: string }) => {
+  const Chip = ({ slug, icono, resaltado }: { slug: string; icono?: string; resaltado?: boolean }) => {
     const puesto = sel.indexOf(slug);
     return (
       <button type="button" disabled={guardando} onClick={() => alternar(slug)}
+              title={resaltado ? "Alguien lo propuso para este comercio" : undefined}
+              style={resaltado && puesto < 0
+                ? { borderColor: "var(--neon)", color: "var(--neon)" } : undefined}
               className={`btn btn-sm ${puesto >= 0 ? "btn-primary" : "btn-ghost"}`}>
         {puesto === 0 && "★ "}
         {puesto > 0 && `${puesto + 1}. `}
@@ -232,19 +243,38 @@ export function RubroRecalcular({ comercioId, nombre, rubroActual, rubros, onLis
             </div>
           )}
 
-          {/* 3) La lista completa, con buscador: para lo que nadie propuso. */}
-          <label style={{ fontSize: 11.5, color: "var(--txt-3)", display: "block", marginTop: 12 }}>
-            ¿Falta alguno? Buscalo entre los {rubros.length}
-            <input className="adm-input" style={{ marginTop: 4 }} value={filtro}
-                   placeholder="escribí para filtrar"
-                   onChange={(e) => setFiltro(e.target.value)} />
-          </label>
-          {filtrados.length > 0 && (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6,
-                          maxHeight: 130, overflowY: "auto" }}>
-              {filtrados.slice(0, 24).map((r) => <Chip key={r.slug} slug={r.slug} />)}
+          {/* 3) TODOS los rubros, siempre a la vista.
+              Antes había un buscador que no mostraba nada hasta escribir, y eso
+              obliga a ACORDARSE de cómo se llama el rubro que falta. Para una
+              tarea manual de doscientas fichas eso es lo que la vuelve inviable:
+              el que revisa no tiene que recordar la taxonomía, tiene que
+              reconocerla de un vistazo. Son 56 y entran en una caja con scroll.
+              El buscador queda arriba para ir rápido cuando ya sabés cuál es. */}
+          <div style={{ marginTop: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between",
+                          alignItems: "baseline", gap: 8, marginBottom: 5 }}>
+              <div style={{ fontSize: 11.5, color: "var(--txt-3)" }}>
+                <b>Todos los rubros</b> — tocá para sumar o sacar
+              </div>
+              <input className="adm-input" style={{ width: 180, padding: "4px 8px", fontSize: 12 }}
+                     value={filtro} placeholder="filtrar…"
+                     onChange={(e) => setFiltro(e.target.value)} />
             </div>
-          )}
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", maxHeight: 190,
+                          overflowY: "auto", padding: "8px", borderRadius: 8,
+                          border: "1px solid var(--border)" }}>
+              {filtrados.length === 0 && (
+                <span style={{ fontSize: 12, color: "var(--txt-3)" }}>
+                  Ningún rubro se llama así. Probá con otra palabra, o creá el rubro
+                  desde la pestaña Rubros.
+                </span>
+              )}
+              {filtrados.map((r) => (
+                <Chip key={r.slug} slug={r.slug} icono={r.icono ?? undefined}
+                      resaltado={propuestos.has(r.slug)} />
+              ))}
+            </div>
+          </div>
 
           {/* 4) La palabra: lo único que sirve para el PRÓXIMO comercio. */}
           <label style={{ fontSize: 11.5, color: "var(--txt-3)", display: "block", marginTop: 12 }}>
