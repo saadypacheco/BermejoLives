@@ -219,6 +219,11 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   // se saca desde ahí. Un botón que borra siete cosas a la vez es más rápido de
   // apretar por error que de rehacer.
 
+  /** Si la persona ya pidió algo. El contador de resultados aparece sólo acá:
+   *  en la pantalla vacía es de donde se lo sacó, y con razón. */
+  const hayBusqueda = Boolean(q.trim() || rubro || subcategoria || modalidad || zona
+                              || precioMax || soloOfertas);
+
   return (
     <div className="uk-container uk-buscar">
       <form className="uk-search-live" onSubmit={(e) => e.preventDefault()}>
@@ -280,6 +285,18 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
           <button type="button" className={`uk-chip ${soloOfertas ? "active" : ""}`} onClick={() => setSoloOfertas((v) => !v)}>Ofertas</button>
         )}
       </div>
+        {/* Cuántos hay, pero SÓLO cuando alguien ya buscó algo.
+            El total salió de acá porque decir "887" antes de que la persona
+            pida nada no le contesta ninguna pregunta. Después de buscar es al
+            revés: la lista trae 30 por página y sin este número "comida" se lee
+            como que hay treinta comercios de comida, cuando hay 78. La pantalla
+            decía menos de lo que el buscador encontraba. */}
+        {hayBusqueda && total != null && total > results.length && (
+          <span className="uk-total-res">
+            {total} resultados
+          </span>
+        )}
+
         <div className="uk-seg">
           <button className={vista === "lista" ? "active" : ""} onClick={() => setVista("lista")}>Lista</button>
           <button className={vista === "mapa" ? "active" : ""} onClick={() => setVista("mapa")}>Mapa</button>
