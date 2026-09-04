@@ -818,21 +818,26 @@ export type SugerenciasRubro = {
   ia: { rubros: RubroSimple[]; motivo: string } | null;
 };
 
+export type ModoRecalculo = "principal" | "reemplazar";
+
 export type RecalculoPrincipal = {
+  modo: ModoRecalculo;
   aplicado: boolean;
   cambiados: number;
   candidatos: number;
-  /** Los que tienen dos o más sugerencias: no se tocan, van a mano. */
+  /** Los que ese modo NO toca. */
   ambiguos: number;
   salteados: { codigo: string | null; nombre: string | null }[];
   detalle: { comercio_id: string; codigo: string | null; nombre: string | null;
-             de: string | null; a: string; texto: string }[];
+             tenia: string[]; queda: string[]; texto: string }[];
   detalle_recortado: number;
 };
 
-export async function recalcularPrincipal(aplicar = false): Promise<RecalculoPrincipal> {
-  const res = await authFetch(`/admin/rubros/recalcular-principal?aplicar=${aplicar}`,
-                              { method: "POST" });
+export async function recalcularPrincipal(
+  aplicar = false, modo: ModoRecalculo = "principal",
+): Promise<RecalculoPrincipal> {
+  const res = await authFetch(
+    `/admin/rubros/recalcular-principal?aplicar=${aplicar}&modo=${modo}`, { method: "POST" });
   return res.json();
 }
 

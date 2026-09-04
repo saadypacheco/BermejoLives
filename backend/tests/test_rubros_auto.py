@@ -8,10 +8,30 @@ búsquedas.
 from app.services.rubros import SLUG_DESCARTE, aplicar_rubros, resolver_rubros, texto_para_rubros
 
 
-def test_texto_junta_los_tres_campos():
-    """Da igual en cuál de los tres escribió el agente la palabra que importa."""
-    t = texto_para_rubros({"nombre": "Casa Pepe", "prod_obs_human": "zapatillas", "descripcion": "importa"})
-    assert "Casa Pepe" in t and "zapatillas" in t and "importa" in t
+def test_el_texto_junta_los_campos_que_dicen_QUE_VENDE():
+    """Da igual en cuál de ellos escribió el agente la palabra que importa."""
+    t = texto_para_rubros({"nombre": "Casa Pepe", "prod_obs_human": "zapatillas",
+                           "prod_det_ia": "chinelas", "subcategoria": "calzado"})
+    assert all(x in t for x in ("Casa Pepe", "zapatillas", "chinelas", "calzado"))
+
+
+def test_la_descripcion_y_los_sinonimos_NO_clasifican():
+    """La regla que faltaba, y la que causó 194 comercios "mal clasificados".
+
+    El alta miraba seis campos y el clasificador masivo tres: los rubros que un
+    comercio TENÍA se calcularon con un texto más ancho que el que después los
+    juzgaba. De ahí salían las carnicerías en talleres de motos.
+
+    La descripción es prosa libre sobre el local —la cuadra, los vecinos, cómo
+    llegar— y los sinónimos existen para que el comprador ENCUENTRE, no para
+    clasificar: "ciclismo indoor" hacía de un gimnasio una bicicletería.
+    """
+    t = texto_para_rubros({
+        "nombre": "Taller Rey",
+        "descripcion": "Al lado de la carniceria de la esquina",
+        "sinonimos": "ciclismo indoor",
+    })
+    assert t == "Taller Rey"
 
 
 def test_texto_tolera_campos_vacios():
@@ -32,8 +52,8 @@ def test_un_local_amplio_queda_en_todos_sus_rubros(repo):
 
 
 def test_deduce_del_nombre_cuando_no_hay_productos(repo):
-    c = repo.seed_comercio(slug="x", nombre="Ferreteria Roque", prod_obs_human=None,
-                           descripcion="tornillos y pintura")
+    """El cartel es dato: muchas veces es lo único cargado."""
+    c = repo.seed_comercio(slug="x", nombre="Tornillos del Sur", prod_obs_human=None)
     assert "ferreteria" in resolver_rubros(repo, c)
 
 

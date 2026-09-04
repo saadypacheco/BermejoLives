@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   getRevisionRubros, revisarRubro, recalcularPrincipal,
   type FilaRevision, type ResumenRevision, type RubroSimple, type RecalculoPrincipal,
+  type ModoRecalculo,
 } from "@/lib/api";
 import { RubroRecalcular } from "@/components/rubro-recalcular";
 
@@ -43,6 +44,7 @@ export function RevisionRubros() {
   const [editando, setEditando] = useState<string | null>(null);
   // La vista previa del recálculo. `null` = todavía no se pidió.
   const [prev, setPrev] = useState<RecalculoPrincipal | null>(null);
+  const [modo, setModo] = useState<ModoRecalculo>("principal");
   const [corriendo, setCorriendo] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
@@ -108,28 +110,37 @@ export function RevisionRubros() {
 
   const nombreDe = (slug: string) => rubros.find((r) => r.slug === slug)?.nombre ?? slug;
 
-  async function verQueCambiaria() {
-    setCorriendo(true); setErr("");
-    try { setPrev(await recalcularPrincipal(false)); }
+  async function verQueCambiaria(m: ModoRecalculo) {
+    setModo(m); setCorriendo(true); setErr("");
+    try { setPrev(await recalcularPrincipal(false, m)); }
     catch (e) { setErr(e instanceof Error ? e.message : "No se pudo calcular"); }
     finally { setCorriendo(false); }
   }
 
   async function aplicarRecalculo() {
     if (!prev) return;
-    if (!confirm(
-      `Se va a cambiar el rubro principal de ${prev.candidatos} comercios.
+    const aviso = modo === "reemplazar"
+      ? `Se van a REEMPLAZAR los rubros de ${prev.candidatos} comercios.
 
 ` +
-      `Sólo los que tienen UNA sugerencia. Los ${prev.ambiguos} con dos o más ` +
-      `quedan en la cola para revisar a mano.
+        `Los que tienen ahora se BORRAN y quedan exactamente los que el ` +
+        `diccionario deduce del texto. Es lo que hace falta cuando lo guardado ` +
+        `viene de un alta vieja, pero no se puede deshacer.
+
+¿Seguimos?`
+      : `Se va a cambiar el rubro principal de ${prev.candidatos} comercios.
+
+` +
+        `Sólo los que tienen UNA sugerencia. Los ${prev.ambiguos} con dos o más ` +
+        `quedan en la cola para revisar a mano.
 
 No se borra ningún rubro: ` +
-      `los que ya tenían quedan como secundarios.
+        `los que ya tenían quedan como secundarios.
 
-¿Seguimos?`)) return;
+¿Seguimos?`;
+    if (!confirm(aviso)) return;
     setCorriendo(true); setErr("");
-    try { setPrev(await recalcularPrincipal(true)); await cargar(); }
+    try { setPrev(await recalcularPrincipal(true, modo)); await cargar(); }
     catch (e) { setErr(e instanceof Error ? e.message : "No se pudo aplicar"); }
     finally { setCorriendo(false); }
   }
@@ -180,22 +191,36 @@ No se borra ningún rubro: ` +
       {estado === "dudosos" && (
         <div className="panel-card glass" style={{ padding: 14 }}>
           <div style={{ fontSize: 12.5 }}>
-            <b>Los que no tienen nada que decidir</b>
+            <b>Recalcular en tanda</b>
             <div style={{ color: "var(--txt-3)", marginTop: 4 }}>
-              Cuando el texto dispara <b>un solo</b> rubro y la ficha muestra otro, no falta
-              criterio: falta escribirlo. Con dos o más sugerencias no se toca nada — el
-              diccionario las devuelve en orden alfabético, así que “la primera” no quiere
-              decir nada, y elegir entre tres es tu decisión.
+              <b>Sólo el principal</b> — toca los que tienen <b>una sola</b> sugerencia y
+              cambia cuál manda. Lo que ya tenían queda de secundario. Conservador: no
+              borra nada.
+            </div>
+            <div style={{ color: "var(--txt-3)", marginTop: 4 }}>
+              <b>Recalcular de cero</b> — los rubros pasan a ser exactamente los que el
+              diccionario deduce hoy, y <b>lo demás se borra</b>. Es lo que hace falta
+              cuando lo guardado viene de un alta vieja: hasta ahora el alta clasificaba
+              con un texto más ancho —le sumaba los sinónimos y la descripción del local— y
+              de ahí salían las carnicerías en talleres de motos. Sumar sobre eso deja la
+              basura adentro.
             </div>
           </div>
 
           <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-            <button className="btn btn-ghost btn-sm" disabled={corriendo} onClick={verQueCambiaria}>
-              Ver qué cambiaría
+            <button className="btn btn-ghost btn-sm" disabled={corriendo}
+                    onClick={() => verQueCambiaria("principal")}>
+              Ver qué cambiaría · sólo el principal
+            </button>
+            <button className="btn btn-ghost btn-sm" disabled={corriendo}
+                    onClick={() => verQueCambiaria("reemplazar")}>
+              Ver qué cambiaría · recalcular de cero
             </button>
             {prev && !prev.aplicado && prev.candidatos > 0 && (
               <button className="btn btn-primary btn-sm" disabled={corriendo} onClick={aplicarRecalculo}>
-                Aplicar los {prev.candidatos}
+                {prev.modo === "reemplazar"
+                  ? `Reemplazar en ${prev.candidatos} comercios`
+                  : `Aplicar los ${prev.candidatos}`}
               </button>
             )}
           </div>
@@ -223,16 +248,24 @@ No se borra ningún rubro: ` +
                               border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
                   <div style={{ fontSize: 11, color: "var(--txt-3)", paddingBottom: 5,
                                 borderBottom: "1px solid var(--border)", marginBottom: 5 }}>
-                    Comercio · <span style={{ color: "var(--amber)" }}>rubro que tiene hoy</span> →{" "}
-                    <span style={{ color: "var(--neon)" }}>al que pasa</span> · con qué texto se dedujo
+                    Comercio · <span style={{ color: "var(--amber)" }}>lo que tiene hoy</span> →{" "}
+                    <span style={{ color: "var(--neon)" }}>cómo queda</span> (el primero es el
+                    principal) · con qué texto se dedujo
                   </div>
                   {prev.detalle.map((x) => (
-                    <div key={x.comercio_id} style={{ padding: "3px 0", color: "var(--txt-2)" }}>
+                    <div key={x.comercio_id} style={{ padding: "4px 0", color: "var(--txt-2)",
+                                                      borderBottom: "1px solid var(--border)" }}>
                       <b>{x.nombre || "Comercio"}</b>{" "}
-                      <span style={{ color: "var(--amber)" }}>{x.de}</span>
-                      {" → "}
-                      <span style={{ color: "var(--neon)" }}>{nombreDe(x.a)}</span>
-                      <span style={{ color: "var(--txt-3)" }}> — {x.texto}</span>
+                      <span style={{ color: "var(--txt-3)", fontFamily: "monospace",
+                                     fontSize: 11 }}>{x.codigo}</span>
+                      <div>
+                        <span style={{ color: "var(--amber)" }}>
+                          {x.tenia.length ? x.tenia.join(" · ") : "sin rubro"}
+                        </span>
+                        {" → "}
+                        <span style={{ color: "var(--neon)" }}>{x.queda.join(" · ")}</span>
+                      </div>
+                      <div style={{ color: "var(--txt-3)", fontSize: 11 }}>{x.texto}</div>
                     </div>
                   ))}
                   {prev.detalle_recortado > 0 && (

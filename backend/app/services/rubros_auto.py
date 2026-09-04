@@ -50,7 +50,12 @@ def _texto_de(comercio: dict, con_sinonimos: bool) -> str:
     mandaba a repuestos de auto, "copa de vino" convertía una heladería en
     bebidas.
     """
-    campos = [comercio.get("prod_det_ia"), comercio.get("subcategoria"), comercio.get("nombre")]
+    # `prod_obs_human` —lo que anotó el agente parado en la vereda— entró acá
+    # para que este texto sea EL MISMO que usa el alta (`texto_para_rubros`).
+    # Que difirieran es lo que hacía que la revisión juzgara los rubros con una
+    # regla distinta de la que los había puesto.
+    campos = [comercio.get("prod_det_ia"), comercio.get("subcategoria"),
+              comercio.get("nombre"), comercio.get("prod_obs_human")]
     if con_sinonimos:
         campos.append(comercio.get("sinonimos"))
     return " ".join(filter(None, campos))

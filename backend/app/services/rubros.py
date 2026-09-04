@@ -30,17 +30,32 @@ SLUG_DESCARTE = "otros"
 
 
 def texto_para_rubros(comercio: dict) -> str:
-    """El texto del que se deduce. Los tres campos juntos: da igual en cuál de
-    ellos escribió el agente la palabra que importa."""
+    """El texto del que se deduce el rubro. UNO SOLO, para todo el sistema.
+
+    Antes esta función miraba seis campos —sumaba `sinonimos` y `descripcion`—
+    y el clasificador masivo miraba tres. O sea: los rubros que un comercio
+    TIENE se calcularon con un texto más ancho y más sucio que el que después
+    los juzga, y por eso la revisión encontraba 194 comercios "mal
+    clasificados" que en realidad estaban clasificados con otra regla.
+
+    `sinonimos` se va por lo que ya estaba escrito en `rubros_auto._texto_de` y
+    nunca se aplicó acá: existe para que el COMPRADOR encuentre —busca "polera"
+    y aparece el que vende remeras— y clasificar es otra pregunta. Metido acá
+    arrastra por una palabra suelta: "ciclismo indoor" hacía de un gimnasio una
+    bicicletería.
+
+    `descripcion` se va por lo mismo, y es peor: es prosa libre sobre el local
+    —la cuadra, los vecinos, cómo llegar— y cualquier sustantivo que caiga ahí
+    dispara un rubro que nadie pidió.
+
+    Quedan los cuatro que nombran lo que vende: el nombre del negocio, lo que
+    anotó el agente, lo que la IA vio en la foto, y la subcategoría.
+    """
     return " ".join(filter(None, (
         comercio.get("nombre"),
-        comercio.get("prod_obs_human"),
-        comercio.get("prod_det_ia"),
         comercio.get("subcategoria"),
-        # Los sinónimos que escribió la IA también disparan rubros: si detectó
-        # "polera" donde el diccionario sólo conoce "remera", igual clasifica.
-        comercio.get("sinonimos"),
-        comercio.get("descripcion"),
+        comercio.get("prod_det_ia"),
+        comercio.get("prod_obs_human"),
     )))
 
 

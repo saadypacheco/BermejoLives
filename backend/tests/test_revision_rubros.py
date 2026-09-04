@@ -235,6 +235,8 @@ def test_el_recalculo_toca_solo_los_de_UNA_sugerencia(client, repo, admin_token)
     assert r.status_code == 200, r.text
     d = r.json()
     assert [x["comercio_id"] for x in d["detalle"]] == [claro["id"]]
+    assert d["detalle"][0]["tenia"] == ["Ferreteria"]
+    assert d["detalle"][0]["queda"] == ["Calzado", "Ferreteria"]
     assert d["ambiguos"] >= 1
 
 
@@ -276,4 +278,41 @@ def test_queda_dicho_que_lo_cambio_una_corrida_y_no_una_persona(client, repo, ad
     repo.set_comercio_rubros(c["id"], [repo.rubros["ferreteria"]])
 
     client.post("/admin/rubros/recalcular-principal?aplicar=true", headers=_h(admin_token))
-    assert "recalculo-automatico" in repo.correcciones_rubro[-1]["revisado_por"]
+    # Dice también QUÉ modo: sumar el principal y reemplazar de cero dejan
+    # estados muy distintos, y auditando meses después la diferencia es la
+    # pregunta.
+    assert repo.correcciones_rubro[-1]["revisado_por"].startswith("recalculo-principal")
+
+
+def test_reemplazar_BORRA_lo_que_tenia_y_deja_lo_que_el_diccionario_dice(client, repo, admin_token):
+    """El modo que hacía falta cuando lo guardado es basura heredada.
+
+    Un taller de motos con "carnicería" pegada de un alta vieja: sumar deja la
+    carnicería adentro y el comercio sigue apareciendo donde no va."""
+    c = repo.seed_comercio(slug="moto", nombre="Taller", prod_det_ia="zapatilla", activo=True)
+    repo.set_comercio_rubros(c["id"], [repo.rubros["ferreteria"], repo.rubros["ropa"]])
+
+    r = client.post("/admin/rubros/recalcular-principal?modo=reemplazar&aplicar=true",
+                    headers=_h(admin_token))
+    assert r.status_code == 200, r.text
+    assert repo.get_comercio_rubros(c["id"]) == ["calzado"]
+
+
+def test_reemplazar_alcanza_tambien_a_los_ambiguos(client, repo, admin_token):
+    """Con varias sugerencias no hay nada que elegir a mano: quedan TODAS, y el
+    principal se decide por el orden de la taxonomía —de más específico a más
+    general—, que es un criterio, a diferencia del orden alfabético en que
+    vienen las sugerencias."""
+    c = repo.seed_comercio(slug="amb", nombre="Mixto",
+                           prod_det_ia="zapatilla y remera", activo=True)
+    repo.set_comercio_rubros(c["id"], [repo.rubros["ferreteria"]])
+
+    r = client.post("/admin/rubros/recalcular-principal?modo=reemplazar", headers=_h(admin_token))
+    fila = next(x for x in r.json()["detalle"] if x["comercio_id"] == c["id"])
+    assert sorted(fila["queda"]) == ["Calzado", "Ropa"]
+    assert fila["tenia"] == ["Ferreteria"]
+
+
+def test_un_modo_inventado_se_rechaza(client, admin_token):
+    r = client.post("/admin/rubros/recalcular-principal?modo=magia", headers=_h(admin_token))
+    assert r.status_code == 400
