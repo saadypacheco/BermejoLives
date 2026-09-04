@@ -1870,7 +1870,15 @@ async def admin_sugerencias_de_rubro(
 class RevisionRubroBody(BaseModel):
     """El veredicto de una persona sobre cómo quedó clasificado un comercio."""
     veredicto: str                      # "ok" | "corregido"
-    rubro_slug: str | None = None       # el correcto, si estaba mal
+    # Los rubros correctos, EN ORDEN: el primero es el principal —el que sale en
+    # la ficha, en el color del pin y en el filtro— y los demás quedan para que
+    # el buscador lo encuentre. Un comercio casi nunca es una sola cosa: el
+    # puesto de coca machucada también vende bebidas y golosinas, y obligarlo a
+    # elegir uno lo saca de las otras dos búsquedas.
+    rubro_slugs: list[str] | None = None
+    # Forma vieja, de un solo rubro. Se mantiene porque la cola de revisión la
+    # usa para el atajo de un toque.
+    rubro_slug: str | None = None
     # El rubro que la persona TENÍA A LA VISTA cuando decidió. Viaja desde el
     # panel en vez de releerse acá: si entre que se dibujó la cola y se apretó
     # el botón alguien más lo cambió, lo que queda anotado es sobre qué se
@@ -1928,31 +1936,45 @@ async def admin_revisar_rubro(
     texto = " ".join(filter(None, [comercio.get("nombre"), comercio.get("subcategoria"),
                                    comercio.get("prod_det_ia")]))
 
+    elegidos = [s for s in (body.rubro_slugs or ([body.rubro_slug] if body.rubro_slug else []))
+                if s]
+    elegidos = list(dict.fromkeys(elegidos))  # sin repetidos, conservando el orden
+
     if body.veredicto == "corregido":
-        if not body.rubro_slug:
+        if not elegidos:
             raise HTTPException(status_code=400, detail="Falta el rubro correcto")
-        if not any(r["slug"] == body.rubro_slug for r in repo.list_rubros()):
-            raise HTTPException(status_code=400, detail=f"No existe el rubro {body.rubro_slug}")
-        # El elegido va PRIMERO y los que ya tenía quedan detrás: `update_comercio`
-        # toma el primero como principal. Mandar sólo el nuevo borraría los demás,
-        # que es justo lo que hace que el buscador deje de encontrarlo.
-        otros = [s for s in repo.get_comercio_rubros(comercio_id) if s != body.rubro_slug]
-        repo.update_comercio(comercio_id, {}, [body.rubro_slug] + otros)
+        existentes = {r["slug"] for r in repo.list_rubros()}
+        faltan = [s for s in elegidos if s not in existentes]
+        if faltan:
+            raise HTTPException(status_code=400, detail=f"No existe el rubro {faltan[0]}")
+
+        if body.rubro_slugs is not None:
+            # Lista explícita: es EXACTAMENTE lo que la persona dejó marcado, en
+            # su orden. Sumarle los que ya tenía haría imposible sacar uno mal
+            # puesto, que es la mitad de para qué se abre esta pantalla.
+            repo.update_comercio(comercio_id, {}, elegidos)
+        else:
+            # Atajo de un toque desde la cola: el elegido pasa al frente y los
+            # que ya tenía quedan detrás. Mandar sólo el nuevo borraría los
+            # demás y el buscador dejaría de encontrarlo por ellos.
+            otros = [s for s in repo.get_comercio_rubros(comercio_id) if s not in elegidos]
+            repo.update_comercio(comercio_id, {}, elegidos + otros)
+
         if body.palabras and body.palabras.strip():
-            repo.agregar_palabras_rubro(body.rubro_slug, _patron_de(body.palabras))
+            repo.agregar_palabras_rubro(elegidos[0], _patron_de(body.palabras))
 
     repo.marcar_rubro_revisado(comercio_id, admin["email"])
     repo.registrar_correccion_rubro({
         "comercio_id": comercio_id,
         "veredicto": body.veredicto,
         "rubro_antes": body.rubro_antes,
-        "rubro_nuevo": body.rubro_slug if body.veredicto == "corregido" else None,
+        "rubro_nuevo": (", ".join(elegidos) if body.veredicto == "corregido" else None),
         "texto": texto[:2000],
         "palabras": body.palabras,
         "revisado_por": admin["email"],
     })
     logger.info("admin.rubro_revisado", comercio=comercio_id, veredicto=body.veredicto,
-                rubro=body.rubro_slug, by=admin["email"])
+                rubros=elegidos, by=admin["email"])
     return {"ok": True}
 
 

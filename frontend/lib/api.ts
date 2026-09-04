@@ -144,7 +144,10 @@ export type ComercioPorVerificar = {
   created_at: string;
   lugar_id: string | null;
   puesto: string | null;
+  /** El rubro PRINCIPAL: el de la ficha, el color del pin y el filtro. */
   rubros?: { nombre: string; slug: string };
+  /** Todos los rubros del comercio, como los anida PostgREST. */
+  comercio_rubros?: { rubros: { nombre: string; slug: string } | null }[];
   ciudades?: { nombre: string; slug: string };
   lugares?: { nombre: string; tipo: string; lat: number | null; lng: number | null; portada_thumb_url?: string | null } | null;
 };
@@ -822,6 +825,9 @@ export async function sugerenciasDeRubro(comercioId: string): Promise<Sugerencia
 
 export async function revisarRubro(comercioId: string, body: {
   veredicto: "ok" | "corregido";
+  /** Varios, EN ORDEN: el primero es el principal. Reemplaza lo que haya. */
+  rubro_slugs?: string[];
+  /** Uno solo, para el atajo de un toque: se suma a los que ya tiene. */
   rubro_slug?: string;
   rubro_antes?: string | null;
   palabras?: string;

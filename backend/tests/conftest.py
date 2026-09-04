@@ -715,6 +715,11 @@ class FakeRepo:
         return [
             {**{k: c.get(k) for k in self._COLS_LISTADO_ADMIN},
              "rubros": c.get("rubros_join"), "ciudades": c.get("ciudades_join"),
+             # El repo real trae TODOS los rubros embebidos, con la misma forma
+             # anidada que devuelve PostgREST. El fake tiene que imitarla o el
+             # panel se probaría contra una estructura que no existe.
+             "comercio_rubros": [{"rubros": {"slug": s, "nombre": s.title()}}
+                                 for s in self.get_comercio_rubros(c["id"])],
              "lugares": c.get("lugares_join")}
             for c in items[:limit]
         ]

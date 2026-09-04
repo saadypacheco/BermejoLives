@@ -197,6 +197,11 @@ _COLS_COMERCIO_ADMIN = (
     "verificado, suspendido, paga_hasta, portada_url, portada_thumb_url, cargado_por, "
     "created_at, lugar_id, puesto, "
     "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), "
+    # TODOS los rubros, no sólo el principal. La fila mostraba uno solo y se
+    # leía como "está mal clasificado" cuando en realidad el correcto ya estaba
+    # puesto, sólo que segundo. Ver los tres de una evita corregir lo que no
+    # hace falta.
+    "comercio_rubros(rubros(nombre, slug)), "
     "lugares(nombre, tipo, lat, lng, portada_thumb_url)"
 )
 

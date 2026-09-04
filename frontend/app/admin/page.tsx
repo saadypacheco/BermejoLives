@@ -1020,6 +1020,24 @@ function incompletoDe(c: ComercioPorVerificar, noComerciales?: Set<string>): str
   return r;
 }
 
+/** Los rubros de un comercio en una línea: el principal en negrita y primero,
+ *  los demás detrás. Sin esto la fila mostraba sólo el principal y no había
+ *  forma de saber, desde la lista, si el rubro correcto ya estaba puesto. */
+function RubrosDeFila({ c }: { c: ComercioPorVerificar }) {
+  const principal = c.rubros?.nombre;
+  const otros = (c.comercio_rubros ?? [])
+    .map((x) => x.rubros?.nombre)
+    .filter((n): n is string => !!n && n !== principal);
+
+  if (!principal && otros.length === 0) return <>Sin rubro</>;
+  return (
+    <>
+      <b>{principal ?? "Sin rubro"}</b>
+      {otros.length > 0 && <span style={{ opacity: .75 }}> + {otros.join(" + ")}</span>}
+    </>
+  );
+}
+
 function TabComercios({
   todos, pendientes, rubros, onVerificar, onRechazar, onEdited,
 }: {
@@ -1244,7 +1262,11 @@ function TabComercios({
             </div>
             <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 3 }}>
               {c.codigo && <span style={{ fontFamily: "monospace", color: "var(--neon)" }}>URUKU-{c.codigo} · </span>}
-              {rubroLocal[c.id] ?? c.rubros?.nombre ?? "Sin rubro"}
+              {/* Todos los rubros, con el PRINCIPAL primero y en negrita. Antes
+                  se veía uno solo y se leía como "está mal clasificado" cuando
+                  el correcto ya estaba puesto, sólo que segundo — que es la
+                  mitad de los casos que parecían errores. */}
+              {rubroLocal[c.id] ?? <RubrosDeFila c={c} />}
               {c.lugares?.nombre ? ` · 🏬 ${c.lugares.nombre}${c.puesto ? ` #${c.puesto}` : ""}` : ""}
               {c.ciudades?.nombre ? ` · ${c.ciudades.nombre}` : ""}
               {c.modalidad ? ` · ${MODALIDAD_LABEL[c.modalidad] ?? c.modalidad}` : ""}
@@ -1320,8 +1342,8 @@ function TabComercios({
                 nombre={c.nombre || "Comercio"}
                 rubroActual={c.rubros?.slug ?? null}
                 rubros={rubros.map((r) => ({ slug: r.slug, nombre: r.nombre }))}
-                onListo={(_slug, nombreNuevo) => {
-                  setRubroLocal((prev) => ({ ...prev, [c.id]: nombreNuevo }));
+                onListo={(resumen) => {
+                  setRubroLocal((prev) => ({ ...prev, [c.id]: resumen }));
                   setRecalcId(null);
                 }}
                 onCerrar={() => setRecalcId(null)}

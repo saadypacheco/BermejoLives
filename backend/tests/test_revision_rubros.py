@@ -174,3 +174,45 @@ def test_sin_ia_configurada_las_sugerencias_siguen_saliendo(client, repo, admin_
 def test_pedir_sugerencias_de_un_comercio_que_no_existe(client, admin_token):
     r = client.post("/admin/comercio/no-existe/rubro/sugerencias", headers=_h(admin_token))
     assert r.status_code == 404
+
+
+def test_varios_rubros_en_orden_el_primero_manda(client, repo, admin_token):
+    """Un comercio casi nunca es una sola cosa.
+
+    El puesto de coca machucada también vende bebidas y golosinas: dejarlo en un
+    rubro solo lo saca de las otras dos búsquedas. Se guarda la lista completa,
+    y el orden es la respuesta — el primero es el principal."""
+    c = repo.seed_comercio(slug="coca", nombre="Coca Machucada Rey", activo=True)
+    repo.set_comercio_rubros(c["id"], [repo.rubros["ropa"]])
+
+    r = client.post(f"/admin/rubros/revision/{c['id']}",
+                    json={"veredicto": "corregido",
+                          "rubro_slugs": ["calzado", "ropa", "ferreteria"],
+                          "rubro_antes": "ropa"}, headers=_h(admin_token))
+    assert r.status_code == 200, r.text
+    assert repo.get_comercio_rubros(c["id"]) == ["calzado", "ropa", "ferreteria"]
+
+
+def test_la_lista_explicita_puede_SACAR_un_rubro_mal_puesto(client, repo, admin_token):
+    """Es la mitad de para qué se abre esta pantalla. Si a la lista marcada se
+    le sumaran los que ya tenía, un rubro mal puesto no habría forma de quitarlo
+    desde acá."""
+    c = repo.seed_comercio(slug="saca", nombre="Zapas", activo=True)
+    repo.set_comercio_rubros(c["id"], [repo.rubros["ropa"], repo.rubros["ferreteria"]])
+
+    client.post(f"/admin/rubros/revision/{c['id']}",
+                json={"veredicto": "corregido", "rubro_slugs": ["calzado"]},
+                headers=_h(admin_token))
+    assert repo.get_comercio_rubros(c["id"]) == ["calzado"]
+
+
+def test_el_atajo_de_un_toque_sigue_sumando_sin_borrar(client, repo, admin_token):
+    """La cola de revisión manda un solo rubro y ahí SÍ se conserva el resto:
+    es un toque rápido para poner el principal, no una edición de la lista."""
+    c = repo.seed_comercio(slug="suma", nombre="Mixto", activo=True)
+    repo.set_comercio_rubros(c["id"], [repo.rubros["ropa"]])
+
+    client.post(f"/admin/rubros/revision/{c['id']}",
+                json={"veredicto": "corregido", "rubro_slug": "calzado"},
+                headers=_h(admin_token))
+    assert repo.get_comercio_rubros(c["id"]) == ["calzado", "ropa"]
