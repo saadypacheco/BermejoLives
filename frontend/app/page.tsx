@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
 import { Ic } from "@/components/uruku-ui";
-import { getFeed, getVideosPromo, getRedes, getLugaresPublicos, getVolumenes, UMBRALES } from "@/lib/data";
+import { getFeed, getVideosPromo, getRedes, getLugaresPublicos, getVolumenes, UMBRALES, APAGADAS } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { precioFmt } from "@/lib/types";
 
@@ -161,7 +161,7 @@ export default async function InicioPage() {
       {/* ===== Mercados y galerías =====
           Con tres mercados cargados la sección cuenta lo que falta, igual que
           las tarjetas de arriba. Aparece a partir de UMBRALES.lugares. */}
-      {lugares.length > 0 && vol.lugares >= UMBRALES.lugares && (
+      {!APAGADAS.mercados && lugares.length > 0 && vol.lugares >= UMBRALES.lugares && (
         <section className="uk-container uk-section">
           <div className="uk-section-head">
             <h2>🏬 Mercados y galerías de {nombre}</h2>
@@ -183,7 +183,14 @@ export default async function InicioPage() {
       )}
 
       {/* ===== Highlight grid ===== */}
-      <section className="uk-container uk-highlight">
+      {/* Con "Lo mejor de hoy" apagado queda una sola tarjeta, y la grilla de dos
+          columnas la dejaría a media pantalla con un hueco al lado. La clase
+          `uk-highlight-solo` la hace ocupar todo. */}
+      <section className={`uk-container uk-highlight${APAGADAS.loMejorDeHoy ? " uk-highlight-solo" : ""}`}>
+        {/* "Lo mejor de hoy" contaba: ofertas activas, novedades, recorridos.
+            Con una oferta cargada el panel dice "1", y un contador en uno mide
+            el vacío en vez de mostrar la ciudad. Vuelve cuando haya qué contar. */}
+        {!APAGADAS.loMejorDeHoy && (
         <article className="uk-panel">
           <h3>Lo mejor de hoy en {nombre}</h3>
           {ofertas.length > 0 && <div className="uk-statrow"><span>🏷️ Ofertas activas</span><strong>{ofertas.length}</strong></div>}
@@ -193,6 +200,7 @@ export default async function InicioPage() {
             <p style={{ color: "var(--uk-ink-soft)", fontSize: 14, margin: "4px 0 0" }}>Buscá lo que necesitás y descubrí los comercios de {nombre}.</p>
           )}
         </article>
+        )}
 
         <article className="uk-panel uk-discover" style={{ backgroundImage: `url('${fotoImg}')` }}>
           <h3>Descubrí más.<br /><span>Ahorrá siempre.</span></h3>

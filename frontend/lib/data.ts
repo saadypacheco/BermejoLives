@@ -91,6 +91,22 @@ export const UMBRALES: Volumenes = {
   lugares: 8,
 };
 
+/** Secciones apagadas a mano mientras el catálogo crece.
+ *
+ *  No son umbrales: son una decisión. Un umbral dice "cuando haya tanto, esto
+ *  vale la pena"; esto dice "hoy no queremos mostrarlo, aunque el número dé".
+ *  Mezclarlas escondería la decisión adentro de un número y nadie sabría, en
+ *  dos meses, si la sección no aparece porque falta dato o porque se apagó.
+ *
+ *  Se vuelve a encender poniendo `false`. */
+export const APAGADAS = {
+  /** Con pocos mercados cargados la sección cuenta lo que falta. */
+  mercados: true,
+  /** "Lo mejor de hoy": con una oferta activa, el panel dice "1" y eso mide
+   *  el vacío en vez de mostrar la ciudad. */
+  loMejorDeHoy: true,
+};
+
 const SIN_VOLUMEN: Volumenes = { ofertas: 0, verificados: 0, destacados: 0, promos: 0, lugares: 0 };
 
 export async function getVolumenes(): Promise<Volumenes> {

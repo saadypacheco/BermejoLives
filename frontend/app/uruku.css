@@ -313,6 +313,9 @@
 
 /* ---- Highlight grid ---- */
 .uk-highlight { display: grid; grid-template-columns: 1fr 1.3fr; gap: 16px; padding-bottom: 30px; }
+/* Con una sola tarjeta adentro, que ocupe el ancho: si no queda a media
+   pantalla con un hueco al lado, que se lee como algo que no cargó. */
+.uk-highlight-solo { grid-template-columns: 1fr; }
 .uk-panel { min-height: 240px; border-radius: 19px; padding: 22px; background: var(--uk-surface); border: 1px solid var(--uk-line); box-shadow: var(--uk-shadow-soft); }
 .uk-panel h3 { margin: 0 0 15px; font-size: 20px; }
 .uk-statrow { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--uk-line); font-size: 13px; }
