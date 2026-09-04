@@ -818,6 +818,24 @@ export type SugerenciasRubro = {
   ia: { rubros: RubroSimple[]; motivo: string } | null;
 };
 
+export type RecalculoPrincipal = {
+  aplicado: boolean;
+  cambiados: number;
+  candidatos: number;
+  /** Los que tienen dos o más sugerencias: no se tocan, van a mano. */
+  ambiguos: number;
+  salteados: { codigo: string | null; nombre: string | null }[];
+  detalle: { comercio_id: string; codigo: string | null; nombre: string | null;
+             de: string | null; a: string; texto: string }[];
+  detalle_recortado: number;
+};
+
+export async function recalcularPrincipal(aplicar = false): Promise<RecalculoPrincipal> {
+  const res = await authFetch(`/admin/rubros/recalcular-principal?aplicar=${aplicar}`,
+                              { method: "POST" });
+  return res.json();
+}
+
 export async function sugerenciasDeRubro(comercioId: string): Promise<SugerenciasRubro> {
   const res = await authFetch(`/admin/comercio/${comercioId}/rubro/sugerencias`, { method: "POST" });
   return res.json();

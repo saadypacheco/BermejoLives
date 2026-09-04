@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  getRevisionRubros, revisarRubro,
-  type FilaRevision, type ResumenRevision, type RubroSimple,
+  getRevisionRubros, revisarRubro, recalcularPrincipal,
+  type FilaRevision, type ResumenRevision, type RubroSimple, type RecalculoPrincipal,
 } from "@/lib/api";
 import { RubroRecalcular } from "@/components/rubro-recalcular";
 
@@ -41,6 +41,9 @@ export function RevisionRubros() {
   // Cuál tiene el editor abierto. Uno por vez: dos formularios abiertos en una
   // cola de 200 filas es cómo se termina guardando el rubro de otro comercio.
   const [editando, setEditando] = useState<string | null>(null);
+  // La vista previa del recálculo. `null` = todavía no se pidió.
+  const [prev, setPrev] = useState<RecalculoPrincipal | null>(null);
+  const [corriendo, setCorriendo] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -105,6 +108,32 @@ export function RevisionRubros() {
 
   const nombreDe = (slug: string) => rubros.find((r) => r.slug === slug)?.nombre ?? slug;
 
+  async function verQueCambiaria() {
+    setCorriendo(true); setErr("");
+    try { setPrev(await recalcularPrincipal(false)); }
+    catch (e) { setErr(e instanceof Error ? e.message : "No se pudo calcular"); }
+    finally { setCorriendo(false); }
+  }
+
+  async function aplicarRecalculo() {
+    if (!prev) return;
+    if (!confirm(
+      `Se va a cambiar el rubro principal de ${prev.candidatos} comercios.
+
+` +
+      `Sólo los que tienen UNA sugerencia. Los ${prev.ambiguos} con dos o más ` +
+      `quedan en la cola para revisar a mano.
+
+No se borra ningún rubro: ` +
+      `los que ya tenían quedan como secundarios.
+
+¿Seguimos?`)) return;
+    setCorriendo(true); setErr("");
+    try { setPrev(await recalcularPrincipal(true)); await cargar(); }
+    catch (e) { setErr(e instanceof Error ? e.message : "No se pudo aplicar"); }
+    finally { setCorriendo(false); }
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {err && <div className="panel-card glass" style={{ padding: 14, color: "var(--pink)", fontSize: 13 }}>{err}</div>}
@@ -143,6 +172,80 @@ export function RevisionRubros() {
           </p>
         )}
       </div>
+
+      {/* El atajo que resuelve la mitad de la cola sin decidir nada.
+          Va acá arriba y con vista previa obligatoria: escribe sobre cien
+          fichas de una, y la única forma honesta de ofrecer eso es mostrar
+          antes la lista exacta de lo que va a cambiar. */}
+      {estado === "dudosos" && (
+        <div className="panel-card glass" style={{ padding: 14 }}>
+          <div style={{ fontSize: 12.5 }}>
+            <b>Los que no tienen nada que decidir</b>
+            <div style={{ color: "var(--txt-3)", marginTop: 4 }}>
+              Cuando el texto dispara <b>un solo</b> rubro y la ficha muestra otro, no falta
+              criterio: falta escribirlo. Con dos o más sugerencias no se toca nada — el
+              diccionario las devuelve en orden alfabético, así que “la primera” no quiere
+              decir nada, y elegir entre tres es tu decisión.
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <button className="btn btn-ghost btn-sm" disabled={corriendo} onClick={verQueCambiaria}>
+              Ver qué cambiaría
+            </button>
+            {prev && !prev.aplicado && prev.candidatos > 0 && (
+              <button className="btn btn-primary btn-sm" disabled={corriendo} onClick={aplicarRecalculo}>
+                Aplicar los {prev.candidatos}
+              </button>
+            )}
+          </div>
+
+          {prev && (
+            <div style={{ marginTop: 10, fontSize: 12.5 }}>
+              {prev.aplicado ? (
+                <div style={{ color: "var(--neon)" }}>
+                  Listo: {prev.cambiados} comercios con el principal corregido.
+                  Quedan {prev.ambiguos} para revisar a mano, abajo.
+                </div>
+              ) : (
+                <div>
+                  <b>{prev.candidatos}</b> cambiarían · <b>{prev.ambiguos}</b> quedan para vos
+                  {prev.salteados.length > 0 && (
+                    <span style={{ color: "var(--amber)" }}>
+                      {" "}· {prev.salteados.length} salteados por tener ya 6 rubros
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {!prev.aplicado && prev.detalle.length > 0 && (
+                <div style={{ marginTop: 8, maxHeight: 260, overflowY: "auto",
+                              border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
+                  <div style={{ fontSize: 11, color: "var(--txt-3)", paddingBottom: 5,
+                                borderBottom: "1px solid var(--border)", marginBottom: 5 }}>
+                    Comercio · <span style={{ color: "var(--amber)" }}>rubro que tiene hoy</span> →{" "}
+                    <span style={{ color: "var(--neon)" }}>al que pasa</span> · con qué texto se dedujo
+                  </div>
+                  {prev.detalle.map((x) => (
+                    <div key={x.comercio_id} style={{ padding: "3px 0", color: "var(--txt-2)" }}>
+                      <b>{x.nombre || "Comercio"}</b>{" "}
+                      <span style={{ color: "var(--amber)" }}>{x.de}</span>
+                      {" → "}
+                      <span style={{ color: "var(--neon)" }}>{nombreDe(x.a)}</span>
+                      <span style={{ color: "var(--txt-3)" }}> — {x.texto}</span>
+                    </div>
+                  ))}
+                  {prev.detalle_recortado > 0 && (
+                    <div style={{ color: "var(--txt-3)", marginTop: 4 }}>
+                      …y {prev.detalle_recortado} más que no entran en esta lista.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {cargando && (
         <div className="panel-card glass" style={{ padding: 24, textAlign: "center", color: "var(--txt-3)" }}>

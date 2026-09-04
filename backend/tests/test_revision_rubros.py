@@ -216,3 +216,64 @@ def test_el_atajo_de_un_toque_sigue_sumando_sin_borrar(client, repo, admin_token
                 json={"veredicto": "corregido", "rubro_slug": "calzado"},
                 headers=_h(admin_token))
     assert repo.get_comercio_rubros(c["id"]) == ["calzado", "ropa"]
+
+
+# ═════════════════════════════════ recálculo del principal, sólo lo inequívoco
+def test_el_recalculo_toca_solo_los_de_UNA_sugerencia(client, repo, admin_token):
+    """Con dos o más, "la primera" no significa nada.
+
+    `rubros_sugeridos` devuelve un array_agg(distinct), o sea alfabético: entre
+    calzado y ropa gana calzado por la C, no por describir mejor al comercio.
+    Elegir ahí es criterio humano."""
+    claro = repo.seed_comercio(slug="claro", nombre="Zapas", prod_det_ia="zapatilla", activo=True)
+    repo.set_comercio_rubros(claro["id"], [repo.rubros["ferreteria"]])
+    ambiguo = repo.seed_comercio(slug="ambiguo", nombre="Mixto",
+                                 prod_det_ia="zapatilla y remera", activo=True)
+    repo.set_comercio_rubros(ambiguo["id"], [repo.rubros["ferreteria"]])
+
+    r = client.post("/admin/rubros/recalcular-principal", headers=_h(admin_token))
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert [x["comercio_id"] for x in d["detalle"]] == [claro["id"]]
+    assert d["ambiguos"] >= 1
+
+
+def test_sin_aplicar_no_escribe_nada(client, repo, admin_token):
+    """La vista previa es previa. Si escribiera, no habría dónde decir que no."""
+    c = repo.seed_comercio(slug="prev", nombre="Zapas", prod_det_ia="zapatilla", activo=True)
+    repo.set_comercio_rubros(c["id"], [repo.rubros["ferreteria"]])
+
+    client.post("/admin/rubros/recalcular-principal", headers=_h(admin_token))
+    assert repo.get_comercio_rubros(c["id"]) == ["ferreteria"]
+
+
+def test_aplicar_pone_el_principal_y_conserva_los_otros(client, repo, admin_token):
+    c = repo.seed_comercio(slug="apl", nombre="Zapas", prod_det_ia="zapatilla", activo=True)
+    repo.set_comercio_rubros(c["id"], [repo.rubros["ferreteria"]])
+
+    r = client.post("/admin/rubros/recalcular-principal?aplicar=true", headers=_h(admin_token))
+    assert r.json()["cambiados"] == 1
+    assert repo.get_comercio_rubros(c["id"]) == ["calzado", "ferreteria"]
+
+
+def test_el_recalculo_NO_marca_el_comercio_como_revisado_por_una_persona(client, repo, admin_token):
+    """La marca separa lo que miró alguien de lo que hizo una corrida. Si el
+    recálculo la pusiera, dejaría de servir para lo único que sirve.
+
+    Igual sale de la cola: la cola es "el principal no está entre las
+    sugerencias", y después de esto sí está."""
+    c = repo.seed_comercio(slug="nomarca", nombre="Zapas", prod_det_ia="zapatilla", activo=True)
+    repo.set_comercio_rubros(c["id"], [repo.rubros["ferreteria"]])
+
+    client.post("/admin/rubros/recalcular-principal?aplicar=true", headers=_h(admin_token))
+    assert not repo.comercios[c["id"]].get("rubro_revisado_at")
+    en_cola = client.get("/admin/rubros/revision", headers=_h(admin_token)).json()["items"]
+    assert c["id"] not in [i["comercio_id"] for i in en_cola]
+
+
+def test_queda_dicho_que_lo_cambio_una_corrida_y_no_una_persona(client, repo, admin_token):
+    c = repo.seed_comercio(slug="audit", nombre="Zapas", prod_det_ia="zapatilla", activo=True)
+    repo.set_comercio_rubros(c["id"], [repo.rubros["ferreteria"]])
+
+    client.post("/admin/rubros/recalcular-principal?aplicar=true", headers=_h(admin_token))
+    assert "recalculo-automatico" in repo.correcciones_rubro[-1]["revisado_por"]

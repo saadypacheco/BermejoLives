@@ -1817,6 +1817,80 @@ class AplicarPatronBody(BaseModel):
     palabras: str
 
 
+@router.post("/admin/rubros/recalcular-principal")
+async def admin_recalcular_principal(
+    aplicar: bool = Query(default=False),
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Arregla el rubro principal SÓLO donde no hay nada que decidir.
+
+    De los que no cierran, algunos tienen **una sola** sugerencia: el texto
+    dispara un único rubro y la ficha muestra otro. Ahí no falta criterio, falta
+    que alguien lo escriba — y son 102 de 194.
+
+    Los demás tienen dos o tres, y ésos NO se tocan. La razón es concreta y no
+    es prudencia: `rubros_sugeridos` devuelve un `array_agg(distinct ...)`, o
+    sea orden alfabético. Con varias sugerencias, "la primera" no significa
+    nada — Bazar gana porque empieza con B. Elegir entre tres es criterio
+    humano, y para eso está la cola.
+
+    No marca los comercios como revisados por una persona: la marca tiene que
+    seguir queriendo decir eso. Salen de la cola solos, porque la cola es "el
+    principal no está entre las sugerencias" y después de esto sí lo está.
+
+    Sin `aplicar=true` no escribe nada: devuelve la lista de qué cambiaría.
+    """
+    from app.services.rubros_auto import MAX_RUBROS
+
+    filas = await run_in_threadpool(repo.rubros_a_revisar, "dudosos", 1000)
+    unicos = [f for f in filas if len(f.get("sugeridos") or []) == 1]
+
+    detalle, salteados, hechos = [], [], 0
+    for f in unicos:
+        destino = f["sugeridos"][0]
+        otros = [s for s in (f.get("ya_tiene") or []) if s != destino]
+        # El mismo tope que el completado masivo: un comercio en siete
+        # categorías no filtra en ninguna, y sumarle una más lo empeora.
+        if len(otros) + 1 > MAX_RUBROS:
+            salteados.append({"codigo": f.get("codigo"), "nombre": f.get("nombre")})
+            continue
+
+        detalle.append({
+            "comercio_id": f["comercio_id"], "codigo": f.get("codigo"),
+            "nombre": f.get("nombre"), "de": f.get("principal_nombre") or f.get("principal"),
+            "a": destino, "texto": (f.get("texto") or "")[:110],
+        })
+        if not aplicar:
+            continue
+
+        repo.update_comercio(f["comercio_id"], {}, [destino] + otros)
+        repo.registrar_correccion_rubro({
+            "comercio_id": f["comercio_id"],
+            "veredicto": "corregido",
+            "rubro_antes": f.get("principal"),
+            "rubro_nuevo": destino,
+            "texto": (f.get("texto") or "")[:2000],
+            # Queda dicho que esto no lo decidió una persona: el día que haya que
+            # auditar una clasificación rara, la diferencia importa.
+            "revisado_por": f"recalculo-automatico ({admin['email']})",
+        })
+        hechos += 1
+
+    if aplicar:
+        logger.info("admin.recalculo_principal", comercios=hechos, by=admin["email"])
+    return {
+        "aplicado": aplicar, "cambiados": hechos if aplicar else 0,
+        "candidatos": len(detalle),
+        # Cuántos quedan para revisar a mano, dicho acá para que el botón no se
+        # lea como "esto arregla todo".
+        "ambiguos": len(filas) - len(unicos),
+        "salteados": salteados,
+        "detalle": detalle[:200],
+        "detalle_recortado": max(0, len(detalle) - 200),
+    }
+
+
 @router.post("/admin/comercio/{comercio_id}/rubro/sugerencias")
 async def admin_sugerencias_de_rubro(
     comercio_id: str,
