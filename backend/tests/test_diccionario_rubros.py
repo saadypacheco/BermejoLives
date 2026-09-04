@@ -91,3 +91,28 @@ def test_ninguna_palabra_clasifica_en_dos_rubros_sin_estar_declarada():
         "La misma palabra clasifica en dos rubros. Si el solapamiento es real "
         "—dos negocios que de verdad hacen lo mismo— agregalo a "
         f"SOLAPES_ACEPTADOS con el motivo; si no, sacala del genérico: {chocan}")
+
+
+def test_ningun_patron_lleva_tildes_ni_ene():
+    """Una palabra con tilde en el diccionario no clasifica a nadie. Nunca.
+
+    `rubros_sugeridos` compara `unaccent(lower(texto)) ~ patron`: el TEXTO se
+    desacentúa antes de comparar, el PATRÓN no. "Peña El Ceibo" llega como
+    "pena el ceibo" y el patrón busca "peña" — no coinciden, y no coinciden con
+    ningún texto en ninguna ciudad.
+
+    Es la forma cara de fallar: no da error, la palabra está escrita en la
+    tabla, el panel la muestra, y clasifica cero. Se descubrió porque el
+    verificador del buscador listó `peña` entre las palabras que no traen nada,
+    y una peña en Bermejo no es una rareza.
+    """
+    con_tilde = []
+    for slug, patrones in _estado_final().items():
+        for p in patrones:
+            for termino in p[p.index("(") + 1:-1].split("|"):
+                if any(c in termino for c in "áéíóúñüÁÉÍÓÚÑÜ"):
+                    con_tilde.append(f"{slug}: {termino.strip()}")
+    assert not con_tilde, (
+        "Estas palabras no pueden matchear nunca: el texto se compara sin "
+        "tildes. Escribilas sin tilde — y si sin tilde quedan ambiguas (uñas → "
+        f"unas), usá la forma compuesta: {con_tilde}")
