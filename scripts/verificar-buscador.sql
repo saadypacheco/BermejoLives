@@ -111,6 +111,30 @@ select p.rubro_slug, p.termino, coalesce(b.total, 0) as resultados
  order by p.rubro_slug, p.termino;
 
 \echo ''
+\echo '=== EL ORDEN DE LAS PALABRAS NO DEBERIA CAMBIAR NADA ==='
+\echo '(cada rubro de nombre compuesto, buscado al derecho y al reves)'
+\echo '(si normal y al_reves difieren, ese rubro depende del orden y hay que mirarlo)'
+with r as (
+  select rb.nombre,
+         btrim(regexp_replace(rb.nombre, '[^[:alpha:] ]', '', 'g')) as texto
+    from rubros rb
+   where rb.activo
+), inv as (
+  select nombre, texto,
+         (select string_agg(w, ' ' order by i desc)
+            from unnest(string_to_array(texto, ' ')) with ordinality as t(w, i)) as revertido
+    from r
+   where texto like '% %'
+)
+select nombre,
+       coalesce((select total from buscar_comercios(texto, p_limit => 1) limit 1), 0) as normal,
+       coalesce((select total from buscar_comercios(revertido, p_limit => 1) limit 1), 0) as al_reves
+  from inv
+ order by abs(coalesce((select total from buscar_comercios(texto, p_limit => 1) limit 1), 0)
+             - coalesce((select total from buscar_comercios(revertido, p_limit => 1) limit 1), 0)) desc,
+          nombre;
+
+\echo ''
 \echo '=== RESUMEN ==='
 select
   (select count(*) from comercios where activo) as "comercios activos",
