@@ -782,10 +782,33 @@ class SupabaseRepo:
         return sorted(salida, key=lambda x: -x["veces"])[:limite]
 
     def crear_rubro(self, row: dict) -> dict:
-        """Alta de un rubro. `on conflict` sobre el slug: reactiva en vez de
-        fallar, porque el caso común es recrear uno que se había apagado."""
-        res = (self._db.table("rubros")
-               .upsert({**row, "activo": True}, on_conflict="slug").execute())
+        """Alta de un rubro. Si el slug ya existe, lo REACTIVA sin pisarle el
+        nombre.
+
+        El upsert plano pisaba todo, y eso convirtió "🥩 Carnicería y pollería"
+        en "carniceria": alguien resolvió la propuesta creando el rubro, el slug
+        coincidió con el que ya existía y el nombre bueno se perdió. No falló
+        nada — el rubro siguió andando, sólo pasó a llamarse peor, y así
+        quedaron cinco rubros en minúscula entre los 64.
+
+        Reactivar sí tiene que seguir funcionando: el caso común es recrear uno
+        que se había apagado.
+        """
+        existente = (self._db.table("rubros").select("id, slug, nombre, icono, activo")
+                     .eq("slug", row["slug"]).limit(1).execute().data)
+        if existente:
+            fila = existente[0]
+            patch: dict = {"activo": True}
+            # Sólo se completa lo que falta. Cambiarle el nombre a un rubro vivo
+            # se hace editándolo, no creándolo de nuevo.
+            if not (fila.get("nombre") or "").strip():
+                patch["nombre"] = row.get("nombre")
+            if not (fila.get("icono") or "").strip() and row.get("icono"):
+                patch["icono"] = row["icono"]
+            self._db.table("rubros").update(patch).eq("slug", row["slug"]).execute()
+            return {**fila, **patch}
+
+        res = self._db.table("rubros").insert({**row, "activo": True}).execute()
         return res.data[0] if res.data else {}
 
     def agregar_palabras_rubro(self, slug: str, patron: str) -> None:

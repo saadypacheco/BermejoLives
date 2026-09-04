@@ -790,6 +790,12 @@ class FakeRepo:
         # usan veinte tests.
         slug = row["slug"]
         self.rubros.setdefault(slug, self._id("rub"))
+        previo = self.rubros_meta.get(slug)
+        if previo and (previo.get("nombre") or "").strip():
+            # Igual que el repo real: reactiva sin pisar el nombre. Pisarlo fue
+            # lo que dejó cinco rubros llamados "carniceria" o "gimnasio".
+            previo["activo"] = True
+            return previo
         self.rubros_meta[slug] = {**row, "id": self.rubros[slug], "activo": True}
         return self.rubros_meta[slug]
 

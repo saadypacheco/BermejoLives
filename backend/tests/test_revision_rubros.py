@@ -363,3 +363,31 @@ def test_la_identidad_no_agrega_rubros_que_el_texto_no_dispara(client, repo, adm
     r = client.post("/admin/rubros/recalcular-principal?modo=reemplazar", headers=_h(admin_token))
     fila = next(x for x in r.json()["detalle"] if x["comercio_id"] == c["id"])
     assert fila["queda"] == ["Calzado"]
+
+
+def test_crear_un_rubro_que_ya_existe_no_le_pisa_el_nombre(client, repo, admin_token):
+    """Cómo "🥩 Carnicería y pollería" terminó llamándose "carniceria".
+
+    Alguien resolvió la propuesta creando el rubro, el slug coincidió con el que
+    ya existía, y el upsert le pisó el nombre. No falló nada: el rubro siguió
+    andando, sólo pasó a llamarse peor — y así quedaron cinco en minúscula
+    entre los 64."""
+    repo.crear_rubro({"slug": "carniceria", "nombre": "🥩 Carnicería y pollería",
+                      "icono": "🥩", "orden": 20, "comercial": True})
+
+    r = client.post("/admin/rubros", json={"slug": "carniceria", "nombre": "carniceria"},
+                    headers=_h(admin_token))
+    assert r.status_code == 200, r.text
+    assert repo.rubros_meta["carniceria"]["nombre"] == "🥩 Carnicería y pollería"
+
+
+def test_crear_un_rubro_que_estaba_apagado_lo_reactiva(client, repo, admin_token):
+    """Reactivar tiene que seguir funcionando: es el caso común de recrear uno
+    que se había apagado, y es para lo que estaba el upsert."""
+    repo.crear_rubro({"slug": "telas", "nombre": "🧵 Telas y mercería"})
+    repo.rubros_meta["telas"]["activo"] = False
+
+    client.post("/admin/rubros", json={"slug": "telas", "nombre": "telas"},
+                headers=_h(admin_token))
+    assert repo.rubros_meta["telas"]["activo"] is True
+    assert repo.rubros_meta["telas"]["nombre"] == "🧵 Telas y mercería"

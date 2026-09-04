@@ -90,13 +90,19 @@ select r.nombre, r.asignados,
 \echo ''
 \echo '=== PALABRAS DEL DICCIONARIO QUE NO TRAEN NADA ==='
 \echo '(vocabulario que no clasifico a nadie: o no existe en Bermejo, o esta mal escrito)'
+-- Los anclajes se sacan de CADA término, no sólo del borde del patrón.
+--
+-- Muchos se guardan pegados a la palabra —`\macolchado`, `toalla\M`— y no en
+-- los extremos. Sacando sólo los del borde quedaba el literal "\macolchado", que
+-- no lo trae nada, y el informe decía que nadie vende sábanas, caramelos ni
+-- chocolate en Bermejo. Un cero tranquilizador que era del script.
 with palabras as (
   select distinct rp.rubro_slug,
-         btrim(x) as termino
+         btrim(replace(replace(x, '\m', ''), '\M', '')) as termino
     from rubro_palabras rp,
          unnest(string_to_array(
            regexp_replace(rp.patron, '^\\m\(|\)$', '', 'g'), '|')) as x
-   where btrim(x) <> ''
+   where btrim(replace(replace(x, '\m', ''), '\M', '')) <> ''
 )
 select p.rubro_slug, p.termino, coalesce(b.total, 0) as resultados
   from palabras p
