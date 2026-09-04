@@ -212,20 +212,12 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   const catChips = [{ slug: "", nombre: "Todos" }, ...rubros];
   const rubroElegido = rubro ? rubros.find((x) => x.slug === rubro)?.nombre ?? null : null;
 
-  function limpiarTodo() {
-    setQ(""); setRubro(""); setSubcategoria(""); setModalidad("");
-    setZona(""); setPrecioMax(""); setSoloOfertas(false);
-  }
-
-  const activos: { clave: string; texto: string; quitar: () => void }[] = [
-    q.trim() && { clave: "q", texto: `“${q.trim()}”`, quitar: () => setQ("") },
-    rubroElegido && { clave: "rubro", texto: rubroElegido, quitar: () => setRubro("") },
-    subcategoria && { clave: "sub", texto: subcategoria, quitar: () => setSubcategoria("") },
-    modalidad && { clave: "mod", texto: MODALIDAD_LABEL[modalidad] ?? modalidad, quitar: () => setModalidad("") },
-    zonaNom && { clave: "zona", texto: zonaNom, quitar: () => setZona("") },
-    precioMax && { clave: "precio", texto: `hasta ${precioMax}`, quitar: () => setPrecioMax("") },
-    soloOfertas && { clave: "ofertas", texto: "Con ofertas", quitar: () => setSoloOfertas(false) },
-  ].filter(Boolean) as { clave: string; texto: string; quitar: () => void }[];
+  // Sin fila de filtros activos y sin "Limpiar todo": el buscador se lee de una
+  // sola pasada, como el de Google. Lo que está filtrando ya se ve donde se
+  // eligió —el texto en el buscador, la subcategoría en su chip encendido,
+  // rubro / zona / precio / tipo en la etiqueta del propio filtro—, y cada uno
+  // se saca desde ahí. Un botón que borra siete cosas a la vez es más rápido de
+  // apretar por error que de rehacer.
 
   return (
     <div className="uk-container uk-buscar">
@@ -253,28 +245,6 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
         </div>
       ) : null}
 
-
-      {/* Qué está filtrando, en un solo lugar y con la × para sacarlo.
-          Reemplaza al "Todos" ambiguo: había uno en la fila de rubros que
-          significaba "todas las categorías" y otro en la de refinamientos que
-          significaba "todas las subcategorías de esta búsqueda" — mismo texto,
-          mismo aspecto, mismo lugar, distinto efecto. */}
-      {activos.length > 0 && (
-        <div className="uk-activos">
-          <span className="uk-activos-tit">Mostrando</span>
-          {activos.map((a) => (
-            <button type="button" key={a.clave} className="uk-activo" onClick={a.quitar}>
-              {a.texto} <span aria-hidden>×</span>
-              <span className="sr-only">Quitar filtro {a.texto}</span>
-            </button>
-          ))}
-          {activos.length > 1 && (
-            <button type="button" className="uk-activos-limpiar" onClick={limpiarTodo}>
-              Limpiar todo
-            </button>
-          )}
-        </div>
-      )}
 
       {/* Los filtros y el interruptor Lista/Mapa comparten fila: eran dos
           renglones y arriba del mapa cada renglón se paga en mapa cortado.

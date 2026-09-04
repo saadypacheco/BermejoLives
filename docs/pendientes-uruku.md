@@ -274,6 +274,19 @@ captación** — analizado en la §2 de ese documento, con una recomendación.
 ---
 
 ## 🎨 Diseño (menor, no bloquea)
+- [x] **Fuera la fila “Mostrando” — 2026-09-03.**
+      Cada vez que escribías o aplicabas un filtro aparecía un renglón nuevo
+      debajo de los chips (`Mostrando · “estacion de servicio” ×`) que empujaba
+      los resultados hacia abajo, y arriba del mapa un renglón se paga en mapa
+      cortado. Además repetía: buscabas `estacion de servicio`, tocabas el
+      refinamiento `estación de servicio` y quedaban dos etiquetas casi iguales,
+      una sin tilde. Se fue la fila entera, y con ella el botón “Limpiar todo”:
+      el buscador se lee de una sola pasada. Lo que está filtrando se ve donde
+      se eligió —el texto en el buscador, la subcategoría en su chip encendido,
+      rubro / zona / precio / tipo en la etiqueta del propio filtro— y cada uno
+      se saca desde ahí. Ver
+      [buscar-client.tsx](../frontend/components/buscar-client.tsx).
+
 - [ ] **Input del buscador en modo oscuro:** se pierde, hay muy poco contraste
       contra el fondo. Debería leerse claramente dónde se escribe.
 - [ ] **Barra de redes / clima / cotización en escritorio:** queda pegada debajo

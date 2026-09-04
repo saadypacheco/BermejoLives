@@ -813,17 +813,6 @@ select:not(.adm-input) { color-scheme: dark; }
   color: #d8d8d8 !important; padding: 1px 6px; border-radius: 6px 0 0 0; }
 .leaflet-control-attribution a { color: #eaeaea !important; }
 
-/* Los filtros activos, en una línea. Reemplazan al "Todos" ambiguo: para
-   quitar un filtro se lo saca de donde está, en vez de buscar un botón que
-   significaba cosas distintas según la fila en la que estuviera. */
-.uk-activos { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 10px 0 4px; }
-.uk-activos-tit { font-size: 12.5px; color: var(--uk-ink-soft); }
-.uk-activo { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
-  border-radius: 999px; border: 1px solid var(--uk-line); background: var(--uk-surface-2);
-  color: var(--uk-ink); font: inherit; font-size: 12.5px; cursor: pointer; }
-.uk-activo:hover { border-color: var(--uk-ink-soft); }
-.uk-activos-limpiar { background: none; border: 0; color: var(--uk-ink-soft);
-  font: inherit; font-size: 12.5px; text-decoration: underline; cursor: pointer; padding: 4px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
