@@ -5,6 +5,7 @@ import {
   getRevisionRubros, revisarRubro,
   type FilaRevision, type ResumenRevision, type RubroSimple,
 } from "@/lib/api";
+import { RubroRecalcular } from "@/components/rubro-recalcular";
 
 /**
  * Revisar la clasificación de a uno, con una persona decidiendo.
@@ -37,12 +38,9 @@ export function RevisionRubros() {
   const [rubros, setRubros] = useState<RubroSimple[]>([]);
   const [err, setErr] = useState("");
   const [cargando, setCargando] = useState(true);
-  // Cuál está abierto para corregir, y con qué. Uno por vez: dos formularios
-  // abiertos en una cola de 200 filas es cómo se termina guardando el rubro de
-  // otro comercio.
+  // Cuál tiene el editor abierto. Uno por vez: dos formularios abiertos en una
+  // cola de 200 filas es cómo se termina guardando el rubro de otro comercio.
   const [editando, setEditando] = useState<string | null>(null);
-  const [elegido, setElegido] = useState("");
-  const [palabras, setPalabras] = useState("");
   const [guardando, setGuardando] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -97,7 +95,7 @@ export function RevisionRubros() {
         palabras: conPalabras?.trim() || undefined,
       });
       sacarDeLaLista(f.comercio_id);
-      setEditando(null); setElegido(""); setPalabras("");
+      setEditando(null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "No se pudo guardar");
     } finally {
@@ -205,8 +203,6 @@ export function RevisionRubros() {
                 <button className="btn btn-ghost btn-sm" disabled={guardando} onClick={() => marcarOk(f)}>
                   ✓ Está bien
                 </button>
-                {/* Los sugeridos como atajo: en la mayoría de los casos el
-                    diccionario ya acertó y el trabajo es un solo toque. */}
                 {/* Un toque y listo. En la mayoría de los casos el diccionario
                     ya acertó, y obligar a abrir un formulario para confirmarlo
                     convierte una cola de 200 en una tarde. */}
@@ -216,54 +212,26 @@ export function RevisionRubros() {
                     → {nombreDe(s)}
                   </button>
                 ))}
+                {/* Los atajos de arriba sólo SUMAN un rubro. Cuando hay que
+                    sacar alguno —"quitá supermercado y café, dejá el resto"—
+                    hace falta el editor completo, que es el mismo de la lista
+                    de Negocios: casillas, orden y la ★ del principal. Tener dos
+                    editores distintos para lo mismo era la mitad del problema. */}
                 <button className="btn btn-ghost btn-sm" disabled={guardando}
-                        onClick={() => {
-                          setEditando(editando === f.comercio_id ? null : f.comercio_id);
-                          setElegido(""); setPalabras("");
-                        }}>
-                  Es otro…
+                        onClick={() => setEditando(editando === f.comercio_id ? null : f.comercio_id)}>
+                  ✏️ Editar los rubros
                 </button>
               </div>
 
               {editando === f.comercio_id && (
-                <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 10,
-                              border: "1px solid var(--border)" }}>
-                  <label style={{ fontSize: 12, color: "var(--txt-3)" }}>
-                    Rubro correcto
-                    <select className="adm-input" style={{ marginTop: 4 }} value={elegido}
-                            onChange={(e) => setElegido(e.target.value)}>
-                      <option value="">Elegir…</option>
-                      {rubros.map((r) => (
-                        <option key={r.slug} value={r.slug}>{r.nombre}</option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label style={{ fontSize: 12, color: "var(--txt-3)", display: "block", marginTop: 8 }}>
-                    Palabra que lo hubiera clasificado bien <span style={{ opacity: .7 }}>(opcional)</span>
-                    <input className="adm-input" style={{ marginTop: 4 }} value={palabras}
-                           placeholder="taller de motos, motos"
-                           onChange={(e) => setPalabras(e.target.value)} />
-                  </label>
-                  <div style={{ fontSize: 11.5, color: "var(--txt-3)", marginTop: 6 }}>
-                    Esto es lo que hace que la corrección sirva para el próximo. Van las
-                    formas compuestas, que nombran el negocio y no el producto suelto:
-                    &ldquo;pollo&rdquo; lo vende media comida rápida y &ldquo;bar&rdquo; está
-                    dentro de &ldquo;barbería&rdquo;. Si dudás del alcance, agregala desde
-                    <b> Rubros → vista previa</b>, que cuenta a cuántos llega antes de guardarla.
-                  </div>
-
-                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                    <button className="btn btn-primary btn-sm" disabled={!elegido || guardando}
-                            onClick={() => corregirA(f, elegido, palabras)}>
-                      Guardar corrección
-                    </button>
-                    <button className="btn btn-ghost btn-sm" disabled={guardando}
-                            onClick={() => { setEditando(null); setElegido(""); setPalabras(""); }}>
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
+                <RubroRecalcular
+                  comercioId={f.comercio_id}
+                  nombre={f.nombre || "Comercio"}
+                  rubroActual={f.principal}
+                  rubros={rubros}
+                  onListo={() => { sacarDeLaLista(f.comercio_id); setEditando(null); }}
+                  onCerrar={() => setEditando(null)}
+                />
               )}
             </div>
           </div>
