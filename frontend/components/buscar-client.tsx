@@ -62,6 +62,17 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   // Última búsqueda logueada: se le atan los contactos que salgan de ella.
   const [busquedaId, setBusquedaId] = useState<string | null>(null);
   const PAGE = 30;
+  /** A partir de cuántos resultados vale la pena mostrar el conteo de cada chip.
+   *
+   *  Debajo de esto los números son de un dígito y cuentan lo que no hay: sobre
+   *  78 resultados de "comida", el chip decía "hamburguesería 2". Arriba, en
+   *  cambio, el número es lo que hace útil al chip — sin búsqueda son los rubros
+   *  de la ciudad entera ("almacén 62", "bazar 42") y ahí el conteo dice a
+   *  dónde ir.
+   *
+   *  Es un solo número y se cambia acá. Cuando la ciudad esté cargada de verdad
+   *  va a poder bajar. */
+  const MIN_PARA_CONTAR = 150;
 
   const filtros = { q, rubro, subcategoria, modalidad, zona, ciudad, precioMax: precioMax ? Number(precioMax) : undefined };
 
@@ -244,7 +255,19 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
             <button type="button" key={rf.subcategoria}
                     className={`uk-chip ${subcategoria === rf.subcategoria ? "active" : ""}`}
                     onClick={() => setSubcategoria(subcategoria === rf.subcategoria ? "" : rf.subcategoria)}>
-              {rf.subcategoria} <span style={{ opacity: .6 }}>{rf.n}</span>
+              {rf.subcategoria}
+              {/* El número, sólo cuando hay de dónde elegir. Es la misma regla
+                  por la que el total salió de la barra: un número chico no
+                  informa, delata. Buscabas "comida" y el chip decía
+                  "hamburguesería 2" — el comprador no aprende nada útil y se
+                  entera de que el directorio está casi vacío, que es lo que no
+                  conviene contar en la etapa de captación.
+
+                  El chip se queda igual: sigue siendo la forma de afinar
+                  "comida" a "hamburguesería". Lo que se va es el conteo. */}
+              {total != null && total >= MIN_PARA_CONTAR && (
+                <span style={{ opacity: .6 }}> {rf.n}</span>
+              )}
             </button>
           ))}
         </div>
