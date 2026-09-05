@@ -103,9 +103,17 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   //
   // Se escriben sólo los que vienen en la URL: los chips de acá abajo cambian el
   // estado sin navegar, y pisarlos con un valor vacío los borraría al toque.
-  /** Si ya se leyó la URL al menos una vez. El efecto que la ESCRIBE no puede
-   *  correr antes que éste; el porqué está abajo, donde se usa. */
-  const urlLeida = useRef(false);
+  /** Si el ESTADO ya tiene lo que decía la URL. El efecto que la escribe no
+   *  puede correr antes; el porqué está abajo, donde se usa.
+   *
+   *  Va como estado y no como ref, y eso es el arreglo entero. Con una ref no
+   *  servía: los dos efectos corren en el MISMO commit y en orden, así que el
+   *  de lectura la ponía en true y el de escritura —que va después— ya la
+   *  encontraba puesta, con el estado todavía viejo. El guard no frenaba nada.
+   *
+   *  Como estado, cambiarla obliga a un render nuevo, y recién en ESE el efecto
+   *  de escritura corre con la búsqueda ya cargada. */
+  const [urlLeida, setUrlLeida] = useState(false);
 
   useEffect(() => {
     const g = (k: string) => sp.get(k);
@@ -124,7 +132,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     // `of=1` es el enlace de "Ofertas" del menú, que antes iba a /mapa.
     setSoloOfertas(g("of") === "1");
     // Recién ahora el efecto de abajo puede escribir la URL. Ver el porqué allá.
-    urlLeida.current = true;
+    setUrlLeida(true);
   }, [sp]);
 
   // La URL se LEE antes de escribirse, y esto no es una precaución: es una
@@ -140,13 +148,19 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   // nada. El enlace estaba bien; se pisaba al llegar. Y se notó recién ahora
   // porque hasta el "Volver a resultados" nadie entraba a esta pantalla con
   // una búsqueda en la dirección.
+  //
+  // El primer intento de arreglo usó una ref puesta al final del efecto de
+  // lectura, y no sirvió por la misma razón que causa el bug: los dos efectos
+  // son del mismo commit y corren en orden, así que la ref ya estaba en true.
+  // Tiene que ser ESTADO — cambiarla fuerza un render nuevo, y sólo ahí el
+  // estado tiene la búsqueda.
   // La URL refleja SIEMPRE lo que se está viendo. Sin esto, la dirección
   // quedaba con la primera búsqueda para siempre: no se podía compartir ni
   // guardar una búsqueda, el botón "atrás" sacaba de la pantalla en vez de
   // deshacer un filtro, y al recargar volvía un estado que contradecía lo que
   // había en la pantalla.
   useEffect(() => {
-    if (!urlLeida.current) return;
+    if (!urlLeida) return;
     const p = new URLSearchParams();
     if (q.trim()) p.set("q", q.trim());
     if (rubro) p.set("rubro", rubro);
@@ -169,7 +183,9 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     // búsqueda que nunca hizo.
     try { sessionStorage.setItem(CLAVE_ULTIMA_BUSQUEDA, nueva); } catch { /* modo privado */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, rubro, subcategoria, modalidad, zona, ciudad, precioMax, vista, soloOfertas]);
+    // `urlLeida` va en las dependencias: sin él, el efecto no vuelve a correr
+    // cuando pasa a true y una URL que no cambia nada más nunca se escribiría.
+  }, [urlLeida, q, rubro, subcategoria, modalidad, zona, ciudad, precioMax, vista, soloOfertas]);
 
   useEffect(() => {
     clearTimeout(debounce.current);
