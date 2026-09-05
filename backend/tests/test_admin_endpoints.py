@@ -349,3 +349,29 @@ def test_borrar_es_baja_logica(client, admin_token, repo):
     client.delete(f"/admin/vencimientos/{v['id']}", headers=_h(admin_token))
     assert repo.vencimientos[v["id"]]["activo"] is False
     assert repo.list_vencimientos() == []
+
+
+# ══════════════════════════════════════════════════ encuadre de la portada
+def test_el_encuadre_de_la_portada_se_guarda(client, repo, admin_token):
+    """El recorte lo elige quien sacó la foto, que sabe qué parte importa."""
+    c = repo.seed_comercio(slug="vidriera", nombre="Vidriera", portada_url="http://x/p.jpg")
+    r = client.put(f"/admin/comercio/{c['id']}", json={"portada_pos": 20}, headers=_h(admin_token))
+    assert r.status_code == 200, r.text
+    assert repo.comercios[c["id"]]["portada_pos"] == 20
+
+
+def test_encuadre_cero_es_un_valor_y_no_un_vacio(client, repo, admin_token):
+    """0 es "arriba de todo" —el cartel—, que es el caso más común de todos.
+
+    El patch descarta los None, no los ceros: si se filtrara por valor
+    falsy, el ajuste más útil sería justo el único imposible de guardar."""
+    c = repo.seed_comercio(slug="cartel", nombre="Cartel", portada_url="http://x/p.jpg")
+    r = client.put(f"/admin/comercio/{c['id']}", json={"portada_pos": 0}, headers=_h(admin_token))
+    assert r.status_code == 200, r.text
+    assert repo.comercios[c["id"]]["portada_pos"] == 0
+
+
+def test_un_encuadre_fuera_de_rango_se_rechaza(client, repo, admin_token):
+    c = repo.seed_comercio(slug="raro", nombre="Raro")
+    assert client.put(f"/admin/comercio/{c['id']}", json={"portada_pos": 150},
+                      headers=_h(admin_token)).status_code == 422

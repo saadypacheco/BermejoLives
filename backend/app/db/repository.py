@@ -194,7 +194,7 @@ class Repo(Protocol):
 _COLS_COMERCIO_ADMIN = (
     "id, slug, nombre, whatsapp, telefono, modalidad, descripcion, prod_obs_human, "
     "prod_det_ia, subcategoria, sinonimos, codigo, direccion, lat, lng, horario, "
-    "verificado, suspendido, paga_hasta, portada_url, portada_thumb_url, cargado_por, "
+    "verificado, suspendido, paga_hasta, portada_url, portada_thumb_url, portada_pos, cargado_por, "
     "created_at, lugar_id, puesto, "
     "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), "
     # TODOS los rubros, no sólo el principal. La fila mostraba uno solo y se

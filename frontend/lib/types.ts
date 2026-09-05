@@ -98,6 +98,9 @@ export type ResultadoBusqueda = {
    *  verse igual. Con treinta resultados por página eso son varios megas de
    *  datos móviles. La agrega la 0078. */
   portada_thumb_url: string | null;
+  /** Dónde recortar la portada: el % vertical que va al centro. NULL = nadie lo
+   *  ajustó y se usa el centro, que es lo que hacía siempre. */
+  portada_pos: number | null;
   whatsapp: string;
   direccion: string | null;
   lat: number | null;

@@ -1453,6 +1453,11 @@ function ModalEditar({
   const [modalidad, setModalidad] = useState(comercio.modalidad ?? "local");
   const [direccion, setDireccion] = useState(comercio.direccion ?? "");
   const [horario, setHorario] = useState((comercio as Record<string, unknown>).horario as string ?? "");
+  // Encuadre de la portada: el % vertical que va al centro del recorte. NULL
+  // significa "nadie lo tocó" y se dibuja como 50, que es lo que hace el CSS
+  // por defecto — pero se guarda sólo si la persona movió la barra.
+  const [portadaPos, setPortadaPos] = useState<number | null>(
+    ((comercio as Record<string, unknown>).portada_pos as number | null) ?? null);
   const _campo = (k: string) => (comercio as Record<string, unknown>)[k] as string ?? "";
   const [instagram, setInstagram] = useState(_campo("instagram_url"));
   const [facebook, setFacebook] = useState(_campo("facebook_url"));
@@ -1492,6 +1497,7 @@ function ModalEditar({
         sitio_web: normalizarRed(sitioWeb, "https://"),
         email: email || undefined,
         rubro_slugs: rubroSlugs.length ? rubroSlugs : undefined,
+        portada_pos: portadaPos,
       });
       // Se recuerda para el "igual que el anterior" de la ficha siguiente.
       // En localStorage y no en estado: el modal se remonta con `key` en cada
@@ -1567,12 +1573,30 @@ function ModalEditar({
                 scroll era el paso que hacía lento el ir uno por uno. */}
             <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
               {(comercio.portada_url || comercio.portada_thumb_url) && (
-                <a href={comercio.portada_url ?? comercio.portada_thumb_url ?? "#"}
-                   target="_blank" rel="noopener" title="Abrir la foto en grande"
-                   style={{ flexShrink: 0 }}>
-                  <img src={comercio.portada_url ?? comercio.portada_thumb_url ?? ""} alt=""
-                       style={{ width: 132, height: 132, objectFit: "cover", borderRadius: 12, display: "block" }} />
-                </a>
+                <div style={{ flexShrink: 0, width: 200 }}>
+                  {/* La vista previa tiene la MISMA forma que la tarjeta de
+                      resultados —una franja apaisada— y no un cuadrado. Ajustar
+                      el recorte mirando un cuadrado es ajustar a ciegas: lo que
+                      se corta en la tarjeta es otra cosa. */}
+                  <a href={comercio.portada_url ?? comercio.portada_thumb_url ?? "#"}
+                     target="_blank" rel="noopener" title="Abrir la foto en grande"
+                     style={{ display: "block" }}>
+                    <img src={comercio.portada_url ?? comercio.portada_thumb_url ?? ""} alt=""
+                         style={{ width: 200, height: 100, objectFit: "cover", borderRadius: 12,
+                                  display: "block",
+                                  objectPosition: `center ${portadaPos ?? 50}%` }} />
+                  </a>
+                  <label style={{ fontSize: 11, color: "var(--txt-3)", display: "block", marginTop: 6 }}>
+                    Encuadre {portadaPos == null ? "(sin ajustar)" : `${portadaPos}%`}
+                    <input type="range" min={0} max={100} step={5}
+                           value={portadaPos ?? 50}
+                           onChange={(e) => setPortadaPos(Number(e.target.value))}
+                           style={{ width: "100%", marginTop: 2 }} />
+                  </label>
+                  <div style={{ fontSize: 10.5, color: "var(--txt-3)", marginTop: -2 }}>
+                    Izquierda = el cartel · derecha = la vereda
+                  </div>
+                </div>
               )}
               <label style={{ fontSize: 12, color: "var(--txt-3)", flex: 1, minWidth: 0 }}>Nombre
                 <input className="adm-input" style={{ marginTop: 4, fontSize: 16, fontWeight: 600 }}

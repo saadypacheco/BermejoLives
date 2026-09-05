@@ -6,7 +6,7 @@ import re
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.auth import require_admin, require_moderador
 from app.core.config import settings
@@ -254,6 +254,9 @@ class EditarComercioBody(BaseModel):
     tiene_factura: bool | None = None
     envios_internacionales: bool | None = None
     tiene_stock: bool | None = None
+    # Dónde recortar la portada: el % vertical que va al centro. 0 es arriba y
+    # el `patch` descarta los None, así que un 0 legítimo sí viaja.
+    portada_pos: int | None = Field(default=None, ge=0, le=100)
     rubro_slugs: list[str] | None = None
 
 

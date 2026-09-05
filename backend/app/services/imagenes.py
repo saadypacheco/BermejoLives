@@ -62,7 +62,7 @@ def subir_foto_comercio(slug: str, data: bytes) -> str | None:
 
 def subir_foto_galeria(slug: str, data: bytes) -> tuple[str | None, str | None]:
     """Procesa una foto de galería: guarda la grande (1280px) y una miniatura
-    (400px) para las tarjetas/mapa. Devuelve (url, thumb_url).
+    (600px) para las tarjetas/mapa. Devuelve (url, thumb_url).
     Lanza ValueError si el archivo no es una imagen válida.
 
     Grande a 1280px/q80 (antes 1600/82): en un celular se ve igual y pesa ~40%
@@ -70,12 +70,20 @@ def subir_foto_galeria(slug: str, data: bytes) -> tuple[str | None, str | None]:
     abre la foto en pantalla completa; el mapa/tarjetas usan siempre el thumb."""
     try:
         grande = procesar_imagen(data, 1280, 80)
-        # 200px, no 400: la miniatura se muestra a 22px en el pin del mapa, 34px
-        # en la lista, 84px en la tarjeta. A 400px se mandaba seis veces más
-        # resolución de la que se ve, y el mapa de Bermejo abre 160 de estas a la
-        # vez — 5 MB para dibujar pines diminutos. A 200px cubre el doble del
-        # tamaño de pantalla más grande (retina) y pesa un tercio.
-        chica = procesar_imagen(data, 200, 72)
+        # 600px. Estuvo en 200 y se veía borrosa en la tarjeta de resultados:
+        # ahí la portada ocupa el ancho de la tarjeta (~300px), y en una
+        # pantalla retina eso son 600px pedidos a una imagen de 200. Se agranda
+        # tres veces.
+        #
+        # El comentario que fijó los 200 decía "84px en la tarjeta" y era cierto
+        # cuando la tarjeta tenía la foto chica al costado. El diseño pasó a
+        # portada ancha y nadie volvió a mirar ese número.
+        #
+        # También decía que el mapa "abre 160 de estas a la vez — 5 MB". No
+        # pasa: el pin es un emoji con color (`pinHtml`), no lleva foto, y el
+        # globo lo arma Leaflet recién cuando alguien lo abre. Es una imagen por
+        # globo abierto, no 160.
+        chica = procesar_imagen(data, 600, 76)
     except Exception as exc:  # noqa: BLE001
         raise ValueError("El archivo no es una imagen válida") from exc
     token = secrets.token_hex(8)

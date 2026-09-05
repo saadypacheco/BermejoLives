@@ -1,91 +1,117 @@
 #!/usr/bin/env python3
-"""Rehace las miniaturas existentes al tamaño nuevo, desde la foto grande.
+"""Rehace las miniaturas de portada que quedaron en 200px.
 
-Por qué: las miniaturas se generaban a 400px pero se muestran a 22px en el pin
-del mapa, 34px en la lista y 84px en la tarjeta. El mapa de Bermejo abre ~160 de
-una sola vez, así que eran unos 5 MB para dibujar pines diminutos — lo que se
-siente como "el buscador va lento" en una conexión mala.
+POR QUÉ
+=======
+La miniatura se generaba a 200px de lado, con un comentario que decía "84px en
+la tarjeta". Era cierto cuando la tarjeta de resultados tenía la foto chica al
+costado; el diseño pasó a portada ancha —la foto ocupa el ancho de la tarjeta,
+unos 300px— y en una pantalla retina eso son 600px pedidos a una imagen de 200.
+Se agranda tres veces y se ve borrosa. Nadie volvió a mirar ese número cuando
+cambió el diseño.
 
-A 200px cubre el doble del tamaño de pantalla más grande (pantallas retina) y
-pesa alrededor de un tercio.
+`subir_foto_galeria` ya genera 600px, pero eso alcanza sólo a las fotos NUEVAS.
+Este script rehace las que ya están, a partir de la grande (1280px) que sigue
+guardada al lado.
 
-También se puede correr por tubería, sin que la imagen lo tenga:
-    docker compose ... exec -T backend python - < backend/scripts/regenerar_miniaturas.py
-    docker compose ... exec -T -e APLICAR=1 backend python - < backend/scripts/regenerar_miniaturas.py
+GUARDA UN ARCHIVO NUEVO, NO PISA EL VIEJO
+=========================================
+La miniatura nueva va a `<token>_t2.jpg` y se actualiza `portada_thumb_url`.
+Pisar el archivo con el mismo nombre habría sido más corto, pero la URL no
+cambia y el navegador —y el nginx de adelante— siguen sirviendo la versión
+cacheada. La foto seguiría viéndose borrosa y el informe diría que se arregló:
+otra vez el resultado plausible.
 
-Uso, dentro del contenedor del backend:
+USO
+===
     docker compose -f docker-compose.prod.yml exec -T backend \\
-        python /app/scripts/regenerar_miniaturas.py --aplicar
+        python - < backend/scripts/regenerar_miniaturas.py
 
-Sin --aplicar sólo informa cuánto se ahorraría. No toca la base: los nombres de
-archivo no cambian, así que las URLs guardadas siguen sirviendo.
+    docker compose -f docker-compose.prod.yml exec -T -e APLICAR=1 backend \\
+        python - < backend/scripts/regenerar_miniaturas.py
+
+Sin APLICAR=1 sólo cuenta y muestra los primeros casos. Es idempotente: los que
+ya tienen `_t2` se saltean, así que se puede cortar y volver a correr.
 """
-import argparse
 import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, "/app")
 
-from app.core.config import settings          # noqa: E402
-from app.services.imagenes import procesar_imagen  # noqa: E402
+from app.core.config import settings  # noqa: E402
+from app.db.repository import get_repo  # noqa: E402
+from app.services.imagenes import guardar_foto_local, procesar_imagen  # noqa: E402
 
-LADO = 200
-CALIDAD = 72
+LADO = 600
+CALIDAD = 76
+
+
+def ruta_local(url: str | None) -> Path | None:
+    """De la URL pública al archivo en el volumen.
+
+    Se corta por `/fotos/` en vez de armar la ruta desde el dominio: la URL
+    pública cambió de host al mudarse a uruku.bo, y las guardadas antes tienen
+    el host viejo. Lo que no cambió nunca es lo que va después de /fotos/.
+    """
+    if not url or "/fotos/" not in url:
+        return None
+    return Path(settings.fotos_dir) / url.split("/fotos/", 1)[1]
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--aplicar", action="store_true", help="escribir; sin esto sólo informa")
-    ap.add_argument("--lado", type=int, default=LADO)
-    ap.add_argument("--calidad", type=int, default=CALIDAD)
-    args = ap.parse_args()
-    # Por tubería (python - < script) argparse no recibe argumentos: ahí se usa
-    # la variable de entorno.
-    aplicar = args.aplicar or os.environ.get("APLICAR") in {"1", "true", "si"}
+    aplicar = os.environ.get("APLICAR") in {"1", "true", "si"}
+    repo = get_repo()
 
-    raiz = Path(settings.fotos_dir)
-    if not raiz.is_dir():
-        print(f"No existe {raiz}")
-        return 1
+    comercios = repo.list_todos_comercios(None, 5000)
+    hechos, sin_archivo, ya_estaban, sin_foto = 0, 0, 0, 0
+    ejemplos: list[str] = []
 
-    thumbs = sorted(raiz.rglob("*_t.jpg"))
-    if not thumbs:
-        print("No hay miniaturas para procesar.")
-        return 0
-
-    antes = despues = 0
-    saltadas = errores = 0
-
-    for thumb in thumbs:
-        # La grande es el mismo nombre sin el sufijo _t.
-        grande = thumb.with_name(thumb.name[:-6] + ".jpg")
-        if not grande.is_file():
-            saltadas += 1
+    for c in comercios:
+        grande, thumb = c.get("portada_url"), c.get("portada_thumb_url")
+        if not grande:
+            sin_foto += 1
             continue
+        if thumb and "_t2.jpg" in thumb:
+            ya_estaban += 1
+            continue
+
+        origen = ruta_local(grande)
+        if not origen or not origen.exists():
+            sin_archivo += 1
+            continue
+
+        if len(ejemplos) < 5:
+            ejemplos.append(f"{c.get('codigo')} {c.get('nombre')}")
+        if not aplicar:
+            hechos += 1
+            continue
+
         try:
-            nueva = procesar_imagen(grande.read_bytes(), args.lado, args.calidad)
-        except Exception as exc:  # noqa: BLE001
-            print(f"  error en {thumb.name}: {exc}")
-            errores += 1
+            chica = procesar_imagen(origen.read_bytes(), LADO, CALIDAD)
+        except Exception as exc:  # noqa: BLE001 — una foto corrupta no corta la corrida
+            print(f"  ! {c.get('codigo')}: {exc}")
+            sin_archivo += 1
             continue
 
-        peso_viejo = thumb.stat().st_size
-        antes += peso_viejo
-        despues += len(nueva)
-        if aplicar:
-            thumb.write_bytes(nueva)
+        sub = str(origen.relative_to(Path(settings.fotos_dir))).replace("\\", "/")
+        nueva = sub.rsplit(".", 1)[0] + "_t2.jpg"
+        url = guardar_foto_local(nueva, chica)
+        if not url:
+            sin_archivo += 1
+            continue
+        repo.update_comercio(c["id"], {"portada_thumb_url": url}, None)
+        hechos += 1
 
-    n = len(thumbs) - saltadas - errores
-    print(f"Miniaturas procesadas: {n}"
-          + (f" · sin foto grande: {saltadas}" if saltadas else "")
-          + (f" · con error: {errores}" if errores else ""))
-    if n:
-        print(f"  antes:   {antes/1024/1024:.1f} MB  ({antes/n/1024:.0f} KB promedio)")
-        print(f"  después: {despues/1024/1024:.1f} MB  ({despues/n/1024:.0f} KB promedio)")
-        ahorro = 100 * (1 - despues / antes) if antes else 0
-        print(f"  ahorro:  {ahorro:.0f}%")
-    print("APLICADO" if aplicar else "\nSimulación. Volvé a correrlo con --aplicar para escribir.")
+    print(f"\n{'APLICADO' if aplicar else 'SIMULACIÓN'}")
+    print(f"  miniaturas rehechas : {hechos}")
+    print(f"  ya estaban al día   : {ya_estaban}")
+    print(f"  sin archivo en disco: {sin_archivo}")
+    print(f"  sin foto            : {sin_foto}")
+    if ejemplos:
+        print("  primeros:", " · ".join(ejemplos))
+    if not aplicar:
+        print("\n  Para escribir: APLICAR=1")
     return 0
 
 

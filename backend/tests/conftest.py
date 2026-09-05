@@ -594,7 +594,7 @@ class FakeRepo:
     _COLS_LISTADO_ADMIN = (
         "id", "slug", "nombre", "whatsapp", "telefono", "modalidad", "descripcion",
         "prod_obs_human", "prod_det_ia", "subcategoria", "codigo", "direccion", "lat", "lng", "verificado", "suspendido",
-        "paga_hasta", "portada_url", "portada_thumb_url", "cargado_por", "created_at",
+        "paga_hasta", "portada_url", "portada_thumb_url", "portada_pos", "cargado_por", "created_at",
         "lugar_id", "puesto",
     )
 

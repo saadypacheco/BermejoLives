@@ -373,7 +373,13 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
             return (
               <article className="uk-rescard" key={r.id}>
                 <Link href={`/comercios/${r.slug}`} className="uk-rescover">
-                  {cover && <img src={cover} alt={r.nombre} loading="lazy" decoding="async" />}
+                  {/* El encuadre lo eligió una persona desde el panel. Sin
+                      ajustar va al centro, que es lo que hacía siempre — de una
+                      foto vertical de vidriera, el centro suele ser la mitad de
+                      abajo del toldo y la mitad de arriba de la puerta. */}
+                  {cover && <img src={cover} alt={r.nombre} loading="lazy" decoding="async"
+                                 style={r.portada_pos != null
+                                   ? { objectPosition: `center ${r.portada_pos}%` } : undefined} />}
                   {r.logo_url && <img className="uk-reslogo" src={r.logo_url} alt="" />}
                 </Link>
                 <div className="uk-resbody">
@@ -458,7 +464,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
                       Cuando hay ofertas, el enlace las nombra: es lo que el
                       comprador vino a ver, y lleva directo a esa sección. */}
                   <Link className="uk-resficha" href={r.ofertas > 0 ? `/comercios/${r.slug}#ofertas` : `/comercios/${r.slug}`}>
-                    {r.ofertas > 0 ? `Ver ${r.ofertas} ${r.ofertas === 1 ? "oferta" : "ofertas"} y datos del negocio` : "Ver datos del negocio"} →
+                    {r.ofertas > 0 ? `Ver ${r.ofertas} ${r.ofertas === 1 ? "oferta" : "ofertas"}` : "Ver negocio"} →
                   </Link>
                 </div>
               </article>
