@@ -478,6 +478,100 @@
 .uk-empty { color: var(--uk-ink-soft); font-size: 15px; padding: 30px 0; }
 
 /* ===== Ficha de comercio (/comercios/[slug]) ===== */
+/* ═══════ Ficha del comercio ═══════
+   La página tiene un solo objetivo: que alguien escriba o camine hasta el
+   local. Por eso el contacto va ARRIBA, al lado de la foto, y no al final —
+   antes había que scrollear una portada de 62vh, la descripción y la galería
+   entera para llegar al botón de WhatsApp.
+
+   Dos columnas de escritorio, una sola en el celular. El orden en el celular
+   es el que importa: foto, nombre, qué vende, WhatsApp. Nada antes del botón. */
+.uk-ficha { padding: 14px 0 50px; }
+.uk-ficha-top { display: grid; grid-template-columns: 1.15fr .85fr; gap: 20px; margin-top: 10px; }
+
+/* La galería: una grande y tres al costado. La grande manda —es el frente del
+   local, lo que permite reconocerlo— y las otras son la mercadería. */
+.uk-fgal { display: grid; grid-template-columns: 1fr 132px; gap: 10px; }
+.uk-fgal-main { position: relative; border-radius: 16px; overflow: hidden; background: var(--uk-chip); }
+.uk-fgal-main button { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.uk-fgal-main img { width: 100%; height: 100%; min-height: 260px; max-height: 380px; object-fit: cover; display: block; }
+.uk-fgal-count { position: absolute; left: 12px; bottom: 12px; background: rgba(0,0,0,.62);
+  color: #fff; font-size: 12px; padding: 4px 9px; border-radius: 999px; }
+.uk-fgal-side { display: flex; flex-direction: column; gap: 10px; }
+.uk-fgal-side button { padding: 0; border: 0; background: var(--uk-chip); border-radius: 12px;
+  overflow: hidden; cursor: pointer; flex: 1; min-height: 0; }
+.uk-fgal-side img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.uk-fgal-todas { color: var(--uk-ink); font-size: 12.5px; font-weight: 700;
+  border: 1px solid var(--uk-line) !important; background: var(--uk-surface) !important;
+  min-height: 44px; flex: 0 0 auto !important; }
+.uk-fgal-todas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px; max-width: min(920px, 92vw); max-height: 80vh; overflow-y: auto; padding: 8px; }
+.uk-fgal-todas-grid button { padding: 0; border: 0; background: none; cursor: zoom-in; }
+.uk-fgal-todas-grid img, .uk-fgal-todas-grid video { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; display: block; }
+
+/* La tarjeta de contacto. */
+.uk-ficha-card { background: var(--uk-surface); border: 1px solid var(--uk-line);
+  border-radius: 18px; padding: 18px; box-shadow: var(--uk-shadow-soft);
+  display: flex; flex-direction: column; gap: 12px; align-self: start; }
+.uk-ficha-card h1 { font-size: 26px; margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.uk-ficha-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.uk-ficha-desc { margin: 0; color: var(--uk-ink-soft); font-size: 14px; line-height: 1.5; }
+.uk-ficha-vende { display: flex; gap: 6px; flex-wrap: wrap; }
+.uk-ficha-vende span { font-size: 12.5px; padding: 4px 10px; border-radius: 999px;
+  background: var(--uk-chip); color: var(--uk-ink); }
+
+/* El botón grande y con el número a la vista: en Bermejo el número ES el
+   negocio, y verlo antes de tocar evita el viaje de ida y vuelta al teclado. */
+.uk-ficha-wa { display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: var(--uk-green-grad); color: #fff; border-radius: 14px; padding: 12px 16px;
+  font-weight: 800; font-size: 15px; text-align: center; }
+.uk-ficha-wa small { display: block; font-weight: 600; font-size: 12px; opacity: .9; }
+.uk-ficha-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.uk-ficha-acciones > * { justify-content: center; }
+
+/* Las secciones que existen, como anclas. */
+.uk-ficha-tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none;
+  border-bottom: 1px solid var(--uk-line); margin: 22px 0 0; }
+.uk-ficha-tabs::-webkit-scrollbar { display: none; }
+.uk-ficha-tabs a { padding: 11px 14px; font-size: 14px; font-weight: 700;
+  color: var(--uk-ink-soft); white-space: nowrap; border-bottom: 2px solid transparent; }
+.uk-ficha-tabs a:hover { color: var(--uk-ink); border-bottom-color: var(--uk-green); }
+
+.uk-ficha-body { display: grid; grid-template-columns: 1.15fr .85fr; gap: 20px; margin-top: 20px; align-items: start; }
+.uk-ficha-side { display: flex; flex-direction: column; gap: 14px; }
+.uk-ficha-sec { margin-bottom: 28px; scroll-margin-top: 80px; }
+.uk-ficha-vacio { background: var(--uk-surface); border: 1px solid var(--uk-line);
+  border-radius: 16px; padding: 20px; color: var(--uk-ink-soft); font-size: 14px; }
+.uk-ficha-vacio p { margin: 0; }
+
+.uk-product-img { position: relative; margin-bottom: 10px; }
+.uk-product-img img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 10px; display: block; }
+.uk-product-off { position: absolute; left: 8px; top: 8px; background: var(--uk-red); color: #fff;
+  font-size: 11.5px; font-weight: 800; padding: 3px 8px; border-radius: 8px; }
+.uk-product-desc { color: var(--uk-ink-soft); font-size: 13px; margin: 4px 0 0; }
+
+.uk-novedades { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.uk-novedad { display: flex; gap: 12px; background: var(--uk-surface); border: 1px solid var(--uk-line);
+  border-radius: 14px; padding: 12px; }
+.uk-novedad img { width: 84px; height: 84px; object-fit: cover; border-radius: 10px; flex-shrink: 0; }
+.uk-novedad b { font-size: 14px; }
+.uk-novedad p { margin: 4px 0 0; color: var(--uk-ink-soft); font-size: 13px; }
+
+.uk-ficha-reclamo p { color: var(--uk-ink-soft); font-size: 13px; margin: 0 0 8px; }
+.uk-ficha-reclamo a { color: var(--uk-red); font-weight: 700; font-size: 13.5px; }
+
+@media (max-width: 900px) {
+  /* Una columna, y el orden manda: foto, tarjeta con el WhatsApp, y recién
+     después las ofertas. La barra lateral se va al final porque son datos que
+     se consultan, no que deciden. */
+  .uk-ficha-top, .uk-ficha-body { grid-template-columns: 1fr; }
+  .uk-fgal { grid-template-columns: 1fr; }
+  .uk-fgal-side { flex-direction: row; height: 76px; }
+  .uk-fgal-side button { flex: 1; }
+  .uk-fgal-todas { flex: 1.4 !important; }
+  .uk-fgal-main img { min-height: 220px; max-height: 300px; }
+}
+
 .uk-profile { padding-bottom: 50px; }
 /* La portada la saca el agente parado en la puerta: casi siempre es vertical o
    4:3 de una vidriera. Con una franja fija de 220px en pantalla ancha el recorte
