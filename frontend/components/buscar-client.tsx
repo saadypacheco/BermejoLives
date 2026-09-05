@@ -103,6 +103,10 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   //
   // Se escriben sólo los que vienen en la URL: los chips de acá abajo cambian el
   // estado sin navegar, y pisarlos con un valor vacío los borraría al toque.
+  /** Si ya se leyó la URL al menos una vez. El efecto que la ESCRIBE no puede
+   *  correr antes que éste; el porqué está abajo, donde se usa. */
+  const urlLeida = useRef(false);
+
   useEffect(() => {
     const g = (k: string) => sp.get(k);
     if (g("ciudad") !== null) setCiudad(g("ciudad")!);
@@ -119,14 +123,30 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     if (g("vista") === "mapa") setVista("mapa");
     // `of=1` es el enlace de "Ofertas" del menú, que antes iba a /mapa.
     setSoloOfertas(g("of") === "1");
+    // Recién ahora el efecto de abajo puede escribir la URL. Ver el porqué allá.
+    urlLeida.current = true;
   }, [sp]);
 
+  // La URL se LEE antes de escribirse, y esto no es una precaución: es una
+  // carrera que se perdía siempre.
+  //
+  // En el montaje corren los dos efectos en el mismo commit. El de arriba mete
+  // `q` en el estado, pero un `setState` dentro de un efecto no cambia el
+  // estado que ven los efectos YA programados de ese mismo commit: el de abajo
+  // corría con `q = ""`, armaba "ciudad=bermejo" y hacía `router.replace`.
+  //
+  // Resultado: entrabas a /buscar?q=zapatillas&ciudad=bermejo y la URL se
+  // reescribía sola como /buscar?ciudad=bermejo antes de que llegaras a ver
+  // nada. El enlace estaba bien; se pisaba al llegar. Y se notó recién ahora
+  // porque hasta el "Volver a resultados" nadie entraba a esta pantalla con
+  // una búsqueda en la dirección.
   // La URL refleja SIEMPRE lo que se está viendo. Sin esto, la dirección
   // quedaba con la primera búsqueda para siempre: no se podía compartir ni
   // guardar una búsqueda, el botón "atrás" sacaba de la pantalla en vez de
   // deshacer un filtro, y al recargar volvía un estado que contradecía lo que
   // había en la pantalla.
   useEffect(() => {
+    if (!urlLeida.current) return;
     const p = new URLSearchParams();
     if (q.trim()) p.set("q", q.trim());
     if (rubro) p.set("rubro", rubro);
