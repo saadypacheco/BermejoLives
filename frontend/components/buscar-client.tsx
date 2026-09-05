@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { MapResults } from "@/components/map-results";
-import { buscarComercios, getFiltrosDisponibles, getOfertasDeComercios, getRefinamientos, getRubros, getZonas, type FiltrosDisponibles } from "@/lib/data";
+import { APAGADAS, buscarComercios, getFiltrosDisponibles, getOfertasDeComercios, getRefinamientos, getRubros, getZonas, type FiltrosDisponibles } from "@/lib/data";
 import { type FeedItem, type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD_LABEL, precioFmt, comoLlegarHref, waLink } from "@/lib/types";
 import { productosDe } from "@/lib/productos";
 import { ReservarBoton } from "@/components/reservar-boton";
@@ -145,7 +145,12 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
       // Los chips se piden SIN el refinamiento activo: si se pidieran con él,
       // al tocar uno desaparecerían todos los demás y no habría forma de
       // cambiar de opinión sin borrar la búsqueda.
-      getRefinamientos({ ...filtros, subcategoria: "" }).then(setRefinamientos).catch(() => {});
+      // No se piden si los chips están apagados: es una consulta más por cada
+      // tecleo, sobre una conexión que en Bermejo no sobra, para dibujar algo
+      // que no se muestra.
+      if (!APAGADAS.filtrosBuscador) {
+        getRefinamientos({ ...filtros, subcategoria: "" }).then(setRefinamientos).catch(() => {});
+      }
       // Se guarda el id de la búsqueda para atárselo al contacto si la persona
       // termina escribiéndole a alguno de estos comercios.
       // El registro NO va acá adentro, aunque los resultados ya estén.
@@ -249,7 +254,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
           El problema que arregla: buscabas "zapatillas americanas" y los chips
           ofrecían "Óptica" y "Joyería", que son secciones del catálogo y no
           formas de afinar lo que pediste. */}
-      {refinamientos.length > 0 ? (
+      {!APAGADAS.filtrosBuscador && refinamientos.length > 0 ? (
         <div className="uk-chips">
           {refinamientos.map((rf) => (
             <button type="button" key={rf.subcategoria}
@@ -281,6 +286,12 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
           busque no le sirve al comprador —no le dice si ESTÁ lo que quiere— y
           en la etapa de captación es un número que no conviene mostrar. */}
       <div className="uk-resbar">
+        {/* Los filtros están apagados mientras el catálogo crece
+            (APAGADAS.filtrosBuscador). Un filtro sirve cuando hay demasiado y
+            hace falta cortar; con lo que hay hoy, afinar "ropa" a "ropa
+            femenina 25" no ayuda a decidir, sólo muestra qué poco hay de cada
+            cosa. Queda el buscador, el total y la lista. */}
+        {!APAGADAS.filtrosBuscador ? (
         <div className="uk-filters">
         <FilterChip icon="🏷" label="Categoría" value={rubroElegido ?? undefined} active={!!rubro}>
           {(close) => <OptionList items={catChips} sel={rubro} onPick={(v) => { setRubro(v); setSubcategoria(""); close(); }} />}
@@ -308,6 +319,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
           <button type="button" className={`uk-chip ${soloOfertas ? "active" : ""}`} onClick={() => setSoloOfertas((v) => !v)}>Ofertas</button>
         )}
       </div>
+        ) : <span />}
         {/* Cuántos hay, pero SÓLO cuando alguien ya buscó algo.
             El total salió de acá porque decir "887" antes de que la persona
             pida nada no le contesta ninguna pregunta. Después de buscar es al

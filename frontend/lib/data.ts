@@ -105,6 +105,14 @@ export const APAGADAS = {
   /** "Lo mejor de hoy": con una oferta activa, el panel dice "1" y eso mide
    *  el vacío en vez de mostrar la ciudad. */
   loMejorDeHoy: true,
+  /** Los filtros del buscador: los chips de refinamiento y los desplegables de
+   *  Categoría, Zona, Precio y Tipo.
+   *
+   *  Un filtro sirve cuando hay demasiado y hace falta cortar. Con lo que hay
+   *  hoy, afinar "ropa" a "ropa femenina 25" no ayuda a nadie a decidir: sólo
+   *  muestra qué poco hay de cada cosa. Mientras tanto la pantalla es el
+   *  buscador, el total y la lista — y ese total es el termómetro. */
+  filtrosBuscador: true,
 };
 
 const SIN_VOLUMEN: Volumenes = { ofertas: 0, verificados: 0, destacados: 0, promos: 0, lugares: 0 };
