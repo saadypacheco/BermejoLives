@@ -458,20 +458,57 @@
 .uk-seg button { border: 0; background: transparent; color: var(--uk-ink-soft); padding: 7px 16px; cursor: pointer; font-size: 13px; font-weight: 600; }
 .uk-seg button.active { background: var(--uk-green); color: #fff; }
 
-.uk-res-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-.uk-rescard { background: var(--uk-surface); border: 1px solid var(--uk-line); border-radius: 16px; overflow: hidden; box-shadow: var(--uk-shadow-soft); display: flex; flex-direction: column; }
-.uk-rescover { position: relative; height: 150px; background: var(--uk-chip); display: block; }
+/* La tarjeta de resultado es HORIZONTAL: foto a la izquierda, todo lo demás a
+   la derecha.
+
+   En la vertical la foto se llevaba media pantalla de celular por comercio, así
+   que comparar tres locales —que es exactamente lo que hace alguien antes de
+   comprar— eran tres scrolls completos. Horizontal entran cuatro donde entraban
+   dos, y la foto sigue siendo lo bastante grande para reconocer la vidriera.
+
+   La grilla pasa a una sola columna hasta 900px y a dos arriba: dos tarjetas
+   horizontales al lado no dejan lugar para el nombre. */
+.uk-res-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 1100px) { .uk-res-grid { grid-template-columns: 1fr 1fr; } }
+
+.uk-rescard { background: var(--uk-surface); border: 1px solid var(--uk-line);
+  border-radius: 16px; overflow: hidden; box-shadow: var(--uk-shadow-soft);
+  display: flex; gap: 12px; padding: 10px; align-items: stretch; }
+.uk-rescover { position: relative; width: 116px; flex-shrink: 0; align-self: stretch;
+  min-height: 116px; background: var(--uk-chip); border-radius: 12px; overflow: hidden; display: block; }
 .uk-rescover img { width: 100%; height: 100%; object-fit: cover; }
-.uk-reslogo { position: absolute; left: 12px; bottom: -18px; width: 46px; height: 46px; border-radius: 12px; border: 2px solid var(--uk-surface); object-fit: cover; background: var(--uk-surface); }
-.uk-resbody { padding: 22px 14px 14px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
-.uk-resbody h4 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 6px; }
-.uk-resbody h4 a { color: var(--uk-ink); }
-.uk-resmeta { display: flex; gap: 6px; flex-wrap: wrap; }
+.uk-rescover-sin { position: absolute; inset: 0; display: grid; place-items: center; font-size: 30px; opacity: .5; }
+
+/* La chapa sobre la foto. Una sola: dos encimadas sobre 116px no se leen. */
+.uk-resbadge { position: absolute; left: 6px; top: 6px; font-size: 10.5px; font-weight: 800;
+  padding: 3px 8px; border-radius: 999px; color: #fff; background: rgba(0,0,0,.55); }
+.uk-resbadge.oferta { background: var(--uk-red); }
+/* El badge de horario usa `.uk-open`, y sobre la foto va posicionado como
+   cualquier otra chapa. */
+.uk-rescover .uk-open { position: absolute; left: 6px; top: 6px; z-index: 1; }
+
+.uk-resbody { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; padding: 2px 2px 0 0; }
+.uk-restop { display: flex; align-items: flex-start; gap: 8px; }
+.uk-resbody h4 { margin: 0; font-size: 15.5px; display: flex; align-items: center; gap: 6px;
+  min-width: 0; line-height: 1.25; }
+.uk-resbody h4 a { color: var(--uk-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uk-resmeta { display: flex; gap: 5px; flex-wrap: wrap; }
+
+/* El precio más barato del local, en la tarjeta. Era el dato que hace entrar y
+   estaba a dos toques, adentro de la ficha. */
+.uk-resdesde { font-size: 12.5px; color: var(--uk-ink-soft); }
+.uk-resdesde b { color: var(--uk-red); font-size: 14px; }
 .uk-pill { font-size: 11px; padding: 3px 9px; border-radius: 999px; background: var(--uk-chip); color: var(--uk-ink-soft); font-weight: 600; }
 .uk-pill.green { color: var(--uk-green); }
 .uk-pill.blue { color: var(--uk-blue); }
 .uk-resdir { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--uk-ink-soft); }
-.uk-resact { display: flex; gap: 8px; margin-top: auto; padding-top: 8px; }
+/* Los dos contactos como íconos y la ficha como botón verde: los tres entran
+   en un renglón sólo así, y son las tres cosas que alguien hace desde acá. */
+.uk-resact { display: flex; gap: 6px; margin-top: auto; padding-top: 6px; align-items: center; }
+.uk-resic { width: 36px; height: 36px; flex-shrink: 0; display: inline-flex; align-items: center;
+  justify-content: center; border: 1px solid var(--uk-line); border-radius: 10px;
+  color: var(--uk-green); background: var(--uk-surface); }
+.uk-resic:hover { border-color: var(--uk-green); }
 .uk-btn-wa { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: linear-gradient(135deg,#25d366,#128c4a); color: #fff; border: 0; border-radius: 11px; padding: 10px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .uk-btn-ghost { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: var(--uk-surface); color: var(--uk-ink); border: 1px solid var(--uk-line); border-radius: 11px; padding: 10px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .uk-verif { color: var(--uk-green); display: inline-flex; }
@@ -690,9 +727,10 @@
 
 /* Enlace a la ficha, debajo de los dos botones de acción: no compite con
    WhatsApp (que es lo que cierra la venta) pero deja de ser invisible. */
-.uk-resficha { display: block; margin-top: 8px; padding: 8px 2px 0; font-size: 12.5px; font-weight: 700;
-  color: var(--uk-ink-2, #9aa4b2); text-align: center; border-top: 1px solid var(--uk-line); }
-.uk-resficha:hover { color: var(--uk-neon, #39ff9e); }
+.uk-resficha { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--uk-green-grad); color: #fff; border-radius: 10px; padding: 9px 12px;
+  font-size: 13px; font-weight: 700; white-space: nowrap; }
+.uk-resficha:hover { filter: brightness(1.08); }
 
 /* Qué vende el local. Dos renglones y corta: es un renglón de apoyo, no el
    título de la tarjeta. Lo que coincide con lo buscado va resaltado y primero

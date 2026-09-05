@@ -8,7 +8,6 @@ import { CLAVE_ULTIMA_BUSQUEDA } from "@/components/volver-a-resultados";
 import { APAGADAS, buscarComercios, getFiltrosDisponibles, getOfertasDeComercios, getRefinamientos, getRubros, getZonas, type FiltrosDisponibles } from "@/lib/data";
 import { type FeedItem, type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD_LABEL, precioFmt, comoLlegarHref, waLink } from "@/lib/types";
 import { productosDe } from "@/lib/productos";
-import { ReservarBoton } from "@/components/reservar-boton";
 import { ReservaBarra } from "@/components/reserva-barra";
 import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
@@ -456,23 +455,39 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
             const susOfertas = ofertas.get(r.id) ?? [];
             return (
               <article className="uk-rescard" key={r.id}>
+                {/* Horizontal y no en columna: entran el doble de resultados en
+                    la misma pantalla de celular. En la vertical, la foto se
+                    llevaba media pantalla por comercio y comparar tres locales
+                    —que es lo que hace cualquiera antes de comprar— eran tres
+                    scrolls completos. */}
                 <Link href={`/comercios/${r.slug}`} className="uk-rescover">
                   {/* El encuadre lo eligió una persona desde el panel. Sin
                       ajustar va al centro, que es lo que hacía siempre — de una
                       foto vertical de vidriera, el centro suele ser la mitad de
                       abajo del toldo y la mitad de arriba de la puerta. */}
-                  {cover && <img src={cover} alt={r.nombre} loading="lazy" decoding="async"
-                                 style={r.portada_pos != null
-                                   ? { objectPosition: `center ${r.portada_pos}%` } : undefined} />}
-                  {r.logo_url && <img className="uk-reslogo" src={r.logo_url} alt="" />}
+                  {cover
+                    ? <img src={cover} alt={r.nombre} loading="lazy" decoding="async"
+                           style={r.portada_pos != null
+                             ? { objectPosition: `center ${r.portada_pos}%` } : undefined} />
+                    : <span className="uk-rescover-sin" aria-hidden>🏪</span>}
+                  {/* Una sola chapa arriba de la foto, y la oferta le gana al
+                      horario: "¡Oferta!" mueve a alguien a entrar, "Abierto" lo
+                      confirma cuando ya decidió. Dos chapas encimadas sobre una
+                      foto de 110px no se leen ninguna. */}
+                  {susOfertas.length > 0
+                    ? <span className="uk-resbadge oferta">¡Oferta!</span>
+                    : r.horario ? <HorarioBadge horario={r.horario} /> : null}
                 </Link>
+
                 <div className="uk-resbody">
-                  <h4>
-                    <Link href={`/comercios/${r.slug}`}>{r.nombre}</Link>
-                    {r.verificado && <span className="uk-verif"><Verified style={{ width: 15, height: 15 }} /></span>}
-                  </h4>
+                  <div className="uk-restop">
+                    <h4>
+                      <Link href={`/comercios/${r.slug}`}>{r.nombre}</Link>
+                      {r.verificado && <span className="uk-verif"><Verified style={{ width: 15, height: 15 }} /></span>}
+                    </h4>
+                  </div>
+
                   <div className="uk-resmeta">
-                    <span className="uk-pill blue">{MODALIDAD_LABEL[r.modalidad] ?? r.modalidad}</span>
                     {/* Cuando hay una categoría elegida se muestra ÉSA, no el rubro
                         principal del comercio. Los locales son multi-rubro: uno
                         cuyo principal es "Calzado" puede tener también
@@ -484,8 +499,9 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
                     {r.subcategoria
                       ? <span className="uk-pill">{r.subcategoria}</span>
                       : !rubroElegido && r.rubro_nombre && <span className="uk-pill">{r.rubro_nombre}</span>}
-                    {r.horario && <HorarioBadge horario={r.horario} />}
+                    <span className="uk-pill blue">{MODALIDAD_LABEL[r.modalidad] ?? r.modalidad}</span>
                   </div>
+
                   {/* Qué vende: primero lo que coincide con lo buscado y
                       resaltado. Contesta "¿por qué me aparece este local?" sin
                       que el comprador tenga que entrar a averiguarlo. */}
@@ -499,57 +515,52 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
                       {resto > 0 && <span className="mas"> +{resto}</span>}
                     </p>
                   )}
+
+                  {/* El precio de la oferta más barata, en la tarjeta. Es el
+                      dato que hace entrar y estaba a dos toques de distancia,
+                      dentro de la ficha. Sin precio no se inventa un "desde":
+                      muchos acá no lo publican porque se les mueve con el
+                      cambio del día. */}
+                  {(() => {
+                    const conPrecio = susOfertas.filter((o) => o.precio != null);
+                    if (conPrecio.length === 0) return null;
+                    const barata = conPrecio.reduce((a, b) => (a.precio! <= b.precio! ? a : b));
+                    return (
+                      <Link className="uk-resdesde" href={`/comercios/${r.slug}#ofertas`}>
+                        {barata.titulo ? `${barata.titulo} · ` : ""}
+                        <b>{precioFmt(barata.precio!, barata.moneda)}</b>
+                      </Link>
+                    );
+                  })()}
+
                   {r.direccion && <div className="uk-resdir"><Pin style={{ width: 13, height: 13 }} />{r.direccion}</div>}
-                  {/* La tira sólo existe si el comercio publicó algo. Hoy no
-                      la ve casi nadie y va apareciendo a medida que publiquen —
-                      que es justamente lo que hace visible el premio de
-                      publicar, sin tener que explicárselo a nadie.
-                      Acá va "Reservar" cuando exista: se reserva una oferta, no
-                      un local. */}
-                  {susOfertas.length > 0 && (
-                    <div className="uk-resofertas">
-                      {susOfertas.map((o) => (
-                        <Link key={o.id} className="uk-resoferta" href={`/comercios/${r.slug}#ofertas`}>
-                          {o.imagen_url
-                            ? <img src={o.imagen_url} alt={o.titulo ?? ""} loading="lazy" decoding="async" />
-                            : <span className="sinfoto" />}
-                          <b>{o.titulo ?? "Oferta"}</b>
-                          {o.contacto_es_uruku && <span className="uk-marca-uruku">URUKU</span>}
-                          {/* Sin precio no decimos "consultar": mandar a
-                              preguntar por WhatsApp no es comparar. */}
-                          {o.precio != null && <span className="precio">{precioFmt(o.precio, o.moneda)}</span>}
-                          <ReservarBoton oferta={o} />
-                        </Link>
-                      ))}
-                      {r.ofertas > susOfertas.length && (
-                        <Link className="uk-resoferta mas" href={`/comercios/${r.slug}#ofertas`}>
-                          +{r.ofertas - susOfertas.length}<br />más
-                        </Link>
-                      )}
-                    </div>
-                  )}
+
+                  {/* Los dos contactos como íconos y la ficha como botón: los
+                      tres entraban en un renglón sólo así, y son las tres cosas
+                      que alguien hace desde acá. */}
                   <div className="uk-resact">
-                    <a className="uk-btn-wa" href={waLink(r.whatsapp, `Hola, te vi en URUKU`)} target="_blank" rel="noopener" onClick={() => registrarLead(r.id, "whatsapp", busquedaId)}>
-                      <WhatsApp style={{ width: 15, height: 15 }} /> WhatsApp
+                    <a className="uk-resic" title="WhatsApp" aria-label="WhatsApp"
+                       href={waLink(r.whatsapp, `Hola, te vi en URUKU`)} target="_blank" rel="noopener"
+                       onClick={() => registrarLead(r.id, "whatsapp", busquedaId)}>
+                      <WhatsApp style={{ width: 17, height: 17 }} />
                     </a>
                     {/* "Cómo llegar" también es un contacto: nadie pide
                         indicaciones para un local al que no piensa ir. Sin
                         registrarlo, el comercio que se descubre por el mapa y
                         se visita caminando figuraba con cero. */}
-                    <a className="uk-btn-ghost" href={comoLlegarHref(r)} target="_blank" rel="noopener"
+                    <a className="uk-resic" title="Cómo llegar" aria-label="Cómo llegar"
+                       href={comoLlegarHref(r)} target="_blank" rel="noopener"
                        onClick={() => registrarLead(r.id, "mapa", busquedaId)}>
-                      <Pin style={{ width: 15, height: 15 }} /> Cómo llegar
+                      <Pin style={{ width: 17, height: 17 }} />
                     </a>
+                    {/* A la ficha se llegaba sólo por la foto o por el nombre, sin
+                        que nada lo dijera. Los dos botones que sí se veían sacan
+                        del sitio (WhatsApp, Maps), así que lo único que muestra
+                        horario, redes y ofertas era lo único sin puerta. */}
+                    <Link className="uk-resficha" href={r.ofertas > 0 ? `/comercios/${r.slug}#ofertas` : `/comercios/${r.slug}`}>
+                      {r.ofertas > 0 ? `Ver ${r.ofertas} ${r.ofertas === 1 ? "oferta" : "ofertas"}` : "Ver negocio"} →
+                    </Link>
                   </div>
-                  {/* A la ficha se llegaba sólo por la foto o por el nombre, sin
-                      que nada lo dijera. Los dos botones que sí se veían sacan
-                      del sitio (WhatsApp, Maps), así que lo único que muestra
-                      horario, redes y ofertas era lo único sin puerta.
-                      Cuando hay ofertas, el enlace las nombra: es lo que el
-                      comprador vino a ver, y lleva directo a esa sección. */}
-                  <Link className="uk-resficha" href={r.ofertas > 0 ? `/comercios/${r.slug}#ofertas` : `/comercios/${r.slug}`}>
-                    {r.ofertas > 0 ? `Ver ${r.ofertas} ${r.ofertas === 1 ? "oferta" : "ofertas"}` : "Ver negocio"} →
-                  </Link>
                 </div>
               </article>
             );
