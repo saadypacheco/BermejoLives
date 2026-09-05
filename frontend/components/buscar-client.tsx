@@ -314,9 +314,14 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
             revés: la lista trae 30 por página y sin este número "comida" se lee
             como que hay treinta comercios de comida, cuando hay 78. La pantalla
             decía menos de lo que el buscador encontraba. */}
-        {hayBusqueda && total != null && total > results.length && (
+        {/* Siempre que haya una búsqueda, aunque el número sea chico y aunque
+            entren todos en pantalla. Es distinto del conteo de los chips: aquél
+            cuenta lo que NO hay —"hamburguesería 2" delata el catálogo vacío—
+            y éste contesta la pregunta que la persona acaba de hacer. "4
+            resultados" es una respuesta; no decir nada, no. */}
+        {hayBusqueda && total != null && (
           <span className="uk-total-res">
-            {total} resultados
+            {total === 1 ? "1 resultado" : `${total} resultados`}
           </span>
         )}
 

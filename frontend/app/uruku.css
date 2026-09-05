@@ -434,9 +434,16 @@
    una fila menos, y arriba del mapa cada fila se paga en mapa cortado.
    `min-width: 0` + scroll: en un celular angosto se deslizan en vez de empujar
    al interruptor fuera de la pantalla. */
+/* SIN `overflow-x: auto`, y no es un detalle de estilo.
+   Un contenedor con overflow en un eje se vuelve contenedor de scroll en los
+   DOS, así que RECORTA lo que se sale — y lo que se sale acá es el desplegable
+   de Categoría y Tipo, que cae hacia abajo. El combo se abría, existía en el
+   DOM y no se veía: quedaba cortado detrás de las tarjetas de resultados.
+   No era z-index; era recorte, que es la versión de este bug que no se arregla
+   subiendo números.
+   Los filtros son cinco: envuelven a la segunda línea sin problema. */
 .uk-filters { display: flex; gap: 8px; align-items: center; min-width: 0;
-  overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
-.uk-filters::-webkit-scrollbar { display: none; }
+  flex-wrap: wrap; padding-bottom: 2px; }
 .uk-filters > * { flex-shrink: 0; }
 
 .uk-resbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
