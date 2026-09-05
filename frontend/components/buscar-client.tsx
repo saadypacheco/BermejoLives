@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { MapResults } from "@/components/map-results";
+import { CLAVE_ULTIMA_BUSQUEDA } from "@/components/volver-a-resultados";
 import { APAGADAS, buscarComercios, getFiltrosDisponibles, getOfertasDeComercios, getRefinamientos, getRubros, getZonas, type FiltrosDisponibles } from "@/lib/data";
 import { type FeedItem, type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD_LABEL, precioFmt, comoLlegarHref, waLink } from "@/lib/types";
 import { productosDe } from "@/lib/productos";
@@ -142,6 +143,11 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     if (nueva !== sp.toString()) {
       router.replace(nueva ? `/buscar?${nueva}` : "/buscar", { scroll: false });
     }
+    // Y se guarda para el "Volver a resultados" de la ficha. Va acá y no en el
+    // enlace de cada tarjeta: la dirección de un negocio se comparte por
+    // WhatsApp, y con la búsqueda pegada el que abre el enlace volvería a una
+    // búsqueda que nunca hizo.
+    try { sessionStorage.setItem(CLAVE_ULTIMA_BUSQUEDA, nueva); } catch { /* modo privado */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, rubro, subcategoria, modalidad, zona, ciudad, precioMax, vista, soloOfertas]);
 

@@ -11,9 +11,10 @@ import { CompartirBoton } from "@/components/compartir-boton";
 import { getComercioBySlug, getOfertasComercio, getGaleriaComercio } from "@/lib/data";
 import { FichaGaleria } from "@/components/ficha-galeria";
 import { VistaLogger } from "@/components/vista-logger";
+import { VolverAResultados } from "@/components/volver-a-resultados";
 import { precioFmt, vencimientoFmt, contactoDeOferta, MODALIDAD_LABEL } from "@/lib/types";
 import {
-  WhatsApp, Verified, Pin, Phone, Globe, Instagram, Facebook, TikTok, Arrow,
+  WhatsApp, Verified, Pin, Phone, Globe, Instagram, Facebook, TikTok,
 } from "@/components/icons";
 
 export const dynamic = "force-dynamic"; // el header (ciudad por cookie) es dinámico
@@ -85,9 +86,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
       <VistaLogger comercioId={comercio.id} />
 
       <div className="uk-container uk-ficha">
-        <Link className="uk-back" href="/buscar">
-          <Arrow style={{ transform: "rotate(180deg)" }} /> Volver a resultados
-        </Link>
+        <VolverAResultados />
 
         {/* ===== Arriba: la galería y la tarjeta de contacto ===== */}
         <div className="uk-ficha-top">
