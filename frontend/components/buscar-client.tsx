@@ -61,7 +61,18 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   const sp = useSearchParams();
   // Última búsqueda logueada: se le atan los contactos que salgan de ella.
   const [busquedaId, setBusquedaId] = useState<string | null>(null);
+  // PRIMERAS: lo que se pide para pintar la pantalla. Diez entran de sobra en
+  // el primer scroll y llegan mucho antes que treinta — que era el tamaño de
+  // página anterior y hacía esperar por veinte tarjetas que nadie estaba
+  // mirando todavía.
+  //
+  // PAGE: el tamaño de cada lote que sigue llegando SOLO, por detrás, mientras
+  // la persona ya está leyendo. No hay que apretar nada.
+  const PRIMERAS = 10;
   const PAGE = 30;
+  // Hasta dónde sigue solo. Más allá de esto queda el botón: mil tarjetas en el
+  // DOM de un celular de gama baja no es "cargar en background", es trabarlo.
+  const TOPE_AUTO = 90;
   /** A partir de cuántos resultados vale la pena mostrar el conteo de cada chip.
    *
    *  Debajo de esto los números son de un dígito y cuentan lo que no hay: sobre
@@ -137,8 +148,13 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   useEffect(() => {
     clearTimeout(debounce.current);
     setLoading(true);
+    // Se marca al desmontar o al cambiar la búsqueda. Sin esto, los lotes que
+    // seguían viniendo por detrás de la búsqueda ANTERIOR se agregaban a la
+    // lista de la nueva: escribías "pan", llegaban diez panaderías, seguías
+    // tecleando "pantalón" y abajo aparecían las panaderías igual.
+    let cancelado = false;
     debounce.current = setTimeout(async () => {
-      const r = await buscarComercios(filtros, PAGE, 0);
+      const r = await buscarComercios(filtros, PRIMERAS, 0);
       setResults(r);
       // El total viaja en cada fila; sin resultados, es cero.
       setTotal(r.length ? (r[0].total ?? r.length) : 0);
@@ -168,15 +184,41 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
       clearTimeout(logTimer.current);
       if (q.trim().length >= 3) {
         logTimer.current = setTimeout(() => {
-          logBusqueda(q, r.length, r.map((c) => c.id)).then(setBusquedaId);
+          // El TOTAL, no las diez de la primera página: `resultados` es lo que
+          // el panel lee para saber qué se buscó y no se encontró, y con el
+          // tamaño de página ahí ese número mediría cuánto pedimos, no cuánto
+          // hay.
+          logBusqueda(q, r.length ? (r[0].total ?? r.length) : 0, r.map((c) => c.id))
+            .then(setBusquedaId);
         }, 900);
       } else {
         setBusquedaId(null);
       }
-      setHayMas(r.length === PAGE);
+      setHayMas(r.length === PRIMERAS);
       setLoading(false);
+
+      // Y el resto sigue llegando SOLO, mientras la persona ya está leyendo las
+      // primeras diez. Nadie aprieta nada: cuando llega al final del scroll, lo
+      // que sigue ya está.
+      //
+      // Se corta en TOPE_AUTO y ahí queda el botón. Traer los 282 de "moda y
+      // ropa" al DOM de un celular de gama baja no es cargar en background: es
+      // trabarlo, y encima para mostrar tarjetas que nadie va a mirar.
+      let acumulado = r;
+      while (!cancelado && acumulado.length >= PRIMERAS && acumulado.length < TOPE_AUTO) {
+        const lote = await buscarComercios(filtros, PAGE, acumulado.length);
+        if (cancelado) return;
+        acumulado = [...acumulado, ...lote];
+        setResults(acumulado);
+        setHayMas(lote.length === PAGE);
+        if (lote.length < PAGE) break;
+      }
     }, 280);
-    return () => { clearTimeout(debounce.current); clearTimeout(logTimer.current); };
+    return () => {
+      cancelado = true;
+      clearTimeout(debounce.current);
+      clearTimeout(logTimer.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, rubro, subcategoria, modalidad, zona, ciudad, precioMax]);
 
