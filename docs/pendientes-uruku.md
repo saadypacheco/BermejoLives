@@ -160,9 +160,12 @@ ninguna**, por la misma razón que se decidió con licorería: partir una catego
 para uno o dos comercios deja dos filtros que no filtran.
 
 - [ ] **ropa de fiesta** (2 comercios) es la que primero va a pasar el umbral.
-- [ ] **gimnasio** (1) es la que más incomoda: no es un negocio de venta y hoy
-      está en "Deportes y fitness" junto a los que venden pelotas. Se arregla
-      igual de bien sacándolo de ahí que creándole un rubro.
+- [x] ~~**gimnasio**~~ — resuelto el 4/9, y de una forma que nadie esperaba: el
+      rubro `gimnasios` YA existía (0086) y además alguien había creado un
+      segundo rubro llamado `gimnasio` desde el panel. Los comercios estaban
+      repartidos entre los dos, 5 y 5, y ninguno se veía completo. La 0095 los
+      fusiona y la 0094 saca `gimnasio` del diccionario de `deportes`, que era
+      lo que hacía ganar al genérico.
 - [ ] **pinturería** (1) hoy cae en ferretería, que la cubre.
 - [ ] Las otras seis ya están cubiertas (`pollería` → comida rápida, `calzado de
       trabajo` → calzado, `artículos de plástico` → bazar) o no son un rubro
@@ -249,7 +252,12 @@ captación** — analizado en la §2 de ese documento, con una recomendación.
       cartel desde el 23/8 y quedaron 3 comercios sin nombre en toda la tanda.
       Se resuelven a mano.
 - [x] ~~Revisar las categorías propuestas~~ — hecho, ver arriba.
-- [ ] **`completar_rubros.py` sigue SIN APLICAR.** El diccionario ya está
+- [ ] **`completar_rubros.py` sigue SIN APLICAR** — y el 4/9 dejó de ser el
+      camino principal. Ver la sección de la sesión del 4-5/9 más abajo: la
+      revisión de rubros mide 194 comercios que no cierran, de los cuales 102
+      se resuelven con una corrida y 92 a mano. Ese botón hace lo que este
+      script iba a hacer, con vista previa y sin pisar lo corregido a mano.
+      Lo de abajo sigue valiendo como criterio: El diccionario ya está
       corregido (migraciones 0061 y 0062, ver §2.8 de clasificacion-ia.md) pero
       falta lo último antes de dar el `APLICAR=1`:
       - medir cuánto ruido mete el blob de sinónimos al clasificar (§8 de
@@ -273,6 +281,83 @@ captación** — analizado en la §2 de ese documento, con una recomendación.
 
 ---
 
+## 🔵 De la sesión del 4-5/9 — lo que quedó a medio aplicar
+
+Todo esto está **escrito y desplegado en código**. Lo que falta es correrlo
+contra la base de producción, y hasta que se corra el sitio se comporta como
+antes. Es la clase de pendiente que se olvida porque "ya está hecho".
+
+### Antes de nada: medir qué se aplicó
+Las migraciones 0089 a 0098 se fueron dando de a una y no hay registro de
+cuáles corrieron. Esto lo contesta de una:
+
+```sql
+select 'reclamos con grant' as que,
+       has_table_privilege('service_role','reclamos','select')::text as estado
+union all select 'portada_pos', (to_regclass('comercios') is not null and exists (
+  select 1 from information_schema.columns
+   where table_name='comercios' and column_name='portada_pos'))::text
+union all select 'rubro_revisado_at', (exists (
+  select 1 from information_schema.columns
+   where table_name='comercios' and column_name='rubro_revisado_at'))::text
+union all select 'rubros_a_revisar', (to_regproc('rubros_a_revisar') is not null)::text
+union all select 'salones y agro', (select count(*)::text from rubros
+   where slug in ('salones','agro') and activo)
+union all select 'rubros duplicados sueltos', (select count(*)::text from rubros
+   where activo and nombre !~ '[A-ZÁÉÍÓÚ]');
+```
+
+### Después, en orden
+- [ ] **Aplicar las migraciones que falten** (0090 grants · 0091 texto único ·
+      0092 principal por identidad · 0093 salones y agro · 0094 palabras
+      repetidas · 0095 rubros duplicados · 0096 buscar por todas las palabras ·
+      0097 sin tildes · 0098 encuadre). Cada una con `restart postgrest`.
+- [ ] **Regenerar las miniaturas**
+      (`backend/scripts/regenerar_miniaturas.py`). Sin esto las 1079 fotos
+      cargadas siguen viéndose borrosas: el arreglo del tamaño sólo alcanza a
+      las nuevas.
+- [ ] **Correr "Completar rubros"** después de la 0093: `salones` y `agro`
+      nacieron con cero comercios y el diccionario recién ahora puede
+      alcanzarlos.
+- [ ] **Revisar rubros** (Admin › Revisar rubros). Medido: 194 no cierran, 102
+      con una sola sugerencia —se resuelven con la corrida y su vista previa— y
+      92 a mano. Los 7 anotados en [rubros-a-corregir.md](rubros-a-corregir.md)
+      salen ahí.
+- [ ] **Encuadrar las portadas** de los comercios donde el recorte al centro
+      corta el cartel. Es la barra del editor; se hace de corrido con el modal
+      saltando de ficha en ficha.
+
+### Lo que el verificador del buscador dejó abierto
+`scripts/verificar-buscador.sql`, corrido el 5/9.
+
+- [ ] **36 palabras del diccionario no traen ningún comercio.** Algunas son
+      correctas y no hay negocio todavía (`agroquimico`, `dhl`); otras son de
+      producto y nadie las escribe (`ibuprofeno`, `paracetamol`); y una,
+      `quiosqu`, es un prefijo a propósito y no una palabra — el informe la
+      cuenta mal. Decidir cuáles se sacan.
+- [ ] **La mitad de los 99 términos buscados son tecleo** (`zempanad`,
+      `zempanada`, `zempanadas`). Sigue sin aplicarse
+      `limpiar_busquedas_de_tecleo.sql`, y mientras tanto la lista de "buscado
+      sin resultado" —la que dice a qué rubros salir a buscar comercios— está
+      llena de fragmentos.
+- [ ] **Las búsquedas largas traen de más.** Con menos de 5 resultados fuertes
+      entra la red de contención y "artículos de limpieza" devuelve 27 sobre 4
+      comercios del rubro. Es lo correcto mientras el catálogo esté flaco;
+      revisarlo cuando los rubros tengan volumen.
+
+### Lo que el diseño nuevo dejó pedido
+- [ ] **Distancia en km en la tarjeta de resultados.** Es lo que más agregaría
+      en una ciudad donde todo está a diez cuadras, y necesita pedir permiso de
+      ubicación. Decisión de producto: cuándo se pide y qué se muestra si dicen
+      que no.
+- [ ] **Opiniones.** El diseño las pide (`4.8 (12)`) y no existe el sistema. Es
+      una funcionalidad entera, no un campo.
+- [ ] **Contador de fotos sobre la portada** (`📷 3`): el dato existe por
+      comercio pero `buscar_comercios` no lo devuelve.
+- [ ] **Reservar desde la tarjeta de resultados**, que se perdió al hacerla
+      compacta. Sigue en la ficha. Revisar si hace falta cuando haya reservas
+      de verdad.
+
 ## 🎨 Diseño (menor, no bloquea)
 - [x] **Fuera la fila “Mostrando” — 2026-09-03.**
       Cada vez que escribías o aplicabas un filtro aparecía un renglón nuevo
@@ -289,6 +374,12 @@ captación** — analizado en la §2 de ese documento, con una recomendación.
 
 - [ ] **Input del buscador en modo oscuro:** se pierde, hay muy poco contraste
       contra el fondo. Debería leerse claramente dónde se escribe.
+- [x] ~~**Header partido en el celular**~~ — arreglado el 5/9. El wordmark a
+      72px más el selector de ciudad, Ingresar y el tema no entraban en 390px,
+      así que "Bermejo · Ingresar" caía un renglón abajo con el logo solo
+      arriba. Baja a 46px bajo 560px. Se veía en todo el sitio porque el header
+      es uno solo.
+
 - [ ] **Barra de redes / clima / cotización en escritorio:** queda pegada debajo
       del logo y se ve rara. En móvil está bien; el problema es el ancho grande.
 - [ ] **Puntos del mapa:** sigue sin convencer (pendiente de la sesión del 2026-08-22).
