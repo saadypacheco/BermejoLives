@@ -167,6 +167,79 @@ atar deja al comerciante mandando ofertas al vacío.
 
 El camino del código `URUKU-XXXX` sigue funcionando, para grupos que ya existen.
 
+## Checklist: cada número, dónde va
+
+Se escribe junto porque el día de configurarlo son cinco números, cinco
+variables y una sola vinculación, y estaban repartidos en cuatro secciones de
+este documento.
+
+| Rol | Se empareja con WAHA | En los grupos | Variables donde va |
+|---|---|---|---|
+| **Marca** | No | No | ninguna (es el número público; el canal se carga en Admin › Contenido) |
+| **Operativo** | **SÍ, el único** | Sí | `WA_NUMEROS_PROPIOS`, `BOT_WHATSAPP_NUMERO` |
+| **Respaldo 1** | No | Sí | `WA_NUMEROS_PROPIOS`, `WA_NUMEROS_GRUPO` |
+| **Respaldo 2** | No | Sí | `WA_NUMEROS_PROPIOS`, `WA_NUMEROS_GRUPO` |
+| **Explorador** | No | No | `WA_NUMEROS_PROPIOS`, `WA_NUMEROS_EXPLORADOR`, `WA_CONTACTO_EXPLORADOR` |
+
+**WAHA maneja UNA sola cuenta.** No hay nada que emparejar para los otros
+cuatro: los respaldos están en los grupos para el día del baneo, el explorador
+manda desde su propio teléfono y llega como cualquier remitente, y la marca ni
+siquiera entra a los grupos.
+
+**Todos van en `WA_NUMEROS_PROPIOS`, incluido el operativo que ya está
+vinculado.** Parece redundante y es lo que hace seguro el reemplazo: cuando WAHA
+se vincule a un respaldo, el operativo viejo pasa a ser un participante más, y
+si no estuviera en la lista sus mensajes en los grupos empezarían a publicarse
+como ofertas del comerciante.
+
+### El bloque para `backend/.env`
+
+```
+# Sin placeholders: 591XXXXXXXX se normaliza a "591" y apaga la guarda sin
+# dar ningún error. El arranque avisa cuáles descartó (config.wa_numero_invalido).
+WA_NUMEROS_PROPIOS=591OPERATIVO,591RESPALDO1,591RESPALDO2,591EXPLORADOR,591MARCA
+WA_NUMEROS_GRUPO=591RESPALDO1,591RESPALDO2
+WA_NUMEROS_EXPLORADOR=591EXPLORADOR
+WA_CONTACTO_EXPLORADOR=591EXPLORADOR
+BOT_WHATSAPP_NUMERO=591OPERATIVO
+```
+
+`WA_CONTACTO_EXPLORADOR` vacío es seguro: las consultas van al comercio.
+`WA_NUMEROS_GRUPO` no lleva al operativo: es quien crea el grupo, así que ya
+queda adentro y como administrador.
+
+### Emparejar el operativo (una vez)
+
+Antes de crear ningún grupo. Verificar primero que `comercio_wa_grupos` esté en
+0: una vez que haya cien grupos, el número nuevo no está en ninguno y hay que
+agregarlo a mano uno por uno.
+
+```bash
+cd /docker/uruku
+# ¿Hay grupos ya creados? Tiene que decir 0.
+docker compose -f docker-compose.prod.yml exec -T postgres   psql -U postgres -d postgres -c "select count(*) from comercio_wa_grupos;"
+
+# 1. Estado de la sesión
+docker exec buscadonde-waha sh -c  'curl -s -H "X-Api-Key: $WAHA_API_KEY" localhost:3000/api/sessions'
+
+# 2. Si no existe, crearla
+docker exec buscadonde-waha sh -c  'curl -s -X POST -H "X-Api-Key: $WAHA_API_KEY" -H "Content-Type: application/json"   -d "{\"name\":\"default\",\"start\":true}" localhost:3000/api/sessions'
+
+# 3. Con la sesión en SCAN_QR_CODE, pedir el código para el OPERATIVO
+docker exec buscadonde-waha sh -c  'curl -s -X POST -H "X-Api-Key: $WAHA_API_KEY" -H "Content-Type: application/json"   -d "{\"phoneNumber\":\"59175314737\"}" localhost:3000/api/default/auth/request-code'
+```
+
+El código de 8 dígitos se ingresa en el teléfono: WhatsApp › Dispositivos
+vinculados › Vincular con número de teléfono.
+
+### Antes de dar por hecho que anda
+
+En **Admin › WhatsApp** tiene que decir cuántos números propios están
+configurados. Si dice 0, el `.env` no se leyó o quedaron placeholders — y con 0
+cada mensaje que escriba alguien de URUKU dentro de un grupo se publica como
+oferta del comerciante. Después, mandar una foto de prueba a un grupo atado y
+verla aparecer en esa misma pantalla.
+
 ## El día que baneen el operativo
 
 **Lo que NO se puede hacer:** que el sistema agregue un número nuevo a los
