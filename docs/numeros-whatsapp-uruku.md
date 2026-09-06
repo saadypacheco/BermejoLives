@@ -84,9 +84,21 @@ cola es donde una persona lo mira.
 
 | Número | Operadora | Rol | Dónde vive |
 |---|---|---|---|
-| **75314737** | Tigo | **Operativo** — vinculado a WAHA | Teléfono fijo en la oficina, cargado |
-| **64610187** | Entel | **Respaldo 1** | Cajón, sin usar |
+| **64610187** | **Tigo** | **Operativo** — se vincula a WAHA | Celular aparte (no el personal). Acá vive el canal |
+| **75314737** | Entel *(a confirmar)* | **Respaldo 1** | eSIM en el celular personal |
 | **72900149** | Entel | **Respaldo 2** | Cajón, sin usar |
+
+> **Corregido el 6/9.** La tabla tenía el operativo y el respaldo 1 cruzados:
+> decía que el Tigo era el 75314737. El Tigo es el **64610187**, y es el que
+> está en el celular aparte. Se anota el error y no sólo el dato correcto
+> porque el número equivocado ya había viajado a tres documentos y a los
+> comandos de emparejado de más abajo: un dato mal copiado se propaga, y lo que
+> lo frena es dejar dicho cuál era el equivocado.
+>
+> La intención del diseño **no cambia**: operativo en Tigo y respaldos en
+> Entel, para que un problema de red o de portabilidad de Entel no se lleve
+> puesto al operativo y a su reemplazo el mismo día. Lo que estaba mal eran los
+> dígitos, no la idea.
 | *(a comprar)* | — | **Marca** | El número público del sitio |
 | *(a comprar)* | — | **Explorador** | El celular que sale a la calle |
 
@@ -226,7 +238,7 @@ docker exec buscadonde-waha sh -c  'curl -s -H "X-Api-Key: $WAHA_API_KEY" localh
 docker exec buscadonde-waha sh -c  'curl -s -X POST -H "X-Api-Key: $WAHA_API_KEY" -H "Content-Type: application/json"   -d "{\"name\":\"default\",\"start\":true}" localhost:3000/api/sessions'
 
 # 3. Con la sesión en SCAN_QR_CODE, pedir el código para el OPERATIVO
-docker exec buscadonde-waha sh -c  'curl -s -X POST -H "X-Api-Key: $WAHA_API_KEY" -H "Content-Type: application/json"   -d "{\"phoneNumber\":\"59175314737\"}" localhost:3000/api/default/auth/request-code'
+docker exec buscadonde-waha sh -c  'curl -s -X POST -H "X-Api-Key: $WAHA_API_KEY" -H "Content-Type: application/json"   -d "{\"phoneNumber\":\"59164610187\"}" localhost:3000/api/default/auth/request-code'
 ```
 
 El código de 8 dígitos se ingresa en el teléfono: WhatsApp › Dispositivos
@@ -259,11 +271,11 @@ Con un solo número real, todo lo demás vacío. Vacío es un estado válido y
 seguro; con placeholders no.
 
 ```
-WA_NUMEROS_PROPIOS=59175314737      # sólo el operativo por ahora
+WA_NUMEROS_PROPIOS=59164610187      # sólo el operativo por ahora
 WA_NUMEROS_GRUPO=                   # vacío: los respaldos todavía no tienen WhatsApp
 WA_NUMEROS_EXPLORADOR=
 WA_CONTACTO_EXPLORADOR=
-BOT_WHATSAPP_NUMERO=59175314737
+BOT_WHATSAPP_NUMERO=59164610187
 ```
 
 `WA_NUMEROS_GRUPO` vacío hace que el grupo se cree sólo con el comerciante. Es
@@ -315,6 +327,26 @@ significa volver a los cien grupos uno por uno.
 
 WhatsApp permite dos cuentas en la misma aplicación, así que una de las eSIM de
 Entel puede ser el respaldo 1 en el mismo celular personal sin comprar nada.
+
+## El canal vive en el operativo, y eso hay que cubrirlo
+
+El canal se creó el 6/9 desde el **64610187**, que es el mismo número que se
+vincula a WAHA y va a estar dentro de los cien grupos de comerciantes.
+
+Para los seguidores no cambia nada: un canal **nunca muestra el número de quien
+lo administra**. El problema es otro y es el mismo que motiva todo este
+documento: **el día que baneen esa cuenta se van el canal y los grupos juntos.**
+Es el número más expuesto que tenemos, y ahora también tiene encima lo único que
+le habla al comprador.
+
+Lo que se puede hacer, y conviene hacerlo con el canal en cero seguidores:
+**agregarle un segundo administrador** desde otra línea de URUKU (canal → tocar
+el nombre → Administradores → Agregar). No hay garantía de que un canal
+sobreviva al baneo de su creador, pero es la única palanca disponible y no
+cuesta nada ahora. Con mil seguidores, rehacerlo sí cuesta.
+
+Mover el canal a otro número más adelante no es directo, así que la decisión
+práctica es dejarlo donde está y sumarle el segundo admin.
 
 ## El día que baneen el operativo
 

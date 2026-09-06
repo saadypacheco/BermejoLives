@@ -108,7 +108,8 @@ el comprador no ve "Abierto ahora" y nadie se entera de por qué.
 Todo lo que se construyó alrededor —el explorador, el carrito de reservas, las
 ofertas en la tarjeta— no tiene qué mostrar hasta que entre la primera oferta.
 
-- [ ] Emparejar WAHA con el **Tigo (75314737)**, que pasa a ser el operativo.
+- [ ] Emparejar WAHA con el **Tigo (64610187)**, que pasa a ser el operativo.
+      (Corregido el 6/9: la tabla tenía cruzados el operativo y el respaldo 1.)
 - [ ] Comprar **3 chips**: marca, explorador y respaldo 2. Ver
       [numeros-whatsapp-uruku.md](numeros-whatsapp-uruku.md).
 - [ ] Poner el perfil del operativo como **URUKU** (hoy dice "Juan"). Un
