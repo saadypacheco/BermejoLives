@@ -202,14 +202,16 @@ def _publicar_del_explorador(payload, event, repo: Repo) -> dict:
     codigo = extraer_codigo(payload.body)
     if not codigo:
         logger.info("ingest.explorador_sin_codigo", phone=payload.phone)
-        return {"captured": True, "publicada": False,
-                "motivo": "el explorador mandó una oferta sin el código del local"}
+        motivo = "el explorador mandó una oferta sin el código del local"
+        repo.marcar_wa_inbox(payload.id, "sin_comercio", motivo)
+        return {"captured": True, "publicada": False, "motivo": motivo}
 
     comercio = repo.get_comercio_por_codigo(codigo)
     if not comercio:
         logger.info("ingest.explorador_codigo_desconocido", codigo=codigo)
-        return {"captured": True, "publicada": False,
-                "motivo": f"no hay ningún comercio con el código {codigo}", "codigo": codigo}
+        motivo = f"no hay ningún comercio con el código {codigo}"
+        repo.marcar_wa_inbox(payload.id, "sin_comercio", motivo)
+        return {"captured": True, "publicada": False, "motivo": motivo, "codigo": codigo}
 
     slug = comercio.get("slug") or comercio.get("id") or "?"
 
@@ -245,6 +247,9 @@ def _publicar_del_explorador(payload, event, repo: Repo) -> dict:
     }
     repo.insert_publicacion(row)
     logger.info("ingest.explorador_publicacion", comercio=slug, codigo=codigo, foto=bool(imagen_url))
+    repo.marcar_wa_inbox(payload.id, "publicada",
+                         f"del explorador, para {codigo} · a la cola de moderación",
+                         comercio["id"])
     return {"captured": True, "comercio": slug, "origen": "explorador",
             "estado": "pendiente", "codigo": codigo}
 
@@ -298,7 +303,9 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
 
     if payload.es_grupo and settings.es_numero_propio(payload.phone):
         logger.info("ingest.mensaje_propio", grupo=payload.grupo_jid)
-        return {"captured": True, "publicada": False, "motivo": "mensaje de un número de URUKU"}
+        motivo = "mensaje de un número de URUKU"
+        repo.marcar_wa_inbox(payload.id, "ignorada", motivo)
+        return {"captured": True, "publicada": False, "motivo": motivo}
 
     # 2) Identificar al comercio.
     #    En un GRUPO manda el grupo: está atado a un comercio y no cambia aunque
@@ -312,8 +319,9 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
             # El crudo ya quedó en wa_inbox, así que nada se pierde: cuando
             # alguien mande el código en ese grupo, o lo ate desde el admin, se
             # sabe qué llegó antes. Lo que NO se hace es inventar un comercio.
-            return {"captured": True, "publicada": False,
-                    "motivo": "el grupo no está asociado a ningún comercio",
+            motivo = "el grupo no está asociado a ningún comercio"
+            repo.marcar_wa_inbox(payload.id, "sin_comercio", motivo)
+            return {"captured": True, "publicada": False, "motivo": motivo,
                     "grupo": payload.grupo_jid}
     else:
         comercio, identidad_origen, codigo_recibido = _identificar_comercio(repo, payload)
@@ -328,6 +336,9 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         if loc:
             repo.actualizar_ubicacion_comercio(comercio["id"], loc[0], loc[1], loc[2])
         logger.info("ingest.ubicacion", comercio=slug, ok=bool(loc))
+        repo.marcar_wa_inbox(payload.id, "ignorada",
+                             "compartió la ubicación" if loc else "ubicación ilegible",
+                             comercio.get("id"))
         return {"captured": True, "comercio": slug, "ubicacion_actualizada": bool(loc)}
 
     # 2.c) ¿Este comercio puede publicar por WhatsApp?
@@ -338,8 +349,9 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     #      después el comercio contrata el plan, el crudo sigue estando.
     if not _puede_publicar_por_whatsapp(comercio):
         logger.info("ingest.plan_insuficiente", comercio=slug, plan=comercio.get("plan"))
-        return {"captured": True, "comercio": slug, "publicada": False,
-                "motivo": "el plan del comercio no incluye publicar por WhatsApp"}
+        motivo = "el plan del comercio no incluye publicar por WhatsApp"
+        repo.marcar_wa_inbox(payload.id, "sin_permiso", motivo, comercio.get("id"))
+        return {"captured": True, "comercio": slug, "publicada": False, "motivo": motivo}
 
     # 3) Crear publicación. Comercio confiable -> publica directo; si no, a moderación.
     from datetime import datetime, timezone
@@ -397,4 +409,8 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
 
     estado = row["estado"]
     logger.info("ingest.publicacion", comercio=slug, tipo=tipo, estado=estado)
+    repo.marcar_wa_inbox(
+        payload.id, "publicada",
+        f"{tipo} · {'publicada' if estado == 'aprobado' else 'a la cola de moderación'}",
+        comercio["id"])
     return {"captured": True, "comercio": slug, "tipo": tipo, "estado": estado}

@@ -334,6 +334,31 @@ class FakeRepo:
         self.wa_inbox[wamid] = row
         return True
 
+    def marcar_wa_inbox(self, wa_message_id, resultado, motivo=None, comercio_id=None):
+        fila = self.wa_inbox.get(wa_message_id)
+        if fila is None:
+            return
+        fila["resultado"] = resultado
+        fila["procesado"] = True
+        if motivo:
+            fila["motivo"] = motivo[:300]
+        if comercio_id:
+            fila["comercio_id"] = comercio_id
+
+    def list_wa_inbox(self, resultado=None, limite=100):
+        filas = list(self.wa_inbox.values())
+        if resultado == "problemas":
+            filas = [f for f in filas if f.get("resultado") in
+                     {"sin_comercio", "sin_permiso", "error"}]
+        elif resultado:
+            filas = [f for f in filas if f.get("resultado") == resultado]
+        return list(reversed(filas))[:limite]
+
+    def resumen_wa_inbox(self, dias=7):
+        from collections import Counter
+        cuenta = Counter(f.get("resultado") or "sin_registrar" for f in self.wa_inbox.values())
+        return sorted(({"resultado": k, "n": v} for k, v in cuenta.items()), key=lambda x: -x["n"])
+
     def insert_publicacion(self, row):
         wamid = row.get("wa_message_id")
         if wamid and any(p.get("wa_message_id") == wamid for p in self.publicaciones):

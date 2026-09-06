@@ -36,6 +36,7 @@ import { ImportadosPanel } from "@/components/importados-panel";
 import { VencimientosPanel } from "@/components/vencimientos-panel";
 import { RubrosPanel } from "@/components/rubros-panel";
 import { RevisionRubros } from "@/components/revision-rubros";
+import { BandejaWhatsApp } from "@/components/bandeja-whatsapp";
 import { RubroRecalcular } from "@/components/rubro-recalcular";
 import { CatalogoPanel } from "@/components/catalogo-panel";
 import { ImageLightbox } from "@/components/image-lightbox";
@@ -49,7 +50,7 @@ export default function AdminPage() {
   const [email, setEmail] = useState("admin@bermejolive.com");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"publicaciones" | "comercios" | "lugares" | "adornos" | "catalogo" | "importados" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero" | "vencimientos" | "rubros" | "revision-rubros">("comercios");
+  const [tab, setTab] = useState<"publicaciones" | "comercios" | "lugares" | "adornos" | "catalogo" | "importados" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero" | "vencimientos" | "rubros" | "revision-rubros" | "whatsapp">("comercios");
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [items, setItems] = useState<PendingPub[]>([]);
   const [comercios, setComercios] = useState<ComercioPorVerificar[]>([]);
@@ -279,6 +280,9 @@ export default function AdminPage() {
         <button className={tab === "revision-rubros" ? "active" : ""} onClick={() => setTab("revision-rubros")}>
           Revisar rubros
         </button>
+        <button className={tab === "whatsapp" ? "active" : ""} onClick={() => setTab("whatsapp")}>
+          WhatsApp
+        </button>
         <button className={tab === "importados" ? "active" : ""} onClick={() => setTab("importados")}>
           Importados
         </button>
@@ -325,6 +329,7 @@ export default function AdminPage() {
       {tab === "catalogo" && <CatalogoPanel />}
       {tab === "rubros" && <RubrosPanel />}
       {tab === "revision-rubros" && <RevisionRubros />}
+      {tab === "whatsapp" && <BandejaWhatsApp />}
       {tab === "importados" && <ImportadosPanel rubros={rubros} />}
 
       {tab === "comercios" && (

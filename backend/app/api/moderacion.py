@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from app.core.auth import require_admin, require_moderador
-from app.core.config import settings
+from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import validar_whatsapp
 from app.services import clasificador
@@ -1818,6 +1818,46 @@ async def admin_analizar_ofertas(
 class AplicarPatronBody(BaseModel):
     rubro_slug: str
     palabras: str
+
+
+@router.get("/admin/whatsapp/entrantes")
+async def admin_wa_entrantes(
+    estado: str = Query(default="problemas"),
+    limite: int = Query(default=100, le=300),
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Qué entró por WhatsApp y qué pasó con cada mensaje.
+
+    El canal está construido y era ciego: cuando algo no se publicaba —el grupo
+    no está atado, vino sin código, el plan no alcanza— el crudo quedaba
+    guardado y el motivo se iba en una línea de log. Alcanzaba con el canal
+    apagado. Encendido, la primera pregunta es "le dije que mande la foto,
+    ¿llegó?", y contestarla por SSH significa que no la contesta nadie: se le
+    pide al comerciante que mande otra vez, y la segunda tampoco se publica por
+    la misma razón que la primera.
+
+    El filtro por defecto es `problemas` —lo que llegó y no se publicó— porque
+    es lo único que pide acción. Lo publicado se mira cuando se quiere.
+
+    Devuelve también el estado del canal: qué números están configurados y
+    cuántos mensajes de cada tipo llegaron. Sin eso, "no llega nada" y "llega y
+    se descarta" se ven igual desde el panel, y son problemas opuestos.
+    """
+    items = await run_in_threadpool(repo.list_wa_inbox, estado, limite)
+    resumen = await run_in_threadpool(repo.resumen_wa_inbox, 7)
+    return {
+        "items": items,
+        "resumen": resumen,
+        # Cuántos hay de cada rol, sin mostrar los números: el panel lo usa un
+        # administrador, pero un teléfono en pantalla se saca en una foto.
+        "config": {
+            "propios": len(_numeros_propios(settings.wa_numeros_propios)),
+            "explorador": len(_numeros_propios(settings.wa_numeros_explorador,
+                                               "WA_NUMEROS_EXPLORADOR")),
+            "contacto_explorador": bool(settings.wa_contacto_explorador.strip()),
+        },
+    }
 
 
 @router.post("/admin/rubros/recalcular-principal")

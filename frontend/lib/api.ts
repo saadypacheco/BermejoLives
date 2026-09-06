@@ -818,6 +818,31 @@ export type SugerenciasRubro = {
   ia: { rubros: RubroSimple[]; motivo: string } | null;
 };
 
+export type WaEntrante = {
+  id: string;
+  wa_message_id: string;
+  wa_jid: string | null;
+  phone: string | null;
+  tipo: string | null;
+  body: string | null;
+  media_url: string | null;
+  resultado: string | null;
+  motivo: string | null;
+  created_at: string;
+  comercios?: { nombre: string; slug: string; codigo: string | null } | null;
+};
+
+export type BandejaWa = {
+  items: WaEntrante[];
+  resumen: { resultado: string; n: number }[];
+  config: { propios: number; explorador: number; contacto_explorador: boolean };
+};
+
+export async function getBandejaWa(estado = "problemas", limite = 100): Promise<BandejaWa> {
+  const res = await authFetch(`/admin/whatsapp/entrantes?estado=${estado}&limite=${limite}`);
+  return res.json();
+}
+
 export type ModoRecalculo = "principal" | "reemplazar";
 
 export type RecalculoPrincipal = {

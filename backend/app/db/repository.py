@@ -37,6 +37,10 @@ class Repo(Protocol):
     def upsert_comercio_by_jid(self, wa_jid: str, phone: str) -> dict: ...
     def actualizar_ubicacion_comercio(self, comercio_id: str, lat: float, lng: float, direccion: str | None) -> None: ...
     def insert_wa_inbox(self, row: dict) -> bool: ...
+    def marcar_wa_inbox(self, wa_message_id: str, resultado: str, motivo: str | None,
+                        comercio_id: str | None) -> None: ...
+    def list_wa_inbox(self, resultado: str | None, limite: int) -> list[dict]: ...
+    def resumen_wa_inbox(self, dias: int) -> list[dict]: ...
     def insert_publicacion(self, row: dict) -> bool: ...
     def insert_publicacion_directa(self, row: dict) -> dict: ...
     def list_publicaciones(self, estado: str | None) -> list[dict]: ...
@@ -419,6 +423,59 @@ class SupabaseRepo:
             .execute()
         )
         return bool(res.data)  # vacío => duplicado
+
+    def marcar_wa_inbox(self, wa_message_id: str, resultado: str, motivo: str | None = None,
+                        comercio_id: str | None = None) -> None:
+        """Deja escrito en la MISMA fila qué pasó con el mensaje.
+
+        Nunca lanza: el mensaje ya está guardado y la publicación ya se hizo o
+        no. Que falle la anotación no puede cambiar ninguna de las dos cosas —
+        sería perder una oferta por no poder escribir un comentario al margen.
+        """
+        try:
+            patch: dict = {"resultado": resultado, "procesado": True}
+            if motivo:
+                patch["motivo"] = motivo[:300]
+            if comercio_id:
+                patch["comercio_id"] = comercio_id
+            self._db.table("wa_inbox").update(patch).eq("wa_message_id", wa_message_id).execute()
+        except Exception:  # noqa: BLE001
+            logger.warning("marcar_wa_inbox.fallo", wa_message_id=wa_message_id, exc_info=True)
+
+    def list_wa_inbox(self, resultado: str | None = None, limite: int = 100) -> list[dict]:
+        """La bandeja de lo que entró por WhatsApp, lo más nuevo primero."""
+        try:
+            q = (self._db.table("wa_inbox")
+                 .select("id, wa_message_id, wa_jid, phone, tipo, body, media_url, "
+                         "resultado, motivo, comercio_id, created_at, "
+                         "comercios(nombre, slug, codigo)")
+                 .order("created_at", desc=True).limit(min(limite, 300)))
+            if resultado == "problemas":
+                # Lo que hay que mirar: llegó y no se publicó. Es el filtro por
+                # defecto del panel, porque es el único que pide acción.
+                q = q.in_("resultado", ["sin_comercio", "sin_permiso", "error"])
+            elif resultado:
+                q = q.eq("resultado", resultado)
+            return q.execute().data or []
+        except Exception:  # noqa: BLE001
+            logger.warning("list_wa_inbox.fallo", exc_info=True)
+            return []
+
+    def resumen_wa_inbox(self, dias: int = 7) -> list[dict]:
+        """Cuántos de cada resultado en los últimos días. Se agrupa acá y no en
+        SQL porque son pocas filas y no justifica una función más en la base."""
+        from collections import Counter
+        from datetime import datetime, timedelta, timezone
+
+        desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+        try:
+            filas = (self._db.table("wa_inbox").select("resultado")
+                     .gte("created_at", desde).limit(5000).execute().data) or []
+        except Exception:  # noqa: BLE001
+            logger.warning("resumen_wa_inbox.fallo", exc_info=True)
+            return []
+        cuenta = Counter(f.get("resultado") or "sin_registrar" for f in filas)
+        return sorted(({"resultado": k, "n": v} for k, v in cuenta.items()), key=lambda x: -x["n"])
 
     def insert_publicacion(self, row: dict) -> bool:
         res = (

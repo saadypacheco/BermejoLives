@@ -375,3 +375,56 @@ def test_un_encuadre_fuera_de_rango_se_rechaza(client, repo, admin_token):
     c = repo.seed_comercio(slug="raro", nombre="Raro")
     assert client.put(f"/admin/comercio/{c['id']}", json={"portada_pos": 150},
                       headers=_h(admin_token)).status_code == 422
+
+
+# ══════════════════════════════════════════════════ bandeja de WhatsApp
+def _mensaje(repo, wamid, resultado=None, motivo=None, body="hola"):
+    repo.insert_wa_inbox({"wa_message_id": wamid, "wa_jid": "1@g.us", "phone": "59171234567",
+                          "tipo": "image", "body": body, "media_url": None, "raw": {}})
+    if resultado:
+        repo.marcar_wa_inbox(wamid, resultado, motivo)
+
+
+def test_la_bandeja_muestra_por_defecto_lo_que_NO_se_publico(client, repo, admin_token):
+    """Es el único filtro que pide acción. Lo publicado se mira cuando se quiere;
+    lo que llegó y se descartó es un comerciante esperando que aparezca su
+    oferta."""
+    _mensaje(repo, "ok1", "publicada", "oferta · publicada")
+    _mensaje(repo, "mal1", "sin_comercio", "el grupo no está asociado a ningún comercio")
+
+    r = client.get("/admin/whatsapp/entrantes", headers=_h(admin_token))
+    assert r.status_code == 200, r.text
+    ids = [i["wa_message_id"] for i in r.json()["items"]]
+    assert ids == ["mal1"]
+
+
+def test_la_bandeja_puede_mostrar_todo(client, repo, admin_token):
+    _mensaje(repo, "ok1", "publicada")
+    _mensaje(repo, "mal1", "sin_comercio")
+    r = client.get("/admin/whatsapp/entrantes?estado=", headers=_h(admin_token))
+    assert len(r.json()["items"]) == 2
+
+
+def test_dice_cuantos_numeros_hay_configurados_pero_no_cuales(client, repo, admin_token):
+    """Sin esto, "no llega nada" y "llega y se descarta" se ven igual desde el
+    panel, y son problemas opuestos. Los números NO van: el panel lo usa un
+    administrador, pero un teléfono en pantalla se saca en una foto."""
+    cuerpo = client.get("/admin/whatsapp/entrantes", headers=_h(admin_token)).json()
+    assert set(cuerpo["config"]) == {"propios", "explorador", "contacto_explorador"}
+    assert all(isinstance(v, (int, bool)) for v in cuerpo["config"].values())
+
+
+def test_la_ingesta_deja_escrito_por_que_no_publico(client, repo):
+    """El motivo va en la MISMA fila del mensaje crudo: una tabla aparte
+    obligaría a cruzarlas para contestar la única pregunta que importa."""
+    from app.services.ingest import handle_message
+
+    handle_message({
+        "event": "message",
+        "payload": {"id": "wamid.X1", "from": "120999@g.us", "fromMe": False,
+                    "type": "chat", "body": "tengo ofertas", "hasMedia": False},
+    }, repo)
+
+    fila = repo.wa_inbox["wamid.X1"]
+    assert fila["resultado"] == "sin_comercio"
+    assert "grupo" in fila["motivo"]
