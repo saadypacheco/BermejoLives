@@ -1,7 +1,7 @@
 # Los números de WhatsApp de URUKU
 
 > Quién es quién en los grupos, cómo se configura, y qué hacer el día que
-> baneen el testigo. Escrito antes de necesitarlo a propósito: ese día no hay
+> baneen el operativo. Escrito antes de necesitarlo a propósito: ese día no hay
 > tiempo de razonarlo.
 
 ## Los roles
@@ -381,6 +381,37 @@ queda igual. Y los grupos siguen intactos: el respaldo ya estaba adentro.
 Después del cambio, conseguir un respaldo nuevo y **agregarlo a los grupos**,
 para volver a tener dos. Ése es el trabajo manual que queda, y se hace con
 tiempo en vez de con el canal caído.
+
+## A quién banean, y por qué a ése
+
+La pregunta natural es si el riesgo está en los respaldos, que serían "los que
+pasan los datos". No: **los respaldos no pasan nada.** WAHA lee sólo a través de
+la única cuenta que tiene vinculada. Los respaldos entran al grupo y se quedan
+callados — no publican, no capturan, no escriben. Esa inactividad es lo que los
+mantiene sanos.
+
+**El único expuesto es el operativo**, y no por recibir. Recibir es pasivo y de
+bajo riesgo: un teléfono en cien grupos leyendo no le llama la atención a nadie.
+Lo que sí, en orden de peso:
+
+**Agregar gente a grupos.** Es el disparador número uno, y es exactamente lo que
+hace el botón de crear grupo: mete a un comerciante que no lo pidió. Un par de
+"reportar spam" seguidos alcanzan. Por eso el perfil tiene que decir **URUKU**
+con el logo y no "Juan": la gente reporta al desconocido, no a la marca que
+acaba de aceptar por la calle.
+
+**Estar vinculado a un cliente no oficial.** WAHA se conecta como dispositivo
+vinculado, igual que WhatsApp Web, pero automatizado. No es la API oficial de
+Meta y esa diferencia existe.
+
+**Mandar mensajes automáticos a desconocidos.** Es el patrón clásico. Hoy el
+envío de códigos `CONFIRMAR-XXXXXX` sale por ahí; el código ya soporta los dos
+proveedores y se cambia con `WHATSAPP_PROVIDER`.
+
+La conclusión práctica: **el baneo cae sobre el número que crea grupos y
+escribe**, no sobre los que miran. Y como ése es también el que tiene el canal
+de difusión, ese día se pierden las tres cosas juntas si no hay un segundo
+administrador puesto antes.
 
 ## Cómo bajar la chance de que pase
 

@@ -5,13 +5,30 @@
 
 ## 1. El modelo que existe: un grupo por comerciante
 
-Cada comerciante tiene **un** grupo con tres participantes y nada más:
+Cada comerciante tiene **un** grupo, chico:
 
 | Quién | Para qué |
 |---|---|
 | El celular del comercio | El único que publica |
-| Un celular de URUKU | La cara de la marca adentro del grupo |
-| El testigo | El número vinculado a WAHA; es el que trae el contenido a la base |
+| El **operativo** | La cara de URUKU adentro del grupo Y el número vinculado a WAHA: es el que trae el contenido a la base |
+| Los **respaldos** | No hacen nada. Están adentro para el día que baneen al operativo |
+
+> **"Testigo" y "operativo" son el mismo número.** Este documento decía
+> "testigo" para el vinculado a WAHA y "un celular de URUKU" para quien habla,
+> como si fueran dos. Al principio lo eran; después se unificaron —WhatsApp
+> marca como propios los mensajes del número vinculado (`fromMe`), así que la
+> misma línea puede escribirle al comerciante sin que eso se convierta en una
+> oferta— y el documento no se actualizó.
+>
+> La palabra "testigo" quedó en varios comentarios del código. Significa
+> siempre lo mismo: **el operativo**.
+>
+> Importa porque lleva a una conclusión equivocada sobre el baneo: que los
+> respaldos, "los que pasan los datos a la base", serían los expuestos. **No
+> pasan nada.** WAHA lee sólo a través de la cuenta que tiene vinculada, que es
+> una sola. Los respaldos son miembros inertes: entran al grupo, no publican, no
+> capturan y no escriben. Esa inactividad es justamente lo que los mantiene
+> sanos para el día que hagan falta.
 
 **Por qué el grupo y no el número.** Antes la ingesta identificaba al comercio
 por el teléfono de quien mandaba. Eso se rompe de dos maneras que pasan seguido:
@@ -34,8 +51,10 @@ WhatsApp, para cuando el grupo se rehízo.
   ate se sabe qué llegó antes. (Antes, cada grupo generaba un "Comercio 1234".)
 - El código de otro local **no le roba el grupo** a nadie: el primero que lo ata
   se lo queda.
-- Los números de URUKU (`WA_NUMEROS_PROPIOS`) no publican nunca. El testigo ya
-  estaba cubierto por `fromMe`; el de URUKU no lo estaba.
+- Los números de URUKU (`WA_NUMEROS_PROPIOS`) no publican nunca. El operativo ya
+  estaba cubierto por `fromMe` —es el vinculado—; los respaldos no lo estaban, y
+  sin la lista cada "buen día" que escriba uno se publicaba como oferta del
+  comerciante.
 - La foto se baja al disco propio apenas llega. La URL de WAHA es interna y
   efímera, y **acá la foto es la oferta**.
 - Soltar un grupo no borra lo publicado: son ofertas que existieron.
