@@ -240,6 +240,82 @@ cada mensaje que escriba alguien de URUKU dentro de un grupo se publica como
 oferta del comerciante. Después, mandar una foto de prueba a un grupo atado y
 verla aparecer en esa misma pantalla.
 
+## Probarlo con dos teléfonos, antes de tener los cinco números
+
+No hacen falta los cinco para saber si el canal funciona. El par mínimo es
+**operativo + alguien que haga de comerciante**, y ese alguien puede ser el
+celular personal de quien lo está probando.
+
+### La trampa: el número que hace de comerciante NO va en `WA_NUMEROS_PROPIOS`
+
+Es el error que más caro sale porque no se ve como error. Si el número de prueba
+está en esa lista, cada foto que mande al grupo se descarta con "mensaje de un
+número de URUKU" y la ingesta parece rota estando perfecta. La lista es de los
+números **nuestros**; el que actúa de comerciante es de ellos.
+
+### El `.env` para la prueba
+
+Con un solo número real, todo lo demás vacío. Vacío es un estado válido y
+seguro; con placeholders no.
+
+```
+WA_NUMEROS_PROPIOS=59175314737      # sólo el operativo por ahora
+WA_NUMEROS_GRUPO=                   # vacío: los respaldos todavía no tienen WhatsApp
+WA_NUMEROS_EXPLORADOR=
+WA_CONTACTO_EXPLORADOR=
+BOT_WHATSAPP_NUMERO=59175314737
+```
+
+`WA_NUMEROS_GRUPO` vacío hace que el grupo se cree sólo con el comerciante. Es
+lo correcto mientras los respaldos no existan: pedirle a WhatsApp que agregue un
+número que no tiene cuenta es cómo se consigue un grupo a medio armar.
+
+### La secuencia
+
+1. **`comercio_wa_grupos` en 0.** Si ya hay grupos, emparejar otro número
+   significa agregarlo a mano a cada uno.
+2. **Emparejar el Tigo** con WAHA (comandos arriba).
+3. **Cargar el `.env` y reiniciar el backend.**
+4. **Admin › WhatsApp tiene que decir `números propios: 1`.** Si dice 0, el
+   `.env` no se leyó: no seguir, porque todo lo que venga después va a mentir.
+5. **Crear un comercio de prueba** en el panel, con el número personal como su
+   WhatsApp. De prueba y no uno real: el alta del grupo usa ese número, y
+   pisarle el suyo a un comerciante de verdad lo saca de sus propias consultas.
+6. **Crear el grupo desde la ficha** (Admin › el comercio › Grupo de WhatsApp).
+   El grupo tiene que quedar atado en el mismo acto; si el panel avisa que no
+   pudo, atarlo a mano antes de seguir.
+7. **Mandar una foto con texto desde el personal, dentro del grupo.**
+8. **Mirar Admin › WhatsApp.** Tiene que aparecer como *Publicada · a la cola de
+   moderación*, y la misma foto en Publicaciones.
+
+### Las tres pruebas que confirman las guardas
+
+Pasan más desapercibidas que la principal, y son las que evitan publicar cosas
+que no son ofertas:
+
+- **Escribir desde el propio Tigo en el grupo.** No tiene que publicar nada
+  (`fromMe`). En la bandeja no aparece o aparece como *Ignorada*.
+- **Chat 1-a-1 desde el personal al Tigo, con `URUKU-XXXX` en el texto.** Tiene
+  que publicar para ESE comercio, aunque el número no sea suyo: es el camino que
+  le permite publicar a un comercio sin número propio.
+- **Chat 1-a-1 sin código, desde un número desconocido.** Tiene que quedar como
+  *No se supo de quién es*. Que NO publique es el acierto: adivinar sería poner
+  la foto de un local en la ficha de otro.
+
+### Los respaldos: antes de crear los cien grupos, no después
+
+La prueba se puede hacer sin ellos. La operación no: una cuenta baneada no puede
+agregar a nadie, así que los respaldos tienen que estar adentro de los grupos
+desde el primer día. Un chip en el cajón sin teléfono no tiene WhatsApp, y un
+número sin WhatsApp no se puede agregar a un grupo.
+
+O sea que el orden real es: probar con dos → conseguir los teléfonos y dar de
+alta los respaldos → recién ahí crear los grupos de verdad. Crearlos antes
+significa volver a los cien grupos uno por uno.
+
+WhatsApp permite dos cuentas en la misma aplicación, así que una de las eSIM de
+Entel puede ser el respaldo 1 en el mismo celular personal sin comprar nada.
+
 ## El día que baneen el operativo
 
 **Lo que NO se puede hacer:** que el sistema agregue un número nuevo a los
