@@ -701,7 +701,7 @@ def agregar_numero(
 # ---- Grupo de WhatsApp del comercio ----
 #
 # El canal por el que el comerciante manda sus ofertas: un grupo con su celular,
-# uno de URUKU y el testigo. Vive en el perfil del comercio porque es parte de
+# el operativo y los respaldos. Vive en el perfil del comercio porque es parte de
 # cómo se llega a ese local — igual que el código o los números autorizados.
 class GrupoBody(BaseModel):
     grupo_jid: str

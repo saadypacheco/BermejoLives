@@ -38,12 +38,12 @@ class Settings(BaseSettings):
         return f"https://wa.me/{self.bot_whatsapp_numero}?text=CONFIRMAR-{codigo}"
 
     # Los números de URUKU que están dentro de los grupos de comerciantes,
-    # separados por coma. En cada grupo hay tres participantes: el comercio, un
-    # número de URUKU y el testigo.
+    # separados por coma. En cada grupo está el comercio, el OPERATIVO —que es
+    # el vinculado a WAHA— y los RESPALDOS.
     #
-    # El testigo es el número vinculado a WAHA, así que sus mensajes llegan con
-    # fromMe=true y la ingesta ya los descarta. El de URUKU NO: es otro
-    # teléfono, entra como cualquier participante, y sin esta lista cada vez que
+    # El operativo ya está cubierto: sus mensajes llegan con fromMe=true y la
+    # ingesta los descarta. Los respaldos NO: son otros teléfonos, entran como
+    # cualquier participante, y sin esta lista cada vez que
     # alguien de URUKU escriba "buen día" en el grupo se crea una publicación a
     # nombre del comerciante.
     wa_numeros_propios: str = ""

@@ -38,8 +38,9 @@ class IngestError(Exception):
 def _identificar_por_grupo(repo: Repo, payload) -> tuple[dict | None, str, str | None]:
     """Resuelve el comercio cuando el mensaje vino de un grupo.
 
-    El modelo: UN grupo por comerciante, con tres participantes — el celular del
-    comercio, un celular de URUKU y el testigo (el vinculado a WAHA). El grupo
+    El modelo: UN grupo por comerciante, con el celular del comercio, el
+    OPERATIVO (el vinculado a WAHA, que además es la cara de URUKU adentro) y
+    los RESPALDOS, que están ahí callados para el día del baneo. El grupo
     es lo estable: el comerciante puede cambiar de teléfono, o publicar desde el
     celular del hijo, y el contenido sigue llegando al local correcto.
 
@@ -288,8 +289,8 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         return {"captured": True, "duplicate": True}
 
     # 1.b) En un grupo, los mensajes de los NUESTROS no son ofertas.
-    #      El testigo ya está cubierto por fromMe (es el número vinculado a
-    #      WAHA), pero el celular de URUKU es otro teléfono y entra como
+    #      El operativo ya está cubierto por fromMe (es el número vinculado a
+    #      WAHA), pero los respaldos son otros teléfonos y entran como
     #      cualquier participante: sin esto, cada "buen día" que escriba alguien
     #      de URUKU se publica a nombre del comerciante.
     # 1.c) El EXPLORADOR: URUKU sale a fotografiar ofertas de locales que

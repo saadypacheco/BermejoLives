@@ -4,6 +4,71 @@
 > baneen el operativo. Escrito antes de necesitarlo a propósito: ese día no hay
 > tiempo de razonarlo.
 
+## La tabla definitiva (6/9/2026)
+
+Cuatro funciones, cinco números, dos celulares. Lo demás de este documento
+explica el porqué; esto es lo que hay que tener.
+
+| # | Rol | Número | Chip | ¿WAHA? | ¿En los grupos? | ¿En la web? |
+|---|---|---|---|---|---|---|
+| 1 | **Marca** | *falta* | a comprar / eSIM libre | No | No | **Sí**, es el que ve el comprador |
+| 2 | **Operativo** | **64610187** | Tigo, celular exclusivo | **Sí, el único** | Sí, en todos | No |
+| 3 | **Respaldo 1** | 75314737 | eSIM Entel | No | Sí, en todos | No |
+| 4 | **Respaldo 2** | 72900149 | Entel (cajón) | No | Sí, en todos | No |
+| 5 | **Explorador** | *falta* | a comprar / eSIM libre | No | **No** | No |
+
+**Qué hace cada uno, en una línea:**
+
+1. **Marca** — el WhatsApp del sitio. Atiende compradores. No entra a ningún
+   grupo: mezclarlo con cien grupos de comerciantes hace imposible atender los
+   dos.
+2. **Operativo** — el celular exclusivo. Crea los grupos, recibe las fotos,
+   le habla al comerciante y es el que WAHA vincula para traer todo a la base.
+   Acá vive también el canal de difusión.
+3. y 4. **Respaldos** — callados adentro de los grupos. **No capturan nada**:
+   WAHA lee sólo por la cuenta vinculada. Están para el día que baneen al
+   operativo, y tienen que estar adentro ANTES, porque una cuenta baneada no
+   puede agregar a nadie.
+5. **Explorador** — sale a la calle a fotografiar ofertas de locales que
+   todavía no publican. Manda la foto con `URUKU-XXXX` en el texto, en chat
+   directo. **No va a los grupos**: publica por código, no por grupo.
+
+### Cómo reparten en dos celulares
+
+WhatsApp permite **dos cuentas en la misma app**, y WhatsApp Business es una
+tercera aplicación. Con los dos teléfonos que ya hay alcanza:
+
+| Dispositivo | App | Cuenta |
+|---|---|---|
+| **Celular exclusivo** (Tigo) | WhatsApp | **Operativo** |
+| **Celular personal** | WhatsApp — cuenta 1 | el personal (no es de URUKU) |
+| **Celular personal** | WhatsApp — cuenta 2 | **Explorador** (sale a la calle con vos) |
+| **Celular personal** | WhatsApp Business | **Marca** |
+
+Los respaldos **no necesitan un teléfono permanente**: alcanza con registrarlos
+una vez para que la cuenta exista, porque a los grupos los agrega el sistema
+(`WA_NUMEROS_GRUPO`), no ellos. Un chip en el cajón sin registrar no sirve: un
+número sin cuenta de WhatsApp no se puede agregar a nada.
+
+> **Verificar antes de confiarse:** WhatsApp da de baja cuentas inactivas por
+> mucho tiempo. Un respaldo que se registra y nunca más se abre puede no estar
+> el día que haga falta. Conviene abrirlos cada tanto, y conviene confirmar el
+> plazo real antes de dar por hecho que van a estar.
+
+### Lo que falta comprar
+
+Dos chips: **marca** y **explorador**. Los cinco números son cinco líneas
+distintas: no se puede usar la misma para dos roles porque cada rol necesita su
+propia cuenta de WhatsApp.
+
+### Una palabra que ya no usamos: "testigo"
+
+Este documento y el código la usaban para el **operativo** (el vinculado a
+WAHA), y en la conversación se usó para los **respaldos**. Significaba lo
+contrario según dónde se leyera, y de ahí salió la idea de que los respaldos
+eran los que pasaban los datos a la base. Se sacó del código y de los
+documentos: quedan **operativo** y **respaldos**.
+
 ## Los roles
 
 | Rol | Qué hace | ¿En los grupos? | ¿Vinculado a WAHA? |
