@@ -81,16 +81,16 @@ export default function GuiaVentaPage() {
       <Bloque titulo="Los precios, de memoria">
         <table className="guia-tabla">
           <tbody>
-            <tr><td><b>Básico</b></td><td>Gratis</td><td>Mapa, buscador y ficha</td></tr>
+            <tr><td><b>Básico</b></td><td>Gratis <b>el primer mes</b></td><td>Mapa, buscador y ficha</td></tr>
             <tr><td><b>Publica</b></td><td>Bs 70</td><td>15 publicaciones/mes · extra Bs 5</td></tr>
-            <tr><td><b>Destacado</b></td><td>Bs 140</td><td>100 publicaciones + destacado + canal</td></tr>
-            <tr><td><b>Pro</b></td><td>Pronto</td><td>Atención automática — todavía no se vende</td></tr>
+            <tr><td><b>Destacado</b></td><td>Bs 140</td><td>50 publicaciones + destacado + canal</td></tr>
+            <tr><td><b>Pro</b></td><td>Consultá</td><td>Atención 24/7 del WhatsApp del comercio</td></tr>
           </tbody>
         </table>
         <p><b>Promoción de lanzamiento: paga un mes y tiene dos.</b></p>
         <p className="chico">
           La cuenta que cierra sola: 15 incluidas y Bs 5 la extra. A las 29 publicaciones
-          ya paga Bs 140 — el precio de Destacado, que le da 100. No hay que empujarlo,
+          ya paga Bs 140 — el precio de Destacado, que le da 50. No hay que empujarlo,
           hay que mostrarle la cuenta.
         </p>
       </Bloque>
@@ -116,7 +116,7 @@ export default function GuiaVentaPage() {
           nos metemos en la venta.
         </Obj>
         <Obj q="&ldquo;Déjeme pensarlo.&rdquo;">
-          Listo — <b>queda cargado gratis igual</b>, no hay que decidir nada hoy. Y ahí se
+          Listo — <b>el primer mes es gratis igual</b>, no hay que decidir nada hoy. Y ahí se
           deja la ficha andando. El que la ve funcionando una semana vuelve solo; el que
           se siente apurado, no.
         </Obj>
@@ -130,8 +130,9 @@ export default function GuiaVentaPage() {
             cruzan de Aguas Blancas y Orán. Alcanza, y se puede sostener.</li>
           <li><b>No vender el sello Verificado.</b> Significa que fuimos y lo vimos. Si se
             compra, deja de servirle a nadie.</li>
-          <li><b>No prometer el plan Pro.</b> Todavía no existe. Se anota el interés y se
-            avisa cuando esté.</li>
+          <li><b>Pro: no cerrar precio en la vereda.</b> Se anota el interés y se coordina
+            aparte. Antes de venderlo hay que saber quién contesta y en qué horario — si
+            se promete 24/7 y contesta nadie, se pierde el comercio y los tres de al lado.</li>
         </ul>
       </Bloque>
 

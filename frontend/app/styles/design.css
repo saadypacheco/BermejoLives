@@ -142,6 +142,9 @@ body::after {
 .nav .wrap { display: flex; align-items: center; gap: 28px; width: 100%; }
 .brand { display: flex; flex-direction: column; line-height: 1; }
 .brand b { font-size: 22px; font-weight: 900; letter-spacing: .02em; }
+/* El wordmark reemplaza a las letras escritas a mano. Alto fijo y ancho
+   automático: el archivo es apaisado y con `width` se deformaba. */
+.brand-logo { height: 34px; width: auto; display: block; }
 .brand b i { color: var(--neon); font-style: normal; }
 .brand span { font-size: 9px; letter-spacing: .42em; color: var(--txt-3); font-weight: 700; margin-top: 3px; }
 .nav-links { display: flex; gap: 4px; margin: 0 auto; }

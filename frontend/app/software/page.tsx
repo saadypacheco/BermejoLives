@@ -11,7 +11,7 @@ export const metadata = {
 const FEATURES = [
   { Icon: Pin, t: "En el mapa", d: "Tu comercio aparece en el mapa con foto, ubicación y cómo llegar." },
   { Icon: WhatsApp, t: "Contacto directo", d: "El comprador te escribe por WhatsApp con un toque — sin intermediarios ni comisiones." },
-  { Icon: Send, t: "Ofertas en vivo", d: "Publicás tus ofertas y aparecen al instante en el feed que ve toda la ciudad." },
+  { Icon: Send, t: "Ofertas en vivo", d: "Publicás tu oferta y en el momento la ve toda la ciudad." },
   { Icon: Search, t: "Buscador por rubro", d: "Te encuentran buscando lo que vendés: mayorista, minorista, rubro, zona y precio." },
   { Icon: Play, t: "Videos", d: "Mostrá tu local y tus productos con videos estilo TikTok." },
   { Icon: Verified, t: "Verificado", d: "Fuimos, lo vimos y lo confirmamos. No se compra: se verifica en el lugar." },
@@ -38,8 +38,8 @@ const waLink = (texto: string) => `https://wa.me/${WA_VENTAS}?text=${encodeURICo
  *  solo y nadie tiene que empujarlo. */
 const PLANES = [
   {
-    nombre: "Básico", precio: "Gratis", destacado: false,
-    pie: "Para siempre, no por un mes",
+    nombre: "Básico", precio: "Gratis", sub: " el primer mes", destacado: false,
+    pie: "Después elegís Publica o Destacado",
     items: [
       "Aparecés en el mapa y en el buscador",
       "Te encuentran buscando lo que vendés",
@@ -62,19 +62,19 @@ const PLANES = [
     pie: "Desde 29 publicaciones ya te conviene éste",
     items: [
       "Todo lo de Publica",
-      "100 publicaciones por mes",
+      "50 publicaciones por mes",
       "Destacado en el mapa y en el buscador",
       "Tu oferta en el canal de WhatsApp de URUKU",
     ],
   },
   {
-    nombre: "Pro", precio: "Pronto", destacado: false,
-    pie: "Escribinos si te interesa y te avisamos primero",
+    nombre: "Pro", precio: "Consultá", destacado: false,
+    pie: "Escribinos y te contamos cómo funciona",
     items: [
       "Todo lo de Destacado",
-      "Atención automática de tus consultas",
-      "Respuestas fuera de horario",
-      "En preparación",
+      "Atención 24/7 de tu WhatsApp",
+      "Contestamos cuando el local está cerrado",
+      "No perdés la consulta de la noche ni la del domingo",
     ],
   },
 ];
@@ -111,8 +111,8 @@ export default async function SoftwarePage() {
             Poné tu comercio<br /><span className="green">en el mapa</span>
           </h1>
           <p className="hero-sub" style={{ margin: "22px auto 30px" }}>
-            El que busca algo en {nombre} lo busca acá — y también el que cruza de Aguas Blancas y
-            Orán. Te encuentran por lo que vendés, te escriben al WhatsApp, y la venta es tuya.
+            El que busca algo en {nombre} lo busca acá. Te encuentran por lo que vendés, te
+            escriben al WhatsApp y saben cómo llegar, porque tu local está en el mapa.
           </p>
           <div className="hero-cta" style={{ justifyContent: "center" }}>
             <a href={waLink(`Hola URUKU, quiero sumar mi negocio a ${nombre}`)} target="_blank" rel="noopener" className="btn btn-primary">
@@ -149,9 +149,9 @@ export default async function SoftwarePage() {
               <span className="eyebrow">Cómo funciona</span>
               <h2>Publicar es mandar un WhatsApp</h2>
               <div className="zone-chips" style={{ gridTemplateColumns: "repeat(3,1fr)", marginTop: 18 }}>
-                <div className="zchip"><b>1. Te sumás</b><small>Cargás tu comercio (o lo reclamás)</small></div>
-                <div className="zchip"><b>2. Publicás</b><small>Mandás tu oferta por WhatsApp o el panel</small></div>
-                <div className="zchip"><b>3. Te encuentran</b><small>Aparecés en el mapa, el feed y el buscador</small></div>
+                <div className="zchip"><b>1. Te sumás</b><small>Cargamos tu comercio con tus fotos</small></div>
+                <div className="zchip"><b>2. Publicás</b><small>Mandás tu oferta por WhatsApp</small></div>
+                <div className="zchip"><b>3. Te encuentran</b><small>Aparecés en el mapa, en las ofertas y en el buscador</small></div>
               </div>
             </div>
           </div>

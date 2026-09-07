@@ -20,7 +20,9 @@ export function Nav({ active, mapOnly = false }: { active?: string; mapOnly?: bo
       <header className="nav">
         <div className="wrap">
           <Link className="brand" href="/">
-            <b>URUKU</b>
+            {/* El logo y no las letras: es el que está en los carteles y en el
+                resto del sitio, y es lo que el comerciante reconoce. */}
+            <img src="/logouruku-wordmark.png" alt="URUKU" className="brand-logo" />
             <span>EN EL MAPA</span>
           </Link>
           <div className="nav-actions">
@@ -37,7 +39,7 @@ export function Nav({ active, mapOnly = false }: { active?: string; mapOnly?: bo
     <header className="nav">
       <div className="wrap">
         <Link className="brand" href="/">
-          <b>URUKU</b>
+          <img src="/logouruku-wordmark.png" alt="URUKU" className="brand-logo" />
           <span>EN EL MAPA</span>
         </Link>
         <nav className="nav-links">
