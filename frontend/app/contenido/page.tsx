@@ -10,14 +10,17 @@ import {
 export default function ContenidoPage() {
   const [authed, setAuthed] = useState(false);
   const [ready, setReady] = useState(false);
+  // Por qué venció la sesión, para decirlo en el formulario. Sin esto, la
+  // pantalla vuelve al login sin explicación y parece que se deslogueó sola.
+  const [aviso, setAviso] = useState("");
   useEffect(() => { setAuthed(hayPub()); setReady(true); }, []);
   if (!ready) return null;
-  if (!authed) return <Login onOk={() => setAuthed(true)} />;
-  return <Panel onLogout={() => { clearPub(); setAuthed(false); }} />;
+  if (!authed) return <Login aviso={aviso} onOk={() => { setAviso(""); setAuthed(true); }} />;
+  return <Panel onLogout={(motivo) => { clearPub(); setAviso(motivo ?? ""); setAuthed(false); }} />;
 }
 
-function Login({ onOk }: { onOk: () => void }) {
-  const [email, setEmail] = useState(""); const [pass, setPass] = useState(""); const [err, setErr] = useState("");
+function Login({ onOk, aviso = "" }: { onOk: () => void; aviso?: string }) {
+  const [email, setEmail] = useState(""); const [pass, setPass] = useState(""); const [err, setErr] = useState(aviso);
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setErr("");
     try { await publicadorLogin(email, pass); onOk(); } catch { setErr("Credenciales incorrectas"); }
@@ -38,7 +41,7 @@ function Login({ onOk }: { onOk: () => void }) {
   );
 }
 
-function Panel({ onLogout }: { onLogout: () => void }) {
+function Panel({ onLogout }: { onLogout: (motivo?: string) => void }) {
   const [cotiz, setCotiz] = useState<Cotizacion[]>([]);
   const [vals, setVals] = useState<Record<string, string>>({});
   const [clima, setClima] = useState<Clima | null>(null);
@@ -60,7 +63,13 @@ function Panel({ onLogout }: { onLogout: () => void }) {
     try { await editarRed(clave, redVals[clave] || ""); flash("Red guardada ✓"); } catch (e) { fail(e); }
   }
   const flash = (m: string) => { setMsg(m); setErr(""); setTimeout(() => setMsg(""), 2500); };
-  const fail = (e: unknown) => setErr(e instanceof Error ? e.message : "Error");
+  const fail = (e: unknown) => {
+    const msg = e instanceof Error ? e.message : "Error";
+    setErr(msg);
+    // Si el 401 borró el token, volver al login. Quedarse en un panel que ya no
+    // puede guardar nada es peor que pedir la contraseña de nuevo.
+    if (!hayPub()) onLogout(msg);
+  };
 
   async function guardarCotiz(clave: string) {
     try { await editarCotizacion(clave, Number(vals[clave] || 0)); flash("Cotización guardada ✓"); } catch (e) { fail(e); }
@@ -91,7 +100,7 @@ function Panel({ onLogout }: { onLogout: () => void }) {
     <div className="campo-wrap" style={{ maxWidth: 560 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <h1 style={{ fontSize: 22, margin: 0 }}>Contenido de la home</h1>
-        <button className="link-more" onClick={onLogout}>Salir</button>
+        <button className="link-more" onClick={() => onLogout()}>Salir</button>
       </div>
       {msg && <div style={{ color: "var(--neon)", fontSize: 13, marginBottom: 10 }}>{msg}</div>}
       {err && <div style={{ color: "var(--pink)", fontSize: 13, marginBottom: 10 }}>{err}</div>}

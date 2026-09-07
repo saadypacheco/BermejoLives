@@ -24,6 +24,15 @@ async function pFetch(path: string, init?: RequestInit) {
     ...init,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${getPubToken() ?? ""}`, ...(init?.headers ?? {}) },
   });
+  // La sesión vencida BORRA el token, como ya hacían el panel de campo y el de
+  // mi-comercio. Éste era el único que no: el token queda guardado, `hayPub()`
+  // sigue diciendo que sí, y la pantalla se queda mostrando el formulario lleno
+  // mientras cada Guardar contesta "token expirado". No hay forma de salir de
+  // ahí salvo saber que existe el botón de cerrar sesión.
+  if (res.status === 401) {
+    clearPub();
+    throw new Error("Tu sesión venció. Volvé a entrar.");
+  }
   if (!res.ok) {
     const d = await res.json().catch(() => ({}));
     throw new Error(d.detail ?? "Error");
