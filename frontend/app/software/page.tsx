@@ -14,21 +14,85 @@ const FEATURES = [
   { Icon: Send, t: "Ofertas en vivo", d: "Publicás tus ofertas y aparecen al instante en el feed que ve toda la ciudad." },
   { Icon: Search, t: "Buscador por rubro", d: "Te encuentran buscando lo que vendés: mayorista, minorista, rubro, zona y precio." },
   { Icon: Play, t: "Videos", d: "Mostrá tu local y tus productos con videos estilo TikTok." },
-  { Icon: Verified, t: "Verificado", d: "Sello de confianza: tu comercio fue verificado en el lugar por nuestro equipo." },
+  { Icon: Verified, t: "Verificado", d: "Fuimos, lo vimos y lo confirmamos. No se compra: se verifica en el lugar." },
 ];
 
+/** El WhatsApp al que escribe un comerciante desde esta página.
+ *
+ *  Estaba `59170000000` —un placeholder— en los tres botones. No daba error:
+ *  abría WhatsApp con un número que no existe, así que cada comerciante que
+ *  tocó "Sumar mi negocio" en los últimos meses se topó con la nada y nadie se
+ *  enteró. Va el operativo hasta que exista el número de marca. */
+const WA_VENTAS = "59164610187";
+const waLink = (texto: string) => `https://wa.me/${WA_VENTAS}?text=${encodeURIComponent(texto)}`;
+
+/** Los planes, en el orden en que se sube.
+ *
+ *  Cada escalón agrega OTRA COSA, no más de lo mismo: existís · publicás vos ·
+ *  te mostramos nosotros · te atendemos nosotros. Es lo que hace que el
+ *  comerciante entienda por qué sube sin que se lo expliquen.
+ *
+ *  Los precios están en bolivianos y por mes. El tope de publicaciones es el
+ *  eje del primer salto: con 15 incluidas y Bs 5 la extra, el que necesita 29
+ *  ya paga lo mismo que Destacado —que le da 100—, así que la cuenta la hace
+ *  solo y nadie tiene que empujarlo. */
 const PLANES = [
-  { nombre: "Presencia", precio: "Gratis", destacado: false, items: ["Aparecés en el mapa y el buscador", "Ficha con WhatsApp y cómo llegar", "Datos de contacto y redes"] },
-  { nombre: "Activo", precio: "Bs 49", sub: "/mes", destacado: false, items: ["Todo lo de Presencia", "Publicás ofertas (con moderación)", "1 video por mes", "Aparecés en la publicidad regional", "Reporte mensual de visitas"] },
-  { nombre: "Destacado", precio: "Bs 99", sub: "/mes", destacado: true, items: ["Todo lo de Activo", "Destacado en tu zona y rubro", "Más publicaciones y videos", "Hot-sale que late en el mapa", "Reporte semanal"] },
-  { nombre: "Premium Frontera", precio: "Bs 199", sub: "/mes", destacado: false, items: ["Todo lo de Destacado", "Sello Verificado", "Publicación directa (sin espera)", "Bot de WhatsApp", "Cupo de publicidad paga incluido"] },
+  {
+    nombre: "Básico", precio: "Gratis", destacado: false,
+    pie: "Para siempre, no por un mes",
+    items: [
+      "Aparecés en el mapa y en el buscador",
+      "Te encuentran buscando lo que vendés",
+      "Ficha con WhatsApp, cómo llegar y horario",
+      "Tus redes y tus fotos",
+    ],
+  },
+  {
+    nombre: "Publica", precio: "Bs 70", sub: "/mes", destacado: false,
+    pie: "Publicaciones extra: Bs 5 cada una",
+    items: [
+      "Todo lo de Básico",
+      "15 publicaciones por mes",
+      "Publicás mandando un WhatsApp",
+      "Ofertas y novedades en tu ficha",
+    ],
+  },
+  {
+    nombre: "Destacado", precio: "Bs 140", sub: "/mes", destacado: true,
+    pie: "Desde 29 publicaciones ya te conviene éste",
+    items: [
+      "Todo lo de Publica",
+      "100 publicaciones por mes",
+      "Destacado en el mapa y en el buscador",
+      "Tu oferta en el canal de WhatsApp de URUKU",
+    ],
+  },
+  {
+    nombre: "Pro", precio: "Pronto", destacado: false,
+    pie: "Escribinos si te interesa y te avisamos primero",
+    items: [
+      "Todo lo de Destacado",
+      "Atención automática de tus consultas",
+      "Respuestas fuera de horario",
+      "En preparación",
+    ],
+  },
 ];
 
+/** Lo que se cobra por trabajo hecho y no por mes.
+ *
+ *  Es la diferencia que sostiene los precios de arriba: un plan compromete algo
+ *  todos los meses; esto se cobra una vez, cuando se hizo. Por eso puede tener
+ *  precio sin arriesgar nada.
+ *
+ *  El sello Verificado NO está acá a propósito: hoy significa "fuimos y lo
+ *  vimos". El día que signifique "pagó", deja de servirle al comprador — y es
+ *  lo único que distingue esto de una lista de Facebook. */
 const ADDONS = [
-  { Icon: TikTok, t: "Videos para redes", d: "Te grabamos, editamos y subimos videos." },
-  { Icon: Store, t: "Tienda online", d: "Catálogo con carrito y pedido por WhatsApp (sin comisiones)." },
-  { Icon: WhatsApp, t: "WhatsApp Business", d: "Te lo dejamos listo: catálogo, bienvenida, etiquetas." },
-  { Icon: Send, t: "Campañas de pauta", d: "Avisos en redes y medios de Salta, Orán, Tucumán y más." },
+  { Icon: Play, t: "Video de tu local", d: "Vamos, grabamos y editamos. Queda en tu ficha y en las redes de URUKU." },
+  { Icon: TikTok, t: "En las redes de URUKU", d: "Tu oferta en el TikTok e Instagram de URUKU. Cupo por semana." },
+  { Icon: Store, t: "Te cargamos el catálogo", d: "Nos pasás las fotos y los precios, y lo dejamos publicado." },
+  { Icon: Send, t: "Fotos mejoradas", d: "Recortamos, mejoramos y encuadramos las fotos de tu vidriera." },
 ];
 
 export default async function SoftwarePage() {
@@ -47,10 +111,11 @@ export default async function SoftwarePage() {
             Poné tu comercio<br /><span className="green">en el mapa</span>
           </h1>
           <p className="hero-sub" style={{ margin: "22px auto 30px" }}>
-            La plataforma que muestra todo lo que se vende en {nombre}, en tiempo real. Más clientes, contacto directo por WhatsApp, sin comisiones por venta.
+            El que busca algo en {nombre} lo busca acá — y también el que cruza de Aguas Blancas y
+            Orán. Te encuentran por lo que vendés, te escriben al WhatsApp, y la venta es tuya.
           </p>
           <div className="hero-cta" style={{ justifyContent: "center" }}>
-            <a href="https://wa.me/59170000000?text=Quiero%20sumar%20mi%20comercio%20a%20Bermejo" target="_blank" rel="noopener" className="btn btn-primary">
+            <a href={waLink(`Hola URUKU, quiero sumar mi negocio a ${nombre}`)} target="_blank" rel="noopener" className="btn btn-primary">
               <WhatsApp style={{ width: 18, height: 18 }} /> Sumar mi negocio
             </a>
             <a href="#planes" className="btn btn-ghost">Ver planes <Arrow /></a>
@@ -96,7 +161,7 @@ export default async function SoftwarePage() {
       {/* Planes */}
       <section className="section" id="planes" style={{ paddingTop: 0 }}>
         <div className="wrap">
-          <div className="section-head"><div><span className="eyebrow">Planes</span><h2>Elegí cómo querés aparecer</h2><p>Pago mensual por QR. Sin comisiones por venta — la venta es tuya.</p></div></div>
+          <div className="section-head"><div><span className="eyebrow">Planes</span><h2>Elegí cómo querés aparecer</h2><p>Pago mensual por QR. <b>Sin comisiones por venta</b> — el cliente te escribe a vos y la venta es tuya.</p></div></div>
           <div className="planes-grid">
             {PLANES.map((p) => (
               <div className={`plan-card glass ${p.destacado ? "dest" : ""}`} key={p.nombre}>
@@ -106,11 +171,22 @@ export default async function SoftwarePage() {
                 <ul>
                   {p.items.map((it) => (<li key={it}><Check style={{ width: 15, height: 15, color: "var(--neon)", flexShrink: 0 }} /> {it}</li>))}
                 </ul>
-                <a href="https://wa.me/59170000000?text=Quiero%20el%20plan%20" target="_blank" rel="noopener" className={`btn ${p.destacado ? "btn-primary" : "btn-ghost"} btn-sm`} style={{ width: "100%", marginTop: "auto" }}>Elegir</a>
+                {p.pie && <p style={{ color: "var(--txt-3)", fontSize: 12, margin: "0 0 12px" }}>{p.pie}</p>}
+                <a href={waLink(`Hola URUKU, me interesa el plan ${p.nombre}`)} target="_blank" rel="noopener" className={`btn ${p.destacado ? "btn-primary" : "btn-ghost"} btn-sm`} style={{ width: "100%", marginTop: "auto" }}>Elegir</a>
               </div>
             ))}
           </div>
-          <p style={{ color: "var(--txt-3)", fontSize: 12.5, marginTop: 14, textAlign: "center" }}>* Precios de referencia, en bolivianos. El pago se realiza por QR a cuenta de Bolivia.</p>
+          {/* La promoción va con el nombre puesto. Un 2x1 sin fecha de fin no es
+              una promoción: es el precio, y volver al de lista después se lee
+              como un aumento. */}
+          <div className="glass" style={{ padding: "14px 18px", borderRadius: 14, marginTop: 18, textAlign: "center" }}>
+            <b style={{ color: "var(--neon)" }}>Promoción de lanzamiento:</b>{" "}
+            pagás un mes y tenés dos.
+          </div>
+          <p style={{ color: "var(--txt-3)", fontSize: 12.5, marginTop: 14, textAlign: "center" }}>
+            Precios en bolivianos, por mes. El pago se hace por QR. Podés cambiar de plan o dar de
+            baja cuando quieras.
+          </p>
         </div>
       </section>
 
@@ -135,7 +211,7 @@ export default async function SoftwarePage() {
         <div className="wrap">
           <div className="cta">
             <div><h2>¿Sumamos tu comercio?</h2><p>Escribinos y en minutos estás en el mapa de {nombre}.</p></div>
-            <a className="btn btn-primary" href="https://wa.me/59170000000?text=Quiero%20sumar%20mi%20comercio" target="_blank" rel="noopener">
+            <a className="btn btn-primary" href={waLink(`Hola URUKU, quiero sumar mi negocio a ${nombre}`)} target="_blank" rel="noopener">
               <WhatsApp style={{ width: 18, height: 18 }} /> Hablar por WhatsApp
             </a>
           </div>
