@@ -19,7 +19,17 @@
 // escribiendo "zapatillas" y los resultados apareciendo— y montar encima estas
 // mismas placas. Cinco minutos con el teléfono.
 //
-// USO
+// SE CORRE EN LA MÁQUINA DE DESARROLLO, NO EN EL VPS
+// ==================================================
+// El servidor no tiene Node ni ffmpeg —el frontend se construye adentro de
+// Docker— y no conviene instalarlos: serían 150 MB de navegador headless más
+// las librerías de sistema que pide Chromium, en una máquina que sólo tiene que
+// servir el sitio.
+//
+// Da igual desde dónde se ejecute: el script entra a uruku.bo por internet,
+// como cualquier visitante.
+//
+// USO (en la PC, dentro del repo)
 //   cd frontend
 //   npm i --no-save playwright && npx playwright install chromium
 //   node scripts/video-promo.mjs

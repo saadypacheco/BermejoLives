@@ -55,6 +55,22 @@ abre el sitio a buscarse.
 **No grabar esta versión hasta que las ofertas sean reales.** Un video con
 ofertas inventadas se nota, y el que entra y no las encuentra no vuelve.
 
+### El video de placas ya está automatizado
+
+`frontend/scripts/video-promo.mjs` lo arma solo, con capturas de `uruku.bo` en
+vivo. **Se corre en la PC, no en el VPS**: el servidor no tiene Node ni ffmpeg y
+no vale la pena instalarlos — el script entra al sitio por internet como
+cualquier visitante, así que da igual desde dónde salga.
+
+```
+cd frontend
+npm i --no-save playwright && npx playwright install chromium
+node scripts/video-promo.mjs
+```
+
+Rehacerlo cuando cambie una pantalla es volver a correrlo. Lo que sigue abajo es
+para la versión buena: la grabada con el teléfono.
+
 ### Cómo grabarlo
 
 Tres o cuatro tomas de la calle (carteles, vidrieras, gente caminando) y el
