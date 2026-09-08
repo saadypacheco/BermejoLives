@@ -99,3 +99,77 @@ def id_del_grupo(respuesta: dict) -> str | None:
             if isinstance(s, str) and s.endswith("@g.us"):
                 return s
     return None
+
+
+def agregar_a_grupo(grupo_jid: str, numeros: list[str]) -> None:
+    """Suma participantes a un grupo que YA existe.
+
+    Es la salida para el problema de tiempo de los respaldos: el sistema los
+    agrega solo a cada grupo que crea, así que un respaldo dado de alta después
+    no está en ninguno de los grupos anteriores — y meterlo a mano en cien es
+    trabajo que nadie hace. Peor: el día del baneo ya no se puede, porque una
+    cuenta baneada no agrega a nadie.
+
+    Lanza `GrupoError`. Que un grupo falle no puede pasar por exitoso: el caller
+    los cuenta y muestra cuáles quedaron afuera, porque un respaldo "casi" en
+    todos los grupos es un respaldo que no está donde haga falta.
+    """
+    if not settings.waha_base_url or not settings.waha_api_key:
+        raise GrupoError("WAHA no está configurado (falta URL o API key)")
+
+    jids = [j for j in (_jid(n) for n in numeros) if j]
+    if not jids:
+        raise GrupoError("Ningún número válido para agregar")
+
+    url = (f"{settings.waha_base_url.rstrip('/')}/api/default/groups/"
+           f"{grupo_jid}/participants/add")
+    try:
+        r = httpx.post(url, json={"participants": [{"id": j} for j in jids]},
+                       headers={"X-Api-Key": settings.waha_api_key}, timeout=_TIMEOUT)
+    except Exception as exc:  # noqa: BLE001
+        raise GrupoError(f"No se pudo hablar con WhatsApp: {exc}") from exc
+
+    if r.status_code >= 400:
+        logger.warning("wa_grupo.agregar_error", grupo=grupo_jid,
+                       status=r.status_code, respuesta=r.text[:300])
+        raise GrupoError(f"HTTP {r.status_code}: {r.text[:160]}")
+
+    logger.info("wa_grupo.agregado", grupo=grupo_jid, participantes=len(jids))
+
+def participantes_de_grupo(grupo_jid: str) -> list[str] | None:
+    """Los números que ya están adentro. `None` si no se pudo averiguar.
+
+    La distinción entre `[]` y `None` es todo el sentido de esta función: un
+    grupo vacío y un grupo que no se pudo leer llevan a decisiones opuestas, y
+    devolver `[]` en los dos casos sería decir "no está adentro" de algo que
+    quizás sí está.
+
+    Leer no cuenta para el baneo como agregar; se puede consultar cada grupo
+    antes de tocarlo.
+    """
+    if not settings.waha_base_url or not settings.waha_api_key:
+        return None
+    url = (f"{settings.waha_base_url.rstrip('/')}/api/default/groups/"
+           f"{grupo_jid}/participants")
+    try:
+        r = httpx.get(url, headers={"X-Api-Key": settings.waha_api_key}, timeout=_TIMEOUT)
+        if r.status_code >= 400:
+            return None
+        datos = r.json()
+    except Exception:  # noqa: BLE001
+        logger.warning("wa_grupo.participantes_fallo", grupo=grupo_jid, exc_info=True)
+        return None
+
+    if not isinstance(datos, list):
+        datos = datos.get("participants") if isinstance(datos, dict) else None
+        if not isinstance(datos, list):
+            return None
+
+    nums: list[str] = []
+    for p in datos:
+        jid = p.get("id") if isinstance(p, dict) else p
+        if isinstance(jid, dict):          # algunas versiones anidan {_serialized}
+            jid = jid.get("_serialized") or jid.get("user")
+        if isinstance(jid, str):
+            nums.append(jid.split("@")[0].lstrip("+"))
+    return nums

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getBandejaWa, type BandejaWa } from "@/lib/api";
+import { agregarNumeroAGrupos, getBandejaWa,
+         type AgregarAGrupos, type BandejaWa } from "@/lib/api";
 
 const ETIQUETA: Record<string, { texto: string; color: string }> = {
   publicada: { texto: "Publicada", color: "var(--neon)" },
@@ -29,6 +30,110 @@ const ETIQUETA: Record<string, { texto: string; color: string }> = {
  *
  * El filtro arranca en "hay que mirarlos": es lo único que pide acción.
  */
+
+/**
+ * Sumar un número de URUKU a los grupos que ya existen.
+ *
+ * POR QUÉ EXISTE ESTE BOTÓN
+ * =========================
+ * Al crear un grupo, el sistema mete adentro a los respaldos que estén
+ * configurados EN ESE MOMENTO. Un respaldo dado de alta después queda afuera de
+ * todos los grupos anteriores, y meterlo a mano en cien grupos es trabajo que
+ * no se hace nunca. La factura llega tarde y entera: el día que banean al
+ * operativo, cada grupo sin respaldo es un comerciante perdido — y una cuenta
+ * ya baneada tampoco puede agregar a nadie.
+ *
+ * POR QUÉ DE A POCO Y NO TODOS DE GOLPE
+ * =====================================
+ * Agregar un número a cien grupos seguidos es justo el patrón que WhatsApp lee
+ * como automatización, y lo que banea es la cuenta que agrega: la operativa, la
+ * que sostiene el canal entero. Por eso el tope arranca chico y se corre varias
+ * veces a lo largo de días. Los grupos donde el número ya está se saltean, así
+ * que repetir no cuesta nada.
+ */
+function AgregarANuevosGrupos() {
+  const [numero, setNumero] = useState("");
+  const [tope, setTope] = useState(20);
+  const [r, setR] = useState<AgregarAGrupos | null>(null);
+  const [err, setErr] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+
+  const correr = async (aplicar: boolean) => {
+    setOcupado(true); setErr("");
+    try { setR(await agregarNumeroAGrupos(numero, aplicar, tope)); }
+    catch (e) { setErr(e instanceof Error ? e.message : "No se pudo"); setR(null); }
+    finally { setOcupado(false); }
+  };
+
+  return (
+    <div className="panel-card glass">
+      <div className="ph"><h3>Agregar un número a los grupos</h3></div>
+      <div style={{ padding: "12px 16px", fontSize: 12.5, color: "var(--txt-3)" }}>
+        Para los <b>respaldos</b>: los números de URUKU que tienen que estar adentro de cada
+        grupo el día que se caiga el operativo. Un número nuevo no entra solo a los grupos
+        viejos — esto los recorre.
+      </div>
+      <div style={{ display: "flex", gap: 8, padding: "0 16px 12px", flexWrap: "wrap", alignItems: "center" }}>
+        <input className="input" placeholder="59168727584" value={numero}
+               onChange={(e) => { setNumero(e.target.value); setR(null); }}
+               style={{ width: 170 }} />
+        <label style={{ fontSize: 12.5, color: "var(--txt-3)", display: "flex", gap: 6, alignItems: "center" }}>
+          de a
+          <input className="input" type="number" min={1} max={200} value={tope}
+                 onChange={(e) => setTope(Math.max(1, Number(e.target.value) || 1))}
+                 style={{ width: 70 }} />
+          grupos
+        </label>
+        <button className="btn btn-sm btn-ghost" disabled={!numero.trim() || ocupado}
+                onClick={() => correr(false)}>Ver a cuáles entraría</button>
+        <button className="btn btn-sm btn-primary"
+                disabled={!numero.trim() || ocupado || !r || r.aplicado || !r.a_agregar}
+                onClick={() => correr(true)}>
+          Agregar a {r?.a_agregar ?? 0}
+        </button>
+      </div>
+
+      {err && <div style={{ padding: "0 16px 12px", color: "var(--pink)", fontSize: 13 }}>{err}</div>}
+
+      {r && (
+        <div style={{ padding: "0 16px 14px", fontSize: 13 }}>
+          <div style={{ color: "var(--txt-2)" }}>
+            {r.grupos_totales} grupos en total · ya estaba en <b>{r.ya_estaba}</b>
+            {r.aplicado
+              ? <> · agregado a <b style={{ color: "var(--neon)" }}>{r.agregados}</b></>
+              : <> · entraría a <b>{r.a_agregar}</b></>}
+            {r.quedan_despues > 0 && (
+              <> · quedan <b style={{ color: "var(--amber)" }}>{r.quedan_despues}</b> para otra corrida</>
+            )}
+          </div>
+
+          {/* Los que fallaron van con nombre y motivo. "18 de 20" sin decir
+              cuáles dos faltaron es un número que no sirve para nada: nadie
+              puede ir a arreglar un grupo que no sabe cuál es. */}
+          {!!r.fallaron?.length && (
+            <ul style={{ margin: "8px 0 0", paddingLeft: 18, color: "var(--pink)" }}>
+              {r.fallaron.map((f, i) => <li key={i}>{f.grupo}: {f.motivo}</li>)}
+            </ul>
+          )}
+
+          {!r.aplicado && !!r.grupos?.length && (
+            <ul style={{ margin: "8px 0 0", paddingLeft: 18, color: "var(--txt-3)", fontSize: 12.5 }}>
+              {r.grupos.map((g) => <li key={g.jid}>{g.nombre}</li>)}
+            </ul>
+          )}
+
+          {r.quedan_despues > 0 && (
+            <div style={{ marginTop: 8, color: "var(--amber)", fontSize: 12 }}>
+              Dejá pasar un rato antes de la próxima tanda. Agregar un número a muchos grupos
+              seguidos es el patrón que dispara el baneo, y el baneado sería el operativo.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function BandejaWhatsApp() {
   const [estado, setEstado] = useState("problemas");
   const [d, setD] = useState<BandejaWa | null>(null);
@@ -100,6 +205,8 @@ export function BandejaWhatsApp() {
           </button>
         </div>
       </div>
+
+      <AgregarANuevosGrupos />
 
       {!cargando && (d?.items.length ?? 0) === 0 && (
         <div className="panel-card glass" style={{ padding: 24, textAlign: "center", color: "var(--txt-3)" }}>

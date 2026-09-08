@@ -142,6 +142,13 @@ class FakeRepo:
     def list_grupos_comercio(self, comercio_id):
         return [g for g in self.wa_grupos.values() if g["comercio_id"] == comercio_id]
 
+    def list_grupos_todos(self):
+        return [{"grupo_jid": j, "comercio_id": g.get("comercio_id"),
+                 "nombre": g.get("nombre"),
+                 "comercios": {"nombre": (self.comercios.get(g.get("comercio_id")) or {}).get("nombre"),
+                               "codigo": (self.comercios.get(g.get("comercio_id")) or {}).get("codigo")}}
+                for j, g in self.wa_grupos.items()]
+
     def desvincular_grupo(self, grupo_jid):
         self.wa_grupos.pop(grupo_jid, None)
 

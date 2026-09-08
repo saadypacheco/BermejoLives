@@ -151,23 +151,53 @@ en una operadora distinta de los respaldos, para que una caída de red de Entel
 no se lleve al operativo y a su reemplazo el mismo día. Si los dos son Entel,
 esa protección no existe y conviene saberlo.
 
-### El bloque para `backend/.env`
+### El bloque para `backend/.env` — definitivo
+
+Va tal cual en `/docker/uruku/backend/.env` del VPS. Son dos bloques porque hoy
+sólo dos de los cinco números tienen cuenta de WhatsApp, y esa diferencia cambia
+una línea.
+
+**Hoy (8/9/2026), lo que hay que dejar puesto:**
 
 ```
 WA_NUMEROS_PROPIOS=59164610187,59167991916,59168727944,59175314737,59168727584
-WA_NUMEROS_GRUPO=59175314737,59168727584
+WA_NUMEROS_GRUPO=59175314737
 WA_NUMEROS_EXPLORADOR=59168727944
-WA_CONTACTO_EXPLORADOR=59168727944
+WA_CONTACTO_EXPLORADOR=
 BOT_WHATSAPP_NUMERO=59164610187
 ```
 
-**59172900149 no aparece en ninguna línea todavía**, a propósito: hasta que la
-cuenta de WhatsApp no sea nuestra, ponerlo ahí mete a un desconocido en los
-grupos. Se agrega el día que se recupere.
+**Cuando las cuatro eSIM de Entel tengan WhatsApp**, cambian dos líneas:
 
-Las de `WA_NUMEROS_GRUPO` se agregan solas a cada grupo que crea el sistema, así
-que **tienen que tener WhatsApp registrado antes** de crear el primer grupo. Un
-número sin cuenta no se puede agregar a nada.
+```
+WA_NUMEROS_GRUPO=59175314737,59168727584
+WA_CONTACTO_EXPLORADOR=59168727944
+```
+
+Por qué las dos listas no dicen lo mismo, que es lo que hace falta entender para
+no romper nada:
+
+- **`WA_NUMEROS_PROPIOS`** es una guarda de lectura: dice de qué números NO hay
+  que tomar el contenido como oferta del comerciante. Puede llevar números sin
+  WhatsApp sin ninguna consecuencia — el día que lo tengan, ya está cubierto. Es
+  gratis y hay que ponerlos todos desde ahora. Si un número de URUKU falta acá,
+  cualquier cosa que escriba en un grupo se publica como oferta del local.
+- **`WA_NUMEROS_GRUPO`** es una acción de escritura: a cada uno de esos números
+  el sistema lo mete adentro de cada grupo que crea. Un número sin cuenta de
+  WhatsApp no se puede agregar a nada, así que ponerlo ahí no protege — hace
+  fallar la creación del grupo delante del comerciante. Por eso hoy va uno solo.
+- **`WA_CONTACTO_EXPLORADOR`** vacío es seguro y correcto: las consultas van al
+  comercio, como siempre. Ponerlo apuntando a un número sin WhatsApp sería peor
+  que dejarlo vacío — publicaría un contacto que no contesta.
+
+**59172900149 no aparece en ninguna línea**, a propósito: hasta que la cuenta de
+WhatsApp no sea nuestra, ponerlo ahí mete a un desconocido en los grupos. Se
+agrega el día que se recupere.
+
+Después de tocar el archivo hay que reiniciar el backend, y el arranque avisa
+cuáles números descartó por inválidos (`config.wa_numero_invalido`). Un
+placeholder tipo `591XXXXXXXX` se normaliza a `591` y apaga la guarda sin dar
+error, así que esa línea del log es la que confirma que quedó bien.
 
 ## Los roles
 
@@ -486,9 +516,14 @@ agregar a nadie, así que los respaldos tienen que estar adentro de los grupos
 desde el primer día. Un chip en el cajón sin teléfono no tiene WhatsApp, y un
 número sin WhatsApp no se puede agregar a un grupo.
 
-O sea que el orden real es: probar con dos → conseguir los teléfonos y dar de
-alta los respaldos → recién ahí crear los grupos de verdad. Crearlos antes
-significa volver a los cien grupos uno por uno.
+El orden ideal sigue siendo: probar con dos → dar de alta los respaldos → recién
+ahí crear los grupos de verdad. Pero ya no es una puerta que se cierra: si los
+grupos se crearon antes, **Admin › WhatsApp → "Agregar un número a los grupos"**
+recorre los que ya existen y mete al respaldo. Va de a tandas chicas a propósito
+—agregar un número a cien grupos seguidos es el patrón que dispara el baneo, y
+el baneado sería el operativo— así que son varias corridas a lo largo de días.
+Los grupos donde el número ya está se saltean solos, así que repetir no cuesta
+nada.
 
 WhatsApp permite dos cuentas en la misma aplicación, así que una de las eSIM de
 Entel puede ser el respaldo 1 en el mismo celular personal sin comprar nada.

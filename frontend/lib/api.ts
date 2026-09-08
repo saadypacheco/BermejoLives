@@ -843,6 +843,32 @@ export async function getBandejaWa(estado = "problemas", limite = 100): Promise<
   return res.json();
 }
 
+export type AgregarAGrupos = {
+  aplicado: boolean;
+  numero: string;
+  grupos_totales: number;
+  ya_estaba: number;
+  /** Sólo en la vista previa. */
+  a_agregar?: number;
+  grupos?: { jid: string; nombre: string }[];
+  /** Sólo al aplicar. */
+  agregados?: number;
+  ok?: string[];
+  fallaron?: { grupo: string; motivo: string }[];
+  quedan_despues: number;
+};
+
+export async function agregarNumeroAGrupos(
+  numero: string, aplicar: boolean, tope = 20,
+): Promise<AgregarAGrupos> {
+  const res = await authFetch("/admin/whatsapp/grupos/agregar-numero", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ numero, aplicar, tope }),
+  });
+  return res.json();
+}
+
 export type ModoRecalculo = "principal" | "reemplazar";
 
 export type RecalculoPrincipal = {

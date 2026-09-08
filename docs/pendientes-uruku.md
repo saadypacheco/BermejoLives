@@ -108,15 +108,25 @@ el comprador no ve "Abierto ahora" y nadie se entera de por qué.
 Todo lo que se construyó alrededor —el explorador, el carrito de reservas, las
 ofertas en la tarjeta— no tiene qué mostrar hasta que entre la primera oferta.
 
-- [ ] Emparejar WAHA con el **Tigo (64610187)**, que pasa a ser el operativo.
-      (Corregido el 6/9: la tabla tenía cruzados el operativo y el respaldo 1.)
-- [ ] Comprar **3 chips**: marca, explorador y respaldo 2. Ver
-      [numeros-whatsapp-uruku.md](numeros-whatsapp-uruku.md).
+- [x] WAHA emparejado con el **64610187** (sesión `WORKING`, verificado el 6/9).
+- [x] Los cinco números definidos, con el bloque exacto de `backend/.env` en
+      [numeros-whatsapp-uruku.md](numeros-whatsapp-uruku.md). No hay que comprar
+      chips: las cuatro eSIM de Entel ya están, les falta registrar WhatsApp.
+- [ ] Dejar el bloque de `.env` en el VPS y reiniciar el backend. Hoy el único
+      que está puesto es `WA_NUMEROS_PROPIOS`; falta `BOT_WHATSAPP_NUMERO`, y
+      sin él el enlace de recuperación sale como `wa.me/?text=…` — sin
+      destinatario, o sea que no le llega a nadie.
 - [ ] Poner el perfil del operativo como **URUKU** (hoy dice "Juan"). Un
       desconocido llamado Juan agregándote a un grupo es lo que la gente
-      reporta como spam, y el reporte es lo que dispara el baneo.
+      reporta como spam, y el reporte es lo que dispara el baneo. **Antes de
+      crear el primer grupo**: el nombre que ve el comerciante es el de ese
+      momento.
+- [ ] Registrar WhatsApp en las eSIM de Entel para tener el respaldo 2 y el
+      explorador. Hoy sólo dos números tienen cuenta.
 - [ ] Los respaldos entran a los grupos **antes** de necesitarlos: una cuenta
-      baneada no puede agregar a nadie.
+      baneada no puede agregar a nadie. Si algún grupo queda sin ellos, se
+      arregla desde **Admin › WhatsApp → "Agregar un número a los grupos"**, de
+      a tandas chicas.
 
 ### Las 8 fechas del panel de Vencimientos
 Están cargadas sin fecha a propósito — ése es el estado real, nadie las anotó

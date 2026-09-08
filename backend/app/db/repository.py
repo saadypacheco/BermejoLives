@@ -122,6 +122,7 @@ class Repo(Protocol):
     def vincular_grupo_comercio(self, grupo_jid: str, comercio_id: str,
                                 nombre: str | None, origen: str, by: str) -> None: ...
     def list_grupos_comercio(self, comercio_id: str) -> list[dict]: ...
+    def list_grupos_todos(self) -> list[dict]: ...
     def desvincular_grupo(self, grupo_jid: str) -> None: ...
     # ---- comercios importados de fuentes externas ----
     def upsert_importado(self, row: dict) -> bool: ...
@@ -280,6 +281,18 @@ class SupabaseRepo:
             .select("*").eq("comercio_id", comercio_id).execute()
         )
         return res.data or []
+
+    def list_grupos_todos(self) -> list[dict]:
+        """Todos los grupos atados, con el nombre del comercio para poder decir
+        cuál falló. Sin el nombre, el informe es una lista de JIDs que no le
+        dice nada a quien tiene que arreglarlo."""
+        try:
+            return (self._db.table("comercio_wa_grupos")
+                    .select("grupo_jid, comercio_id, nombre, comercios(nombre, codigo)")
+                    .limit(2000).execute().data) or []
+        except Exception:  # noqa: BLE001
+            logger.warning("list_grupos_todos.fallo", exc_info=True)
+            return []
 
     def desvincular_grupo(self, grupo_jid: str) -> None:
         """Suelta el grupo. Lo ya publicado NO se toca: son ofertas que

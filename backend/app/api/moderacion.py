@@ -11,8 +11,8 @@ from pydantic import BaseModel, Field
 from app.core.auth import require_admin, require_moderador
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
-from app.core.telefono import validar_whatsapp
-from app.services import clasificador
+from app.core.telefono import normalizar_whatsapp, validar_whatsapp
+from app.services import clasificador, wa_grupos
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
@@ -2180,3 +2180,107 @@ async def admin_aplicar_patron(
     logger.info("admin.patron_aplicado", rubro=body.rubro_slug, comercios=agregados,
                 by=admin["email"])
     return {"ok": True, "agregados": agregados, "salteados": salteados}
+
+
+class AgregarAGruposBody(BaseModel):
+    numero: str
+    aplicar: bool = False
+    # Cuántos grupos tocar en esta corrida. No es un límite técnico: es el
+    # freno. Ver la nota de abajo.
+    tope: int = Field(default=20, ge=1, le=200)
+
+
+@router.post("/admin/whatsapp/grupos/agregar-numero")
+async def admin_agregar_numero_a_grupos(
+    body: AgregarAGruposBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Suma un número de URUKU a los grupos de comercios que YA existen.
+
+    POR QUÉ HACE FALTA
+    ==================
+    Al crear un grupo, el sistema mete a los respaldos que estén configurados en
+    ese momento. Un respaldo dado de alta después no queda en ninguno de los
+    grupos anteriores, y meterlo a mano en cien grupos es trabajo que no se hace
+    nunca. El costo se paga tarde y todo junto: el día que la cuenta operativa
+    se cae, los grupos donde el respaldo no entró son grupos perdidos — y una
+    cuenta ya baneada tampoco puede agregar a nadie.
+
+    POR QUÉ VA DE A POCO Y NO TODOS DE GOLPE
+    ========================================
+    Agregar un número a cien grupos seguidos es exactamente el patrón que
+    WhatsApp lee como automatización, y la respuesta es el baneo de la cuenta
+    que agrega — que es la operativa, la que sostiene todo el canal. Por eso hay
+    `tope` y por eso el valor por defecto es chico: se corre varias veces a lo
+    largo de días, no una vez. Los grupos donde el número ya está se saltean sin
+    llamar a WhatsApp, así que repetir la corrida no vuelve a pedir lo mismo.
+
+    Sin `aplicar` es una vista previa: dice a qué grupos entraría y no toca
+    nada.
+    """
+    # `validar_whatsapp` devuelve el MOTIVO del rechazo, o None si está bien —
+    # al revés de lo que sugiere el nombre. El número normalizado sale de
+    # `normalizar_whatsapp`.
+    error = validar_whatsapp(body.numero)
+    if error:
+        raise HTTPException(400, error)
+    numero = normalizar_whatsapp(body.numero) or ""
+
+    grupos = await run_in_threadpool(repo.list_grupos_todos)
+
+    def _nombre(g: dict) -> str:
+        c = g.get("comercios") or {}
+        return (g.get("nombre") or c.get("nombre") or g.get("grupo_jid") or "")
+
+    # Quién está adentro se le pregunta a WhatsApp, grupo por grupo. La tabla no
+    # lo guarda —sólo tiene el jid y de qué comercio es— así que mirar la fila
+    # sería una guarda que se lee como protección y contesta siempre lo mismo.
+    # Si no se puede averiguar (sesión caída, grupo borrado), se intenta igual:
+    # un agregado repetido lo rechaza WhatsApp sin consecuencias, y dar por
+    # sentado que está adentro es cómo un respaldo termina faltando justo donde
+    # hacía falta.
+    ya_estaba = 0
+    faltan: list[dict] = []
+    for g in grupos:
+        jid = g.get("grupo_jid")
+        if not jid:
+            continue
+        dentro = await run_in_threadpool(wa_grupos.participantes_de_grupo, jid)
+        if dentro is not None and numero in dentro:
+            ya_estaba += 1
+        else:
+            faltan.append(g)
+    pendientes = faltan[: body.tope]
+
+    if not body.aplicar:
+        return {
+            "aplicado": False, "numero": numero,
+            "grupos_totales": len(grupos), "ya_estaba": ya_estaba,
+            "a_agregar": len(pendientes), "quedan_despues": max(0, len(faltan) - len(pendientes)),
+            "grupos": [{"jid": g.get("grupo_jid"), "nombre": _nombre(g)} for g in pendientes],
+        }
+
+    ok: list[str] = []
+    fallaron: list[dict] = []
+    for g in pendientes:
+        jid = g.get("grupo_jid")
+        if not jid:
+            continue
+        try:
+            await run_in_threadpool(wa_grupos.agregar_a_grupo, jid, [numero])
+            ok.append(_nombre(g))
+        except wa_grupos.GrupoError as exc:
+            # Un grupo que falla no corta la corrida —los otros se pueden
+            # agregar igual— pero SÍ se informa uno por uno: "18 de 20" sin
+            # decir cuáles dos faltaron es un número que no sirve para nada.
+            fallaron.append({"grupo": _nombre(g), "motivo": str(exc)})
+
+    logger.info("wa.agregar_a_grupos", numero=numero, ok=len(ok), fallaron=len(fallaron),
+                admin=admin.get("sub"))
+    return {
+        "aplicado": True, "numero": numero,
+        "grupos_totales": len(grupos), "ya_estaba": ya_estaba,
+        "agregados": len(ok), "quedan_despues": max(0, len(faltan) - len(pendientes)),
+        "ok": ok, "fallaron": fallaron,
+    }
