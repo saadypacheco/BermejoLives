@@ -4,70 +4,100 @@
 > baneen el operativo. Escrito antes de necesitarlo a propósito: ese día no hay
 > tiempo de razonarlo.
 
-## La tabla definitiva (6/9/2026)
+## La tabla definitiva (8/9/2026)
 
-Cuatro funciones, cinco números, dos celulares. Lo demás de este documento
-explica el porqué; esto es lo que hay que tener.
+Revisada contra los teléfonos de verdad. Antes estaba armada sobre una lista de
+números; ahora sobre lo que hay en cada aparato, que es distinto — y dos de los
+números que figuraban **no sirven** para el rol que tenían.
 
-| # | Rol | Número | Chip | ¿WAHA? | ¿En los grupos? | ¿En la web? |
-|---|---|---|---|---|---|---|
-| 1 | **Marca** | *falta* | a comprar / eSIM libre | No | No | **Sí**, es el que ve el comprador |
-| 2 | **Operativo** | **64610187** | Tigo, celular exclusivo | **Sí, el único** | Sí, en todos | No |
-| 3 | **Respaldo 1** | 75314737 | eSIM Entel | No | Sí, en todos | No |
-| 4 | **Respaldo 2** | 72900149 | Entel (cajón) | No | Sí, en todos | No |
-| 5 | **Explorador** | *falta* | a comprar / eSIM libre | No | **No** | No |
+| # | Rol | Número | Dónde vive | ¿WAHA? | ¿En los grupos? |
+|---|---|---|---|---|---|
+| 1 | **Operativo** | **59164610187** | Tablet (oficina) | **Sí, el único** | Sí, en todos |
+| 2 | **Marca** | 59167991916 | Tablet, 2ª cuenta | No | No |
+| 3 | **Explorador** | 59168727944 | iPhone, 2ª cuenta | No | No |
+| 4 | **Respaldo 1** | 59175314737 | El otro celular | No | Sí, en todos |
+| 5 | **Respaldo 2** | 59168727584 | Se registra y se guarda | No | Sí, en todos |
 
-**Qué hace cada uno, en una línea:**
+### Los dos que quedaron afuera, y por qué
 
-1. **Marca** — el WhatsApp del sitio. Atiende compradores. No entra a ningún
-   grupo: mezclarlo con cien grupos de comerciantes hace imposible atender los
-   dos.
-2. **Operativo** — el celular exclusivo. Crea los grupos, recibe las fotos,
-   le habla al comerciante y es el que WAHA vincula para traer todo a la base.
-   Acá vive también el canal de difusión.
-3. y 4. **Respaldos** — callados adentro de los grupos. **No capturan nada**:
-   WAHA lee sólo por la cuenta vinculada. Están para el día que baneen al
-   operativo, y tienen que estar adentro ANTES, porque una cuenta baneada no
-   puede agregar a nadie.
-5. **Explorador** — sale a la calle a fotografiar ofertas de locales que
-   todavía no publican. Manda la foto con `URUKU-XXXX` en el texto, en chat
-   directo. **No va a los grupos**: publica por código, no por grupo.
+**59172900149 — NO USAR.** El número está activo pero **la cuenta de WhatsApp la
+tiene otra persona**: es un número reciclado y quien lo tuvo antes sigue con la
+sesión. Figuraba como Respaldo 2 en la versión anterior de esta tabla. Si se lo
+hubiera puesto en `WA_NUMEROS_GRUPO`, el sistema habría metido a un
+desconocido dentro de cada grupo de comerciante — con acceso a las fotos, los
+precios y los teléfonos de todos. Es el peor error posible de esta lista y no
+habría dado ningún aviso.
 
-### Cómo reparten en dos celulares
+**+5491154574097 (personal, Argentina).** Tiene WhatsApp pero **la línea no está
+en el teléfono**: la sesión sigue viva porque WhatsApp no necesita el chip
+después de registrarse. Sirve para el día a día y **no debe usarse para ningún
+rol de URUKU**: el día que esa sesión se cierre —cambio de teléfono, reinstalar
+la app— no hay forma de recuperarla sin la línea.
 
-WhatsApp permite **dos cuentas en la misma app**, y WhatsApp Business es una
-tercera aplicación. Con los dos teléfonos que ya hay alcanza:
+### Cómo se reparte en los aparatos
 
-| Dispositivo | App | Cuenta |
+WhatsApp permite **dos cuentas en la misma app**, así que con lo que hay alcanza
+para los cinco roles sin comprar nada:
+
+| Aparato | App | Cuenta |
 |---|---|---|
-| **Celular exclusivo** (Tigo) | WhatsApp | **Operativo** |
-| **Celular personal** | WhatsApp — cuenta 1 | el personal (no es de URUKU) |
-| **Celular personal** | WhatsApp — cuenta 2 | **Explorador** (sale a la calle con vos) |
-| **Celular personal** | WhatsApp Business | **Marca** |
+| **Tablet** (oficina) | WhatsApp · cuenta 1 | **Operativo** — vinculado a WAHA |
+| **Tablet** | WhatsApp · cuenta 2 | **Marca** — atiende compradores |
+| **iPhone personal** | WhatsApp · cuenta 1 | el personal (no es de URUKU) |
+| **iPhone personal** | WhatsApp · cuenta 2 | **Explorador** — sale a la calle |
+| **El otro celular** | WhatsApp | **Respaldo 1** |
+| — | — | **Respaldo 2**: se registra una vez y se guarda |
 
-Los respaldos **no necesitan un teléfono permanente**: alcanza con registrarlos
-una vez para que la cuenta exista, porque a los grupos los agrega el sistema
-(`WA_NUMEROS_GRUPO`), no ellos. Un chip en el cajón sin registrar no sirve: un
-número sin cuenta de WhatsApp no se puede agregar a nada.
+La marca va en la tablet y no en el celular: recibe compradores todo el día y
+conviene que esté donde hay alguien sentado. El explorador va en el iPhone
+porque es el que sale a la calle.
 
-> **Verificar antes de confiarse:** WhatsApp da de baja cuentas inactivas por
-> mucho tiempo. Un respaldo que se registra y nunca más se abre puede no estar
-> el día que haga falta. Conviene abrirlos cada tanto, y conviene confirmar el
-> plazo real antes de dar por hecho que van a estar.
+> **El iPhone tiene un límite:** guarda muchas eSIM pero sólo puede tener **dos
+> activas a la vez**. Para registrar cada número de Entel hay que activarlo,
+> recibir el código, y recién ahí cambiar a la siguiente. Una vez registrada, la
+> cuenta de WhatsApp sigue funcionando sin la línea puesta.
 
-### Lo que falta comprar
+### El riesgo nuevo: el operativo vive en una tablet
 
-Dos chips: **marca** y **explorador**. Los cinco números son cinco líneas
-distintas: no se puede usar la misma para dos roles porque cada rol necesita su
-propia cuenta de WhatsApp.
+WAHA se conecta como **dispositivo vinculado**, igual que WhatsApp Web. Un
+dispositivo vinculado deja de funcionar si el teléfono principal —acá, la
+tablet— pasa **unos catorce días sin conectarse**.
 
-### Una palabra que ya no usamos: "testigo"
+O sea: **si la tablet se queda apagada o sin internet dos semanas, el canal se
+corta solo.** No avisa, no da error, y desde el panel se ve igual que "no llegó
+nada". La tablet tiene que quedar enchufada y con wifi, y conviene abrirle
+WhatsApp cada tanto.
 
-Este documento y el código la usaban para el **operativo** (el vinculado a
-WAHA), y en la conversación se usó para los **respaldos**. Significaba lo
-contrario según dónde se leyera, y de ahí salió la idea de que los respaldos
-eran los que pasaban los datos a la base. Se sacó del código y de los
-documentos: quedan **operativo** y **respaldos**.
+Es la misma clase de falla que venimos persiguiendo: nada se rompe, todo parece
+bien, y no entra nada. En **Admin › WhatsApp** se nota porque los mensajes dejan
+de aparecer.
+
+### Qué operadora es cada uno — pendiente de confirmar
+
+En la conversación del 6/9 se dijo que el Tigo era el **64610187** y en la del
+8/9 que era el **75314737**. Uno de los dos es Entel y no está claro cuál.
+
+**No cambia quién es el operativo**: eso lo define WAHA, que está vinculado al
+64610187 y se verificó en vivo. Cambia otra cosa — el diseño quería el operativo
+en una operadora distinta de los respaldos, para que una caída de red de Entel
+no se lleve al operativo y a su reemplazo el mismo día. Si los dos son Entel,
+esa protección no existe y conviene saberlo.
+
+### El bloque para `backend/.env`
+
+```
+WA_NUMEROS_PROPIOS=59164610187,59167991916,59168727944,59175314737,59168727584
+WA_NUMEROS_GRUPO=59175314737,59168727584
+WA_NUMEROS_EXPLORADOR=59168727944
+WA_CONTACTO_EXPLORADOR=59168727944
+BOT_WHATSAPP_NUMERO=59164610187
+```
+
+**59172900149 no aparece en ninguna línea, a propósito.** Ver arriba.
+
+Las de `WA_NUMEROS_GRUPO` se agregan solas a cada grupo que crea el sistema, así
+que **tienen que tener WhatsApp registrado antes** de crear el primer grupo. Un
+número sin cuenta no se puede agregar a nada.
 
 ## Los roles
 
