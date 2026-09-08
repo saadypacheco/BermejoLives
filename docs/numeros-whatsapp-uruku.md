@@ -57,6 +57,48 @@ porque es el que sale a la calle.
 > recibir el código, y recién ahí cambiar a la siguiente. Una vez registrada, la
 > cuenta de WhatsApp sigue funcionando sin la línea puesta.
 
+### Cómo dar de alta las cuentas que faltan (8/9)
+
+**Estado real:** de los cinco roles, sólo el operativo tiene WhatsApp. Los cuatro
+números de Entel están como líneas en el iPhone y **ninguno tiene cuenta**.
+
+El obstáculo aparente es que las cuatro eSIM viven en el iPhone y ahí sólo
+entran dos cuentas de WhatsApp. Pero no hace falta que la cuenta viva donde está
+el chip:
+
+> **El código de verificación llega por SMS a la línea, y se puede tipear en
+> otro aparato.** O sea: se activa la eSIM en el iPhone, se empieza el registro
+> en la tablet, llega el SMS al iPhone, y el código se escribe en la tablet. La
+> cuenta queda en la tablet.
+
+Con eso, los cinco roles entran en los tres aparatos que ya hay.
+
+**El orden, uno por vez** (el iPhone sólo admite **dos eSIM activas a la vez**,
+así que se activa la que toca y después se pasa a la siguiente):
+
+1. **Marca → la tablet.** Activar Entel 2 (`67991916`) en el iPhone. En la
+   tablet, agregar segunda cuenta de WhatsApp y registrar ese número. El SMS
+   llega al iPhone; el código se escribe en la tablet.
+2. **Explorador → el iPhone.** Activar Entel 3 (`68727944`). Agregar la segunda
+   cuenta ahí mismo. Va en el iPhone porque es el que sale a la calle.
+3. **Respaldo 1 → el otro celular.** Registrar WhatsApp con `75314737`, que ya
+   tiene el chip puesto ahí.
+4. **Respaldo 2 → el otro celular, segunda cuenta.** Activar Entel 4
+   (`68727584`) en el iPhone y escribir el código en el otro celular.
+5. **Respaldo 3** → el `72900149`, cuando se recupere (abajo).
+
+**Los respaldos hay que registrarlos ANTES de crear el primer grupo.** El
+sistema los agrega solo a cada grupo, y a un número sin cuenta de WhatsApp no lo
+puede agregar — el grupo se crea igual, sin ellos, y eso no se descubre hasta el
+día del baneo.
+
+> **Por qué conviene que cada cuenta quede en un aparato y no rotando:** una
+> cuenta de WhatsApp vive en un teléfono principal. Si se registra un número en
+> un slot y después se usa ese mismo slot para otro, el primero **queda sin
+> dispositivo** — sigue existiendo y sigue adentro de los grupos, pero WhatsApp
+> da de baja las cuentas que pasan mucho tiempo sin conectarse. Un respaldo que
+> se dio de baja solo es un respaldo que no está el día que hace falta.
+
 ### Recuperar el 59172900149
 
 Se quiere de vuelta, y se puede: **la línea es de URUKU**, así que el código de
