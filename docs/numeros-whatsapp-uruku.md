@@ -20,13 +20,13 @@ números que figuraban **no sirven** para el rol que tenían.
 
 ### Los dos que quedaron afuera, y por qué
 
-**59172900149 — NO USAR.** El número está activo pero **la cuenta de WhatsApp la
-tiene otra persona**: es un número reciclado y quien lo tuvo antes sigue con la
-sesión. Figuraba como Respaldo 2 en la versión anterior de esta tabla. Si se lo
-hubiera puesto en `WA_NUMEROS_GRUPO`, el sistema habría metido a un
-desconocido dentro de cada grupo de comerciante — con acceso a las fotos, los
-precios y los teléfonos de todos. Es el peor error posible de esta lista y no
-habría dado ningún aviso.
+**59172900149 — NO USAR TODAVÍA. Se va a recuperar.** El número está activo pero
+**la cuenta de WhatsApp la tiene otra persona**: es reciclado y quien lo tuvo
+antes sigue con la sesión. Figuraba como Respaldo 2 en la versión anterior de
+esta tabla. Si se lo hubiera puesto en `WA_NUMEROS_GRUPO`, el sistema habría
+metido a un desconocido dentro de cada grupo de comerciante — con acceso a las
+fotos, los precios y los teléfonos de todos. Es el peor error posible de esta
+lista y no habría dado ningún aviso. Cómo recuperarlo, más abajo.
 
 **+5491154574097 (personal, Argentina).** Tiene WhatsApp pero **la línea no está
 en el teléfono**: la sesión sigue viva porque WhatsApp no necesita el chip
@@ -57,16 +57,42 @@ porque es el que sale a la calle.
 > recibir el código, y recién ahí cambiar a la siguiente. Una vez registrada, la
 > cuenta de WhatsApp sigue funcionando sin la línea puesta.
 
-### El riesgo nuevo: el operativo vive en una tablet
+### Recuperar el 59172900149
 
-WAHA se conecta como **dispositivo vinculado**, igual que WhatsApp Web. Un
-dispositivo vinculado deja de funcionar si el teléfono principal —acá, la
-tablet— pasa **unos catorce días sin conectarse**.
+Se quiere de vuelta, y se puede: **la línea es de URUKU**, así que el código de
+verificación llega a nuestro chip. Registrar el número en un teléfono propio
+saca la sesión del que la tiene — es cómo funciona WhatsApp con los números
+reciclados, y el que lo tenía sabe que el número ya no es suyo.
 
-O sea: **si la tablet se queda apagada o sin internet dos semanas, el canal se
-corta solo.** No avisa, no da error, y desde el panel se ve igual que "no llegó
-nada". La tablet tiene que quedar enchufada y con wifi, y conviene abrirle
-WhatsApp cada tanto.
+Los pasos, con la eSIM activa en un teléfono:
+
+1. Instalar WhatsApp (o agregar la segunda cuenta) y registrar `+591 72900149`.
+2. Llega el SMS con el código y se completa.
+
+**Lo que puede frenarlo:** si el que la tiene le puso *verificación en dos
+pasos*, WhatsApp va a pedir un PIN de 6 dígitos que no tenemos. Ahí hay que
+pedir el restablecimiento y **esperar hasta 7 días**. No hay atajo, y por eso
+conviene empezarlo ahora y no el día que haga falta.
+
+Cuando esté recuperado entra como **Respaldo 3**. Los respaldos son lo único que
+salva el día del baneo, y tener tres en vez de dos no cuesta nada: no hacen
+nada, sólo están adentro de los grupos. Ese día se agrega a `WA_NUMEROS_PROPIOS`
+y a `WA_NUMEROS_GRUPO` — pero **sólo después** de verificar que la cuenta es
+nuestra, abriendo el chat y viendo que sea una sesión nueva y vacía.
+
+### El riesgo del operativo en la tablet
+
+WAHA se conecta como **dispositivo vinculado**, igual que WhatsApp Web, y un
+vinculado deja de funcionar si el aparato principal —acá, la tablet— pasa **unos
+catorce días sin conectarse**.
+
+La tablet tiene chip propio, así que no depende del wifi de la oficina: eso ya
+cubre la mitad del problema. Lo que queda es que **no se apague** ni se quede sin
+saldo de datos dos semanas.
+
+Si pasa, el canal se corta solo: no avisa, no da error, y desde el panel se ve
+igual que "no llegó nada". Que quede enchufada, y abrirle WhatsApp cada tanto.
+En **Admin › WhatsApp** se nota porque los mensajes dejan de aparecer.
 
 Es la misma clase de falla que venimos persiguiendo: nada se rompe, todo parece
 bien, y no entra nada. En **Admin › WhatsApp** se nota porque los mensajes dejan
@@ -93,7 +119,9 @@ WA_CONTACTO_EXPLORADOR=59168727944
 BOT_WHATSAPP_NUMERO=59164610187
 ```
 
-**59172900149 no aparece en ninguna línea, a propósito.** Ver arriba.
+**59172900149 no aparece en ninguna línea todavía**, a propósito: hasta que la
+cuenta de WhatsApp no sea nuestra, ponerlo ahí mete a un desconocido en los
+grupos. Se agrega el día que se recupere.
 
 Las de `WA_NUMEROS_GRUPO` se agregan solas a cada grupo que crea el sistema, así
 que **tienen que tener WhatsApp registrado antes** de crear el primer grupo. Un
