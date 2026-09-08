@@ -48,21 +48,54 @@ export default function GuiaVentaPage() {
 
       <Bloque titulo="Los primeros 30 segundos" abierto>
         <p>
-          No se abre con quiénes somos. Se abre con <b>lo que le pasa a él todos los días</b>:
+          <b>No se abre con una pregunta.</b> Una pregunta se puede contestar &ldquo;no&rdquo;
+          y ahí se terminó. Se abre <b>mostrando el celular</b>, con su local ya adentro:
         </p>
         <Cita>
-          &ldquo;¿Le pasa que la gente entra preguntando si tiene algo, y usted lo tiene pero
-          no sabían? Nosotros hacemos que lo encuentren buscando <b>lo que vende</b>, no el
-          nombre del local.&rdquo;
+          &ldquo;Buen día. Mire — su local ya está acá.&rdquo;
         </Cita>
         <p>
-          Y ahí <b>le mostrás su propia ficha en el celular</b>, con su foto. No una
-          demostración: la suya, que ya está cargada. Ese es el momento que convierte —
-          pasa de escuchar una propuesta a mirar algo que ya existe con su cara.
+          Y le das vuelta el teléfono con <b>su ficha abierta</b>: su foto, su nombre, su
+          WhatsApp. No una demostración con otro comercio: <b>el de él</b>.
+        </p>
+        <p>
+          Eso cambia quién pide algo. No estás pidiendo cinco minutos: estás mostrándole
+          algo que ya existe con su cara. En dos segundos deja de escuchar una propuesta y
+          empieza a mirar lo suyo. <b>Casi siempre la siguiente pregunta la hace él</b> — y
+          la que hace es &ldquo;¿y esto cuánto sale?&rdquo;.
+        </p>
+        <p>
+          Recién ahí, la segunda frase, que es la que explica para qué sirve:
+        </p>
+        <Cita>
+          &ldquo;Acá lo encuentra el que busca <b>lo que usted vende</b>. Su cartel dice
+          Comercial Velásquez; la gente busca zapatillas.&rdquo;
+        </Cita>
+        <p className="chico">
+          <b>Y el remate, si querés cerrar fuerte:</b> buscá delante de él lo que vende, en
+          voz alta. &ldquo;Mire, pongo zapatillas…&rdquo; y le mostrás la lista con él adentro
+          y los otros al lado. Ver a los del rubro en la misma pantalla dice más que
+          cualquier explicación.
         </p>
         <p className="chico">
-          Si todavía no está cargado, cargalo ahí mismo con la app de campo y mostráselo. Son
-          dos minutos y cambia la conversación entera.
+          Si el local todavía no está cargado, <b>cargalo ahí mismo</b> con la app de campo y
+          después mostráselo. Son dos minutos y es otra conversación.
+        </p>
+      </Bloque>
+
+      <Bloque titulo="Si no te dan tiempo">
+        <p>
+          Está atendiendo, hay gente, no te va a escuchar. No insistas: <b>dejá el volante y
+          andate</b>. El volante tiene el QR de su propia ficha, así que lo mira cuando puede
+          y ya sabe de qué le hablás cuando volvés.
+        </p>
+        <Cita>
+          &ldquo;Le dejo esto, míralo con calma. Su local ya está adentro — escanee y lo ve.&rdquo;
+        </Cita>
+        <p className="chico">
+          Volver a la semana siguiente con el local ya cargado convierte mucho más que
+          insistir hoy. Y el que te atendió mal con cinco clientes adelante suele atender
+          bien un martes a las 10.
         </p>
       </Bloque>
 
@@ -134,6 +167,18 @@ export default function GuiaVentaPage() {
             aparte. Antes de venderlo hay que saber quién contesta y en qué horario — si
             se promete 24/7 y contesta nadie, se pierde el comercio y los tres de al lado.</li>
         </ul>
+      </Bloque>
+
+      <Bloque titulo="El volante">
+        <p>
+          Se imprime desde el panel: <b>Negocios → el botón 🖨</b> de cada comercio. Sale en
+          media hoja, entran dos por página en cualquier impresora, y lleva el
+          <b> QR de su propia ficha</b> — escanea y se ve a sí mismo.
+        </p>
+        <p className="chico">
+          Imprimí los de la cuadra <b>antes de salir</b>, no de a uno. Y dejá uno siempre,
+          aunque la charla haya ido bien: es lo que tiene a mano cuando lo piensa a la noche.
+        </p>
       </Bloque>
 
       <Bloque titulo="Antes de irte del local">

@@ -1319,6 +1319,12 @@ function TabComercios({
                 <Pin style={{ width: 16, height: 16 }} />
               </a>
             )}
+            {/* El volante con el QR de ESTE comercio, listo para imprimir.
+                Se abre en otra pestaña: el que lo usa está recorriendo la lista
+                y no quiere perder dónde iba. */}
+            <a className="mbtn" title="Volante para imprimir" href={`/volante/${c.slug}`}
+               target="_blank" rel="noopener" style={{ fontSize: 15, display: "flex",
+               alignItems: "center", justifyContent: "center" }}>🖨</a>
             <button className="mbtn" title="Recalcular el rubro"
                     onClick={() => setRecalcId(recalcId === c.id ? null : c.id)}
                     style={{ fontSize: 15 }}>🏷</button>
