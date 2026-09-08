@@ -539,11 +539,16 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
                       tres entraban en un renglón sólo así, y son las tres cosas
                       que alguien hace desde acá. */}
                   <div className="uk-resact">
-                    <a className="uk-resic" title="WhatsApp" aria-label="WhatsApp"
-                       href={waLink(r.whatsapp, `Hola, te vi en URUKU`)} target="_blank" rel="noopener"
-                       onClick={() => registrarLead(r.id, "whatsapp", busquedaId)}>
-                      <WhatsApp style={{ width: 17, height: 17 }} />
-                    </a>
+                    {/* Sólo si hay número. Sin esto se dibujaba el botón verde
+                        igual y llevaba a wa.me/null — una página de error de
+                        WhatsApp que el comprador lee como "no atiende". */}
+                    {r.whatsapp && (
+                      <a className="uk-resic" title="WhatsApp" aria-label="WhatsApp"
+                         href={waLink(r.whatsapp, `Hola, te vi en URUKU`)} target="_blank" rel="noopener"
+                         onClick={() => registrarLead(r.id, "whatsapp", busquedaId)}>
+                        <WhatsApp style={{ width: 17, height: 17 }} />
+                      </a>
+                    )}
                     {/* "Cómo llegar" también es un contacto: nadie pide
                         indicaciones para un local al que no piensa ir. Sin
                         registrarlo, el comercio que se descubre por el mapa y

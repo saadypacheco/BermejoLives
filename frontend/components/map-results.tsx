@@ -171,7 +171,7 @@ export function MapResults({ results, hayFiltro = true, ciudad = null }: {
           <b>${r.nombre}</b>
           <span>${MODALIDAD_LABEL[r.modalidad] ?? r.modalidad}${r.rubro_nombre ? " · " + r.rubro_nombre : ""}</span>
           <div class="map-pop-act">
-            <a href="${waLink(r.whatsapp, "Hola, te vi en URUKU")}" target="_blank" rel="noopener" data-lead-comercio="${r.id}" data-lead-tipo="whatsapp">WhatsApp</a>
+            ${r.whatsapp ? `<a href="${waLink(r.whatsapp, "Hola, te vi en URUKU")}" target="_blank" rel="noopener" data-lead-comercio="${r.id}" data-lead-tipo="whatsapp">WhatsApp</a>` : ""}
             <a href="${comoLlegarHref(r)}" target="_blank" rel="noopener" data-lead-comercio="${r.id}" data-lead-tipo="mapa">Cómo llegar</a>
             <a href="/comercios/${r.slug}">Ver comercio</a>
           </div>

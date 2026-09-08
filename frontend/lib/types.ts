@@ -254,6 +254,18 @@ export function contactoDeOferta(o: {
   return { href: waLink(numero, mensaje), esUruku };
 }
 
-export function waLink(numero: string, mensaje: string): string {
-  return `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
+/** El enlace a WhatsApp, o cadena vacía si no hay número.
+ *
+ *  El tipo decía `string` y le llegaban nulos: `wa.me/null` es una página de
+ *  error de WhatsApp, y el comprador que la abre cree que el comercio no
+ *  atiende. Pasaba en la tarjeta de resultados de todo comercio sin número —de
+ *  los 67 cargados en la última salida, 43 no lo tienen— con un botón verde
+ *  que prometía un contacto inexistente.
+ *
+ *  Devuelve "" y no un enlace roto, para que quien la use TENGA que decidir
+ *  qué mostrar cuando no hay número. Un href vacío recarga la página, así que
+ *  el llamador igual tiene que preguntar antes de dibujar el botón. */
+export function waLink(numero: string | null | undefined, mensaje: string): string {
+  const limpio = (numero ?? "").replace(/[^\d]/g, "");
+  return limpio ? `https://wa.me/${limpio}?text=${encodeURIComponent(mensaje)}` : "";
 }

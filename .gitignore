@@ -35,3 +35,9 @@ supabase/.branches/
 
 # memoria de sesiones de Claude (puede contener credenciales, nunca commitear)
 memory/
+
+# Las placas y el video se generan con scripts/video-promo.mjs contra el sitio
+# real. Versionar 3 MB de PNG que se rehacen en dos minutos —y que envejecen
+# cada vez que cambia una pantalla— es guardar una foto vieja del producto.
+frontend/video-promo/
+capturas/
