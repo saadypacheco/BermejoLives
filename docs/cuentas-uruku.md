@@ -38,6 +38,38 @@ esa persona no esté, o pierda el teléfono, la cuenta se va con ella. Es el mis
 riesgo que tiene el canal de WhatsApp por vivir en el operativo, y se cubre
 igual — con un segundo administrador.
 
+## Google Workspace
+
+El dominio `uruku.bo` tiene Workspace contratado. Se administra en
+`admin.google.com`.
+
+| Qué | Valor |
+|---|---|
+| Cuenta principal (administrador) | `admin@uruku.bo` |
+| A nombre de | Saady Horacio Pacheco Villarroel |
+| Unidad organizativa | URUKU |
+| Creada | 14/8/2026 |
+
+**Alias de `admin@uruku.bo`** (vistos el 8/9/2026): `info@`, `contacto@`,
+`comercios@`, `ventas@`. La pantalla seguía hacia abajo, así que puede haber
+más — la lista completa está en Usuarios → el usuario → *Direcciones de correo
+electrónico alternativas*.
+
+**Un alias no es una casilla.** Es la trampa de esto y conviene tenerla clara
+antes de repartir direcciones: el correo que llega a `ventas@uruku.bo` cae en la
+bandeja de `admin@uruku.bo`, y **con el alias no se puede iniciar sesión**. Sirve
+para publicar una dirección linda en el sitio o en Facebook; no sirve para
+darle acceso a otra persona ni para separar bandejas. Eso necesita un usuario
+de verdad, que sí cuesta licencia. Los alias son gratis y se pueden tener hasta
+30.
+
+**Ojo con los usuarios del panel de URUKU.** `admin@uruku.bo`,
+`agente@uruku.bo` y `publicador@uruku.bo` aparecen en
+[deploy-prod-nuevo-vps.md](deploy-prod-nuevo-vps.md) como usuarios del backend:
+son **otra cosa**, no cuentas de Google. Comparten el nombre y nada más — el
+backend los valida contra su propio `.env`, no contra Workspace. Cambiar la
+contraseña en Google no cambia la del panel, y al revés tampoco.
+
 ## Qué falta
 
 - [ ] Recuperar el enlace de la **página de Facebook** y cargarlo en
@@ -47,3 +79,6 @@ igual — con un segundo administrador.
       comprador —"Enterate antes que nadie"— **no se dibuja**.
 - [ ] Ponerle un **segundo administrador** al canal desde otra línea de URUKU.
 - [ ] Completar en la tabla de arriba con qué cuenta se administra cada red.
+- [ ] Buscar el mail de bienvenida de Facebook en la casilla de
+      `admin@uruku.bo` y en la cuenta personal: es el camino más corto al
+      enlace de la página perdida, y de paso dice **con qué cuenta se creó**.
