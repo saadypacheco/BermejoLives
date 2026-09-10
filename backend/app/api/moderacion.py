@@ -12,7 +12,7 @@ from app.core.auth import require_admin, require_moderador
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp
-from app.services import clasificador, difusion, wa_grupos
+from app.services import clasificador, difusion, planes, wa_grupos
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
@@ -2354,3 +2354,86 @@ async def admin_difusion_reintentar(
     r = await run_in_threadpool(difusion.procesar, repo, fila)
     logger.info("difusion.reintento", fila=fila_id, by=admin.get("sub"), **r)
     return r
+
+
+class PlanBody(BaseModel):
+    nombre: str | None = None
+    orden: int | None = None
+    precio_mes: float | None = Field(default=None, ge=0)
+    publicaciones_mes: int | None = Field(default=None, ge=0)
+    precio_publicacion_extra: float | None = Field(default=None, ge=0)
+    permite_extras: bool | None = None
+    funciones: dict | None = None
+    descripcion: str | None = None
+    activo: bool | None = None
+    visible: bool | None = None
+
+
+@router.get("/admin/planes")
+async def admin_planes(
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Los planes como están hoy, con cuota y precios."""
+    return {"items": await run_in_threadpool(repo.list_planes)}
+
+
+@router.put("/admin/planes/{slug}")
+async def admin_editar_plan(
+    slug: str,
+    body: PlanBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Cambia un plan, o crea uno nuevo.
+
+    POR QUÉ ESTO EXISTE
+    ===================
+    Un precio, una cuota o el nombre de un plan cambian por razones
+    comerciales: una promoción, un competidor, una charla con un comerciante.
+    Eso no puede necesitar un programador y un deploy — lo tiene que poder
+    hacer quien vende, el mismo día que lo decide.
+
+    `funciones` es un objeto libre a propósito: agregar una función al plan Pro
+    es sumarle una clave, no migrar la base.
+    """
+    patch = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not patch:
+        raise HTTPException(400, "no hay nada que cambiar")
+    if "nombre" not in patch and not await run_in_threadpool(repo.get_plan, slug):
+        # Un plan nuevo sin nombre saldría en la página de venta como un slug.
+        raise HTTPException(400, "un plan nuevo necesita nombre")
+
+    plan = await run_in_threadpool(repo.upsert_plan, slug, patch)
+    logger.info("planes.editado", plan=slug, campos=list(patch), by=admin.get("sub"))
+    return {"ok": True, "plan": plan}
+
+
+@router.get("/admin/cargos-extra")
+async def admin_cargos_extra(
+    estado: str = Query(default="pendiente"),
+    limite: int = Query(default=200, le=500),
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Lo que se pasó de la cuota y todavía no se cobró.
+
+    Un cargo que se calcula a mano se cobra dos veces o no se cobra nunca.
+    """
+    items = await run_in_threadpool(repo.list_cargos_extra, estado or None, limite)
+    total = sum(float(c.get("monto") or 0) for c in items)
+    return {"items": items, "total": total}
+
+
+@router.get("/admin/comercio/{comercio_id}/cuota")
+async def admin_cuota_comercio(
+    comercio_id: str,
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Cuánto lleva publicado este comercio en su ciclo y cuánto le queda."""
+    comercio = await run_in_threadpool(repo.get_comercio, comercio_id)
+    if not comercio:
+        raise HTTPException(404, "comercio no encontrado")
+    est = await run_in_threadpool(planes.estado, repo, comercio)
+    return {"comercio": comercio.get("nombre"), **est}

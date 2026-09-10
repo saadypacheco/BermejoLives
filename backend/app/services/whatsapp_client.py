@@ -106,3 +106,30 @@ def enviar_codigo_otp(telefono: str, codigo: str, contexto: str = "login") -> bo
     """Punto de entrada único — a los endpoints no les importa qué proveedor
     está activo, solo si el envío salió bien."""
     return get_whatsapp_provider().enviar_codigo_otp(telefono, codigo, contexto)
+
+
+def enviar_texto(chat_id: str, texto: str) -> bool:
+    """Un mensaje suelto al chat que sea — una persona o un grupo.
+
+    Existe aparte de `enviar_codigo_otp` porque aquello manda plantillas de
+    código a un teléfono; esto contesta dentro de una conversación que ya está
+    abierta (el grupo del comercio). Mezclarlos obligaba a inventar un
+    "contexto" por cada aviso nuevo.
+
+    Devuelve si salió. No lanza: quien avisa nunca puede romperse por avisar.
+    """
+    if not settings.waha_base_url or not settings.waha_api_key:
+        logger.warning("whatsapp.enviar_texto_sin_config", chat=chat_id)
+        return False
+    try:
+        r = httpx.post(
+            f"{settings.waha_base_url.rstrip('/')}/api/sendText",
+            json={"chatId": chat_id, "text": texto, "session": "default"},
+            headers={"X-Api-Key": settings.waha_api_key},
+            timeout=10,
+        )
+        r.raise_for_status()
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("whatsapp.enviar_texto_error", chat=chat_id, error=str(exc))
+        return False

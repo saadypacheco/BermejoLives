@@ -55,6 +55,35 @@ class FakeRepo:
         self.favoritos: list[dict] = []               # {usuario_id, comercio_id}
         self.publicaciones: list[dict] = []
         self.difusion: list[dict] = []
+        self.cargos_extra: list[dict] = []
+        # Los mismos que siembra la migración 0101: si el fake trajera otros,
+        # los tests pasarían contra una realidad que no existe.
+        self.planes: dict[str, dict] = {
+            "gratis":    {"slug": "gratis", "nombre": "Básico", "orden": 0,
+                          "precio_mes": 0, "publicaciones_mes": 10,
+                          "precio_publicacion_extra": 5, "permite_extras": True,
+                          "moneda": "BOB", "funciones": {}, "activo": True, "visible": True},
+            "publica":   {"slug": "publica", "nombre": "Publica", "orden": 1,
+                          "precio_mes": 70, "publicaciones_mes": 15,
+                          "precio_publicacion_extra": 5, "permite_extras": True,
+                          "moneda": "BOB", "funciones": {}, "activo": True, "visible": True},
+            "destacado": {"slug": "destacado", "nombre": "Destacado", "orden": 2,
+                          "precio_mes": 140, "publicaciones_mes": 50,
+                          "precio_publicacion_extra": 5, "permite_extras": True,
+                          "moneda": "BOB", "funciones": {"canal_wa": True},
+                          "activo": True, "visible": True},
+            "pro":       {"slug": "pro", "nombre": "Pro", "orden": 3,
+                          "precio_mes": 400, "publicaciones_mes": 50,
+                          "precio_publicacion_extra": 5, "permite_extras": True,
+                          "moneda": "BOB",
+                          "funciones": {"canal_wa": True, "asistente_24_7": True},
+                          "activo": True, "visible": True},
+            "premium":   {"slug": "premium", "nombre": "Premium (viejo)", "orden": 9,
+                          "precio_mes": 140, "publicaciones_mes": 50,
+                          "precio_publicacion_extra": 5, "permite_extras": True,
+                          "moneda": "BOB", "funciones": {"canal_wa": True},
+                          "activo": True, "visible": False},
+        }
         self.wa_inbox: dict[str, dict] = {}          # wa_message_id -> row
         self.leads: list[dict] = []
         self.busquedas: list[dict] = []
@@ -384,6 +413,44 @@ class FakeRepo:
         pub = {"id": self._id("pub"), "activo": True, **row}
         self.publicaciones.append(pub)
         return pub
+
+    # ---- planes y cargos extra ----
+    def list_planes(self, solo_visibles=False):
+        ps = [p for p in self.planes.values() if p.get("activo", True)]
+        if solo_visibles:
+            ps = [p for p in ps if p.get("visible", True)]
+        return sorted(ps, key=lambda p: p.get("orden") or 0)
+
+    def get_plan(self, slug):
+        return self.planes.get(slug)
+
+    def upsert_plan(self, slug, patch):
+        fila = {**self.planes.get(slug, {"slug": slug}), **patch, "slug": slug}
+        self.planes[slug] = fila
+        return fila
+
+    def contar_publicaciones_desde(self, comercio_id, desde_iso):
+        return len([p for p in self.publicaciones
+                    if p.get("comercio_id") == comercio_id
+                    and p.get("estado") == "aprobado"
+                    and str(p.get("created_at") or "9999") >= desde_iso])
+
+    def registrar_cargo_extra(self, comercio_id, publicacion_id, monto, moneda):
+        if publicacion_id and any(c["publicacion_id"] == publicacion_id
+                                  for c in self.cargos_extra):
+            return {}
+        fila = {"id": self._id("cargo"), "comercio_id": comercio_id,
+                "publicacion_id": publicacion_id, "monto": monto, "moneda": moneda,
+                "estado": "pendiente", "concepto": "publicacion_extra"}
+        self.cargos_extra.append(fila)
+        return fila
+
+    def list_cargos_extra(self, estado, limite):
+        filas = [c for c in self.cargos_extra if not estado or c["estado"] == estado]
+        return [{**c, "comercios": {
+            "nombre": (self.comercios.get(c["comercio_id"]) or {}).get("nombre"),
+            "slug": (self.comercios.get(c["comercio_id"]) or {}).get("slug")}}
+            for c in filas[:limite]]
 
     # ---- cola de difusión ----
     def encolar_difusion(self, publicacion_id, destinos):

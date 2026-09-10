@@ -20,7 +20,7 @@ import structlog
 
 from app.core.config import settings
 from app.db.repository import Repo, get_repo
-from app.services import difusion
+from app.services import difusion, planes
 from app.models.whatsapp import WahaEvent, WahaMessagePayload
 
 logger = structlog.get_logger()
@@ -117,6 +117,23 @@ def _identificar_comercio(repo: Repo, payload) -> tuple[dict, str, str | None]:
 
     # Ni número conocido ni código válido: borrador nuevo, como siempre.
     return repo.upsert_comercio_by_jid(wa_jid, payload.phone), "desconocido", codigo
+
+
+def _avisar(chat_id: str | None, texto: str) -> None:
+    """Le contesta al comerciante en el mismo chat donde mandó la foto.
+
+    Nunca lanza: que no se pueda avisar no puede impedir que la publicación
+    siga su curso. Un aviso perdido es molesto; una oferta perdida por un fallo
+    al avisar es absurdo.
+    """
+    if not chat_id:
+        return
+    try:
+        from app.services.whatsapp_client import enviar_texto
+
+        enviar_texto(chat_id, texto)
+    except Exception:  # noqa: BLE001
+        logger.warning("ingest.aviso_fallo", chat=chat_id, exc_info=True)
 
 
 def _puede_publicar_por_whatsapp(comercio: dict) -> bool:
@@ -355,6 +372,26 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         repo.marcar_wa_inbox(payload.id, "sin_permiso", motivo, comercio.get("id"))
         return {"captured": True, "comercio": slug, "publicada": False, "motivo": motivo}
 
+    # 2.b) La cuota del plan.
+    #
+    # EL SILENCIO ES EL PEOR RESULTADO
+    # ================================
+    # Si el comercio llegó al tope y su foto simplemente no aparece, manda otra,
+    # tampoco sale, y se va convencido de que esto no funciona. Es exactamente
+    # cómo se perdían las ofertas antes de la bandeja. Por eso el aviso se manda
+    # acá, en el mismo chat donde mandó la foto, y con las DOS salidas: pagar la
+    # extra o pasar de plan. Ofrecer una sola es elegir por él.
+    cuota = planes.revisar_antes_de_publicar(repo, comercio)
+    if cuota["consecuencia"]:
+        siguiente = planes.plan_siguiente(repo, cuota["plan"])
+        _avisar(payload.from_, planes.texto_de_aviso(cuota, siguiente))
+    if not cuota["puede"]:
+        motivo = (f"llegó al tope de {cuota['cuota']} publicaciones de su plan "
+                  f"{cuota['plan'].get('nombre')}")
+        logger.info("ingest.cuota_agotada", comercio=slug, usadas=cuota["usadas"])
+        repo.marcar_wa_inbox(payload.id, "sin_permiso", motivo, comercio.get("id"))
+        return {"captured": True, "comercio": slug, "publicada": False, "motivo": motivo}
+
     # 3) Crear publicación. Comercio confiable -> publica directo; si no, a moderación.
     from datetime import datetime, timezone
 
@@ -416,6 +453,10 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     # justo el que más publica.
     if estado == "aprobado" and creada.get("id"):
         difusion.encolar(repo, creada["id"])
+    # El cargo se ata a la publicación para que no se cobre dos veces si el
+    # webhook repite el mensaje — que pasa.
+    if cuota["consecuencia"] == "cobrar" and creada.get("id"):
+        planes.cobrar_extra(repo, comercio, creada["id"], cuota["plan"])
     logger.info("ingest.publicacion", comercio=slug, tipo=tipo, estado=estado)
     repo.marcar_wa_inbox(
         payload.id, "publicada",

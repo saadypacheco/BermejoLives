@@ -45,6 +45,14 @@ class Repo(Protocol):
     def insert_publicacion_directa(self, row: dict) -> dict: ...
     def list_publicaciones(self, estado: str | None) -> list[dict]: ...
     def get_publicacion(self, pub_id: str) -> dict | None: ...
+    # ---- planes y cargos ----
+    def list_planes(self, solo_visibles: bool = False) -> list[dict]: ...
+    def get_plan(self, slug: str) -> dict | None: ...
+    def upsert_plan(self, slug: str, patch: dict) -> dict: ...
+    def contar_publicaciones_desde(self, comercio_id: str, desde_iso: str) -> int: ...
+    def registrar_cargo_extra(self, comercio_id: str, publicacion_id: str | None,
+                              monto: float, moneda: str) -> dict: ...
+    def list_cargos_extra(self, estado: str | None, limite: int) -> list[dict]: ...
     def encolar_difusion(self, publicacion_id: str, destinos: list[str]) -> int: ...
     def difusion_pendientes(self, limite: int) -> list[dict]: ...
     def marcar_difusion(self, fila_id: str, estado: str, motivo: str | None,
@@ -1253,6 +1261,54 @@ class SupabaseRepo:
                  .limit(5000).execute().data) or []
         cuenta = Counter((f.get("destino"), f.get("estado")) for f in filas)
         return [{"destino": d, "estado": e, "n": n} for (d, e), n in sorted(cuenta.items())]
+
+    # ---- planes y cargos extra ----
+    def list_planes(self, solo_visibles: bool = False) -> list[dict]:
+        q = self._db.table("planes").select("*").eq("activo", True)
+        if solo_visibles:
+            q = q.eq("visible", True)
+        return q.order("orden").limit(100).execute().data or []
+
+    def get_plan(self, slug: str) -> dict | None:
+        res = self._db.table("planes").select("*").eq("slug", slug).limit(1).execute()
+        return res.data[0] if res.data else None
+
+    def upsert_plan(self, slug: str, patch: dict) -> dict:
+        from datetime import datetime, timezone
+
+        fila = {**patch, "slug": slug,
+                "updated_at": datetime.now(timezone.utc).isoformat()}
+        res = self._db.table("planes").upsert(fila, on_conflict="slug").execute()
+        return res.data[0] if res.data else {}
+
+    def contar_publicaciones_desde(self, comercio_id: str, desde_iso: str) -> int:
+        """Cuántas publicaciones del comercio salieron desde esa fecha.
+
+        Cuenta las APROBADAS. Una que se rechazó no puede consumir cuota: el
+        comerciante no obtuvo nada por ella, y cobrársela sería cobrarle por un
+        rechazo nuestro.
+        """
+        res = (self._db.table("publicaciones").select("id", count="exact")
+               .eq("comercio_id", comercio_id).eq("estado", "aprobado")
+               .gte("created_at", desde_iso).limit(1).execute())
+        return res.count or 0
+
+    def registrar_cargo_extra(self, comercio_id: str, publicacion_id: str | None,
+                              monto: float, moneda: str) -> dict:
+        fila = {"comercio_id": comercio_id, "publicacion_id": publicacion_id,
+                "monto": monto, "moneda": moneda}
+        # on_conflict por publicacion_id: si el webhook de WhatsApp repite el
+        # mensaje —pasa— no se cobra dos veces la misma publicación.
+        res = (self._db.table("cargos_extra")
+               .upsert(fila, on_conflict="publicacion_id", ignore_duplicates=True)
+               .execute())
+        return (res.data or [{}])[0]
+
+    def list_cargos_extra(self, estado: str | None, limite: int) -> list[dict]:
+        q = self._db.table("cargos_extra").select("*, comercios(nombre, slug)")
+        if estado:
+            q = q.eq("estado", estado)
+        return q.order("created_at", desc=True).limit(limite).execute().data or []
 
     def set_estado_publicacion(self, pub_id: str, estado: str, motivo: str | None, by: str) -> dict:
         from datetime import datetime, timezone
