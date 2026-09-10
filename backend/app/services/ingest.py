@@ -20,6 +20,7 @@ import structlog
 
 from app.core.config import settings
 from app.db.repository import Repo, get_repo
+from app.services import difusion
 from app.models.whatsapp import WahaEvent, WahaMessagePayload
 
 logger = structlog.get_logger()
@@ -406,9 +407,15 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         "wa_message_id": payload.id,
         "raw": event.payload,
     }
-    repo.insert_publicacion(row)
+    creada = repo.insert_publicacion(row)
 
     estado = row["estado"]
+    # Un comercio confiable publica sin pasar por moderación, así que éste es el
+    # único momento en que esa oferta queda aprobada: si la difusión no se
+    # engancha acá, todo lo de los confiables no sale nunca a las redes — y es
+    # justo el que más publica.
+    if estado == "aprobado" and creada.get("id"):
+        difusion.encolar(repo, creada["id"])
     logger.info("ingest.publicacion", comercio=slug, tipo=tipo, estado=estado)
     repo.marcar_wa_inbox(
         payload.id, "publicada",

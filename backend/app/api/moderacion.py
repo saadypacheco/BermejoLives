@@ -12,7 +12,7 @@ from app.core.auth import require_admin, require_moderador
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp
-from app.services import clasificador, wa_grupos
+from app.services import clasificador, difusion, wa_grupos
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
@@ -168,8 +168,13 @@ def moderar(
     updated = repo.set_estado_publicacion(pub_id, body.estado, body.motivo, mod["email"])
     if not updated:
         raise HTTPException(status_code=404, detail="publicación no encontrada")
-    logger.info("moderacion.accion", pub=pub_id, estado=body.estado, by=mod["email"])
-    return {"ok": True, "publicacion": updated}
+    # Aprobar es lo que dispara la difusión a las redes. `encolar` no manda
+    # nada: sólo anota, y nunca lanza. Aprobar una oferta no puede fallar
+    # porque a Meta se le venció un token.
+    encoladas = difusion.encolar(repo, pub_id) if body.estado == "aprobado" else 0
+    logger.info("moderacion.accion", pub=pub_id, estado=body.estado, by=mod["email"],
+                difusion=encoladas)
+    return {"ok": True, "publicacion": updated, "difusion_encolada": encoladas}
 
 
 class RevisarIABody(BaseModel):
@@ -2284,3 +2289,68 @@ async def admin_agregar_numero_a_grupos(
         "agregados": len(ok), "quedan_despues": max(0, len(faltan) - len(pendientes)),
         "ok": ok, "fallaron": fallaron,
     }
+
+
+@router.get("/admin/difusion")
+async def admin_difusion(
+    estado: str = Query(default=""),
+    limite: int = Query(default=100, le=300),
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """La cola de difusión: qué oferta salió a qué red y qué pasó.
+
+    Devuelve también qué destinos están configurados y cuáles salen solos. Sin
+    eso, "no se publica nada en Facebook" y "se publica y falla" se ven igual
+    desde el panel — y uno se arregla pegando un token y el otro mirando el
+    error.
+    """
+    items = await run_in_threadpool(repo.list_difusion, estado or None, limite)
+    resumen = await run_in_threadpool(repo.resumen_difusion)
+    autos = settings.destinos_automaticos()
+    return {
+        "items": items,
+        "resumen": resumen,
+        "destinos": [
+            {"clave": d, "nombre": difusion.NOMBRE[d],
+             "configurado": difusion.configurado(d), "automatico": d in autos}
+            for d in difusion.DESTINOS
+        ],
+    }
+
+
+@router.post("/admin/difusion/enviar")
+async def admin_difusion_enviar(
+    limite: int = Query(default=10, ge=1, le=50),
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Manda lo que está esperando, sin filtrar por automático.
+
+    Es el clic explícito: quien lo aprieta sabe qué está soltando en el muro de
+    la marca. Por eso pide admin y no moderador.
+    """
+    r = await run_in_threadpool(difusion.enviar_pendientes, repo, limite, False)
+    logger.info("difusion.enviar_manual", by=admin.get("sub"), **r["resumen"])
+    return r
+
+
+@router.post("/admin/difusion/{fila_id}/reintentar")
+async def admin_difusion_reintentar(
+    fila_id: str,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Vuelve a intentar UNA fila que falló."""
+    filas = await run_in_threadpool(repo.list_difusion, None, 300)
+    fila = next((f for f in filas if f["id"] == fila_id), None)
+    if not fila:
+        raise HTTPException(404, "esa fila de la cola no existe")
+    if fila["estado"] == "enviado":
+        # Reintentar algo ya enviado es publicarlo dos veces. La misma oferta
+        # repetida en el muro es exactamente lo que hace que la gente deje de
+        # seguir la página.
+        raise HTTPException(409, "esa oferta ya se publicó; reintentarla la duplicaría")
+    r = await run_in_threadpool(difusion.procesar, repo, fila)
+    logger.info("difusion.reintento", fila=fila_id, by=admin.get("sub"), **r)
+    return r

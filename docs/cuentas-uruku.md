@@ -24,13 +24,12 @@ existe para el visitante.
 | TikTok | `@uruku.bo` | ✅ | *(completar)* |
 | Instagram | `@uruku.bo` | ✅ | *(completar)* |
 | YouTube | `@Uruku-Bermejo` | ✅ | *(completar)* |
-| Facebook | *(completar — la página existe)* | ❌ | *(completar)* |
+| Facebook | `facebook.com/uruku.bo` | ❌ | *(completar)* |
 | Canal de WhatsApp | *(completar)* | ❌ | Operativo `64610187` |
 
-> **Facebook:** la página se creó y el enlace se perdió. Para recuperarlo:
-> menú → Páginas en el celular, `facebook.com/pages/?category=your_pages` en la
-> compu, o Meta Business Suite. Si no aparece, probablemente se creó desde otra
-> cuenta personal — es el motivo más común de una página que "desaparece".
+> **Facebook:** apareció el 10/9. La URL es `https://www.facebook.com/uruku.bo/`
+> — el mismo handle que TikTok e Instagram, que es como tiene que ser: una
+> marca con tres nombres distintos no se busca, se pierde.
 
 **Anotar quién la administra no es burocracia.** Una página de Facebook o un
 canal de WhatsApp pertenecen a una cuenta personal, no a la empresa: el día que
@@ -72,13 +71,14 @@ contraseña en Google no cambia la del panel, y al revés tampoco.
 
 ## Qué falta
 
-- [ ] Recuperar el enlace de la **página de Facebook** y cargarlo en
-      `/contenido`.
+- [ ] Cargar la **página de Facebook** en `/contenido`. La URL ya está
+      (arriba); falta pegarla, y sin eso el ícono no se dibuja en el sitio.
+- [ ] Configurar la **difusión automática** a las redes. Los pasos y los
+      tokens, en [difusion-redes.md](difusion-redes.md).
 - [ ] Cargar el **canal de WhatsApp** en `/contenido`. Está creado en el
       operativo (6/9); sin el enlace, la sección del home que le habla al
       comprador —"Enterate antes que nadie"— **no se dibuja**.
 - [ ] Ponerle un **segundo administrador** al canal desde otra línea de URUKU.
 - [ ] Completar en la tabla de arriba con qué cuenta se administra cada red.
-- [ ] Buscar el mail de bienvenida de Facebook en la casilla de
-      `admin@uruku.bo` y en la cuenta personal: es el camino más corto al
-      enlace de la página perdida, y de paso dice **con qué cuenta se creó**.
+- [ ] Anotar **con qué cuenta personal** se administra la página de Facebook.
+      El día que esa persona no esté, la página se va con ella.

@@ -869,6 +869,41 @@ export async function agregarNumeroAGrupos(
   return res.json();
 }
 
+export type FilaDifusion = {
+  id: string;
+  destino: string;
+  estado: "pendiente" | "enviado" | "error" | "omitido";
+  intentos: number;
+  motivo: string | null;
+  url_publicada: string | null;
+  created_at: string;
+  publicaciones?: {
+    titulo: string | null; descripcion: string | null; imagen_url: string | null;
+    estado: string; comercios?: { nombre: string | null; slug: string | null } | null;
+  } | null;
+};
+
+export type Difusion = {
+  items: FilaDifusion[];
+  resumen: { destino: string; estado: string; n: number }[];
+  destinos: { clave: string; nombre: string; configurado: boolean; automatico: boolean }[];
+};
+
+export async function getDifusion(estado = "", limite = 100): Promise<Difusion> {
+  const res = await authFetch(`/admin/difusion?estado=${estado}&limite=${limite}`);
+  return res.json();
+}
+
+export async function enviarDifusion(limite = 10) {
+  const res = await authFetch(`/admin/difusion/enviar?limite=${limite}`, { method: "POST" });
+  return res.json() as Promise<{ procesados: number; resumen: Record<string, number> }>;
+}
+
+export async function reintentarDifusion(id: string) {
+  const res = await authFetch(`/admin/difusion/${id}/reintentar`, { method: "POST" });
+  return res.json();
+}
+
 export type ModoRecalculo = "principal" | "reemplazar";
 
 export type RecalculoPrincipal = {

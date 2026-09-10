@@ -106,6 +106,104 @@ foto.
 
 ---
 
+## Cómo se hacen conocidas las redes de URUKU
+
+> Escrito el 10/9, cuando ya existen las cuatro cuentas (`@uruku.bo` en TikTok,
+> Instagram y Facebook, `@Uruku-Bermejo` en YouTube) y el canal de WhatsApp.
+> Tener las cuentas no es tener audiencia: son cinco perfiles vacíos hasta que
+> alguien los siga.
+
+### El error que hay que no cometer: repartirse en cuatro
+
+Publicar lo mismo en cuatro redes no construye ninguna. Cada red premia a quien
+publica seguido en ELLA, y cuatro cuentas con tres seguidores cada una son peor
+que una con doscientos.
+
+**El orden para Bermejo, que no es el mismo que para una ciudad grande:**
+
+1. **Canal de WhatsApp.** Es el único donde el mensaje llega sin pelear con un
+   algoritmo. En Bolivia todo el mundo usa WhatsApp y nadie tiene que aprender
+   nada nuevo. Es el que hay que empujar en cada conversación.
+2. **Facebook.** En Bolivia sigue siendo donde se compra y se vende en las
+   ciudades del interior, sobre todo de treinta para arriba — que es quien tiene
+   la plata. Y tiene la pieza que ninguna otra red tiene: los **grupos de compra
+   y venta de Bermejo**, que ya existen y ya tienen a la gente adentro.
+3. **TikTok / Instagram.** Para los jóvenes y para el contenido de recorridos.
+   Rinde, pero más lento, y es el que más trabajo pide por publicación.
+4. **YouTube.** Último. Sirve como archivo de los videos largos, no para que
+   alguien te descubra.
+
+### La palanca más grande: el comerciante distribuye por vos
+
+URUKU tiene 888 comercios cargados. Cada uno tiene sus propios clientes, su
+propio WhatsApp y su propia gente. **La suma de sus contactos es enormemente más
+grande que cualquier cantidad de seguidores que la marca pueda juntar sola.**
+
+Por eso, cuando la oferta de un comercio sale a las redes de URUKU, el paso que
+no hay que saltear es **mandarle el enlace del posteo al comerciante**:
+
+> *"Publicamos tu oferta acá 👇 compartila con tus clientes."*
+
+Hace dos cosas al mismo tiempo, y las dos importan:
+
+- Le da **la prueba** de que URUKU hizo lo que prometió — que es lo que sostiene
+  el cobro del mes que viene mejor que cualquier argumento.
+- Lo convierte en el que reparte. Comparte un posteo donde aparece **su** local,
+  no una publicidad ajena.
+
+Es también lo que hace crecer las redes de URUKU sin pagar nada: cada vez que un
+comerciante comparte, su gente ve el nombre de la marca.
+
+### Qué publicar para que se comparta
+
+En una ciudad chica funciona lo que la gente **reconoce**: la vidriera de la
+esquina, el mostrador, la cara del que atiende. Nadie comparte un placeholder
+bonito; todo el mundo comparte algo donde aparece.
+
+- **La oferta con precio.** Es el contenido que la gente guarda y reenvía.
+- **Recorridos de galerías y locales.** Sirven doble: son contenido para el
+  comprador y son el mejor argumento de venta para el comerciante — *"te
+  grabamos el local"*.
+- **El "ya está adentro".** Mostrar la ficha de un local que se acaba de sumar y
+  etiquetarlo. El local lo comparte casi siempre.
+- **Nada de frases de marca sin producto.** "Bienvenidos a URUKU" no lo comparte
+  nadie.
+
+**Constancia antes que cantidad.** Tres o cuatro publicaciones por semana,
+sostenidas, valen más que veinte una semana y cero el mes siguiente. Las redes
+castigan la irregularidad más que el volumen bajo.
+
+### Los primeros seguidores no salen de las redes
+
+Nadie va a encontrar `@uruku.bo` buscándolo. Los primeros seguidores salen de
+donde ya hay gente:
+
+- **Los grupos de compra y venta de Bermejo que ya existen** — una oferta buena
+  por vez, con el enlace. No spamear: una cuenta que satura un grupo termina
+  expulsada y con la marca quemada.
+- **El QR**, que ya está hecho ([frontend/public/qr/](../frontend/public/qr/)):
+  en el volante, en la vidriera del local, en la firma del correo.
+- **Cada visita de campo.** El agente que carga un local puede pedirle que siga
+  el canal ahí mismo, con el teléfono en la mano. Es el momento de más
+  disposición que va a haber.
+- **Cruce entre las propias redes.** El canal de WhatsApp anuncia el TikTok, el
+  TikTok manda al canal.
+
+### Pauta paga: última, y con una condición
+
+Antes de que haya ofertas de verdad, pagar publicidad es pagar por traer gente a
+una casa vacía. Cuando las haya, lo más barato que existe es **promocionar un
+posteo que ya funcionó solo** — no uno nuevo. Facebook lo cobra por alcance y en
+Bermejo el alcance es barato justamente porque la ciudad es chica.
+
+### Lo que falta para dejar de adivinar
+
+Hoy no hay forma de saber **qué red trae gente al sitio**. Sin eso, la decisión
+de dónde poner el esfuerzo se toma por intuición. Lo que falta es marcar los
+enlaces que se publican en cada red y contar las visitas por origen — es poco
+trabajo y cambia la conversación de "me parece que Facebook anda mejor" a un
+número.
+
 ## Dónde anunciar, por orden de lo que rinde
 
 **1. Los grupos de WhatsApp que ya existen.** Bermejo tiene grupos de compra y

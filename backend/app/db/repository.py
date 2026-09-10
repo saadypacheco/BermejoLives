@@ -41,10 +41,16 @@ class Repo(Protocol):
                         comercio_id: str | None) -> None: ...
     def list_wa_inbox(self, resultado: str | None, limite: int) -> list[dict]: ...
     def resumen_wa_inbox(self, dias: int) -> list[dict]: ...
-    def insert_publicacion(self, row: dict) -> bool: ...
+    def insert_publicacion(self, row: dict) -> dict: ...
     def insert_publicacion_directa(self, row: dict) -> dict: ...
     def list_publicaciones(self, estado: str | None) -> list[dict]: ...
     def get_publicacion(self, pub_id: str) -> dict | None: ...
+    def encolar_difusion(self, publicacion_id: str, destinos: list[str]) -> int: ...
+    def difusion_pendientes(self, limite: int) -> list[dict]: ...
+    def marcar_difusion(self, fila_id: str, estado: str, motivo: str | None,
+                        url: str | None = None) -> None: ...
+    def list_difusion(self, estado: str | None, limite: int) -> list[dict]: ...
+    def resumen_difusion(self) -> list[dict]: ...
     def set_estado_publicacion(self, pub_id: str, estado: str, motivo: str | None, by: str) -> dict: ...
     def list_comercios_admin(self, verificado: bool | None) -> list[dict]: ...
     def set_comercio_verificado(self, comercio_id: str, valor: bool) -> dict: ...
@@ -490,13 +496,19 @@ class SupabaseRepo:
         cuenta = Counter(f.get("resultado") or "sin_registrar" for f in filas)
         return sorted(({"resultado": k, "n": v} for k, v in cuenta.items()), key=lambda x: -x["n"])
 
-    def insert_publicacion(self, row: dict) -> bool:
+    def insert_publicacion(self, row: dict) -> dict:
+        """Devuelve la fila insertada, o {} si ya existía ese wa_message_id.
+
+        Devolvía un bool. Ahora la difusión necesita el `id` para encolar la
+        oferta a las redes, y un bool obligaba a volver a buscarla. Sigue
+        sirviendo como antes en un `if`: {} es falso igual que False.
+        """
         res = (
             self._db.table("publicaciones")
             .upsert(row, on_conflict="wa_message_id", ignore_duplicates=True)
             .execute()
         )
-        return bool(res.data)
+        return (res.data or [{}])[0] if res.data else {}
 
     def insert_publicacion_directa(self, row: dict) -> dict:
         """Inserta una publicación del chatbot/panel (sin wa_message_id)."""
@@ -1190,6 +1202,57 @@ class SupabaseRepo:
     def get_publicacion(self, pub_id: str) -> dict | None:
         res = self._db.table("publicaciones").select("*").eq("id", pub_id).limit(1).execute()
         return res.data[0] if res.data else None
+
+    # ---- cola de difusión a las redes ----
+    def encolar_difusion(self, publicacion_id: str, destinos: list[str]) -> int:
+        """Anota una fila por red. Devuelve cuántas quedaron.
+
+        El upsert con ignore_duplicates se apoya en la clave única
+        (publicacion_id, destino): encolar dos veces la misma oferta —porque se
+        rechazó y se volvió a aprobar, por ejemplo— no la publica dos veces.
+        """
+        filas = [{"publicacion_id": publicacion_id, "destino": d} for d in destinos]
+        res = (self._db.table("difusion_cola")
+               .upsert(filas, on_conflict="publicacion_id,destino", ignore_duplicates=True)
+               .execute())
+        return len(res.data or [])
+
+    def difusion_pendientes(self, limite: int) -> list[dict]:
+        res = (self._db.table("difusion_cola").select("*")
+               .eq("estado", "pendiente").order("created_at").limit(limite).execute())
+        return res.data or []
+
+    def marcar_difusion(self, fila_id: str, estado: str, motivo: str | None,
+                        url: str | None = None) -> None:
+        from datetime import datetime, timezone
+
+        patch: dict = {"estado": estado, "motivo": motivo}
+        if estado == "enviado":
+            patch["enviado_at"] = datetime.now(timezone.utc).isoformat()
+            patch["url_publicada"] = url
+        # `intentos` se lleva acá y no en el caller: es lo que separa "falló una
+        # vez" de "falla siempre", y sin eso un token vencido se ve igual que un
+        # corte de red de hace un rato.
+        actual = (self._db.table("difusion_cola").select("intentos")
+                  .eq("id", fila_id).limit(1).execute().data or [{}])[0]
+        patch["intentos"] = (actual.get("intentos") or 0) + 1
+        self._db.table("difusion_cola").update(patch).eq("id", fila_id).execute()
+
+    def list_difusion(self, estado: str | None, limite: int) -> list[dict]:
+        q = (self._db.table("difusion_cola")
+             .select("*, publicaciones(titulo, descripcion, imagen_url, estado, "
+                     "comercios(nombre, slug))"))
+        if estado:
+            q = q.eq("estado", estado)
+        return q.order("created_at", desc=True).limit(limite).execute().data or []
+
+    def resumen_difusion(self) -> list[dict]:
+        from collections import Counter
+
+        filas = (self._db.table("difusion_cola").select("destino, estado")
+                 .limit(5000).execute().data) or []
+        cuenta = Counter((f.get("destino"), f.get("estado")) for f in filas)
+        return [{"destino": d, "estado": e, "n": n} for (d, e), n in sorted(cuenta.items())]
 
     def set_estado_publicacion(self, pub_id: str, estado: str, motivo: str | None, by: str) -> dict:
         from datetime import datetime, timezone

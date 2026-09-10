@@ -44,6 +44,7 @@ class FakeRepo:
         self.compradores: dict[str, dict] = {}       # id -> row (usuarios/favoritos: comprador, no comercio)
         self.favoritos: list[dict] = []               # {usuario_id, comercio_id}
         self.publicaciones: list[dict] = []
+        self.difusion: list[dict] = []
         self.wa_inbox: dict[str, dict] = {}          # wa_message_id -> row
         self.leads: list[dict] = []
         self.busquedas: list[dict] = []
@@ -369,9 +370,53 @@ class FakeRepo:
     def insert_publicacion(self, row):
         wamid = row.get("wa_message_id")
         if wamid and any(p.get("wa_message_id") == wamid for p in self.publicaciones):
-            return False
-        self.publicaciones.append({"id": self._id("pub"), "activo": True, **row})
-        return True
+            return {}
+        pub = {"id": self._id("pub"), "activo": True, **row}
+        self.publicaciones.append(pub)
+        return pub
+
+    # ---- cola de difusión ----
+    def encolar_difusion(self, publicacion_id, destinos):
+        nuevas = 0
+        for d in destinos:
+            if any(f["publicacion_id"] == publicacion_id and f["destino"] == d
+                   for f in self.difusion):
+                continue
+            self.difusion.append({"id": self._id("dif"), "publicacion_id": publicacion_id,
+                                  "destino": d, "estado": "pendiente", "intentos": 0,
+                                  "motivo": None, "url_publicada": None,
+                                  "created_at": "2026-01-01T00:00:00Z", "enviado_at": None})
+            nuevas += 1
+        return nuevas
+
+    def difusion_pendientes(self, limite):
+        return [f for f in self.difusion if f["estado"] == "pendiente"][:limite]
+
+    def marcar_difusion(self, fila_id, estado, motivo, url=None):
+        for f in self.difusion:
+            if f["id"] == fila_id:
+                f.update({"estado": estado, "motivo": motivo, "intentos": f["intentos"] + 1})
+                if estado == "enviado":
+                    f["url_publicada"] = url
+                    f["enviado_at"] = "2026-01-01T00:00:01Z"
+
+    def list_difusion(self, estado, limite):
+        filas = [f for f in self.difusion if not estado or f["estado"] == estado]
+        salida = []
+        for f in filas[:limite]:
+            pub = self.get_publicacion(f["publicacion_id"]) or {}
+            com = self.comercios.get(pub.get("comercio_id")) or {}
+            salida.append({**f, "publicaciones": {
+                "titulo": pub.get("titulo"), "descripcion": pub.get("descripcion"),
+                "imagen_url": pub.get("imagen_url"), "estado": pub.get("estado"),
+                "comercios": {"nombre": com.get("nombre"), "slug": com.get("slug")}}})
+        return salida
+
+    def resumen_difusion(self):
+        from collections import Counter
+
+        cuenta = Counter((f["destino"], f["estado"]) for f in self.difusion)
+        return [{"destino": d, "estado": e, "n": n} for (d, e), n in sorted(cuenta.items())]
 
     def insert_publicacion_directa(self, row):
         pub = {"id": self._id("pub"), "activo": True, **row}

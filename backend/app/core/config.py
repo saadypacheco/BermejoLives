@@ -65,6 +65,39 @@ class Settings(BaseSettings):
     # un número que no está escuchando.
     wa_contacto_explorador: str = ""
 
+    # ── Difusión: la oferta aprobada sale también a las redes de URUKU ──────
+    #
+    # Cada destino se enciende poniendo su credencial. Vacío = apagado, y la
+    # oferta queda en la cola con motivo "sin configurar" en vez de perderse:
+    # el día que se configure se puede mandar lo atrasado.
+    #
+    # El identificador del canal de WhatsApp, tal como lo devuelve WAHA
+    # (termina en @newsletter). Se saca con GET /api/{sesion}/channels.
+    wa_canal_id: str = ""
+
+    # Facebook e Instagram salen por la misma API de Meta y comparten token: el
+    # de la PÁGINA, no el personal. La cuenta de Instagram tiene que ser
+    # profesional y estar vinculada a la página. Ver docs/difusion-redes.md.
+    facebook_page_id: str = ""
+    facebook_page_token: str = ""
+    instagram_user_id: str = ""
+
+    # Qué destinos salen SOLOS al aprobar. Los que no estén acá se encolan y
+    # esperan un clic en el panel.
+    #
+    # Por qué no todo automático por defecto: el canal de WhatsApp lo siguen
+    # personas que se anotaron para recibir ofertas —ahí una oferta más es lo
+    # prometido—, pero un muro de Facebook con veinte ofertas por día es cómo
+    # una página deja de tener alcance. La diferencia no la puede decidir el
+    # código; la decide quien mira el feed.
+    difusion_auto: str = "wa_canal"
+
+    # A dónde apunta el enlace de cada oferta que se publica en las redes.
+    sitio_url: str = "https://uruku.bo"
+
+    def destinos_automaticos(self) -> set[str]:
+        return {d.strip() for d in self.difusion_auto.split(",") if d.strip()}
+
     def es_numero_explorador(self, numero: str | None) -> bool:
         if not numero:
             return False
