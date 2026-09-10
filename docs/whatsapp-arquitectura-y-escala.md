@@ -145,18 +145,119 @@ Cubierto por `backend/tests/test_mensajeria_cloud.py`. Hoy no entra ni un
 mensaje por Meta, así que esos tests son lo único que evita que esta traducción
 se pudra sin que nadie se entere.
 
-### Para probarlo de verdad, sin migrar nada
+### Probar la API oficial de Meta con el número de prueba
 
-Se puede tener la API oficial andando en paralelo, sin tocar lo que funciona:
+> Media hora. No toca nada de lo que funciona hoy: WAHA sigue igual, y el
+> número de prueba lo pone Meta —no se gasta ninguno de los nuestros.
 
-1. Dar de alta la app de WhatsApp en `developers.facebook.com`. Meta regala un
-   **número de prueba**: no hace falta gastar uno de los nuestros.
-2. `META_VERIFY_TOKEN` (una cadena cualquiera, la elegís vos) y `META_APP_SECRET`
-   en el `.env`, y apuntar el webhook a `https://uruku.bo/ingest/webhook`.
-3. Mandarle un mensaje al número de prueba. **Entra por el mismo camino** que
-   los de WAHA y aparece en Admin › WhatsApp.
-4. `WHATSAPP_PROVIDER` se deja en `waha`: eso sólo decide **por dónde sale** lo
-   que se manda. Recibir por los dos lados a la vez no rompe nada.
+#### Lo que hay que saber antes de empezar
 
-Es la forma de medir el costo real y la latencia con datos propios antes de
-mover un solo comercio.
+- **El número de prueba sólo le puede escribir a 5 teléfonos**, que hay que
+  registrar a mano. Para recibir no hay límite: cualquiera puede escribirle.
+- **El token que muestra la pantalla dura 24 horas.** Para la prueba alcanza. Si
+  después se quiere dejar andando, se cambia por uno de usuario de sistema.
+- **No hace falta verificación del negocio** para probar. Eso recién se pide
+  para salir a producción con un número propio.
+
+#### 1. Crear la app (5 minutos)
+
+1. `developers.facebook.com` → **Mis apps** → **Crear app**.
+2. Cuando pregunta qué querés hacer, elegir **Otro** → tipo **Negocio**.
+3. Nombre: `URUKU`. Se asocia a tu cuenta de Meta Business.
+4. En el panel de la app: **Agregar producto** → **WhatsApp** → *Configurar*.
+
+Meta arma sola una cuenta de WhatsApp Business de prueba y te da el número.
+
+#### 2. Anotar los tres datos
+
+En **WhatsApp → Configuración de la API**:
+
+- **Identificador del número de teléfono** (`phone_number_id`) — un número
+  largo. **No es el teléfono**, es su identificador interno.
+- **Token de acceso temporal** — el de 24 horas.
+
+En **Configuración → Básica** (del menú de la izquierda):
+
+- **Clave secreta de la app** (App Secret) → botón *Mostrar*.
+
+> No los pegues acá en el chat. Van directo al `.env` del servidor.
+
+#### 3. Registrar tu teléfono como destinatario
+
+En la misma pantalla de la API, en **Para**: *Administrar lista de números de
+teléfono* → agregar tu número personal → llega un código → confirmarlo.
+
+Sin esto el número de prueba no te puede contestar.
+
+#### 4. Poner las variables en el servidor
+
+En `/docker/uruku/backend/.env`:
+
+```
+META_VERIFY_TOKEN=uruku-prueba-2026        # la inventás vos, cualquier cadena
+META_APP_SECRET=<la clave secreta de la app>
+WHATSAPP_CLOUD_PHONE_ID=<el identificador del número>
+WHATSAPP_CLOUD_TOKEN=<el token temporal>
+```
+
+**`WHATSAPP_PROVIDER` se queda en `waha`.** Esa variable sólo decide por dónde
+*sale* lo que mandamos; recibir por los dos lados a la vez no rompe nada.
+
+Y reiniciar el backend:
+
+```bash
+cd /docker/uruku
+GIT_SHA=$(git rev-parse --short HEAD) APP_ENV=prod \
+  docker compose -f docker-compose.prod.yml --env-file .env up -d --build backend
+```
+
+#### 5. Enganchar el webhook
+
+De vuelta en **WhatsApp → Configuración** → sección *Webhook* → **Editar**:
+
+- **URL de devolución de llamada**: `https://api.uruku.bo/ingest/webhook`
+  ← con **`api.`**. `uruku.bo` es el sitio y ahí da 404.
+- **Token de verificación**: el mismo `META_VERIFY_TOKEN` de arriba.
+- **Verificar y guardar**.
+
+Si dice que no pudo validar la URL: el backend no levantó con la variable nueva,
+o el token no coincide. Se ve en el registro — busca `webhook.verificacion_rechazada`.
+
+Después, **Administrar** → suscribirse al campo **`messages`**. Es el paso que
+más se olvida: sin él la URL queda validada y **no llega nunca nada**.
+
+#### 6. Probarlo
+
+Escribile un WhatsApp al número de prueba desde tu teléfono. Dos cosas tienen
+que pasar:
+
+1. Aparece en **Admin › WhatsApp**, en la bandeja, igual que los de WAHA.
+2. En el registro del backend:
+
+```bash
+docker compose -f docker-compose.prod.yml logs --tail 50 backend | grep -i "ingest\|webhook"
+```
+
+Probá también **mandando una foto con texto**: es el caso que de verdad importa,
+porque en la API oficial la imagen no viene con URL sino con un identificador
+que hay que canjear con el token. Si la foto queda guardada, la parte más
+delicada de la traducción funciona.
+
+#### 7. Medir lo que viniste a medir
+
+Con eso andando ya se puede saber, con datos propios y no con estimaciones:
+
+- **Cuánto tarda** un mensaje desde que se manda hasta que está en la base,
+  comparado con WAHA.
+- **Cuánto cobra Meta**: en el panel de la app, *Estadísticas* → conversaciones.
+  Las que inicia el usuario tienen que aparecer en cero.
+- **Si la foto entra bien**, que es lo único que no se puede dar por sentado.
+
+#### Cuando termines la prueba
+
+El token vence solo a las 24 horas y deja de entrar. Si querés cortar antes,
+sacá `META_APP_SECRET` del `.env` y reiniciá: sin esa clave las firmas de Meta
+no validan y el webhook las rechaza.
+
+**No borres la app de Meta.** Sirve igual para el asistente 24/7 y para publicar
+en Facebook e Instagram — es la misma app.
