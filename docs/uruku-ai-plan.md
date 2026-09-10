@@ -139,8 +139,11 @@ lo pagan todos los demás.
 Ordenado por **valor sobre esfuerzo con los datos que hay hoy**, que no es el
 orden de ninguno de los dos documentos.
 
-1. **Agente Analista (informe de demanda).** Datos ya existentes, sin IA. Es un
-   argumento de venta antes que un producto.
+1. ~~**Agente Analista (informe de demanda).**~~ ✅ **Construido el 10/9** —
+   Admin › Demanda. Sin IA, con las búsquedas que ya se registran. Muestra lo
+   más buscado, lo que no encontró nada, y arma la frase para decirle a un
+   comerciante. Descarta el tecleo a medio escribir: sin eso el informe diría
+   que lo más buscado en Bermejo es «zap».
 2. **Nivel 0** — horario, dirección, teléfono, cómo llegar, resueltos por
    consulta directa. Sin modelo. Cubre la mayoría de las preguntas reales.
 3. **Uruku Ayuda** — el asistente del propio sitio. Riesgo bajo: si se equivoca,

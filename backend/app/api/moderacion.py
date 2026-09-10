@@ -12,7 +12,7 @@ from app.core.auth import require_admin, require_moderador
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp
-from app.services import clasificador, difusion, planes, wa_grupos
+from app.services import clasificador, demanda, difusion, planes, wa_grupos
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
@@ -2437,3 +2437,24 @@ async def admin_cuota_comercio(
         raise HTTPException(404, "comercio no encontrado")
     est = await run_in_threadpool(planes.estado, repo, comercio)
     return {"comercio": comercio.get("nombre"), **est}
+
+
+@router.get("/admin/demanda")
+async def admin_demanda(
+    dias: int = Query(default=7, ge=1, le=90),
+    limite: int = Query(default=40, le=200),
+    _mod: dict = Depends(require_moderador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Qué busca la gente en la ciudad y qué no encuentra.
+
+    Es el primero de los agentes que se puede construir, y el único que no
+    necesita datos que todavía no existen: las búsquedas ya se registran. No usa
+    modelo de IA — es una cuenta.
+
+    Lo que vale de acá no es el ranking, es la lista de lo que **no encontró
+    nada**: eso es demanda que hoy se va sin comprar, y es lo que se le lleva a
+    un comerciante como oportunidad.
+    """
+    inf = await run_in_threadpool(demanda.informe, repo, dias, limite)
+    return {**inf, "frase": demanda.frase_de_venta(inf)}

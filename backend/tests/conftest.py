@@ -478,6 +478,9 @@ class FakeRepo:
     def difusion_pendientes(self, limite):
         return [f for f in self.difusion if f["estado"] == "pendiente"][:limite]
 
+    def list_busquedas(self, desde_iso):
+        return [b for b in self.busquedas if str(b.get("created_at") or "") >= desde_iso]
+
     def contar_difusion_hoy(self, destino):
         return len([f for f in self.difusion
                     if f["destino"] == destino and f["estado"] == "enviado"])
@@ -1179,7 +1182,12 @@ class FakeRepo:
 
     def insert_busqueda(self, query, resultados, comercios=None):
         bid = self._id("busq")
-        self.busquedas.append({"id": bid, "query": query, "resultados": resultados})
+        # `created_at` no estaba: sin él, el informe de demanda —que filtra por
+        # fecha— no veía NINGUNA búsqueda del fake y habría dado siempre cero.
+        from datetime import datetime, timezone
+
+        self.busquedas.append({"id": bid, "query": query, "resultados": resultados,
+                               "created_at": datetime.now(timezone.utc).isoformat()})
         for i, cid in enumerate((comercios or [])[:10]):
             if cid:
                 self.busqueda_comercios.append(

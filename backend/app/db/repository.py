@@ -56,6 +56,7 @@ class Repo(Protocol):
     def encolar_difusion(self, publicacion_id: str, destinos: list[str]) -> int: ...
     def difusion_pendientes(self, limite: int) -> list[dict]: ...
     def contar_difusion_hoy(self, destino: str) -> int: ...
+    def list_busquedas(self, desde_iso: str) -> list[dict]: ...
     def marcar_difusion(self, fila_id: str, estado: str, motivo: str | None,
                         url: str | None = None) -> None: ...
     def list_difusion(self, estado: str | None, limite: int) -> list[dict]: ...
@@ -1230,6 +1231,22 @@ class SupabaseRepo:
         res = (self._db.table("difusion_cola").select("*")
                .eq("estado", "pendiente").order("created_at").limit(limite).execute())
         return res.data or []
+
+    def list_busquedas(self, desde_iso: str) -> list[dict]:
+        """Las búsquedas crudas desde esa fecha, para el informe de demanda.
+
+        El tope de 5000 es el de PostgREST y alcanza de sobra: hoy hay 99
+        búsquedas registradas en total. Si algún día lo toca, el informe empieza
+        a mentir por lo bajo y hay que pasar a agrupar del lado de la base — por
+        eso queda avisado en el log.
+        """
+        filas = (self._db.table("busquedas").select("query, resultados, created_at")
+                 .gte("created_at", desde_iso).order("created_at", desc=True)
+                 .limit(5000).execute().data) or []
+        if len(filas) >= 5000:
+            logger.warning("demanda.tope_de_filas",
+                           detalle="el informe se calculó sobre 5000 búsquedas; hay más")
+        return filas
 
     def contar_difusion_hoy(self, destino: str) -> int:
         """Cuántas salieron hoy a esa red. Es el freno del canal.

@@ -904,6 +904,24 @@ export async function reintentarDifusion(id: string) {
   return res.json();
 }
 
+export type FilaDemanda = { termino: string; veces: number; sin_resultado: number };
+
+export type Demanda = {
+  dias: number;
+  busquedas: number;
+  terminos: number;
+  sin_resultado: number;
+  top: FilaDemanda[];
+  oportunidades: FilaDemanda[];
+  descartados_por_tecleo: number;
+  frase: string | null;
+};
+
+export async function getDemanda(dias = 7): Promise<Demanda> {
+  const res = await authFetch(`/admin/demanda?dias=${dias}`);
+  return res.json();
+}
+
 export type ModoRecalculo = "principal" | "reemplazar";
 
 export type RecalculoPrincipal = {
