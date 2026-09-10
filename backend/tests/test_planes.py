@@ -49,7 +49,7 @@ def test_un_plan_que_ya_no_existe_no_deja_sin_publicar(repo):
 def test_una_funcion_no_declarada_es_que_no(repo):
     """Lo que permite agregar una función sin migrar: el código puede preguntar
     por uno que todavía no existe y recibe "no" en vez de romperse."""
-    assert planes.funcion(repo.get_plan("pro"), "asistente_24_7") is True
+    assert planes.funcion(repo.get_plan("empleado_ia"), "asistente_24_7") is True
     assert planes.funcion(repo.get_plan("publica"), "asistente_24_7") is False
     assert planes.funcion(repo.get_plan("pro"), "una_que_no_inventamos_todavia") is False
 
@@ -247,3 +247,13 @@ def test_dentro_de_la_cuota_no_avisa_ni_cobra(repo, monkeypatch):
     ingest.handle_message(_mensaje(repo, c), repo)
     assert avisos == []
     assert repo.cargos_extra == []
+
+
+def test_el_plan_caro_trae_algo_que_el_barato_no(repo):
+    """Un plan de Bs 1.250 que no suma ninguna función sobre el de 400 no tiene
+    nada que vender: el comerciante mira los dos y elige el barato, con razón."""
+    caro = repo.get_plan("empleado_ia")
+    pro = repo.get_plan("pro")
+    extras = set(caro["funciones"]) - set(pro["funciones"])
+    assert "asistente_24_7" in extras
+    assert float(caro["precio_mes"]) > float(pro["precio_mes"])

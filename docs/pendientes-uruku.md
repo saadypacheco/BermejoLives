@@ -85,6 +85,31 @@ select proname from pg_proc where proname in ('buscar_comercios','refinamientos_
 
 ---
 
+## 🟣 Uruku AI — decidido el 10/9
+
+Los dos documentos de análisis, adaptados a lo que URUKU ya tiene, en
+[uruku-ai-plan.md](uruku-ai-plan.md). Lo esencial:
+
+- **No se rehace el backend.** Los documentos proponen Node porque no saben que
+  existen 621 tests en Python. Se mantiene y se le suma funcionalidad.
+- **URUKU no necesita WhatsApp para tener agentes.** Primero adentro del sitio;
+  WhatsApp después, como canal. Ser Tech Provider de Meta son meses de trámite
+  ajeno y no puede estar en el camino crítico.
+- **Plan Empleado Digital creado a Bs 1.250**, con el precio editable desde el
+  panel — los costos de un agente 24/7 todavía no están medidos.
+- **El Agente Catálogo es lo que da margen**, no una función más: a Bs 1.250,
+  si dar de alta un comercio cuesta dos días de carga de datos, el primer mes
+  ya se fue.
+- **El Agente Analista se puede construir hoy** y es el único: las búsquedas ya
+  se registran. "26 personas buscaron esto y no encontraron nada" es una
+  consulta, no un modelo — y es el mejor argumento de venta que hay.
+
+- [ ] Informe de demanda (Agente Analista) — sin IA, con datos que ya están.
+- [ ] Nivel 0: horario, dirección y teléfono sin modelo.
+- [ ] Escribir las preguntas frecuentes, que Uruku Ayuda necesita y no existen.
+- [ ] Verificar si WAAC / número compartido entre partners existe de verdad
+      para Bolivia antes de planificar nada encima.
+
 ## 🟣 La escala de WhatsApp — analizado el 10/9
 
 El detalle entero en
