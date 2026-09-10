@@ -230,3 +230,78 @@ def test_los_envios_van_espaciados(repo, sin_red, config_completa, monkeypatch):
     r = difusion.enviar_pendientes(repo, 10, solo_auto=False)
     assert r["resumen"]["enviado"] == 3
     assert esperas == [20, 20]
+
+
+# ══════════════════════════════════════════════════════ el tope del canal
+
+def test_el_canal_no_publica_mas_de_lo_configurado(repo, sin_red, config_completa, monkeypatch):
+    """Cada publicación al canal es una notificación en el teléfono de cada
+    seguidor. Cincuenta por día es cómo se pierde a los seguidores, que son lo
+    único que no se puede rehacer."""
+    monkeypatch.setattr(settings, "difusion_canal_max_dia", 2)
+    monkeypatch.setattr(settings, "difusion_auto", "wa_canal")
+    c = repo.seed_comercio(slug="x", nombre="X")
+    for i in range(5):
+        pub = repo.insert_publicacion_directa(
+            {"comercio_id": c["id"], "titulo": f"of {i}", "estado": "aprobado"})
+        difusion.encolar(repo, pub["id"])
+
+    difusion.enviar_pendientes(repo, 20, solo_auto=True)
+    assert len([d for d, _, _ in sin_red if d == "wa_canal"]) == 2
+
+
+def test_lo_que_no_entra_hoy_espera_para_mañana(repo, sin_red, config_completa, monkeypatch):
+    """Pendiente, no omitida. Una oferta descartada por el tope de ayer es una
+    que el comerciante nunca va a ver publicada."""
+    monkeypatch.setattr(settings, "difusion_canal_max_dia", 1)
+    monkeypatch.setattr(settings, "difusion_auto", "wa_canal")
+    c = repo.seed_comercio(slug="x", nombre="X")
+    for i in range(3):
+        pub = repo.insert_publicacion_directa(
+            {"comercio_id": c["id"], "titulo": f"of {i}", "estado": "aprobado"})
+        difusion.encolar(repo, pub["id"])
+
+    difusion.enviar_pendientes(repo, 20, solo_auto=True)
+    esperando = [f for f in repo.difusion
+                 if f["destino"] == "wa_canal" and f["estado"] == "pendiente"]
+    assert len(esperando) == 2
+    assert "sale mañana" in esperando[0]["motivo"]
+
+
+def test_el_tope_no_frena_facebook_ni_instagram(repo, sin_red, config_completa, monkeypatch):
+    """Esas redes tienen algoritmo: el que no quiere ver sigue scrolleando. El
+    canal es una notificación en el teléfono, y por eso es el único con tope."""
+    monkeypatch.setattr(settings, "difusion_canal_max_dia", 1)
+    c = repo.seed_comercio(slug="x", nombre="X")
+    for i in range(3):
+        pub = repo.insert_publicacion_directa(
+            {"comercio_id": c["id"], "titulo": f"of {i}", "estado": "aprobado"})
+        difusion.encolar(repo, pub["id"])
+
+    difusion.enviar_pendientes(repo, 30, solo_auto=False)
+    assert len([d for d, _, _ in sin_red if d == "facebook"]) == 3
+    assert len([d for d, _, _ in sin_red if d == "wa_canal"]) == 1
+
+
+def test_el_lugar_en_el_canal_se_puede_reservar_a_los_planes_que_lo_pagan(
+    repo, sin_red, config_completa, monkeypatch,
+):
+    """Es lo que convierte el problema de volumen en una razón para subir de
+    plan, en vez de un derecho ilimitado que arruina el canal para todos."""
+    monkeypatch.setattr(settings, "difusion_canal_solo_planes", True)
+    monkeypatch.setattr(settings, "difusion_auto", "wa_canal")
+    barato = repo.seed_comercio(slug="a", nombre="A", plan="publica")
+    caro = repo.seed_comercio(slug="b", nombre="B", plan="destacado")
+    for c in (barato, caro):
+        pub = repo.insert_publicacion_directa(
+            {"comercio_id": c["id"], "titulo": "of", "estado": "aprobado"})
+        difusion.encolar(repo, pub["id"])
+
+    difusion.enviar_pendientes(repo, 20, solo_auto=True)
+    assert len([d for d, _, _ in sin_red if d == "wa_canal"]) == 1
+
+
+def test_reservarlo_a_los_planes_arranca_apagado():
+    """Hoy no paga nadie: encenderlo antes de que haya un plan contratado
+    dejaría el canal vacío sin dar ningún error."""
+    assert settings.difusion_canal_solo_planes is False

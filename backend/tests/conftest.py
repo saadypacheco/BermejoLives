@@ -469,6 +469,10 @@ class FakeRepo:
     def difusion_pendientes(self, limite):
         return [f for f in self.difusion if f["estado"] == "pendiente"][:limite]
 
+    def contar_difusion_hoy(self, destino):
+        return len([f for f in self.difusion
+                    if f["destino"] == destino and f["estado"] == "enviado"])
+
     def marcar_difusion(self, fila_id, estado, motivo, url=None):
         for f in self.difusion:
             if f["id"] == fila_id:

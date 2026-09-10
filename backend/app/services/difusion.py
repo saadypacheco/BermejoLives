@@ -207,6 +207,33 @@ def encolar(repo, publicacion_id: str) -> int:
         return 0
 
 
+def _freno_del_canal(repo, comercio: dict | None) -> str | None:
+    """¿Esta oferta entra hoy al canal? Devuelve el motivo si NO entra.
+
+    POR QUÉ EL CANAL TIENE TOPE Y LAS OTRAS REDES NO
+    ================================================
+    Facebook e Instagram tienen algoritmo: publicar de más se paga en alcance,
+    y el que no quiere ver una publicación sigue scrolleando. El canal de
+    WhatsApp no: cada publicación es una notificación en el teléfono de cada
+    seguidor. Treinta comercios del plan Publica son cincuenta notificaciones
+    diarias, y eso no lo aguanta nadie.
+
+    Los seguidores son lo único de todo el sistema que no se puede rehacer. Los
+    grupos se recrean; el que se hartó y dejó de seguir no vuelve.
+    """
+    from app.services import planes
+
+    if settings.difusion_canal_solo_planes:
+        plan = planes.plan_de(repo, comercio or {})
+        if not planes.funcion(plan, "canal_wa"):
+            return f"el plan {plan.get('nombre')} no incluye lugar en el canal"
+
+    tope = settings.difusion_canal_max_dia
+    if tope and repo.contar_difusion_hoy("wa_canal") >= tope:
+        return f"el canal ya publicó {tope} hoy; sale mañana"
+    return None
+
+
 def procesar(repo, fila: dict) -> dict:
     """Manda UNA fila de la cola y guarda el resultado."""
     destino = fila["destino"]
@@ -228,6 +255,16 @@ def procesar(repo, fila: dict) -> dict:
         return {"estado": "pendiente", "motivo": "sin configurar"}
 
     comercio = repo.get_comercio(pub["comercio_id"]) if pub.get("comercio_id") else None
+
+    if destino == "wa_canal":
+        freno = _freno_del_canal(repo, comercio)
+        if freno:
+            # Queda PENDIENTE, no omitida: mañana hay lugar de nuevo. Marcarla
+            # como omitida la perdería para siempre, y una oferta que se
+            # descarta por un tope de ayer es una oferta que el comerciante
+            # nunca va a ver publicada.
+            repo.marcar_difusion(fila["id"], "pendiente", freno)
+            return {"estado": "pendiente", "motivo": freno}
     texto = texto_de(pub, comercio)
     try:
         url = enviar(destino, texto, pub.get("imagen_url"))

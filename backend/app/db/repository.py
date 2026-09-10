@@ -55,6 +55,7 @@ class Repo(Protocol):
     def list_cargos_extra(self, estado: str | None, limite: int) -> list[dict]: ...
     def encolar_difusion(self, publicacion_id: str, destinos: list[str]) -> int: ...
     def difusion_pendientes(self, limite: int) -> list[dict]: ...
+    def contar_difusion_hoy(self, destino: str) -> int: ...
     def marcar_difusion(self, fila_id: str, estado: str, motivo: str | None,
                         url: str | None = None) -> None: ...
     def list_difusion(self, estado: str | None, limite: int) -> list[dict]: ...
@@ -1229,6 +1230,19 @@ class SupabaseRepo:
         res = (self._db.table("difusion_cola").select("*")
                .eq("estado", "pendiente").order("created_at").limit(limite).execute())
         return res.data or []
+
+    def contar_difusion_hoy(self, destino: str) -> int:
+        """Cuántas salieron hoy a esa red. Es el freno del canal.
+
+        Cuenta por `enviado_at`, no por `created_at`: lo que importa es cuántas
+        notificaciones recibió hoy el seguidor, no cuándo se encolaron.
+        """
+        from datetime import date
+
+        res = (self._db.table("difusion_cola").select("id", count="exact")
+               .eq("destino", destino).eq("estado", "enviado")
+               .gte("enviado_at", date.today().isoformat()).limit(1).execute())
+        return res.count or 0
 
     def marcar_difusion(self, fila_id: str, estado: str, motivo: str | None,
                         url: str | None = None) -> None:

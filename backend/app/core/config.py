@@ -118,6 +118,28 @@ class Settings(BaseSettings):
     # tres cosas juntas.
     difusion_pausa_seg: int = 20
 
+    # ── El tope del canal ────────────────────────────────────────────────────
+    #
+    # Un canal es un boletín, no una base de datos. Treinta comercios del plan
+    # Publica son 50 publicaciones por día, y nadie sigue un canal que le tira
+    # cincuenta notificaciones diarias: lo silencia el primer día y lo abandona
+    # el tercero. Ahí se pierde lo único que no se puede rehacer — los grupos se
+    # recrean, los seguidores no.
+    #
+    # Lo que no entra hoy no se descarta: queda esperando y sale mañana.
+    difusion_canal_max_dia: int = 4
+
+    # Cuando esté en true, al canal sólo entran los comercios cuyo plan incluye
+    # la función `canal_wa` — que es lo que convierte el lugar en el canal en
+    # algo que se vende, en vez de un derecho ilimitado que lo arruina para
+    # todos.
+    #
+    # Arranca APAGADO a propósito: hoy no paga nadie, y encenderlo antes de que
+    # haya un solo plan contratado dejaría el canal vacío. Es la clase de guarda
+    # que, puesta demasiado pronto, apaga la función entera sin dar ningún
+    # error.
+    difusion_canal_solo_planes: bool = False
+
     def destinos_automaticos(self) -> set[str]:
         return {d.strip() for d in self.difusion_auto.split(",") if d.strip()}
 

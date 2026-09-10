@@ -90,6 +90,10 @@ export function DifusionPanel() {
         </div>
 
         <div style={{ padding: "0 16px 14px", fontSize: 12, color: "var(--txt-3)" }}>
+          El canal tiene tope diario: lo que no entra hoy espera y sale mañana. Cada
+          publicación es una notificación en el teléfono de cada seguidor, y los
+          seguidores son lo único que no se puede rehacer.
+          <br />
           TikTok y YouTube no están: sus APIs piden video y una app auditada. Esas dos
           se siguen subiendo a mano.
         </div>
