@@ -205,3 +205,28 @@ def test_el_panel_dice_que_destinos_faltan(client, repo, admin_token, monkeypatc
     assert r.status_code == 200, r.text
     fb = next(d for d in r.json()["destinos"] if d["clave"] == "facebook")
     assert fb["configurado"] is False
+
+
+def test_los_envios_van_espaciados(repo, sin_red, config_completa, monkeypatch):
+    """La pausa entre envíos es lo que evita el baneo del operativo.
+
+    Después de una tanda de moderación se aprueban muchas ofertas de golpe; sin
+    pausa saldrían todas en pocos segundos, que es la ráfaga que WhatsApp lee
+    como automatización. Y el baneado sería el número vinculado a WAHA, que es
+    el mismo que está en todos los grupos y el dueño del canal: se caen las tres
+    cosas juntas.
+
+    No espera de verdad —eso haría la suite inservible—: comprueba que pide la
+    espera, una vez menos que envíos.
+    """
+    monkeypatch.setattr(settings, "difusion_pausa_seg", 20)
+    esperas = []
+    monkeypatch.setattr("time.sleep", lambda s: esperas.append(s))
+
+    c = repo.seed_comercio(slug="x", nombre="X")
+    pub = repo.insert_publicacion_directa({"comercio_id": c["id"], "estado": "aprobado"})
+    difusion.encolar(repo, pub["id"])
+
+    r = difusion.enviar_pendientes(repo, 10, solo_auto=False)
+    assert r["resumen"]["enviado"] == 3
+    assert esperas == [20, 20]

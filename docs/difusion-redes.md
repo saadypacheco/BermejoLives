@@ -133,6 +133,48 @@ También muestra qué destinos están configurados. Sin eso, *"no se publica nad
 en Facebook"* y *"se publica y falla"* se ven igual desde el panel, y se
 arreglan de maneras opuestas: uno pegando un token, el otro leyendo el error.
 
+## ¿Publicar en el canal puede hacer que baneen la cuenta?
+
+Es la pregunta correcta, porque WAHA es automatización **no oficial** de
+WhatsApp y todo lo que pase por ahí tiene algo de riesgo. Pero no todos los usos
+son igual de riesgosos, y éste es de los más bajos.
+
+**Por qué publicar en el canal es lo más seguro que hace WAHA acá:**
+
+- **Los seguidores se anotaron.** Nadie recibe un mensaje que no pidió, y el
+  disparador número uno del baneo es que la gente te reporte o te bloquee. En un
+  canal eso casi no pasa: el que se cansa deja de seguirlo.
+- **No abre conversaciones.** Un posteo al canal es una difusión, no cien chats
+  nuevos con desconocidos — que es el patrón que WhatsApp persigue.
+- **El volumen es bajo.** Unas pocas publicaciones por día.
+
+**Lo que sí es riesgoso, y no es esto:** crear muchos grupos seguidos y agregar
+números a muchos grupos seguidos. Esos dos sí disparan el baneo, y por eso el
+botón de agregar respaldos va de a tandas chicas
+([numeros-whatsapp-uruku.md](numeros-whatsapp-uruku.md)).
+
+**Las ráfagas.** El único riesgo real del canal es publicar todo de golpe:
+después de una tanda de moderación se aprueban veinte ofertas juntas, y veinte
+publicaciones en cuatro segundos no se parecen a una persona con un teléfono. Va
+resuelto en el código: el worker manda de a **5 por vuelta, con 20 segundos
+entre cada una, cada 5 minutos**. Se regula sin tocar código:
+
+```
+DIFUSION_POR_TANDA=5
+DIFUSION_PAUSA_SEG=20
+DIFUSION_CADA_SEG=300
+```
+
+**El riesgo que sí hay que mirar no es el baneo: es la concentración.** El
+operativo `64610187` es al mismo tiempo el vinculado a WAHA, el que está en
+todos los grupos y **el dueño del canal**. Si cae, se caen las tres cosas
+juntas. Publicar en el canal no mueve mucho esa aguja — pero la hace más cara.
+
+Por eso hay una tarea que estaba anotada como deseable y ahora es necesaria:
+**ponerle un segundo administrador al canal desde otra línea de URUKU**. Cuesta
+dos minutos y es lo único que hace que el canal —con sus seguidores, que son lo
+único que no se puede rehacer— sobreviva al día que baneen al operativo.
+
 ## Límites que conviene saber antes de chocarlos
 
 - **Instagram: 50 publicaciones cada 24 horas.** Con el volumen de hoy sobra.

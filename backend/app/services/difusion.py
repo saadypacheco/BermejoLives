@@ -254,13 +254,29 @@ def procesar(repo, fila: dict) -> dict:
     return {"estado": "enviado", "url": url}
 
 
-def enviar_pendientes(repo, limite: int = 20, solo_auto: bool = True) -> dict:
-    """Manda lo que está esperando.
+def enviar_pendientes(repo, limite: int = 20, solo_auto: bool = True,
+                      pausa: float | None = None) -> dict:
+    """Manda lo que está esperando, de a uno y con pausa entre medio.
 
     `solo_auto` limita a los destinos que el `.env` marcó como automáticos. El
     panel manda con `solo_auto=False`: ése es el clic explícito de una persona
     que sabe lo que está soltando en el muro de la marca.
+
+    LA PAUSA
+    ========
+    El canal de WhatsApp sale por WAHA, que es automatización no oficial. Lo que
+    WhatsApp mira para banear son las ráfagas: si se aprueban veinte ofertas de
+    golpe —que es lo que pasa después de una tanda de moderación— salen veinte
+    publicaciones en cuatro segundos, y eso no se parece a una persona con un
+    teléfono.
+
+    El que se banearía es el OPERATIVO: el mismo número vinculado a WAHA, el que
+    está en todos los grupos y el dueño del canal. Se caen las tres cosas
+    juntas, así que la pausa es barata al lado de lo que evita.
     """
+    import time
+
+    espera = settings.difusion_pausa_seg if pausa is None else pausa
     autos = settings.destinos_automaticos()
     filas = repo.difusion_pendientes(limite * 3 if solo_auto else limite)
     hechos: dict[str, int] = {"enviado": 0, "error": 0, "omitido": 0, "pendiente": 0}
@@ -270,6 +286,10 @@ def enviar_pendientes(repo, limite: int = 20, solo_auto: bool = True) -> dict:
             continue
         if len(salidas) >= limite:
             break
+        # La pausa va ANTES del segundo envío y no después del último: esperar
+        # al final retrasa la respuesta del panel sin proteger nada.
+        if salidas and espera:
+            time.sleep(espera)
         r = procesar(repo, fila)
         hechos[r["estado"]] = hechos.get(r["estado"], 0) + 1
         salidas.append({"destino": fila["destino"], **r})

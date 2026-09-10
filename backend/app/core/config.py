@@ -95,6 +95,24 @@ class Settings(BaseSettings):
     # A dónde apunta el enlace de cada oferta que se publica en las redes.
     sitio_url: str = "https://uruku.bo"
 
+    # El worker que manda lo automático. Apagarlo deja todo en la cola, para
+    # mandarlo a mano desde el panel.
+    difusion_worker: bool = True
+    difusion_cada_seg: int = 300      # cada cuánto mira la cola
+    difusion_por_tanda: int = 5       # cuántas manda por vuelta
+    #
+    # LA PAUSA ENTRE ENVÍOS NO ES UN DETALLE DE CORTESÍA
+    # ==================================================
+    # El canal sale por WAHA, que es automatización no oficial de WhatsApp. Lo
+    # que WhatsApp mira para banear son ráfagas: veinte publicaciones seguidas
+    # en cuatro segundos no se parecen a una persona con un teléfono. Un posteo
+    # cada veinte segundos sí.
+    #
+    # Y el que se banea sería el OPERATIVO, que es el mismo número vinculado a
+    # WAHA, el que está en todos los grupos y el dueño del canal: se caen las
+    # tres cosas juntas.
+    difusion_pausa_seg: int = 20
+
     def destinos_automaticos(self) -> set[str]:
         return {d.strip() for d in self.difusion_auto.split(",") if d.strip()}
 

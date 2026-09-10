@@ -77,6 +77,36 @@ async def _baja_loop():
         await asyncio.sleep(86400)  # 1 día
 
 
+async def _difusion_loop():
+    """Manda a las redes lo que quedó aprobado.
+
+    POR QUÉ UN WORKER Y NO MANDARLO AL APROBAR
+    ==========================================
+    Si el envío colgara del pedido que aprueba la publicación, aprobar diez
+    ofertas seguidas serían diez llamadas a WhatsApp en diez segundos — la
+    ráfaga que WhatsApp lee como automatización. Y el moderador esperaría a que
+    Meta conteste para ver que su clic funcionó.
+
+    Acá sale de a poco: unas pocas por vuelta, con pausa entre medio, cada
+    varios minutos. Una oferta que tarda cinco minutos en aparecer en el canal
+    no le importa a nadie; una cuenta baneada sí.
+    """
+    from app.services import difusion
+
+    while True:
+        await asyncio.sleep(settings.difusion_cada_seg)
+        try:
+            repo = get_repo()
+            r = await run_in_threadpool(
+                difusion.enviar_pendientes, repo, settings.difusion_por_tanda, True)
+            if r["procesados"]:
+                logger.info("difusion_loop", **r["resumen"])
+        except Exception as exc:  # noqa: BLE001
+            # Nunca corta el loop: un error de red hoy no puede dejar la difusión
+            # muerta hasta el próximo reinicio del backend.
+            logger.warning("difusion_loop.error", error=str(exc))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("api.startup", service="bermejo", environment=settings.environment)
@@ -84,6 +114,8 @@ async def lifespan(app: FastAPI):
     if settings.clima_worker:
         tareas.append(asyncio.create_task(_clima_loop()))
         tareas.append(asyncio.create_task(_baja_loop()))
+    if settings.difusion_worker:
+        tareas.append(asyncio.create_task(_difusion_loop()))
     yield
     for t in tareas:
         t.cancel()

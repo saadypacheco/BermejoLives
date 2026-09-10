@@ -23,6 +23,16 @@ def _reset_rate_limit():
 
 
 @pytest.fixture(autouse=True)
+def _sin_pausa_de_difusion(monkeypatch):
+    """La difusión pausa 20 segundos entre envíos para no parecer una ráfaga a
+    WhatsApp. En los tests eso son minutos de suite dormida: la pausa se prueba
+    una vez, a propósito, en test_difusion.py."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "difusion_pausa_seg", 0)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _tmp_fotos_dir(tmp_path, monkeypatch):
     """Apunta el volumen de fotos a un tmp escribible: así las subidas de
     foto/video no fallan por no poder escribir en /data/fotos."""
