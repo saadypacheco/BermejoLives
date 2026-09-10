@@ -4,19 +4,48 @@
 > baneen el operativo. Escrito antes de necesitarlo a propósito: ese día no hay
 > tiempo de razonarlo.
 
-## La tabla definitiva (8/9/2026)
+## La tabla definitiva (10/9/2026)
 
-Revisada contra los teléfonos de verdad. Antes estaba armada sobre una lista de
-números; ahora sobre lo que hay en cada aparato, que es distinto — y dos de los
-números que figuraban **no sirven** para el rol que tenían.
+Revisada contra los teléfonos de verdad, con las operadoras confirmadas.
 
-| # | Rol | Número | Dónde vive | ¿WAHA? | ¿En los grupos? |
-|---|---|---|---|---|---|
-| 1 | **Operativo** | **59164610187** | Tablet (oficina) | **Sí, el único** | Sí, en todos |
-| 2 | **Marca** | 59167991916 | Tablet, 2ª cuenta | No | No |
-| 3 | **Explorador** | 59168727944 | iPhone, 2ª cuenta | No | No |
-| 4 | **Respaldo 1** | 59175314737 | El otro celular | No | Sí, en todos |
-| 5 | **Respaldo 2** | 59168727584 | Se registra y se guarda | No | Sí, en todos |
+| Rol | Número | Operadora | Dónde vive | ¿WhatsApp hoy? |
+|---|---|---|---|---|
+| **Operativo** | 64610187 | **Entel** | Tablet | Sí — vinculado a WAHA |
+| **Respaldo 1** | 75314737 | **Tigo** | Samsung | Sí |
+| **Marca** | 67991916 | Entel | eSIM iPhone, línea activa | No, **y así tiene que quedarse** |
+| **Respaldo 2** | 68727584 | Entel | eSIM iPhone, sin activar | No |
+| **Explorador** | 68727944 | Entel | eSIM iPhone, sin activar | No |
+| *(reserva)* | 72900149 | Entel | eSIM iPhone, sin activar | No |
+
+**El operativo es Entel y el respaldo 1 es Tigo.** Quedó al revés durante días y
+ahora está confirmado — y es una buena noticia: la protección que se buscaba
+existe. Si Entel se cae, el respaldo 1 sigue en pie y puede tomar el canal. Los
+que no tienen esa red aparte son el respaldo 2 y el explorador, que son Entel
+como el operativo.
+
+**El de la marca no se registra en WhatsApp común. Es a propósito y es fácil de
+arruinar sin querer:** ese número va a la API oficial de Meta (WhatsApp Cloud
+API), y un número que ya tiene WhatsApp normal **no se puede pasar** a la API
+sin darlo de baja primero. Registrarlo "para probar" quema el único número que
+está en condiciones de ser el de la marca. Ver
+[la sección del asistente 24/7 en pendientes-uruku.md](pendientes-uruku.md).
+
+**Tres eSIM están sin activar** (68727584, 68727944, 72900149). Una línea
+inactiva no recibe el SMS ni la llamada de verificación, así que **no se les
+puede registrar WhatsApp hasta activarlas**. Es el primer paso, no el último.
+
+### Segundo administrador: no es un número, es un permiso
+
+La pregunta era si el "segundo administrador" es otro operativo. **No.** Es un
+sombrero que se le pone a un número que ya existe: se entra al canal desde el
+operativo, se va a los administradores y se agrega al **respaldo 1 (75314737)**.
+
+Sirve para una sola cosa, y es la que más importa: **si banean al operativo, el
+canal sobrevive**. El canal es lo único de todo el sistema que no se puede
+rehacer —los grupos se recrean, los seguidores no— y hoy cuelga entero de una
+cuenta que está en cien grupos y corre automatización no oficial.
+
+Se hace en dos minutos y no cuesta un número más.
 
 ### Los dos que quedaron afuera, y por qué
 
@@ -139,17 +168,6 @@ En **Admin › WhatsApp** se nota porque los mensajes dejan de aparecer.
 Es la misma clase de falla que venimos persiguiendo: nada se rompe, todo parece
 bien, y no entra nada. En **Admin › WhatsApp** se nota porque los mensajes dejan
 de aparecer.
-
-### Qué operadora es cada uno — pendiente de confirmar
-
-En la conversación del 6/9 se dijo que el Tigo era el **64610187** y en la del
-8/9 que era el **75314737**. Uno de los dos es Entel y no está claro cuál.
-
-**No cambia quién es el operativo**: eso lo define WAHA, que está vinculado al
-64610187 y se verificó en vivo. Cambia otra cosa — el diseño quería el operativo
-en una operadora distinta de los respaldos, para que una caída de red de Entel
-no se lleve al operativo y a su reemplazo el mismo día. Si los dos son Entel,
-esa protección no existe y conviene saberlo.
 
 ### El bloque para `backend/.env` — definitivo
 

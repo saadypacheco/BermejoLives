@@ -85,6 +85,223 @@ select proname from pg_proc where proname in ('buscar_comercios','refinamientos_
 
 ---
 
+## 🟣 Las seis decisiones a cerrar antes de salir a difundir (10/9/2026)
+
+> Todo esto son decisiones de negocio con consecuencias técnicas, no tareas de
+> programación. Están juntas porque comparten una cosa: **si se salen a difundir
+> sin cerrarlas, cada una se cierra sola de la peor manera** — el canal se llena
+> y la gente lo silencia, el comerciante publica de más y nadie le cobra, el
+> que trajo usuarios reclama una plata que nadie puede calcular.
+
+### 1. El canal no aguanta todo lo que manden los vendedores
+
+**El problema, con números.** Un plan Publica son 50 publicaciones al mes. Con
+30 comercios en ese plan son 1.500 publicaciones mensuales: **50 por día en el
+canal**. Nadie sigue un canal que le tira cincuenta notificaciones diarias — lo
+silencia el primer día y lo abandona el tercero.
+
+Y ahí se pierde lo único que no se puede rehacer. Los grupos se vuelven a crear;
+los seguidores no vuelven.
+
+**Lo que NO es la solución.** Cambiar de plataforma no arregla nada:
+
+- **WhatsApp Business (la app)** tiene listas de difusión de 256 contactos y —lo
+  que la hace inservible— **sólo le llega a quien tenga tu número agendado**. Es
+  peor que el canal, no mejor.
+- **Telegram** no tiene límites y es gratis, pero en Bermejo no lo usa nadie.
+  Una herramienta perfecta a la que no entra el público no sirve.
+
+El canal es la plataforma correcta. **El problema no es dónde se publica: es
+cuánto.**
+
+**La salida, y de paso es plata.** Un canal es un boletín, no una base de datos.
+El sitio se queda con todo; el canal se queda con la selección:
+
+- **Un resumen diario**: una sola publicación con "las ofertas de hoy" y el
+  enlace al sitio. Volumen constante, sin importar cuántas entren.
+- **Más unos pocos lugares individuales por día** (tres o cuatro), y **ésos se
+  venden**. "Tu oferta sale sola en el canal de URUKU" pasa a ser un beneficio
+  escaso del plan Destacado/Pro, en vez de un derecho ilimitado que arruina el
+  canal para todos.
+
+Convierte el problema de volumen en una razón para subir de plan. Y le da al
+plan caro algo que el barato no puede tener, que es justo lo que hoy le falta.
+
+- [ ] Decidir: ¿resumen diario, lugares vendidos, o las dos cosas?
+- [ ] Programarlo (hoy la difusión manda TODO lo aprobado al canal).
+
+### 2. La IA revisa antes que el humano, y hoy no lo hace
+
+Lo que hay: la IA (`moderar_publicacion`, Gemini) da un veredicto
+aprobar/rechazar/dudoso **cuando el moderador aprieta un botón en el panel**. O
+sea: primero mira una persona, después opina la máquina. Está al revés.
+
+Lo que falta: que la IA corra **al entrar el mensaje** y guarde el veredicto, de
+modo que la cola llegue ordenada — lo dudoso arriba, lo limpio abajo. Con dos o
+tres ofertas por día da igual; con cincuenta, es la diferencia entre revisar y
+no revisar.
+
+El orden que quedó definido, y que ya está construido de la mitad para adelante:
+
+```
+llega al grupo → IA opina (falta) → humano aprueba (hay) → cola de difusión (hay)
+              → sale espaciado, 5 por vuelta (hay)
+```
+
+- [ ] Correr la IA en la ingesta y guardar veredicto + confianza.
+- [ ] Ordenar la cola de moderación por eso.
+- [ ] Recién entonces decidir si algo se auto-aprueba solo (la nota vieja decía
+      ≥0.8; con el volumen de hoy no hace falta y es prematuro).
+
+### 3. Cuánto puede publicar cada plan — hoy no lo cuenta nadie
+
+**Lo que se vende no existe en el código.** La página de planes promete 15 y 50
+publicaciones por mes. El sistema **no cuenta nada**: hay un interruptor que
+deja publicar o no por WhatsApp según el plan (`INGESTA_REQUIERE_PLAN`,
+apagado), y ninguna cuota. Un comercio del plan de 15 puede mandar 300 y salen
+las 300.
+
+Y hay otra inconsistencia que va a doler: los planes que conoce el código son
+`gratis / pro / premium`, y los que se venden son **Básico, Publica, Destacado,
+Pro**. Son dos vocabularios distintos para la misma cosa.
+
+**Lo que hay que construir**, y el orden importa:
+
+1. Una tabla de planes con la cuota, el precio y **el precio de la publicación
+   extra** — en la base, no en el `.env` ni en el código. Los Bs 5 van a cambiar,
+   y el día que cambien tiene que poder hacerlo quien vende, sin un deploy.
+2. Contar las publicaciones **por ciclo de facturación**, no por mes
+   calendario: se paga hoy y corren dos meses desde hoy, así que el mes
+   calendario no significa nada para el comerciante.
+3. Qué pasa al llegar al tope. **Acá está la trampa**: bloquear en silencio es
+   lo peor que puede pasar. El comerciante manda la foto, no aparece, y no se
+   entera de por qué — igual que las ofertas que se perdían antes de la bandeja.
+
+   Tiene que avisarle **por WhatsApp, en el momento**, y con las dos salidas:
+
+   > *"Llegaste a las 50 de tu plan. La próxima sale Bs 5, o pasás al plan
+   > Destacado y tenés 50 más por mes."*
+
+   Las dos opciones juntas, no una. El que no quiere gastar más igual se entera
+   de que existe el plan de arriba; el que tiene apuro paga los 5 y publica.
+
+- [ ] Tabla de planes con cuota y precios editables.
+- [ ] Contador por ciclo de facturación.
+- [ ] Aviso automático al llegar al tope, con las dos salidas.
+- [ ] Unificar los nombres de plan del código con los que se venden.
+
+### 4. El número de la marca con IA 24/7 — cuánto cuesta de verdad
+
+**Es el 67991916**, y hay una cosa que hacer YA, que es **no tocarlo**: no
+registrarle WhatsApp común. Un número que ya tiene WhatsApp normal no se puede
+pasar a la API oficial sin darlo de baja antes, y hoy es el único candidato
+limpio.
+
+**Por qué la API oficial y no WAHA, que es gratis.** Éste es el único número que
+va impreso en volantes, en el sitio y en Facebook: es el que **no puede morir**.
+Y un número que contesta todo el día a desconocidos es justo el patrón de uso
+que hace que WhatsApp banee una cuenta no oficial. Pagar por lo oficial acá es
+comprar que no se caiga.
+
+**Los costos, que son más bajos de lo que parece:**
+
+- **Meta**: las conversaciones que **inicia el usuario** (te escriben y
+  contestás) **no se cobran**. Se cobran las que inicia la empresa con
+  plantillas — o sea, mandar promociones. Un asistente que sólo responde es,
+  del lado de Meta, prácticamente gratis.
+- **La IA**: con un modelo chico (Gemini Flash, Haiku), una conversación de diez
+  mensajes cuesta fracciones de centavo. Mil conversaciones al mes son unos
+  pocos dólares.
+- **Lo que sí cuesta**: la verificación del negocio en Meta (trámite, no plata) y
+  el trabajo de armarlo.
+
+Media parte ya está: el proyecto tiene un cliente de la Cloud API
+(`whatsapp_client.py`, hecho para el OTP).
+
+**Los límites que hay que ponerle al asistente antes de encenderlo.** Una IA
+contestando como la marca puede inventar, y lo que invente lo dijo URUKU:
+
+- Contesta sobre qué es URUKU, los planes, cómo publicar, cómo sumarse.
+- **Nunca** afirma precios, stock ni horarios de un comercio: para eso manda a
+  la ficha.
+- Lo que no sabe, lo pasa a una persona. Un "no sé, te contesta alguien" es
+  infinitamente mejor que una respuesta inventada a un cliente.
+
+- [ ] Decidir si se hace ahora o después de la primera tanda de comercios.
+- [ ] Verificación de negocio en Meta.
+- [ ] Definir por escrito qué puede y qué no puede contestar.
+
+### 5. Pagar por ofertas: cómo no financiar el fraude
+
+La idea: quien le manda ofertas a URUKU cobra plata o descuentos. Funciona, y
+tiene un modo de fallar muy conocido — **si se paga por mandar, se recibe
+basura**; si se paga por publicar, alguien va a inventar ofertas.
+
+Las reglas que lo hacen sostenible, todas juntas:
+
+- **Se paga por lo aprobado, nunca por lo enviado.** La revisión humana va antes
+  del pago, siempre.
+- **Sólo cuenta lo que agrega algo**: un comercio que todavía no está, o uno que
+  no publica hace X días. Diez fotos del mismo local en una tarde valen una.
+- **Tope por persona y por mes**, y además **tope de presupuesto total**. Sin el
+  segundo, una semana en que la idea se vuelve popular cuesta plata de verdad.
+- **Un pago por número de WhatsApp verificado.** Sin eso, la misma persona cobra
+  cinco veces.
+- **Crédito antes que efectivo.** Un descuento o un mes de plan atrae a gente que
+  quiere el servicio; la plata en mano atrae a gente que quiere la plata. El
+  crédito además vuelve al negocio.
+
+- [ ] Fijar los tres números: por publicación, tope por persona, tope mensual.
+- [ ] Decidir crédito o efectivo (recomendado: crédito).
+- [ ] Construir el registro de recompensas — hoy no existe ninguno.
+
+### 6. La recompensa por traer usuarios: existe la mitad que no se ve
+
+**Lo que hay de verdad:** la columna `usuarios.ref`, que guarda el código del QR
+por el que llegó cada usuario y **no se pisa nunca** (queda el primero). Eso es
+la atribución, y está bien hecha.
+
+**Lo que NO hay:** el registro de recompensas, el cálculo, el tope mensual y el
+control de fraude. Nada de eso existe.
+
+**Y una cosa que hay que corregir de la idea, porque no se puede medir.** "Que
+dure más de 7 días con la aplicación instalada" **no es medible**: URUKU es una
+aplicación web, y ni en iOS ni en Android se puede saber si sigue instalada. Lo
+dice el comentario de la propia migración que creó `ref`, de hace meses.
+
+Lo que sí se puede medir, y sirve igual o más:
+
+> **Un usuario que se registró con ese código y volvió a usar el sitio después
+> de 7 días.**
+
+Es mejor métrica que la instalación: una app instalada y nunca abierta no vale
+nada, y un usuario que volvió a la semana es exactamente el que se buscaba.
+
+Para eso falta una pieza chica: **hoy no se guarda cuándo fue la última vez que
+un usuario usó el sitio**. Sin ese dato no hay forma de saber quién volvió.
+
+- [ ] Agregar `usuarios.ultima_actividad`.
+- [ ] Definir: cuánto por usuario, tope por promotor, tope mensual total.
+- [ ] Registro de recompensas con estado (pendiente / pagado) — un pago que se
+      calcula a mano se paga dos veces.
+- [ ] Un pago por WhatsApp verificado, y no contar a los que trae el propio
+      equipo.
+
+### Lo que no puede salir a la calle antes de esto
+
+Difundir es prometer. De esta lista, lo que **hay que cerrar sí o sí antes** de
+salir a buscar comercios y usuarios:
+
+1. **El tope del canal** (punto 1) — porque el daño es a los seguidores, que no
+   vuelven.
+2. **El aviso al llegar a la cuota** (punto 3) — porque el silencio es cómo se
+   pierde un comerciante que ya había pagado.
+3. **Los topes de las dos recompensas** (puntos 5 y 6) — porque prometer una
+   plata sin techo es una deuda que se descubre cuando ya se contrajo.
+
+El asistente 24/7 (punto 4) y el orden de la IA (punto 2) pueden esperar a que
+haya volumen: hoy no hay tanta consulta ni tanta cola.
+
 ## 🔴 Ahora / alta prioridad
 
 ### Los 888 horarios (2026-09-03)
@@ -121,8 +338,15 @@ ofertas en la tarjeta— no tiene qué mostrar hasta que entre la primera oferta
       reporta como spam, y el reporte es lo que dispara el baneo. **Antes de
       crear el primer grupo**: el nombre que ve el comerciante es el de ese
       momento.
-- [ ] Registrar WhatsApp en las eSIM de Entel para tener el respaldo 2 y el
-      explorador. Hoy sólo dos números tienen cuenta.
+- [ ] **Activar** las tres eSIM que están sin activar (68727584, 68727944,
+      72900149). Una línea inactiva no recibe el SMS de verificación, así que
+      sin esto no se les puede registrar WhatsApp.
+- [ ] Registrar WhatsApp en el respaldo 2 (68727584) y el explorador
+      (68727944). **En el 67991916 NO**: ése va a la API oficial de Meta como
+      número de la marca, y registrarle WhatsApp común lo quema.
+- [ ] Agregar el **respaldo 1 (75314737)** como segundo administrador del
+      canal. Dos minutos, y es lo único que hace que el canal sobreviva al día
+      que baneen al operativo.
 - [ ] Los respaldos entran a los grupos **antes** de necesitarlos: una cuenta
       baneada no puede agregar a nadie. Si algún grupo queda sin ellos, se
       arregla desde **Admin › WhatsApp → "Agregar un número a los grupos"**, de
