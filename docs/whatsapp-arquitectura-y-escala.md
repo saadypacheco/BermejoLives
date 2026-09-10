@@ -98,28 +98,92 @@ No es mala noticia, pero cambia la planificación:
 se crea ahora es trabajo que no se transporta.** No es razón para no crearlos —
 sirven hoy— pero sí para no invertir meses en un modelo que se va a dejar.
 
-### Los costos
+### Qué es "la app de Meta", que no es una aplicación
 
-La estructura de precios de Meta, que es lo que importa para decidir:
+Confunde por el nombre. **No es un programa, no se instala, y ningún usuario la
+ve nunca.** Es una ficha de registro: el lugar donde Meta anota *quién* está
+pidiendo cosas por API y *qué* le está permitido.
 
-- **Conversaciones que inicia el usuario ("de servicio"): gratis.** Te escriben
-  y contestás, sin cargo. **Es exactamente el modelo de URUKU**: el comerciante
-  manda la foto, el sistema responde.
-- **Plantillas de utilidad** (avisos transaccionales: "llegaste a tu cuota"):
-  gratis dentro de la ventana de atención abierta.
-- **Plantillas de marketing** (vos iniciás para promocionar): **se pagan por
-  mensaje**, con tarifa por país.
+Sin ella, el servidor de URUKU le pide algo a Meta y Meta contesta "¿y vos quién
+sos?". Con ella, el servidor tiene credenciales —un identificador y un token— y
+Meta sabe que ese pedido viene de URUKU y le corresponde tocar las cuentas de
+URUKU.
 
-**No pongo acá el precio de Bolivia porque cambia y no lo voy a inventar.** Se
-lee en la página de precios de Meta para desarrolladores, y hay que mirarlo
-antes de presupuestar cualquier campaña.
+Es **una sola app para las tres cosas** que ya están en marcha:
 
-**La conclusión práctica**: para recibir ofertas y contestarlas, la API oficial
-sale prácticamente lo mismo que WAHA —nada— y sin riesgo de baneo. Lo que cuesta
-plata es mandar promociones masivas, que es una decisión aparte.
+| Para qué | Qué guarda la app |
+|---|---|
+| Recibir y contestar WhatsApp por la API oficial | El número, su token y el webhook |
+| Publicar en la página de Facebook | El permiso `pages_manage_posts` |
+| Publicar en Instagram | El permiso `instagram_content_publish` |
 
-Lo demás que cuesta no es plata sino trámite: **verificación del negocio en
-Meta**, que pide documentación de la empresa.
+O sea que **la app que se crea para probar WhatsApp es la misma** que después
+sirve para la difusión automática a Facebook e Instagram (ver
+[difusion-redes.md](difusion-redes.md)) y para el asistente 24/7. No es trabajo
+que se hace dos veces.
+
+Y hay una razón más para crearla ya, aunque no se pruebe nada: **el tarifario
+que se ve adentro es el nuestro**. Lo de afuera son estimaciones de terceros que
+no coinciden entre sí.
+
+### Los costos, investigados el 10/9/2026
+
+**La estructura, que es lo que decide todo:**
+
+| Situación | Quién empieza | Precio |
+|---|---|---|
+| El comerciante manda una foto y el sistema le contesta | El usuario | **Gratis** |
+| El aviso de "llegaste a tu cuota" | Nosotros, pero dentro de las 24 h | **Gratis** |
+| Un comprador escribe al número de la marca y contesta la IA | El usuario | **Gratis** |
+| Mandarle una oferta a alguien que no escribió | Nosotros | **Se paga** |
+
+La regla: **cuando el usuario escribe primero se abre una ventana de 24 horas y
+todo lo que pase adentro es gratis y sin límite.** Fuera de esa ventana hay que
+usar una plantilla, y las de *marketing* se cobran por mensaje entregado.
+
+**Lo que eso significa para URUKU: la ingesta de ofertas y el asistente 24/7
+cuestan cero.** Los dos funcionan porque alguien nos escribió primero.
+
+**Los precios de Bolivia** (queda en el grupo "Resto de Latinoamérica", no tiene
+tarifario propio). Dos fuentes de terceros y **no coinciden**:
+
+| | Marketing | Utilidad / Autenticación |
+|---|---|---|
+| Twilio | sin cargo de Meta | US$ 0,0034 |
+| edna.io | US$ 0,09–0,10 | US$ 0,03 |
+
+Es una diferencia de diez veces, así que **ninguno de los dos números sirve para
+presupuestar**. El bueno está en el tarifario de la propia cuenta, que se ve una
+vez creada la app. Lo que sí está confirmado por la documentación de Meta y por
+las dos fuentes es lo único que importa hoy: **lo que entra por conversación de
+servicio no se cobra**.
+
+Ojo con dos cosas al leer precios por ahí:
+
+- **Los intermediarios (Twilio, 360dialog y demás) suman su propio cargo** —
+  Twilio, unos US$ 0,005 por mensaje, en todas las categorías incluida la
+  gratuita. URUKU se conecta **directo a Meta**, así que ese recargo no aplica.
+  Es la diferencia entre pagar cero y pagar US$ 100 por 20.000 mensajes.
+- Circula que **el 1 de octubre de 2026 los mensajes de servicio pasan a
+  cobrarse**. La documentación de Meta dice otra cosa: ese día cambian los
+  tarifarios de **Bangladesh, Irak, Nepal, Sri Lanka, Kazajistán, Kuwait,
+  Marruecos, Omán y Ucrania**. Bolivia no está en esa lista. Igual conviene
+  mirarlo en el tarifario propio antes de contar con la gratuidad.
+
+### La cuenta que cambia una decisión
+
+Alcanzar compradores tiene dos caminos, y la diferencia de precio es enorme:
+
+- **Por el canal de WhatsApp**: gratis y sin límite, para todos los seguidores.
+- **Por plantillas de marketing**: se paga cada mensaje a cada persona.
+
+Mandarle una alerta semanal a 5.000 compradores son 20.000 mensajes por mes.
+Aun tomando el precio más barato de los dos tarifarios, eso es plata todos los
+meses; con el más caro, más que todos los planes juntos.
+
+**Entonces el canal no es sólo más cómodo: es la diferencia entre cero y una
+factura mensual.** Y eso refuerza lo de más arriba — el canal hay que cuidarlo
+de saturarlo, porque no tiene reemplazo barato.
 
 ## Lo que ya está listo para ese día (10/9)
 
