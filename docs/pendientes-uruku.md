@@ -85,6 +85,29 @@ select proname from pg_proc where proname in ('buscar_comercios','refinamientos_
 
 ---
 
+## 🟣 La escala de WhatsApp — analizado el 10/9
+
+El detalle entero en
+[whatsapp-arquitectura-y-escala.md](whatsapp-arquitectura-y-escala.md). Lo que
+hay que retener:
+
+- **Un teléfono no llega a 20.000 grupos**, y se rompe antes por sincronización
+  que por baneo. El techo práctico son cientos, no miles.
+- **La API oficial de Meta no tiene grupos.** El modelo de un grupo por comercio
+  no migra: allá es chat uno a uno. Cada grupo que se crea hoy es trabajo que no
+  se transporta.
+- **Recibir y contestar por la API oficial es gratis**: sólo se pagan las
+  plantillas de marketing que inicia la empresa. La tarifa de Bolivia hay que
+  mirarla en Meta, no está inventada acá.
+- **Ya está construida la capa** que hace que migrar sea configuración y no
+  reescritura, con tests. Se puede probar en paralelo con el número de prueba
+  que regala Meta, sin tocar lo que funciona.
+
+- [ ] Poner el segundo administrador del canal (lo único irrecuperable de un
+      baneo, y cuesta dos minutos).
+- [ ] Dar de alta la app de Meta y probar con el número de prueba.
+- [ ] Al pasar los ~300 comercios: decidir chat directo en vez de grupo.
+
 ## 🟣 Las seis decisiones a cerrar antes de salir a difundir (10/9/2026)
 
 > Todo esto son decisiones de negocio con consecuencias técnicas, no tareas de

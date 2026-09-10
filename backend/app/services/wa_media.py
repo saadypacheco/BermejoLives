@@ -67,6 +67,15 @@ def descargar_media(url: str | None) -> bytes | None:
         return None
     import httpx
 
+    # La API oficial no manda una URL: manda un identificador que hay que
+    # canjear con el token. Sin esta rama, una foto que llega por Meta se
+    # descarga contra "cloud-media:123" y falla en silencio — la publicación
+    # sale sin imagen y nadie se entera de por qué.
+    if url.startswith("cloud-media:"):
+        from app.services.mensajeria import descargar_media_cloud
+
+        return descargar_media_cloud(url.split(":", 1)[1])
+
     url = _url_alcanzable(url)
     try:
         # La API key va igual que en whatsapp_client.py: WAHA protege /api y

@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     whatsapp_cloud_phone_id: str = ""
     whatsapp_cloud_token: str = ""
     whatsapp_cloud_template_otp: str = "otp_login"
+    # Lo que pide Meta para dar de alta el webhook: el token de verificación lo
+    # elige uno (cualquier cadena), el App Secret sale de la app de Meta y es
+    # con lo que firma los mensajes entrantes.
+    meta_verify_token: str = ""
+    meta_app_secret: str = ""
 
     # Número al que el usuario le manda "CONFIRMAR-XXXXXX" para probar que
     # el celular es suyo (login/recuperación por mensaje entrante, sin

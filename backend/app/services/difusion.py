@@ -35,6 +35,7 @@ import httpx
 import structlog
 
 from app.core.config import settings
+from app.services import mensajeria
 
 logger = structlog.get_logger()
 
@@ -110,21 +111,11 @@ def texto_de(pub: dict, comercio: dict | None) -> str:
 def _enviar_wa_canal(texto: str, imagen_url: str | None) -> str | None:
     """Al canal se le manda como a cualquier chat: el identificador termina en
     @newsletter en vez de @c.us. Es el mismo endpoint de siempre."""
-    base = settings.waha_base_url.rstrip("/")
-    cabeceras = {"X-Api-Key": settings.waha_api_key}
     chat = settings.wa_canal_id.strip()
-
-    if imagen_url:
-        url = f"{base}/api/sendImage"
-        cuerpo = {"session": "default", "chatId": chat, "caption": texto,
-                  "file": {"url": imagen_url}}
-    else:
-        url = f"{base}/api/sendText"
-        cuerpo = {"session": "default", "chatId": chat, "text": texto}
-
-    r = httpx.post(url, json=cuerpo, headers=cabeceras, timeout=_TIMEOUT)
-    if r.status_code >= 400:
-        raise DifusionError(f"WAHA respondió HTTP {r.status_code}: {r.text[:200]}")
+    ok = (mensajeria.enviar_imagen(chat, imagen_url, texto) if imagen_url
+          else mensajeria.enviar_texto(chat, texto))
+    if not ok:
+        raise DifusionError("no se pudo publicar en el canal (ver los registros)")
     return None
 
 
