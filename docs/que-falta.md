@@ -18,17 +18,7 @@ nadie puede ver ni probar.
 Las migraciones nuevas: `0100` (cola de difusión), `0101` (planes y cargos),
 `0102` (plan Empleado Digital).
 
-```bash
-cd /docker/uruku && git pull
-for m in 0100_cola_de_difusion 0101_planes_en_la_base 0102_plan_empleado_digital; do
-  docker exec -i uruku-postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
-    -f - < selfhost/postgres-init/$m.sql
-done
-docker compose -f docker-compose.prod.yml restart postgrest
-GIT_SHA=$(git rev-parse --short HEAD) APP_ENV=prod \
-  docker compose -f docker-compose.prod.yml --env-file .env up -d --build frontend backend
-curl -s https://uruku.bo/version
-```
+Los pasos, uno por uno y con verificación, en [deploy-10-09.md](deploy-10-09.md).
 
 ### 0.2 El `.env` de producción
 

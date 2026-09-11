@@ -72,7 +72,53 @@ on conflict (slug) do nothing;
 -- El CHECK se va: era la razón por la que no se podía agregar un plan sin
 -- migrar. Lo reemplaza la clave foránea, que dice lo mismo pero se actualiza
 -- sola cuando se crea un plan nuevo.
-alter table comercios drop constraint if exists comercios_plan_check;
+--
+-- SE BUSCA POR COLUMNA Y NO POR NOMBRE, A PROPÓSITO
+-- =================================================
+-- `drop constraint if exists comercios_plan_check` depende de que Postgres le
+-- haya puesto ese nombre exacto. Si se llamara de otra forma, el DROP no
+-- encuentra nada, no da error, y la migración termina "bien" dejando el candado
+-- puesto: los planes nuevos se rechazarían al asignarlos, meses después, sin
+-- que nada apunte a esta línea. Es la guarda que se lee como protección y no
+-- protege.
+--
+-- Buscarlo por la columna que restringe lo encuentra se llame como se llame.
+do $$
+declare c record;
+begin
+  for c in
+    select con.conname
+      from pg_constraint con
+      join pg_class      rel on rel.oid = con.conrelid
+      join pg_namespace  nsp on nsp.oid = rel.relnamespace
+      join pg_attribute  att on att.attrelid = rel.oid and att.attname = 'plan'
+     where rel.relname = 'comercios'
+       and nsp.nspname = 'public'
+       and con.contype = 'c'
+       and att.attnum = any (con.conkey)
+  loop
+    raise notice 'quitando el CHECK % de comercios.plan', c.conname;
+    execute format('alter table public.comercios drop constraint %I', c.conname);
+  end loop;
+end $$;
+
+-- Antes de atar la clave foránea: si algún comercio apunta a un plan que no
+-- existe, el ALTER falla con un mensaje que no dice cuál. Mejor decirlo acá.
+do $$
+declare huerfanos text;
+begin
+  select string_agg(distinct coalesce(c.plan, '(nulo)'), ', ')
+    into huerfanos
+    from comercios c
+    left join planes p on p.slug = c.plan
+   where p.slug is null;
+
+  if huerfanos is not null then
+    raise exception 'Hay comercios con planes que no existen en la tabla planes: %. '
+                    'Agregalos a planes o corregí esas filas antes de seguir.', huerfanos;
+  end if;
+end $$;
+
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'comercios_plan_fkey') then
