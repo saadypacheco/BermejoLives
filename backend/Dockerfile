@@ -7,6 +7,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
 WORKDIR /app
 # cache de modelos whisper (se monta como volumen en prod para no re-bajarlo)
 ENV HF_HOME=/models PIP_DEFAULT_TIMEOUT=120 UV_HTTP_TIMEOUT=120
+ARG GIT_SHA=dev
+ENV GIT_SHA=$GIT_SHA
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --timeout 120 --retries 8 uv \
  && uv pip install --system .

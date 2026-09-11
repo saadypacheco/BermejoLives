@@ -415,8 +415,9 @@ docker compose -f docker-compose.prod.yml logs --since 10m waha | tail -40
 # Registros del backend: ¿qué pasó con las ofertas?
 docker compose -f docker-compose.prod.yml logs --since 10m backend | grep -i "ingest\|wa_sesion"
 
-# Versión en producción
+# Versión en producción: la del frontend y la del backend (son builds distintos)
 curl -s https://uruku.bo/version
+curl -s https://api.uruku.bo/health
 
 # Levantar después de tocar el .env
 GIT_SHA=$(git rev-parse --short HEAD) APP_ENV=prod \

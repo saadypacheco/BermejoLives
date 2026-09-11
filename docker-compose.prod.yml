@@ -149,7 +149,13 @@ services:
       - traefik.http.services.uruku-tiles.loadbalancer.server.port=80
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        # Mismo GIT_SHA que el frontend. Sin esto no había forma de saber qué
+        # backend corre: /version es del frontend, y el 11/9 se reconstruyó
+        # sólo el backend y el sha que se veía era el viejo del frontend.
+        GIT_SHA: ${GIT_SHA:-dev}
     container_name: buscadonde-backend
     restart: unless-stopped
     env_file: ./backend/.env
