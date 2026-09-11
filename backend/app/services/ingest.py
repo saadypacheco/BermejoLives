@@ -426,6 +426,19 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         repo.marcar_wa_inbox(payload.id, "sin_permiso", motivo, comercio.get("id"))
         return {"captured": True, "comercio": slug, "publicada": False, "motivo": motivo}
 
+    # 2.a) Un mensaje que es SÓLO el código no es una oferta.
+    #
+    # El código sirve para atar el grupo o identificar al comercio, y eso ya
+    # pasó arriba. Si además se publicara, cada alta dejaría una "novedad"
+    # pendiente cuyo texto es URUKU-XXXX — pasó con el primer grupo real, el
+    # 11/9. Con texto alrededor ("URUKU-XXXX zapatillas 250") sí es una oferta,
+    # y el código se le saca al guardar.
+    if not (payload.type == "image" or payload.has_media) and not _sin_codigo(payload.body):
+        motivo = "sólo el código: identifica, no publica"
+        repo.marcar_wa_inbox(payload.id, "ignorada", motivo, comercio.get("id"))
+        return {"captured": True, "comercio": slug, "publicada": False, "motivo": motivo,
+                "identidad_origen": identidad_origen}
+
     # 2.b) La cuota del plan.
     #
     # EL SILENCIO ES EL PEOR RESULTADO
@@ -486,8 +499,8 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         # que vino va de descripción. Un "200 bs" de título no ayuda a nadie.
         # Sin imagen sí se usa la primera línea, o la fila queda en blanco en la
         # cola de moderación y no se puede saber qué es sin abrirla.
-        "titulo": None if imagen_url else ((payload.body or "").split("\n")[0][:120] or None),
-        "descripcion": payload.body,
+        "titulo": None if imagen_url else ((_sin_codigo(payload.body) or "").split("\n")[0][:120] or None),
+        "descripcion": _sin_codigo(payload.body),
         "imagen_url": imagen_url,
         "tiktok_url": _extract_tiktok(payload.body),
         "estado": "aprobado" if confiable else "pendiente",

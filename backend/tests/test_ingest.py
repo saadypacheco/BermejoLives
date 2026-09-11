@@ -146,14 +146,30 @@ def test_grupo_desconocido_no_crea_comercio_fantasma(repo):
     assert len(repo.wa_inbox) == 1
 
 
-def test_grupo_se_ata_con_el_codigo_y_publica(repo):
+def test_grupo_se_ata_con_el_codigo_y_el_codigo_no_se_publica(repo):
+    """El código identifica; no es una oferta. Antes además se publicaba como
+    "novedad" con el texto URUKU-XXXX — cada alta dejaba una publicación
+    basura pendiente. Se vio con el primer grupo real, el 11/9."""
     repo.seed_comercio(id="com-g", slug="mendo", nombre="Mendo", whatsapp="59170000007",
                        codigo="ABCD")
     res = ingest.handle_message(_evento_grupo(body="URUKU-ABCD"), repo)
 
-    assert res["estado"] == "pendiente"
+    assert res["publicada"] is False
+    assert "sólo el código" in res["motivo"]
     assert repo.wa_grupos[GRUPO]["comercio_id"] == "com-g"
-    assert repo.publicaciones[0]["comercio_id"] == "com-g"
+    assert repo.publicaciones == []
+
+
+def test_codigo_con_texto_alrededor_si_publica_y_sin_el_codigo(repo):
+    """"URUKU-ABCD zapatillas 250 bs" es una oferta. El código se le saca al
+    guardar: al comprador no le dice nada."""
+    repo.seed_comercio(id="com-g", slug="mendo", nombre="Mendo", whatsapp="59170000007",
+                       codigo="ABCD")
+    res = ingest.handle_message(_evento_grupo(body="URUKU-ABCD zapatillas 250 bs"), repo)
+
+    assert res["estado"] == "pendiente"
+    assert repo.publicaciones[0]["descripcion"] == "zapatillas 250 bs"
+    assert "URUKU" not in (repo.publicaciones[0]["titulo"] or "")
 
 
 def test_grupo_ya_atado_publica_sin_codigo(repo):
@@ -174,7 +190,8 @@ def test_el_codigo_de_otro_no_le_roba_el_grupo(repo):
 
     ingest.handle_message(_evento_grupo(wamid="wa-g3", body="URUKU-BBBB"), repo)
     assert repo.wa_grupos[GRUPO]["comercio_id"] == "com-a"
-    assert repo.publicaciones[0]["comercio_id"] == "com-a"
+    # Y el código ajeno tampoco se publica como oferta de nadie.
+    assert repo.publicaciones == []
 
 
 def test_mensaje_de_un_numero_de_uruku_no_publica(repo, monkeypatch):
@@ -354,3 +371,50 @@ def test_explorador_gana_al_descarte_por_numero_propio(repo, monkeypatch):
     res = ingest.handle_message(ev, repo)
     assert res.get("origen") == "explorador"
     assert repo.publicaciones[0]["comercio_id"] == "com-a"
+
+
+# ───────────────────────────────── el @lid que esconde el número
+
+def test_el_numero_real_se_toma_de_participant_alt_cuando_viene_lid(repo, monkeypatch):
+    """WhatsApp reemplaza el número por un identificador oculto (@lid) en los
+    grupos. Sin esto, el Samsung —que está en WA_NUMEROS_PROPIOS— no era
+    reconocido como propio y sus mensajes entraban como del comerciante."""
+    from app.core.config import settings
+    from app.core import config as cfg
+
+    monkeypatch.setattr(settings, "wa_numeros_propios", "59175314737")
+    cfg._numeros_propios.cache_clear()
+    repo.seed_comercio(id="com-g", slug="mendo", nombre="Mendo", codigo="ABCD")
+    repo.vincular_grupo_comercio(GRUPO, "com-g", None, "admin", "test")
+
+    evento = _evento_grupo(wamid="wa-lid", body="buen día")
+    evento["payload"]["participant"] = "160138577080406@lid"
+    evento["payload"]["_data"] = {"key": {
+        "participant": "160138577080406@lid",
+        "participantAlt": "59175314737@s.whatsapp.net",
+        "addressingMode": "lid"}}
+
+    res = ingest.handle_message(evento, repo)
+    assert res["publicada"] is False
+    assert res["motivo"] == "mensaje de un número de URUKU"
+    assert repo.publicaciones == []
+
+
+def test_sin_alternativo_el_lid_no_se_confunde_con_un_numero():
+    """Si WAHA no manda participantAlt, el "número" queda vacío-ish y no
+    matchea nada — que es peor que antes pero honesto. Lo importante es que
+    no se tome el @lid como si fuera un teléfono."""
+    from app.models.whatsapp import WahaMessagePayload
+
+    p = WahaMessagePayload.model_validate({"id": "x", "from": GRUPO,
+                                           "participant": "160138577080406@lid"})
+    assert p.phone == "160138577080406"
+
+
+def test_chat_directo_con_lid_usa_remote_jid_alt():
+    from app.models.whatsapp import WahaMessagePayload
+
+    p = WahaMessagePayload.model_validate({
+        "id": "x", "from": "999@lid",
+        "_data": {"key": {"remoteJid": "999@lid", "remoteJidAlt": "59170000001@s.whatsapp.net"}}})
+    assert p.phone == "59170000001"

@@ -4,6 +4,31 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 
 
+def _numero_de(jid: str | None, alternativo: str | None) -> str:
+    """El teléfono detrás de un JID — incluso cuando WhatsApp lo esconde.
+
+    EL @lid, QUE APAGABA TODAS LAS GUARDAS SIN DAR ERROR
+    ====================================================
+    WhatsApp está reemplazando el número de teléfono en los grupos por un
+    identificador oculto: el remitente llega como `160138577080406@lid` en vez
+    de `59175314737@c.us`. Se vio el 11/9 con el primer código de grupo en
+    producción: el Samsung —que está en WA_NUMEROS_PROPIOS— no fue reconocido
+    como propio, porque el "número" que se comparaba era el @lid.
+
+    Eso apaga en silencio todo lo que mira el número: que los respaldos se
+    ignoren, que un comercio confiable publique directo, que el explorador se
+    reconozca. Ninguna de esas guardas da error; simplemente no matchean.
+
+    WAHA manda el número real al lado, en `_data.key.participantAlt` (grupos) o
+    `remoteJidAlt` (chat directo), con sufijo `@s.whatsapp.net`. Cuando el JID
+    principal es un @lid, se usa ése.
+    """
+    principal = jid or ""
+    if principal.endswith("@lid") and alternativo:
+        principal = alternativo
+    return principal.split("@")[0]
+
+
 class WahaMessagePayload(BaseModel):
     id: str | None = None
     from_: str | None = Field(default=None, alias="from")   # jid del remitente
@@ -34,9 +59,13 @@ class WahaMessagePayload(BaseModel):
         grupo y el remitente viene aparte — si se usara `from` acá, el "número"
         sería el ID del grupo y no matchearía ningún comercio.
         """
-        if self.es_grupo:
-            return (self.remitente_jid or "").split("@")[0]
-        return (self.from_ or "").split("@")[0]
+        jid = self.remitente_jid if self.es_grupo else self.from_
+        return _numero_de(jid, self._alternativo("remoteJidAlt" if not self.es_grupo
+                                                  else "participantAlt"))
+
+    def _alternativo(self, campo: str) -> str | None:
+        key = (self.data or {}).get("key") or {}
+        return key.get(campo) or None
 
     @property
     def remitente_jid(self) -> str | None:
