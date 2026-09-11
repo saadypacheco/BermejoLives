@@ -418,3 +418,35 @@ def test_chat_directo_con_lid_usa_remote_jid_alt():
         "id": "x", "from": "999@lid",
         "_data": {"key": {"remoteJid": "999@lid", "remoteJidAlt": "59170000001@s.whatsapp.net"}}})
     assert p.phone == "59170000001"
+
+
+# ───────────────────────────────── el precio sale del texto
+
+def test_bolivianos_escrito_entero_es_una_oferta_con_precio(repo):
+    """"Pizarra 220 bolivianos" entraba como novedad y sin precio: el
+    clasificador buscaba "bs". Fue la primera oferta real, el 11/9."""
+    repo.seed_comercio(id="com-g", slug="mendo", nombre="Mendo", whatsapp="59170000007")
+    repo.vincular_grupo_comercio(GRUPO, "com-g", None, "admin", "test")
+
+    res = ingest.handle_message(_evento_grupo(wamid="wa-p1", body="Pizarra 220 bolivianos"), repo)
+    assert res["tipo"] == "oferta"
+    pub = repo.publicaciones[0]
+    assert pub["precio"] == 220.0 and pub["moneda"] == "BOB"
+
+
+def test_sin_precio_ni_palabra_de_oferta_es_novedad(repo):
+    repo.seed_comercio(id="com-g", slug="mendo", nombre="Mendo", whatsapp="59170000007")
+    repo.vincular_grupo_comercio(GRUPO, "com-g", None, "admin", "test")
+
+    res = ingest.handle_message(_evento_grupo(wamid="wa-p2", body="Llegó mercadería nueva"), repo)
+    assert res["tipo"] == "novedad"
+    assert repo.publicaciones[0]["precio"] is None
+
+
+def test_un_numero_suelto_no_se_toma_como_precio(repo):
+    """"talle 42" no es Bs 42. Inventar un precio es peor que no tenerlo."""
+    repo.seed_comercio(id="com-g", slug="mendo", nombre="Mendo", whatsapp="59170000007")
+    repo.vincular_grupo_comercio(GRUPO, "com-g", None, "admin", "test")
+
+    ingest.handle_message(_evento_grupo(wamid="wa-p3", body="Llegaron zapatillas talle 42"), repo)
+    assert repo.publicaciones[0]["precio"] is None

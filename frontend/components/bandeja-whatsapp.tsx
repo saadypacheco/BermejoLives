@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { agregarNumeroAGrupos, getBandejaWa, probarCloud, reprocesarEntrante,
-         type AgregarAGrupos, type BandejaWa } from "@/lib/api";
+         type AgregarAGrupos, type BandejaWa, type WaEntrante } from "@/lib/api";
 
 const ETIQUETA: Record<string, { texto: string; color: string }> = {
   publicada: { texto: "Publicada", color: "var(--neon)" },
@@ -202,6 +202,140 @@ function PlanB({ c }: { c: BandejaWa["cloud"] }) {
   );
 }
 
+
+/** Una fila de la bandeja. Separada para poder listarla suelta o agrupada. */
+function FilaEntrante({ m, reprocesando, reprocesar }: {
+  m: WaEntrante; reprocesando: string | null; reprocesar: (id: string) => void;
+}) {
+  const et = ETIQUETA[m.resultado ?? "sin_registrar"] ?? ETIQUETA.sin_registrar;
+  return (
+      <div key={m.id} className="panel-card glass" style={{ padding: 12 }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          {m.media_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={m.media_url} alt="" width={72} height={72}
+                 style={{ borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+          )}
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+              <b style={{ color: et.color }}>{et.texto}</b>
+              <span style={{ color: "var(--txt-3)", fontSize: 12 }}>
+                {new Date(m.created_at).toLocaleString("es-BO", {
+                  day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+                })}
+              </span>
+              {m.comercios?.nombre && (
+                <span style={{ fontSize: 12.5 }}>
+                  · {m.comercios.nombre}
+                  {m.comercios.codigo && (
+                    <span style={{ color: "var(--neon)", fontFamily: "monospace" }}>
+                      {" "}URUKU-{m.comercios.codigo}
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
+
+            {m.motivo && (
+              <div style={{ fontSize: 12.5, color: "var(--txt-2)", marginTop: 3 }}>{m.motivo}</div>
+            )}
+            {!m.resultado && (
+              <div style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontSize: 12, color: "var(--amber)" }}>
+                  Se guardó pero la ingesta no terminó. Se puede volver a procesar.
+                </span>
+                <button className="btn btn-sm btn-ghost"
+                        disabled={reprocesando === m.wa_message_id}
+                        onClick={() => reprocesar(m.wa_message_id)}>
+                  {reprocesando === m.wa_message_id ? "…" : "Reprocesar"}
+                </button>
+              </div>
+            )}
+
+            {/* De dónde vino. El grupo importa más que el número: un grupo
+                sin atar es el caso que más se repite y se arregla desde la
+                ficha del comercio, en "Grupo de WhatsApp". */}
+            <div style={{ fontSize: 11.5, color: "var(--txt-3)", marginTop: 4, fontFamily: "monospace" }}>
+              {m.wa_jid?.endsWith("@g.us") ? `grupo ${m.wa_jid}` : `de ${m.phone ?? m.wa_jid}`}
+              {m.tipo ? ` · ${m.tipo}` : ""}
+            </div>
+
+            {m.body && (
+              <div style={{ fontSize: 12.5, color: "var(--txt-2)", marginTop: 5,
+                            maxHeight: 60, overflow: "hidden" }}>
+                {m.body}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+  );
+}
+
+/**
+ * La bandeja agrupada por comercio.
+ *
+ * Con un comercio, la lista plana alcanza. Con treinta, cada uno mandando
+ * varias fotos por día, es infinita y no se ve nada. Agrupada, cada comercio
+ * es un renglón con su cantidad y su último mensaje, y se abre el que hace
+ * falta. Lo que no tiene comercio (grupos sin atar, números sueltos) va en un
+ * grupo aparte al final — es lo que más pide acción.
+ */
+function Agrupada({ items, reprocesando, reprocesar }: {
+  items: WaEntrante[]; reprocesando: string | null; reprocesar: (id: string) => void;
+}) {
+  const grupos = new Map<string, { titulo: string; codigo: string | null; filas: WaEntrante[] }>();
+  for (const m of items) {
+    const clave = m.comercios?.slug ?? `sin:${m.wa_jid ?? "?"}`;
+    if (!grupos.has(clave)) {
+      grupos.set(clave, {
+        titulo: m.comercios?.nombre ?? `Sin comercio · ${(m.wa_jid ?? "").split("@")[0] || "?"}`,
+        codigo: m.comercios?.codigo ?? null,
+        filas: [],
+      });
+    }
+    grupos.get(clave)!.filas.push(m);
+  }
+  // Los que tienen comercio primero, ordenados por el más reciente; los sin
+  // comercio al final.
+  const orden = [...grupos.entries()].sort((a, b) => {
+    const sa = a[0].startsWith("sin:") ? 1 : 0, sb = b[0].startsWith("sin:") ? 1 : 0;
+    if (sa !== sb) return sa - sb;
+    return b[1].filas[0].created_at.localeCompare(a[1].filas[0].created_at);
+  });
+
+  return (
+    <>
+      {orden.map(([clave, g]) => {
+        const pendientes = g.filas.filter((f) => !f.resultado || f.resultado === "sin_comercio" || f.resultado === "error").length;
+        return (
+          <details key={clave} className="panel-card glass" open={clave.startsWith("sin:") || pendientes > 0}
+                   style={{ padding: 0 }}>
+            <summary style={{ padding: "12px 16px", cursor: "pointer", listStyle: "none",
+                              display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+              <b style={{ fontSize: 14 }}>{g.titulo}</b>
+              {g.codigo && <span style={{ fontFamily: "monospace", color: "var(--neon)", fontSize: 12 }}>URUKU-{g.codigo}</span>}
+              <span style={{ color: "var(--txt-3)", fontSize: 12.5 }}>
+                {g.filas.length} {g.filas.length === 1 ? "mensaje" : "mensajes"}
+                {" · último "}
+                {new Date(g.filas[0].created_at).toLocaleString("es-BO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+              </span>
+              {pendientes > 0 && (
+                <span style={{ color: "var(--amber)", fontSize: 12.5 }}>· {pendientes} para mirar</span>
+              )}
+            </summary>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 10px 10px" }}>
+              {g.filas.map((m) => (
+                <FilaEntrante key={m.id} m={m} reprocesando={reprocesando} reprocesar={reprocesar} />
+              ))}
+            </div>
+          </details>
+        );
+      })}
+    </>
+  );
+}
+
 export function BandejaWhatsApp() {
   const [estado, setEstado] = useState("problemas");
   const [d, setD] = useState<BandejaWa | null>(null);
@@ -221,6 +355,9 @@ export function BandejaWhatsApp() {
   // y WAHA ya no va a reintentar. El crudo está guardado, así que se puede
   // volver a pasar por la ingesta desde acá.
   const [reprocesando, setReprocesando] = useState<string | null>(null);
+  // Agrupada por comercio es la vista por defecto: con varios comercios la
+  // lista plana no se puede leer.
+  const [vista, setVista] = useState<"agrupada" | "plana">("agrupada");
   const reprocesar = async (id: string) => {
     setReprocesando(id);
     try { await reprocesarEntrante(id); await cargar(); }
@@ -325,71 +462,11 @@ export function BandejaWhatsApp() {
         </div>
       )}
 
-      {(d?.items ?? []).map((m) => {
-        const et = ETIQUETA[m.resultado ?? "sin_registrar"] ?? ETIQUETA.sin_registrar;
-        return (
-          <div key={m.id} className="panel-card glass" style={{ padding: 12 }}>
-            <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-              {m.media_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={m.media_url} alt="" width={72} height={72}
-                     style={{ borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
-              )}
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
-                  <b style={{ color: et.color }}>{et.texto}</b>
-                  <span style={{ color: "var(--txt-3)", fontSize: 12 }}>
-                    {new Date(m.created_at).toLocaleString("es-BO", {
-                      day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
-                    })}
-                  </span>
-                  {m.comercios?.nombre && (
-                    <span style={{ fontSize: 12.5 }}>
-                      · {m.comercios.nombre}
-                      {m.comercios.codigo && (
-                        <span style={{ color: "var(--neon)", fontFamily: "monospace" }}>
-                          {" "}URUKU-{m.comercios.codigo}
-                        </span>
-                      )}
-                    </span>
-                  )}
-                </div>
-
-                {m.motivo && (
-                  <div style={{ fontSize: 12.5, color: "var(--txt-2)", marginTop: 3 }}>{m.motivo}</div>
-                )}
-                {!m.resultado && (
-                  <div style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 12, color: "var(--amber)" }}>
-                      Se guardó pero la ingesta no terminó. Se puede volver a procesar.
-                    </span>
-                    <button className="btn btn-sm btn-ghost"
-                            disabled={reprocesando === m.wa_message_id}
-                            onClick={() => reprocesar(m.wa_message_id)}>
-                      {reprocesando === m.wa_message_id ? "…" : "Reprocesar"}
-                    </button>
-                  </div>
-                )}
-
-                {/* De dónde vino. El grupo importa más que el número: un grupo
-                    sin atar es el caso que más se repite y se arregla desde la
-                    ficha del comercio, en "Grupo de WhatsApp". */}
-                <div style={{ fontSize: 11.5, color: "var(--txt-3)", marginTop: 4, fontFamily: "monospace" }}>
-                  {m.wa_jid?.endsWith("@g.us") ? `grupo ${m.wa_jid}` : `de ${m.phone ?? m.wa_jid}`}
-                  {m.tipo ? ` · ${m.tipo}` : ""}
-                </div>
-
-                {m.body && (
-                  <div style={{ fontSize: 12.5, color: "var(--txt-2)", marginTop: 5,
-                                maxHeight: 60, overflow: "hidden" }}>
-                    {m.body}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })}
+      {vista === "agrupada"
+        ? <Agrupada items={d?.items ?? []} reprocesando={reprocesando} reprocesar={reprocesar} />
+        : (d?.items ?? []).map((m) => (
+            <FilaEntrante key={m.id} m={m} reprocesando={reprocesando} reprocesar={reprocesar} />
+          ))}
     </div>
   );
 }

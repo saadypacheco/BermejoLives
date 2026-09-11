@@ -174,10 +174,19 @@ def _puede_publicar_por_whatsapp(comercio: dict) -> bool:
 
 
 def _classify_tipo(payload: WahaMessagePayload) -> str:
+    """Oferta, novedad o video.
+
+    "Pizarra 220 bolivianos" entraba como NOVEDAD: el clasificador buscaba
+    "bs" o "$" en el texto y "bolivianos" no le matcheaba. Ahora la pregunta
+    es si el texto trae un precio —con cualquier forma de escribirlo— o habla
+    de una oferta. Se vio con la primera oferta real, el 11/9.
+    """
+    from app.core.precio import parece_oferta
+
     text = (payload.body or "").lower()
     if payload.type in {"video"} or any(h in text for h in _VIDEO_HINTS):
         return "video"
-    if payload.type in {"image"} or "oferta" in text or "$" in text or "bs" in text:
+    if payload.type in {"image"} or parece_oferta(text):
         return "oferta"
     return "novedad"
 
@@ -483,6 +492,14 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     now = datetime.now(timezone.utc).isoformat()
     tipo = _classify_tipo(payload)
 
+    # El precio se saca del texto. Una oferta sin precio en la lista es una
+    # oferta que nadie abre, y el comerciante casi nunca lo manda en un campo:
+    # lo manda en la frase. Si no hay uno claro, queda vacío — inventarlo es
+    # peor que no tenerlo.
+    from app.core.precio import extraer_precio
+
+    precio_detectado = extraer_precio(payload.body)
+
     # La imagen se baja a disco propio ACÁ, no se referencia la de WAHA: esa URL
     # es interna (el navegador del comprador no la alcanza) y efímera. Y en una
     # oferta la foto no es un adorno, es el contenido.
@@ -501,6 +518,8 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         # cola de moderación y no se puede saber qué es sin abrirla.
         "titulo": None if imagen_url else ((_sin_codigo(payload.body) or "").split("\n")[0][:120] or None),
         "descripcion": _sin_codigo(payload.body),
+        "precio": precio_detectado[0] if precio_detectado else None,
+        "moneda": precio_detectado[1] if precio_detectado else "BOB",
         "imagen_url": imagen_url,
         "tiktok_url": _extract_tiktok(payload.body),
         "estado": "aprobado" if confiable else "pendiente",
