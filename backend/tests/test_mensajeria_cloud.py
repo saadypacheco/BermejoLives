@@ -94,6 +94,7 @@ def test_lo_de_waha_pasa_derecho():
 # ════════════════════════════════════════════════════════ salida por proveedor
 
 def test_el_proveedor_decide_por_donde_sale(monkeypatch):
+    monkeypatch.setattr(settings, "wa_solo_lectura", False)
     llamadas = []
     monkeypatch.setattr(mensajeria, "_waha_texto",
                         lambda c, t: llamadas.append(("waha", c)) or True)

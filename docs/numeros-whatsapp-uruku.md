@@ -4,48 +4,81 @@
 > baneen el operativo. Escrito antes de necesitarlo a propósito: ese día no hay
 > tiempo de razonarlo.
 
-## La tabla definitiva (10/9/2026)
+## La tabla definitiva (11/9/2026)
 
-Revisada contra los teléfonos de verdad, con las operadoras confirmadas.
+Decidida el 11/9, después de dos días de darle vueltas. **WAHA sólo lee.**
 
-| Rol | Número | Operadora | Dónde vive | ¿WhatsApp hoy? |
+| Rol | Número | Operadora | Dónde | Qué hace |
 |---|---|---|---|---|
-| **Operativo** | 64610187 | **Entel** | Tablet | Sí — vinculado a WAHA |
-| **Respaldo 1** | 75314737 | **Tigo** | Samsung | Sí |
-| **Marca** | 67991916 | Entel | eSIM iPhone, línea activa | No, **y así tiene que quedarse** |
-| **Respaldo 2** | 68727584 | Entel | eSIM iPhone, sin activar | No |
-| **Explorador** | 68727944 | Entel | eSIM iPhone, sin activar | No |
-| *(reserva)* | 72900149 | Entel | eSIM iPhone, sin activar | No |
+| **Anfitrión** | 64610187 | Entel | Tablet | Crea los grupos **a mano**, es admin, publica en el canal **a mano**, es la cara de URUKU. **Nunca corre WAHA** |
+| **Registrador** | 75314737 | Tigo | Samsung | **Sólo** corre WAHA: está en cada grupo y lleva lo que llega a la base. No escribe nunca |
+| **Marca** | 67991916 | Entel | eSIM iPhone, activa | El público. Va a la API oficial de Meta. **No registrarle WhatsApp común** |
+| **Respaldo** | 68727584 | Entel | eSIM, sin activar | Está en los grupos callado. Toma el lugar del Registrador el día del baneo |
+| **Explorador** | 68727944 | Entel | eSIM, sin activar | Sale a fotografiar ofertas |
+| *(reserva)* | 72900149 | Entel | eSIM, sin activar | — |
 
-**El operativo es Entel y el respaldo 1 es Tigo.** Quedó al revés durante días y
-ahora está confirmado — y es una buena noticia: la protección que se buscaba
-existe. Si Entel se cae, el respaldo 1 sigue en pie y puede tomar el canal. Los
-que no tienen esa red aparte son el respaldo 2 y el explorador, que son Entel
-como el operativo.
+### Por qué este reparto es el correcto
 
-**El de la marca no se registra en WhatsApp común. Es a propósito y es fácil de
-arruinar sin querer:** ese número va a la API oficial de Meta (WhatsApp Cloud
-API), y un número que ya tiene WhatsApp normal **no se puede pasar** a la API
-sin darlo de baja primero. Registrarlo "para probar" quema el único número que
-está en condiciones de ser el de la marca. Ver
-[la sección del asistente 24/7 en pendientes-uruku.md](pendientes-uruku.md).
+El único número que corre un cliente no oficial —el Registrador— **sólo
+escucha**. Es lo más inofensivo que existe para WhatsApp, y si igual lo banean
+no se pierde nada que no se recupere re-vinculando a un Respaldo que ya está
+adentro de los grupos.
 
-**Tres eSIM están sin activar** (68727584, 68727944, 72900149). Una línea
-inactiva no recibe el SMS ni la llamada de verificación, así que **no se les
-puede registrar WhatsApp hasta activarlas**. Es el primer paso, no el último.
+Todo lo que se *escribe* lo escribe una persona desde la tablet, con la app de
+verdad: crear un grupo, agregar gente, publicar en el canal, avisarle a un
+comerciante. Un humano haciendo un grupo por día es uso normal, no
+automatización. Y ese número —el Anfitrión— es el dueño del canal y el
+administrador de todos los grupos, así que **lo irrecuperable vive en la cuenta
+que menos riesgo corre**.
 
-### Segundo administrador: no es un número, es un permiso
+### Lo que eso apaga en el sistema
 
-La pregunta era si el "segundo administrador" es otro operativo. **No.** Es un
-sombrero que se le pone a un número que ya existe: se entra al canal desde el
-operativo, se va a los administradores y se agrega al **respaldo 1 (75314737)**.
+Una sola llave, `WA_SOLO_LECTURA` (puesta por defecto), cierra las cuatro cosas
+que escribían por WAHA:
 
-Sirve para una sola cosa, y es la que más importa: **si banean al operativo, el
-canal sobrevive**. El canal es lo único de todo el sistema que no se puede
-rehacer —los grupos se recrean, los seguidores no— y hoy cuelga entero de una
-cuenta que está en cien grupos y corre automatización no oficial.
+| Antes | Ahora |
+|---|---|
+| El panel creaba el grupo por API | Se crea desde la tablet; el panel muestra los tres pasos |
+| El panel agregaba respaldos a todos los grupos | Se agregan desde la tablet |
+| Lo aprobado salía solo al canal | Se publica en el canal desde la tablet; la cola no lo encola |
+| El aviso de cuota lo mandaba el Registrador al grupo | Lo da el Anfitrión; la bandeja marca "AVISARLE desde la tablet" |
 
-Se hace en dos minutos y no cuesta un número más.
+Facebook e Instagram **no** pasan por WAHA, así que siguen automáticos cuando
+tengan token.
+
+### El flujo de un grupo nuevo, a mano
+
+1. En la tablet: grupo nuevo `URUKU · <nombre del local>`.
+2. Agregar al comerciante y al **75314737** (el Registrador).
+3. Mandar adentro **`URUKU-XXXX`** — el código del local, que está en su ficha
+   del admin y en el volante.
+
+Con el código adentro, el Registrador lo ve y ata el grupo al comercio. Desde
+ahí, todo lo que mande el comerciante se atribuye solo. **El código lo puede
+mandar el Anfitrión** — hasta el 11/9 se descartaba por venir de un número
+propio, y el grupo quedaba sin comercio hasta que lo mandara el comerciante.
+
+### El bloque para `backend/.env` — definitivo
+
+```
+WA_NUMEROS_PROPIOS=59164610187,59167991916,59168727944,59175314737,59168727584
+WA_NUMEROS_GRUPO=
+WA_NUMEROS_EXPLORADOR=59168727944
+WA_CONTACTO_EXPLORADOR=
+BOT_WHATSAPP_NUMERO=59175314737
+WA_CANAL_ID=
+```
+
+- `BOT_WHATSAPP_NUMERO` es **el del Registrador**: recibe los `CONFIRMAR-XXXXXX`
+  del login y los procesa el webhook. Se muda con WAHA.
+- `WA_NUMEROS_GRUPO` vacío: no se crean grupos desde el sistema.
+- `WA_CANAL_ID` vacío: el canal se publica a mano. El identificador es
+  `120363412598489616@newsletter` por si algún día se enciende.
+- `WA_SOLO_LECTURA` no hace falta ponerlo: es el valor por defecto.
+
+**WAHA hay que re-vincularlo al Tigo.** Hoy está en la tablet (se vinculó el
+11/9 a la mañana). Mismo procedimiento de más abajo, con `75314737` en el
+pedido de código, y desde el Samsung.
 
 ### Los dos que quedaron afuera, y por qué
 

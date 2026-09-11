@@ -725,7 +725,11 @@ def listar_grupos(
     repo: Repo = Depends(get_repo),
 ) -> dict:
     items = repo.list_grupos_comercio(comercio_id)
-    return {"items": items, "total": len(items)}
+    return {"items": items, "total": len(items),
+            # El panel decide con esto si ofrece el botón de crear o las
+            # instrucciones del flujo manual. Un botón que hace justo lo que
+            # se decidió no hacer es una trampa esperando un clic.
+            "solo_lectura": settings.wa_solo_lectura}
 
 
 @router.post("/admin/comercio/{comercio_id}/grupos")
@@ -1870,6 +1874,7 @@ async def admin_wa_entrantes(
             "explorador": len(_numeros_propios(settings.wa_numeros_explorador,
                                                "WA_NUMEROS_EXPLORADOR")),
             "contacto_explorador": bool(settings.wa_contacto_explorador.strip()),
+            "solo_lectura": settings.wa_solo_lectura,
         },
     }
 
@@ -2322,7 +2327,9 @@ async def admin_difusion(
         "resumen": resumen,
         "destinos": [
             {"clave": d, "nombre": difusion.NOMBRE[d],
-             "configurado": difusion.configurado(d), "automatico": d in autos}
+             "configurado": difusion.configurado(d), "automatico": d in autos,
+             # El canal se publica a mano desde la tablet mientras WAHA sólo lea.
+             "manual": d == "wa_canal" and d not in difusion.destinos_activos()}
             for d in difusion.DESTINOS
         ],
     }

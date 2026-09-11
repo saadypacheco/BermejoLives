@@ -125,22 +125,21 @@ Antes de levantar. Editá `/docker/uruku/backend/.env` y dejá:
 
 ```
 WA_NUMEROS_PROPIOS=59164610187,59167991916,59168727944,59175314737,59168727584
-WA_NUMEROS_GRUPO=59175314737
+WA_NUMEROS_GRUPO=
 WA_NUMEROS_EXPLORADOR=59168727944
 WA_CONTACTO_EXPLORADOR=
-BOT_WHATSAPP_NUMERO=59164610187
-WA_CANAL_ID=120363412598489616@newsletter
+BOT_WHATSAPP_NUMERO=59175314737
+WA_CANAL_ID=
 ```
 
-`WA_CANAL_ID` es el identificador del canal, que apareció en los registros de
-WAHA el 11/9. Con él, la difusión al canal queda **encendida**: lo aprobado
-sale solo, de a cuatro por día.
+Es el bloque del diseño final del 11/9 — **WAHA sólo lee y vive en el Tigo**.
+Cada línea explicada en [numeros-whatsapp-uruku.md](numeros-whatsapp-uruku.md).
+Lo único que tiene que coincidir con la realidad: `BOT_WHATSAPP_NUMERO` es el
+número **vinculado a WAHA**. Si WAHA todavía está en la tablet cuando levantes,
+dejalo en `59164610187` y cambialo cuando lo muevas.
 
-**`WA_CONTACTO_EXPLORADOR` vacío es correcto**: las consultas van al comercio.
-Apuntarlo a un número sin WhatsApp sería peor que dejarlo vacío.
-
-Los tokens de Meta (Facebook, Instagram) **todavía no**: sin ellos esa parte de
-la cola espera y no se pierde nada. Se agregan cuando los tengas.
+Los tokens de Meta (Facebook, Instagram) **todavía no**: esa parte de la cola
+espera y no se pierde nada.
 
 ---
 

@@ -20,22 +20,24 @@ Las migraciones nuevas: `0100` (cola de difusión), `0101` (planes y cargos),
 
 Los pasos, uno por uno y con verificación, en [deploy-10-09.md](deploy-10-09.md).
 
-### 0.2 El `.env` de producción
+### 0.2 El `.env` de producción — y WAHA al Tigo
 
-Hoy la única variable de WhatsApp puesta es `WA_NUMEROS_PROPIOS`. Falta el
-bloque entero — está en
-[numeros-whatsapp-uruku.md](numeros-whatsapp-uruku.md):
+Decidido el 11/9: **WAHA sólo lee**, y vive en el **Tigo (75314737)**. Hoy está
+en la tablet, así que hay que re-vincularlo. El bloque final y el porqué de
+cada línea en [numeros-whatsapp-uruku.md](numeros-whatsapp-uruku.md):
 
 ```
 WA_NUMEROS_PROPIOS=59164610187,59167991916,59168727944,59175314737,59168727584
-WA_NUMEROS_GRUPO=59175314737
+WA_NUMEROS_GRUPO=
 WA_NUMEROS_EXPLORADOR=59168727944
 WA_CONTACTO_EXPLORADOR=
-BOT_WHATSAPP_NUMERO=59164610187
+BOT_WHATSAPP_NUMERO=59175314737
+WA_CANAL_ID=
 ```
 
-Sin `BOT_WHATSAPP_NUMERO` el enlace de recuperación sale como `wa.me/?text=…`,
-sin destinatario: no le llega a nadie.
+- [ ] Re-vincular WAHA al **75314737** desde el Samsung (borrar sesión → crear
+      → código → tipear).
+- [ ] Poner ese bloque y levantar el backend.
 
 ---
 
@@ -47,9 +49,9 @@ Son minutos cada una y **después ya no se pueden hacer**.
       comerciante es el del momento en que lo agregan. Un desconocido llamado
       Juan agregándote a un grupo es lo que la gente reporta como spam, y el
       reporte es lo que dispara el baneo.
-- [ ] **Segundo administrador del canal**: el respaldo 1 (75314737), desde el
-      operativo. Dos minutos. Es lo único que hace que el canal —con sus
-      seguidores, lo único irrecuperable— sobreviva a un baneo.
+- [ ] **Segundo administrador del canal**, desde la tablet. Cualquier otro
+      número tuyo. Es lo único que hace que el canal —con sus seguidores, lo
+      único irrecuperable— sobreviva si se pierde el 64610187.
 
 ---
 
@@ -63,9 +65,9 @@ Todo esto es pegar credenciales. El código está y probado.
       Tiene 0 seguidores.
 - [ ] **Facebook en `/contenido`**: `https://www.facebook.com/uruku.bo/`. La URL
       ya está anotada; falta pegarla.
-- [ ] **`WA_CANAL_ID=120363412598489616@newsletter`** al `.env` — ya está
-      identificado, salió en los registros. Es el destino que más rinde y el
-      único que no depende de nadie más.
+- [x] ~~`WA_CANAL_ID`~~ — **decidido el 11/9: el canal se publica a mano
+      desde la tablet.** El identificador (`120363412598489616@newsletter`)
+      queda anotado por si algún día se enciende.
 - [ ] **App de Meta** → `FACEBOOK_PAGE_ID`, `FACEBOOK_PAGE_TOKEN`,
       `INSTAGRAM_USER_ID`. ~30 minutos, una sola vez. Pasos en
       [difusion-redes.md](difusion-redes.md).

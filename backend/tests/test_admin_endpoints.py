@@ -410,7 +410,7 @@ def test_dice_cuantos_numeros_hay_configurados_pero_no_cuales(client, repo, admi
     panel, y son problemas opuestos. Los números NO van: el panel lo usa un
     administrador, pero un teléfono en pantalla se saca en una foto."""
     cuerpo = client.get("/admin/whatsapp/entrantes", headers=_h(admin_token)).json()
-    assert set(cuerpo["config"]) == {"propios", "explorador", "contacto_explorador"}
+    assert set(cuerpo["config"]) == {"propios", "explorador", "contacto_explorador", "solo_lectura"}
     assert all(isinstance(v, (int, bool)) for v in cuerpo["config"].values())
 
 

@@ -152,6 +152,22 @@ class Settings(BaseSettings):
     # "rechazar" en el panel. Encenderlo es una decisión, no un ajuste.
     ia_auto_aprobar_desde: float = 0.0
 
+    # ── WAHA SÓLO LEE ────────────────────────────────────────────────────────
+    #
+    # Decisión del 11/9: el número vinculado a WAHA (el Registrador) existe
+    # para UNA cosa — llevar lo que llega a los grupos hasta la base. No crea
+    # grupos, no agrega gente, no publica en el canal, no contesta. Todo lo que
+    # se escribe por WhatsApp lo escribe una persona desde la tablet.
+    #
+    # Es la forma de que un cliente no oficial exponga lo mínimo: una cuenta
+    # que sólo escucha es lo más inofensivo que existe para WhatsApp, y si
+    # igual la banean no se pierde nada que no se recupere re-vinculando.
+    #
+    # Una sola llave para las cuatro cosas, a propósito: apagarlas por separado
+    # es cómo queda una prendida sin que nadie se acuerde. La API oficial de
+    # Meta no pasa por acá — cuando exista el número de la marca, ése sí manda.
+    wa_solo_lectura: bool = True
+
     # ── Vigilar la sesión de WhatsApp ───────────────────────────────────────
     # Estuvo caída tres días sin que nadie lo supiera. Cada pocos minutos se le
     # pregunta a WAHA y, si no está WORKING, queda un ERROR en los registros.

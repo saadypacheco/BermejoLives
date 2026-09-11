@@ -35,6 +35,7 @@ def test_no_confunde_un_chat_de_persona_con_un_grupo():
 # ─────────────────────────────── antes de molestar a WhatsApp
 def test_sin_waha_configurado_no_intenta(monkeypatch):
     from app.core.config import settings
+    monkeypatch.setattr(settings, "wa_solo_lectura", False)
     monkeypatch.setattr(settings, "waha_api_key", "", raising=False)
     with pytest.raises(wa_grupos.GrupoError, match="no está configurado"):
         wa_grupos.crear_grupo("X", ["59170000007"])
@@ -42,6 +43,7 @@ def test_sin_waha_configurado_no_intenta(monkeypatch):
 
 def test_sin_numeros_validos_no_crea_un_grupo_vacio(monkeypatch):
     from app.core.config import settings
+    monkeypatch.setattr(settings, "wa_solo_lectura", False)
     monkeypatch.setattr(settings, "waha_api_key", "k", raising=False)
     monkeypatch.setattr(settings, "waha_base_url", "http://waha:3000", raising=False)
     with pytest.raises(wa_grupos.GrupoError, match="Ningún número válido"):
@@ -101,3 +103,22 @@ def test_si_whatsapp_rechaza_no_se_ata_nada(client, repo, admin_token, monkeypat
     r = client.post(f"/admin/comercio/{c['id']}/grupo", headers=_h(admin_token))
     assert r.status_code == 502
     assert repo.wa_grupos == {}
+
+
+# ─────────────────────────────── WAHA sólo lee (decisión del 11/9)
+def test_con_solo_lectura_no_se_crea_ningun_grupo(monkeypatch):
+    """Los grupos los crea el Anfitrión a mano desde la tablet. Un botón que
+    hace justo lo que se decidió no hacer es una trampa esperando un clic."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "waha_api_key", "k", raising=False)
+    monkeypatch.setattr(settings, "waha_base_url", "http://waha:3000", raising=False)
+    with pytest.raises(wa_grupos.GrupoError, match="sólo lectura"):
+        wa_grupos.crear_grupo("X", ["59170000007"])
+
+
+def test_con_solo_lectura_no_se_agrega_a_nadie(monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "waha_api_key", "k", raising=False)
+    monkeypatch.setattr(settings, "waha_base_url", "http://waha:3000", raising=False)
+    with pytest.raises(wa_grupos.GrupoError, match="sólo lectura"):
+        wa_grupos.agregar_a_grupo("120363@g.us", ["59170000007"])

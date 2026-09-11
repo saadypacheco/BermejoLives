@@ -17,6 +17,9 @@ def _h(token):
 
 @pytest.fixture
 def config_completa(monkeypatch):
+    # Estos tests prueban las ESCRITURAS a las redes, así que apagan la llave
+    # de sólo lectura. Que arranque puesta se prueba aparte, más abajo.
+    monkeypatch.setattr(settings, "wa_solo_lectura", False)
     monkeypatch.setattr(settings, "wa_canal_id", "1203@newsletter")
     monkeypatch.setattr(settings, "waha_base_url", "http://waha:3000")
     monkeypatch.setattr(settings, "waha_api_key", "k")
@@ -73,10 +76,11 @@ def test_solo_sale_lo_aprobado(client, repo, sin_red, config_completa):
     assert sin_red == []
 
 
-def test_la_misma_oferta_no_se_encola_dos_veces(repo):
+def test_la_misma_oferta_no_se_encola_dos_veces(repo, monkeypatch):
     """Se rechaza y se vuelve a aprobar: encola de nuevo. Sin la clave única,
     eso son dos posteos idénticos en el mismo muro — que es justo lo que hace
     que la gente deje de seguir la página."""
+    monkeypatch.setattr(settings, "wa_solo_lectura", False)
     c = repo.seed_comercio(slug="x", nombre="X")
     pub = repo.insert_publicacion_directa({"comercio_id": c["id"], "estado": "aprobado"})
 
@@ -115,6 +119,7 @@ def test_un_destino_sin_configurar_espera_en_vez_de_perderse(repo, monkeypatch):
     """Queda pendiente, no en error: el día que pegan el token se manda lo
     atrasado. Si no se encolara, todo lo aprobado antes de configurar Facebook
     habría que buscarlo a mano en la base."""
+    monkeypatch.setattr(settings, "wa_solo_lectura", False)
     monkeypatch.setattr(settings, "facebook_page_token", "")
     monkeypatch.setattr(settings, "facebook_page_id", "")
     c = repo.seed_comercio(slug="x", nombre="X")
@@ -128,6 +133,7 @@ def test_un_destino_sin_configurar_espera_en_vez_de_perderse(repo, monkeypatch):
 
 
 def test_un_envio_que_falla_queda_con_el_motivo(repo, config_completa, monkeypatch):
+    monkeypatch.setattr(settings, "wa_solo_lectura", False)
     """Un error invisible es una oferta que el comerciante espera ver y no
     aparece. El motivo se guarda para que el panel lo muestre."""
     def _explota(texto, img):
@@ -161,8 +167,9 @@ def test_instagram_no_publica_sin_imagen(config_completa):
 
 # ══════════════════════════════════════════════════════════ el panel
 
-def test_aprobar_desde_el_panel_encola(client, repo, admin_token):
+def test_aprobar_desde_el_panel_encola(client, repo, admin_token, monkeypatch):
     """El enganche: si esto se rompe, la difusión existe y no la dispara nadie."""
+    monkeypatch.setattr(settings, "wa_solo_lectura", False)
     c = repo.seed_comercio(slug="x", nombre="X", codigo="AB12")
     pub = repo.insert_publicacion_directa(
         {"comercio_id": c["id"], "tipo": "oferta", "titulo": "t", "estado": "pendiente",
@@ -305,3 +312,51 @@ def test_reservarlo_a_los_planes_arranca_apagado():
     """Hoy no paga nadie: encenderlo antes de que haya un plan contratado
     dejaría el canal vacío sin dar ningún error."""
     assert settings.difusion_canal_solo_planes is False
+
+
+# ═══════════════════════════════════════════ WAHA sólo lee (decisión del 11/9)
+
+def test_por_defecto_waha_solo_lee():
+    """El Registrador existe para llevar lo que llega a la base. Nada más."""
+    assert settings.wa_solo_lectura is True
+
+
+def test_con_solo_lectura_el_canal_no_se_encola(repo):
+    """Se publica a mano desde la tablet. Encolarlo igual llenaría la cola de
+    filas que nunca van a salir, y el panel diría "N esperando" para siempre."""
+    c = repo.seed_comercio(slug="x", nombre="X")
+    pub = repo.insert_publicacion_directa({"comercio_id": c["id"], "estado": "aprobado"})
+    assert difusion.encolar(repo, pub["id"]) == 2
+    assert {f["destino"] for f in repo.difusion} == {"facebook", "instagram"}
+
+
+def test_con_solo_lectura_el_canal_figura_como_manual(client, admin_token):
+    r = client.get("/admin/difusion", headers=_h(admin_token))
+    canal = next(d for d in r.json()["destinos"] if d["clave"] == "wa_canal")
+    assert canal["manual"] is True
+    assert canal["configurado"] is False
+
+
+def test_con_solo_lectura_nada_sale_por_waha(monkeypatch):
+    """La única puerta de salida por WAHA, cerrada con llave. Si esto se
+    rompiera, el Registrador empezaría a escribir en los grupos."""
+    from app.services import mensajeria
+
+    llamadas = []
+    monkeypatch.setattr(mensajeria, "_waha_texto", lambda c, t: llamadas.append(c) or True)
+    monkeypatch.setattr(mensajeria, "_waha_imagen", lambda c, u, t: llamadas.append(c) or True)
+    assert mensajeria.enviar_texto("120363@g.us", "hola") is False
+    assert mensajeria.enviar_imagen("120363@g.us", "http://x/1.jpg") is False
+    assert llamadas == []
+
+
+def test_la_api_oficial_no_esta_sujeta_a_la_llave(monkeypatch):
+    """La llave es sobre WAHA. El número de la marca, por la API oficial, sí
+    escribe — para eso existe."""
+    from app.services import mensajeria
+
+    monkeypatch.setattr(settings, "whatsapp_provider", "cloud_api")
+    llamadas = []
+    monkeypatch.setattr(mensajeria, "_cloud_texto", lambda c, t: llamadas.append(c) or True)
+    assert mensajeria.enviar_texto("59170000001", "hola") is True
+    assert llamadas == ["59170000001"]

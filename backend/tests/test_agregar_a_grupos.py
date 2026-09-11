@@ -125,3 +125,60 @@ def test_un_numero_invalido_se_rechaza_antes_de_tocar_nada(client, admin_token, 
 
 def test_solo_admin(client, tres_grupos):
     assert client.post(RUTA, json={"numero": "59168727584"}).status_code in (401, 403)
+
+
+# ═══════════════════════════ el Anfitrión ata el grupo mandando el código
+
+def _mensaje_en_grupo(texto, de, grupo="120999@g.us", mid="m1"):
+    return {"event": "message", "session": "default", "payload": {
+        "id": mid, "from": grupo, "participant": f"{de}@c.us",
+        "body": texto, "type": "text", "fromMe": False}}
+
+
+def test_el_anfitrion_ata_el_grupo_con_el_codigo(repo, monkeypatch):
+    """El grupo lo crea el Anfitrión a mano desde la tablet, y lo natural es
+    que sea él quien mande el URUKU-XXXX. Como su número es propio, antes se
+    descartaba antes de mirarlo y el grupo quedaba sin comercio."""
+    from app.core.config import settings
+    from app.services import ingest
+
+    monkeypatch.setattr(settings, "wa_numeros_propios", "59164610187")
+    from app.core import config as cfg
+    cfg._numeros_propios.cache_clear()
+    c = repo.seed_comercio(slug="calzados", nombre="Calzados Top", codigo="7K3M")
+
+    r = ingest.handle_message(_mensaje_en_grupo("URUKU-7K3M", "59164610187"), repo)
+    assert r["grupo_atado"] == "calzados"
+    assert repo.wa_grupos["120999@g.us"]["comercio_id"] == c["id"]
+    # Y NADA se publicó a nombre de nadie: un número propio nunca publica.
+    assert repo.publicaciones == []
+
+
+def test_un_propio_sin_codigo_sigue_ignorandose(repo, monkeypatch):
+    from app.core.config import settings
+    from app.services import ingest
+
+    monkeypatch.setattr(settings, "wa_numeros_propios", "59164610187")
+    from app.core import config as cfg
+    cfg._numeros_propios.cache_clear()
+
+    r = ingest.handle_message(_mensaje_en_grupo("buen día", "59164610187"), repo)
+    assert r["publicada"] is False and "grupo_atado" not in r
+    assert repo.wa_grupos == {}
+
+
+def test_el_codigo_de_un_propio_no_pisa_un_grupo_ya_atado(repo, monkeypatch):
+    """Si el grupo ya es de un comercio, otro código no lo cambia: robar un
+    grupo tiene que ser imposible por accidente."""
+    from app.core.config import settings
+    from app.services import ingest
+
+    monkeypatch.setattr(settings, "wa_numeros_propios", "59164610187")
+    from app.core import config as cfg
+    cfg._numeros_propios.cache_clear()
+    a = repo.seed_comercio(slug="a", nombre="A", codigo="7K3M")
+    repo.seed_comercio(slug="b", nombre="B", codigo="9P2Q")
+    repo.vincular_grupo_comercio("120999@g.us", a["id"], None, "codigo", "anfitrion")
+
+    ingest.handle_message(_mensaje_en_grupo("URUKU-9P2Q", "59164610187"), repo)
+    assert repo.wa_grupos["120999@g.us"]["comercio_id"] == a["id"]

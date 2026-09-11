@@ -50,11 +50,23 @@ def usa_cloud() -> bool:
 
 # ───────────────────────────────────────────────────────────────── salida
 
+def _waha_bloqueado(chat: str) -> bool:
+    """WAHA sólo lee. Un envío por WAHA con la llave puesta no sale, y queda en
+    los registros — si alguien esperaba que saliera, ahí está por qué no."""
+    if usa_cloud() or not settings.wa_solo_lectura:
+        return False
+    logger.info("mensajeria.waha_solo_lectura", chat=chat,
+                detalle="no se manda nada por WAHA; se escribe desde la tablet")
+    return True
+
+
 def enviar_texto(chat: str, texto: str) -> bool:
     """Un mensaje de texto. `chat` es el JID (WAHA) o el teléfono (Cloud).
 
     Nunca lanza: quien avisa no puede romperse por avisar.
     """
+    if _waha_bloqueado(chat):
+        return False
     try:
         return _cloud_texto(chat, texto) if usa_cloud() else _waha_texto(chat, texto)
     except Exception as exc:  # noqa: BLE001
@@ -63,6 +75,8 @@ def enviar_texto(chat: str, texto: str) -> bool:
 
 
 def enviar_imagen(chat: str, imagen_url: str, texto: str = "") -> bool:
+    if _waha_bloqueado(chat):
+        return False
     try:
         return (_cloud_imagen(chat, imagen_url, texto) if usa_cloud()
                 else _waha_imagen(chat, imagen_url, texto))

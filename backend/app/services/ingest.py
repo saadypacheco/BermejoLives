@@ -36,6 +36,30 @@ class IngestError(Exception):
     """Error recuperable de ingesta."""
 
 
+def _atar_grupo_por_codigo_propio(repo: Repo, payload) -> str | None:
+    """Un número de URUKU mandó URUKU-XXXX en un grupo sin atar: se ata.
+    Devuelve el slug del comercio, o None si no había código o ya estaba."""
+    from app.core.codigo import extraer_codigo
+
+    codigo = extraer_codigo(payload.body)
+    if not codigo:
+        return None
+    grupo = payload.grupo_jid or ""
+    if repo.get_comercio_por_grupo(grupo):
+        return None                         # ya atado: no se pisa
+    comercio = repo.get_comercio_por_codigo(codigo)
+    if not comercio:
+        logger.info("ingest.codigo_desconocido_propio", codigo=codigo, grupo=grupo)
+        return None
+    try:
+        repo.vincular_grupo_comercio(grupo, comercio["id"], None, "codigo", "anfitrion")
+    except Exception:  # noqa: BLE001
+        logger.warning("ingest.vincular_grupo_fallo", grupo=grupo, exc_info=True)
+        return None
+    logger.info("ingest.grupo_atado_por_anfitrion", comercio=comercio.get("slug"), codigo=codigo)
+    return comercio.get("slug") or comercio.get("id")
+
+
 def _identificar_por_grupo(repo: Repo, payload) -> tuple[dict | None, str, str | None]:
     """Resuelve el comercio cuando el mensaje vino de un grupo.
 
@@ -119,21 +143,26 @@ def _identificar_comercio(repo: Repo, payload) -> tuple[dict, str, str | None]:
     return repo.upsert_comercio_by_jid(wa_jid, payload.phone), "desconocido", codigo
 
 
-def _avisar(chat_id: str | None, texto: str) -> None:
+def _avisar(chat_id: str | None, texto: str) -> bool:
     """Le contesta al comerciante en el mismo chat donde mandó la foto.
 
+    Devuelve si salió. Con WAHA en sólo lectura no sale nunca —el aviso lo da
+    una persona desde la tablet— y por eso el caller lo deja escrito en la
+    bandeja: un tope alcanzado que nadie le dice al comerciante es una oferta
+    que él cree publicada y no está.
+
     Nunca lanza: que no se pueda avisar no puede impedir que la publicación
-    siga su curso. Un aviso perdido es molesto; una oferta perdida por un fallo
-    al avisar es absurdo.
+    siga su curso.
     """
     if not chat_id:
-        return
+        return False
     try:
         from app.services.whatsapp_client import enviar_texto
 
-        enviar_texto(chat_id, texto)
+        return bool(enviar_texto(chat_id, texto))
     except Exception:  # noqa: BLE001
         logger.warning("ingest.aviso_fallo", chat=chat_id, exc_info=True)
+        return False
 
 
 def _puede_publicar_por_whatsapp(comercio: dict) -> bool:
@@ -321,6 +350,18 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         return _publicar_del_explorador(payload, event, repo)
 
     if payload.es_grupo and settings.es_numero_propio(payload.phone):
+        # El grupo lo crea el Anfitrión a mano desde la tablet, y lo natural es
+        # que sea él quien mande el URUKU-XXXX para atarlo. Como su número es
+        # propio, sin esto el código se descartaba antes de mirarlo y el grupo
+        # quedaba sin comercio hasta que el comerciante lo mandara — que es
+        # justo el paso incómodo que se quería evitar.
+        #
+        # Se ata y NADA MÁS: un número propio nunca publica a nombre de nadie.
+        atado = _atar_grupo_por_codigo_propio(repo, payload)
+        if atado:
+            repo.marcar_wa_inbox(payload.id, "ignorada",
+                                 f"código de URUKU: grupo atado a {atado}", None)
+            return {"captured": True, "publicada": False, "grupo_atado": atado}
         logger.info("ingest.mensaje_propio", grupo=payload.grupo_jid)
         motivo = "mensaje de un número de URUKU"
         repo.marcar_wa_inbox(payload.id, "ignorada", motivo)
@@ -382,12 +423,14 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     # acá, en el mismo chat donde mandó la foto, y con las DOS salidas: pagar la
     # extra o pasar de plan. Ofrecer una sola es elegir por él.
     cuota = planes.revisar_antes_de_publicar(repo, comercio)
+    avisado = False
     if cuota["consecuencia"]:
         siguiente = planes.plan_siguiente(repo, cuota["plan"])
-        _avisar(payload.from_, planes.texto_de_aviso(cuota, siguiente))
+        avisado = _avisar(payload.from_, planes.texto_de_aviso(cuota, siguiente))
     if not cuota["puede"]:
         motivo = (f"llegó al tope de {cuota['cuota']} publicaciones de su plan "
-                  f"{cuota['plan'].get('nombre')}")
+                  f"{cuota['plan'].get('nombre')}"
+                  + ("" if avisado else " · AVISARLE desde la tablet, no se le mandó nada"))
         logger.info("ingest.cuota_agotada", comercio=slug, usadas=cuota["usadas"])
         repo.marcar_wa_inbox(payload.id, "sin_permiso", motivo, comercio.get("id"))
         return {"captured": True, "comercio": slug, "publicada": False, "motivo": motivo}

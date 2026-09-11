@@ -562,7 +562,7 @@ export type GrupoComercio = {
   created_at?: string; created_by?: string | null;
 };
 
-export async function listarGrupos(comercioId: string): Promise<{ items: GrupoComercio[] }> {
+export async function listarGrupos(comercioId: string): Promise<{ items: GrupoComercio[]; solo_lectura?: boolean }> {
   const res = await authFetch(`/admin/comercio/${comercioId}/grupos`);
   return res.json();
 }
@@ -839,7 +839,7 @@ export type WaEntrante = {
 export type BandejaWa = {
   items: WaEntrante[];
   resumen: { resultado: string; n: number }[];
-  config: { propios: number; explorador: number; contacto_explorador: boolean };
+  config: { propios: number; explorador: number; contacto_explorador: boolean; solo_lectura?: boolean };
   /** El estado de la sesión de WAHA, en vivo. `ok` sólo si está WORKING. */
   sesion: {
     alcanzable: boolean; estado: string; ok: boolean;
@@ -895,7 +895,7 @@ export type FilaDifusion = {
 export type Difusion = {
   items: FilaDifusion[];
   resumen: { destino: string; estado: string; n: number }[];
-  destinos: { clave: string; nombre: string; configurado: boolean; automatico: boolean }[];
+  destinos: { clave: string; nombre: string; configurado: boolean; automatico: boolean; manual?: boolean }[];
 };
 
 export async function getDifusion(estado = "", limite = 100): Promise<Difusion> {

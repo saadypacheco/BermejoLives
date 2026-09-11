@@ -55,6 +55,9 @@ def crear_grupo(nombre: str, participantes: list[str]) -> dict:
     servicios: acá el caller SÍ necesita saber, porque un grupo a medias es
     peor que ninguno — el comerciante ya lo vio aparecer en su teléfono.
     """
+    if settings.wa_solo_lectura:
+        raise GrupoError("WAHA está en modo sólo lectura: los grupos se crean a mano "
+                         "desde la tablet y se atan mandando URUKU-XXXX adentro")
     if not settings.waha_base_url or not settings.waha_api_key:
         raise GrupoError("WAHA no está configurado (falta URL o API key)")
 
@@ -114,6 +117,9 @@ def agregar_a_grupo(grupo_jid: str, numeros: list[str]) -> None:
     los cuenta y muestra cuáles quedaron afuera, porque un respaldo "casi" en
     todos los grupos es un respaldo que no está donde haga falta.
     """
+    if settings.wa_solo_lectura:
+        raise GrupoError("WAHA está en modo sólo lectura: los respaldos se agregan a mano "
+                         "desde la tablet")
     if not settings.waha_base_url or not settings.waha_api_key:
         raise GrupoError("WAHA no está configurado (falta URL o API key)")
 

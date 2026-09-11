@@ -111,6 +111,7 @@ def test_por_defecto_nunca_aprueba_sola(repo, ia):
 
 def test_con_la_perilla_encendida_aprueba_y_encola(repo, ia, monkeypatch):
     monkeypatch.setattr(settings, "ia_auto_aprobar_desde", 0.8)
+    monkeypatch.setattr(settings, "wa_solo_lectura", False)
     c = repo.seed_comercio(slug="x", nombre="X")
     p = _pub(repo, c, "zapatillas")           # aprobar, 0.9
     r = revision_ia.revisar_pendientes(repo)

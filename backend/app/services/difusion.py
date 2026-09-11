@@ -54,8 +54,19 @@ class DifusionError(Exception):
     """Falló el envío a una red. El motivo se guarda en la cola."""
 
 
+def destinos_activos() -> tuple[str, ...]:
+    """A qué redes se encola. Con WAHA en sólo lectura, el canal NO: se
+    publica a mano desde la tablet, y encolarlo igual llenaría la cola de
+    filas que nunca van a salir."""
+    if settings.wa_solo_lectura and not mensajeria.usa_cloud():
+        return tuple(d for d in DESTINOS if d != "wa_canal")
+    return DESTINOS
+
+
 def configurado(destino: str) -> bool:
     if destino == "wa_canal":
+        if settings.wa_solo_lectura and not mensajeria.usa_cloud():
+            return False
         return bool(settings.wa_canal_id.strip() and settings.waha_base_url
                     and settings.waha_api_key)
     if destino == "facebook":
@@ -201,7 +212,7 @@ def encolar(repo, publicacion_id: str) -> int:
     por un problema de redes.
     """
     try:
-        return repo.encolar_difusion(publicacion_id, list(DESTINOS))
+        return repo.encolar_difusion(publicacion_id, list(destinos_activos()))
     except Exception:  # noqa: BLE001
         logger.warning("difusion.encolar_fallo", pub=publicacion_id, exc_info=True)
         return 0

@@ -2093,6 +2093,9 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
   const [err, setErr] = useState("");
   const [cargando, setCargando] = useState(true);
   const [grupos, setGrupos] = useState<GrupoComercio[]>([]);
+  // WAHA sólo lee (decisión del 11/9): los grupos se crean a mano desde la
+  // tablet. Con esto puesto, el botón de crear no se ofrece.
+  const [soloLectura, setSoloLectura] = useState(true);
   const [grupoNuevo, setGrupoNuevo] = useState("");
   const [errGrupo, setErrGrupo] = useState("");
   const [misRubros, setMisRubros] = useState<string[] | null>(null);
@@ -2104,7 +2107,7 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
       .catch(() => setErr("No se pudieron cargar los números"))
       .finally(() => setCargando(false));
     listarGrupos(comercio.id)
-      .then((r) => setGrupos(r.items ?? []))
+      .then((r) => { setGrupos(r.items ?? []); setSoloLectura(r.solo_lectura ?? true); })
       .catch(() => setErrGrupo("No se pudieron cargar los grupos"));
     rubrosDeComercio(comercio.id)
       .then(setMisRubros)
@@ -2258,7 +2261,27 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
               El grupo del comercio con URUKU y el testigo. Lo que se manda ahí entra como oferta.
             </div>
 
-            {grupos.length === 0 && (
+            {grupos.length === 0 && soloLectura && (
+              <div style={{ padding: "8px 0", fontSize: 12.5, lineHeight: 1.5 }}>
+                {/* El flujo manual, paso a paso, porque es lo que hay que hacer
+                    y no está escrito en ningún otro lado que se vea desde acá. */}
+                <b>El grupo se crea desde la tablet:</b>
+                <ol style={{ margin: "6px 0 0", paddingLeft: 18, color: "var(--txt-2)" }}>
+                  <li>Grupo nuevo: <span style={{ fontFamily: "monospace" }}>URUKU · {comercio.nombre}</span></li>
+                  <li>Agregar al comerciante y al número de WAHA (el Registrador)</li>
+                  <li>Mandar adentro:{" "}
+                    <span style={{ fontFamily: "monospace", color: "var(--neon)", fontWeight: 700 }}>
+                      URUKU-{comercio.codigo ?? "XXXX"}
+                    </span>
+                  </li>
+                </ol>
+                <div style={{ color: "var(--txt-3)", marginTop: 6 }}>
+                  Con el código adentro, el grupo queda atado a este comercio solo y aparece acá.
+                </div>
+              </div>
+            )}
+
+            {grupos.length === 0 && !soloLectura && (
               <div style={{ padding: "8px 0" }}>
                 {/* El camino corto: el sistema crea el grupo y, como lo crea él,
                     sabe su identificador y lo ata en el mismo acto. Sin código,

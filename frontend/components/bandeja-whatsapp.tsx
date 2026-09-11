@@ -232,7 +232,9 @@ export function BandejaWhatsApp() {
         </div>
       </div>
 
-      <AgregarANuevosGrupos />
+      {/* Con WAHA en sólo lectura, los respaldos se agregan a mano desde la
+          tablet, y este botón no puede hacer nada más que fallar. */}
+      {d && !d.config.solo_lectura && <AgregarANuevosGrupos />}
 
       {!cargando && (d?.items.length ?? 0) === 0 && (
         <div className="panel-card glass" style={{ padding: 24, textAlign: "center", color: "var(--txt-3)" }}>
