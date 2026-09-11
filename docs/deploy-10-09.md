@@ -75,6 +75,10 @@ docker compose -f docker-compose.prod.yml exec -T postgres \
   -f - < selfhost/postgres-init/0103_veredicto_ia_en_la_publicacion.sql
 ```
 
+```bash
+docker compose -f docker-compose.prod.yml exec -T postgres   psql -U postgres -d postgres -v ON_ERROR_STOP=1   -f - < selfhost/postgres-init/0104_por_donde_entro.sql
+```
+
 ### Verificar que entraron
 
 ```bash

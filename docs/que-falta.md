@@ -1,5 +1,9 @@
 # Qué falta — lista ordenada
 
+> **Para operar los teléfonos —configuración, qué no hacer, y qué hacer cuando
+> algo se rompe— está el
+> [manual operativo](manual-operativo-whatsapp.md).**
+>
 > Al 10/9/2026. Ordenado por lo que **desbloquea a lo demás**, no por tamaño.
 > Lo de arriba hace que lo de abajo tenga sentido; hacer lo de abajo primero es
 > trabajar sobre algo que nadie puede ver todavía.
@@ -77,10 +81,11 @@ Todo esto es pegar credenciales. El código está y probado.
       [difusion-redes.md](difusion-redes.md).
       **La misma app sirve para las tres cosas**: difusión a Facebook, a
       Instagram y, después, WhatsApp oficial.
-- [ ] **Probar WhatsApp oficial con el número de prueba** que regala Meta, sin
-      migrar nada. Pasos en
-      [whatsapp-arquitectura-y-escala.md](whatsapp-arquitectura-y-escala.md).
-      Es lo que permite medir costo y latencia con datos propios.
+- [ ] **Probar el Plan B (API oficial)** con el número de prueba de Meta, sin
+      migrar nada. Ahora se verifica desde **Admin › WhatsApp → Plan B**: token
+      válido, último mensaje recibido por esa vía, y un botón para mandar uno
+      de prueba. Pasos en
+      [manual-operativo-whatsapp.md](manual-operativo-whatsapp.md), sección 7.
 
 ---
 

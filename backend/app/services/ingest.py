@@ -329,6 +329,10 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
             "body": payload.body,
             "media_url": payload.media_url,
             "raw": event.payload,
+            # Por dónde entró. Es lo que permite DEMOSTRAR que el Plan B anda:
+            # un mensaje de prueba al número de Meta que aparece en la bandeja
+            # como "cloud" es una prueba; "creo que anduvo" no.
+            "via": "cloud" if (event.session or "").lower() == "cloud" else "waha",
         }
     )
     if not inserted_inbox:

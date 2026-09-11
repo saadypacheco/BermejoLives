@@ -478,6 +478,13 @@ class FakeRepo:
     def difusion_pendientes(self, limite):
         return [f for f in self.difusion if f["estado"] == "pendiente"][:limite]
 
+    def ultimo_wa_inbox_por_via(self):
+        salida = {"waha": None, "cloud": None}
+        for f in self.wa_inbox.values():
+            v = f.get("via") or "waha"
+            salida[v] = max(salida[v] or "", f.get("created_at") or "2026-01-01T00:00:00Z")
+        return salida
+
     def list_busquedas(self, desde_iso):
         return [b for b in self.busquedas if str(b.get("created_at") or "") >= desde_iso]
 

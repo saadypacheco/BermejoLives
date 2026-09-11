@@ -845,7 +845,22 @@ export type BandejaWa = {
     alcanzable: boolean; estado: string; ok: boolean;
     numero: string | null; nombre: string | null; sesion: string;
   };
+  /** El Plan B: la API oficial de Meta. */
+  cloud: {
+    configurado: boolean; ok: boolean; estado: string; activo: boolean;
+    numero: string | null; nombre: string | null; calidad: string | null;
+    ultimo_entrante: string | null;
+  };
 };
+
+export async function probarCloud(numero: string): Promise<{ ok: boolean; a: string }> {
+  const res = await authFetch("/admin/whatsapp/cloud/prueba", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ numero }),
+  });
+  return res.json();
+}
 
 export async function getBandejaWa(estado = "problemas", limite = 100): Promise<BandejaWa> {
   const res = await authFetch(`/admin/whatsapp/entrantes?estado=${estado}&limite=${limite}`);

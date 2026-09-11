@@ -60,6 +60,7 @@ class Repo(Protocol):
     def difusion_pendientes(self, limite: int) -> list[dict]: ...
     def contar_difusion_hoy(self, destino: str) -> int: ...
     def list_busquedas(self, desde_iso: str) -> list[dict]: ...
+    def ultimo_wa_inbox_por_via(self) -> dict[str, str | None]: ...
     def marcar_difusion(self, fila_id: str, estado: str, motivo: str | None,
                         url: str | None = None) -> None: ...
     def list_difusion(self, estado: str | None, limite: int) -> list[dict]: ...
@@ -455,6 +456,21 @@ class SupabaseRepo:
             .execute()
         )
         return bool(res.data)  # vacío => duplicado
+
+    def ultimo_wa_inbox_por_via(self) -> dict[str, str | None]:
+        """Cuándo llegó el último mensaje por cada camino (WAHA / API oficial).
+        Es lo que el panel muestra como "último por la API oficial: hace 2
+        min" — la única prueba de que el Plan B recibe de verdad."""
+        salida: dict[str, str | None] = {"waha": None, "cloud": None}
+        for via in salida:
+            try:
+                res = (self._db.table("wa_inbox").select("created_at").eq("via", via)
+                       .order("created_at", desc=True).limit(1).execute())
+                if res.data:
+                    salida[via] = res.data[0].get("created_at")
+            except Exception:  # noqa: BLE001
+                logger.warning("ultimo_wa_inbox_por_via.fallo", via=via, exc_info=True)
+        return salida
 
     def marcar_wa_inbox(self, wa_message_id: str, resultado: str, motivo: str | None = None,
                         comercio_id: str | None = None) -> None:

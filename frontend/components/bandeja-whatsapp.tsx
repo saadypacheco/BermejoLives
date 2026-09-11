@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { agregarNumeroAGrupos, getBandejaWa,
+import { agregarNumeroAGrupos, getBandejaWa, probarCloud,
          type AgregarAGrupos, type BandejaWa } from "@/lib/api";
 
 const ETIQUETA: Record<string, { texto: string; color: string }> = {
@@ -134,6 +134,74 @@ function AgregarANuevosGrupos() {
   );
 }
 
+/**
+ * El Plan B: la API oficial de Meta, verificable desde acá.
+ *
+ * Un interruptor que nadie puede probar es una promesa. Esta tarjeta dice si
+ * el token vale y a qué número corresponde (sin mandar nada), cuándo entró el
+ * último mensaje por ahí (la prueba de que RECIBE), y tiene el botón para
+ * mandar uno de prueba a un número propio (la prueba de que MANDA). Con las
+ * tres en verde, el día que haga falta el cambio es una variable.
+ */
+function PlanB({ c }: { c: BandejaWa["cloud"] }) {
+  const [numero, setNumero] = useState("");
+  const [msg, setMsg] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+
+  const probar = async () => {
+    setOcupado(true); setMsg("");
+    try { const r = await probarCloud(numero); setMsg(`✓ Enviado a ${r.a}. Miralo en ese teléfono.`); }
+    catch (e) { setMsg(e instanceof Error ? e.message : "No se pudo"); }
+    finally { setOcupado(false); }
+  };
+
+  const hace = (iso: string | null) => {
+    if (!iso) return "nunca";
+    const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    return min < 1 ? "recién" : min < 60 ? `hace ${min} min` : min < 1440 ? `hace ${Math.round(min / 60)} h` : `hace ${Math.round(min / 1440)} días`;
+  };
+
+  return (
+    <div className="panel-card glass">
+      <div className="ph">
+        <h3>Plan B · API oficial de Meta</h3>
+        <span style={{ fontSize: 12.5, color: c.activo ? "var(--neon)" : "var(--txt-3)" }}>
+          {c.activo ? "ACTIVO: lo que sale va por acá" : "en espera · lo que sale va por WAHA"}
+        </span>
+      </div>
+      <div style={{ padding: "12px 16px", fontSize: 13, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div>
+          {c.ok ? "🟢" : c.configurado ? "🔴" : "○"}{" "}
+          {!c.configurado ? "Sin configurar — faltan WHATSAPP_CLOUD_PHONE_ID y WHATSAPP_CLOUD_TOKEN"
+            : c.estado === "TOKEN_INVALIDO" ? "El token venció o se revocó: hay que rehacerlo en la consola de Meta"
+            : c.estado === "META_NO_RESPONDE" ? "Meta no responde"
+            : <>Token válido · <b>{c.nombre ?? "(sin nombre verificado)"}</b> · {c.numero}
+                {c.calidad && <> · calidad <b style={{ color: c.calidad === "GREEN" ? "var(--neon)" : "var(--amber)" }}>{c.calidad}</b></>}</>}
+        </div>
+        <div style={{ color: "var(--txt-3)", fontSize: 12.5 }}>
+          Último mensaje recibido por la API oficial: <b>{hace(c.ultimo_entrante)}</b>
+          {!c.ultimo_entrante && " — mandale un WhatsApp al número de Meta y tiene que aparecer acá."}
+        </div>
+        {c.configurado && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 4 }}>
+            <input className="input" placeholder="59175314737" value={numero}
+                   onChange={(e) => setNumero(e.target.value)} style={{ width: 170 }} />
+            <button className="btn btn-sm btn-ghost" disabled={!numero.trim() || ocupado || !c.ok}
+                    onClick={probar}>
+              Mandar un mensaje de prueba
+            </button>
+            {msg && <span style={{ fontSize: 12.5, color: msg.startsWith("✓") ? "var(--neon)" : "var(--pink)" }}>{msg}</span>}
+          </div>
+        )}
+        <div style={{ color: "var(--txt-3)", fontSize: 11.5 }}>
+          Sólo a números de URUKU. Recibir funciona siempre que el webhook esté enganchado en
+          Meta; mandar por acá recién cuando se ponga <code>WHATSAPP_PROVIDER=cloud_api</code>.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function BandejaWhatsApp() {
   const [estado, setEstado] = useState("problemas");
   const [d, setD] = useState<BandejaWa | null>(null);
@@ -231,6 +299,8 @@ export function BandejaWhatsApp() {
           </button>
         </div>
       </div>
+
+      {d?.cloud && <PlanB c={d.cloud} />}
 
       {/* Con WAHA en sólo lectura, los respaldos se agregan a mano desde la
           tablet, y este botón no puede hacer nada más que fallar. */}

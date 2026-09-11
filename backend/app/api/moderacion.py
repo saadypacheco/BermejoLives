@@ -1863,10 +1863,16 @@ async def admin_wa_entrantes(
     # El estado de la sesión, EN VIVO. La sesión estuvo caída tres días sin que
     # nadie lo supiera: todo parecía configurado y no entraba una sola oferta.
     sesion = await run_in_threadpool(wa_sesion.estado)
+    # El Plan B, con la misma honestidad que el A: si el token vale, a qué
+    # número corresponde, cuándo entró el último mensaje por ahí. Un
+    # interruptor que nadie puede verificar es una promesa.
+    cloud = await run_in_threadpool(wa_sesion.estado_cloud)
+    cloud["ultimo_entrante"] = (await run_in_threadpool(repo.ultimo_wa_inbox_por_via)).get("cloud")
     return {
         "items": items,
         "resumen": resumen,
         "sesion": sesion,
+        "cloud": cloud,
         # Cuántos hay de cada rol, sin mostrar los números: el panel lo usa un
         # administrador, pero un teléfono en pantalla se saca en una foto.
         "config": {
@@ -2474,3 +2480,45 @@ async def admin_demanda(
     """
     inf = await run_in_threadpool(demanda.informe, repo, dias, limite)
     return {**inf, "frase": demanda.frase_de_venta(inf)}
+
+
+class PruebaCloudBody(BaseModel):
+    numero: str
+
+
+@router.post("/admin/whatsapp/cloud/prueba")
+async def admin_cloud_prueba(
+    body: PruebaCloudBody,
+    admin: dict = Depends(require_admin),
+) -> dict:
+    """Manda un mensaje de prueba por la API oficial, a un número tuyo.
+
+    Es la otra mitad de la verificación del Plan B: `estado_cloud` dice que el
+    token vale; esto dice que un mensaje SALE. Va siempre por la API oficial,
+    esté o no puesto el interruptor — es una prueba, no un cambio de proveedor.
+    Y no pasa por la llave de sólo lectura, porque ésa es sobre WAHA.
+
+    Sólo a números de URUKU: una prueba que le llega a un comerciante es un
+    mensaje raro de un número que no conoce.
+    """
+    error = validar_whatsapp(body.numero)
+    if error:
+        raise HTTPException(400, error)
+    numero = normalizar_whatsapp(body.numero) or ""
+    if not settings.es_numero_propio(numero):
+        raise HTTPException(400, "La prueba sólo se manda a un número de URUKU "
+                                 "(los de WA_NUMEROS_PROPIOS)")
+
+    from app.services import mensajeria
+
+    texto = ("Prueba de URUKU por la API oficial de WhatsApp. "
+             "Si leés esto, el Plan B manda.")
+    try:
+        ok = await run_in_threadpool(mensajeria._cloud_texto, numero, texto)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("cloud.prueba_fallo", error=str(exc), by=admin.get("sub"))
+        raise HTTPException(502, f"Meta rechazó el envío: {str(exc)[:200]}") from exc
+    if not ok:
+        raise HTTPException(409, "La API oficial no está configurada (falta el número o el token)")
+    logger.info("cloud.prueba_enviada", a=numero, by=admin.get("sub"))
+    return {"ok": True, "a": numero}

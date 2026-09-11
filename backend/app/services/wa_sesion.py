@@ -82,3 +82,60 @@ def vigilar(sesion: str = "default") -> dict:
                  alcanzable=e["alcanzable"],
                  detalle="no entra ninguna oferta por WhatsApp hasta que vuelva a WORKING")
     return e
+
+
+# ───────────────────────────────────────── el Plan B: la API oficial de Meta
+
+_GRAPH = "https://graph.facebook.com/v20.0"
+
+
+def _cloud_activo() -> bool:
+    """¿El interruptor está en la API oficial? Lo que SALE va por ahí."""
+    return (settings.whatsapp_provider or "").strip().lower() in {"cloud", "cloud_api", "meta"}
+
+
+def _cloud(estado: str, ok: bool, configurado: bool = True, **extra) -> dict:
+    base = {"configurado": configurado, "ok": ok, "estado": estado,
+            "numero": None, "nombre": None, "calidad": None, "activo": _cloud_activo()}
+    base.update(extra)
+    return base
+
+
+def estado_cloud() -> dict:
+    """¿Está viva la API oficial? Se le pregunta a Meta con el token, sin
+    mandar nada.
+
+    Es el equivalente de `estado()` para el Plan B, y existe por lo mismo: un
+    interruptor que nadie puede verificar es una promesa. Con esto, el panel
+    dice si el token vale, a qué número corresponde y cómo lo califica Meta —
+    antes de que haga falta apretar el interruptor.
+
+    Nunca lanza.
+    """
+    pid = (settings.whatsapp_cloud_phone_id or "").strip()
+    token = (settings.whatsapp_cloud_token or "").strip()
+    if not pid or not token:
+        return _cloud("SIN_CONFIGURAR", ok=False, configurado=False)
+    try:
+        r = httpx.get(f"{_GRAPH}/{pid}",
+                      params={"fields": "display_phone_number,verified_name,quality_rating"},
+                      headers={"Authorization": f"Bearer {token}"}, timeout=_TIMEOUT)
+        if r.status_code in (400, 401):
+            # Meta contesta 400 con error.code 190 cuando el token venció o
+            # se revocó. Es el caso más común y merece nombre propio: se
+            # arregla rehaciendo el token, no mirando la red.
+            cuerpo = (r.json() or {}).get("error") or {}
+            if r.status_code == 401 or cuerpo.get("code") == 190:
+                return _cloud("TOKEN_INVALIDO", ok=False)
+        r.raise_for_status()
+        d = r.json() or {}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("wa_sesion.cloud_inalcanzable", error=str(exc))
+        return _cloud("META_NO_RESPONDE", ok=False)
+
+    return _cloud("OK", ok=True,
+                  numero=d.get("display_phone_number"),
+                  nombre=d.get("verified_name"),
+                  # GREEN / YELLOW / RED: cómo califica Meta la cuenta. RED es
+                  # antesala de que la limiten, y conviene verlo antes de que pase.
+                  calidad=d.get("quality_rating"))
