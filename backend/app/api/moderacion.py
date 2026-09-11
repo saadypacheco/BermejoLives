@@ -12,7 +12,7 @@ from app.core.auth import require_admin, require_moderador
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp
-from app.services import clasificador, demanda, difusion, planes, revision_ia, wa_grupos
+from app.services import clasificador, demanda, difusion, planes, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
@@ -1856,9 +1856,13 @@ async def admin_wa_entrantes(
     """
     items = await run_in_threadpool(repo.list_wa_inbox, estado, limite)
     resumen = await run_in_threadpool(repo.resumen_wa_inbox, 7)
+    # El estado de la sesión, EN VIVO. La sesión estuvo caída tres días sin que
+    # nadie lo supiera: todo parecía configurado y no entraba una sola oferta.
+    sesion = await run_in_threadpool(wa_sesion.estado)
     return {
         "items": items,
         "resumen": resumen,
+        "sesion": sesion,
         # Cuántos hay de cada rol, sin mostrar los números: el panel lo usa un
         # administrador, pero un teléfono en pantalla se saca en una foto.
         "config": {

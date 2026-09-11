@@ -155,6 +155,32 @@ export function BandejaWhatsApp() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {err && <div className="panel-card glass" style={{ padding: 14, color: "var(--pink)", fontSize: 13 }}>{err}</div>}
 
+      {/* LA SESIÓN, EN GRANDE Y PRIMERO. Estuvo caída tres días sin que nadie
+          lo supiera: el sitio andaba, el panel andaba, y no entraba una sola
+          oferta. Esto es lo primero que tiene que ver quien abra la pestaña. */}
+      {d?.sesion && (
+        <div className="panel-card glass" style={{
+          padding: "14px 16px", display: "flex", gap: 14, alignItems: "center",
+          borderLeft: `4px solid ${d.sesion.ok ? "var(--neon)" : "var(--pink)"}`,
+        }}>
+          <span style={{ fontSize: 26 }}>{d.sesion.ok ? "🟢" : "🔴"}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>
+              {d.sesion.ok
+                ? "WhatsApp conectado"
+                : !d.sesion.alcanzable
+                  ? "WAHA no responde"
+                  : `WhatsApp caído · ${d.sesion.estado}`}
+            </div>
+            <div style={{ fontSize: 12.5, color: "var(--txt-3)", marginTop: 2 }}>
+              {d.sesion.ok
+                ? <>{d.sesion.nombre ?? "(sin nombre)"} · {d.sesion.numero}</>
+                : "No entra ninguna oferta hasta que vuelva. Hay que re-vincular desde la tablet: ver docs/numeros-whatsapp-uruku.md."}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* El estado del canal. Sin esto, "no llega nada" y "llega y se descarta"
           se ven igual desde acá — y son problemas opuestos: uno se arregla en
           el teléfono y el otro en el panel. */}

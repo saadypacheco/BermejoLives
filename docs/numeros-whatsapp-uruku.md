@@ -151,6 +151,51 @@ nada, sólo están adentro de los grupos. Ese día se agrega a `WA_NUMEROS_PROPI
 y a `WA_NUMEROS_GRUPO` — pero **sólo después** de verificar que la cuenta es
 nuestra, abriendo el chat y viendo que sea una sesión nueva y vacía.
 
+### Se cayó tres días y nadie se enteró (10–11/9)
+
+WhatsApp desvinculó la tablet el 10/9 a las 23:27 (`conflict · device_removed`)
+y del lado de URUKU no hubo ni un error: el sitio andaba, el panel andaba, y
+no entraba una sola oferta. Se descubrió por casualidad, pidiendo el estado de
+la sesión por curiosidad.
+
+Ahora **Admin › WhatsApp muestra el estado de la sesión en grande y primero**,
+en vivo, y el backend deja un `ERROR` en los registros cada cinco minutos
+mientras no esté `WORKING`. No la arregla —eso pide una persona con la tablet
+en la mano— pero el problema existe desde el primer minuto.
+
+**Re-vincular sin el panel de WAHA** (no hace falta usuario ni contraseña):
+
+```bash
+cd /docker/uruku
+# 1. Borrar la sesión muerta y crearla limpia
+docker compose -f docker-compose.prod.yml exec -T waha \
+  sh -c 'wget -qO- --method=DELETE --header="X-Api-Key: $WAHA_API_KEY" \
+    http://localhost:3000/api/sessions/default'
+docker compose -f docker-compose.prod.yml exec -T waha \
+  sh -c 'wget -qO- --post-data="{\"name\":\"default\",\"start\":true}" \
+    --header="Content-Type: application/json" --header="X-Api-Key: $WAHA_API_KEY" \
+    http://localhost:3000/api/sessions'
+
+# 2. Esperar a que diga SCAN_QR_CODE
+docker compose -f docker-compose.prod.yml exec -T waha \
+  sh -c 'wget -qO- --header="X-Api-Key: $WAHA_API_KEY" http://localhost:3000/api/sessions'
+
+# 3. Con la tablet YA en "Vincular con número de teléfono", pedir el código
+#    UNA sola vez — cada pedido nuevo invalida el anterior
+docker compose -f docker-compose.prod.yml exec -T waha \
+  sh -c 'wget -qO- --post-data="{\"phoneNumber\":\"59164610187\"}" \
+    --header="Content-Type: application/json" --header="X-Api-Key: $WAHA_API_KEY" \
+    http://localhost:3000/api/default/auth/request-code'
+```
+
+Se tipea el código en la tablet y se espera hasta un minuto. Si dice "no se
+pudo vincular", lo primero es mirar los registros de WAHA
+(`logs --since 5m waha`) y **Dispositivos vinculados** en la tablet: si hay
+cuatro, no entra uno más; si hay uno viejo de WAHA, eliminarlo.
+
+**Lo que se manda mientras está caída no se recupera.** No hay que contar con
+que WhatsApp reenvíe lo perdido al reconectar.
+
 ### El riesgo del operativo en la tablet
 
 WAHA se conecta como **dispositivo vinculado**, igual que WhatsApp Web, y un

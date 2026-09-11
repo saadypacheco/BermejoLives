@@ -130,6 +130,23 @@ async def _revision_ia_loop():
             logger.warning("revision_ia_loop.error", error=str(exc))
 
 
+async def _wa_sesion_loop():
+    """Mira la sesión de WhatsApp cada pocos minutos y grita si está caída.
+
+    La sesión estuvo caída tres días sin que nadie lo supiera. Este loop no la
+    arregla —eso pide una persona con la tablet en la mano— pero hace que el
+    problema exista en los registros el mismo minuto que empieza.
+    """
+    from app.services import wa_sesion
+
+    while True:
+        await asyncio.sleep(settings.wa_sesion_cada_seg)
+        try:
+            await run_in_threadpool(wa_sesion.vigilar)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("wa_sesion_loop.error", error=str(exc))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("api.startup", service="bermejo", environment=settings.environment)
@@ -141,6 +158,8 @@ async def lifespan(app: FastAPI):
         tareas.append(asyncio.create_task(_difusion_loop()))
     if settings.ia_revision_worker:
         tareas.append(asyncio.create_task(_revision_ia_loop()))
+    if settings.wa_sesion_vigilar:
+        tareas.append(asyncio.create_task(_wa_sesion_loop()))
     yield
     for t in tareas:
         t.cancel()

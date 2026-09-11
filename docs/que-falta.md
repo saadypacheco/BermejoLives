@@ -58,12 +58,14 @@ Son minutos cada una y **después ya no se pueden hacer**.
 Todo esto es pegar credenciales. El código está y probado.
 
 - [ ] **Canal de WhatsApp en `/contenido`.** Sin el enlace, la sección del home
-      que le habla al comprador no se dibuja.
+      que le habla al comprador no se dibuja. **El enlace ya está** (salió en
+      los registros de WAHA): `https://whatsapp.com/channel/0029Vb8mQrMGOj9rI7Bg4S1a`.
+      Tiene 0 seguidores.
 - [ ] **Facebook en `/contenido`**: `https://www.facebook.com/uruku.bo/`. La URL
       ya está anotada; falta pegarla.
-- [ ] **`WA_CANAL_ID`** para la difusión automática — una consulta a WAHA
-      (`GET /api/default/channels`). Es el destino que más rinde y el único que
-      no depende de nadie más.
+- [ ] **`WA_CANAL_ID=120363412598489616@newsletter`** al `.env` — ya está
+      identificado, salió en los registros. Es el destino que más rinde y el
+      único que no depende de nadie más.
 - [ ] **App de Meta** → `FACEBOOK_PAGE_ID`, `FACEBOOK_PAGE_TOKEN`,
       `INSTAGRAM_USER_ID`. ~30 minutos, una sola vez. Pasos en
       [difusion-redes.md](difusion-redes.md).

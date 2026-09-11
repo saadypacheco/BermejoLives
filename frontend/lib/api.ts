@@ -840,6 +840,11 @@ export type BandejaWa = {
   items: WaEntrante[];
   resumen: { resultado: string; n: number }[];
   config: { propios: number; explorador: number; contacto_explorador: boolean };
+  /** El estado de la sesión de WAHA, en vivo. `ok` sólo si está WORKING. */
+  sesion: {
+    alcanzable: boolean; estado: string; ok: boolean;
+    numero: string | null; nombre: string | null; sesion: string;
+  };
 };
 
 export async function getBandejaWa(estado = "problemas", limite = 100): Promise<BandejaWa> {

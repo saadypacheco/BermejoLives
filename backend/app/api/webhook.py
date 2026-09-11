@@ -127,7 +127,14 @@ async def webhook(
 
     if kind == "session.status":
         status = (event.get("payload") or {}).get("status")
-        logger.info("bridge.status", status=status)
+        # WAHA avisa cuando la sesión cambia de estado. Que se caiga es lo único
+        # que, sin romper nada más, hace que se pierdan ofertas: va como ERROR
+        # para que aparezca en cualquier filtro de registros.
+        if status == "WORKING":
+            logger.info("bridge.status", status=status)
+        else:
+            logger.error("wa_sesion.CAMBIO", status=status,
+                         detalle="no entra ninguna oferta hasta que vuelva a WORKING")
         return {"ok": True, "handled": "session.status"}
 
     return {"ok": True, "ignored": kind}

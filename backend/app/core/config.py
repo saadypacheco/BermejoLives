@@ -152,6 +152,12 @@ class Settings(BaseSettings):
     # "rechazar" en el panel. Encenderlo es una decisión, no un ajuste.
     ia_auto_aprobar_desde: float = 0.0
 
+    # ── Vigilar la sesión de WhatsApp ───────────────────────────────────────
+    # Estuvo caída tres días sin que nadie lo supiera. Cada pocos minutos se le
+    # pregunta a WAHA y, si no está WORKING, queda un ERROR en los registros.
+    wa_sesion_vigilar: bool = True
+    wa_sesion_cada_seg: int = 300
+
     def destinos_automaticos(self) -> set[str]:
         return {d.strip() for d in self.difusion_auto.split(",") if d.strip()}
 

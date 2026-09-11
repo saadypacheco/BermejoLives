@@ -129,12 +129,17 @@ WA_NUMEROS_GRUPO=59175314737
 WA_NUMEROS_EXPLORADOR=59168727944
 WA_CONTACTO_EXPLORADOR=
 BOT_WHATSAPP_NUMERO=59164610187
+WA_CANAL_ID=120363412598489616@newsletter
 ```
+
+`WA_CANAL_ID` es el identificador del canal, que apareció en los registros de
+WAHA el 11/9. Con él, la difusión al canal queda **encendida**: lo aprobado
+sale solo, de a cuatro por día.
 
 **`WA_CONTACTO_EXPLORADOR` vacío es correcto**: las consultas van al comercio.
 Apuntarlo a un número sin WhatsApp sería peor que dejarlo vacío.
 
-Lo de la difusión (`WA_CANAL_ID`, los tokens de Meta) **todavía no**: sin ellos
+Los tokens de Meta (Facebook, Instagram) **todavía no**: sin ellos esa parte de
 la cola espera y no se pierde nada. Se agregan cuando los tengas.
 
 ---
