@@ -128,15 +128,15 @@ WA_NUMEROS_PROPIOS=59164610187,59167991916,59168727944,59175314737,59168727584
 WA_NUMEROS_GRUPO=
 WA_NUMEROS_EXPLORADOR=59168727944
 WA_CONTACTO_EXPLORADOR=
-BOT_WHATSAPP_NUMERO=59175314737
+BOT_WHATSAPP_NUMERO=59164610187
 WA_CANAL_ID=
 ```
 
-Es el bloque del diseño final del 11/9 — **WAHA sólo lee y vive en el Tigo**.
-Cada línea explicada en [numeros-whatsapp-uruku.md](numeros-whatsapp-uruku.md).
-Lo único que tiene que coincidir con la realidad: `BOT_WHATSAPP_NUMERO` es el
-número **vinculado a WAHA**. Si WAHA todavía está en la tablet cuando levantes,
-dejalo en `59164610187` y cambialo cuando lo muevas.
+Es el bloque del diseño final del 11/9 — **WAHA sólo lee y se queda en la
+tablet**. Cada línea explicada en
+[numeros-whatsapp-uruku.md](numeros-whatsapp-uruku.md). `BOT_WHATSAPP_NUMERO`
+es el número **vinculado a WAHA**; si algún día WAHA se muda, esta línea se
+muda con él.
 
 Los tokens de Meta (Facebook, Instagram) **todavía no**: esa parte de la cola
 espera y no se pierde nada.

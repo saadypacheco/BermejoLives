@@ -10,8 +10,8 @@ Decidida el 11/9, después de dos días de darle vueltas. **WAHA sólo lee.**
 
 | Rol | Número | Operadora | Dónde | Qué hace |
 |---|---|---|---|---|
-| **Anfitrión** | 64610187 | Entel | Tablet | Crea los grupos **a mano**, es admin, publica en el canal **a mano**, es la cara de URUKU. **Nunca corre WAHA** |
-| **Registrador** | 75314737 | Tigo | Samsung | **Sólo** corre WAHA: está en cada grupo y lleva lo que llega a la base. No escribe nunca |
+| **Registrador** | 64610187 | Entel | Tablet (chip físico) | **Sólo** corre WAHA: está en cada grupo y lleva lo que llega a la base. No escribe nunca. Es dueño del canal, que se publica **a mano** desde acá |
+| **Anfitrión** | 75314737 | Tigo | Samsung | Crea los grupos **a mano**, es admin de cada uno, es la cara de URUKU con el comerciante. **Nunca corre WAHA** |
 | **Marca** | 67991916 | Entel | eSIM iPhone, activa | El público. Va a la API oficial de Meta. **No registrarle WhatsApp común** |
 | **Respaldo** | 68727584 | Entel | eSIM, sin activar | Está en los grupos callado. Toma el lugar del Registrador el día del baneo |
 | **Explorador** | 68727944 | Entel | eSIM, sin activar | Sale a fotografiar ofertas |
@@ -24,12 +24,16 @@ escucha**. Es lo más inofensivo que existe para WhatsApp, y si igual lo banean
 no se pierde nada que no se recupere re-vinculando a un Respaldo que ya está
 adentro de los grupos.
 
-Todo lo que se *escribe* lo escribe una persona desde la tablet, con la app de
-verdad: crear un grupo, agregar gente, publicar en el canal, avisarle a un
-comerciante. Un humano haciendo un grupo por día es uso normal, no
-automatización. Y ese número —el Anfitrión— es el dueño del canal y el
-administrador de todos los grupos, así que **lo irrecuperable vive en la cuenta
-que menos riesgo corre**.
+Todo lo que se *escribe* lo escribe una persona con la app de verdad: crear un
+grupo, agregar gente, avisarle a un comerciante (desde el Samsung), publicar en
+el canal (desde la tablet, que es la dueña). Un humano haciendo un grupo por día
+es uso normal, no automatización.
+
+**Por qué quedó así y no al revés (decidido el 11/9):** WAHA ya estaba vinculado
+a la tablet y funcionando; moverlo al Tigo era re-vincular a cambio de nada
+todavía. El costo que se asume a sabiendas: el canal vive en el número que corre
+WAHA. Se cubre con un **segundo administrador desde el Tigo**, y con que WAHA
+en sólo lectura sea lo más inofensivo que existe para WhatsApp.
 
 ### Lo que eso apaga en el sistema
 
@@ -41,15 +45,15 @@ que escribían por WAHA:
 | El panel creaba el grupo por API | Se crea desde la tablet; el panel muestra los tres pasos |
 | El panel agregaba respaldos a todos los grupos | Se agregan desde la tablet |
 | Lo aprobado salía solo al canal | Se publica en el canal desde la tablet; la cola no lo encola |
-| El aviso de cuota lo mandaba el Registrador al grupo | Lo da el Anfitrión; la bandeja marca "AVISARLE desde la tablet" |
+| El aviso de cuota lo mandaba el Registrador al grupo | Lo da el Anfitrión desde el Samsung; la bandeja marca "AVISARLE" |
 
 Facebook e Instagram **no** pasan por WAHA, así que siguen automáticos cuando
 tengan token.
 
 ### El flujo de un grupo nuevo, a mano
 
-1. En la tablet: grupo nuevo `URUKU · <nombre del local>`.
-2. Agregar al comerciante y al **75314737** (el Registrador).
+1. En el Samsung (Tigo): grupo nuevo `URUKU · <nombre del local>`.
+2. Agregar al comerciante y al **64610187** (el Registrador, la tablet).
 3. Mandar adentro **`URUKU-XXXX`** — el código del local, que está en su ficha
    del admin y en el volante.
 
@@ -65,20 +69,42 @@ WA_NUMEROS_PROPIOS=59164610187,59167991916,59168727944,59175314737,59168727584
 WA_NUMEROS_GRUPO=
 WA_NUMEROS_EXPLORADOR=59168727944
 WA_CONTACTO_EXPLORADOR=
-BOT_WHATSAPP_NUMERO=59175314737
+BOT_WHATSAPP_NUMERO=59164610187
 WA_CANAL_ID=
 ```
 
-- `BOT_WHATSAPP_NUMERO` es **el del Registrador**: recibe los `CONFIRMAR-XXXXXX`
-  del login y los procesa el webhook. Se muda con WAHA.
+- `BOT_WHATSAPP_NUMERO` es **el del Registrador** (la tablet): recibe los
+  `CONFIRMAR-XXXXXX` del login y los procesa el webhook. Se muda con WAHA.
 - `WA_NUMEROS_GRUPO` vacío: no se crean grupos desde el sistema.
 - `WA_CANAL_ID` vacío: el canal se publica a mano. El identificador es
   `120363412598489616@newsletter` por si algún día se enciende.
 - `WA_SOLO_LECTURA` no hace falta ponerlo: es el valor por defecto.
 
-**WAHA hay que re-vincularlo al Tigo.** Hoy está en la tablet (se vinculó el
-11/9 a la mañana). Mismo procedimiento de más abajo, con `75314737` en el
-pedido de código, y desde el Samsung.
+**WAHA se queda en la tablet**, donde ya está vinculado desde el 11/9.
+
+### Cambiar de aparato: la cuenta va con el número, no con el aparato
+
+Un chip se pasa a otro aparato, se instala WhatsApp, llega el SMS, y la cuenta
+está ahí: mismos grupos, misma condición de administrador, mismo canal. Lo que
+NO viaja:
+
+- **El historial de chats**, sin copia de seguridad. Al Registrador no le
+  importa (todo está en la base); al Anfitrión sí — activar la copia en Google
+  Drive en el Samsung.
+- **Los dispositivos vinculados.** Registrar en un aparato nuevo desvincula
+  todos. Cambiar la tablet = volver a vincular WAHA, y lo que llegue en esa
+  ventana se pierde.
+- **El PIN de dos pasos**, que te lo pide al registrar de nuevo. Sin él, 7 días
+  de espera.
+
+Chip roto o perdido: duplicado en Entel del mismo número, y lo de arriba. Con
+el PIN de dos pasos puesto, nadie puede hacer ese trámite por vos y quedarse
+con la cuenta.
+
+**Lo que hay que hacer ahora, que son minutos:** PIN de dos pasos en los dos
+números con correo de recuperación (`admin@uruku.bo`), copia de seguridad en el
+Samsung, y la línea de la tablet con crédito o uso — una línea inactiva se
+recicla, y con ella se va la cuenta.
 
 ### Los dos que quedaron afuera, y por qué
 

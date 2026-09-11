@@ -2265,10 +2265,10 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
               <div style={{ padding: "8px 0", fontSize: 12.5, lineHeight: 1.5 }}>
                 {/* El flujo manual, paso a paso, porque es lo que hay que hacer
                     y no está escrito en ningún otro lado que se vea desde acá. */}
-                <b>El grupo se crea desde la tablet:</b>
+                <b>El grupo se crea a mano:</b>
                 <ol style={{ margin: "6px 0 0", paddingLeft: 18, color: "var(--txt-2)" }}>
-                  <li>Grupo nuevo: <span style={{ fontFamily: "monospace" }}>URUKU · {comercio.nombre}</span></li>
-                  <li>Agregar al comerciante y al número de WAHA (el Registrador)</li>
+                  <li>Desde el Samsung: grupo nuevo <span style={{ fontFamily: "monospace" }}>URUKU · {comercio.nombre}</span></li>
+                  <li>Agregar al comerciante y al número de la tablet (el Registrador, el que corre WAHA)</li>
                   <li>Mandar adentro:{" "}
                     <span style={{ fontFamily: "monospace", color: "var(--neon)", fontWeight: 700 }}>
                       URUKU-{comercio.codigo ?? "XXXX"}

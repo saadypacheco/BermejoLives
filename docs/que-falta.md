@@ -20,24 +20,28 @@ Las migraciones nuevas: `0100` (cola de difusión), `0101` (planes y cargos),
 
 Los pasos, uno por uno y con verificación, en [deploy-10-09.md](deploy-10-09.md).
 
-### 0.2 El `.env` de producción — y WAHA al Tigo
+### 0.2 El `.env` de producción
 
-Decidido el 11/9: **WAHA sólo lee**, y vive en el **Tigo (75314737)**. Hoy está
-en la tablet, así que hay que re-vincularlo. El bloque final y el porqué de
-cada línea en [numeros-whatsapp-uruku.md](numeros-whatsapp-uruku.md):
+Decidido el 11/9: **WAHA sólo lee**, y se queda en la **tablet (64610187)**,
+donde ya está vinculado. El Tigo es el Anfitrión. El bloque final y el porqué
+de cada línea en [numeros-whatsapp-uruku.md](numeros-whatsapp-uruku.md):
 
 ```
 WA_NUMEROS_PROPIOS=59164610187,59167991916,59168727944,59175314737,59168727584
 WA_NUMEROS_GRUPO=
 WA_NUMEROS_EXPLORADOR=59168727944
 WA_CONTACTO_EXPLORADOR=
-BOT_WHATSAPP_NUMERO=59175314737
+BOT_WHATSAPP_NUMERO=59164610187
 WA_CANAL_ID=
 ```
 
-- [ ] Re-vincular WAHA al **75314737** desde el Samsung (borrar sesión → crear
-      → código → tipear).
 - [ ] Poner ese bloque y levantar el backend.
+- [ ] **PIN de dos pasos** en la tablet y en el Samsung, con correo de
+      recuperación. Es lo que impide que alguien se quede con el número con un
+      duplicado de chip, y lo que te pide WhatsApp al cambiar de aparato.
+- [ ] **Perfil URUKU también en el Samsung**: es el que crea los grupos y el
+      nombre que ve el comerciante.
+- [ ] Copia de seguridad de WhatsApp en Google Drive, en el Samsung.
 
 ---
 
@@ -49,9 +53,9 @@ Son minutos cada una y **después ya no se pueden hacer**.
       comerciante es el del momento en que lo agregan. Un desconocido llamado
       Juan agregándote a un grupo es lo que la gente reporta como spam, y el
       reporte es lo que dispara el baneo.
-- [ ] **Segundo administrador del canal**, desde la tablet. Cualquier otro
-      número tuyo. Es lo único que hace que el canal —con sus seguidores, lo
-      único irrecuperable— sobreviva si se pierde el 64610187.
+- [ ] **Segundo administrador del canal: el Tigo**, desde la tablet. El canal
+      vive en el número que corre WAHA; esto es lo que lo cubre si ese número
+      se pierde.
 
 ---
 
