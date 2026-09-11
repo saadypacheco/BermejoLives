@@ -61,6 +61,8 @@ class Repo(Protocol):
     def contar_difusion_hoy(self, destino: str) -> int: ...
     def list_busquedas(self, desde_iso: str) -> list[dict]: ...
     def ultimo_wa_inbox_por_via(self) -> dict[str, str | None]: ...
+    def wa_inbox_sin_procesar(self, wa_message_id: str) -> bool: ...
+    def get_wa_inbox(self, wa_message_id: str) -> dict | None: ...
     def marcar_difusion(self, fila_id: str, estado: str, motivo: str | None,
                         url: str | None = None) -> None: ...
     def list_difusion(self, estado: str | None, limite: int) -> list[dict]: ...
@@ -456,6 +458,26 @@ class SupabaseRepo:
             .execute()
         )
         return bool(res.data)  # vacío => duplicado
+
+    def wa_inbox_sin_procesar(self, wa_message_id: str) -> bool:
+        """¿La fila existe pero nunca se le puso resultado?
+
+        Es la diferencia entre "ya está guardado" y "ya se procesó". Un mensaje
+        cuya ingesta se cortó a mitad de camino —se cayó la conexión con la
+        base justo después del INSERT— queda guardado y sin resultado. Si el
+        reintento de WAHA lo toma por duplicado, ese mensaje no se procesa
+        nunca: el reintento que lo habría arreglado es rechazado por la propia
+        guarda. Pasó el 11/9 con el primer código de grupo.
+        """
+        res = (self._db.table("wa_inbox").select("resultado")
+               .eq("wa_message_id", wa_message_id).limit(1).execute())
+        return bool(res.data) and res.data[0].get("resultado") is None
+
+    def get_wa_inbox(self, wa_message_id: str) -> dict | None:
+        res = (self._db.table("wa_inbox").select("*")
+               .eq("wa_message_id", wa_message_id).limit(1).execute())
+        return res.data[0] if res.data else None
+
 
     def ultimo_wa_inbox_por_via(self) -> dict[str, str | None]:
         """Cuándo llegó el último mensaje por cada camino (WAHA / API oficial).

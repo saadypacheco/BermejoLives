@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import hmac
 
+import httpx
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import PlainTextResponse
@@ -47,6 +48,24 @@ def _valid_signature(body: bytes, signature: str | None, algoritmo: str | None =
         return False
     expected = hmac.new(settings.webhook_secret.encode(), body, hash_fn).hexdigest()
     return hmac.compare_digest(expected, signature)
+
+
+async def _con_reintento(fn, *args):
+    """Corre la ingesta y, si la conexión con la base estaba muerta, una vez más.
+
+    El backend mantiene la conexión abierta, y tras una hora sin uso el
+    servidor la cierra por su lado. La primera consulta después del silencio
+    viaja por una conexión que ya no existe: `RemoteProtocolError: Server
+    disconnected`. La segunda abre una nueva y anda. Como la ingesta es
+    idempotente —lo guardado sin resultado se retoma—, repetirla es seguro.
+
+    Sólo ese error, y sólo una vez: cualquier otra cosa tiene que verse.
+    """
+    try:
+        return await asyncio.to_thread(fn, *args)
+    except httpx.RemoteProtocolError as exc:
+        logger.warning("webhook.conexion_muerta_reintento", error=str(exc))
+        return await asyncio.to_thread(fn, *args)
 
 
 @router.get("/webhook")
@@ -112,12 +131,12 @@ async def webhook(
 
     if kind in {"message", "message.any"}:
         try:
-            result = await asyncio.to_thread(ingest.handle_message, event, repo)
+            result = await _con_reintento(ingest.handle_message, event, repo)
             # Una tanda de Meta puede traer varios mensajes. Procesarlos de a
             # uno es la diferencia entre atender todo y perder en silencio lo
             # que venga después del primero, los días de mucho movimiento.
             for extra in event.get("_extra") or []:
-                await asyncio.to_thread(
+                await _con_reintento(
                     ingest.handle_message,
                     {"event": "message", "session": event.get("session"), "payload": extra},
                     repo)

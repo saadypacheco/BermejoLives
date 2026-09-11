@@ -336,8 +336,17 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         }
     )
     if not inserted_inbox:
-        logger.info("ingest.duplicado", wa_message_id=payload.id)
-        return {"captured": True, "duplicate": True}
+        # "Ya está guardado" NO es "ya se procesó". Si la fila existe pero
+        # nunca recibió resultado, la ingesta anterior se cortó a mitad de
+        # camino —la conexión con la base se cayó justo después del INSERT— y
+        # este reintento es la oportunidad de terminar el trabajo. Rechazarlo
+        # como duplicado deja el mensaje guardado y muerto para siempre.
+        if repo.wa_inbox_sin_procesar(payload.id):
+            logger.warning("ingest.reprocesando", wa_message_id=payload.id,
+                           detalle="quedó guardado sin resultado; se retoma")
+        else:
+            logger.info("ingest.duplicado", wa_message_id=payload.id)
+            return {"captured": True, "duplicate": True}
 
     # 1.b) En un grupo, los mensajes de los NUESTROS no son ofertas.
     #      El operativo ya está cubierto por fromMe (es el número vinculado a

@@ -478,6 +478,13 @@ class FakeRepo:
     def difusion_pendientes(self, limite):
         return [f for f in self.difusion if f["estado"] == "pendiente"][:limite]
 
+    def wa_inbox_sin_procesar(self, wa_message_id):
+        f = self.wa_inbox.get(wa_message_id)
+        return bool(f) and f.get("resultado") is None
+
+    def get_wa_inbox(self, wa_message_id):
+        return self.wa_inbox.get(wa_message_id)
+
     def ultimo_wa_inbox_por_via(self):
         salida = {"waha": None, "cloud": None}
         for f in self.wa_inbox.values():

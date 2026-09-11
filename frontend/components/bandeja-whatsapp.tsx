@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { agregarNumeroAGrupos, getBandejaWa, probarCloud,
+import { agregarNumeroAGrupos, getBandejaWa, probarCloud, reprocesarEntrante,
          type AgregarAGrupos, type BandejaWa } from "@/lib/api";
 
 const ETIQUETA: Record<string, { texto: string; color: string }> = {
@@ -217,6 +217,17 @@ export function BandejaWhatsApp() {
 
   useEffect(() => { cargar(); }, [cargar]);
 
+  // Un mensaje "sin registrar" es uno cuya ingesta se cortó a mitad de camino
+  // y WAHA ya no va a reintentar. El crudo está guardado, así que se puede
+  // volver a pasar por la ingesta desde acá.
+  const [reprocesando, setReprocesando] = useState<string | null>(null);
+  const reprocesar = async (id: string) => {
+    setReprocesando(id);
+    try { await reprocesarEntrante(id); await cargar(); }
+    catch (e) { setErr(e instanceof Error ? e.message : "No se pudo reprocesar"); }
+    finally { setReprocesando(null); }
+  };
+
   const total = (d?.resumen ?? []).reduce((a, b) => a + b.n, 0);
 
   return (
@@ -346,6 +357,18 @@ export function BandejaWhatsApp() {
 
                 {m.motivo && (
                   <div style={{ fontSize: 12.5, color: "var(--txt-2)", marginTop: 3 }}>{m.motivo}</div>
+                )}
+                {!m.resultado && (
+                  <div style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 12, color: "var(--amber)" }}>
+                      Se guardó pero la ingesta no terminó. Se puede volver a procesar.
+                    </span>
+                    <button className="btn btn-sm btn-ghost"
+                            disabled={reprocesando === m.wa_message_id}
+                            onClick={() => reprocesar(m.wa_message_id)}>
+                      {reprocesando === m.wa_message_id ? "…" : "Reprocesar"}
+                    </button>
+                  </div>
                 )}
 
                 {/* De dónde vino. El grupo importa más que el número: un grupo

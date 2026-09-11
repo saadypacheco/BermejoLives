@@ -2522,3 +2522,38 @@ async def admin_cloud_prueba(
         raise HTTPException(409, "La API oficial no está configurada (falta el número o el token)")
     logger.info("cloud.prueba_enviada", a=numero, by=admin.get("sub"))
     return {"ok": True, "a": numero}
+
+
+@router.post("/admin/whatsapp/entrantes/{wa_message_id}/reprocesar")
+async def admin_wa_reprocesar(
+    wa_message_id: str,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Vuelve a pasar por la ingesta un mensaje que quedó "sin registrar".
+
+    Es para el caso en que la ingesta se cortó a mitad de camino y WAHA ya no
+    va a reintentar. El crudo está guardado entero en la fila, así que se
+    puede reconstruir el evento y procesarlo como si acabara de llegar.
+
+    Sólo lo que no tiene resultado: reprocesar algo ya procesado podría
+    publicar dos veces.
+    """
+    from app.services import ingest
+
+    fila = await run_in_threadpool(repo.get_wa_inbox, wa_message_id)
+    if not fila:
+        raise HTTPException(404, "ese mensaje no está en la bandeja")
+    if fila.get("resultado"):
+        raise HTTPException(409, f"ya tiene resultado ({fila['resultado']}); no se reprocesa")
+    crudo = fila.get("raw") or {}
+    if not crudo:
+        raise HTTPException(409, "la fila no guardó el mensaje crudo; no hay con qué reprocesar")
+
+    evento = {"event": "message",
+              "session": "cloud" if fila.get("via") == "cloud" else "default",
+              "payload": crudo}
+    r = await run_in_threadpool(ingest.handle_message, evento, repo)
+    logger.info("wa.reprocesado", wa_message_id=wa_message_id, by=admin.get("sub"),
+                resultado=str(r)[:200])
+    return {"ok": True, **r}

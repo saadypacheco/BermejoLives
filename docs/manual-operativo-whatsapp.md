@@ -304,7 +304,11 @@ En orden:
 3. ¿Motivo *"mensaje de un número de URUKU"*? Lo mandó alguien de URUKU, no el
    comerciante. Se descarta a propósito.
 4. ¿Motivo *"llegó al tope"*? Sección 3.3.
-5. Si no aparece ni en "Todo": WAHA no lo recibió. Registros de WAHA (5.1).
+5. ¿Aparece como **"Sin registrar"**? La ingesta se cortó a mitad de camino
+   (la conexión con la base estaba muerta, pasa después de una hora sin
+   mensajes). Debajo del mensaje hay un botón **Reprocesar**: lo vuelve a
+   pasar por la ingesta como si acabara de llegar.
+6. Si no aparece ni en "Todo": WAHA no lo recibió. Registros de WAHA (5.1).
 
 ---
 

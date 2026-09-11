@@ -853,6 +853,12 @@ export type BandejaWa = {
   };
 };
 
+export async function reprocesarEntrante(waMessageId: string) {
+  const res = await authFetch(`/admin/whatsapp/entrantes/${encodeURIComponent(waMessageId)}/reprocesar`,
+                              { method: "POST" });
+  return res.json();
+}
+
 export async function probarCloud(numero: string): Promise<{ ok: boolean; a: string }> {
   const res = await authFetch("/admin/whatsapp/cloud/prueba", {
     method: "POST",
