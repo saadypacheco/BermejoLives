@@ -6,6 +6,10 @@
 > [decision-uruku-sin-reservalo.md](decision-uruku-sin-reservalo.md).
 > La **clasificación por IA** y el prompt vigente: [clasificacion-ia.md](clasificacion-ia.md).
 
+> **La lista corta y ordenada de qué falta está en
+> [que-falta.md](que-falta.md).** Este archivo es el detalle y el porqué de cada
+> cosa; aquél es el orden en que conviene hacerlas.
+
 ## 📍 Situación al 2026-09-03
 
 > Handoff con el estado completo: [handoff-2026-09-03.md](handoff-2026-09-03.md)
