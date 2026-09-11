@@ -411,7 +411,14 @@ export default function AdminPage() {
                 <IdentidadBadge pub={p} />
               </div>
               {(() => {
-                const v = veredictos[p.id];
+                // El veredicto vivo (recién pedido con ✨) manda; si no hay,
+                // el guardado en la fila. Antes sólo existía el primero y se
+                // perdía al recargar: la IA opinaba después de que ya había
+                // mirado una persona.
+                const v = veredictos[p.id]
+                  ?? (p.ia_veredicto
+                        ? { veredicto: p.ia_veredicto, motivo: p.ia_motivo ?? "", confianza: p.ia_confianza ?? 0 }
+                        : undefined);
                 if (!v) return null;
                 if (v === "cargando") return <div style={{ marginTop: 8, fontSize: 12, color: "var(--txt-3)" }}>✨ Consultando IA…</div>;
                 const color = v.veredicto === "aprobar" ? "var(--neon)" : v.veredicto === "rechazar" ? "var(--pink)" : "var(--amber)";

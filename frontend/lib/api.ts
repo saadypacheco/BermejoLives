@@ -84,6 +84,10 @@ export type PendingPub = {
   // 'codigo' (número desconocido + código del local en el mensaje) o 'desconocido'.
   identidad_origen?: string | null;
   codigo_recibido?: string | null;
+  /** Lo que dijo la IA al entrar. Null = todavía no la miró. */
+  ia_veredicto?: "aprobar" | "rechazar" | "dudoso" | null;
+  ia_motivo?: string | null;
+  ia_confianza?: number | null;
 };
 
 export async function listPendientes(estado = "pendiente"): Promise<PendingPub[]> {

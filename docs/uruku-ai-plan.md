@@ -144,7 +144,9 @@ orden de ninguno de los dos documentos.
    más buscado, lo que no encontró nada, y arma la frase para decirle a un
    comerciante. Descarta el tecleo a medio escribir: sin eso el informe diría
    que lo más buscado en Bermejo es «zap».
-2. **Nivel 0** — horario, dirección, teléfono, cómo llegar, resueltos por
+2. ~~**IA en la ingesta**~~ ✅ **Hecho el 11/9** — la cola de moderación llega
+   ordenada; el veredicto vive en la fila y no en el navegador.
+3. **Nivel 0** — horario, dirección, teléfono, cómo llegar, resueltos por
    consulta directa. Sin modelo. Cubre la mayoría de las preguntas reales.
 3. **Uruku Ayuda** — el asistente del propio sitio. Riesgo bajo: si se equivoca,
    se equivoca sobre URUKU, no sobre el precio de un comercio. Es donde se

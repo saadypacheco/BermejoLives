@@ -45,6 +45,9 @@ class Repo(Protocol):
     def insert_publicacion_directa(self, row: dict) -> dict: ...
     def list_publicaciones(self, estado: str | None) -> list[dict]: ...
     def get_publicacion(self, pub_id: str) -> dict | None: ...
+    def publicaciones_sin_revision_ia(self, limite: int) -> list[dict]: ...
+    def guardar_veredicto_ia(self, pub_id: str, veredicto: str, motivo: str | None,
+                             confianza: float) -> None: ...
     # ---- planes y cargos ----
     def list_planes(self, solo_visibles: bool = False) -> list[dict]: ...
     def get_plan(self, slug: str) -> dict | None: ...
@@ -1212,6 +1215,26 @@ class SupabaseRepo:
     def get_publicacion(self, pub_id: str) -> dict | None:
         res = self._db.table("publicaciones").select("*").eq("id", pub_id).limit(1).execute()
         return res.data[0] if res.data else None
+
+    # ---- revisión por IA ----
+    def publicaciones_sin_revision_ia(self, limite: int) -> list[dict]:
+        """Pendientes que la IA todavía no miró, las más viejas primero: son las
+        que más tiempo llevan esperando a que alguien las ordene."""
+        res = (self._db.table("publicaciones")
+               .select("id, titulo, descripcion, imagen_url, created_at")
+               .eq("estado", "pendiente").eq("activo", True).is_("ia_veredicto", "null")
+               .order("created_at").limit(limite).execute())
+        return res.data or []
+
+    def guardar_veredicto_ia(self, pub_id: str, veredicto: str, motivo: str | None,
+                             confianza: float) -> None:
+        from datetime import datetime, timezone
+
+        self._db.table("publicaciones").update({
+            "ia_veredicto": veredicto, "ia_motivo": motivo,
+            "ia_confianza": round(max(0.0, min(1.0, confianza)), 2),
+            "ia_revisado_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", pub_id).execute()
 
     # ---- cola de difusión a las redes ----
     def encolar_difusion(self, publicacion_id: str, destinos: list[str]) -> int:

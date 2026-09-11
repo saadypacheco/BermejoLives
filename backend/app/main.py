@@ -107,6 +107,29 @@ async def _difusion_loop():
             logger.warning("difusion_loop.error", error=str(exc))
 
 
+async def _revision_ia_loop():
+    """La IA revisa lo pendiente apenas entra, para que la cola llegue ordenada.
+
+    Corre aparte de la ingesta a propósito: Gemini tarda uno o dos segundos y
+    a veces no contesta, y nada de eso puede frenar el webhook de WhatsApp —
+    que tiene su propio tiempo de espera y, si se agota, reintenta el mensaje.
+    """
+    from app.services import revision_ia
+
+    while True:
+        await asyncio.sleep(settings.ia_revision_cada_seg)
+        if not settings.gemini_api_key:
+            continue          # sin clave no hay a quién preguntarle; se vuelve a mirar
+        try:
+            repo = get_repo()
+            r = await run_in_threadpool(
+                revision_ia.revisar_pendientes, repo, settings.ia_revision_por_tanda)
+            if r["revisadas"] or r["fallidas"]:
+                logger.info("revision_ia_loop", **r)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("revision_ia_loop.error", error=str(exc))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("api.startup", service="bermejo", environment=settings.environment)
@@ -116,6 +139,8 @@ async def lifespan(app: FastAPI):
         tareas.append(asyncio.create_task(_baja_loop()))
     if settings.difusion_worker:
         tareas.append(asyncio.create_task(_difusion_loop()))
+    if settings.ia_revision_worker:
+        tareas.append(asyncio.create_task(_revision_ia_loop()))
     yield
     for t in tareas:
         t.cancel()

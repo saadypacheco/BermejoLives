@@ -12,7 +12,7 @@ from app.core.auth import require_admin, require_moderador
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp
-from app.services import clasificador, demanda, difusion, planes, wa_grupos
+from app.services import clasificador, demanda, difusion, planes, revision_ia, wa_grupos
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
@@ -119,6 +119,11 @@ def listar(
     repo: Repo = Depends(get_repo),
 ) -> dict:
     items = repo.list_publicaciones(estado)
+    # La cola de pendientes llega ORDENADA por lo que dijo la IA: rechazable y
+    # dudoso arriba, lo limpio abajo. Es la mitad del valor de tener el
+    # veredicto guardado; la otra mitad es no tener que apretar un botón.
+    if estado == "pendiente":
+        items = revision_ia.ordenar_para_moderar(items)
     return {"items": items, "total": len(items)}
 
 

@@ -131,10 +131,12 @@ El tope del canal y el aviso al llegar a la cuota ya están hechos.
 En orden de **valor sobre esfuerzo con los datos que hay**:
 
 - [x] ~~Informe de demanda (Agente Analista)~~ — **hecho el 10/9**.
-- [ ] **IA en la ingesta.** Hoy la IA opina cuando el moderador aprieta un botón:
-      o sea, después de que ya miró una persona. Tiene que correr al entrar y
-      dejar la cola ordenada, lo dudoso arriba. Con tres ofertas por día da
-      igual; con cincuenta es la diferencia entre revisar y no revisar.
+- [x] ~~**IA en la ingesta.**~~ **Hecho el 11/9.** Un worker revisa lo
+      pendiente cada minuto y guarda el veredicto en la fila; la cola llega
+      ordenada al moderador (rechazable y dudoso arriba). Migración `0103`.
+      El auto-aprobar existe como perilla (`IA_AUTO_APROBAR_DESDE`) y arranca
+      **apagado**: aprobar manda al canal y a las redes, y una foto que nadie
+      miró en el muro de la marca no se deshace.
 - [ ] **Nivel 0** — dirección, teléfono y cómo llegar por consulta directa, sin
       modelo. *Los horarios quedan afuera hasta que el punto 4 esté hecho.*
 - [ ] **Resumen diario del canal** (una publicación con "las ofertas de hoy").

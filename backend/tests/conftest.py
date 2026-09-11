@@ -519,6 +519,17 @@ class FakeRepo:
     def list_publicaciones(self, estado):
         return [p for p in self.publicaciones if p.get("activo") and (not estado or p.get("estado") == estado)]
 
+    def publicaciones_sin_revision_ia(self, limite):
+        return [p for p in self.publicaciones
+                if p.get("estado") == "pendiente" and p.get("activo")
+                and not p.get("ia_veredicto")][:limite]
+
+    def guardar_veredicto_ia(self, pub_id, veredicto, motivo, confianza):
+        for p in self.publicaciones:
+            if p["id"] == pub_id:
+                p.update({"ia_veredicto": veredicto, "ia_motivo": motivo,
+                          "ia_confianza": confianza, "ia_revisado_at": "2026-01-01T00:00:00Z"})
+
     def list_publicaciones_de_comercio(self, comercio_id):
         return [p for p in self.publicaciones if p.get("comercio_id") == comercio_id and p.get("activo")]
 

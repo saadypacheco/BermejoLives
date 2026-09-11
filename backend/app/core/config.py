@@ -140,6 +140,18 @@ class Settings(BaseSettings):
     # error.
     difusion_canal_solo_planes: bool = False
 
+    # ── La IA revisa lo que entra ────────────────────────────────────────────
+    ia_revision_worker: bool = True
+    ia_revision_cada_seg: int = 60
+    ia_revision_por_tanda: int = 10
+
+    # Desde qué confianza una publicación que la IA marcó "aprobar" se aprueba
+    # SOLA. Cero = nunca, y es el valor por defecto a propósito: aprobar manda
+    # a la cola de difusión, o sea al canal y a las redes de la marca. Una foto
+    # que ninguna persona miró en el muro de URUKU no se deshace con un
+    # "rechazar" en el panel. Encenderlo es una decisión, no un ajuste.
+    ia_auto_aprobar_desde: float = 0.0
+
     def destinos_automaticos(self) -> set[str]:
         return {d.strip() for d in self.difusion_auto.split(",") if d.strip()}
 
