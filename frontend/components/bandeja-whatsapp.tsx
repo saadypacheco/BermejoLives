@@ -336,28 +336,55 @@ function Agrupada({ items, reprocesando, reprocesar }: {
   );
 }
 
+/**
+ * Recepción: lo que llega por WhatsApp, organizado para miles de comercios.
+ *
+ * TRES PREGUNTAS, EN ESTE ORDEN
+ * =============================
+ * 1. ¿Está vivo el canal? — la sesión, en grande y primero. Estuvo caída tres
+ *    días sin que nadie lo supiera.
+ * 2. ¿Qué pide acción? — sólo lo que llegó y no se publicó, agrupado por
+ *    comercio. Es la vista por defecto y es chica aunque haya mil comercios:
+ *    los problemas son la excepción.
+ * 3. ¿Le llegó lo de tal comercio? — la búsqueda. Es la pregunta de soporte
+ *    número uno ("el de la ferretería dice que mandó la foto"), y con miles
+ *    de comercios no se contesta listando: se contesta buscando.
+ *
+ * Lo publicado y lo ignorado NO se listan solos: son miles de filas que no
+ * piden nada. Aparecen cuando se busca un comercio, o a pedido.
+ */
 export function BandejaWhatsApp() {
   const [estado, setEstado] = useState("problemas");
+  const [q, setQ] = useState("");
+  const [qAplicada, setQAplicada] = useState("");
   const [d, setD] = useState<BandejaWa | null>(null);
   const [err, setErr] = useState("");
   const [cargando, setCargando] = useState(true);
+  const [vista, setVista] = useState<"agrupada" | "plana">("agrupada");
 
   const cargar = useCallback(async () => {
     setCargando(true);
-    try { setD(await getBandejaWa(estado, 150)); setErr(""); }
+    try { setD(await getBandejaWa(estado, 150, qAplicada)); setErr(""); }
     catch (e) { setErr(e instanceof Error ? e.message : "No se pudo cargar"); }
     finally { setCargando(false); }
-  }, [estado]);
+  }, [estado, qAplicada]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  // Un mensaje "sin registrar" es uno cuya ingesta se cortó a mitad de camino
-  // y WAHA ya no va a reintentar. El crudo está guardado, así que se puede
-  // volver a pasar por la ingesta desde acá.
+  // La búsqueda se aplica al soltar el tecleo, no en cada letra: cada letra
+  // es una consulta al servidor que busca comercios y mensajes.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setQAplicada(q.trim());
+      // Buscar un comercio muestra TODO lo suyo, no sólo los problemas: la
+      // pregunta es "¿llegó?", y la respuesta puede ser "sí, y se publicó".
+      if (q.trim() && estado === "problemas") setEstado("");
+      if (!q.trim() && estado === "") setEstado("problemas");
+    }, 350);
+    return () => clearTimeout(t);
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [reprocesando, setReprocesando] = useState<string | null>(null);
-  // Agrupada por comercio es la vista por defecto: con varios comercios la
-  // lista plana no se puede leer.
-  const [vista, setVista] = useState<"agrupada" | "plana">("agrupada");
   const reprocesar = async (id: string) => {
     setReprocesando(id);
     try { await reprocesarEntrante(id); await cargar(); }
@@ -366,98 +393,86 @@ export function BandejaWhatsApp() {
   };
 
   const total = (d?.resumen ?? []).reduce((a, b) => a + b.n, 0);
+  const problemas = (d?.resumen ?? [])
+    .filter((r) => ["sin_comercio", "sin_permiso", "error", "sin_registrar"].includes(r.resultado))
+    .reduce((a, b) => a + b.n, 0);
+  const buscando = qAplicada.length > 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {err && <div className="panel-card glass" style={{ padding: 14, color: "var(--pink)", fontSize: 13 }}>{err}</div>}
 
-      {/* LA SESIÓN, EN GRANDE Y PRIMERO. Estuvo caída tres días sin que nadie
-          lo supiera: el sitio andaba, el panel andaba, y no entraba una sola
-          oferta. Esto es lo primero que tiene que ver quien abra la pestaña. */}
+      {/* 1. ¿Está vivo? — sesión y Plan B en una tira compacta. */}
       {d?.sesion && (
         <div className="panel-card glass" style={{
-          padding: "14px 16px", display: "flex", gap: 14, alignItems: "center",
+          padding: "12px 16px", display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap",
           borderLeft: `4px solid ${d.sesion.ok ? "var(--neon)" : "var(--pink)"}`,
         }}>
-          <span style={{ fontSize: 26 }}>{d.sesion.ok ? "🟢" : "🔴"}</span>
-          <div style={{ flex: 1 }}>
+          <span style={{ fontSize: 22 }}>{d.sesion.ok ? "🟢" : "🔴"}</span>
+          <div style={{ flex: 1, minWidth: 220 }}>
             <div style={{ fontSize: 15, fontWeight: 700 }}>
-              {d.sesion.ok
-                ? "WhatsApp conectado"
-                : !d.sesion.alcanzable
-                  ? "WAHA no responde"
-                  : `WhatsApp caído · ${d.sesion.estado}`}
+              {d.sesion.ok ? "WhatsApp conectado"
+                : !d.sesion.alcanzable ? "WAHA no responde"
+                : `WhatsApp caído · ${d.sesion.estado}`}
             </div>
             <div style={{ fontSize: 12.5, color: "var(--txt-3)", marginTop: 2 }}>
               {d.sesion.ok
                 ? <>{d.sesion.nombre ?? "(sin nombre)"} · {d.sesion.numero}</>
-                : "No entra ninguna oferta hasta que vuelva. Hay que re-vincular desde la tablet: ver docs/numeros-whatsapp-uruku.md."}
+                : "No entra ninguna oferta hasta que vuelva. Manual operativo, sección 5."}
             </div>
+          </div>
+          <div style={{ fontSize: 12.5, color: "var(--txt-3)", textAlign: "right" }}>
+            <div>últimos 7 días: <b style={{ color: "var(--txt)" }}>{total}</b> mensajes</div>
+            <div>{d.config.propios} propios · {d.config.explorador} explorador · {d.config.solo_lectura ? "sólo lectura" : "con envíos"}</div>
           </div>
         </div>
       )}
 
-      {/* El estado del canal. Sin esto, "no llega nada" y "llega y se descarta"
-          se ven igual desde acá — y son problemas opuestos: uno se arregla en
-          el teléfono y el otro en el panel. */}
-      <div className="panel-card glass">
-        <div className="ph">
-          <h3>Canal de WhatsApp</h3>
-          <span style={{ color: "var(--txt-3)", fontSize: 12.5 }}>últimos 7 días</span>
+      {d && d.config.propios === 0 && (
+        <div className="panel-card glass" style={{ padding: 12, fontSize: 12.5, color: "var(--amber)" }}>
+          ⚠️ Sin números propios cargados, cualquier mensaje que escriba alguien de URUKU dentro de
+          un grupo se publica como oferta del comerciante. Va en <code>WA_NUMEROS_PROPIOS</code>.
         </div>
-        <div style={{ padding: "12px 16px", display: "flex", gap: 18, flexWrap: "wrap", fontSize: 13 }}>
-          <span><b style={{ fontSize: 18 }}>{total}</b> mensajes</span>
-          {(d?.resumen ?? []).map((r) => (
-            <span key={r.resultado} style={{ color: ETIQUETA[r.resultado]?.color ?? "var(--txt-2)" }}>
-              {ETIQUETA[r.resultado]?.texto ?? r.resultado}: <b>{r.n}</b>
-            </span>
-          ))}
-        </div>
-        <div style={{ padding: "0 16px 14px", fontSize: 12, color: "var(--txt-3)" }}>
-          {/* Cuántos, no cuáles: el panel lo usa un administrador, pero un
-              teléfono en pantalla se saca en una foto. */}
-          Números propios configurados: <b>{d?.config.propios ?? 0}</b> ·
-          {" "}explorador: <b>{d?.config.explorador ?? 0}</b> ·
-          {" "}contacto del explorador: <b>{d?.config.contacto_explorador ? "sí" : "no"}</b>
-          {d && d.config.propios === 0 && (
-            <div style={{ color: "var(--amber)", marginTop: 6 }}>
-              ⚠️ Sin números propios cargados, cualquier mensaje que escriba alguien de URUKU
-              dentro de un grupo se publica como oferta del comerciante. Va en
-              <code> WA_NUMEROS_PROPIOS</code> del <code>backend/.env</code>, y sin
-              placeholders: <code>591XXXXXXXX</code> se normaliza a <code>591</code> y apaga
-              la guarda sin avisar.
-            </div>
-          )}
-        </div>
+      )}
 
-        <div style={{ display: "flex", gap: 8, padding: "0 16px 14px", flexWrap: "wrap" }}>
-          {[
-            { k: "problemas", t: "Hay que mirarlos" },
-            { k: "publicada", t: "Publicadas" },
-            { k: "ignorada", t: "Ignoradas" },
-            { k: "", t: "Todo" },
-          ].map((f) => (
-            <button key={f.k} className={`btn btn-sm ${estado === f.k ? "btn-primary" : "btn-ghost"}`}
-                    onClick={() => setEstado(f.k)}>
-              {f.t}
-            </button>
-          ))}
-          <button className="btn btn-ghost btn-sm" onClick={cargar} disabled={cargando}>
-            {cargando ? "…" : "↻ Actualizar"}
-          </button>
-        </div>
+      {/* 3. ¿Le llegó lo de tal comercio? — la búsqueda, arriba de la lista. */}
+      <div className="panel-card glass" style={{ padding: "12px 16px", display: "flex", gap: 10,
+                                                   alignItems: "center", flexWrap: "wrap" }}>
+        <input className="input" style={{ flex: 1, minWidth: 240 }}
+               placeholder="Buscar un comercio: nombre, código URUKU-XXXX o teléfono"
+               value={q} onChange={(e) => setQ(e.target.value)} />
+        {buscando && (
+          <button className="btn btn-sm btn-ghost" onClick={() => setQ("")}>✕ Limpiar</button>
+        )}
+        <button className="btn btn-ghost btn-sm" onClick={cargar} disabled={cargando}>
+          {cargando ? "…" : "↻"}
+        </button>
       </div>
 
-      {d?.cloud && <PlanB c={d.cloud} />}
-
-      {/* Con WAHA en sólo lectura, los respaldos se agregan a mano desde la
-          tablet, y este botón no puede hacer nada más que fallar. */}
-      {d && !d.config.solo_lectura && <AgregarANuevosGrupos />}
+      {/* 2. ¿Qué pide acción? — filtros: "Para mirar" por defecto. Lo demás,
+          a pedido o dentro de una búsqueda. */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        {[
+          { k: "problemas", t: `Para mirar${problemas ? ` (${problemas})` : ""}` },
+          { k: "publicada", t: "Publicadas" },
+          { k: "ignorada", t: "Ignoradas" },
+          { k: "", t: buscando ? "Todo lo del comercio" : "Últimas 150" },
+        ].map((f) => (
+          <button key={f.k} className={`btn btn-sm ${estado === f.k ? "btn-primary" : "btn-ghost"}`}
+                  onClick={() => setEstado(f.k)}>
+            {f.t}
+          </button>
+        ))}
+        <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }}
+                onClick={() => setVista(vista === "agrupada" ? "plana" : "agrupada")}>
+          {vista === "agrupada" ? "Lista plana" : "Por comercio"}
+        </button>
+      </div>
 
       {!cargando && (d?.items.length ?? 0) === 0 && (
         <div className="panel-card glass" style={{ padding: 24, textAlign: "center", color: "var(--txt-3)" }}>
-          {estado === "problemas"
-            ? "Nada pendiente de mirar. 🎉"
+          {buscando ? `Nada de "${qAplicada}" con ese filtro.`
+            : estado === "problemas" ? "Nada pendiente de mirar. 🎉"
             : "No hay mensajes con ese filtro."}
         </div>
       )}
@@ -467,6 +482,22 @@ export function BandejaWhatsApp() {
         : (d?.items ?? []).map((m) => (
             <FilaEntrante key={m.id} m={m} reprocesando={reprocesando} reprocesar={reprocesar} />
           ))}
+
+      {/* Lo que no es del día a día, abajo y plegado. */}
+      {d?.cloud && (
+        <details className="panel-card glass" style={{ padding: 0 }}>
+          <summary style={{ padding: "12px 16px", cursor: "pointer", listStyle: "none", fontSize: 13.5,
+                            display: "flex", gap: 10, alignItems: "baseline" }}>
+            <b>Plan B · API oficial de Meta</b>
+            <span style={{ color: d.cloud.ok ? "var(--neon)" : "var(--txt-3)", fontSize: 12.5 }}>
+              {d.cloud.activo ? "ACTIVO" : d.cloud.ok ? "probado, en espera" : d.cloud.configurado ? "configurado con error" : "sin configurar"}
+            </span>
+          </summary>
+          <div style={{ padding: "0 4px 4px" }}><PlanB c={d.cloud} /></div>
+        </details>
+      )}
+
+      {d && !d.config.solo_lectura && <AgregarANuevosGrupos />}
     </div>
   );
 }

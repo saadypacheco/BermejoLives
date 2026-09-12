@@ -283,7 +283,7 @@ export default function AdminPage() {
           Revisar rubros
         </button>
         <button className={tab === "whatsapp" ? "active" : ""} onClick={() => setTab("whatsapp")}>
-          WhatsApp
+          Recepción
         </button>
         <button className={tab === "difusion" ? "active" : ""} onClick={() => setTab("difusion")}>
           Difusión

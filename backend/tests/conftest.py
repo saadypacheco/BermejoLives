@@ -401,14 +401,29 @@ class FakeRepo:
         if comercio_id:
             fila["comercio_id"] = comercio_id
 
-    def list_wa_inbox(self, resultado=None, limite=100):
+    def list_wa_inbox(self, resultado=None, limite=100, q=None):
         filas = list(self.wa_inbox.values())
         if resultado == "problemas":
             filas = [f for f in filas if f.get("resultado") in
-                     {"sin_comercio", "sin_permiso", "error"}]
+                     {"sin_comercio", "sin_permiso", "error", None}]
         elif resultado:
             filas = [f for f in filas if f.get("resultado") == resultado]
-        return list(reversed(filas))[:limite]
+        if q and q.strip():
+            ql = q.strip().lower()
+            digitos = "".join(ch for ch in q if ch.isdigit())
+            ids = {cid for cid, c in self.comercios.items()
+                   if ql in (c.get("nombre") or "").lower()
+                   or ql.replace("uruku-", "").upper() == (c.get("codigo") or "")
+                   or (len(digitos) >= 6 and digitos in (c.get("whatsapp") or ""))}
+            filas = [f for f in filas
+                     if f.get("comercio_id") in ids
+                     or (len(digitos) >= 6 and digitos in (f.get("phone") or ""))]
+        salida = []
+        for f in reversed(filas):
+            c = self.comercios.get(f.get("comercio_id")) or {}
+            salida.append({**f, "comercios": ({"nombre": c.get("nombre"), "slug": c.get("slug"),
+                                               "codigo": c.get("codigo")} if c else None)})
+        return salida[:limite]
 
     def resumen_wa_inbox(self, dias=7):
         from collections import Counter

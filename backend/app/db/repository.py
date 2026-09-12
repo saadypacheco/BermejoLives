@@ -39,7 +39,8 @@ class Repo(Protocol):
     def insert_wa_inbox(self, row: dict) -> bool: ...
     def marcar_wa_inbox(self, wa_message_id: str, resultado: str, motivo: str | None,
                         comercio_id: str | None) -> None: ...
-    def list_wa_inbox(self, resultado: str | None, limite: int) -> list[dict]: ...
+    def list_wa_inbox(self, resultado: str | None, limite: int,
+                      q: str | None = None) -> list[dict]: ...
     def resumen_wa_inbox(self, dias: int) -> list[dict]: ...
     def insert_publicacion(self, row: dict) -> dict: ...
     def insert_publicacion_directa(self, row: dict) -> dict: ...
@@ -512,23 +513,65 @@ class SupabaseRepo:
         except Exception:  # noqa: BLE001
             logger.warning("marcar_wa_inbox.fallo", wa_message_id=wa_message_id, exc_info=True)
 
-    def list_wa_inbox(self, resultado: str | None = None, limite: int = 100) -> list[dict]:
-        """La bandeja de lo que entró por WhatsApp, lo más nuevo primero."""
+    def list_wa_inbox(self, resultado: str | None = None, limite: int = 100,
+                      q: str | None = None) -> list[dict]:
+        """La bandeja de lo que entró por WhatsApp, lo más nuevo primero.
+
+        `q` busca UN comercio —por nombre, código o teléfono— y devuelve todo lo
+        suyo. Es la pregunta de soporte número uno: "el de la ferretería dice
+        que mandó la foto, ¿llegó?". Con miles de comercios, listar todo no
+        contesta eso; buscar sí.
+        """
         try:
-            q = (self._db.table("wa_inbox")
-                 .select("id, wa_message_id, wa_jid, phone, tipo, body, media_url, "
-                         "resultado, motivo, comercio_id, created_at, "
-                         "comercios(nombre, slug, codigo)")
-                 .order("created_at", desc=True).limit(min(limite, 300)))
+            sel = (self._db.table("wa_inbox")
+                   .select("id, wa_message_id, wa_jid, phone, tipo, body, media_url, "
+                           "resultado, motivo, comercio_id, created_at, "
+                           "comercios(nombre, slug, codigo)")
+                   .order("created_at", desc=True).limit(min(limite, 300)))
             if resultado == "problemas":
-                # Lo que hay que mirar: llegó y no se publicó. Es el filtro por
-                # defecto del panel, porque es el único que pide acción.
-                q = q.in_("resultado", ["sin_comercio", "sin_permiso", "error"])
+                # Lo que hay que mirar: llegó y no se publicó. Incluye lo que
+                # quedó SIN resultado —la ingesta se cortó a medias— que hasta
+                # el 12/9 sólo aparecía en "Todo": justo lo que más pide acción,
+                # fuera de la cola de acción.
+                sel = sel.or_("resultado.in.(sin_comercio,sin_permiso,error),resultado.is.null")
             elif resultado:
-                q = q.eq("resultado", resultado)
-            return q.execute().data or []
+                sel = sel.eq("resultado", resultado)
+
+            if q and q.strip():
+                ids = self._ids_de_comercios_que_matchean(q.strip())
+                digitos = "".join(ch for ch in q if ch.isdigit())
+                partes = []
+                if ids:
+                    partes.append(f"comercio_id.in.({','.join(ids)})")
+                if len(digitos) >= 6:
+                    partes.append(f"phone.ilike.*{digitos}*")
+                if not partes:
+                    return []
+                sel = sel.or_(",".join(partes))
+            return sel.execute().data or []
         except Exception:  # noqa: BLE001
             logger.warning("list_wa_inbox.fallo", exc_info=True)
+            return []
+
+    def _ids_de_comercios_que_matchean(self, q: str) -> list[str]:
+        """Comercios por nombre, código o WhatsApp. Tope chico a propósito: si
+        "a" matchea trescientos, la bandeja no puede mostrar los mensajes de
+        trescientos comercios de forma útil."""
+        from app.core.codigo import normalizar
+
+        try:
+            partes = [f"nombre.ilike.*{q}*"]
+            cod = normalizar(q.replace("URUKU-", "").replace("uruku-", ""))
+            if cod:
+                partes.append(f"codigo.eq.{cod}")
+            digitos = "".join(ch for ch in q if ch.isdigit())
+            if len(digitos) >= 6:
+                partes.append(f"whatsapp.ilike.*{digitos}*")
+            res = (self._db.table("comercios").select("id")
+                   .or_(",".join(partes)).limit(30).execute())
+            return [r["id"] for r in (res.data or [])]
+        except Exception:  # noqa: BLE001
+            logger.warning("ids_de_comercios.fallo", exc_info=True)
             return []
 
     def resumen_wa_inbox(self, dias: int = 7) -> list[dict]:

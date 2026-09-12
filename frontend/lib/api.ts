@@ -868,8 +868,9 @@ export async function probarCloud(numero: string): Promise<{ ok: boolean; a: str
   return res.json();
 }
 
-export async function getBandejaWa(estado = "problemas", limite = 100): Promise<BandejaWa> {
-  const res = await authFetch(`/admin/whatsapp/entrantes?estado=${estado}&limite=${limite}`);
+export async function getBandejaWa(estado = "problemas", limite = 100, q = ""): Promise<BandejaWa> {
+  const res = await authFetch(
+    `/admin/whatsapp/entrantes?estado=${estado}&limite=${limite}&q=${encodeURIComponent(q)}`);
   return res.json();
 }
 

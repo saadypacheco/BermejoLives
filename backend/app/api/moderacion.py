@@ -1838,6 +1838,7 @@ class AplicarPatronBody(BaseModel):
 async def admin_wa_entrantes(
     estado: str = Query(default="problemas"),
     limite: int = Query(default=100, le=300),
+    q: str = Query(default=""),
     _mod: dict = Depends(require_moderador),
     repo: Repo = Depends(get_repo),
 ) -> dict:
@@ -1858,7 +1859,7 @@ async def admin_wa_entrantes(
     cuántos mensajes de cada tipo llegaron. Sin eso, "no llega nada" y "llega y
     se descarta" se ven igual desde el panel, y son problemas opuestos.
     """
-    items = await run_in_threadpool(repo.list_wa_inbox, estado, limite)
+    items = await run_in_threadpool(repo.list_wa_inbox, estado, limite, q or None)
     resumen = await run_in_threadpool(repo.resumen_wa_inbox, 7)
     # El estado de la sesión, EN VIVO. La sesión estuvo caída tres días sin que
     # nadie lo supiera: todo parecía configurado y no entraba una sola oferta.

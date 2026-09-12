@@ -118,7 +118,7 @@ ya revisada por la IA (lo dudoso arriba). Se aprueba o rechaza desde el panel.
 
 ### 3.3 Cuando un comercio llega al tope de su plan
 
-**Admin › WhatsApp → "Hay que mirarlos"** muestra la oferta con el motivo
+**Admin › Recepción → "Para mirar"** muestra la oferta con el motivo
 *"llegó al tope de N publicaciones · AVISARLE desde la tablet"*. El sistema no
 le escribe solo (WAHA no escribe). Se le avisa desde el **Samsung**, en su
 grupo, con las dos salidas:
@@ -134,7 +134,7 @@ por día la gente lo silencia y no vuelve.
 
 ### 3.5 Lo que se mira cada mañana
 
-**Admin › WhatsApp**, arriba de todo:
+**Admin › Recepción**, arriba de todo:
 
 - 🟢 **WhatsApp conectado** — todo bien.
 - 🔴 **WhatsApp caído** — no entra ninguna oferta. Ir a la sección 5.
@@ -297,8 +297,8 @@ actualiza al reconectar. Si no, 5.2.
 
 En orden:
 
-1. **Admin › WhatsApp** — ¿🟢? Si no, 5.1.
-2. **"Hay que mirarlos"** — ¿está ahí con motivo *"el grupo no está asociado a
+1. **Admin › Recepción** — ¿🟢? Si no, 5.1.
+2. **Buscá el comercio** en Recepción (nombre, código o teléfono): muestra todo lo suyo. ¿Está con motivo con motivo *"el grupo no está asociado a
    ningún comercio"*? El grupo no quedó atado: mandar el `URUKU-XXXX` adentro
    desde el Samsung.
 3. ¿Motivo *"mensaje de un número de URUKU"*? Lo mandó alguien de URUKU, no el
@@ -366,7 +366,7 @@ Meta regala un número de prueba: no se gasta ninguno nuestro.
    `.env`, **Verificar y guardar**. Después **suscribirse al campo `messages`**
    — sin esto la URL queda validada y no llega nunca nada.
 
-### 7.3 Verificarlo — Admin › WhatsApp, tarjeta "Plan B"
+### 7.3 Verificarlo — Admin › Recepción, abajo, "Plan B"
 
 Tres luces, y las tres tienen que estar:
 

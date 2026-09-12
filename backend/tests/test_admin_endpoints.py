@@ -428,3 +428,35 @@ def test_la_ingesta_deja_escrito_por_que_no_publico(client, repo):
     fila = repo.wa_inbox["wamid.X1"]
     assert fila["resultado"] == "sin_comercio"
     assert "grupo" in fila["motivo"]
+
+
+# ═══════════════════════════════════════ Recepción: buscar y "para mirar"
+def test_buscar_un_comercio_trae_todo_lo_suyo(client, repo, admin_token):
+    """La pregunta de soporte número uno: "el de la ferretería dice que mandó
+    la foto, ¿llegó?". Con miles de comercios se contesta buscando."""
+    a = repo.seed_comercio(slug="ferre", nombre="Ferretería Sur", codigo="7K3M",
+                           whatsapp="59170000111")
+    b = repo.seed_comercio(slug="otro", nombre="Otro", codigo="9P2Q", whatsapp="59170000222")
+    repo.insert_wa_inbox({"wa_message_id": "f1", "wa_jid": "g@g.us", "raw": {}, "comercio_id": a["id"]})
+    repo.marcar_wa_inbox("f1", "publicada", "ok", a["id"])
+    repo.insert_wa_inbox({"wa_message_id": "o1", "wa_jid": "g2@g.us", "raw": {}, "comercio_id": b["id"]})
+    repo.marcar_wa_inbox("o1", "publicada", "ok", b["id"])
+
+    for q in ("ferre", "URUKU-7K3M", "7k3m", "70000111"):
+        r = client.get(f"/admin/whatsapp/entrantes?estado=&q={q}", headers=_h(admin_token))
+        assert r.status_code == 200, r.text
+        ids = [i["wa_message_id"] for i in r.json()["items"]]
+        assert ids == ["f1"], q
+
+
+def test_para_mirar_incluye_lo_que_quedo_sin_registrar(client, repo, admin_token):
+    """Un mensaje cuya ingesta se cortó a medias no tiene resultado. Hasta el
+    12/9 sólo aparecía en "Todo": justo lo que más pide acción, fuera de la
+    cola de acción."""
+    repo.insert_wa_inbox({"wa_message_id": "s1", "wa_jid": "g@g.us", "raw": {}})
+    repo.insert_wa_inbox({"wa_message_id": "p1", "wa_jid": "g@g.us", "raw": {}})
+    repo.marcar_wa_inbox("p1", "publicada", "ok")
+
+    r = client.get("/admin/whatsapp/entrantes?estado=problemas", headers=_h(admin_token))
+    ids = [i["wa_message_id"] for i in r.json()["items"]]
+    assert "s1" in ids and "p1" not in ids
