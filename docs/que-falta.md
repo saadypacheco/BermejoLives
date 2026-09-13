@@ -139,6 +139,30 @@ El tope del canal y el aviso al llegar a la cuota ya están hechos.
 
 ---
 
+## 5b. La base de contactos (decidido el 13/9: todavía no)
+
+Existe `Base_Maestra_Contactos_Uruku_v11.xlsx` (Descargas): 4.316 números de
+11 grupos de venta de Bermejo, sacados por OCR de capturas — 3.608 argentinos,
+696 bolivianos, 19 "vendedores probables" (los admins de los grupos), el resto
+compradores. Casi todos sin nombre.
+
+**No se importa por ahora.** La difusión con esa base se hace desde un número
+que no es de URUKU, para aislar el riesgo de baneo. Cuando se decida guardarla:
+
+- [ ] Tabla `contactos` con teléfono normalizado, tipo, grupos de origen y
+      **consentimiento** (arranca en "ninguno"; cambia solo cuando la persona
+      escribe o entra al canal).
+- [ ] Importador idempotente, en seco primero, que descarte los mal leídos.
+- [ ] El cruce de los 19 vendedores contra `comercios`: cuáles ya están y
+      cuáles hay que ir a ver en persona.
+
+Lo que no cambia: **no es una lista de difusión desde la marca**. Ni por WAHA
+(sólo lectura, y es el patrón del baneo) ni por la API oficial (las plantillas
+de marketing exigen consentimiento, y 3.608 números son argentinos, donde eso
+es ley).
+
+---
+
 ## 6. Producto — lo que sigue de Uruku AI
 
 En orden de **valor sobre esfuerzo con los datos que hay**:
