@@ -312,11 +312,19 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   const rubroElegido = rubro ? rubros.find((x) => x.slug === rubro)?.nombre ?? null : null;
 
   // Sin fila de filtros activos y sin "Limpiar todo": el buscador se lee de una
-  // sola pasada, como el de Google. Lo que está filtrando ya se ve donde se
-  // eligió —el texto en el buscador, la subcategoría en su chip encendido,
-  // rubro / zona / precio / tipo en la etiqueta del propio filtro—, y cada uno
-  // se saca desde ahí. Un botón que borra siete cosas a la vez es más rápido de
-  // apretar por error que de rehacer.
+  // sola pasada, como el de Google.
+  //
+  // Pero lo que filtra tiene que verse EN ALGÚN LADO. Este comentario decía
+  // que el rubro "ya se ve en la etiqueta del propio filtro" — y era cierto
+  // hasta que los filtros se apagaron (APAGADAS.filtrosBuscador). Desde ahí,
+  // entrar por "Moda y ropa" desde el home dejaba el rubro aplicado y sin
+  // ninguna marca en pantalla: alguien escribía "rustico", buscaba adentro de
+  // ropa, no encontraba nada, y no tenía forma de saber por qué. Un filtro
+  // invisible es el peor de los filtros.
+  //
+  // Por eso el rubro va como chip ADENTRO del buscador, con su ×. Es el único
+  // filtro que llega sin haberse elegido acá (viene de las pestañas del home),
+  // así que es el único que necesita mostrarse acá.
 
   /** Si la persona ya pidió algo. El contador de resultados aparece sólo acá:
    *  en la pantalla vacía es de donde se lo sacó, y con razón. */
@@ -327,7 +335,17 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     <div className="uk-container uk-buscar">
       <form className="uk-search-live" onSubmit={(e) => e.preventDefault()}>
         <Search style={{ width: 20, height: 20 }} />
-        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar locales o servicios…" aria-label="Buscar" />
+        {rubroElegido && (
+          <button type="button" className="uk-search-chip"
+                  title="Quitar el rubro y buscar en todos"
+                  onClick={() => { setRubro(""); setSubcategoria(""); }}>
+            <span>{rubroElegido}{subcategoria ? ` · ${subcategoria}` : ""}</span>
+            <b aria-hidden>×</b>
+          </button>
+        )}
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)}
+               placeholder={rubroElegido ? `Buscar en ${rubroElegido}…` : "Buscar locales o servicios…"}
+               aria-label="Buscar" />
       </form>
 
       {/* Con una búsqueda escrita, los chips son las SUBCATEGORÍAS que hay entre
@@ -459,7 +477,19 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
       {(
         <div className="uk-res-grid" style={vista === "mapa" ? { display: "none" } : undefined}>
           {!loading && shown.length === 0 && (
-            <p className="uk-empty">No encontramos comercios con esos filtros. Probá con otra palabra o quitá filtros.</p>
+            rubroElegido && q.trim()
+              ? (
+                // Dice DÓNDE no encontró y ofrece la salida obvia: es la
+                // diferencia entre "no existe" y "no está en este rubro".
+                <div className="uk-empty">
+                  No hay «{q.trim()}» en {rubroElegido}.
+                  <button type="button" className="uk-btn-ghost" style={{ marginTop: 10 }}
+                          onClick={() => { setRubro(""); setSubcategoria(""); }}>
+                    Buscar «{q.trim()}» en todos los rubros
+                  </button>
+                </div>
+              )
+              : <p className="uk-empty">No encontramos comercios con esa búsqueda. Probá con otra palabra.</p>
           )}
           {shown.map((r, i) => {
             // La miniatura, no la grande: la portada de la tarjeta mide 116px.

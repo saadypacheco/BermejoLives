@@ -423,6 +423,15 @@
 .uk-search-live { display: flex; align-items: center; background: var(--uk-surface); border: 1px solid var(--uk-line); box-shadow: var(--uk-shadow-soft); border-radius: 14px; overflow: hidden; min-height: 50px; margin-bottom: 14px; }
 .uk-search-live svg { margin-left: 14px; width: 20px; height: 20px; color: var(--uk-ink-soft); flex-shrink: 0; }
 .uk-search-live input { flex: 1; border: 0; outline: 0; background: transparent; padding: 0 14px; min-width: 0; color: var(--uk-ink); }
+/* El rubro que llegó desde el home, adentro del buscador y con su ×. Un
+   filtro que no se ve es un filtro que nadie puede sacar. */
+.uk-search-chip { margin-left: 10px; flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px;
+  background: var(--uk-chip); color: var(--uk-green); border: 0; border-radius: 999px;
+  padding: 6px 8px 6px 11px; font-size: 12.5px; font-weight: 700; cursor: pointer; max-width: 46%;
+  font-family: inherit; }
+.uk-search-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uk-search-chip b { font-size: 15px; line-height: 1; opacity: .75; }
+.uk-search-chip:hover b { opacity: 1; }
 
 .uk-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; margin-bottom: 12px; }
 .uk-chips::-webkit-scrollbar { display: none; }
