@@ -109,6 +109,34 @@ async function buscar(p, texto) { await p.fill("form.uk-search input", texto); a
   ok(caja === "rustico sab", `5. lo tecleado sobrevive a un cambio de URL propio: caja="${caja}"`);
   await ctx.close();
 }
+// 6. LA SECUENCIA QUE FALLABA EN LOS TELÉFONOS: home → un rubro de la barra →
+//    esperar la lista entera → sacar el chip → buscar. Las páginas del rubro
+//    traían comercios repetidos, React dejaba tarjetas huérfanas en el DOM, y
+//    se veía "2 resultados" con veinticinco tarjetas. Se mira el DOM, no sólo
+//    el estado, y se escucha el aviso de React por keys repetidas.
+{
+  const { ctx, p, errores } = await nueva(false);
+  const avisosReact = [];
+  p.on("console", (m) => { if (/same key|misma key|two children/i.test(m.text())) avisosReact.push(m.text().slice(0, 80)); });
+  await p.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await p.tap("nav.uk-catnav a[href='/buscar?rubro=ropa']");
+  await p.waitForURL(/buscar/);
+  await p.waitForFunction(() => document.querySelectorAll(".uk-res-grid article").length >= 90, null, { timeout: 60000 }).catch(() => {});
+  const slugs = await p.locator(".uk-res-grid article a.uk-resficha").evaluateAll((as) => as.map((a) => a.getAttribute("href")));
+  ok(new Set(slugs).size === slugs.length, `6. la lista del rubro no repite comercios (${slugs.length} tarjetas, ${new Set(slugs).size} distintas)`);
+  await p.tap("button.uk-search-chip");
+  await p.waitForTimeout(6000);
+  let e = await estado(p);
+  const enPantalla = await p.locator(".uk-res-grid article").count();
+  ok(enPantalla <= 100, `6. sin el chip, la pantalla tiene ${enPantalla} tarjetas (≤ 100)`);
+  await buscar(p, "Rustico");
+  await p.waitForTimeout(5000);
+  e = await estado(p);
+  ok(e.total === "2 resultados" && e.n === 2 && e.primero === "/comercios/rustico", `6. rustico tras sacar el chip: ${JSON.stringify(e)}`);
+  ok(avisosReact.length === 0, `6. React no avisó por keys repetidas (${avisosReact.join(" | ") || "ninguno"})`);
+  ok(errores.length === 0, `6. sin avisos del vigía (${errores.join(" | ") || "ninguno"})`);
+  await ctx.close();
+}
 await b.close();
 console.log(fallas ? `${fallas} FALLAS` : "todo ok");
 process.exit(fallas ? 1 : 0);

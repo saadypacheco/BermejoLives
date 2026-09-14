@@ -51,13 +51,20 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   // de los lotes de fondo o de "Cargar más".
   //
   // Antes cada camino tenía (o no) su propia bandera: el efecto tenía
-  // `cancelado`, "Cargar más" no tenía nada. En un iPhone con 3G se vio la
-  // lista de otra búsqueda debajo de un contador que decía "2 resultados": la
-  // base había contestado bien (el registro de búsquedas lo prueba) y algo
-  // pisó la lista después. En vez de adivinar cuál de los caminos fue, se
-  // cierra la puerta a todos con una sola regla: si no sos la búsqueda
-  // vigente, no tocás la lista.
+  // `cancelado`, "Cargar más" no tenía nada — treinta comercios de la lista
+  // anterior podían pegarse debajo de lo recién buscado. Una sola regla para
+  // todos: si no sos la búsqueda vigente, no tocás la lista.
   const serie = useRef(0);
+  // NUNCA DOS TARJETAS DEL MISMO COMERCIO. Las páginas vienen de consultas
+  // distintas, y hasta la migración 0105 la base podía devolver empates en
+  // distinto orden en cada una: la página 2 repetía comercios de la 1. Con
+  // ids repetidos, React (que usa el id como key) deja tarjetas huérfanas en
+  // pantalla al cambiar la lista — "2 resultados" y veinticinco tarjetas. La
+  // base ya ordena de forma total; esto es el cinturón por si vuelve a pasar.
+  function sinRepetidos(lista: ResultadoBusqueda[]): ResultadoBusqueda[] {
+    const vistos = new Set<string>();
+    return lista.filter((r) => (vistos.has(r.id) ? false : (vistos.add(r.id), true)));
+  }
   // Quién puso la lista por última vez, y las últimas veces que alguien la
   // puso. Sólo para el vigía de abajo: si la lista se pisa, el historial dice
   // en qué orden llegaron las respuestas y cuál fue la que no debía entrar.
@@ -321,7 +328,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
       while (vigente() && acumulado.length >= PRIMERAS && acumulado.length < TOPE_AUTO) {
         const lote = await buscarComercios(filtros, PAGE, acumulado.length);
         if (!vigente()) return;
-        acumulado = [...acumulado, ...lote];
+        acumulado = sinRepetidos([...acumulado, ...lote]);
         ponerResultados(acumulado, "lote", mia, q);
         setHayMas(lote.length === PAGE);
         if (lote.length < PAGE) break;
@@ -349,7 +356,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
         todo.push(...lote);
         if (lote.length < 500) break;
       }
-      if (!cancelado) { setResultsMapa(todo); setCargandoMapa(false); }
+      if (!cancelado) { setResultsMapa(sinRepetidos(todo)); setCargandoMapa(false); }
     })().catch(() => { if (!cancelado) setCargandoMapa(false); });
     return () => { cancelado = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -367,36 +374,43 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     // Con función y no con la lista de la clausura: si un lote de fondo entró
     // mientras esto cargaba, se suma a lo que hay, no a lo que había.
     anotar(more, "cargarMas", mia, q);
-    setResults((prev) => [...prev, ...more]);
+    setResults((prev) => sinRepetidos([...prev, ...more]));
     setHayMas(more.length === PAGE);
   }
 
   const zonaNom = zonas.find((z) => z.slug === zona)?.nombre;
   const shown = soloOfertas ? results.filter((r) => r.ofertas > 0) : results;
 
-  // VIGÍA: la lista nunca puede tener más filas que el total que dice el
-  // contador (el total es el count de la misma consulta). Si pasa, es que una
-  // respuesta vieja pisó la lista, y eso se avisa al servidor con lo que hace
-  // falta para entenderlo: qué se buscaba, qué había, por dónde entró y desde
-  // qué navegador. Una sola vez por pantalla, para no llenar la tabla de
-  // errores con el mismo caso repetido.
+  // VIGÍA: dos cosas que nunca pueden pasar, y si pasan se avisan al servidor
+  // con lo necesario para entenderlas (qué se buscaba, qué había, por dónde
+  // entró, historial y navegador). Una sola vez por pantalla.
+  //
+  //  1. La lista en memoria tiene más filas que el total del contador (el
+  //     total es el count de la misma consulta): una respuesta vieja la pisó.
+  //  2. La PANTALLA tiene más tarjetas que la lista en memoria. Esto es lo que
+  //     pasó de verdad con "2 resultados" y veinticinco tarjetas: la memoria
+  //     estaba bien y el primer vigía no vio nada, porque el problema eran
+  //     tarjetas huérfanas que React dejó en el DOM por keys repetidas. Un
+  //     vigía que mira sólo el estado no ve lo que ve la persona.
   const avisado = useRef(false);
   useEffect(() => {
     if (avisado.current || total == null || !q.trim()) return;
-    if (results.length <= total) return;
+    const enPantalla = typeof document !== "undefined" ? document.querySelectorAll(".uk-res-grid article").length : shown.length;
+    if (results.length <= total && enPantalla <= shown.length) return;
     avisado.current = true;
     // El detalle va en el mensaje y no sólo en el contexto: el servidor agrupa
     // por mensaje y del grupo guarda el contexto de la PRIMERA vez. Con el
     // origen y la búsqueda en el texto, cada caso distinto queda entero.
-    reportarError(`Buscador: la lista tiene ${results.length} filas y el total dice ${total} · origen=${origen.current || "?"} · q=${q}`, {
+    reportarError(`Buscador: lista=${results.length} pantalla=${enPantalla} total=${total} · origen=${origen.current || "?"} · q=${q}`, {
       contexto: {
-        q, total, filas: results.length, origen: origen.current, serie: serie.current,
+        q, total, filas: results.length, pantalla: enPantalla, origen: origen.current, serie: serie.current,
         primeros: results.slice(0, 5).map((r) => r.slug),
         historial: historial.current,
         ua: typeof navigator !== "undefined" ? navigator.userAgent : "",
       },
     });
-  }, [results, total, q]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results, total, q, shown.length]);
 
   // Se piden sólo las de los comercios que ya tienen ofertas: el contador viene
   // en la misma búsqueda, así que preguntar por los 800 sería preguntar por 799
