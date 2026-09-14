@@ -13,6 +13,23 @@ import structlog
 logger = structlog.get_logger()
 
 
+# EL TAMAÑO DE LA MINIATURA SIGUE AL DISEÑO DE LA TARJETA, Y YA SE DESFASÓ DOS VECES
+# =================================================================================
+# Estuvo en 200px con un comentario que decía "84px en la tarjeta". La tarjeta
+# pasó a portada ancha (~300px) y a 200 se veía borrosa: se subió a 600. Después
+# la tarjeta volvió a foto chica al costado —`.uk-rescover` mide 116px— y a 600
+# cada miniatura pesaba 50-65 KB. Una lista de "moda y ropa" eran 2,2 MB de
+# fotos, y en un celular se veía tardar. Nadie volvió a mirar el número, otra
+# vez.
+#
+# 116px × 3 (la densidad máxima que hay) = 348px. 400 cubre eso con margen y
+# pesa la mitad que 600. Si la tarjeta cambia de tamaño, ESTE número cambia con
+# ella — y `scripts/regenerar_miniaturas.py` rehace las que ya están.
+THUMB_LADO = 400
+THUMB_CALIDAD = 74
+THUMB_SUFIJO = "_t3"
+
+
 def procesar_imagen(data: bytes, max_side: int = 1600, quality: int = 82) -> bytes:
     from PIL import Image, ImageOps
 
@@ -70,25 +87,12 @@ def subir_foto_galeria(slug: str, data: bytes) -> tuple[str | None, str | None]:
     abre la foto en pantalla completa; el mapa/tarjetas usan siempre el thumb."""
     try:
         grande = procesar_imagen(data, 1280, 80)
-        # 600px. Estuvo en 200 y se veía borrosa en la tarjeta de resultados:
-        # ahí la portada ocupa el ancho de la tarjeta (~300px), y en una
-        # pantalla retina eso son 600px pedidos a una imagen de 200. Se agranda
-        # tres veces.
-        #
-        # El comentario que fijó los 200 decía "84px en la tarjeta" y era cierto
-        # cuando la tarjeta tenía la foto chica al costado. El diseño pasó a
-        # portada ancha y nadie volvió a mirar ese número.
-        #
-        # También decía que el mapa "abre 160 de estas a la vez — 5 MB". No
-        # pasa: el pin es un emoji con color (`pinHtml`), no lleva foto, y el
-        # globo lo arma Leaflet recién cuando alguien lo abre. Es una imagen por
-        # globo abierto, no 160.
-        chica = procesar_imagen(data, 600, 76)
+        chica = procesar_imagen(data, THUMB_LADO, THUMB_CALIDAD)
     except Exception as exc:  # noqa: BLE001
         raise ValueError("El archivo no es una imagen válida") from exc
     token = secrets.token_hex(8)
     url = guardar_foto_local(f"{slug}/{token}.jpg", grande)
-    thumb = guardar_foto_local(f"{slug}/{token}_t.jpg", chica)
+    thumb = guardar_foto_local(f"{slug}/{token}{THUMB_SUFIJO}.jpg", chica)
     return url, thumb
 
 

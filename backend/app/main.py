@@ -236,6 +236,12 @@ async def timing_middleware(request: Request, call_next):
     duracion_ms = (time.perf_counter() - inicio) * 1000
     if duracion_ms > _UMBRAL_LENTO_BACKEND_MS:
         await run_in_threadpool(registrar_perf, "backend", request.url.path, "duracion", duracion_ms)
+    # Las fotos se cachean un año. Sin esta cabecera cada visita volvía a bajar
+    # cada miniatura —y volver de una ficha a los resultados las bajaba todas
+    # de nuevo. Los nombres llevan un token aleatorio y una foto nueva es una
+    # URL nueva, así que `immutable` es verdad: esa URL nunca cambia de contenido.
+    if request.url.path.startswith("/fotos/") and response.status_code == 200:
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response
 
 

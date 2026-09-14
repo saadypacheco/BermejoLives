@@ -448,9 +448,15 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
           {!loading && shown.length === 0 && (
             <p className="uk-empty">No encontramos comercios con esos filtros. Probá con otra palabra o quitá filtros.</p>
           )}
-          {shown.map((r) => {
-            // La miniatura, no la grande: la tarjeta la muestra a ~300px.
+          {shown.map((r, i) => {
+            // La miniatura, no la grande: la portada de la tarjeta mide 116px.
             const cover = r.portada_thumb_url ?? r.portada_url ?? r.logo_url;
+            // Las primeras cuatro entran en la pantalla sin scroll: se piden YA
+            // y con prioridad, para que la primera impresión no espere. Las
+            // demás, perezosas — el navegador las trae cuando se acercan.
+            // Sin esta distinción, "lazy" en todas retrasaba también las que
+            // ya estaban a la vista.
+            const visible = i < 4;
             const { terminos, resto } = productosDe([r.prod_obs_human, r.prod_det_ia], q);
             const susOfertas = ofertas.get(r.id) ?? [];
             return (
@@ -466,7 +472,10 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
                       foto vertical de vidriera, el centro suele ser la mitad de
                       abajo del toldo y la mitad de arriba de la puerta. */}
                   {cover
-                    ? <img src={cover} alt={r.nombre} loading="lazy" decoding="async"
+                    ? <img src={cover} alt={r.nombre}
+                           loading={visible ? "eager" : "lazy"}
+                           fetchPriority={visible ? "high" : "auto"}
+                           decoding="async"
                            style={r.portada_pos != null
                              ? { objectPosition: `center ${r.portada_pos}%` } : undefined} />
                     : <span className="uk-rescover-sin" aria-hidden>🏪</span>}

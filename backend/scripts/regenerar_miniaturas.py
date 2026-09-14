@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
-"""Rehace las miniaturas de portada que quedaron en 200px.
+"""Rehace las miniaturas de portada al tamaño que pide la tarjeta de hoy.
 
 POR QUÉ
 =======
-La miniatura se generaba a 200px de lado, con un comentario que decía "84px en
-la tarjeta". Era cierto cuando la tarjeta de resultados tenía la foto chica al
-costado; el diseño pasó a portada ancha —la foto ocupa el ancho de la tarjeta,
-unos 300px— y en una pantalla retina eso son 600px pedidos a una imagen de 200.
-Se agranda tres veces y se ve borrosa. Nadie volvió a mirar ese número cuando
-cambió el diseño.
-
-`subir_foto_galeria` ya genera 600px, pero eso alcanza sólo a las fotos NUEVAS.
-Este script rehace las que ya están, a partir de la grande (1280px) que sigue
-guardada al lado.
+El tamaño de la miniatura sigue al diseño de la tarjeta, y se desfasó dos
+veces: 200px cuando la tarjeta tenía la foto chica (bien), 600px cuando pasó a
+portada ancha (bien), y 600px todavía cuando volvió a foto chica de 116px —
+ahí cada miniatura pesaba 50-65 KB y una lista de "moda y ropa" eran 2,2 MB.
+El tamaño correcto vive en `imagenes.THUMB_LADO`; este script rehace las que
+ya están a partir de la grande (1280px), que sigue guardada al lado.
 
 GUARDA UN ARCHIVO NUEVO, NO PISA EL VIEJO
 =========================================
-La miniatura nueva va a `<token>_t2.jpg` y se actualiza `portada_thumb_url`.
+La miniatura nueva va a `<token><THUMB_SUFIJO>.jpg` (hoy `_t3`) y se
+actualiza `portada_thumb_url`. Con el sufijo nuevo, además, la cabecera
+`Cache-Control: immutable` que ahora llevan las fotos no puede servir una
+versión vieja: es otra URL.
 Pisar el archivo con el mismo nombre habría sido más corto, pero la URL no
 cambia y el navegador —y el nginx de adelante— siguen sirviendo la versión
 cacheada. La foto seguiría viéndose borrosa y el informe diría que se arregló:
@@ -31,7 +30,8 @@ USO
         python - < backend/scripts/regenerar_miniaturas.py
 
 Sin APLICAR=1 sólo cuenta y muestra los primeros casos. Es idempotente: los que
-ya tienen `_t2` se saltean, así que se puede cortar y volver a correr.
+ya tienen el sufijo de hoy se saltean, así que se puede cortar y volver a
+correr.
 """
 import os
 import sys
@@ -41,10 +41,11 @@ sys.path.insert(0, "/app")
 
 from app.core.config import settings  # noqa: E402
 from app.db.repository import get_repo  # noqa: E402
-from app.services.imagenes import guardar_foto_local, procesar_imagen  # noqa: E402
+from app.services.imagenes import (  # noqa: E402
+    THUMB_CALIDAD, THUMB_LADO, THUMB_SUFIJO, guardar_foto_local, procesar_imagen)
 
-LADO = 600
-CALIDAD = 76
+LADO = THUMB_LADO
+CALIDAD = THUMB_CALIDAD
 
 
 def ruta_local(url: str | None) -> Path | None:
@@ -72,7 +73,7 @@ def main() -> int:
         if not grande:
             sin_foto += 1
             continue
-        if thumb and "_t2.jpg" in thumb:
+        if thumb and f"{THUMB_SUFIJO}.jpg" in thumb:
             ya_estaban += 1
             continue
 
@@ -95,7 +96,7 @@ def main() -> int:
             continue
 
         sub = str(origen.relative_to(Path(settings.fotos_dir))).replace("\\", "/")
-        nueva = sub.rsplit(".", 1)[0] + "_t2.jpg"
+        nueva = sub.rsplit(".", 1)[0] + f"{THUMB_SUFIJO}.jpg"
         url = guardar_foto_local(nueva, chica)
         if not url:
             sin_archivo += 1
