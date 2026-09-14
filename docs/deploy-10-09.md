@@ -160,6 +160,23 @@ curl -s https://uruku.bo/version
 
 El `sha` tiene que ser el del paso 1, no el del paso 0.
 
+**Si el `curl` contesta `404 page not found`, no falló nada: hay que esperar.**
+`docker compose up` vuelve enseguida, pero el contenedor nuevo tarda unos
+segundos en levantar y Traefik otros tantos en registrarlo. En esa ventana
+Traefik contesta su 404 por defecto (ese texto es de Traefik, no del sitio).
+Volvé a probar a los 20-30 segundos.
+
+Para no tener que acordarse, `scripts/deploy-prod.sh` hace estos pasos y
+**espera** a que `/version` conteste con el commit nuevo antes de terminar:
+
+```bash
+bash scripts/deploy-prod.sh                                   # frontend + backend
+bash scripts/deploy-prod.sh frontend                          # sólo frontend
+bash scripts/deploy-prod.sh --sql selfhost/postgres-init/0105_orden_total_en_la_busqueda.sql frontend
+```
+
+`--sql` aplica esa migración antes de levantar (se puede repetir).
+
 ---
 
 ## Paso 6 — Que arrancó bien
