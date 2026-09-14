@@ -21,6 +21,11 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   tilesCiudad?: { tiles_url?: string | null; tiles_atribucion?: string | null } | null;
 }) {
   const [q, setQ] = useState("");
+  // Lo que la persona está escribiendo, separado de lo que se BUSCA (`q`).
+  // El buscador de resultados es igual al del home: se busca al apretar
+  // Buscar o Enter, no en cada tecla. Es más previsible, es lo que la gente
+  // conoce, y no deja pedidos a medias ("rust") que puedan pisar al bueno.
+  const [texto, setTexto] = useState("");
   const [rubro, setRubro] = useState("");
   // El chip de refinamiento elegido, y los que hay para ofrecer. Salen de los
   // resultados de ESTA búsqueda, no de una lista fija.
@@ -124,6 +129,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     // eso lo resuelve la línea de pastillas, que muestra TODO lo que está
     // filtrando y deja sacarlo de a uno.
     setQ(g("q") ?? "");
+    setTexto(g("q") ?? "");
     setRubro(g("rubro") ?? "");
     setSubcategoria(g("sub") ?? "");
     setModalidad(g("modalidad") ?? "");
@@ -196,6 +202,11 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     let cancelado = false;
     debounce.current = setTimeout(async () => {
       const r = await buscarComercios(filtros, PRIMERAS, 0);
+      // La guarda que faltaba. El bucle de fondo la tenía; el primer lote no.
+      // Tecleando "rust…ico", el pedido de "rust" tardaba más que el de
+      // "rustico", llegaba después y pisaba la lista con rústicas y
+      // rustidores. Desde el home no pasaba porque la palabra llega entera.
+      if (cancelado) return;
       setResults(r);
       // El total viaja en cada fila; sin resultados, es cero.
       setTotal(r.length ? (r[0].total ?? r.length) : 0);
@@ -333,7 +344,10 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
 
   return (
     <div className="uk-container uk-buscar">
-      <form className="uk-search-live" onSubmit={(e) => e.preventDefault()}>
+      {/* El mismo buscador que el del home —mismo aspecto, misma palabra
+          "Buscar"— para que sea uno solo y no dos que se parecen. */}
+      <form className="uk-search" style={{ marginBottom: 14 }}
+            onSubmit={(e) => { e.preventDefault(); setQ(texto.trim()); }}>
         <Search style={{ width: 20, height: 20 }} />
         {rubroElegido && (
           <button type="button" className="uk-search-chip"
@@ -343,9 +357,10 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
             <b aria-hidden>×</b>
           </button>
         )}
-        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)}
-               placeholder={rubroElegido ? `Buscar en ${rubroElegido}…` : "Buscar locales o servicios…"}
+        <input autoFocus value={texto} onChange={(e) => setTexto(e.target.value)}
+               placeholder={rubroElegido ? `Buscar en ${rubroElegido}…` : "¿Qué estás buscando?"}
                aria-label="Buscar" />
+        <button type="submit">Buscar</button>
       </form>
 
       {/* Con una búsqueda escrita, los chips son las SUBCATEGORÍAS que hay entre
