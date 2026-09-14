@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { reportarError } from "@/lib/observabilidad";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { MapResults } from "@/components/map-results";
 import { CLAVE_ULTIMA_BUSQUEDA } from "@/components/volver-a-resultados";
@@ -32,7 +33,6 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   const [subcategoria, setSubcategoria] = useState("");
   const [refinamientos, setRefinamientos] = useState<{ subcategoria: string; n: number }[]>([]);
   const [total, setTotal] = useState<number | null>(null);
-  const router = useRouter();
   const [modalidad, setModalidad] = useState("");
   const [zona, setZona] = useState("");
   const [precioMax, setPrecioMax] = useState("");
@@ -46,6 +46,32 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   const [resultsMapa, setResultsMapa] = useState<ResultadoBusqueda[] | null>(null);
   const [cargandoMapa, setCargandoMapa] = useState(false);
   const [results, setResults] = useState<ResultadoBusqueda[]>([]);
+  // NÚMERO DE SERIE DE LA BÚSQUEDA. Cada búsqueda nueva lo sube, y toda
+  // respuesta que llegue con un número viejo se tira — venga del primer lote,
+  // de los lotes de fondo o de "Cargar más".
+  //
+  // Antes cada camino tenía (o no) su propia bandera: el efecto tenía
+  // `cancelado`, "Cargar más" no tenía nada. En un iPhone con 3G se vio la
+  // lista de otra búsqueda debajo de un contador que decía "2 resultados": la
+  // base había contestado bien (el registro de búsquedas lo prueba) y algo
+  // pisó la lista después. En vez de adivinar cuál de los caminos fue, se
+  // cierra la puerta a todos con una sola regla: si no sos la búsqueda
+  // vigente, no tocás la lista.
+  const serie = useRef(0);
+  // Quién puso la lista por última vez, y las últimas veces que alguien la
+  // puso. Sólo para el vigía de abajo: si la lista se pisa, el historial dice
+  // en qué orden llegaron las respuestas y cuál fue la que no debía entrar.
+  const origen = useRef<"primero" | "lote" | "cargarMas" | "">("");
+  const historial = useRef<string[]>([]);
+  function anotar(lista: ResultadoBusqueda[], de: "primero" | "lote" | "cargarMas", serieDe: number, qDe: string) {
+    origen.current = de;
+    historial.current = [...historial.current.slice(-11),
+      `${new Date().toISOString().slice(11, 23)} ${de} s${serieDe} q="${qDe}" n=${lista.length} 1º=${lista[0]?.slug ?? "-"} total=${lista[0]?.total ?? "-"}`];
+  }
+  function ponerResultados(lista: ResultadoBusqueda[], de: "primero" | "lote", serieDe: number, qDe: string) {
+    anotar(lista, de, serieDe, qDe);
+    setResults(lista);
+  }
   // Las ofertas van aparte de la búsqueda: `buscar_comercios` da una fila por
   // comercio y no tiene dónde meterlas salvo como contador.
   const [ofertas, setOfertas] = useState<Map<string, FeedItem[]>>(new Map());
@@ -118,8 +144,14 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
    *  Como estado, cambiarla obliga a un render nuevo, y recién en ESE el efecto
    *  de escritura corre con la búsqueda ya cargada. */
   const [urlLeida, setUrlLeida] = useState(false);
+  // La última URL que ESTE componente escribió. Cuando vuelve como `sp`, es
+  // el eco de lo que ya está en el estado: no hay nada que leer. Sin esta
+  // marca, cada escritura disparaba una lectura que reponía todo — incluso
+  // lo que la persona estaba tecleando y todavía no había buscado.
+  const escrita = useRef<string | null>(null);
 
   useEffect(() => {
+    if (escrita.current !== null && sp.toString() === escrita.current) return;
     const g = (k: string) => sp.get(k);
     if (g("ciudad") !== null) setCiudad(g("ciudad")!);
     if (g("zona") !== null) setZona(g("zona")!);
@@ -179,8 +211,26 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     const nueva = p.toString();
     // Sólo se escribe si de verdad cambió: si no, este efecto y el que LEE la
     // URL se despiertan mutuamente sin parar.
+    //
+    // `history.replaceState` y no `router.replace`, y esto arregla un bug que
+    // se veía sólo en el celular. `router.replace` es una navegación: le pide
+    // al servidor la página entera (/buscar es force-dynamic) y recién cuando
+    // ESO vuelve cambia `sp`. Con 3G tarda segundos. Mientras tanto la
+    // persona ya buscó "rustico": el estado tiene la búsqueda, la lista tiene
+    // los dos resultados… y ahí llega la respuesta de la navegación ANTERIOR
+    // (la que sólo agregaba ciudad=bermejo al entrar), `sp` pasa a esa URL
+    // vieja, el efecto de lectura la obedece y borra la búsqueda: q vacío,
+    // caja vacía, y la lista de todos los comercios cargándose de nuevo. En
+    // la compu no se veía porque la respuesta llegaba antes de terminar de
+    // escribir.
+    //
+    // replaceState cambia la URL en el acto, sin pedirle nada al servidor
+    // (Next lo integra con useSearchParams desde 14.1), así que no hay
+    // respuestas tardías que puedan pisar nada. Y no había motivo para ir al
+    // servidor: la página no lee los parámetros; los lee este componente.
     if (nueva !== sp.toString()) {
-      router.replace(nueva ? `/buscar?${nueva}` : "/buscar", { scroll: false });
+      escrita.current = nueva;
+      window.history.replaceState(null, "", nueva ? `/buscar?${nueva}` : "/buscar");
     }
     // Y se guarda para el "Volver a resultados" de la ficha. Va acá y no en el
     // enlace de cada tarjeta: la dirección de un negocio se comparte por
@@ -200,14 +250,16 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     // lista de la nueva: escribías "pan", llegaban diez panaderías, seguías
     // tecleando "pantalón" y abajo aparecían las panaderías igual.
     let cancelado = false;
+    const mia = ++serie.current;
+    // Vigente = no se desmontó Y ninguna búsqueda nueva pasó por encima.
+    const vigente = () => !cancelado && serie.current === mia;
     debounce.current = setTimeout(async () => {
       const r = await buscarComercios(filtros, PRIMERAS, 0);
-      // La guarda que faltaba. El bucle de fondo la tenía; el primer lote no.
       // Tecleando "rust…ico", el pedido de "rust" tardaba más que el de
       // "rustico", llegaba después y pisaba la lista con rústicas y
       // rustidores. Desde el home no pasaba porque la palabra llega entera.
-      if (cancelado) return;
-      setResults(r);
+      if (!vigente()) return;
+      ponerResultados(r, "primero", mia, q);
       // El total viaja en cada fila; sin resultados, es cero.
       setTotal(r.length ? (r[0].total ?? r.length) : 0);
       // Los chips se piden SIN el refinamiento activo: si se pidieran con él,
@@ -257,11 +309,11 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
       // ropa" al DOM de un celular de gama baja no es cargar en background: es
       // trabarlo, y encima para mostrar tarjetas que nadie va a mirar.
       let acumulado = r;
-      while (!cancelado && acumulado.length >= PRIMERAS && acumulado.length < TOPE_AUTO) {
+      while (vigente() && acumulado.length >= PRIMERAS && acumulado.length < TOPE_AUTO) {
         const lote = await buscarComercios(filtros, PAGE, acumulado.length);
-        if (cancelado) return;
+        if (!vigente()) return;
         acumulado = [...acumulado, ...lote];
-        setResults(acumulado);
+        ponerResultados(acumulado, "lote", mia, q);
         setHayMas(lote.length === PAGE);
         if (lote.length < PAGE) break;
       }
@@ -296,14 +348,46 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
 
   async function cargarMas() {
     setCargandoMas(true);
+    const mia = serie.current;
     const more = await buscarComercios(filtros, PAGE, results.length);
+    setCargandoMas(false);
+    // Si mientras cargaba la persona buscó otra cosa, esto ya no es de acá.
+    // Sin esta línea, treinta comercios de la lista de "todos" se pegaban
+    // debajo de los dos resultados de "rustico".
+    if (serie.current !== mia) return;
+    // Con función y no con la lista de la clausura: si un lote de fondo entró
+    // mientras esto cargaba, se suma a lo que hay, no a lo que había.
+    anotar(more, "cargarMas", mia, q);
     setResults((prev) => [...prev, ...more]);
     setHayMas(more.length === PAGE);
-    setCargandoMas(false);
   }
 
   const zonaNom = zonas.find((z) => z.slug === zona)?.nombre;
   const shown = soloOfertas ? results.filter((r) => r.ofertas > 0) : results;
+
+  // VIGÍA: la lista nunca puede tener más filas que el total que dice el
+  // contador (el total es el count de la misma consulta). Si pasa, es que una
+  // respuesta vieja pisó la lista, y eso se avisa al servidor con lo que hace
+  // falta para entenderlo: qué se buscaba, qué había, por dónde entró y desde
+  // qué navegador. Una sola vez por pantalla, para no llenar la tabla de
+  // errores con el mismo caso repetido.
+  const avisado = useRef(false);
+  useEffect(() => {
+    if (avisado.current || total == null || !q.trim()) return;
+    if (results.length <= total) return;
+    avisado.current = true;
+    // El detalle va en el mensaje y no sólo en el contexto: el servidor agrupa
+    // por mensaje y del grupo guarda el contexto de la PRIMERA vez. Con el
+    // origen y la búsqueda en el texto, cada caso distinto queda entero.
+    reportarError(`Buscador: la lista tiene ${results.length} filas y el total dice ${total} · origen=${origen.current || "?"} · q=${q}`, {
+      contexto: {
+        q, total, filas: results.length, origen: origen.current, serie: serie.current,
+        primeros: results.slice(0, 5).map((r) => r.slug),
+        historial: historial.current,
+        ua: typeof navigator !== "undefined" ? navigator.userAgent : "",
+      },
+    });
+  }, [results, total, q]);
 
   // Se piden sólo las de los comercios que ya tienen ofertas: el contador viene
   // en la misma búsqueda, así que preguntar por los 800 sería preguntar por 799
