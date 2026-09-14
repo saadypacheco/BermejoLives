@@ -13,7 +13,12 @@
 // la caché, el arreglo no le llega y el agente sigue sin poder subir su
 // trabajo. Es lo primero que hay que descartar cuando un arreglo "no funciona"
 // en el teléfono y sí en el servidor.
-const VERSION = "uruku-v27";
+// v28 (2026-09-14): el buscador de resultados pasó a buscar al apretar
+// Buscar, y el celular seguía buscando a cada tecla con el bundle anterior.
+// Ya no depende de este bump: components/version-check.tsx compara el commit
+// del bundle con /version y recarga sola. El bump acá sólo limpia las cachés
+// de estáticos viejos que quedaron.
+const VERSION = "uruku-v28";
 const SHELL = `${VERSION}-shell`;
 const STATIC = `${VERSION}-static`;
 const TILES = `${VERSION}-tiles`;

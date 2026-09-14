@@ -37,11 +37,20 @@ const nextConfig = {
   // pruebas no se indexe no le cuesta nada a nadie; que se indexe con los datos
   // reales de los comercios, sí.
   async headers() {
-    if ((process.env.APP_ENV || "").toLowerCase() === "prod") return [];
-    return [{
-      source: "/:path*",
-      headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }],
-    }];
+    const reglas = [
+      // El service worker no se cachea en el borde. Cloudflare le ponía cuatro
+      // horas por ser .js, y en esas cuatro horas el celular que preguntaba
+      // "¿hay service worker nuevo?" recibía el viejo. El navegador ya lo pide
+      // sin usar su propia caché; faltaba que el proxy hiciera lo mismo.
+      { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache" }] },
+    ];
+    if ((process.env.APP_ENV || "").toLowerCase() !== "prod") {
+      reglas.push({
+        source: "/:path*",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }],
+      });
+    }
+    return reglas;
   },
   images: {
     remotePatterns: [

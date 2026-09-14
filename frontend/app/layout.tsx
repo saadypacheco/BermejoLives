@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { SwRegister } from "@/components/sw-register";
+import { VersionCheck } from "@/components/version-check";
 import { InstallPrompt } from "@/components/install-prompt";
 import { ErrorListener } from "@/components/error-listener";
 import { WebVitalsReporter } from "@/components/web-vitals-reporter";
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <InstallPrompt />
         {children}
         <SwRegister />
+        <VersionCheck />
       </body>
     </html>
   );
