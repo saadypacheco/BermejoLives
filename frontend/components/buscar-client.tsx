@@ -426,7 +426,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
         </div>
       </div>
 
-      {vista === "mapa" ? (
+      {vista === "mapa" && (
         <>
         {cargandoMapa && (
           <div style={{ padding: "6px 0", fontSize: 12.5, color: "var(--uk-ink-soft)" }}>
@@ -443,8 +443,21 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
           ciudad={tilesCiudad}
         />
         </>
-      ) : (
-        <div className="uk-res-grid">
+      )}
+      {/* LA LISTA NO SE DESMONTA AL IR AL MAPA: SE ESCONDE.
+
+          Antes era "mapa O lista": al ir al mapa la lista se destruía, y al
+          volver se creaba de cero con sus 90 tarjetas y 90 <img> nuevos — el
+          navegador pedía cada foto otra vez. En la compu no se notaba (las
+          fotos seguían en memoria); en un celular el mapa desaloja esa
+          memoria, y volver a la lista eran 20 segundos de fotos bajando.
+
+          `display: none` en línea y no el atributo `hidden`: la clase
+          `.uk-res-grid` pone `display: grid` con la misma especificidad que
+          `[hidden]`, y como la del sitio va después, ganaba y el atributo
+          no escondía nada. */}
+      {(
+        <div className="uk-res-grid" style={vista === "mapa" ? { display: "none" } : undefined}>
           {!loading && shown.length === 0 && (
             <p className="uk-empty">No encontramos comercios con esos filtros. Probá con otra palabra o quitá filtros.</p>
           )}
