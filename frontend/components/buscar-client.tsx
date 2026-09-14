@@ -67,6 +67,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     origen.current = de;
     historial.current = [...historial.current.slice(-11),
       `${new Date().toISOString().slice(11, 23)} ${de} s${serieDe} q="${qDe}" n=${lista.length} 1º=${lista[0]?.slug ?? "-"} total=${lista[0]?.total ?? "-"}`];
+    setTic((t) => t + 1);
   }
   function ponerResultados(lista: ResultadoBusqueda[], de: "primero" | "lote", serieDe: number, qDe: string) {
     anotar(lista, de, serieDe, qDe);
@@ -144,6 +145,12 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
    *  Como estado, cambiarla obliga a un render nuevo, y recién en ESE el efecto
    *  de escritura corre con la búsqueda ya cargada. */
   const [urlLeida, setUrlLeida] = useState(false);
+  // ?debug=1 muestra abajo un recuadro con lo que el buscador tiene en
+  // memoria. Es para mirar desde un teléfono lo que en la compu se mira con
+  // DevTools: qué busca, qué lista tiene y por dónde entró cada lista. No
+  // cambia nada del comportamiento.
+  const [debug, setDebug] = useState(false);
+  const [, setTic] = useState(0);
   // La última URL que ESTE componente escribió. Cuando vuelve como `sp`, es
   // el eco de lo que ya está en el estado: no hay nada que leer. Sin esta
   // marca, cada escritura disparaba una lectura que reponía todo — incluso
@@ -166,6 +173,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     setSubcategoria(g("sub") ?? "");
     setModalidad(g("modalidad") ?? "");
     if (g("vista") === "mapa") setVista("mapa");
+    if (g("debug") === "1") setDebug(true);
     // `of=1` es el enlace de "Ofertas" del menú, que antes iba a /mapa.
     setSoloOfertas(g("of") === "1");
     // Recién ahora el efecto de abajo puede escribir la URL. Ver el porqué allá.
@@ -208,6 +216,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     if (precioMax) p.set("precio_max", precioMax);
     if (vista === "mapa") p.set("vista", "mapa");
     if (soloOfertas) p.set("of", "1");
+    if (debug) p.set("debug", "1");
     const nueva = p.toString();
     // Sólo se escribe si de verdad cambió: si no, este efecto y el que LEE la
     // URL se despiertan mutuamente sin parar.
@@ -240,7 +249,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     // `urlLeida` va en las dependencias: sin él, el efecto no vuelve a correr
     // cuando pasa a true y una URL que no cambia nada más nunca se escribiría.
-  }, [urlLeida, q, rubro, subcategoria, modalidad, zona, ciudad, precioMax, vista, soloOfertas]);
+  }, [urlLeida, q, rubro, subcategoria, modalidad, zona, ciudad, precioMax, vista, soloOfertas, debug]);
 
   useEffect(() => {
     clearTimeout(debounce.current);
@@ -732,6 +741,21 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
         </div>
       )}
 
+      {debug && (
+        <pre style={{ marginTop: 30, padding: 12, fontSize: 11, lineHeight: 1.45, whiteSpace: "pre-wrap", wordBreak: "break-all",
+                      background: "#111", color: "#9f9", border: "1px solid #393", borderRadius: 8 }}>
+{[
+  `commit ${process.env.NEXT_PUBLIC_GIT_SHA || "dev"} · ${typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 90) : ""}`,
+  `q="${q}" texto="${texto}" rubro="${rubro}" sub="${subcategoria}" mod="${modalidad}" zona="${zona}" ciudad="${ciudad}" precio="${precioMax}" of=${soloOfertas} vista=${vista}`,
+  `total=${total} results=${results.length} shown=${shown.length} loading=${loading} hayMas=${hayMas} serie=${serie.current} origen=${origen.current || "-"}`,
+  `primeros: ${results.slice(0, 6).map((r) => r.slug).join(", ") || "-"}`,
+  `url: ${typeof window !== "undefined" ? window.location.search : ""}`,
+  ``,
+  `historial (última abajo):`,
+  ...historial.current,
+].join("\n")}
+        </pre>
+      )}
       <ReservaBarra />
     </div>
   );
