@@ -143,9 +143,16 @@
   .uk-head-strip { order: 1; flex-basis: auto; flex: 1; justify-content: center; }
   .uk-head-actions { order: 2; }
 }
-/* El buscador va de punta a punta. Tenía un tope de 680px y en una notebook
-   se cortaba a la mitad de la pantalla, como si le faltara algo. */
-@media (min-width: 900px) { .uk-brand-full { height: 96px; } }
+/* En la compu, el buscador como el de Google: centrado, redondo y de un
+   ancho cómodo. Estuvo pegado a la izquierda con un tope de 680px (se leía
+   como cortado) y de punta a punta (se leía como una barra de menú). En el
+   celular no cambia: ahí va de lado a lado porque no hay otro lado. */
+@media (min-width: 900px) {
+  .uk-brand-full { height: 96px; }
+  .uk-search { width: 100%; max-width: 760px; margin-left: auto; margin-right: auto; border-radius: 999px; min-height: 56px; }
+  .uk-search input { font-size: 17px; padding-left: 8px; }
+  .uk-search button[type="submit"] { border-radius: 999px; margin: 4px; }
+}
 
 /* Mapa · Ofertas · Cambio en el header, sólo de 900px para arriba: abajo de
    eso está la barra del celular con los mismos tres. */
