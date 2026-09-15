@@ -4,6 +4,7 @@ import { ThemeToggle, ThemeNoFlash } from "@/components/uruku-theme";
 import { CitySelector } from "@/components/city-selector";
 import { IngresarMenu } from "@/components/ingresar-menu";
 import { BottomNav } from "@/components/bottom-nav";
+import { Asistente } from "@/components/asistente";
 import { CatNav } from "@/components/catnav";
 import { Ic, SocialLinks, money } from "@/components/uruku-ui";
 import { getClima, getCotizaciones, getRedes } from "@/lib/data";
@@ -26,6 +27,7 @@ export async function UrukuShell({
   mainClass,
   fill = false,
   rootClass,
+  asistente,
 }: {
   children: React.ReactNode;
   activeCat?: string;
@@ -39,6 +41,9 @@ export async function UrukuShell({
   mainClass?: string;
   fill?: boolean;   // llena la pantalla (ej. mapa): flex column, sin footer, main flex-1
   rootClass?: string;   // clase extra en el root (ej. "uk-map" para overrides del mapa)
+  /** Uruku Ayuda. Por defecto el asistente de URUKU; en la ficha de un local
+   *  con el plan que lo incluye, el de ese local; `false` lo esconde. */
+  asistente?: { id: string; nombre: string } | false;
 }) {
   const [{ ciudad, ciudades }, clima, cotizaciones, redes] = await Promise.all([
     ciudadActual(), getClima(), getCotizaciones(), getRedes(),
@@ -147,6 +152,7 @@ export async function UrukuShell({
 
       {!fill && <div style={{ height: 20 }} />}
       <BottomNav active={activeNav ?? ""} />
+      {asistente !== false && <Asistente comercio={asistente || undefined} />}
     </div>
   );
 }

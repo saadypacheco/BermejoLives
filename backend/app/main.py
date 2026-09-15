@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
-from app.api import auth, campo, comercio, contenido, health, moderacion, observabilidad, usuario, webhook
+from app.api import asistente, auth, campo, comercio, contenido, health, moderacion, observabilidad, usuario, webhook
 from app.core.config import settings
 from app.services.clima import fetch_clima_bermejo
 from app.services.observabilidad import registrar_error, registrar_perf
@@ -198,6 +198,9 @@ _RL_RULES: dict[str, int] = {
     "/auth/": 20,
     "/errores": 60,
     "/metricas": 120,
+    # Uruku Ayuda: 20 preguntas por minuto por IP es más de lo que una persona
+    # escribe, y menos de lo que un bot gastaría en modelo.
+    "/asistente/": 20,
 }
 
 
@@ -279,6 +282,7 @@ app.include_router(moderacion.router, tags=["moderacion"])
 app.include_router(usuario.router, tags=["usuario"])
 app.include_router(observabilidad.router, tags=["observabilidad"])
 app.include_router(contenido.router, tags=["contenido"])
+app.include_router(asistente.router, tags=["asistente"])
 
 # Fotos de comercio: servidas por el propio backend (reemplaza a Supabase
 # Storage en el self-host — ver services/imagenes.py).

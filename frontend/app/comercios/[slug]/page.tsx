@@ -90,8 +90,14 @@ export default async function ComercioPage({ params }: { params: { slug: string 
     (comercio.direccion || comercio.lat) && { id: "ubicacion", label: "Ubicación" },
   ].filter(Boolean) as { id: string; label: string }[];
 
+  // En la ficha de un local con el plan Empleado Digital, la ayuda es el
+  // asistente de ESE local. En las demás, la de URUKU. El servidor es el que
+  // decide de verdad (403 si el plan no lo incluye); acá sólo se elige qué
+  // cara mostrar.
   return (
-    <UrukuShell showCatnav={false}>
+    <UrukuShell showCatnav={false}
+                asistente={(comercio as { plan?: string | null }).plan === "empleado_ia"
+                  ? { id: comercio.id, nombre: comercio.nombre } : undefined}>
       <VistaLogger comercioId={comercio.id} />
 
       <div className="uk-container uk-ficha">

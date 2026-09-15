@@ -28,7 +28,7 @@ import {
   getPerfil, updatePerfil, subirFotoPerfil, getSuscripcion, getMetricas, pagarSuscripcion,
   draftProducto, listProductos, crearProducto, borrarProducto, destacarProducto,
   getMensajes, marcarLeido,
-  getMisPublicaciones, editarPublicacion, bajaPublicacion,
+  getMisPublicaciones, editarPublicacion, bajaPublicacion, getPreguntasDelAsistente,
   listarFotosComercio, listarVideosComercio, subirFotoGaleriaComercio, subirVideoGaleriaComercio, borrarFotoComercio, borrarVideoComercio,
   type ComercioSession, type Perfil, type Suscripcion, type Metricas,
   type ProductoDraft, type ProductoRef, type Mensaje, type Publicacion,
@@ -541,7 +541,7 @@ function Panel({ sess, onLogout }: { sess: ComercioSession; onLogout: () => void
           {vista === "productos" && <div style={{ maxWidth: 780 }}><ProductosTab /></div>}
           {vista === "contactos" && <div style={{ maxWidth: 720 }}><ContactosView /></div>}
           {vista === "estadisticas" && <div style={{ maxWidth: 720 }}><EstadisticasView /></div>}
-          {vista === "mensajes" && <div style={{ maxWidth: 760 }}><MensajesTab /></div>}
+          {vista === "mensajes" && <div style={{ maxWidth: 760 }}><PreguntasAlAsistente /><MensajesTab /></div>}
           {vista === "suscripcion" && <div style={{ maxWidth: 620 }}><SuscripcionTab /></div>}
           {vista === "config" && <div style={{ maxWidth: 620 }}><ConfiguracionView /></div>}
         </div>
@@ -994,6 +994,34 @@ function EstadisticasView() {
 }
 
 /* --------------------------------- Mensajes tab -------------------------------- */
+/** Lo que los clientes le preguntaron al asistente del local y el asistente
+ *  no supo contestar. Son ventas que se quedaron sin cerrar: el dueño lee la
+ *  pregunta, y la próxima vez carga ese dato en su ficha (horario, envíos,
+ *  precios) para que el asistente lo tenga. Sólo aparece si hubo alguna. */
+function PreguntasAlAsistente() {
+  const [data, setData] = useState<Awaited<ReturnType<typeof getPreguntasDelAsistente>> | null>(null);
+  useEffect(() => { getPreguntasDelAsistente().then(setData).catch(() => {}); }, []);
+  if (!data || data.items.length === 0) return null;
+  const sinResp = data.items.filter((i) => i.sin_respuesta);
+  return (
+    <div style={{ marginBottom: 18, padding: 14, border: "1px solid var(--stroke)", borderRadius: 12 }}>
+      <b style={{ display: "block", marginBottom: 4 }}>Preguntas al asistente de tu local</b>
+      <p style={{ margin: "0 0 10px", fontSize: 13, color: "var(--txt-3)" }}>
+        {data.items.length} en total · {sinResp.length} que no supo contestar. Lo que el asistente no sabe es lo que
+        te falta cargar en la ficha: horario, envíos, precios.
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13.5 }}>
+        {(sinResp.length ? sinResp : data.items).slice(0, 15).map((i) => (
+          <div key={i.id} style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+            <span>{i.sin_respuesta ? "❓ " : "✓ "}{i.pregunta}</span>
+            <span style={{ color: "var(--txt-3)", whiteSpace: "nowrap", fontSize: 12 }}>{new Date(i.created_at).toLocaleDateString("es-BO")}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function MensajesTab() {
   const [items, setItems] = useState<Mensaje[] | null>(null);
   const [err, setErr] = useState("");

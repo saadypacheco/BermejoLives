@@ -117,6 +117,8 @@ class FakeRepo:
             {"clave": "ars_bob", "etiqueta": "Peso argentino", "detalle": "100 ARS", "valor": 0, "unidad": "Bs", "orden": 2},
         ]
         self.clima: dict = {"id": 1, "temp_c": None, "descripcion": None, "override_hasta": None}
+        self.saber_local: dict[str, dict] = {}        # id -> row
+        self.conversaciones: list[dict] = []          # Uruku Ayuda
         self.videos_promo: list[dict] = []
         self.redes: list[dict] = [
             {"clave": "tiktok", "etiqueta": "TikTok", "url": None, "orden": 1},
@@ -757,6 +759,70 @@ class FakeRepo:
     def update_clima(self, patch):
         self.clima.update(patch)
         return self.clima
+
+    # ------------------------------------------------------------ Uruku Ayuda
+    def buscar_comercios(self, q, limite=5):
+        """Lo que el fake puede: nombre, subcategoría y productos, por
+        substring de cada palabra. La función real rankea; acá alcanza con
+        que aparezca lo que debería."""
+        import unicodedata
+
+        def _sin_acentos(t):
+            return "".join(ch for ch in unicodedata.normalize("NFD", t.lower()) if unicodedata.category(ch) != "Mn")
+        terms = [t for t in _sin_acentos(q or "").split() if t]
+        out = []
+        for c in self.comercios.values():
+            if not c.get("activo", True):
+                continue
+            pajar = _sin_acentos(" ".join(str(c.get(k) or "") for k in ("nombre", "subcategoria", "prod_obs_human", "prod_det_ia")))
+            aciertos = sum(1 for t in terms if t in pajar)
+            if not terms or aciertos:
+                out.append(({**c, "total": None}, aciertos))
+        # Como la función real: los que más coinciden, primero.
+        out.sort(key=lambda par: -par[1])
+        filas = [c for c, _ in out]
+        for c in filas:
+            c["total"] = len(filas)
+        return filas[:limite]
+
+    def list_saber_local(self, solo_activos=True):
+        return [s for s in self.saber_local.values() if not solo_activos or s.get("activo", True)]
+
+    def upsert_saber_local(self, row):
+        import uuid
+        row = {"activo": True, **row}
+        row.setdefault("id", str(uuid.uuid4()))
+        self.saber_local[row["id"]] = {**self.saber_local.get(row["id"], {}), **row}
+        return self.saber_local[row["id"]]
+
+    def borrar_saber_local(self, saber_id):
+        self.saber_local.pop(saber_id, None)
+
+    def insert_conversacion(self, row):
+        import uuid
+        from datetime import datetime, timezone
+        row = {"id": str(uuid.uuid4()), "created_at": datetime.now(timezone.utc).isoformat(),
+               "resuelta_en": None, "util": None, **row}
+        self.conversaciones.append(row)
+        return row
+
+    def list_conversaciones(self, filtro, limite=100):
+        rows = list(reversed(self.conversaciones))
+        if filtro == "sin_respuesta":
+            rows = [r for r in rows if r.get("sin_respuesta") and not r.get("resuelta_en")]
+        elif filtro.startswith("comercio:"):
+            rows = [r for r in rows if r.get("comercio_id") == filtro.split(":", 1)[1]]
+        return rows[:limite]
+
+    def marcar_conversacion(self, conversacion_id, cambios):
+        for r in self.conversaciones:
+            if r["id"] == conversacion_id:
+                r.update(cambios)
+                return r
+        return None
+
+    def contar_conversaciones_sesion_hoy(self, sesion):
+        return len([r for r in self.conversaciones if r.get("sesion") == sesion])
 
     def list_videos_promo(self, solo_activos=False):
         vs = [v for v in self.videos_promo if (not solo_activos or v.get("activo"))]

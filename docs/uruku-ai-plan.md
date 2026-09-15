@@ -146,11 +146,14 @@ orden de ninguno de los dos documentos.
    que lo más buscado en Bermejo es «zap».
 2. ~~**IA en la ingesta**~~ ✅ **Hecho el 11/9** — la cola de moderación llega
    ordenada; el veredicto vive en la fila y no en el navegador.
-3. **Nivel 0** — horario, dirección, teléfono, cómo llegar, resueltos por
-   consulta directa. Sin modelo. Cubre la mayoría de las preguntas reales.
-3. **Uruku Ayuda** — el asistente del propio sitio. Riesgo bajo: si se equivoca,
-   se equivoca sobre URUKU, no sobre el precio de un comercio. Es donde se
-   estrena el núcleo.
+3. ~~**Nivel 0** — horario, dirección, teléfono, cómo llegar, resueltos por
+   consulta directa. Sin modelo.~~ ✅ **Hecho el 14/9** — `services/asistente.py`
+   + `services/horario.py` (el parser de horarios, ahora también en Python).
+3. ~~**Uruku Ayuda** — el asistente del propio sitio.~~ ✅ **Hecho el 14/9** —
+   el botón «Ayuda» en todo el sitio, Admin › Ayuda con las preguntas sin
+   respuesta y el saber local, y el mismo núcleo como asistente del comercio
+   en la ficha (plan Empleado Digital). 26 tests. Ver
+   `estrategia-marca-uruku.md` §5.
 4. **Agente Catálogo**, primero para uso interno. Es lo que hace rentable dar de
    alta a un comercio.
 5. **Uruku Chat** — el agente de la ficha del comercio, con los datos ya

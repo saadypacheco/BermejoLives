@@ -207,6 +207,15 @@ class Repo(Protocol):
     def list_cotizaciones(self) -> list[dict]: ...
     def update_cotizacion(self, clave: str, valor: float) -> dict | None: ...
     def get_clima(self) -> dict | None: ...
+    # Uruku Ayuda (services/asistente.py)
+    def buscar_comercios(self, q: str, limite: int = 5) -> list[dict]: ...
+    def list_saber_local(self, solo_activos: bool = True) -> list[dict]: ...
+    def upsert_saber_local(self, row: dict) -> dict: ...
+    def borrar_saber_local(self, saber_id: str) -> None: ...
+    def insert_conversacion(self, row: dict) -> dict: ...
+    def list_conversaciones(self, filtro: str, limite: int = 100) -> list[dict]: ...
+    def marcar_conversacion(self, conversacion_id: str, cambios: dict) -> dict | None: ...
+    def contar_conversaciones_sesion_hoy(self, sesion: str) -> int: ...
     def update_clima(self, patch: dict) -> dict | None: ...
     def list_videos_promo(self, solo_activos: bool = False) -> list[dict]: ...
     def add_video_promo(self, row: dict) -> dict: ...
@@ -2131,6 +2140,60 @@ class SupabaseRepo:
             .eq("id", 1).execute()
         )
         return res.data[0] if res.data else None
+
+    # ------------------------------------------------------------ Uruku Ayuda
+    def buscar_comercios(self, q: str, limite: int = 5) -> list[dict]:
+        """La MISMA búsqueda del sitio (la función `buscar_comercios` de la
+        base), para que el asistente conteste con lo que el buscador
+        mostraría. Dos buscadores que no coinciden son dos verdades."""
+        res = self._db.rpc("buscar_comercios", {
+            "q": q or None, "p_rubro": None, "p_modalidad": None, "p_zona": None,
+            "p_precio_min": None, "p_precio_max": None, "p_ciudad": None,
+            "p_limit": max(1, min(int(limite), 100)), "p_offset": 0, "p_subcategoria": None,
+        }).execute()
+        return res.data or []
+
+    def list_saber_local(self, solo_activos: bool = True) -> list[dict]:
+        q = self._db.table("saber_local").select("*").order("updated_at", desc=True).limit(500)
+        if solo_activos:
+            q = q.eq("activo", True)
+        return q.execute().data or []
+
+    def upsert_saber_local(self, row: dict) -> dict:
+        from datetime import datetime, timezone
+        row = {**row, "updated_at": datetime.now(timezone.utc).isoformat()}
+        if row.get("id"):
+            res = self._db.table("saber_local").update(row).eq("id", row["id"]).execute()
+        else:
+            res = self._db.table("saber_local").insert(row).execute()
+        return res.data[0]
+
+    def borrar_saber_local(self, saber_id: str) -> None:
+        self._db.table("saber_local").delete().eq("id", saber_id).execute()
+
+    def insert_conversacion(self, row: dict) -> dict:
+        res = self._db.table("asistente_conversaciones").insert(row).execute()
+        return res.data[0]
+
+    def list_conversaciones(self, filtro: str, limite: int = 100) -> list[dict]:
+        q = (self._db.table("asistente_conversaciones").select("*")
+             .order("created_at", desc=True).limit(max(1, min(int(limite), 500))))
+        if filtro == "sin_respuesta":
+            q = q.eq("sin_respuesta", True).is_("resuelta_en", "null")
+        elif filtro.startswith("comercio:"):
+            q = q.eq("comercio_id", filtro.split(":", 1)[1])
+        return q.execute().data or []
+
+    def marcar_conversacion(self, conversacion_id: str, cambios: dict) -> dict | None:
+        res = self._db.table("asistente_conversaciones").update(cambios).eq("id", conversacion_id).execute()
+        return res.data[0] if res.data else None
+
+    def contar_conversaciones_sesion_hoy(self, sesion: str) -> int:
+        from datetime import datetime, timedelta, timezone
+        desde = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        res = (self._db.table("asistente_conversaciones").select("id", count="exact")
+               .eq("sesion", sesion).gte("created_at", desde).execute())
+        return res.count or 0
 
     def list_videos_promo(self, solo_activos: bool = False) -> list[dict]:
         q = self._db.table("videos_promocionales").select("*")

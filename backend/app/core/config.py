@@ -152,6 +152,15 @@ class Settings(BaseSettings):
     # "rechazar" en el panel. Encenderlo es una decisión, no un ajuste.
     ia_auto_aprobar_desde: float = 0.0
 
+    # --- Uruku Ayuda (services/asistente.py) ---
+    # Apagado, el endpoint contesta 503 y el sitio esconde el botón: es la
+    # forma de frenar el gasto en modelo sin un deploy.
+    asistente_activo: bool = True
+    # Preguntas por sesión (un navegador) por día. Un bot pegándole al
+    # endpoint gastaría en modelo lo que cuesta un plan; con esto, no.
+    asistente_max_por_sesion_dia: int = 60
+    asistente_timeout_seg: float = 12.0
+
     # ── WAHA SÓLO LEE ────────────────────────────────────────────────────────
     #
     # Decisión del 11/9: el número vinculado a WAHA (el Registrador) existe

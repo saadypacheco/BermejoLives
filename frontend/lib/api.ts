@@ -1085,3 +1085,79 @@ export async function aplicarPatron(rubro_slug: string, palabras: string): Promi
     agregados: number; salteados: { codigo: string | null; nombre: string | null; rubros: number }[];
   }>;
 }
+
+// ============================================================ Uruku Ayuda
+
+export type RespuestaAsistente = {
+  id: string;
+  texto: string;
+  nivel: 0 | 1 | 3;
+  intent: string;
+  fuentes: { tipo: "comercio" | "saber"; nombre: string; url: string; detalle?: string }[];
+  sugerencias: string[];
+  sin_respuesta: boolean;
+};
+
+/** Público. `sesion` identifica al navegador para el tope diario; `comercioId`
+ *  acota el asistente a ese local (plan Empleado Digital). */
+export async function preguntarAsistente(pregunta: string, sesion: string, comercioId?: string): Promise<RespuestaAsistente> {
+  const res = await fetch(`${API}/asistente/preguntar`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pregunta, sesion, comercio_id: comercioId ?? null }),
+  });
+  if (!res.ok) {
+    let detail = "No pude contestar ahora.";
+    try { detail = (await res.json()).detail ?? detail; } catch { /* sin cuerpo */ }
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+export function marcarUtilAsistente(id: string, util: boolean): void {
+  fetch(`${API}/asistente/${id}/util`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ util }), keepalive: true,
+  }).catch(() => {});
+}
+
+export type ConversacionAsistente = {
+  id: string; sesion: string; canal: "sitio" | "ficha"; comercio_id: string | null;
+  pregunta: string; respuesta: string; nivel: number; intent: string | null;
+  fuentes: RespuestaAsistente["fuentes"]; sin_respuesta: boolean; util: boolean | null;
+  resuelta_en: string | null; created_at: string;
+};
+
+export type SaberLocal = {
+  id: string; pregunta: string; respuesta: string; etiquetas: string[]; activo: boolean;
+  creado_por: string | null; updated_at: string;
+};
+
+export async function getAsistenteConversaciones(filtro: "sin_respuesta" | "todas" = "sin_respuesta"): Promise<ConversacionAsistente[]> {
+  const res = await authFetch(`/admin/asistente/conversaciones?filtro=${filtro}&limite=200`);
+  return (await res.json()).items;
+}
+
+export async function responderAsistente(id: string, respuesta: string, etiquetas: string[], guardar = true): Promise<{ ok: boolean; saber: SaberLocal | null }> {
+  const res = await authFetch(`/admin/asistente/conversaciones/${id}/responder`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ respuesta, etiquetas, guardar }),
+  });
+  if (!res.ok) throw new Error((await res.json()).detail ?? "No se pudo guardar");
+  return res.json();
+}
+
+export async function getSaberLocal(): Promise<SaberLocal[]> {
+  const res = await authFetch(`/admin/asistente/saber`);
+  return (await res.json()).items;
+}
+
+export async function guardarSaberLocal(item: { id?: string; pregunta: string; respuesta: string; etiquetas: string[]; activo?: boolean }): Promise<SaberLocal> {
+  const res = await authFetch(`/admin/asistente/saber`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item),
+  });
+  if (!res.ok) throw new Error((await res.json()).detail ?? "No se pudo guardar");
+  return (await res.json()).item;
+}
+
+export async function borrarSaberLocal(id: string): Promise<void> {
+  await authFetch(`/admin/asistente/saber/${id}`, { method: "DELETE" });
+}

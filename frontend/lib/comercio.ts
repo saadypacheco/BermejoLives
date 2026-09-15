@@ -405,3 +405,8 @@ export async function crearProducto(
   }
   return res.json();
 }
+
+/** Lo que los clientes le preguntaron al asistente de este local. Las que
+ *  quedaron sin respuesta son las que el dueño tiene que mirar. */
+export const getPreguntasDelAsistente = (): Promise<{ items: { id: string; pregunta: string; respuesta: string; nivel: number; sin_respuesta: boolean; created_at: string }[]; sin_respuesta: number }> =>
+  cFetch("/comercio/asistente/preguntas");
