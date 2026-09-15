@@ -16,9 +16,12 @@
 | **Tablet** (chip físico Entel) | 64610187 | **Registrador** | Corre WAHA. Está en cada grupo y lleva lo que llega a la base. **Nunca escribe.** Es dueña del canal |
 | **Samsung** (chip Tigo) | 75314737 | **Anfitrión** | Crea los grupos a mano, es admin de cada uno, habla con los comerciantes. **Nunca corre WAHA** |
 | **iPhone** (eSIM Entel, activa) | 67991916 | **Marca** | El número público. Va a la API oficial de Meta. **No registrarle WhatsApp común** |
-| iPhone (eSIM Entel, sin activar) | 68727584 | Respaldo | Está en los grupos callado. Reemplaza al Registrador si lo banean |
-| iPhone (eSIM Entel, sin activar) | 68727944 | Explorador | Sale a fotografiar ofertas |
-| iPhone (eSIM Entel, sin activar) | 72900149 | — | Reserva |
+| *(a confirmar)* | **67671888** | **Respaldo 1** | **Con WhatsApp.** Está en los grupos callado. Reemplaza al Registrador si lo banean |
+| iPhone (eSIM Entel, sin activar) | 68727584 | Respaldo 2 | Igual, cuando esté activo |
+| *(a confirmar)* | **67677803** | **Explorador** | WhatsApp a activar. Sale a fotografiar ofertas |
+
+> 15/9: el 67671888 reemplaza al 72900149 (cuenta ajena, no se recupera) y el
+> 67677803 al 68727944. Esos dos quedan fuera de todo.
 
 **La regla que ordena todo: la cuenta va con el número, no con el aparato.**
 Cambiar de aparato es sacar el chip, ponerlo en otro, y verificar por SMS. Lo
@@ -76,14 +79,14 @@ desde acá.
       puede pasar a la API oficial sin darlo de baja. Es el único candidato
       limpio para ser el número de la marca. Se conecta a Meta cuando se haga el
       Plan B (sección 7).
-- [ ] **Activar las tres eSIM** (68727584, 68727944, 72900149) con la
-      operadora. Una línea inactiva no recibe el SMS de verificación.
-- [ ] Después, registrar WhatsApp en el **Respaldo (68727584)** y el
-      **Explorador (68727944)**. Son la segunda cuenta de WhatsApp del iPhone
-      (WhatsApp permite dos).
-- [ ] **Recuperar el 72900149**: puede que otra persona tenga la cuenta de
-      WhatsApp de ese número. Registrarlo desde el iPhone lo saca de la cuenta
-      anterior; si tiene PIN de dos pasos ajeno, son 7 días de espera.
+- [x] **Respaldo 1 (67671888) con WhatsApp** — hecho el 15/9. Falta: PIN de
+      dos pasos con correo `admin@uruku.bo`, agregarlo a `WA_NUMEROS_PROPIOS`
+      y meterlo callado en cada grupo (los que existen y los que se creen).
+- [ ] **Explorador (67677803)**: registrar WhatsApp, PIN de dos pasos, y
+      `WA_NUMEROS_EXPLORADOR=59167677803` en el `.env`.
+- [ ] **Activar la eSIM del Respaldo 2 (68727584)** y registrarle WhatsApp.
+      Una línea inactiva no recibe el SMS de verificación.
+- [x] ~~Recuperar el 72900149~~ — descartado el 15/9: lo reemplaza el 67671888.
 - [ ] Todas las líneas **con crédito o uso**. La operadora recicla una línea
       inactiva, y con ella se va la cuenta de WhatsApp.
 

@@ -41,9 +41,12 @@ conversor ✅ · dónde estoy y "cerca de mí" ✅ · **planes** en `/planes` y 
 - [ ] **PIN de dos pasos** en la tablet y en el Samsung, con correo de recuperación.
 - [ ] **Perfil URUKU también en el Samsung** (es el que crea los grupos).
 - [ ] Copia de seguridad de WhatsApp en Google Drive, en el Samsung.
-- [ ] **Activar las tres eSIM** (68727584, 68727944, 72900149) y registrar
-  WhatsApp en respaldo y explorador. **En el 67991916, NO** (va a la API oficial).
-- [ ] Recuperar el **72900149** (no agregarlo a grupos hasta entonces).
+- [ ] **Los dos números nuevos del 15/9**: el Respaldo 1 (**67671888**, ya con
+  WhatsApp) a `WA_NUMEROS_PROPIOS` y callado en cada grupo; el Explorador
+  (**67677803**) con WhatsApp, y `WA_NUMEROS_EXPLORADOR=59167677803`. PIN de dos
+  pasos en los dos. El 72900149 y el 68727944 quedan fuera de todo.
+- [ ] Activar la eSIM del Respaldo 2 (68727584) y registrarle WhatsApp.
+  **En el 67991916, NO** (va a la API oficial).
 - [ ] **Probar el Plan B** (API oficial) con el número de prueba de Meta —
   `whatsapp-arquitectura-y-escala.md` tiene la guía.
 

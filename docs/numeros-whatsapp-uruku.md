@@ -4,18 +4,24 @@
 > baneen el operativo. Escrito antes de necesitarlo a propósito: ese día no hay
 > tiempo de razonarlo.
 
-## La tabla definitiva (11/9/2026)
+## La tabla definitiva (actualizada el 15/9/2026)
 
 Decidida el 11/9, después de dos días de darle vueltas. **WAHA sólo lee.**
+El 15/9 entraron dos números nuevos con WhatsApp propio y salieron dos que
+nunca sirvieron (abajo, "los que quedaron afuera").
 
 | Rol | Número | Operadora | Dónde | Qué hace |
 |---|---|---|---|---|
 | **Registrador** | 64610187 | Entel | Tablet (chip físico) | **Sólo** corre WAHA: está en cada grupo y lleva lo que llega a la base. No escribe nunca. Es dueño del canal, que se publica **a mano** desde acá |
 | **Anfitrión** | 75314737 | Tigo | Samsung | Crea los grupos **a mano**, es admin de cada uno, es la cara de URUKU con el comerciante. **Nunca corre WAHA** |
 | **Marca** | 67991916 | Entel | eSIM iPhone, activa | El público. Va a la API oficial de Meta. **No registrarle WhatsApp común** |
-| **Respaldo** | 68727584 | Entel | eSIM, sin activar | Está en los grupos callado. Toma el lugar del Registrador el día del baneo |
-| **Explorador** | 68727944 | Entel | eSIM, sin activar | Sale a fotografiar ofertas |
-| *(reserva)* | 72900149 | Entel | eSIM, sin activar | — |
+| **Respaldo 1** | **67671888** | *(a confirmar)* | *(a confirmar)* · **con WhatsApp** | Está en los grupos callado. Toma el lugar del Registrador el día del baneo. Es hoy el único respaldo real |
+| Respaldo 2 | 68727584 | Entel | eSIM, sin activar | Igual que el 1, cuando esté activo |
+| **Explorador** | **67677803** | *(a confirmar)* | *(a confirmar)* · WhatsApp a activar | Sale a fotografiar ofertas |
+
+Reemplazos del 15/9: **67671888** ocupa el lugar del 72900149 (que tenía la
+cuenta de otra persona y ya no se recupera) y **67677803** el del 68727944. Ni
+el 72900149 ni el 68727944 van en ninguna línea del `.env`.
 
 ### Por qué este reparto es el correcto
 
@@ -65,9 +71,9 @@ propio, y el grupo quedaba sin comercio hasta que lo mandara el comerciante.
 ### El bloque para `backend/.env` — definitivo
 
 ```
-WA_NUMEROS_PROPIOS=59164610187,59167991916,59168727944,59175314737,59168727584
+WA_NUMEROS_PROPIOS=59164610187,59167991916,59175314737,59168727584,59167671888,59167677803
 WA_NUMEROS_GRUPO=
-WA_NUMEROS_EXPLORADOR=59168727944
+WA_NUMEROS_EXPLORADOR=59167677803
 WA_CONTACTO_EXPLORADOR=
 BOT_WHATSAPP_NUMERO=59164610187
 WA_CANAL_ID=
@@ -108,13 +114,16 @@ recicla, y con ella se va la cuenta.
 
 ### Los dos que quedaron afuera, y por qué
 
-**59172900149 — NO USAR TODAVÍA. Se va a recuperar.** El número está activo pero
-**la cuenta de WhatsApp la tiene otra persona**: es reciclado y quien lo tuvo
-antes sigue con la sesión. Figuraba como Respaldo 2 en la versión anterior de
-esta tabla. Si se lo hubiera puesto en `WA_NUMEROS_GRUPO`, el sistema habría
-metido a un desconocido dentro de cada grupo de comerciante — con acceso a las
-fotos, los precios y los teléfonos de todos. Es el peor error posible de esta
-lista y no habría dado ningún aviso. Cómo recuperarlo, más abajo.
+**59172900149 — FUERA (15/9). Reemplazado por el 67671888.** El número estaba
+activo pero **la cuenta de WhatsApp la tiene otra persona**: es reciclado y
+quien lo tuvo antes sigue con la sesión. Figuraba como Respaldo 2 en la primera
+versión de esta tabla. Si se lo hubiera puesto en `WA_NUMEROS_GRUPO`, el sistema
+habría metido a un desconocido dentro de cada grupo de comerciante — con acceso
+a las fotos, los precios y los teléfonos de todos. Es el peor error posible de
+esta lista y no habría dado ningún aviso. Se decidió no recuperarlo: hay otro
+número con cuenta propia. **No va en ninguna línea.**
+
+**59168727944 — FUERA (15/9). Reemplazado por el 67677803** como Explorador.
 
 **+5491154574097 (personal, Argentina).** Tiene WhatsApp pero **la línea no está
 en el teléfono**: la sesión sigue viva porque WhatsApp no necesita el chip
@@ -161,6 +170,12 @@ el chip:
 
 Con eso, los cinco roles entran en los tres aparatos que ya hay.
 
+> **Superado el 15/9.** Esta secuencia era para cuando todos los números
+> nuevos eran eSIM del iPhone. Hoy el Respaldo 1 (67671888) ya tiene
+> WhatsApp y el Explorador es el 67677803; lo único que sigue pendiente de
+> acá es el Respaldo 2 (68727584) y, para la marca, la API oficial. Se deja
+> por el razonamiento de "una cuenta por aparato", que sigue valiendo.
+
 **El orden, uno por vez** (el iPhone sólo admite **dos eSIM activas a la vez**,
 así que se activa la que toca y después se pasa a la siguiente):
 
@@ -173,7 +188,8 @@ así que se activa la que toca y después se pasa a la siguiente):
    tiene el chip puesto ahí.
 4. **Respaldo 2 → el otro celular, segunda cuenta.** Activar Entel 4
    (`68727584`) en el iPhone y escribir el código en el otro celular.
-5. **Respaldo 3** → el `72900149`, cuando se recupere (abajo).
+5. ~~**Respaldo 3** → el `72900149`~~ Descartado el 15/9: el respaldo con
+   cuenta propia es el **67671888**, y el explorador el **67677803**.
 
 **Los respaldos hay que registrarlos ANTES de crear el primer grupo.** El
 sistema los agrega solo a cada grupo, y a un número sin cuenta de WhatsApp no lo
@@ -187,9 +203,10 @@ día del baneo.
 > da de baja las cuentas que pasan mucho tiempo sin conectarse. Un respaldo que
 > se dio de baja solo es un respaldo que no está el día que hace falta.
 
-### Recuperar el 59172900149
+### ~~Recuperar el 59172900149~~ (ya no: se reemplazó por el 67671888 el 15/9)
 
-Se quiere de vuelta, y se puede: **la línea es de URUKU**, así que el código de
+Queda escrito por si alguna vez hace falta con otro número reciclado. Se
+podía: **la línea es de URUKU**, así que el código de
 verificación llega a nuestro chip. Registrar el número en un teléfono propio
 saca la sesión del que la tiene — es cómo funciona WhatsApp con los números
 reciclados, y el que lo tenía sabe que el número ya no es suyo.
@@ -282,9 +299,9 @@ una línea.
 **Hoy (8/9/2026), lo que hay que dejar puesto:**
 
 ```
-WA_NUMEROS_PROPIOS=59164610187,59167991916,59168727944,59175314737,59168727584
+WA_NUMEROS_PROPIOS=59164610187,59167991916,59175314737,59168727584,59167671888,59167677803
 WA_NUMEROS_GRUPO=59175314737
-WA_NUMEROS_EXPLORADOR=59168727944
+WA_NUMEROS_EXPLORADOR=59167677803
 WA_CONTACTO_EXPLORADOR=
 BOT_WHATSAPP_NUMERO=59164610187
 ```
@@ -293,7 +310,7 @@ BOT_WHATSAPP_NUMERO=59164610187
 
 ```
 WA_NUMEROS_GRUPO=59175314737,59168727584
-WA_CONTACTO_EXPLORADOR=59168727944
+WA_CONTACTO_EXPLORADOR=
 ```
 
 Por qué las dos listas no dicen lo mismo, que es lo que hace falta entender para
@@ -312,9 +329,11 @@ no romper nada:
   comercio, como siempre. Ponerlo apuntando a un número sin WhatsApp sería peor
   que dejarlo vacío — publicaría un contacto que no contesta.
 
-**59172900149 no aparece en ninguna línea**, a propósito: hasta que la cuenta de
-WhatsApp no sea nuestra, ponerlo ahí mete a un desconocido en los grupos. Se
-agrega el día que se recupere.
+**Ni el 72900149 ni el 68727944 aparecen en ninguna línea**, a propósito: el
+primero tiene la cuenta de otra persona y ponerlo ahí mete a un desconocido en
+los grupos; el segundo se reemplazó. Los dos números nuevos del 15/9 sí van:
+el **67671888** (respaldo) en `WA_NUMEROS_PROPIOS`, y el **67677803**
+(explorador) en `WA_NUMEROS_PROPIOS` y en `WA_NUMEROS_EXPLORADOR`.
 
 Después de tocar el archivo hay que reiniciar el backend, y el arranque avisa
 cuáles números descartó por inválidos (`config.wa_numero_invalido`). Un
