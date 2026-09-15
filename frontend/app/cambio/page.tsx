@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
-import { Conversor } from "@/components/conversor";
+import { CambioCalculadora } from "@/components/cambio-calculadora";
 import { buscarComercios, getCotizaciones } from "@/lib/data";
-import { DIAS_VIEJA, diasDesde, formatoMonto, tasasDe } from "@/lib/cambio";
+import { DIAS_VIEJA, diasDesde, tasasDe } from "@/lib/cambio";
 
 export const dynamic = "force-dynamic";
 
@@ -11,26 +10,27 @@ export const dynamic = "force-dynamic";
 // antes de cruzar. Que la conteste URUKU, con el mapa de dónde cambiar al
 // lado, es media publicidad hecha.
 export const metadata: Metadata = {
-  title: "Cotización en Bermejo hoy: peso argentino, boliviano y dólar — URUKU",
-  description: "Cuánto te dan por 1.000 pesos argentinos en Bermejo, el dólar en bolivianos, conversor y las casas de cambio en el mapa.",
+  title: "Cotización en Bermejo hoy: cuánto te dan por tus pesos — URUKU",
+  description: "Calculá cuántos bolivianos recibís por tus pesos argentinos con la cotización que te ofrecen, cómo se hace la cuenta, y las casas de cambio en el mapa.",
 };
 
 /**
- * /cambio — la cotización del día, un conversor y las casas de cambio.
+ * /cambio — la calculadora con la cotización que ingresa la persona, la
+ * cuenta explicada, y las casas de cambio en el mapa.
  *
- * La tasa es la que carga el equipo en /contenido, y eso obliga a una regla:
- * SIEMPRE se muestra de cuándo es. En la frontera cambia todos los días; una
- * cotización de hace una semana presentada como "hoy" hace que alguien cambie
- * mal y no vuelva. Pasados DIAS_VIEJA días, la página lo dice en voz alta.
+ * La referencia del sitio (tabla `cotizaciones`, cargada a mano) es el punto
+ * de partida, y SIEMPRE se dice de cuándo es: en la frontera cambia todos
+ * los días. Pasados DIAS_VIEJA días la página lo dice en voz alta. Pero la
+ * cuenta que le sirve a alguien es con el número que le acaban de decir en
+ * el mostrador, y por eso los valores se pueden cambiar.
  */
 export default async function CambioPage() {
   const [cotizaciones, casas] = await Promise.all([
     getCotizaciones(),
-    buscarComercios({ rubro: "cambio" }, 8, 0),
+    buscarComercios({ rubro: "cambio" }, 60, 0),
   ]);
   const t = tasasDe(cotizaciones);
   const dias = diasDesde(t.actualizado_en);
-  const vieja = dias == null || dias > DIAS_VIEJA;
   const fecha = t.actualizado_en
     ? new Date(t.actualizado_en).toLocaleDateString("es-BO", { day: "numeric", month: "long", timeZone: "America/La_Paz" })
     : null;
@@ -39,58 +39,18 @@ export default async function CambioPage() {
     <UrukuShell showCatnav={false} activeNav="Cambio">
       <div className="uk-container uk-cambio">
         <h1>Cotización en Bermejo</h1>
-        <p className={`uk-cambio-fecha${vieja ? " vieja" : ""}`}>
-          {fecha ? `Actualizada el ${fecha}` : "Sin fecha de actualización"}
-          {dias != null && dias >= 1 ? ` · hace ${dias} ${dias === 1 ? "día" : "días"}` : dias === 0 ? " · hoy" : ""}
-          {vieja && " — puede estar desactualizada: compará en el lugar antes de cambiar."}
+        <p className="uk-cambio-sub">
+          Ingresá la cotización que te ofrece la casa de cambio y calculá fácil cuánto recibís.
+          Las casas de cambio hacen la cuenta con un factor: <em>pesos × 0,0068</em>, por ejemplo.
         </p>
-
-        <div className="uk-cambio-tasas">
-          {t.ars_bob != null && (
-            <div className="uk-cambio-tasa">
-              <span>1.000 pesos argentinos</span>
-              <b>Bs {formatoMonto(t.ars_bob * 1000, "BOB")}</b>
-            </div>
-          )}
-          {t.usd_bob != null && (
-            <div className="uk-cambio-tasa">
-              <span>1 dólar en bolivianos</span>
-              <b>Bs {formatoMonto(t.usd_bob, "BOB")}</b>
-            </div>
-          )}
-          {t.usd_ars != null && (
-            <div className="uk-cambio-tasa">
-              <span>1 dólar en pesos argentinos</span>
-              <b>$ {formatoMonto(t.usd_ars, "ARS")}</b>
-            </div>
-          )}
-        </div>
-
-        <Conversor tasas={t} />
-
-        <p className="uk-cambio-nota">
-          Es la referencia del mercado de Bermejo, no una cotización oficial: cada casa de cambio y cada cambista
-          tiene la suya, y cambia durante el día. Traer dólares suele rendir más que traer pesos.
-        </p>
-
-        <section className="uk-cambio-casas">
-          <div className="uk-cambio-casas-cab">
-            <h2>Dónde cambiar</h2>
-            <Link href="/buscar?rubro=cambio&vista=mapa" className="uk-btn-ghost">Ver todas en el mapa →</Link>
-          </div>
-          {casas.length === 0 ? (
-            <p className="uk-empty">Todavía no hay casas de cambio cargadas.</p>
-          ) : (
-            <ul>
-              {casas.map((c) => (
-                <li key={c.id}>
-                  <Link href={`/comercios/${c.slug}`}><b>{c.nombre}</b>{c.direccion ? <span> · {c.direccion}</span> : null}</Link>
-                </li>
-              ))}
-              {casas.length >= 8 && <li className="uk-cambio-mas"><Link href="/buscar?rubro=cambio">y más…</Link></li>}
-            </ul>
-          )}
-        </section>
+        <CambioCalculadora
+          referencia={{
+            ars_1000_bs: t.ars_bob != null ? t.ars_bob * 1000 : null,
+            usd_bs: t.usd_bob, usd_ars: t.usd_ars,
+            fecha, vieja: dias == null || dias > DIAS_VIEJA,
+          }}
+          casas={casas}
+        />
       </div>
     </UrukuShell>
   );

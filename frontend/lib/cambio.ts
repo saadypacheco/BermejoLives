@@ -1,8 +1,11 @@
 // Convertir entre pesos argentinos, bolivianos y dólares con las cotizaciones
 // del sitio (tabla `cotizaciones`, cargada a mano desde /contenido).
 //
-// Las tres filas que hay: usd_bob (Bs por 1 USD), ars_bob (Bs por 100 ARS) y
-// usd_ars (ARS por 1 USD). Todo se convierte pasando por bolivianos, que es
+// Las tres filas que hay: usd_bob (Bs por 1 USD), ars_bob (Bs por 1.000 ARS —
+// así se cotiza en la frontera: "1.000 pesos = 6,8 Bs") y usd_ars (ARS por 1
+// USD). La fila decía "100 ARS" en su detalle y era mentira: el valor cargado
+// siempre fue por mil. Dividir por cien hacía que el conversor dijera diez
+// veces más de lo que dan (0109 corrige la etiqueta). Todo se convierte pasando por bolivianos, que es
 // la moneda del lugar; ARS↔USD usa usd_ars si está, que es la que la gente
 // mira, y si no, también por Bs.
 import type { Cotizacion } from "@/lib/data";
@@ -17,7 +20,7 @@ export const MONEDAS: { codigo: Moneda; nombre: string; simbolo: string }[] = [
 
 export type Tasas = {
   usd_bob: number | null;   // Bs por 1 USD
-  ars_bob: number | null;   // Bs por 1 ARS (la tabla lo guarda por 100)
+  ars_bob: number | null;   // Bs por 1 ARS (la tabla lo guarda por 1.000)
   usd_ars: number | null;   // ARS por 1 USD
   actualizado_en: string | null;  // la más vieja de las tres: es la que manda
 };
@@ -28,7 +31,7 @@ export function tasasDe(cotizaciones: Cotizacion[]): Tasas {
   const fechas = cotizaciones.map((c) => c.actualizado_en).filter((f): f is string => Boolean(f)).sort();
   return {
     usd_bob: v("usd_bob"),
-    ars_bob: v("ars_bob") != null ? (v("ars_bob") as number) / 100 : null,
+    ars_bob: v("ars_bob") != null ? (v("ars_bob") as number) / 1000 : null,
     usd_ars: v("usd_ars"),
     actualizado_en: fechas[0] ?? null,
   };

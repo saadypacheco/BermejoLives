@@ -892,33 +892,55 @@
 /* La distancia en la tarjeta de resultados, junto a la dirección. */
 .uk-resdist { font-size: 12px; color: var(--uk-green); font-weight: 700; white-space: nowrap; }
 
-/* ===== /cambio: cotización, conversor y casas de cambio ===== */
+/* ===== /cambio: la calculadora con la cotización que ingresa la persona ===== */
 .uk-top-item[href] { text-decoration: none; }
 .uk-top-item[href]:hover b { text-decoration: underline; }
-.uk-cambio { padding: 26px 0 40px; max-width: 720px; }
-.uk-cambio h1 { font-size: 28px; margin: 0 0 4px; }
-.uk-cambio h2 { font-size: 18px; margin: 0; }
-.uk-cambio-fecha { margin: 0 0 18px; font-size: 13px; color: var(--uk-ink-soft); }
-.uk-cambio-fecha.vieja { color: var(--uk-orange); font-weight: 600; }
-.uk-cambio-tasas { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 18px; }
-.uk-cambio-tasa { padding: 14px; border: 1px solid var(--uk-line); border-radius: 14px; background: var(--uk-surface); display: flex; flex-direction: column; gap: 4px; }
-.uk-cambio-tasa span { font-size: 12.5px; color: var(--uk-ink-soft); }
-.uk-cambio-tasa b { font-size: 22px; font-variant-numeric: tabular-nums; }
-.uk-conv { padding: 16px; border: 1px solid var(--uk-line); border-radius: 16px; background: var(--uk-surface); display: flex; flex-direction: column; gap: 10px; }
-.uk-conv-fila { display: flex; gap: 10px; align-items: center; }
-.uk-conv-monto, .uk-conv-res { flex: 1; min-width: 0; padding: 12px 14px; border: 1px solid var(--uk-line); border-radius: 12px; background: transparent; color: var(--uk-ink); font: inherit; font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.uk-conv-res { background: var(--uk-chip); border-color: transparent; }
-.uk-conv select { padding: 10px 12px; border: 1px solid var(--uk-line); border-radius: 12px; background: var(--uk-surface); color: var(--uk-ink); font: inherit; font-size: 14px; max-width: 46%; }
-.uk-conv-swap { align-self: center; width: 36px; height: 36px; border-radius: 999px; border: 1px solid var(--uk-line); background: transparent; color: var(--uk-ink); cursor: pointer; font-size: 16px; }
-.uk-conv-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.uk-conv-chips button { border: 1px solid var(--uk-line); background: transparent; color: var(--uk-ink); border-radius: 999px; padding: 6px 11px; font: inherit; font-size: 12.5px; cursor: pointer; }
-.uk-conv-chips button:hover { border-color: var(--uk-green); color: var(--uk-green); }
-.uk-cambio-nota { font-size: 13.5px; color: var(--uk-ink-soft); line-height: 1.5; margin: 16px 0 26px; }
-.uk-cambio-casas-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
-.uk-cambio-casas ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
-.uk-cambio-casas li a { display: block; padding: 10px 12px; border: 1px solid var(--uk-line); border-radius: 12px; text-decoration: none; color: inherit; }
-.uk-cambio-casas li a span { color: var(--uk-ink-soft); font-size: 13px; }
-.uk-cambio-mas a { border-style: dashed !important; text-align: center; color: var(--uk-green) !important; }
+.uk-cambio { padding: 26px 0 40px; max-width: 980px; }
+.uk-cambio h1 { font-size: 30px; margin: 0 0 6px; }
+.uk-cambio-sub { margin: 0 0 18px; font-size: 15px; line-height: 1.5; color: var(--uk-ink-soft); max-width: 720px; }
+.uk-cambio-sub em { font-style: normal; font-weight: 700; color: var(--uk-green); }
+.uk-cambio-calc { display: flex; flex-direction: column; gap: 14px; }
+.uk-cc-card { padding: 16px 18px; border: 1px solid var(--uk-line); border-radius: 16px; background: var(--uk-surface); }
+.uk-cc-card h2 { font-size: 17px; margin: 0 0 4px; }
+.uk-cc-card > p { margin: 0 0 12px; font-size: 13.5px; color: var(--uk-ink-soft); }
+.uk-cc-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.uk-cc-cab span { font-size: 12.5px; color: var(--uk-ink-soft); }
+.uk-cc-cab span.vieja { color: var(--uk-orange); font-weight: 600; }
+.uk-cc-cab .uk-btn-ghost { flex: 0 0 auto; width: auto; }
+.uk-cc-link { border: 0; background: none; padding: 0; color: var(--uk-green); font: inherit; text-decoration: underline; cursor: pointer; }
+.uk-cc-tasas { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.uk-cc-tasas label { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--uk-line); border-radius: 12px; font-size: 13.5px; }
+.uk-cc-tasas label span { flex: 1; color: var(--uk-ink-soft); }
+.uk-cc-tasas input { width: 88px; padding: 8px 10px; border: 1px solid var(--uk-line); border-radius: 10px; background: transparent; color: var(--uk-ink); font: inherit; font-size: 17px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+.uk-cc-factor { margin: 12px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--uk-ink-soft); }
+.uk-cc-factor b { color: var(--uk-ink); }
+.uk-cc-factor em { font-style: normal; color: var(--uk-green); font-weight: 700; }
+.uk-cc-dos { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+.uk-cc-verde { border-color: var(--uk-green); box-shadow: 0 0 0 2px color-mix(in srgb, var(--uk-green) 22%, transparent); }
+.uk-cc-in { display: flex; align-items: center; gap: 8px; border: 1px solid var(--uk-line); border-radius: 12px; padding: 4px 12px; margin-bottom: 10px; }
+.uk-cc-in span { font-weight: 800; color: var(--uk-ink-soft); }
+.uk-cc-in input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--uk-ink); font: inherit; font-size: 22px; font-weight: 800; padding: 8px 0; outline: 0; font-variant-numeric: tabular-nums; }
+.uk-cc-res { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 12px; background: var(--uk-chip); }
+.uk-cc-res b { font-size: 28px; line-height: 1.1; color: var(--uk-green); font-variant-numeric: tabular-nums; }
+.uk-cc-res small { font-size: 12px; color: var(--uk-ink-soft); }
+.uk-cc-formulas { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.uk-cc-formulas div { display: flex; flex-direction: column; gap: 5px; padding: 12px; border: 1px solid var(--uk-line); border-radius: 12px; font-size: 13px; }
+.uk-cc-formulas code { font-family: inherit; font-weight: 800; color: var(--uk-green); background: var(--uk-chip); padding: 6px 10px; border-radius: 8px; }
+.uk-cc-formulas small { color: var(--uk-ink-soft); }
+.uk-cc-ejemplos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.uk-cc-ejemplos button { border: 1px solid var(--uk-line); background: transparent; color: var(--uk-ink); border-radius: 999px; padding: 7px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.uk-cc-ejemplos button b { color: var(--uk-green); }
+.uk-cc-ejemplos button:hover { border-color: var(--uk-green); }
+.uk-cc-aviso { margin: 14px 0 0; padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.45; background: color-mix(in srgb, var(--uk-orange) 12%, transparent); color: var(--uk-ink); }
+.uk-cc-mapa { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; align-items: start; }
+.uk-cc-mapa-canvas .map-canvas { height: 360px; min-height: 300px; border-radius: 12px; overflow: hidden; }
+.uk-cc-mapa ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.uk-cc-mapa li { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--uk-line); border-radius: 12px; font-size: 13px; }
+.uk-cc-mapa li a:first-child { display: flex; flex-direction: column; text-decoration: none; color: inherit; min-width: 0; }
+.uk-cc-mapa li a:first-child span { color: var(--uk-ink-soft); font-size: 12px; }
+.uk-cc-dist { font-size: 12px; color: var(--uk-green); font-weight: 700; white-space: nowrap; }
+.uk-cc-mapa li .uk-btn-ghost { padding: 6px 10px; font-size: 12px; }
+@media (max-width: 760px) { .uk-cc-mapa { grid-template-columns: 1fr; } }
 
 /* ===== /planes ===== */
 .uk-planes { padding: 26px 0 40px; }

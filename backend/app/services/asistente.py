@@ -206,8 +206,8 @@ def _tasas(repo) -> dict:
         x = (por.get(k) or {}).get("valor")
         return float(x) if x else None
     fechas = sorted(str(c.get("actualizado_en")) for c in por.values() if c.get("actualizado_en"))
-    ars = v("ars_bob")
-    return {"usd_bob": v("usd_bob"), "ars_bob": ars / 100 if ars else None, "usd_ars": v("usd_ars"),
+    ars = v("ars_bob")   # la tabla lo guarda por 1.000 pesos
+    return {"usd_bob": v("usd_bob"), "ars_bob": ars / 1000 if ars else None, "usd_ars": v("usd_ars"),
             "actualizado_en": fechas[0] if fechas else None}
 
 

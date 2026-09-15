@@ -78,7 +78,7 @@ export async function UrukuShell({
                 {/* La tira lleva al conversor: el que mira el dólar arriba
                     quiere saber cuánto son SUS pesos, y eso está en /cambio. */}
                 {cot2.map((c) => (
-                  <Link key={c.clave} href="/cambio" className="uk-top-item" title="Conversor y casas de cambio"><b>{money(c.valor)}</b> {c.unidad} · {c.etiqueta}</Link>
+                  <Link key={c.clave} href="/cambio" className="uk-top-item" title="Calculadora y casas de cambio">{c.detalle} = <b>{money(c.valor)}</b> {c.unidad}</Link>
                 ))}
               </div>
             </div>

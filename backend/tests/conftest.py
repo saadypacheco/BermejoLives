@@ -116,7 +116,7 @@ class FakeRepo:
         self.comercio_videos: list[dict] = []
         self.cotizaciones: list[dict] = [
             {"clave": "usd_bob", "etiqueta": "Dólar", "detalle": "1 USD", "valor": 0, "unidad": "Bs", "orden": 1},
-            {"clave": "ars_bob", "etiqueta": "Peso argentino", "detalle": "100 ARS", "valor": 0, "unidad": "Bs", "orden": 2},
+            {"clave": "ars_bob", "etiqueta": "Peso argentino", "detalle": "1.000 ARS", "valor": 0, "unidad": "Bs", "orden": 2},
         ]
         self.clima: dict = {"id": 1, "temp_c": None, "descripcion": None, "override_hasta": None}
         self.saber_local: dict[str, dict] = {}        # id -> row
