@@ -7,13 +7,16 @@ const ic = (d: string) => (
 );
 
 // "Inicio" = landing para el comprador (/inicio). "Mapa" = el mapa con todos
-// los comercios (/). Salir vive en Perfil ("Cerrar sesión").
+// los comercios (/). "Cambio" = la cotización y el conversor: en una ciudad
+// de frontera, "cuánto son mis pesos" se pregunta más veces por día que
+// cualquier otra cosa, y merece el lugar en la barra. Perfil sigue en el
+// header ("Ingresar"), que es donde lo busca el que tiene cuenta.
 const ITEMS = [
   { key: "Inicio", href: "/", d: "M3 11l9-8 9 8M5 10v10h14V10" },
   { key: "Mapa", href: "/buscar?vista=mapa", d: "M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3zM9 3v15M15 6v15" },
   { key: "Ofertas", href: "/buscar?vista=mapa&of=1", d: "M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" },
   { key: "Guardados", href: "/guardados", d: "M6 3h12v18l-6-4-6 4V3z" },
-  { key: "Perfil", href: "/perfil", d: "M20 21a8 8 0 1 0-16 0M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" },
+  { key: "Cambio", href: "/cambio", d: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 6.5v11M14.8 9.3c-.3-1.1-1.4-1.8-2.8-1.8-1.6 0-2.8.9-2.8 2.1 0 1.3 1.2 1.8 2.8 2.2 1.6.4 2.8.9 2.8 2.2 0 1.3-1.2 2.2-2.8 2.2-1.5 0-2.6-.8-2.9-1.9" },
 ];
 
 export function BottomNav({ active = "Mapa" }: { active?: string }) {

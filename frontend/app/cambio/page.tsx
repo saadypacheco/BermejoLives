@@ -36,7 +36,7 @@ export default async function CambioPage() {
     : null;
 
   return (
-    <UrukuShell showCatnav={false} activeNav="">
+    <UrukuShell showCatnav={false} activeNav="Cambio">
       <div className="uk-container uk-cambio">
         <h1>Cotización en Bermejo</h1>
         <p className={`uk-cambio-fecha${vieja ? " vieja" : ""}`}>
