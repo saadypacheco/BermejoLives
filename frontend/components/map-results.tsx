@@ -2,6 +2,7 @@
 
 import { agregarTiles } from "@/lib/mapa-tiles";
 import { useEffect, useRef } from "react";
+import type { Ubicacion } from "@/lib/ubicacion";
 import { type ResultadoBusqueda, comoLlegarHref, waLink, MODALIDAD_LABEL } from "@/lib/types";
 import { registrarLead, type TipoLead } from "@/lib/campo";
 import { rubroStyle, loadLeaflet } from "@/lib/mapa-visual";
@@ -24,8 +25,16 @@ function pinHtml(r: ResultadoBusqueda): string {
   return `<div class="${cls}" style="--pc:${style.color}">${ring}<span class="ukpin-emo">${style.emoji}</span></div>`;
 }
 
-export function MapResults({ results, hayFiltro = true, ciudad = null }: {
+export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion = null, centrarEnMi = 0, onPedirUbicacion }: {
   results: ResultadoBusqueda[];
+  /** Dónde está la persona, si se sabe: el punto azul. */
+  ubicacion?: Ubicacion | null;
+  /** Sube cada vez que la persona toca el botón: el mapa se centra en ella.
+   *  Es un contador y no un booleano para que dos toques seguidos centren dos
+   *  veces. */
+  centrarEnMi?: number;
+  /** El botón 📍 del mapa. Sin esto no se dibuja. */
+  onPedirUbicacion?: () => void;
   /** El mapa base de esta ciudad, si tiene uno propio (migración 0068). Es lo
    *  que permite cambiar de proveedor con un UPDATE y no con un deploy — que es
    *  el arreglo que faltó el día que CARTO cortó. */
@@ -41,13 +50,31 @@ export function MapResults({ results, hayFiltro = true, ciudad = null }: {
   const adornoLayerRef = useRef<any>(null);
   const adornosRef = useRef<Adorno[]>([]);
   const temaObsRef = useRef<MutationObserver | null>(null);
+  const yoRef = useRef<any>(null);        // el punto azul y su círculo de precisión
+  const LRef = useRef<any>(null);
 
   useEffect(() => {
     let cancelled = false;
     loadLeaflet().then((L) => {
       if (cancelled || !elRef.current) return;
+      LRef.current = L;
       if (!mapRef.current) {
         mapRef.current = L.map(elRef.current, { zoomControl: true, attributionControl: true }).setView(BERMEJO, 15);
+        // El botón 📍, debajo del zoom. Un control de Leaflet y no un botón
+        // de React encima: así respeta el mismo margen, el mismo estilo y el
+        // mismo orden que el + y el −.
+        if (onPedirUbicacion) {
+          const Ctl = L.Control.extend({
+            onAdd() {
+              const div = L.DomUtil.create("div", "leaflet-bar uk-map-yo");
+              const a = L.DomUtil.create("a", "", div);
+              a.href = "#"; a.title = "Dónde estoy"; a.setAttribute("aria-label", "Dónde estoy"); a.textContent = "📍";
+              L.DomEvent.on(a, "click", (e: Event) => { L.DomEvent.stop(e); onPedirUbicacion(); });
+              return div;
+            },
+          });
+          new Ctl({ position: "topleft" }).addTo(mapRef.current);
+        }
         // El tema, no un valor fijo. Estaba clavado en oscuro, y al unificar las
         // pantallas eso pasó a ser el único mapa del sitio: un sitio en claro
         // con un mapa negro adentro. Antes /mapa lo respetaba y /buscar no.
@@ -95,6 +122,32 @@ export function MapResults({ results, hayFiltro = true, ciudad = null }: {
     return () => { cancelled = true; temaObsRef.current?.disconnect(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results]);
+
+  // El punto azul. Se redibuja cuando cambia la posición; se centra sólo
+  // cuando la persona tocó el botón (centrarEnMi sube). Si la posición ya se
+  // sabía al abrir el mapa, se dibuja y NO se centra: el encuadre de los
+  // resultados es lo que la persona vino a ver.
+  useEffect(() => {
+    const L = LRef.current, map = mapRef.current;
+    if (!L || !map) return;
+    if (yoRef.current) { yoRef.current.remove(); yoRef.current = null; }
+    if (!ubicacion) return;
+    const grupo = L.layerGroup();
+    if (ubicacion.precision && ubicacion.precision < 2000) {
+      grupo.addLayer(L.circle([ubicacion.lat, ubicacion.lng], { radius: ubicacion.precision, color: "#2b7de9", weight: 1, fillOpacity: .08, interactive: false }));
+    }
+    grupo.addLayer(L.circleMarker([ubicacion.lat, ubicacion.lng], { radius: 8, color: "#fff", weight: 3, fillColor: "#2b7de9", fillOpacity: 1 })
+      .bindTooltip("Estás acá", { direction: "top", offset: [0, -8] }));
+    grupo.addTo(map);
+    yoRef.current = grupo;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ubicacion, results]);
+
+  useEffect(() => {
+    if (!centrarEnMi || !ubicacion || !mapRef.current) return;
+    mapRef.current.setView([ubicacion.lat, ubicacion.lng], Math.max(mapRef.current.getZoom(), 16));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centrarEnMi]);
 
   // Y si el contenedor cambia de tamaño después —girar el teléfono, abrir el
   // teclado, el navegador escondiendo su barra al hacer scroll— hay que

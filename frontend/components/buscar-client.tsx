@@ -9,6 +9,8 @@ import { CLAVE_ULTIMA_BUSQUEDA } from "@/components/volver-a-resultados";
 import { APAGADAS, buscarComercios, getFiltrosDisponibles, getOfertasDeComercios, getRefinamientos, getRubros, getZonas, type FiltrosDisponibles } from "@/lib/data";
 import { type FeedItem, type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD_LABEL, precioFmt, comoLlegarHref, waLink } from "@/lib/types";
 import { productosDe } from "@/lib/productos";
+import { distanciaMetros, formatDistancia } from "@/lib/distancia";
+import { pedirUbicacion, permisoUbicacion, ubicacionGuardada, type Ubicacion } from "@/lib/ubicacion";
 import { ReservaBarra } from "@/components/reserva-barra";
 import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
@@ -45,6 +47,31 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   // sobre un contador que decía 790.
   const [resultsMapa, setResultsMapa] = useState<ResultadoBusqueda[] | null>(null);
   const [cargandoMapa, setCargandoMapa] = useState(false);
+  // DÓNDE ESTÁ LA PERSONA. Se conoce sin preguntar si el permiso ya estaba
+  // dado (y guardado de hace menos de diez minutos); si no, lo pide el botón
+  // 📍 del mapa o el chip "Cerca de mí". Con la posición conocida, cada
+  // tarjeta dice a cuánto queda, y el chip ordena por eso.
+  const [ubicacion, setUbicacion] = useState<Ubicacion | null>(null);
+  const [cerca, setCerca] = useState(false);
+  const [centrarEnMi, setCentrarEnMi] = useState(0);
+  const [errUbicacion, setErrUbicacion] = useState("");
+  useEffect(() => {
+    const guardada = ubicacionGuardada();
+    if (guardada) { setUbicacion(guardada); return; }
+    permisoUbicacion().then((p) => { if (p === "granted") pedirUbicacion().then(setUbicacion).catch(() => {}); });
+  }, []);
+  async function ubicarme(centrar: boolean) {
+    setErrUbicacion("");
+    try {
+      const u = await pedirUbicacion();
+      setUbicacion(u);
+      if (centrar) setCentrarEnMi((n) => n + 1);
+      return u;
+    } catch (e) {
+      setErrUbicacion(e instanceof Error ? e.message : "No se pudo obtener la ubicación.");
+      return null;
+    }
+  }
   const [results, setResults] = useState<ResultadoBusqueda[]>([]);
   // NÚMERO DE SERIE DE LA BÚSQUEDA. Cada búsqueda nueva lo sube, y toda
   // respuesta que llegue con un número viejo se tira — venga del primer lote,
@@ -346,7 +373,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   // comercios son dos vueltas; el tope de 4000 es un freno de seguridad para
   // que un filtro roto no descargue la base entera al celular de alguien.
   useEffect(() => {
-    if (vista !== "mapa") return;
+    if (vista !== "mapa" && !cerca) return;
     let cancelado = false;
     (async () => {
       setCargandoMapa(true);
@@ -360,7 +387,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     })().catch(() => { if (!cancelado) setCargandoMapa(false); });
     return () => { cancelado = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vista, q, rubro, subcategoria, modalidad, zona, ciudad, precioMax]);
+  }, [vista, cerca, q, rubro, subcategoria, modalidad, zona, ciudad, precioMax]);
 
   async function cargarMas() {
     setCargandoMas(true);
@@ -379,7 +406,15 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   }
 
   const zonaNom = zonas.find((z) => z.slug === zona)?.nombre;
-  const shown = soloOfertas ? results.filter((r) => r.ofertas > 0) : results;
+  const distancia = (r: ResultadoBusqueda): number | null =>
+    ubicacion && r.lat != null && r.lng != null ? distanciaMetros(ubicacion.lat, ubicacion.lng, r.lat, r.lng) : null;
+  // "Cerca de mí": TODOS los que coinciden (la carga del mapa), ordenados por
+  // distancia, y los que no tienen ubicación al final. Se muestran hasta 100:
+  // más allá de eso nadie mira, y el DOM de un celular lo agradece.
+  const base = cerca && ubicacion && resultsMapa
+    ? [...resultsMapa].sort((a, b) => (distancia(a) ?? 1e12) - (distancia(b) ?? 1e12)).slice(0, 100)
+    : results;
+  const shown = soloOfertas ? base.filter((r) => r.ofertas > 0) : base;
 
   // VIGÍA: dos cosas que nunca pueden pasar, y si pasan se avisan al servidor
   // con lo necesario para entenderlas (qué se buscaba, qué había, por dónde
@@ -560,6 +595,15 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
           </span>
         )}
 
+        <button type="button" className={`uk-chip uk-chip-cerca${cerca ? " active" : ""}`}
+                title="Ordenar por distancia desde donde estás"
+                onClick={async () => {
+                  if (cerca) { setCerca(false); return; }
+                  const u = ubicacion ?? await ubicarme(false);
+                  if (u) setCerca(true);
+                }}>
+          📍 Cerca de mí
+        </button>
         <div className="uk-seg">
           <button className={vista === "lista" ? "active" : ""} onClick={() => setVista("lista")}>Lista</button>
           <button className={vista === "mapa" ? "active" : ""} onClick={() => setVista("mapa")}>Mapa</button>
@@ -581,7 +625,11 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
           }
           hayFiltro={Boolean(q.trim() || rubro || subcategoria || modalidad || zona || precioMax || soloOfertas)}
           ciudad={tilesCiudad}
+          ubicacion={ubicacion}
+          centrarEnMi={centrarEnMi}
+          onPedirUbicacion={() => ubicarme(true)}
         />
+        {errUbicacion && <p style={{ fontSize: 12.5, color: "var(--uk-red)", margin: "8px 0 0" }}>{errUbicacion}</p>}
         </>
       )}
       {/* LA LISTA NO SE DESMONTA AL IR AL MAPA: SE ESCONDE.
@@ -707,7 +755,13 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
                     );
                   })()}
 
-                  {r.direccion && <div className="uk-resdir"><Pin style={{ width: 13, height: 13 }} />{r.direccion}</div>}
+                  {(r.direccion || distancia(r) != null) && (
+                    <div className="uk-resdir">
+                      <Pin style={{ width: 13, height: 13 }} />
+                      {r.direccion}
+                      {distancia(r) != null && <span className="uk-resdist">{r.direccion ? " · " : ""}a {formatDistancia(distancia(r) as number)}</span>}
+                    </div>
+                  )}
 
                   {/* Los dos contactos como íconos y la ficha como botón: los
                       tres entraban en un renglón sólo así, y son las tres cosas
