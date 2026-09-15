@@ -4,216 +4,128 @@
 > algo se rompe— está el
 > [manual operativo](manual-operativo-whatsapp.md).**
 >
-> Al 10/9/2026. Ordenado por lo que **desbloquea a lo demás**, no por tamaño.
-> Lo de arriba hace que lo de abajo tenga sentido; hacer lo de abajo primero es
-> trabajar sobre algo que nadie puede ver todavía.
+> Al 15/9/2026. Ordenado por lo que **desbloquea a lo demás**, no por tamaño.
+> Lo de arriba hace que lo de abajo tenga sentido.
+
+## Lo que se hizo desde la lista del 10/9
+
+Para no volver a buscarlo: deploy y `.env` de prod ✅ · perfil de WAHA
+"Uruku" ✅ · prueba punta a punta de alta + oferta ✅ · Recepción, Difusión y
+Demanda en el admin ✅ · miniaturas ✅ · buscador (rubro visible, orden total
+en la base, zombis de React) ✅ · el sitio se recarga solo en cada deploy ✅ ·
+volante al grupo, QR en la ficha, tarjeta de mesa ✅ · **Uruku Ayuda** (Nivel
+0/1/3, saber local, Admin › Ayuda) ✅ · el asistente del comercio (Pro) ✅ ·
+saber local de compras en Bermejo (14 entradas con fuentes) ✅ · `/cambio` con
+conversor ✅ · dónde estoy y "cerca de mí" ✅ · **planes** en `/planes` y Admin
+› Planes, sin canal, con chatbot desde Pro ✅ · `scripts/deploy-prod.sh` ✅.
 
 ---
 
-## 0. Lo que bloquea absolutamente todo
+## 0. Hoy mismo, porque lo de abajo lo necesita
 
-### 0.1 Desplegar — **18 commits y 3 migraciones sin subir**
+- [ ] **Desplegar `3a84fcc`** con la 0108 (planes). Prod está en `16fe18e` /
+  backend `496b371`: la página de planes y las reglas de redes/gratis no
+  existen todavía.
+  `bash scripts/deploy-prod.sh --sql selfhost/postgres-init/0108_planes_sin_canal_con_chatbot.sql frontend backend`
+- [ ] **Cargar la cotización de hoy** en `/contenido`. Está del 15 de agosto y
+  el sitio lo dice en naranja. Y decidir **quién la carga cada mañana** (el
+  Anfitrión se la pide a una casa de cambio por WhatsApp; 20 segundos).
+- [ ] **Facebook e Instagram**: la app de Meta → `FACEBOOK_PAGE_ID`,
+  `FACEBOOK_PAGE_TOKEN`, `INSTAGRAM_USER_ID`. **Ahora es una promesa vendida**:
+  Destacado dice "tus ofertas en las redes de URUKU". Sin token, la cola
+  espera y nada sale. `difusion-redes.md` tiene el paso a paso.
+- [ ] **La URL de Facebook en `/contenido`** (`https://www.facebook.com/uruku.bo/`).
 
-Todo lo construido en los últimos días **no existe en producción**: la difusión
-a redes, los planes en la base, las cuotas, el informe de demanda, el tope del
-canal, la capa de Meta. Cualquier otra cosa que se haga encima es trabajo que
-nadie puede ver ni probar.
+## 1. Los teléfonos (manual operativo, sección 2)
 
-Las migraciones nuevas: `0100` (cola de difusión), `0101` (planes y cargos),
-`0102` (plan Empleado Digital).
-
-Los pasos, uno por uno y con verificación, en [deploy-10-09.md](deploy-10-09.md).
-
-### 0.2 El `.env` de producción
-
-Decidido el 11/9: **WAHA sólo lee**, y se queda en la **tablet (64610187)**,
-donde ya está vinculado. El Tigo es el Anfitrión. El bloque final y el porqué
-de cada línea en [numeros-whatsapp-uruku.md](numeros-whatsapp-uruku.md):
-
-```
-WA_NUMEROS_PROPIOS=59164610187,59167991916,59168727944,59175314737,59168727584
-WA_NUMEROS_GRUPO=
-WA_NUMEROS_EXPLORADOR=59168727944
-WA_CONTACTO_EXPLORADOR=
-BOT_WHATSAPP_NUMERO=59164610187
-WA_CANAL_ID=
-```
-
-- [ ] Poner ese bloque y levantar el backend.
-- [ ] **PIN de dos pasos** en la tablet y en el Samsung, con correo de
-      recuperación. Es lo que impide que alguien se quede con el número con un
-      duplicado de chip, y lo que te pide WhatsApp al cambiar de aparato.
-- [ ] **Perfil URUKU también en el Samsung**: es el que crea los grupos y el
-      nombre que ve el comerciante.
+- [ ] **PIN de dos pasos** en la tablet y en el Samsung, con correo de recuperación.
+- [ ] **Perfil URUKU también en el Samsung** (es el que crea los grupos).
 - [ ] Copia de seguridad de WhatsApp en Google Drive, en el Samsung.
+- [ ] **Activar las tres eSIM** (68727584, 68727944, 72900149) y registrar
+  WhatsApp en respaldo y explorador. **En el 67991916, NO** (va a la API oficial).
+- [ ] Recuperar el **72900149** (no agregarlo a grupos hasta entonces).
+- [ ] **Probar el Plan B** (API oficial) con el número de prueba de Meta —
+  `whatsapp-arquitectura-y-escala.md` tiene la guía.
 
----
+## 2. Los datos, que es lo que hace que todo lo demás sirva
 
-## 1. Antes de tocar un solo grupo de comerciante
+- [ ] **Los horarios.** Ninguno cargado. Ahora pesa más que antes: "¿qué hay
+  abierto?", "¿está abierto Rústico?" y "casas de cambio abiertas ahora" del
+  asistente contestan "no tiene horario" hasta que estén. Empezar por las 27
+  casas de cambio, los restaurantes y los que tienen grupo.
+- [ ] **El saber local que ninguna fuente publica** (Admin › Ayuda ›
+  Agregar): cómo se llama la avenida de venta por unidad, dónde está la feria
+  mayorista y de qué hora a qué hora, qué galerías hay y qué vende cada una,
+  dónde queda el Mercado Central, el precio de la chalana hoy, dónde están los
+  cambistas, la fecha del aniversario. Es lo que convierte "andá a la feria"
+  en "la feria es en tal calle, de 4 a 9".
+- [ ] **Mirar Admin › Ayuda › Sin respuesta** cada dos o tres días y contestar.
+  Es la cola que hace crecer al asistente.
+- [ ] **43 comercios sin WhatsApp** (de los 67 nuevos): sin número no hay lead.
+- [ ] **194 comercios en la cola de revisión de rubros.**
+- [ ] **Nombres "Comercio"**: cientos de fichas se llaman así. Son a propósito
+  (cargados desde la calle), pero en el asistente y en las listas se ven
+  como cinco iguales. Cuando se les ponga nombre, todo mejora solo.
 
-Son minutos cada una y **después ya no se pueden hacer**.
+## 3. Antes de salir a difundir
 
-- [ ] **Perfil del operativo: de "Juan" a URUKU**, con logo. El nombre que ve el
-      comerciante es el del momento en que lo agregan. Un desconocido llamado
-      Juan agregándote a un grupo es lo que la gente reporta como spam, y el
-      reporte es lo que dispara el baneo.
-- [ ] **Segundo administrador del canal: el Tigo**, desde la tablet. El canal
-      vive en el número que corre WAHA; esto es lo que lo cubre si ese número
-      se pierde.
+- [ ] **Topes de la recompensa al explorador** (por publicación, por persona,
+  por día) y **de la recompensa por traer usuarios**. Existe la atribución,
+  no el tope: no prometer plata antes de esto.
+- [ ] **`usuarios.ultima_actividad`** — no se guarda; sin eso no se sabe si un
+  usuario traído volvió.
+- [ ] **`?ref=` en los QR** del volante y la tarjeta (`ref=volante-<slug>`,
+  `ref=mesa-<slug>`) y el conteo de llegadas por `ref` en el admin. Sin
+  esto no se sabe si las tarjetas de mesa trajeron a alguien.
+  `estrategia-marca-uruku.md` §4.
+- [ ] **Panel de marca**: llegadas por `ref`, preguntas al asistente por día,
+  👍/👎, comercios con papel. Cuatro números, una vez por semana.
+- [ ] La base de 4.316 contactos: decidido el 13/9, **todavía no** (y nunca
+  como difusión desde los números de la marca).
 
----
+## 4. Producto — lo que sigue
 
-## 2. Encender lo que ya está construido
+- [ ] **Agente Catálogo** (cargar productos desde fotos), primero para uso
+  interno. Es lo que hace rentable dar de alta a un comercio de Bs 1.250.
+- [ ] **Agente Marketing**: cada lunes, los cuatro borradores de la semana
+  (lo más buscado, los comercios nuevos, la mejor oferta, una pregunta del
+  asistente) en Admin › Difusión para aprobar con un clic.
+  `estrategia-marca-uruku.md` §2.
+- [ ] **El asistente con la ubicación**: "¿qué farmacia hay cerca?" contesta
+  por la ciudad, no por la cuadra. Mandarle la posición con la pregunta y
+  ordenar por distancia.
+- [ ] **La ficha del gratis, reducida.** Los planes venden "el gratis sólo
+  aparece en el mapa" y hoy muestra la ficha completa. Es una promesa de
+  menos, no de más, así que no urge — pero es lo que diferencia a Publica.
+- [ ] **Caída del mapa** de los que no pagan tras la gracia (fase 2, decidido
+  el 13/8).
+- [ ] **Acciones** del agente (crear oferta, cambiar precio) con confirmación
+  y auditoría.
+- [ ] **WhatsApp multi-tenant** — bloqueado por Meta (Tech Provider). Se
+  investiga en paralelo; nada del producto depende de esto.
 
-Todo esto es pegar credenciales. El código está y probado.
+## 5. Deuda técnica, chica y concreta
 
-- [ ] **Canal de WhatsApp en `/contenido`.** Sin el enlace, la sección del home
-      que le habla al comprador no se dibuja. **El enlace ya está** (salió en
-      los registros de WAHA): `https://whatsapp.com/channel/0029Vb8mQrMGOj9rI7Bg4S1a`.
-      Tiene 0 seguidores.
-- [ ] **Facebook en `/contenido`**: `https://www.facebook.com/uruku.bo/`. La URL
-      ya está anotada; falta pegarla.
-- [x] ~~`WA_CANAL_ID`~~ — **decidido el 11/9: el canal se publica a mano
-      desde la tablet.** El identificador (`120363412598489616@newsletter`)
-      queda anotado por si algún día se enciende.
-- [ ] **App de Meta** → `FACEBOOK_PAGE_ID`, `FACEBOOK_PAGE_TOKEN`,
-      `INSTAGRAM_USER_ID`. ~30 minutos, una sola vez. Pasos en
-      [difusion-redes.md](difusion-redes.md).
-      **La misma app sirve para las tres cosas**: difusión a Facebook, a
-      Instagram y, después, WhatsApp oficial.
-- [ ] **Probar el Plan B (API oficial)** con el número de prueba de Meta, sin
-      migrar nada. Ahora se verifica desde **Admin › WhatsApp → Plan B**: token
-      válido, último mensaje recibido por esa vía, y un botón para mandar uno
-      de prueba. Pasos en
-      [manual-operativo-whatsapp.md](manual-operativo-whatsapp.md), sección 7.
-
----
-
-## 3. Los teléfonos
-
-- [ ] **Activar las tres eSIM** sin activar (68727584, 68727944, 72900149). Una
-      línea inactiva no recibe el SMS de verificación: sin esto no se les puede
-      registrar WhatsApp.
-- [ ] **Registrar WhatsApp** en el respaldo 2 (68727584) y el explorador
-      (68727944).
-- [ ] **En el 67991916, NO.** Ése va a la API oficial como número de la marca, y
-      registrarle WhatsApp común lo quema.
-- [ ] Recuperar el **72900149** (puede necesitar el reinicio de 7 días de la
-      verificación en dos pasos).
-
----
-
-## 4. Los datos, que es lo que hace que todo lo demás sirva
-
-Sin esto, el sitio y los agentes no tienen qué mostrar.
-
-- [ ] **Los 888 horarios.** Ninguno cargado. "Abierto ahora" no puede funcionar,
-      y el Nivel 0 del asistente sólo podría contestar dirección y teléfono.
-      Es trabajo manual y no hay forma de evitarlo.
-- [ ] **43 de los 67 nuevos no tienen WhatsApp.** Sin número, el comercio no
-      tiene canal de contacto y la ficha es una vidriera muda.
-- [ ] **194 comercios en la cola de revisión de rubros**, de los cuales 102 se
-      resuelven con un clic (tienen una sola sugerencia).
-- [ ] **`backend/scripts/regenerar_miniaturas.py`**: 1.079 fotos siguen con
-      miniaturas de 200 px y se ven borrosas en las tarjetas.
-
----
-
-## 5. Antes de salir a difundir
-
-De las seis decisiones, éstas son las que **si no se cierran se cierran solas,
-y mal**:
-
-- [ ] **Topes de la recompensa al explorador**: por publicación, por persona y
-      **de presupuesto total**. Sin el tercero, la semana que la idea se vuelva
-      popular cuesta plata de verdad. Y se paga por lo **aprobado**, nunca por
-      lo enviado.
-- [ ] **Topes de la recompensa por traer usuarios.** Existe sólo la atribución
-      (`usuarios.ref`); no hay registro de recompensas, ni cálculo, ni control
-      de fraude.
-- [ ] **`usuarios.ultima_actividad`** — hoy no se guarda, así que no hay forma
-      de saber quién volvió a los 7 días. Y "7 días con la app instalada" **no
-      es medible**: es una app web. Lo medible es que haya vuelto.
-
-El tope del canal y el aviso al llegar a la cuota ya están hechos.
-
----
-
-## 5b. La base de contactos (decidido el 13/9: todavía no)
-
-Existe `Base_Maestra_Contactos_Uruku_v11.xlsx` (Descargas): 4.316 números de
-11 grupos de venta de Bermejo, sacados por OCR de capturas — 3.608 argentinos,
-696 bolivianos, 19 "vendedores probables" (los admins de los grupos), el resto
-compradores. Casi todos sin nombre.
-
-**No se importa por ahora.** La difusión con esa base se hace desde un número
-que no es de URUKU, para aislar el riesgo de baneo. Cuando se decida guardarla:
-
-- [ ] Tabla `contactos` con teléfono normalizado, tipo, grupos de origen y
-      **consentimiento** (arranca en "ninguno"; cambia solo cuando la persona
-      escribe o entra al canal).
-- [ ] Importador idempotente, en seco primero, que descarte los mal leídos.
-- [ ] El cruce de los 19 vendedores contra `comercios`: cuáles ya están y
-      cuáles hay que ir a ver en persona.
-
-Lo que no cambia: **no es una lista de difusión desde la marca**. Ni por WAHA
-(sólo lectura, y es el patrón del baneo) ni por la API oficial (las plantillas
-de marketing exigen consentimiento, y 3.608 números son argentinos, donde eso
-es ley).
-
----
-
-## 6. Producto — lo que sigue de Uruku AI
-
-En orden de **valor sobre esfuerzo con los datos que hay**:
-
-- [x] ~~Informe de demanda (Agente Analista)~~ — **hecho el 10/9**.
-- [x] ~~**IA en la ingesta.**~~ **Hecho el 11/9.** Un worker revisa lo
-      pendiente cada minuto y guarda el veredicto en la fila; la cola llega
-      ordenada al moderador (rechazable y dudoso arriba). Migración `0103`.
-      El auto-aprobar existe como perilla (`IA_AUTO_APROBAR_DESDE`) y arranca
-      **apagado**: aprobar manda al canal y a las redes, y una foto que nadie
-      miró en el muro de la marca no se deshace.
-- [ ] **Nivel 0** — dirección, teléfono y cómo llegar por consulta directa, sin
-      modelo. *Los horarios quedan afuera hasta que el punto 4 esté hecho.*
-- [ ] **Resumen diario del canal** (una publicación con "las ofertas de hoy").
-      El tope ya protege a los seguidores; esto agrega volumen sin costo.
-- [ ] **Uruku Ayuda** — necesita un texto de preguntas frecuentes que hay que
-      escribir primero, y no existe.
-- [ ] **Agente Catálogo**, primero para uso interno. **Es lo que hace que el
-      plan de Bs 1.250 tenga margen**: si dar de alta un comercio cuesta dos
-      días de carga, el primer mes ya se fue.
-- [ ] **Uruku Chat** — el agente de la ficha, con los datos que cargue el
-      anterior.
-- [ ] **Acciones** (crear oferta, cambiar precio) con confirmación y auditoría.
-- [ ] **WhatsApp multi-tenant** — bloqueado por ser Tech Provider de Meta, que
-      son meses de trámite ajeno. **Empezar el trámite ahora**, aunque el
-      desarrollo vaya por otro lado.
-
----
-
-## 7. Deuda técnica encontrada, chica y concreta
-
-- [ ] **`_PLANES` en `comercio.py:33`** es código muerto: define
-      `{gratis, pro, premium}` y no lo usa nadie. Borrarlo antes de que alguien
-      lo "arregle" usándolo y rompa los planes nuevos.
-- [ ] **`frontend/lib/types.ts:33`** declara `plan: "gratis" | "pro" |
-      "premium"`. Los planes que se venden ahora son cinco. El tipo miente.
-- [ ] **`planes_con_ingesta = "premium"`** (config): si alguien enciende
-      `INGESTA_REQUIERE_PLAN`, ningún comercio con los planes nuevos podría
-      publicar. Está apagado, así que es una bomba dormida, no un incendio.
-- [ ] **Marcar los enlaces por red** para saber qué red trae gente al sitio.
-      Hoy se elige dónde poner el esfuerzo por intuición.
+- [ ] `/buscar?of=1` (Ofertas): el contador dice "N resultados" y la lista
+  muestra sólo los que tienen oferta. Contar lo que se muestra.
+- [ ] **`_PLANES` en `comercio.py:33`** es código muerto; **`frontend/lib/types.ts:33`**
+  declara un `plan` que no coincide con la base; **`planes_con_ingesta = "premium"`**
+  en config apunta a un plan oculto.
+- [ ] `scripts/deploy-all.sh` está viejo (paths y sin GIT_SHA); `deploy-prod.sh`
+  lo reemplaza. Borrarlo o apuntar la doc.
+- [ ] **Marcar los enlaces por red** (`?ref=fb`, `?ref=ig`) en la difusión.
 
 ---
 
 ## Lo que yo haría en este orden
 
-1. **Desplegar** (0.1 y 0.2). Sin esto, nada de lo de arriba existe.
-2. **Perfil del operativo y segundo admin del canal** (1). Minutos, y después
-   ya no se pueden hacer.
-3. **Encender el canal y las redes** (2). Todo es pegar credenciales.
-4. **Horarios y rubros** (4). Es lo que hace que el sitio y los agentes tengan
-   qué decir.
-5. **Topes de las recompensas** (5) antes de prometer plata.
-6. Recién ahí, seguir con los agentes (6).
+1. **Desplegar `3a84fcc`** y cargar la cotización de hoy (0). Diez minutos.
+2. **Los tokens de Facebook e Instagram** (0): es lo único que hace que
+   Destacado cumpla lo que dice.
+3. **Horarios de casas de cambio, restaurantes y los que tienen grupo**, y el
+   saber local de la calle (2). Es lo que hace que el asistente conteste de
+   verdad, y es lo que ninguna base ni ningún modelo puede saber por vos.
+4. **Los teléfonos** (1), antes de sumar más grupos.
+5. **`?ref=` en los QR** (3), antes de repartir tarjetas: si no, no se puede
+   saber si sirvieron.
+6. Recién ahí, el Agente Catálogo y el Agente Marketing (4).
