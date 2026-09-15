@@ -387,16 +387,21 @@ def _saber_local(repo, pregunta: str, minimo: int = 2) -> tuple[dict | None, int
     terms = set(_terminos(pregunta))
     if not terms:
         return None, 0
-    mejor, puntos = None, 0
+    mejor, puntos, mejor_peso = None, 0, -1
     for s in repo.list_saber_local(True) or []:
         etiquetas = {_norm(e) for e in (s.get("etiquetas") or [])}
-        propias = set(_terminos(s.get("pregunta", ""))) | set(_terminos(s.get("respuesta", "")))
-        comunes = terms & (etiquetas | propias)
-        p = len(comunes)
-        if p == 1 and comunes & etiquetas and len(terms) <= 2:
+        en_etiquetas = terms & etiquetas
+        en_pregunta = terms & set(_terminos(s.get("pregunta", "")))
+        en_respuesta = terms & set(_terminos(s.get("respuesta", "")))
+        p = len(en_etiquetas | en_pregunta | en_respuesta)
+        if p == 1 and en_etiquetas and len(terms) <= 2:
             p = 2
-        if p > puntos:
-            mejor, puntos = s, p
+        # Entre dos con las mismas palabras en común, gana la que las tiene en
+        # la pregunta o en las etiquetas: "documentos para pasar" es la de
+        # documentos aunque "pasar" sea etiqueta de la de cruzar.
+        peso = 2 * len(en_etiquetas) + 2 * len(en_pregunta) + len(en_respuesta)
+        if (p, peso) > (puntos, mejor_peso):
+            mejor, puntos, mejor_peso = s, p, peso
     return (mejor, puntos) if puntos >= minimo else (None, puntos)
 
 
