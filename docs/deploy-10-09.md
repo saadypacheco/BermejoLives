@@ -175,7 +175,15 @@ bash scripts/deploy-prod.sh frontend                          # sólo frontend
 bash scripts/deploy-prod.sh --sql selfhost/postgres-init/0105_orden_total_en_la_busqueda.sql frontend
 ```
 
-`--sql` aplica esa migración antes de levantar (se puede repetir).
+`--sql` aplica esa migración antes de levantar (se puede repetir) y después
+le avisa a PostgREST que recargue el esquema (`NOTIFY pgrst, 'reload schema'`).
+Sin eso, una tabla nueva se puede leer pero **no insertar**: PostgREST contesta
+`404 {}` y el backend, "Error interno". Si aplicás una migración a mano, el
+NOTIFY va después:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -d postgres -c "NOTIFY pgrst, 'reload schema';"
+```
 
 ---
 

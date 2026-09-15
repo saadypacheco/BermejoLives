@@ -40,6 +40,15 @@ for f in "${SQL[@]}"; do
   echo "== migración: $f =="
   "${COMPOSE[@]}" exec -T postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f - < "$f"
 done
+if [ ${#SQL[@]} -gt 0 ]; then
+  # PostgREST guarda en memoria qué tablas y funciones existen. Una tabla
+  # nueva se puede LEER igual (delega en Postgres), pero para INSERTAR
+  # necesita conocer sus columnas, y contesta "404 {}" hasta que recarga.
+  # Pasó con asistente_conversaciones: el sitio decía "Error interno" con
+  # la tabla ya creada. El NOTIFY recarga sin reiniciar nada.
+  echo "== PostgREST: recargar el esquema =="
+  "${COMPOSE[@]}" exec -T postgres psql -U postgres -d postgres -c "NOTIFY pgrst, 'reload schema';"
+fi
 
 echo "== build: ${SERVICIOS[*]} =="
 GIT_SHA="$SHA" APP_ENV=prod "${COMPOSE[@]}" up -d --build "${SERVICIOS[@]}"
