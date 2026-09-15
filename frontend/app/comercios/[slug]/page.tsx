@@ -8,6 +8,7 @@ import { ReservaBarra } from "@/components/reserva-barra";
 import { GuardarBoton } from "@/components/guardar-boton";
 import { HorarioBadge } from "@/components/horario-badge";
 import { CompartirBoton } from "@/components/compartir-boton";
+import QRCode from "qrcode";
 import { getComercioBySlug, getOfertasComercio, getGaleriaComercio } from "@/lib/data";
 import { FichaGaleria } from "@/components/ficha-galeria";
 import { VistaLogger } from "@/components/vista-logger";
@@ -39,8 +40,16 @@ export default async function ComercioPage({ params }: { params: { slug: string 
       </UrukuShell>
     );
   }
-  const [feed, galeria] = await Promise.all([
+  // El QR de la ficha, el mismo que va en el volante y en la tarjeta de mesa.
+  // En pantalla sirve para pasar la ficha de una compu a un celular sin
+  // tipear, y para que el dueño la muestre desde su teléfono. Se genera acá,
+  // en el servidor, por lo mismo que en el volante: la librería no viaja al
+  // navegador.
+  const urlFicha = `https://uruku.bo/comercios/${comercio.slug}`;
+  const [feed, galeria, qr] = await Promise.all([
     getOfertasComercio(comercio.id), getGaleriaComercio(comercio.id),
+    QRCode.toDataURL(urlFicha, { width: 240, margin: 1, errorCorrectionLevel: "M",
+                                 color: { dark: "#0f2c33", light: "#ffffff" } }),
   ]);
 
   // El feed del comercio trae los tres tipos mezclados. Separarlos es lo que
@@ -154,6 +163,15 @@ export default async function ComercioPage({ params }: { params: { slug: string 
               )}
               <GuardarBoton comercioId={comercio.id} className="uk-btn-ghost" />
               <CompartirBoton titulo={comercio.nombre} texto={`${comercio.nombre} en URUKU`} className="uk-btn-ghost" />
+            </div>
+
+            <div className="uk-ficha-qr">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={qr} alt={`QR de ${comercio.nombre} en URUKU`} width={88} height={88} />
+              <div>
+                <b>El QR de este negocio</b>
+                <span>Escaneado, abre esta ficha · {urlFicha.replace("https://", "")}</span>
+              </div>
             </div>
           </aside>
         </div>

@@ -1342,6 +1342,11 @@ function TabComercios({
             <a className="mbtn" title="Volante para imprimir" href={`/volante/${c.slug}`}
                target="_blank" rel="noopener" style={{ fontSize: 15, display: "flex",
                alignItems: "center", justifyContent: "center" }}>🖨</a>
+            {/* La tarjeta de mesa: cuatro por hoja, para dejar en las mesas
+                o en el mostrador. "Escaneá y mirá la carta" en los de comida. */}
+            <a className="mbtn" title="Tarjeta de mesa con el QR (4 por hoja)" href={`/volante/${c.slug}/mesa`}
+               target="_blank" rel="noopener" style={{ fontSize: 15, display: "flex",
+               alignItems: "center", justifyContent: "center" }}>🍽</a>
             <button className="mbtn" title="Recalcular el rubro"
                     onClick={() => setRecalcId(recalcId === c.id ? null : c.id)}
                     style={{ fontSize: 15 }}>🏷</button>

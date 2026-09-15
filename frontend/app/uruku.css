@@ -582,6 +582,14 @@
 .uk a.uk-ficha-wa, .uk a.uk-resficha, .uk a.uk-btn-wa { color: #fff; }
 .uk-ficha-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .uk-ficha-acciones > * { justify-content: center; }
+/* El QR de la ficha: chico, con la dirección al lado. El fondo blanco es
+   parte del QR — sobre el fondo oscuro del tema no se lee sin él. */
+.uk-ficha-qr { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 10px;
+  border: 1px solid var(--uk-line); border-radius: 12px; }
+.uk-ficha-qr img { width: 88px; height: 88px; border-radius: 8px; background: #fff; flex-shrink: 0; }
+.uk-ficha-qr div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.uk-ficha-qr b { font-size: 13px; }
+.uk-ficha-qr span { font-size: 11.5px; color: var(--uk-ink-soft); word-break: break-all; }
 
 /* Las secciones que existen, como anclas. */
 .uk-ficha-tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none;

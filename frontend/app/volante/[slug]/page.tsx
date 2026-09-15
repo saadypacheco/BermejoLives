@@ -25,6 +25,21 @@ export const dynamic = "force-dynamic";
  * El QR se genera EN EL SERVIDOR y viaja como imagen. Hacerlo en el navegador
  * habría sumado la librería al bundle de todo el sitio para una página que se
  * abre una vez por comercio.
+ *
+ * DOS USOS, EL MISMO PAPEL
+ * ========================
+ * 1. Impreso, en el mostrador: la prueba de que está adentro y el QR para
+ *    que los clientes lo abran.
+ * 2. Como PDF, mandado al grupo de WhatsApp del local apenas se lo da de alta
+ *    (Ctrl+P → Guardar como PDF, desde el admin). Queda fijado en el grupo,
+ *    y el comerciante tiene ahí su QR, su código y cómo publicar, sin tener
+ *    que acordarse de nada.
+ *
+ * Por eso el pie ya no lleva un número de teléfono: las ofertas se mandan al
+ * grupo que se le creó al local, `URUKU · <nombre>` (manual operativo, 3.1).
+ * Un número impreso en cien volantes es un número que no se puede cambiar; el
+ * grupo va con cada local y sigue funcionando aunque cambie el teléfono que
+ * lo atiende.
  */
 export default async function VolantePage({ params }: { params: { slug: string } }) {
   const comercio = await getComercioBySlug(params.slug);
@@ -74,18 +89,16 @@ export default async function VolantePage({ params }: { params: { slug: string }
         </ul>
 
         <div className="vol-pie">
-          <div>
-            <b>Para publicar sus ofertas</b>
-            <span>Mándenos una foto por WhatsApp y la publicamos.</span>
-          </div>
-          <div className="vol-wa">
-            <b>WhatsApp</b>
-            <span>+591 64610187</span>
-          </div>
+          <b>Para publicar una oferta o una novedad</b>
+          <span>
+            Mande la foto al grupo de WhatsApp <b>URUKU · {comercio.nombre}</b>,
+            con el precio si lo tiene. Sale en su ficha y en el canal de ofertas
+            de Bermejo. Sin formularios, sin apps.
+          </span>
         </div>
 
         {codigo && (
-          <p className="vol-cod">Código de su local: <b>URUKU-{codigo}</b></p>
+          <p className="vol-cod">Código de su local: <b>URUKU-{codigo}</b> · <a href={`/volante/${comercio.slug}/mesa`}>tarjeta de mesa</a></p>
         )}
       </div>
 
@@ -107,13 +120,14 @@ export default async function VolantePage({ params }: { params: { slug: string }
         .vol-qr small { font-size: 11px; color: #6b8177; word-break: break-all; }
         .vol-lista { margin: 0; padding-left: 5mm; display: flex; flex-direction: column; gap: 2.5mm;
           font-size: 13.5px; line-height: 1.4; }
-        .vol-pie { margin-top: auto; display: flex; gap: 4mm; justify-content: space-between;
-          align-items: flex-end; border-top: 1px solid #cfdcd6; padding-top: 4mm; }
-        .vol-pie b { display: block; font-size: 13px; }
-        .vol-pie span { font-size: 12.5px; color: #3d5b50; }
-        .vol-wa { text-align: right; flex-shrink: 0; }
-        .vol-wa span { font-size: 15px; font-weight: 700; color: #14322b; }
+        .vol-pie { margin-top: auto; display: flex; flex-direction: column; gap: 1.5mm;
+          border-top: 1px solid #cfdcd6; padding-top: 4mm; }
+        .vol-pie > b { font-size: 13.5px; }
+        .vol-pie span { font-size: 12.5px; line-height: 1.45; color: #3d5b50; }
+        .vol-pie span b { color: #14322b; }
         .vol-cod { margin: 0; font-size: 11px; color: #6b8177; text-align: center; }
+        .vol-cod a { color: #6b8177; }
+        @media print { .vol-cod a { display: none; } }
 
         /* Al imprimir se va todo lo que no es la hoja. Sin esto salen el fondo
            gris y la sombra, que en papel son tinta tirada. */

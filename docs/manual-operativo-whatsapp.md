@@ -104,6 +104,20 @@ La tablet lo ve y ata el grupo al comercio. Desde ahí, todo lo que mande el
 comerciante en ese grupo entra como oferta. En Admin › Negocios, la ficha del
 comercio muestra el grupo atado.
 
+4. **Mandar el volante al grupo y fijarlo.** En el admin, el botón 🖨 del
+   comercio abre `uruku.bo/volante/<slug>`; Ctrl+P → *Guardar como PDF* y
+   ese PDF va al grupo (mantener apretado → *Fijar*). Es el mismo volante
+   que se deja impreso en el mostrador: tiene su QR, su código y dice que
+   las ofertas se mandan a ese grupo — así el comerciante no tiene que
+   acordarse de nada. Y no lleva ningún teléfono nuestro: si cambia el
+   número que atiende, no hay cien papeles impresos que digan otra cosa.
+
+5. **Si es restaurante, cafetería o bar** (o cualquiera con mesas o
+   mostrador), el botón 🍽 abre la **tarjeta de mesa**: cuatro por hoja A4,
+   con el QR y *"Escaneá y mirá la carta"*. Para el local es la carta que
+   no hay que reimprimir cuando cambia un precio; para URUKU, publicidad en
+   cada mesa.
+
 **Antes de agregar al comerciante, avisarle**: *"te va a llegar una invitación
 de URUKU a un grupo, es para que mandes tus ofertas"*. Un reporte evitado vale
 más que cualquier cosa del código.
