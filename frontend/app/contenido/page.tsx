@@ -110,7 +110,18 @@ function Panel({ onLogout }: { onLogout: (motivo?: string) => void }) {
         <h3 style={{ marginTop: 0 }}>💵 Cotizaciones (carga diaria)</h3>
         {cotiz.map((c) => (
           <div key={c.clave} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-            <div style={{ flex: 1 }}><b style={{ fontSize: 14 }}>{c.etiqueta}</b><div style={{ fontSize: 11, color: "var(--txt-3)" }}>{c.detalle} → {c.unidad}</div></div>
+            <div style={{ flex: 1 }}>
+              <b style={{ fontSize: 14 }}>{c.etiqueta}</b>
+              <div style={{ fontSize: 11, color: "var(--txt-3)" }}>
+                {c.detalle} → {c.unidad}
+                {/* Cuánto hace: el sitio y el conversor la muestran como "de hoy"
+                    sólo si lo es. Pasados dos días avisa en naranja. */}
+                {c.actualizado_en && (() => {
+                  const d = Math.floor((Date.now() - new Date(c.actualizado_en).getTime()) / 86400000);
+                  return <span style={{ marginLeft: 6, color: d > 2 ? "var(--pink)" : "inherit", fontWeight: d > 2 ? 700 : 400 }}>· {d === 0 ? "hoy" : `hace ${d} día${d === 1 ? "" : "s"}`}</span>;
+                })()}
+              </div>
+            </div>
             <input className="adm-input" style={{ width: 110 }} type="number" inputMode="decimal" value={vals[c.clave] ?? ""} onChange={(e) => setVals((s) => ({ ...s, [c.clave]: e.target.value }))} />
             <button className="btn btn-primary btn-sm" onClick={() => guardarCotiz(c.clave)}>Guardar</button>
           </div>

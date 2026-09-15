@@ -112,6 +112,23 @@ def test_el_dolar_sale_de_las_cotizaciones(repo, sin_modelo):
     assert "rubro=cambio&vista=mapa" in r.texto
 
 
+def test_cuanto_son_tantos_pesos_es_una_conversion(repo, sin_modelo):
+    repo.cotizaciones[0]["valor"] = 11.2          # 1 USD = 11,2 Bs
+    repo.cotizaciones[1]["valor"] = 7.2           # 100 ARS = 7,2 Bs
+    r = asistente.responder(repo, "¿cuánto son 5.000 pesos en bolivianos?", ahora=MARTES_11)
+    assert r.nivel == 0 and r.intent == "conversion"
+    assert "Bs 360" in r.texto and "/cambio" in r.texto
+    # Sin decir a qué: pesos → bolivianos, bolivianos → pesos, dólares → bolivianos.
+    assert "$ 2.777,78 pesos" in asistente.responder(repo, "200 bolivianos", ahora=MARTES_11).texto
+    assert "Bs 1.120 bolivianos" in asistente.responder(repo, "100 dólares", ahora=MARTES_11).texto
+    # "10 mil pesos" también.
+    assert "Bs 720" in asistente.responder(repo, "10 mil pesos a bolivianos", ahora=MARTES_11).texto
+    # Sin cotización cargada, lo dice y no inventa.
+    repo.cotizaciones[1]["valor"] = 0
+    r2 = asistente.responder(repo, "cuánto son 1000 pesos en bolivianos", ahora=MARTES_11)
+    assert r2.sin_respuesta and "No tengo cargada" in r2.texto
+
+
 def test_donde_cambio_dolares_es_un_lugar_no_un_numero(repo, sin_modelo):
     repo.cotizaciones[0]["valor"] = 11.2
     repo.comercios["cc1"] = {"id": "cc1", "slug": "cambios-frontera", "nombre": "Cambios Frontera", "activo": True,

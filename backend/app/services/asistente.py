@@ -190,6 +190,85 @@ def _cotizaciones(repo) -> str | None:
 
 
 URL_CASAS_DE_CAMBIO = f"{SITIO}/buscar?rubro=cambio&vista=mapa"
+URL_CAMBIO = f"{SITIO}/cambio"
+
+_MONEDA = {
+    "ARS": r"pesos?(?: argentinos?)?|\$|ars|arg",
+    "BOB": r"bolivianos?|\bbs\b|bob",
+    "USD": r"dolares?|usd|u\$s|verdes",
+}
+_NOMBRE = {"ARS": "pesos argentinos", "BOB": "bolivianos", "USD": "dólares"}
+_SIMBOLO = {"ARS": "$", "BOB": "Bs", "USD": "US$"}
+
+
+def _tasas(repo) -> dict:
+    """Bs por 1 USD, Bs por 1 ARS, ARS por 1 USD, y la fecha más vieja."""
+    por = {c.get("clave"): c for c in (repo.list_cotizaciones() or [])}
+
+    def v(k):
+        x = (por.get(k) or {}).get("valor")
+        return float(x) if x else None
+    fechas = sorted(str(c.get("actualizado_en")) for c in por.values() if c.get("actualizado_en"))
+    ars = v("ars_bob")
+    return {"usd_bob": v("usd_bob"), "ars_bob": ars / 100 if ars else None, "usd_ars": v("usd_ars"),
+            "actualizado_en": fechas[0] if fechas else None}
+
+
+def _convertir(monto: float, de: str, a: str, t: dict) -> float | None:
+    if de == a:
+        return monto
+    if de == "USD" and a == "ARS" and t["usd_ars"]:
+        return monto * t["usd_ars"]
+    if de == "ARS" and a == "USD" and t["usd_ars"]:
+        return monto / t["usd_ars"]
+    bs = monto if de == "BOB" else (monto * t["ars_bob"] if de == "ARS" and t["ars_bob"] else (monto * t["usd_bob"] if de == "USD" and t["usd_bob"] else None))
+    if bs is None:
+        return None
+    if a == "BOB":
+        return bs
+    if a == "ARS":
+        return bs / t["ars_bob"] if t["ars_bob"] else None
+    return bs / t["usd_bob"] if t["usd_bob"] else None
+
+
+def _nivel0_conversion(repo, pregunta: str) -> Respuesta | None:
+    """«¿Cuánto son 5.000 pesos en bolivianos?» → el número, con la fecha de la
+    cotización y el conversor. Sin monto no es conversión (es cotización)."""
+    # Sin la normalización dura: "5.000" tiene que seguir siendo cinco mil, y
+    # el "$" tiene que sobrevivir para saber que son pesos.
+    p = unicodedata.normalize("NFD", (pregunta or "").lower())
+    p = "".join(c for c in p if unicodedata.category(c) != "Mn")
+    p = re.sub(r"[^a-z0-9ñ$.,\s]", " ", p)
+    m = re.search(r"(\d[\d.,]*)\s*(?:mil\s*)?(" + "|".join(_MONEDA.values()) + r")", p)
+    if not m:
+        return None
+    try:
+        monto = float(m.group(1).replace(".", "").replace(",", "."))
+    except ValueError:
+        return None
+    if "mil" in p[m.start():m.end()]:
+        monto *= 1000
+    de = next(k for k, pat in _MONEDA.items() if re.fullmatch(pat, m.group(2)))
+    resto = p[m.end():]
+    a = next((k for k, pat in _MONEDA.items() if k != de and re.search(r"(?:en|a|de)\s+(?:" + pat + ")", resto)), None)
+    if a is None:
+        a = "BOB" if de != "BOB" else "ARS"
+    t = _tasas(repo)
+    r = _convertir(monto, de, a, t)
+    if r is None:
+        return Respuesta(texto=f"No tengo cargada la cotización para eso. Mirá el conversor: {URL_CAMBIO}",
+                         nivel=0, intent="conversion", sin_respuesta=True)
+    fecha = ""
+    if t["actualizado_en"]:
+        try:
+            dias = (datetime.now(TZ) - datetime.fromisoformat(t["actualizado_en"].replace("Z", "+00:00"))).days
+            fecha = " de hoy" if dias <= 0 else f" de hace {dias} día{'s' if dias != 1 else ''}"
+        except ValueError:
+            fecha = ""
+    texto = (f"{_SIMBOLO[de]} {_num(monto)} {_NOMBRE[de]} son unos {_SIMBOLO[a]} {_num(round(r, 2))} {_NOMBRE[a]}, "
+             f"con la cotización{fecha}. Cada casa de cambio tiene la suya: compará. Conversor y casas de cambio: {URL_CAMBIO}")
+    return Respuesta(texto=texto, nivel=0, intent="conversion",
+                     sugerencias=["¿Dónde cambio dólares?", "¿A cuánto está el dólar?"])
 
 
 def _casas_de_cambio(repo, ahora: datetime) -> Respuesta:
@@ -423,11 +502,14 @@ def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     # hoy" son la segunda.
     if re.search(r"donde .*(cambi|dolar|peso)|casa(s)? de cambio|cambista|cambiar (plata|dolar|peso|billete)|cambio (de )?(dolar|peso|plata)", p):
         return _casas_de_cambio(repo, ahora)
+    r = _nivel0_conversion(repo, pregunta)
+    if r:
+        return r
     if re.search(r"\bdolar|cotiza|cambio\b|peso(s)? argentino|cuanto esta el peso|blue", p):
         t = _cotizaciones(repo)
         if t:
-            return Respuesta(texto=t + f"\nCasas de cambio, en el mapa: {URL_CASAS_DE_CAMBIO}", nivel=0, intent="cotizacion",
-                             sugerencias=["¿Dónde cambio dólares?"])
+            return Respuesta(texto=t + f"\nConversor: {URL_CAMBIO} · Casas de cambio, en el mapa: {URL_CASAS_DE_CAMBIO}",
+                             nivel=0, intent="cotizacion", sugerencias=["¿Cuánto son 10.000 pesos en bolivianos?", "¿Dónde cambio dólares?"])
     if re.search(r"\bclima|\btiempo\b|lluev|llover|calor|frio|temperatura", p):
         t = _clima(repo)
         if t:

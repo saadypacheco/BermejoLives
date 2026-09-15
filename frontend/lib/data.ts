@@ -472,13 +472,13 @@ export async function getComercioBySlug(slug: string): Promise<Comercio | null> 
 }
 
 // Contenido de la home Inicio (migración 0032): cotizaciones, clima, videos promo.
-export type Cotizacion = { clave: string; etiqueta: string; detalle: string | null; valor: number | null; unidad: string | null };
+export type Cotizacion = { clave: string; etiqueta: string; detalle: string | null; valor: number | null; unidad: string | null; actualizado_en?: string | null };
 export type Clima = { temp_c: number | null; descripcion: string | null; icono: string | null };
 export type VideoPromo = { id: string; titulo: string | null; url: string };
 
 export async function getCotizaciones(): Promise<Cotizacion[]> {
   if (!hasSupabase) return [];
-  const { data } = await supabase.from("cotizaciones").select("clave, etiqueta, detalle, valor, unidad, orden").order("orden");
+  const { data } = await supabase.from("cotizaciones").select("clave, etiqueta, detalle, valor, unidad, orden, actualizado_en").order("orden");
   const rows = (data as Cotizacion[]) ?? [];
   // Dedup por clave prefiriendo la fila con valor: si hay duplicados (una con valor y
   // otra en null), sin orden estable cada fetch agarraba una distinta → el hero mostraba

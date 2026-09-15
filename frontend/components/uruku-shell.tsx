@@ -75,8 +75,10 @@ export async function UrukuShell({
                 {clima?.temp_c != null && (
                   <span className="uk-top-item">{clima.icono || "☀"} {Math.round(clima.temp_c)}°</span>
                 )}
+                {/* La tira lleva al conversor: el que mira el dólar arriba
+                    quiere saber cuánto son SUS pesos, y eso está en /cambio. */}
                 {cot2.map((c) => (
-                  <span key={c.clave} className="uk-top-item"><b>{money(c.valor)}</b> {c.unidad} · {c.etiqueta}</span>
+                  <Link key={c.clave} href="/cambio" className="uk-top-item" title="Conversor y casas de cambio"><b>{money(c.valor)}</b> {c.unidad} · {c.etiqueta}</Link>
                 ))}
               </div>
             </div>
