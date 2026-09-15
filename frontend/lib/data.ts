@@ -612,3 +612,29 @@ export async function getAdornosMapa(): Promise<Adorno[]> {
     return [];
   }
 }
+
+
+// Los planes, de la tabla `planes` (migraciones 0101/0102/0108). Sólo los
+// visibles y activos, en orden. Es lo que muestra /planes.
+export type PlanPublico = {
+  slug: string; nombre: string; precio_mes: number; publicaciones_mes: number | null;
+  precio_publicacion_extra: number; permite_extras: boolean; publica_meses: number | null;
+  descripcion: string | null; incluye: string[]; funciones: Record<string, boolean>;
+};
+
+export async function getPlanes(): Promise<PlanPublico[]> {
+  if (!hasSupabase) return [];
+  // `select("*")` y no la lista de columnas: las viñetas y los meses gratis
+  // llegaron en la 0108, y una página de venta que se queda en blanco porque
+  // la base todavía no tiene una columna es peor que una sin viñetas.
+  const { data } = await supabase.from("planes").select("*")
+    .eq("activo", true).eq("visible", true).order("orden");
+  return ((data ?? []) as Record<string, unknown>[]).map((p) => ({
+    slug: String(p.slug), nombre: String(p.nombre), precio_mes: Number(p.precio_mes ?? 0),
+    publicaciones_mes: p.publicaciones_mes == null ? null : Number(p.publicaciones_mes),
+    precio_publicacion_extra: Number(p.precio_publicacion_extra ?? 0), permite_extras: Boolean(p.permite_extras),
+    publica_meses: p.publica_meses == null ? null : Number(p.publica_meses),
+    descripcion: (p.descripcion as string | null) ?? null, incluye: (p.incluye as string[] | null) ?? [],
+    funciones: (p.funciones as Record<string, boolean> | null) ?? {},
+  }));
+}

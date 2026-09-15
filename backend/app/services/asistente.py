@@ -140,10 +140,7 @@ FAQ: list[tuple[str, str, str]] = [
      "(«URUKU · nombre del local»), con el precio si lo tiene. Sale en la ficha del negocio y en el canal "
      "de ofertas de Bermejo. Si tu local todavía no tiene el grupo, registralo y te lo creamos.",
      "publicar_oferta"),
-    (r"cuanto (cuesta|sale|vale)|precio(s)? de (los )?plan|planes|es gratis|hay que pagar",
-     "Aparecer en URUKU es gratis. Hay planes pagos para publicar más ofertas por mes, salir destacado "
-     f"y, en el plan Empleado Digital, tener un asistente que atiende a tus clientes. Los planes: {SITIO}/mi-comercio.",
-     "planes"),
+    # Los planes se contestan aparte, leyendo la base: ver _nivel0_planes.
     (r"\bcomision|se paga por venta|cobran por vender",
      "URUKU no cobra comisión por venta. La compra es directa entre el comprador y el comercio, por WhatsApp "
      "o en el local, y el comercio cobra como siempre.",
@@ -484,6 +481,21 @@ def _saber_local(repo, pregunta: str, minimo: int = 2) -> tuple[dict | None, int
     return (mejor, puntos) if puntos >= minimo else (None, puntos)
 
 
+def _nivel0_planes(repo) -> Respuesta:
+    """Los planes, de la tabla: nombre, precio y la frase de cada uno. Lo
+    mismo que /planes, así el asistente nunca dice un precio viejo."""
+    planes = [p for p in (repo.list_planes(True) or []) if p.get("visible", True)]
+    if not planes:
+        return Respuesta(texto=f"Los planes están en {SITIO}/planes.", nivel=0, intent="faq_planes")
+    lineas = []
+    for p in sorted(planes, key=lambda x: x.get("orden", 0)):
+        precio = "gratis" if not p.get("precio_mes") else f"Bs {_num(p['precio_mes'])}/mes"
+        desc = (p.get("descripcion") or "").strip().rstrip(".")
+        lineas.append(f"• {p.get('nombre')} — {precio}" + (f": {desc}" if desc else ""))
+    return Respuesta(texto="Los planes de URUKU:\n" + "\n".join(lineas) + f"\nTodo el detalle y cómo pagar: {SITIO}/planes",
+                     nivel=0, intent="faq_planes", sugerencias=["¿Cómo publico mi negocio?", "¿Cobran comisión?"])
+
+
 def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     p = _norm(pregunta)
     if re.fullmatch(r"(hola|buenas|buen dia|buenos dias|buenas tardes|buenas noches|hey|holis)( uruku)?", p):
@@ -496,6 +508,8 @@ def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     for patron, texto, intent in FAQ:
         if re.search(patron, p):
             return Respuesta(texto=texto, nivel=0, intent="faq_" + intent)
+    if re.search(r"cuanto (cuesta|sale|vale)|precio(s)? de (los )?plan|\bplan(es)?\b|es gratis|hay que pagar|chatbot para mi", p):
+        return _nivel0_planes(repo)
     # Dos preguntas distintas con las mismas palabras: DÓNDE cambiar (un
     # lugar) y A CUÁNTO está (un número). "cambio dólares" / "casa de cambio"
     # / "cambiar plata" son la primera; "a cuánto", "cotización", "el dólar

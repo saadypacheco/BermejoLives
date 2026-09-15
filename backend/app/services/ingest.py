@@ -463,9 +463,13 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         siguiente = planes.plan_siguiente(repo, cuota["plan"])
         avisado = _avisar(payload.from_, planes.texto_de_aviso(cuota, siguiente))
     if not cuota["puede"]:
-        motivo = (f"llegó al tope de {cuota['cuota']} publicaciones de su plan "
-                  f"{cuota['plan'].get('nombre')}"
-                  + ("" if avisado else " · AVISARLE desde la tablet, no se le mandó nada"))
+        if cuota["consecuencia"] == "vencido":
+            motivo = (f"se le terminaron los {cuota['plan'].get('publica_meses')} meses de publicar "
+                      f"con el plan {cuota['plan'].get('nombre')}; sigue en el mapa")
+        else:
+            motivo = (f"llegó al tope de {cuota['cuota']} publicaciones de su plan "
+                      f"{cuota['plan'].get('nombre')}")
+        motivo += "" if avisado else " · AVISARLE desde la tablet, no se le mandó nada"
         logger.info("ingest.cuota_agotada", comercio=slug, usadas=cuota["usadas"])
         repo.marcar_wa_inbox(payload.id, "sin_permiso", motivo, comercio.get("id"))
         return {"captured": True, "comercio": slug, "publicada": False, "motivo": motivo}

@@ -37,7 +37,7 @@ function QueOfrecemos() {
         <li>📍 Tu negocio aparece en el mapa.</li>
         <li>📢 Publicá ofertas y productos fácilmente.</li>
         <li>🛒 Accedé a tu propia tienda online.</li>
-        <li>🚀 Llegá a más clientes con nuestros planes de promoción.</li>
+        <li>🚀 Llegá a más clientes con <a href="/planes" target="_blank" rel="noopener">nuestros planes</a>.</li>
         <li>💰 Sin comisiones por venta.</li>
       </ul>
     </div>

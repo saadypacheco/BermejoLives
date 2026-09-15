@@ -210,9 +210,24 @@ def encolar(repo, publicacion_id: str) -> int:
 
     Nunca lanza. Es la regla que hace que aprobar una oferta no pueda romperse
     por un problema de redes.
+
+    FACEBOOK E INSTAGRAM SON DE DESTACADO PARA ARRIBA. Es lo que se vende:
+    Publica tiene el negocio digitalizado; Destacado, además, sale en las
+    redes de URUKU. Un comercio del gratis o de Publica no se encola a las
+    redes — su oferta sale en su ficha y en la búsqueda, que es lo suyo. Se
+    decide por la función `redes` del plan, no por el nombre del plan.
     """
+    from app.services import planes
+
     try:
-        return repo.encolar_difusion(publicacion_id, list(destinos_activos()))
+        destinos = list(destinos_activos())
+        pub = repo.get_publicacion(publicacion_id) or {}
+        comercio = repo.get_comercio(pub["comercio_id"]) if pub.get("comercio_id") else None
+        if comercio is not None and not planes.funcion(planes.plan_de(repo, comercio), "redes"):
+            destinos = [d for d in destinos if d not in ("facebook", "instagram")]
+        if not destinos:
+            return 0
+        return repo.encolar_difusion(publicacion_id, destinos)
     except Exception:  # noqa: BLE001
         logger.warning("difusion.encolar_fallo", pub=publicacion_id, exc_info=True)
         return 0

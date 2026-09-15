@@ -111,6 +111,18 @@ def texto_de_aviso(est: dict, siguiente: dict | None) -> str:
     Ofrecer una sola es elegir por él.
     """
     plan = est["plan"]
+    if est.get("consecuencia") == "vencido":
+        meses = int(plan.get("publica_meses") or 0)
+        partes = [f"Se terminaron los {meses} meses de publicar gratis con el plan "
+                  f"{plan.get('nombre') or plan.get('slug')}. Tu local sigue en el mapa."]
+        if siguiente:
+            cuota = siguiente.get("publicaciones_mes")
+            cuanto = "sin límite" if cuota is None else f"hasta {cuota} publicaciones por mes"
+            partes.append(f"Para seguir publicando, pasás a {siguiente.get('nombre')} por Bs "
+                          f"{_monto(siguiente.get('precio_mes'))} al mes y tenés {cuanto}.")
+        partes.append("Avisanos y lo arreglamos.")
+        return " ".join(partes)
+
     partes = [f"Llegaste a las {est['cuota']} publicaciones de tu plan "
               f"{plan.get('nombre') or plan.get('slug')}."]
 
@@ -138,18 +150,46 @@ def _monto(v) -> str:
     return f"{f:,.0f}".replace(",", ".") if f == int(f) else f"{f:,.2f}"
 
 
+def periodo_vencido(plan: dict, comercio: dict, hoy: date | None = None) -> bool:
+    """¿Se le terminó al comercio el tiempo de publicar con este plan?
+
+    `publica_meses` es cuántos meses desde el alta puede publicar el plan
+    (NULL = siempre). Es el "gratis por dos meses" del Básico en la etapa de
+    arranque: después sigue en el mapa, pero para publicar hay que pasar a
+    Publica. Sin fecha de alta no se puede saber, y ante la duda se deja
+    publicar: bloquear por un dato que falta es castigar al comercio por un
+    problema nuestro.
+    """
+    meses = plan.get("publica_meses")
+    if not meses:
+        return False
+    crudo = comercio.get("created_at")
+    if not crudo:
+        return False
+    try:
+        alta = date.fromisoformat(str(crudo)[:10])
+    except ValueError:
+        return False
+    hoy = hoy or date.today()
+    return hoy > alta + timedelta(days=int(meses) * 30)
+
+
 def revisar_antes_de_publicar(repo, comercio: dict) -> dict:
     """¿Puede publicar? Y si se pasó, ¿qué corresponde hacer?
 
     Devuelve siempre `puede`, y cuando se pasó, con qué consecuencia:
     - `cobrar`: sale, y genera un cargo de la publicación extra.
     - `bloquear`: no sale, porque el plan no admite extras.
+    - `vencido`: no sale, porque el plan sólo publica los primeros meses y ya
+      pasaron. El comercio sigue en el mapa; para publicar, pasa de plan.
 
     No manda el aviso ni crea el cargo: sólo decide. Quien publica es el que
     tiene el mensaje a mano para contestarle al comerciante en su propio chat,
     que es donde el aviso sirve.
     """
     est = estado(repo, comercio)
+    if periodo_vencido(est["plan"], comercio):
+        return {"puede": False, "consecuencia": "vencido", **est}
     if not est["excedido"]:
         return {"puede": True, "consecuencia": None, **est}
 

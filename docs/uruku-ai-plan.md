@@ -124,7 +124,7 @@ eso las funciones son un objeto libre.
 | Nombre | **Empleado Digital** |
 | Precio | **Bs 1.250/mes** — editable desde el panel |
 | Publicaciones | Sin límite |
-| Funciones | `asistente_24_7`, `agente_catalogo`, `agente_analista`, `agente_marketing`, `multicanal`, `leads`, `canal_wa` |
+| Funciones | `negocio_digital`, `redes`, `asistente_24_7`, `agente_catalogo`, `agente_analista`, `agente_marketing`, `multicanal`, `leads` (sin `canal_wa`: el canal salió de todos los planes el 15/9; ver 0108) |
 
 El precio va en la base a propósito: los costos de implementación y
 mantenimiento de un agente 24/7 **todavía no están medidos**, y hasta que lo

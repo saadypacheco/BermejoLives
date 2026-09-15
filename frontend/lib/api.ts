@@ -1161,3 +1161,25 @@ export async function guardarSaberLocal(item: { id?: string; pregunta: string; r
 export async function borrarSaberLocal(id: string): Promise<void> {
   await authFetch(`/admin/asistente/saber/${id}`, { method: "DELETE" });
 }
+
+
+// ============================================================ Planes (admin)
+
+export type PlanAdmin = {
+  slug: string; nombre: string; orden: number; precio_mes: number; publicaciones_mes: number | null;
+  precio_publicacion_extra: number; permite_extras: boolean; publica_meses: number | null;
+  descripcion: string | null; incluye: string[]; funciones: Record<string, boolean>; activo: boolean; visible: boolean;
+};
+
+export async function getPlanesAdmin(): Promise<PlanAdmin[]> {
+  const res = await authFetch(`/admin/planes`);
+  return (await res.json()).items;
+}
+
+export async function guardarPlan(slug: string, patch: Partial<Omit<PlanAdmin, "slug" | "funciones" | "activo">>): Promise<PlanAdmin> {
+  const res = await authFetch(`/admin/planes/${slug}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error((await res.json()).detail ?? "No se pudo guardar");
+  return (await res.json()).plan ?? (await res.json());
+}

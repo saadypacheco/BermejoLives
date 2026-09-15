@@ -65,7 +65,7 @@ def test_solo_sale_lo_aprobado(client, repo, sin_red, config_completa):
     """La guarda que impide que una foto sin mirar aparezca en el muro de la
     marca. Es un error que no se deshace: rechazar la publicación en el panel no
     la baja de Facebook."""
-    c = repo.seed_comercio(slug="x", nombre="X")
+    c = repo.seed_comercio(slug="x", nombre="X", plan="destacado")
     pub = repo.insert_publicacion_directa(
         {"comercio_id": c["id"], "tipo": "oferta", "titulo": "algo", "estado": "pendiente"})
     difusion.encolar(repo, pub["id"])
@@ -81,7 +81,7 @@ def test_la_misma_oferta_no_se_encola_dos_veces(repo, monkeypatch):
     eso son dos posteos idénticos en el mismo muro — que es justo lo que hace
     que la gente deje de seguir la página."""
     monkeypatch.setattr(settings, "wa_solo_lectura", False)
-    c = repo.seed_comercio(slug="x", nombre="X")
+    c = repo.seed_comercio(slug="x", nombre="X", plan="destacado")
     pub = repo.insert_publicacion_directa({"comercio_id": c["id"], "estado": "aprobado"})
 
     assert difusion.encolar(repo, pub["id"]) == 3
@@ -89,7 +89,7 @@ def test_la_misma_oferta_no_se_encola_dos_veces(repo, monkeypatch):
 
 
 def test_lo_aprobado_sale_a_las_tres_redes(client, repo, admin_token, sin_red, config_completa):
-    c = repo.seed_comercio(slug="x", nombre="X")
+    c = repo.seed_comercio(slug="x", nombre="X", plan="destacado")
     pub = repo.insert_publicacion_directa(
         {"comercio_id": c["id"], "tipo": "oferta", "titulo": "oferta", "estado": "aprobado"})
     difusion.encolar(repo, pub["id"])
@@ -105,7 +105,7 @@ def test_solo_auto_manda_los_destinos_del_env(repo, sin_red, config_completa, mo
     anotaron para recibir ofertas. Un muro de Facebook con veinte ofertas por
     día es cómo una página pierde alcance."""
     monkeypatch.setattr(settings, "difusion_auto", "wa_canal")
-    c = repo.seed_comercio(slug="x", nombre="X")
+    c = repo.seed_comercio(slug="x", nombre="X", plan="destacado")
     pub = repo.insert_publicacion_directa({"comercio_id": c["id"], "estado": "aprobado"})
     difusion.encolar(repo, pub["id"])
 
@@ -122,7 +122,7 @@ def test_un_destino_sin_configurar_espera_en_vez_de_perderse(repo, monkeypatch):
     monkeypatch.setattr(settings, "wa_solo_lectura", False)
     monkeypatch.setattr(settings, "facebook_page_token", "")
     monkeypatch.setattr(settings, "facebook_page_id", "")
-    c = repo.seed_comercio(slug="x", nombre="X")
+    c = repo.seed_comercio(slug="x", nombre="X", plan="destacado")
     pub = repo.insert_publicacion_directa({"comercio_id": c["id"], "estado": "aprobado"})
     difusion.encolar(repo, pub["id"])
 
@@ -140,7 +140,7 @@ def test_un_envio_que_falla_queda_con_el_motivo(repo, config_completa, monkeypat
         raise difusion.DifusionError("HTTP 401: token vencido")
     monkeypatch.setattr(difusion, "_ENVIOS", {d: _explota for d in difusion.DESTINOS})
 
-    c = repo.seed_comercio(slug="x", nombre="X")
+    c = repo.seed_comercio(slug="x", nombre="X", plan="destacado")
     pub = repo.insert_publicacion_directa({"comercio_id": c["id"], "estado": "aprobado"})
     difusion.encolar(repo, pub["id"])
     fila = repo.difusion[0]
@@ -170,7 +170,7 @@ def test_instagram_no_publica_sin_imagen(config_completa):
 def test_aprobar_desde_el_panel_encola(client, repo, admin_token, monkeypatch):
     """El enganche: si esto se rompe, la difusión existe y no la dispara nadie."""
     monkeypatch.setattr(settings, "wa_solo_lectura", False)
-    c = repo.seed_comercio(slug="x", nombre="X", codigo="AB12")
+    c = repo.seed_comercio(slug="x", nombre="X", codigo="AB12", plan="destacado")
     pub = repo.insert_publicacion_directa(
         {"comercio_id": c["id"], "tipo": "oferta", "titulo": "t", "estado": "pendiente",
          "codigo_recibido": "AB12"})
@@ -182,7 +182,7 @@ def test_aprobar_desde_el_panel_encola(client, repo, admin_token, monkeypatch):
 
 
 def test_rechazar_no_encola(client, repo, admin_token):
-    c = repo.seed_comercio(slug="x", nombre="X")
+    c = repo.seed_comercio(slug="x", nombre="X", plan="destacado")
     pub = repo.insert_publicacion_directa(
         {"comercio_id": c["id"], "tipo": "oferta", "estado": "pendiente"})
 
@@ -193,7 +193,7 @@ def test_rechazar_no_encola(client, repo, admin_token):
 
 def test_no_se_puede_reintentar_algo_ya_publicado(client, repo, admin_token, config_completa):
     """Reintentar lo enviado es publicarlo dos veces."""
-    c = repo.seed_comercio(slug="x", nombre="X")
+    c = repo.seed_comercio(slug="x", nombre="X", plan="destacado")
     pub = repo.insert_publicacion_directa({"comercio_id": c["id"], "estado": "aprobado"})
     difusion.encolar(repo, pub["id"])
     fila = repo.difusion[0]
@@ -230,7 +230,7 @@ def test_los_envios_van_espaciados(repo, sin_red, config_completa, monkeypatch):
     esperas = []
     monkeypatch.setattr("time.sleep", lambda s: esperas.append(s))
 
-    c = repo.seed_comercio(slug="x", nombre="X")
+    c = repo.seed_comercio(slug="x", nombre="X", plan="destacado")
     pub = repo.insert_publicacion_directa({"comercio_id": c["id"], "estado": "aprobado"})
     difusion.encolar(repo, pub["id"])
 
@@ -247,7 +247,7 @@ def test_el_canal_no_publica_mas_de_lo_configurado(repo, sin_red, config_complet
     único que no se puede rehacer."""
     monkeypatch.setattr(settings, "difusion_canal_max_dia", 2)
     monkeypatch.setattr(settings, "difusion_auto", "wa_canal")
-    c = repo.seed_comercio(slug="x", nombre="X")
+    c = repo.seed_comercio(slug="x", nombre="X", plan="destacado")
     for i in range(5):
         pub = repo.insert_publicacion_directa(
             {"comercio_id": c["id"], "titulo": f"of {i}", "estado": "aprobado"})
@@ -262,7 +262,7 @@ def test_lo_que_no_entra_hoy_espera_para_mañana(repo, sin_red, config_completa,
     que el comerciante nunca va a ver publicada."""
     monkeypatch.setattr(settings, "difusion_canal_max_dia", 1)
     monkeypatch.setattr(settings, "difusion_auto", "wa_canal")
-    c = repo.seed_comercio(slug="x", nombre="X")
+    c = repo.seed_comercio(slug="x", nombre="X", plan="destacado")
     for i in range(3):
         pub = repo.insert_publicacion_directa(
             {"comercio_id": c["id"], "titulo": f"of {i}", "estado": "aprobado"})
@@ -279,7 +279,7 @@ def test_el_tope_no_frena_facebook_ni_instagram(repo, sin_red, config_completa, 
     """Esas redes tienen algoritmo: el que no quiere ver sigue scrolleando. El
     canal es una notificación en el teléfono, y por eso es el único con tope."""
     monkeypatch.setattr(settings, "difusion_canal_max_dia", 1)
-    c = repo.seed_comercio(slug="x", nombre="X")
+    c = repo.seed_comercio(slug="x", nombre="X", plan="destacado")
     for i in range(3):
         pub = repo.insert_publicacion_directa(
             {"comercio_id": c["id"], "titulo": f"of {i}", "estado": "aprobado"})
@@ -297,6 +297,9 @@ def test_el_lugar_en_el_canal_se_puede_reservar_a_los_planes_que_lo_pagan(
     plan, en vez de un derecho ilimitado que arruina el canal para todos."""
     monkeypatch.setattr(settings, "difusion_canal_solo_planes", True)
     monkeypatch.setattr(settings, "difusion_auto", "wa_canal")
+    # Hoy ningún plan declara el canal (no se usa). La mecánica sigue: el día
+    # que un plan lo declare, sólo ése entra.
+    repo.upsert_plan("destacado", {"funciones": {"negocio_digital": True, "redes": True, "canal_wa": True}})
     barato = repo.seed_comercio(slug="a", nombre="A", plan="publica")
     caro = repo.seed_comercio(slug="b", nombre="B", plan="destacado")
     for c in (barato, caro):
@@ -324,7 +327,7 @@ def test_por_defecto_waha_solo_lee():
 def test_con_solo_lectura_el_canal_no_se_encola(repo):
     """Se publica a mano desde la tablet. Encolarlo igual llenaría la cola de
     filas que nunca van a salir, y el panel diría "N esperando" para siempre."""
-    c = repo.seed_comercio(slug="x", nombre="X")
+    c = repo.seed_comercio(slug="x", nombre="X", plan="destacado")
     pub = repo.insert_publicacion_directa({"comercio_id": c["id"], "estado": "aprobado"})
     assert difusion.encolar(repo, pub["id"]) == 2
     assert {f["destino"] for f in repo.difusion} == {"facebook", "instagram"}
@@ -360,3 +363,18 @@ def test_la_api_oficial_no_esta_sujeta_a_la_llave(monkeypatch):
     monkeypatch.setattr(mensajeria, "_cloud_texto", lambda c, t: llamadas.append(c) or True)
     assert mensajeria.enviar_texto("59170000001", "hola") is True
     assert llamadas == ["59170000001"]
+
+
+def test_facebook_e_instagram_son_de_destacado_para_arriba(repo, monkeypatch):
+    """Es lo que se vende: Publica tiene el negocio digitalizado; Destacado,
+    además, sale en las redes de URUKU. La decisión la toma la función
+    `redes` del plan, no el nombre."""
+    monkeypatch.setattr(settings, "wa_solo_lectura", False)
+    for plan, esperado in [("gratis", {"wa_canal"}), ("publica", {"wa_canal"}),
+                           ("destacado", {"wa_canal", "facebook", "instagram"}),
+                           ("pro", {"wa_canal", "facebook", "instagram"})]:
+        repo.difusion.clear()
+        c = repo.seed_comercio(slug=plan, nombre=plan, plan=plan)
+        pub = repo.insert_publicacion_directa({"comercio_id": c["id"], "estado": "aprobado"})
+        difusion.encolar(repo, pub["id"])
+        assert {f["destino"] for f in repo.difusion} == esperado, plan

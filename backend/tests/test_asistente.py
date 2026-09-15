@@ -158,6 +158,10 @@ def test_las_preguntas_sobre_uruku_tienen_respuesta_fija(repo, sin_modelo):
     assert r.nivel == 0 and r.intent == "faq_registrar" and "/autoregistro" in r.texto
     r = asistente.responder(repo, "¿cobran comisión?", ahora=MARTES_11)
     assert r.intent == "faq_comision"
+    # Los planes salen de la base, con el precio de hoy, no de un texto fijo.
+    r = asistente.responder(repo, "¿cuánto cuestan los planes?", ahora=MARTES_11)
+    assert r.intent == "faq_planes" and "Pro — Bs 400/mes" in r.texto and "/planes" in r.texto
+    assert "Premium" not in r.texto
 
 
 def test_el_saber_local_se_encuentra_por_etiquetas(repo, sin_modelo):

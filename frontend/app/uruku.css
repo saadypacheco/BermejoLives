@@ -919,3 +919,22 @@
 .uk-cambio-casas li a { display: block; padding: 10px 12px; border: 1px solid var(--uk-line); border-radius: 12px; text-decoration: none; color: inherit; }
 .uk-cambio-casas li a span { color: var(--uk-ink-soft); font-size: 13px; }
 .uk-cambio-mas a { border-style: dashed !important; text-align: center; color: var(--uk-green) !important; }
+
+/* ===== /planes ===== */
+.uk-planes { padding: 26px 0 40px; }
+.uk-planes h1 { font-size: 28px; margin: 0 0 6px; }
+.uk-planes-sub { margin: 0 0 22px; max-width: 640px; color: var(--uk-ink-soft); font-size: 15px; line-height: 1.5; }
+.uk-planes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; align-items: stretch; }
+.uk-plan { display: flex; flex-direction: column; gap: 12px; padding: 18px; border: 1px solid var(--uk-line); border-radius: 16px; background: var(--uk-surface); }
+.uk-plan-destacado { border-color: var(--uk-green); box-shadow: 0 0 0 2px color-mix(in srgb, var(--uk-green) 25%, transparent); }
+.uk-plan header { display: flex; flex-direction: column; gap: 6px; }
+.uk-plan h2 { margin: 0; font-size: 19px; }
+.uk-plan-precio b { font-size: 26px; }
+.uk-plan-precio span { font-size: 13px; color: var(--uk-ink-soft); margin-left: 2px; }
+.uk-plan-desc { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--uk-ink-soft); }
+.uk-plan ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; line-height: 1.4; flex: 1; }
+.uk-plan li::before { content: "✓ "; color: var(--uk-green); font-weight: 800; }
+.uk-plan li.uk-plan-cuota { margin-top: 4px; color: var(--uk-ink-soft); }
+.uk-plan li.uk-plan-cuota::before { content: "· "; }
+.uk-plan .uk-btn, .uk-plan .uk-btn-ghost { justify-content: center; text-align: center; }
+.uk-planes-nota { margin: 22px 0 0; font-size: 13.5px; color: var(--uk-ink-soft); max-width: 640px; line-height: 1.5; }

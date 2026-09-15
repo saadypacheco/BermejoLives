@@ -132,7 +132,7 @@ export async function UrukuShell({
                 <h4>Para comercios</h4>
                 <Link href="/autoregistro" className="uk-foot-link"><Ic d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0" /><span>Publicar comercio</span><i>›</i></Link>
                 <Link href="/mi-comercio" className="uk-foot-link"><Ic d="M20 21a8 8 0 1 0-16 0M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" /><span>Mi negocio</span><i>›</i></Link>
-                <Link href="/autoregistro" className="uk-foot-link"><Ic d="M2 20h20M3 17l2-9 5 4 2-6 2 6 5-4 2 9" /><span>Planes y beneficios</span><i>›</i></Link>
+                <Link href="/planes" className="uk-foot-link"><Ic d="M2 20h20M3 17l2-9 5 4 2-6 2 6 5-4 2 9" /><span>Planes y beneficios</span><i>›</i></Link>
               </div>
               <div className="uk-foot-col">
                 <h4>Información</h4>

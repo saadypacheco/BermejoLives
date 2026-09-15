@@ -2388,6 +2388,8 @@ class PlanBody(BaseModel):
     permite_extras: bool | None = None
     funciones: dict | None = None
     descripcion: str | None = None
+    incluye: list[str] | None = None
+    publica_meses: int | None = Field(default=None, ge=0)
     activo: bool | None = None
     visible: bool | None = None
 

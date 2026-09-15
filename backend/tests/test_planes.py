@@ -36,7 +36,7 @@ def test_el_plan_sale_de_la_base(repo):
     c = repo.seed_comercio(slug="x", nombre="X", plan="publica")
     plan = planes.plan_de(repo, c)
     assert plan["nombre"] == "Publica"
-    assert plan["publicaciones_mes"] == 15
+    assert plan["publicaciones_mes"] == 25
 
 
 def test_un_plan_que_ya_no_existe_no_deja_sin_publicar(repo):
@@ -65,7 +65,7 @@ def test_cuenta_solo_lo_aprobado(repo):
 
     est = planes.estado(repo, c)
     assert est["usadas"] == 3
-    assert est["quedan"] == 12
+    assert est["quedan"] == 22
 
 
 def test_el_ciclo_no_es_el_mes_calendario(repo):
@@ -99,7 +99,7 @@ def test_sin_limite_nunca_se_excede(repo):
 
 def test_al_pasarse_se_publica_y_se_cobra(repo):
     c = repo.seed_comercio(slug="x", nombre="X", plan="publica")
-    _publicar(repo, c, 15)
+    _publicar(repo, c, 25)
     r = planes.revisar_antes_de_publicar(repo, c)
     assert r["puede"] is True
     assert r["consecuencia"] == "cobrar"
@@ -109,7 +109,7 @@ def test_si_el_plan_no_admite_extras_se_corta(repo):
     """Los dos caminos son válidos y la decisión es comercial, no técnica."""
     repo.upsert_plan("publica", {"permite_extras": False})
     c = repo.seed_comercio(slug="x", nombre="X", plan="publica")
-    _publicar(repo, c, 15)
+    _publicar(repo, c, 25)
     r = planes.revisar_antes_de_publicar(repo, c)
     assert r["puede"] is False
     assert r["consecuencia"] == "bloquear"
@@ -120,7 +120,7 @@ def test_el_aviso_lleva_las_dos_salidas(repo):
     arriba, y el apurado tiene que poder pagar la extra. Ofrecer una sola es
     elegir por él."""
     c = repo.seed_comercio(slug="x", nombre="X", plan="publica")
-    _publicar(repo, c, 15)
+    _publicar(repo, c, 25)
     est = planes.estado(repo, c)
     texto = planes.texto_de_aviso(est, planes.plan_siguiente(repo, est["plan"]))
 
@@ -137,7 +137,7 @@ def test_el_precio_de_la_extra_se_cambia_sin_tocar_codigo(client, repo, admin_to
     assert r.status_code == 200, r.text
 
     c = repo.seed_comercio(slug="x", nombre="X", plan="publica")
-    _publicar(repo, c, 15)
+    _publicar(repo, c, 25)
     est = planes.estado(repo, c)
     assert "Bs 8" in planes.texto_de_aviso(est, None)
 
@@ -210,7 +210,7 @@ def test_al_tope_avisa_en_el_mismo_chat(repo, monkeypatch):
     monkeypatch.setattr(ingest, "_avisar", lambda chat, texto: avisos.append((chat, texto)))
     repo.upsert_plan("publica", {"permite_extras": False})
     c = repo.seed_comercio(slug="x", nombre="X", plan="publica", confiable=True)
-    _publicar(repo, c, 15)
+    _publicar(repo, c, 25)
 
     r = ingest.handle_message(_mensaje(repo, c), repo)
     assert r["publicada"] is False
@@ -225,7 +225,7 @@ def test_si_no_se_puede_avisar_la_publicacion_sigue_su_curso(repo, monkeypatch):
         raise RuntimeError("WAHA caído")
     monkeypatch.setattr("app.services.whatsapp_client.enviar_texto", _explota)
     c = repo.seed_comercio(slug="x", nombre="X", plan="publica", confiable=True)
-    _publicar(repo, c, 15)
+    _publicar(repo, c, 25)
 
     antes = len(repo.publicaciones)
     r = ingest.handle_message(_mensaje(repo, c), repo)
@@ -255,5 +255,29 @@ def test_el_plan_caro_trae_algo_que_el_barato_no(repo):
     caro = repo.get_plan("empleado_ia")
     pro = repo.get_plan("pro")
     extras = set(caro["funciones"]) - set(pro["funciones"])
-    assert "asistente_24_7" in extras
+    # El chatbot ya lo tiene Pro; lo que suma el caro son los agentes.
+    assert {"agente_catalogo", "agente_analista", "agente_marketing"} <= extras
     assert float(caro["precio_mes"]) > float(pro["precio_mes"])
+
+
+def test_el_basico_publica_dos_meses_y_despues_sigue_en_el_mapa(repo):
+    """El "gratis por dos meses" de la etapa de arranque. Pasados los meses el
+    comercio no desaparece: sigue en el mapa, y el aviso le dice cómo seguir
+    publicando. Sin fecha de alta se deja publicar: no se castiga a nadie por
+    un dato que falta."""
+    from datetime import date, timedelta
+    reciente = repo.seed_comercio(slug="nuevo", nombre="Nuevo", plan="gratis",
+                                  created_at=(date.today() - timedelta(days=20)).isoformat())
+    viejo = repo.seed_comercio(slug="viejo", nombre="Viejo", plan="gratis",
+                               created_at=(date.today() - timedelta(days=75)).isoformat())
+    sin_fecha = repo.seed_comercio(slug="sf", nombre="SF", plan="gratis")
+    pagado = repo.seed_comercio(slug="pago", nombre="Pago", plan="publica",
+                                created_at=(date.today() - timedelta(days=400)).isoformat())
+
+    assert planes.revisar_antes_de_publicar(repo, reciente)["puede"]
+    assert planes.revisar_antes_de_publicar(repo, sin_fecha)["puede"]
+    assert planes.revisar_antes_de_publicar(repo, pagado)["puede"]
+    r = planes.revisar_antes_de_publicar(repo, viejo)
+    assert not r["puede"] and r["consecuencia"] == "vencido"
+    aviso = planes.texto_de_aviso(r, planes.plan_siguiente(repo, r["plan"]))
+    assert "2 meses" in aviso and "sigue en el mapa" in aviso and "Publica" in aviso and "Bs 70" in aviso

@@ -848,7 +848,7 @@ function SuscripcionTab() {
             </div>
           )}
         </div>
-        <span style={{ color: "var(--txt-3)", fontSize: 13, whiteSpace: "nowrap" }}>Plan {sub.plan}</span>
+        <span style={{ color: "var(--txt-3)", fontSize: 13, whiteSpace: "nowrap" }}>Plan {sub.plan} · <a href="/planes" target="_blank" rel="noopener">ver planes</a></span>
       </div>
 
       {/* RESUMEN DE CARGOS (solo si hay destacados pendientes) */}
