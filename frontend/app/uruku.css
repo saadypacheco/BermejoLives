@@ -143,7 +143,19 @@
   .uk-head-strip { order: 1; flex-basis: auto; flex: 1; justify-content: center; }
   .uk-head-actions { order: 2; }
 }
-@media (min-width: 900px) { .uk-brand-full { height: 96px; } .uk-search { max-width: 680px; } }
+/* El buscador va de punta a punta. Tenía un tope de 680px y en una notebook
+   se cortaba a la mitad de la pantalla, como si le faltara algo. */
+@media (min-width: 900px) { .uk-brand-full { height: 96px; } }
+
+/* Mapa · Ofertas · Cambio en el header, sólo de 900px para arriba: abajo de
+   eso está la barra del celular con los mismos tres. */
+.uk-topnav { display: none; }
+@media (min-width: 900px) {
+  .uk-topnav { display: flex; align-items: center; gap: 4px; order: 1; flex-shrink: 0; }
+  .uk-topnav a { padding: 8px 12px; border-radius: 999px; font-size: 14px; font-weight: 700; color: var(--uk-ink); text-decoration: none; }
+  .uk-topnav a:hover { background: var(--uk-chip); }
+  .uk-topnav a.active { background: var(--uk-green); color: #fff; }
+}
 .uk-header-main { min-height: 96px; display: grid; grid-template-columns: 300px minmax(240px,1fr) auto; gap: 24px; align-items: center; }
 .uk-brand-word { display: inline-flex; align-items: center; gap: 3px; font-weight: 900; font-size: 46px; letter-spacing: .01em; line-height: 1; color: var(--uk-ink); }
 .uk-brand-logo { width: 46px; height: 46px; object-fit: contain; flex-shrink: 0; }

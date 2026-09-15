@@ -83,6 +83,15 @@ export async function UrukuShell({
               </div>
             </div>
 
+            {/* En la compu no hay barra de abajo: Mapa, Ofertas y Cambio van
+                acá, entre la cotización y la ciudad. Se esconde en el celular,
+                donde la barra de abajo ya los tiene. */}
+            <nav className="uk-topnav" aria-label="Secciones">
+              {[["Mapa", "/buscar?vista=mapa"], ["Ofertas", "/buscar?vista=mapa&of=1"], ["Cambio", "/cambio"]].map(([k, href]) => (
+                <Link key={k} href={href} className={activeNav === k ? "active" : ""}>{k}</Link>
+              ))}
+            </nav>
+
             <div className="uk-head-actions">
               <CitySelector actual={ciudad} ciudades={ciudades} />
               <IngresarMenu />
