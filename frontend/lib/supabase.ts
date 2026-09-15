@@ -18,6 +18,14 @@ if (!url || !anonKey) {
 
 export const supabase = createClient(url ?? "http://localhost", anonKey ?? "anon", {
   auth: { persistSession: false },
+  // NUNCA CACHEAR. Next parchea `fetch` en el servidor y guarda respuestas
+  // aunque la ruta sea dinámica: /cambio y /planes siguieron mostrando la
+  // cotización del 15 de agosto una hora después de cargar la de hoy,
+  // mientras el home la mostraba bien. Una cotización, un plan o una oferta
+  // que se lee de la base tiene que ser la de AHORA; el costo de no cachear
+  // es una consulta a PostgREST por render, que es lo que ya se paga en el
+  // resto del sitio.
+  global: { fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }) },
 });
 
 export const hasSupabase = Boolean(url && anonKey);

@@ -30,8 +30,23 @@ export type Referencia = {
 
 const CLAVE = "uk-cambio-tasas";
 
+/** "6,8", "6.8", "1.570", "100.000" y "100000" → el número que la persona
+ *  quiso escribir. La coma siempre es decimal. Un punto es decimal salvo que
+ *  le sigan exactamente tres dígitos (un mil), o haya más de uno. "6.8"
+ *  tomado como 68 es lo que hizo que 100.000 pesos dieran 6.800 Bs. */
 function num(s: string): number {
-  const n = Number(String(s).replace(/\./g, "").replace(",", "."));
+  let t = String(s).trim().replace(/\s/g, "");
+  if (t.includes(",")) {
+    t = t.replace(/\./g, "").replace(",", ".");
+  } else {
+    const puntos = (t.match(/\./g) || []).length;
+    if (puntos === 1 && !/\.\d{3}$/.test(t)) {
+      // un solo punto y no son tres dígitos: es decimal ("6.8", "10.80")
+    } else {
+      t = t.replace(/\./g, "");
+    }
+  }
+  const n = Number(t);
   return Number.isFinite(n) ? n : 0;
 }
 function bs(n: number): string { return n.toLocaleString("es-BO", { maximumFractionDigits: n < 100 ? 2 : 0 }); }
