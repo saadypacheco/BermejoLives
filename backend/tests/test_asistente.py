@@ -108,7 +108,32 @@ def test_que_hay_abierto_ahora_mira_los_horarios(repo, sin_modelo):
 def test_el_dolar_sale_de_las_cotizaciones(repo, sin_modelo):
     repo.cotizaciones[0]["valor"] = 11.2
     r = asistente.responder(repo, "¿a cuánto está el dólar?", ahora=MARTES_11)
-    assert r.nivel == 0 and r.intent == "cotizacion" and "11.2" in r.texto
+    assert r.nivel == 0 and r.intent == "cotizacion" and "11,2 Bs" in r.texto
+    assert "rubro=cambio&vista=mapa" in r.texto
+
+
+def test_donde_cambio_dolares_es_un_lugar_no_un_numero(repo, sin_modelo):
+    repo.cotizaciones[0]["valor"] = 11.2
+    repo.comercios["cc1"] = {"id": "cc1", "slug": "cambios-frontera", "nombre": "Cambios Frontera", "activo": True,
+                             "rubro_slug": "cambio", "direccion": "Av. del Puente 10", "horario": "Lun-Sáb 8:00-20:00"}
+    repo.comercios["cc2"] = {"id": "cc2", "slug": "cambio-central", "nombre": "Cambio Central", "activo": True,
+                             "rubro_slug": "cambio", "direccion": "Plaza principal", "horario": "Lun-Vie 9:00-12:00"}
+    r = asistente.responder(repo, "¿Dónde cambio dólares?", ahora=MARTES_13)
+    assert r.intent == "casas_de_cambio" and r.nivel == 0
+    # Las dos casas, la abierta primero, el mapa, y la cotización al final.
+    assert r.texto.index("Cambios Frontera") < r.texto.index("Cambio Central")
+    assert "1 abiertas ahora" in r.texto and "rubro=cambio&vista=mapa" in r.texto and "Hoy: Dólar 11,2 Bs" in r.texto
+    assert [f["nombre"] for f in r.fuentes] == ["Cambios Frontera", "Cambio Central"]
+    # Las que no tienen dirección se nombran igual (la ubicación la tiene el
+    # mapa); se cuentan todas y se muestran las primeras cinco.
+    for i in range(6):
+        repo.comercios[f"cx{i}"] = {"id": f"cx{i}", "slug": f"casa-de-cambio-{i}", "nombre": "Casa de Cambio", "activo": True, "rubro_slug": "cambio"}
+    r3 = asistente.responder(repo, "¿dónde cambio pesos?", ahora=MARTES_13)
+    assert "Hay 8 casas de cambio" in r3.texto and "Ver las 8 en el mapa" in r3.texto and len(r3.fuentes) == 5
+    # Sin casas cargadas, lo dice y queda anotado.
+    repo.comercios.clear()
+    r2 = asistente.responder(repo, "casa de cambio", ahora=MARTES_11)
+    assert r2.intent == "casas_de_cambio" and r2.sin_respuesta
 
 
 def test_las_preguntas_sobre_uruku_tienen_respuesta_fija(repo, sin_modelo):

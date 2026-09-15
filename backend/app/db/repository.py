@@ -208,7 +208,7 @@ class Repo(Protocol):
     def update_cotizacion(self, clave: str, valor: float) -> dict | None: ...
     def get_clima(self) -> dict | None: ...
     # Uruku Ayuda (services/asistente.py)
-    def buscar_comercios(self, q: str, limite: int = 5) -> list[dict]: ...
+    def buscar_comercios(self, q: str, limite: int = 5, rubro: str | None = None) -> list[dict]: ...
     def list_saber_local(self, solo_activos: bool = True) -> list[dict]: ...
     def upsert_saber_local(self, row: dict) -> dict: ...
     def borrar_saber_local(self, saber_id: str) -> None: ...
@@ -2142,12 +2142,12 @@ class SupabaseRepo:
         return res.data[0] if res.data else None
 
     # ------------------------------------------------------------ Uruku Ayuda
-    def buscar_comercios(self, q: str, limite: int = 5) -> list[dict]:
+    def buscar_comercios(self, q: str, limite: int = 5, rubro: str | None = None) -> list[dict]:
         """La MISMA búsqueda del sitio (la función `buscar_comercios` de la
         base), para que el asistente conteste con lo que el buscador
         mostraría. Dos buscadores que no coinciden son dos verdades."""
         res = self._db.rpc("buscar_comercios", {
-            "q": q or None, "p_rubro": None, "p_modalidad": None, "p_zona": None,
+            "q": q or None, "p_rubro": rubro or None, "p_modalidad": None, "p_zona": None,
             "p_precio_min": None, "p_precio_max": None, "p_ciudad": None,
             "p_limit": max(1, min(int(limite), 100)), "p_offset": 0, "p_subcategoria": None,
         }).execute()

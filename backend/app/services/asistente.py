@@ -168,13 +168,61 @@ SUGERENCIAS_INICIALES = [
 
 # --------------------------------------------------------------------------- Nivel 0: el sitio
 
+def _num(v) -> str:
+    """11.2 → "11,2"; 1510.0 → "1.510". Como se escribe acá, no como lo guarda la base."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    s = f"{int(f):,}" if f == int(f) else f"{f:,.2f}".rstrip("0").rstrip(".")
+    return s.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
 def _cotizaciones(repo) -> str | None:
-    filas = [c for c in (repo.list_cotizaciones() or []) if c.get("valor")]
+    """Las dos que importan acá: dólar y peso argentino, en bolivianos. La
+    tercera (dólar en pesos) es de la otra orilla y sólo confunde."""
+    filas = [c for c in (repo.list_cotizaciones() or []) if c.get("valor") and (c.get("unidad") or "Bs") == "Bs"]
     if not filas:
         return None
-    partes = [f"{c.get('etiqueta')}: {c.get('valor')} {c.get('unidad', 'Bs')} ({c.get('detalle', '')})".replace(" ()", "")
+    partes = [f"{c.get('etiqueta')} {_num(c.get('valor'))} Bs" + (f" (por {c['detalle']})" if c.get("detalle") else "")
               for c in sorted(filas, key=lambda x: x.get("orden", 0))]
-    return "Cotización de hoy en Bermejo — " + " · ".join(partes) + "."
+    return "Hoy: " + " · ".join(partes) + "."
+
+
+URL_CASAS_DE_CAMBIO = f"{SITIO}/buscar?rubro=cambio&vista=mapa"
+
+
+def _casas_de_cambio(repo, ahora: datetime) -> Respuesta:
+    """«¿Dónde cambio dólares?» es DÓNDE, no A CUÁNTO. La respuesta es lo que
+    el sitio tiene y nadie más: las casas de cambio, cuáles están abiertas
+    ahora, y el mapa para ir. La cotización va al final, como dato extra."""
+    casas = list(repo.buscar_comercios("", 40, rubro="cambio") or [])
+    cot = _cotizaciones(repo)
+    if not casas:
+        texto = f"Todavía no tengo casas de cambio cargadas en el mapa. Mirá el rubro acá: {URL_CASAS_DE_CAMBIO}"
+        return Respuesta(texto=texto + (f"\n{cot}" if cot else ""), nivel=0, intent="casas_de_cambio", sin_respuesta=True)
+
+    def _estado(c):
+        return hor.abierto_ahora(c.get("horario"), ahora).estado if c.get("horario") else "desconocido"
+    # Las abiertas primero; después las que no dicen; las cerradas al final.
+    orden = {"abierto": 0, "desconocido": 1, "cerrado": 2}
+    casas.sort(key=lambda c: orden[_estado(c)])
+    abiertas = [c for c in casas if _estado(c) == "abierto"]
+    # Se nombran las primeras, tengan o no dirección: la ubicación la tiene
+    # el mapa, y ésa es la acción principal de esta respuesta.
+    mostrar = casas[:MAX_COMERCIOS]
+    lineas = []
+    for c in mostrar:
+        et = (hor.etiqueta(hor.abierto_ahora(c["horario"], ahora), ahora) or "").lower() if c.get("horario") else ""
+        extra = [x for x in [c.get("direccion"), et] if x]
+        lineas.append(f"• {c.get('nombre')}" + (f" — {' · '.join(extra)}" if extra else ""))
+    cabeza = (f"Hay {len(casas)} casas de cambio en Bermejo" +
+              (f", {len(abiertas)} abiertas ahora" if abiertas else "") +
+              (f". Las primeras {len(mostrar)}:" if len(casas) > len(mostrar) else ":"))
+    texto = (cabeza + "\n" + "\n".join(lineas) +
+             f"\nVer las {len(casas)} en el mapa: {URL_CASAS_DE_CAMBIO}" + (f"\n{cot}" if cot else ""))
+    return Respuesta(texto=texto, nivel=0, intent="casas_de_cambio", fuentes=[_fuente(c) for c in mostrar],
+                     sugerencias=[f"Horario de {mostrar[0].get('nombre')}", "¿A cuánto está el dólar?"])
 
 
 def _clima(repo) -> str | None:
@@ -364,10 +412,16 @@ def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     for patron, texto, intent in FAQ:
         if re.search(patron, p):
             return Respuesta(texto=texto, nivel=0, intent="faq_" + intent)
+    # Dos preguntas distintas con las mismas palabras: DÓNDE cambiar (un
+    # lugar) y A CUÁNTO está (un número). "cambio dólares" / "casa de cambio"
+    # / "cambiar plata" son la primera; "a cuánto", "cotización", "el dólar
+    # hoy" son la segunda.
+    if re.search(r"donde .*(cambi|dolar|peso)|casa(s)? de cambio|cambista|cambiar (plata|dolar|peso|billete)|cambio (de )?(dolar|peso|plata)", p):
+        return _casas_de_cambio(repo, ahora)
     if re.search(r"\bdolar|cotiza|cambio\b|peso(s)? argentino|cuanto esta el peso|blue", p):
         t = _cotizaciones(repo)
         if t:
-            return Respuesta(texto=t + " Casas de cambio: " + f"{SITIO}/buscar?rubro=cambio", nivel=0, intent="cotizacion",
+            return Respuesta(texto=t + f"\nCasas de cambio, en el mapa: {URL_CASAS_DE_CAMBIO}", nivel=0, intent="cotizacion",
                              sugerencias=["¿Dónde cambio dólares?"])
     if re.search(r"\bclima|\btiempo\b|lluev|llover|calor|frio|temperatura", p):
         t = _clima(repo)

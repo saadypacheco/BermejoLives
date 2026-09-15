@@ -761,7 +761,7 @@ class FakeRepo:
         return self.clima
 
     # ------------------------------------------------------------ Uruku Ayuda
-    def buscar_comercios(self, q, limite=5):
+    def buscar_comercios(self, q, limite=5, rubro=None):
         """Lo que el fake puede: nombre, subcategoría y productos, por
         substring de cada palabra. La función real rankea; acá alcanza con
         que aparezca lo que debería."""
@@ -773,6 +773,8 @@ class FakeRepo:
         out = []
         for c in self.comercios.values():
             if not c.get("activo", True):
+                continue
+            if rubro and rubro not in ([c.get("rubro_slug")] + list(c.get("rubro_slugs") or [])):
                 continue
             pajar = _sin_acentos(" ".join(str(c.get(k) or "") for k in ("nombre", "subcategoria", "prod_obs_human", "prod_det_ia")))
             aciertos = sum(1 for t in terms if t in pajar)
