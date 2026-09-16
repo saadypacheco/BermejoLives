@@ -55,6 +55,9 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   // tarjeta dice a cuánto queda, y el chip ordena por eso.
   const [ubicacion, setUbicacion] = useState<Ubicacion | null>(null);
   const [cerca, setCerca] = useState(false);
+  // Llegó con ?cerca=1 (el "qué hay cerca" del home): se pide la ubicación y
+  // se enciende el orden por distancia, como si hubiera tocado el chip.
+  const [cercaPedido, setCercaPedido] = useState(false);
   // SERVICIOS. "baño público" no es una búsqueda de comercios: es un baño.
   // Si la búsqueda es un servicio, se muestran los lugares de ese tipo y los
   // comercios quedan detrás de un enlace. Buscar "baño" y recibir ochenta
@@ -70,6 +73,13 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     return () => { vivo = false; };
   }, [servicio]);
   const [centrarEnMi, setCentrarEnMi] = useState(0);
+  useEffect(() => {
+    if (!cercaPedido) return;
+    setCercaPedido(false);
+    (ubicacion ? Promise.resolve(ubicacion) : pedirUbicacion().then((u) => { setUbicacion(u); return u; }).catch(() => null))
+      .then((u) => { if (u) setCerca(true); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cercaPedido]);
   const [errUbicacion, setErrUbicacion] = useState("");
   useEffect(() => {
     const guardada = ubicacionGuardada();
@@ -223,6 +233,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
     setSubcategoria(g("sub") ?? "");
     setModalidad(g("modalidad") ?? "");
     if (g("vista") === "mapa") setVista("mapa");
+    if (g("cerca") === "1") setCercaPedido(true);
     if (g("debug") === "1") setDebug(true);
     // `of=1` es el enlace de "Ofertas" del menú, que antes iba a /mapa.
     setSoloOfertas(g("of") === "1");

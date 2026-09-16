@@ -1,148 +1,203 @@
 import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
-import { Ic } from "@/components/uruku-ui";
-import { getFeed, getVideosPromo, getRedes, getLugaresPublicos, getVolumenes, UMBRALES, APAGADAS } from "@/lib/data";
+import { AbrirAyuda } from "@/components/abrir-ayuda";
+import { getClima, getCotizaciones, getFeed, getFronteraEstado, getVideosPromo } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { precioFmt } from "@/lib/types";
+import { formatoMonto, tasasDe } from "@/lib/cambio";
 
 export const dynamic = "force-dynamic";
 
-export default async function InicioPage() {
-  const [{ ciudad }, feed, videos, redes, lugares, vol] = await Promise.all([
-    ciudadActual(), getFeed(12), getVideosPromo(8), getRedes(), getLugaresPublicos(12),
-    getVolumenes(),
-  ]);
-  const nombre = ciudad?.nombre ?? "tu ciudad";
-  // Las fotos vienen de la ciudad elegida. Si todavía no tiene material propio
-  // se cae a las de Bermejo: una ciudad recién abierta se ve bien igual, en vez
-  // de quedar con el hero en blanco.
-  const heroImg = ciudad?.hero_url || "/bermejo-ciudad4.png";
-  const fotoImg = ciudad?.foto_url || "/Bermejo-plaza.png";
+/**
+ * El home: "Todo Bermejo en un solo lugar".
+ *
+ * Cambió el 16/9: antes hablaba del sitio ("descubrí Bermejo como nunca
+ * antes") y le vendía al comerciante desde el hero. Ahora le sirve al que
+ * llega: qué necesita (baños, cajeros, farmacias, cambio), cómo está la
+ * frontera hoy, qué tiene que saber antes de comprar, y las ofertas. Cada
+ * cosa aparece UNA vez —el cambio vive en /cambio, con calculadora y casas
+ * de cambio juntas, y desde acá se llega por un solo lugar—. El comerciante
+ * tiene su banner al pie, que es donde lo busca el que ya tiene un negocio.
+ */
 
+// Los servicios del mapa, con su búsqueda. Baños, estacionamientos, cajeros
+// y wifi son lugares (0110); farmacias y taxis, rubros; el cambio, /cambio.
+const SERVICIOS = [
+  { i: "🚻", t: "Baños cercanos", d: "Ubicaciones", href: "/buscar?q=ba%C3%B1o+p%C3%BAblico&vista=mapa" },
+  { i: "💊", t: "Farmacias", d: "Turnos y direcciones", href: "/buscar?rubro=farmacia&vista=mapa" },
+  { i: "🏧", t: "Cajeros y bancos", d: "Dónde sacar plata", href: "/buscar?q=cajero&vista=mapa" },
+  { i: "🅿️", t: "Estacionamiento", d: "Dónde dejar el auto", href: "/buscar?q=estacionamiento&vista=mapa" },
+  { i: "💱", t: "Casas de cambio", d: "Cotización, calculadora y mapa", href: "/cambio" },
+  { i: "📶", t: "WiFi y chips", d: "Internet y telefonía", href: "/buscar?q=wifi&vista=mapa" },
+  { i: "🚕", t: "Taxis y transporte", d: "Cómo moverte", href: "/buscar?rubro=taxis&vista=mapa" },
+  { i: "🆘", t: "Salud y emergencias", d: "Hospitales y teléfonos", href: "/guia#seguridad" },
+];
+
+// La fila de accesos debajo del buscador: los mismos destinos, en una palabra.
+const CHIPS = [
+  { i: "🚻", t: "Baños", href: SERVICIOS[0].href }, { i: "💊", t: "Farmacias", href: SERVICIOS[1].href },
+  { i: "🏧", t: "Cajeros", href: SERVICIOS[2].href }, { i: "🅿️", t: "Estacionamiento", href: SERVICIOS[3].href },
+  { i: "💱", t: "Casas de cambio", href: "/cambio" }, { i: "📶", t: "WiFi", href: SERVICIOS[5].href },
+  { i: "🚌", t: "Transporte", href: "/guia#transporte" }, { i: "🌉", t: "Frontera", href: "/guia#frontera" },
+];
+
+const GUIAS = [
+  { i: "🛃", t: "Aduana", d: "Franquicia, qué podés pasar y qué no.", href: "/guia#aduana" },
+  { i: "🪪", t: "Documentación", d: "DNI, pasaporte y viaje con menores.", href: "/guia#documentos" },
+  { i: "🌉", t: "Frontera", d: "Estado del paso, horarios, río y clima.", href: "/guia#frontera" },
+  { i: "🛍️", t: "Comprar", d: "Horarios, por docena, pagos y envíos.", href: "/guia#comercios" },
+];
+
+const HERRAMIENTAS = [
+  { i: "🚌", t: "Cómo llegar desde Orán o Salta", href: "/guia#transporte" },
+  { i: "🏔️", t: "De Bermejo a Tarija", href: "/guia#transporte" },
+  { i: "🕒", t: "Qué está abierto ahora", href: "/guia#comercios" },
+  { i: "📍", t: "Qué hay cerca tuyo", href: "/buscar?cerca=1" },
+];
+
+const INFO = [
+  { i: "💳", t: "Medios de pago", d: "Pesos, bolivianos, dólares, QR", href: "/guia#comercios" },
+  { i: "🛡️", t: "Seguridad y consejos", d: "Para la primera vez", href: "/guia#seguridad" },
+  { i: "📞", t: "Teléfonos útiles", d: "110 · 119 · 168", href: "/guia#seguridad" },
+  { i: "📱", t: "Comprar chip o eSIM", d: "Entel y Tigo", href: "/guia#conectividad" },
+  { i: "▶️", t: "Videos guía", d: "Recorridos y tips", href: "/guia#ofertas" },
+  { i: "⭐", t: "Top de ofertas", d: "Lo más buscado", href: "/buscar?of=1" },
+];
+
+const ESTADO: Record<string, Record<string, [string, string]>> = {
+  puente: { normal: ["habilitada", "ok"], demoras: ["con demoras", "ojo"], cerrado: ["cerrada", "mal"] },
+  chalanas: { operando: ["operando", "ok"], suspendidas: ["suspendidas", "mal"] },
+  rio: { normal: ["normal", "ok"], crecido: ["crecido", "ojo"] },
+};
+
+function hace(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (!Number.isFinite(min) || min < 0) return null;
+  if (min < 60) return `hace ${Math.max(1, min)} min`;
+  if (min < 48 * 60) return `hace ${Math.floor(min / 60)} h`;
+  return `hace ${Math.floor(min / 1440)} días`;
+}
+
+export default async function InicioPage() {
+  const [{ ciudad }, feed, videos, frontera, clima, cotizaciones] = await Promise.all([
+    ciudadActual(), getFeed(12), getVideosPromo(6), getFronteraEstado(), getClima(), getCotizaciones(),
+  ]);
+  const nombre = ciudad?.nombre ?? "Bermejo";
+  const heroImg = ciudad?.hero_url || "/bermejo-ciudad4.png";
   const ofertas = feed.filter((f) => f.tipo === "oferta");
-  const novedades = feed.filter((f) => f.tipo === "novedad");
-  const cards = (ofertas.length ? ofertas : feed.filter((f) => f.tipo !== "video")).slice(0, 8);
-  const canalWa = redes.find((r) => r.clave === "whatsapp_canal")?.url;
+  const cards = (ofertas.length ? ofertas : feed.filter((f) => f.tipo !== "video")).slice(0, 4);
+  const t = tasasDe(cotizaciones);
+  const fechas = [frontera?.actualizado_en, t.actualizado_en].filter(Boolean) as string[];
+  const ultima = fechas.length ? fechas.sort()[fechas.length - 1] : null;
 
   return (
     <UrukuShell activeCat="Todos" activeNav="Inicio">
-      {/* ===== Hero ===== */}
-      <section className="uk-hero" style={{ backgroundImage: `url('${heroImg}')` }}>
-        <div className="uk-container uk-hero-grid">
-          <div>
-            <h1>Descubrí <span>{nombre}</span><br />como nunca antes</h1>
-            <p>Explorá comercios locales, ofertas increíbles y todo lo que necesitás cerca de vos.</p>
-            {/* Se fue "Explorá el mapa". Prometía explorar y entregaba una
-                pantalla vacía: sin búsqueda el mapa dibuja sólo destacados y
-                los que pagan —la primera vista es el cupo que se vende— y hoy
-                no paga nadie, así que quedaba la ciudad sin un solo pin y otro
-                buscador pidiendo que escribas.
+      {/* ===== Los accesos rápidos, debajo del buscador ===== */}
+      <nav className="uk-container uk-home-chips" aria-label="Servicios">
+        {CHIPS.map((c) => <Link key={c.t} href={c.href}><span aria-hidden>{c.i}</span>{c.t}</Link>)}
+      </nav>
 
-                La puerta es el buscador de arriba: se escribe una vez y se cae
-                en los resultados, que arrancan en lista (más liviana en el
-                celular que el mapa, que baja la librería y cien tiles) con el
-                interruptor a mapa a un toque. */}
+      {/* ===== Hero: qué es esto, y cómo está Bermejo hoy ===== */}
+      <section className="uk-hero uk-home-hero" style={{ backgroundImage: `url('${heroImg}')` }}>
+        <div className="uk-container uk-home-hero-grid">
+          <div>
+            <h1>Todo <span>{nombre}</span><br />en un solo lugar</h1>
+            <p>Comercios, ofertas, cambio, servicios y datos útiles para tu visita.</p>
             <div className="uk-hero-actions">
-              <Link href="/buscar?of=1" className="uk-btn uk-btn-primary">
-                <Ic d="M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" />
-                Ofertas del día
-              </Link>
+              <Link href="/buscar?of=1" className="uk-btn uk-btn-primary">🏷️ Ver ofertas del día</Link>
+              <Link href="/guia" className="uk-btn uk-btn-ghost uk-home-btn-claro">🧭 Explorar servicios</Link>
             </div>
-            <div className="uk-proof">
-              <div className="uk-avatars"><span>SP</span><span>AM</span><span>LR</span><span>JF</span></div>
-              <div>Miles de personas ya<br />descubren {nombre} con Uruku</div>
+            <div className="uk-home-props">
+              <div><b>Comercios locales</b><span>Cientos de locales con productos y ofertas</span></div>
+              <div><b>Información confiable</b><span>Cargada por gente de {nombre}</span></div>
+              <div><b>Tu visita más fácil</b><span>Todo lo que necesitás, en un solo lugar</span></div>
             </div>
           </div>
 
-          {/* Lo que le hablaba al comerciante era genérico —"más visibilidad,
-              sin complicaciones"— y eso lo dice cualquier cartel. Lo que URUKU
-              tiene y la competencia no es concreto: el cliente lo encuentra
-              buscando lo que vende, y le escribe al WhatsApp directo. Sin
-              comisión, porque la plataforma no se mete en la venta. */}
-          <aside className="uk-quote-card uk-hero-cta">
-            <h3>¿Tenés un comercio?</h3>
-            <p>En {nombre} te buscan por lo que vendés, no por el nombre del local.</p>
+          <aside className="uk-home-hoy">
+            <div className="uk-home-hoy-cab">
+              <h3>Hoy en {nombre}</h3>
+              {ultima && <small>Actualizado {hace(ultima)}</small>}
+            </div>
             <ul>
-              <li>Te encuentran buscando <b>tus productos</b></li>
-              <li>Te escriben al <b>WhatsApp</b>, directo y sin intermediarios</li>
-              <li>Tu local <b>en el mapa</b>, con fotos y horario</li>
-              <li><b>Sin comisión</b> por venta: cobrás vos, como siempre</li>
+              {frontera && (["puente", "chalanas"] as const).map((k) => {
+                const [txt, nivel] = ESTADO[k][frontera[k]] ?? [frontera[k], "ojo"];
+                return <li key={k}><span>{k === "puente" ? "🌉" : "⛵"}</span>{k === "puente" ? "Frontera" : "Chalanas"}: <b className={nivel}>{txt}</b></li>;
+              })}
+              {frontera?.rio === "crecido" && <li><span>🌊</span>Río: <b className="ojo">crecido</b></li>}
+              {clima?.temp_c != null && <li><span>{clima.icono || "☀"}</span>Clima: <b>{Math.round(clima.temp_c)}°</b>{clima.descripcion ? ` · ${clima.descripcion}` : ""}</li>}
+              {t.usd_bob != null && <li><span>🇺🇸</span>1 USD = <b>{formatoMonto(t.usd_bob, "BOB")} Bs</b></li>}
+              {t.ars_bob != null && <li><span>🇦🇷</span>1.000 ARS = <b>{formatoMonto(t.ars_bob * 1000, "BOB")} Bs</b></li>}
+              {frontera?.nota && <li className="uk-home-hoy-nota">{frontera.nota}</li>}
             </ul>
-            <Link href="/autoregistro" className="uk-panel-btn">Publicá tu negocio gratis <span>→</span></Link>
+            <Link href="/cambio" className="uk-home-hoy-link">📍 Casas de cambio y calculadora <span>›</span></Link>
           </aside>
         </div>
       </section>
 
-      {/* ===== Features (cards) =====
-          Cada una aparece cuando hay volumen detrás, y los umbrales son altos a
-          propósito ([data.ts] UMBRALES).
+      {/* ===== Servicios útiles ===== */}
+      <section className="uk-container uk-home-sec">
+        <div className="uk-section-head">
+          <h2>Servicios útiles <small>Encontrá rápido lo que necesitás en {nombre}.</small></h2>
+          <Link href="/guia#mapa">Ver todos →</Link>
+        </div>
+        <div className="uk-home-grid uk-home-grid-4">
+          {SERVICIOS.map((s) => (
+            <Link key={s.t} href={s.href} className="uk-home-card">
+              <span className="uk-home-ic">{s.i}</span>
+              <b>{s.t}</b><small>{s.d}</small>
+            </Link>
+          ))}
+        </div>
+      </section>
 
-          Decían "Comercios verificados · Locales destacados · Promos
-          exclusivas" desde el primer día, con cero de cada uno. Eso no es una
-          promesa: es la lista de lo que falta, firmada por nosotros. Y el que
-          más la lee no es el comprador — es el comerciante que estamos
-          tratando de sumar, que entra, no ve ninguna promo y aprende que la
-          plataforma está vacía.
-
-          "Atención 24/7" también se fue: no había nadie atendiendo a las tres
-          de la mañana, y era la única de las cinco que no se arregla cargando
-          datos. */}
-      {(() => {
-        const feats = [
-          vol.ofertas >= UMBRALES.ofertas && {
-            k: "of", d: "M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01",
-            t: <>Ofertas<br />diarias</> },
-          vol.verificados >= UMBRALES.verificados && {
-            k: "ver", d: "M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0",
-            t: <>Comercios<br />verificados</> },
-          vol.destacados >= UMBRALES.destacados && {
-            k: "des", d: "M12 15a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8.2 13.9 7 22l5-3 5 3-1.2-8.1",
-            t: <>Locales<br />destacados</> },
-          vol.promos >= UMBRALES.promos && {
-            k: "pro", d: "M19 5 5 19M6.5 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM17.5 14.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z",
-            t: <>Promos<br />exclusivas</> },
-        ].filter(Boolean) as { k: string; d: string; t: React.ReactNode }[];
-        if (feats.length === 0) return null;
-        return (
-          <section className="uk-container uk-feats">
-            {feats.map((f) => (
-              <div key={f.k} className="uk-feat">
-                <span className="uk-feat-ic"><Ic d={f.d} /></span><b>{f.t}</b>
-              </div>
-            ))}
-          </section>
-        );
-      })()}
-
-      {/* ===== Lo que gana cada uno, arriba de todo =====
-
-          Sube desde el pie, donde no lo veía nadie. Y es el canal de WhatsApp
-          que YA existe, no un registro nuevo: URUKU no tiene cuentas de
-          comprador —los guardados son locales del teléfono— así que ofrecer
-          "registrate" sería prometer una pantalla que no existe. El canal, en
-          cambio, es donde la gente de Bermejo ya mira las ofertas. */}
-      {canalWa && (
-        <section className="uk-container uk-canal">
-          <div>
-            <h3>📢 Enterate antes que nadie</h3>
-            <p>
-              Mercadería nueva, ofertas y comercios que abren en {nombre}, en tu WhatsApp.
-              Sin registrarte y sin dar tus datos.
-            </p>
+      {/* ===== Antes de comprar + Herramientas ===== */}
+      <section className="uk-container uk-home-sec uk-home-dos">
+        <div>
+          <div className="uk-section-head">
+            <h2>Antes de comprar <small>Lo que hay que saber para tu visita.</small></h2>
+            <Link href="/guia">Ver la guía →</Link>
           </div>
-          <a href={canalWa} target="_blank" rel="noopener">Unirme al canal</a>
-        </section>
-      )}
+          <div className="uk-home-grid uk-home-grid-2">
+            {GUIAS.map((g) => (
+              <Link key={g.t} href={g.href} className="uk-home-card">
+                <span className="uk-home-ic">{g.i}</span>
+                <b>{g.t}</b><small>{g.d}</small>
+                <em>Ver guía →</em>
+              </Link>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="uk-section-head">
+            <h2>Herramientas útiles <small>Planeá tu visita.</small></h2>
+          </div>
+          <div className="uk-home-grid uk-home-grid-2">
+            {HERRAMIENTAS.map((h) => (
+              <Link key={h.t} href={h.href} className="uk-home-card uk-home-card-c">
+                <span className="uk-home-ic">{h.i}</span>
+                <b>{h.t}</b>
+              </Link>
+            ))}
+            <AbrirAyuda className="uk-home-card uk-home-card-c uk-home-card-ayuda">
+              <span className="uk-home-ic">💬</span>
+              <b>Preguntale a URUKU</b>
+              <small>Lo que no esté acá</small>
+            </AbrirAyuda>
+          </div>
+        </div>
+      </section>
 
       {/* ===== Ofertas destacadas ===== */}
       {cards.length > 0 && (
-        <section className="uk-container uk-section">
+        <section className="uk-container uk-home-sec">
           <div className="uk-section-head">
-            <h2>Ofertas destacadas</h2>
-            <Link href="/buscar?of=1">Ver todas →</Link>
+            <h2>Ofertas destacadas <small>De comercios de {nombre}.</small></h2>
+            <Link href="/buscar?of=1">Ver más ofertas →</Link>
           </div>
           <div className="uk-offers">
-            {cards.slice(0, 4).map((o) => (
+            {cards.map((o) => (
               <Link key={o.id} href={`/comercios/${o.comercio_slug}`} className="uk-offer"
                 style={o.imagen_url ? { backgroundImage: `url('${o.imagen_url}')` } : undefined}>
                 <span className="uk-offer-tag">{o.zona_nombre || o.comercio_nombre}</span>
@@ -158,67 +213,25 @@ export default async function InicioPage() {
         </section>
       )}
 
-      {/* ===== Mercados y galerías =====
-          Con tres mercados cargados la sección cuenta lo que falta, igual que
-          las tarjetas de arriba. Aparece a partir de UMBRALES.lugares. */}
-      {!APAGADAS.mercados && lugares.length > 0 && vol.lugares >= UMBRALES.lugares && (
-        <section className="uk-container uk-section">
-          <div className="uk-section-head">
-            <h2>🏬 Mercados y galerías de {nombre}</h2>
-          </div>
-          <div className="uk-rail">
-            {lugares.map((l) => (
-              // Sin destino hasta que se pueda filtrar POR mercado: el enlace
-              // prometía "ver este mercado en el mapa" y abría el mapa general.
-              <div key={l.id} className="uk-lugar-card">
-                <div className="uk-lugar-img" style={l.portada_thumb_url ? { backgroundImage: `url('${l.portada_thumb_url}')` } : undefined}>
-                  {!l.portada_thumb_url && <span>🏬</span>}
-                </div>
-                <b>{l.nombre}</b>
-                <small>{l.n_comercios} {l.n_comercios === 1 ? "local" : "locales"}</small>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ===== Highlight grid ===== */}
-      {/* Con "Lo mejor de hoy" apagado queda una sola tarjeta, y la grilla de dos
-          columnas la dejaría a media pantalla con un hueco al lado. La clase
-          `uk-highlight-solo` la hace ocupar todo. */}
-      <section className={`uk-container uk-highlight${APAGADAS.loMejorDeHoy ? " uk-highlight-solo" : ""}`}>
-        {/* "Lo mejor de hoy" contaba: ofertas activas, novedades, recorridos.
-            Con una oferta cargada el panel dice "1", y un contador en uno mide
-            el vacío en vez de mostrar la ciudad. Vuelve cuando haya qué contar. */}
-        {!APAGADAS.loMejorDeHoy && (
-        <article className="uk-panel">
-          <h3>Lo mejor de hoy en {nombre}</h3>
-          {ofertas.length > 0 && <div className="uk-statrow"><span>🏷️ Ofertas activas</span><strong>{ofertas.length}</strong></div>}
-          {novedades.length > 0 && <div className="uk-statrow"><span>✨ Novedades</span><strong>{novedades.length}</strong></div>}
-          {videos.length > 0 && <div className="uk-statrow"><span>🎬 Recorridos</span><strong>{videos.length}</strong></div>}
-          {ofertas.length === 0 && novedades.length === 0 && videos.length === 0 && (
-            <p style={{ color: "var(--uk-ink-soft)", fontSize: 14, margin: "4px 0 0" }}>Buscá lo que necesitás y descubrí los comercios de {nombre}.</p>
-          )}
-        </article>
-        )}
-
-        <article className="uk-panel uk-discover" style={{ backgroundImage: `url('${fotoImg}')` }}>
-          <h3>Descubrí más.<br /><span>Ahorrá siempre.</span></h3>
-          <p>Compará precios, encontrá promociones y elegí lo mejor para vos.</p>
-          <div className="uk-discover-icons">
-            <div><span><Ic d="M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></span><small>Actualizado<br />todos los días</small></div>
-            <div><span><Ic d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" /></span><small>Cerca tuyo,<br />siempre</small></div>
-            <div><span><Ic d="M13 2 3 14h7l-1 8 10-12h-7z" /></span><small>Fácil, rápido<br />y útil</small></div>
-            <div><span><Ic d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6C19 16.5 12 21 12 21z" /></span><small>100% local,<br />100% {nombre}</small></div>
-          </div>
-        </article>
-
+      {/* ===== Información para tu visita ===== */}
+      <section className="uk-container uk-home-sec">
+        <div className="uk-section-head">
+          <h2>Información para tu visita <small>Consejos y recursos.</small></h2>
+        </div>
+        <div className="uk-home-grid uk-home-grid-3">
+          {INFO.map((x) => (
+            <Link key={x.t} href={x.href} className="uk-home-card uk-home-card-fila">
+              <span className="uk-home-ic">{x.i}</span>
+              <div><b>{x.t}</b><small>{x.d}</small></div>
+            </Link>
+          ))}
+        </div>
       </section>
 
-      {/* ===== Recorrimos ===== */}
+      {/* ===== Videos ===== */}
       {videos.length > 0 && (
-        <section className="uk-container uk-section">
-          <h2>🎬 Recorrimos {nombre}</h2>
+        <section className="uk-container uk-home-sec">
+          <div className="uk-section-head"><h2>🎬 Recorrimos {nombre}</h2></div>
           <div className="uk-rail">
             {videos.map((v) => (
               <div key={v.id} className="uk-vid">
@@ -229,33 +242,6 @@ export default async function InicioPage() {
           </div>
         </section>
       )}
-
-      {/* ===== Así de simple ===== */}
-      <section className="uk-container uk-section" style={{ paddingTop: 0 }}>
-        <h2>Así de simple</h2>
-        <div className="uk-steps">
-          <article>
-            <span className="uk-step-ic"><Ic d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3" /><span className="uk-step-num">1</span></span>
-            <div><strong>Buscá</strong><p>Encontrá lo que necesitás.</p></div>
-            <span className="uk-arrow" aria-hidden>›</span>
-          </article>
-          <article>
-            <span className="uk-step-ic"><Ic d="M3 3h2l2.4 12.3a1 1 0 0 0 1 .7h9.7a1 1 0 0 0 1-.8L22 7H6" /><span className="uk-step-num b">2</span></span>
-            <div><strong>Explorá</strong><p>Compará opciones, mirá fotos y ofertas.</p></div>
-            <span className="uk-arrow" aria-hidden>›</span>
-          </article>
-          <article>
-            <span className="uk-step-ic"><Ic d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6C19 16.5 12 21 12 21z" /><span className="uk-step-num v">3</span></span>
-            <div><strong>Guardá</strong><p>Guardá tus favoritos para volver.</p></div>
-            <span className="uk-arrow" aria-hidden>›</span>
-          </article>
-          <article>
-            <span className="uk-step-ic"><Ic d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0" /><span className="uk-step-num o">4</span></span>
-            <div><strong>Disfrutá</strong><p>Ofertas exclusivas en tu ciudad.</p></div>
-          </article>
-        </div>
-      </section>
-
     </UrukuShell>
   );
 }

@@ -53,6 +53,10 @@ export function Asistente({ comercio }: { comercio?: { id: string; nombre: strin
 
   useEffect(() => {
     try { if (sessionStorage.getItem(CLAVE_ABIERTO) === "1") setAbierto(true); } catch { /* modo privado */ }
+    // "Preguntale a URUKU" desde el home o donde sea: un evento, sin acoplar.
+    const abrir = () => setAbierto(true);
+    window.addEventListener("uk-abrir-ayuda", abrir);
+    return () => window.removeEventListener("uk-abrir-ayuda", abrir);
   }, []);
   useEffect(() => {
     try { sessionStorage.setItem(CLAVE_ABIERTO, abierto ? "1" : "0"); } catch { /* modo privado */ }
