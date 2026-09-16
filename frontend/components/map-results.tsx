@@ -1,8 +1,10 @@
 "use client";
 
 import { agregarTiles } from "@/lib/mapa-tiles";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Ubicacion } from "@/lib/ubicacion";
+import type { LugarServicio } from "@/lib/data";
+import { SERVICIOS, type TipoServicio } from "@/lib/servicios";
 import { type ResultadoBusqueda, comoLlegarHref, waLink, MODALIDAD_LABEL } from "@/lib/types";
 import { registrarLead, type TipoLead } from "@/lib/campo";
 import { rubroStyle, loadLeaflet } from "@/lib/mapa-visual";
@@ -25,8 +27,10 @@ function pinHtml(r: ResultadoBusqueda): string {
   return `<div class="${cls}" style="--pc:${style.color}">${ring}<span class="ukpin-emo">${style.emoji}</span></div>`;
 }
 
-export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion = null, centrarEnMi = 0, onPedirUbicacion }: {
+export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion = null, centrarEnMi = 0, onPedirUbicacion, lugares = [] }: {
   results: ResultadoBusqueda[];
+  /** Servicios (baños, cajeros…) a pintar además de los comercios. */
+  lugares?: LugarServicio[];
   /** Dónde está la persona, si se sabe: el punto azul. */
   ubicacion?: Ubicacion | null;
   /** Sube cada vez que la persona toca el botón: el mapa se centra en ella.
@@ -52,6 +56,10 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
   const temaObsRef = useRef<MutationObserver | null>(null);
   const yoRef = useRef<any>(null);        // el punto azul y su círculo de precisión
   const LRef = useRef<any>(null);
+  const serviciosRef = useRef<any>(null); // la capa de baños, cajeros, etc.
+  // Sube cuando Leaflet terminó de cargar: los efectos que dibujan encima
+  // (servicios, el punto azul) corren antes de eso y tienen que repetirse.
+  const [listo, setListo] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +120,7 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
       }
       renderPins(L);
       pintarAdornos(L);
+      setListo((n) => n + 1);
       // Leaflet mide el contenedor al crearse y pide sólo las tiles que entran
       // en esa medida. Si el ancho todavía no era el definitivo —y no lo es:
       // esta vista aparece al cambiar de Lista a Mapa, y /mapa llega por una
@@ -122,6 +131,31 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
     return () => { cancelled = true; temaObsRef.current?.disconnect(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results]);
+
+  // Los servicios: un marcador con su emoji, encima de los comercios. Si son
+  // lo único que hay (búsqueda "baño público"), el mapa se encuadra en ellos.
+  useEffect(() => {
+    const L = LRef.current, map = mapRef.current;
+    if (!L || !map) return;
+    if (serviciosRef.current) { serviciosRef.current.remove(); serviciosRef.current = null; }
+    const conCoords = lugares.filter((l) => l.lat != null && l.lng != null);
+    if (conCoords.length === 0) return;
+    const grupo = L.layerGroup();
+    for (const l of conCoords) {
+      const s = SERVICIOS[l.tipo as TipoServicio];
+      const icon = L.divIcon({ className: "", html: `<div class="uk-map-servicio">${s?.icono ?? "📍"}</div>`, iconSize: [34, 34], iconAnchor: [17, 17] });
+      grupo.addLayer(L.marker([l.lat, l.lng], { icon, zIndexOffset: 500 }).bindPopup(
+        `<div class="map-pop"><b>${escapeAttr(l.nombre)}</b><span>${s?.nombre ?? l.tipo}</span>
+         <div class="map-pop-act"><a href="https://www.google.com/maps/search/?api=1&query=${l.lat},${l.lng}" target="_blank" rel="noopener">Cómo llegar</a></div></div>`));
+    }
+    grupo.addTo(map);
+    serviciosRef.current = grupo;
+    if (results.filter((r) => r.lat != null && r.lng != null).length === 0) {
+      const b = conCoords.map((l) => [l.lat as number, l.lng as number]) as [number, number][];
+      if (b.length > 1) map.fitBounds(b, { padding: [40, 40], maxZoom: 16 }); else map.setView(b[0], 16);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lugares, results, listo]);
 
   // El punto azul. Se redibuja cuando cambia la posición; se centra sólo
   // cuando la persona tocó el botón (centrarEnMi sube). Si la posición ya se
@@ -141,7 +175,7 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
     grupo.addTo(map);
     yoRef.current = grupo;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ubicacion, results]);
+  }, [ubicacion, results, listo]);
 
   useEffect(() => {
     if (!centrarEnMi || !ubicacion || !mapRef.current) return;

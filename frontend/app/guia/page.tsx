@@ -160,6 +160,10 @@ export default async function GuiaPage() {
             <Link href="/buscar?rubro=restaurantes&vista=mapa">🍽️ Dónde comer</Link>
             <Link href="/buscar?rubro=hospedaje&vista=mapa">🛏️ Dónde dormir</Link>
             <Link href="/buscar?rubro=celulares&vista=mapa">📱 Celulares y chips</Link>
+            <Link href="/buscar?q=ba%C3%B1o+p%C3%BAblico&vista=mapa">🚻 Baños</Link>
+            <Link href="/buscar?q=estacionamiento&vista=mapa">🅿️ Estacionamientos</Link>
+            <Link href="/buscar?q=cajero&vista=mapa">🏧 Cajeros</Link>
+            <Link href="/buscar?q=wifi&vista=mapa">📶 Wifi</Link>
           </div>
           {Object.keys(porTipo).length > 0 ? (
             <div className="uk-guia-servicios">

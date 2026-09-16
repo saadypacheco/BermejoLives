@@ -1009,3 +1009,14 @@
 .uk-guia-videos { display: flex; flex-wrap: wrap; gap: 8px; }
 .uk-guia-videos a { padding: 8px 12px; border: 1px solid var(--uk-line); border-radius: 10px; text-decoration: none; color: var(--uk-ink); font-size: 13.5px; }
 .uk-guia-pie { margin: 8px 0 0; font-size: 13.5px; color: var(--uk-ink-soft); }
+
+/* ===== Servicios en el buscador y en el mapa (baños, cajeros…) ===== */
+.uk-servicios { margin-bottom: 18px; padding: 14px 16px; border: 1px solid var(--uk-line); border-radius: 16px; background: var(--uk-surface); }
+.uk-servicios-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.uk-servicios-cab h2 { margin: 0; font-size: 18px; }
+.uk-servicios-cab .uk-btn-ghost { flex: 0 0 auto; width: auto; }
+.uk-servicios ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.uk-servicios li { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 9px 12px; border: 1px solid var(--uk-line); border-radius: 12px; font-size: 14px; }
+.uk-servicios li .uk-btn-ghost { padding: 6px 10px; font-size: 12px; }
+.uk-servicios-mas { margin-top: 10px; width: auto; }
+.uk-map-servicio { width: 34px; height: 34px; border-radius: 999px; background: #fff; border: 2px solid var(--uk-green); display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 2px 8px rgba(0,0,0,.25); }

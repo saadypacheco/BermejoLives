@@ -11,6 +11,8 @@ import { type FeedItem, type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD
 import { productosDe } from "@/lib/productos";
 import { distanciaMetros, formatDistancia } from "@/lib/distancia";
 import { pedirUbicacion, permisoUbicacion, ubicacionGuardada, type Ubicacion } from "@/lib/ubicacion";
+import { detectarServicio, SERVICIOS } from "@/lib/servicios";
+import { getLugaresServicio, type LugarServicio } from "@/lib/data";
 import { ReservaBarra } from "@/components/reserva-barra";
 import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
@@ -53,6 +55,20 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   // tarjeta dice a cuánto queda, y el chip ordena por eso.
   const [ubicacion, setUbicacion] = useState<Ubicacion | null>(null);
   const [cerca, setCerca] = useState(false);
+  // SERVICIOS. "baño público" no es una búsqueda de comercios: es un baño.
+  // Si la búsqueda es un servicio, se muestran los lugares de ese tipo y los
+  // comercios quedan detrás de un enlace. Buscar "baño" y recibir ochenta
+  // casas de sanitarios es lo que hace que alguien no vuelva a buscar.
+  const servicio = detectarServicio(q);
+  const [lugaresServicio, setLugaresServicio] = useState<LugarServicio[]>([]);
+  const [verComerciosIgual, setVerComerciosIgual] = useState(false);
+  useEffect(() => {
+    setVerComerciosIgual(false);
+    if (!servicio) { setLugaresServicio([]); return; }
+    let vivo = true;
+    getLugaresServicio().then((ls) => { if (vivo) setLugaresServicio(ls.filter((l) => l.tipo === servicio)); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [servicio]);
   const [centrarEnMi, setCentrarEnMi] = useState(0);
   const [errUbicacion, setErrUbicacion] = useState("");
   useEffect(() => {
@@ -591,7 +607,9 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
             resultados" es una respuesta; no decir nada, no. */}
         {hayBusqueda && total != null && (
           <span className="uk-total-res">
-            {total === 1 ? "1 resultado" : `${total} resultados`}
+            {servicio && !verComerciosIgual
+              ? `${lugaresServicio.length} ${lugaresServicio.length === 1 ? SERVICIOS[servicio].nombre.toLowerCase() : SERVICIOS[servicio].plural.toLowerCase()}`
+              : total === 1 ? "1 resultado" : `${total} resultados`}
           </span>
         )}
 
@@ -619,15 +637,20 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
         )}
         <MapResults
           results={
-            soloOfertas
-              ? (resultsMapa ?? results).filter((r) => r.ofertas > 0)
-              : (resultsMapa ?? results)
+            // Buscando un servicio, el mapa muestra el servicio: ochenta pines
+            // de comercios alrededor de dos baños es no encontrar el baño.
+            servicio && !verComerciosIgual
+              ? []
+              : soloOfertas
+                ? (resultsMapa ?? results).filter((r) => r.ofertas > 0)
+                : (resultsMapa ?? results)
           }
           hayFiltro={Boolean(q.trim() || rubro || subcategoria || modalidad || zona || precioMax || soloOfertas)}
           ciudad={tilesCiudad}
           ubicacion={ubicacion}
           centrarEnMi={centrarEnMi}
           onPedirUbicacion={() => ubicarme(true)}
+          lugares={lugaresServicio}
         />
         {errUbicacion && <p style={{ fontSize: 12.5, color: "var(--uk-red)", margin: "8px 0 0" }}>{errUbicacion}</p>}
         </>
@@ -644,8 +667,45 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
           `.uk-res-grid` pone `display: grid` con la misma especificidad que
           `[hidden]`, y como la del sitio va después, ganaba y el atributo
           no escondía nada. */}
+      {servicio && vista === "lista" && (
+        <div className="uk-servicios">
+          <div className="uk-servicios-cab">
+            <h2>{SERVICIOS[servicio].icono} {SERVICIOS[servicio].plural} en Bermejo</h2>
+            <button type="button" className="uk-btn-ghost" onClick={() => setVista("mapa")}>Ver en el mapa →</button>
+          </div>
+          {lugaresServicio.length === 0 ? (
+            <p className="uk-empty">
+              Todavía no cargamos {SERVICIOS[servicio].plural.toLowerCase()} en el mapa. Mientras tanto, preguntá en cualquier local: en Bermejo se ayuda.
+            </p>
+          ) : (
+            <ul>
+              {[...lugaresServicio].sort((a, b) => {
+                const da = ubicacion && a.lat != null && a.lng != null ? distanciaMetros(ubicacion.lat, ubicacion.lng, a.lat, a.lng) : 1e12;
+                const db = ubicacion && b.lat != null && b.lng != null ? distanciaMetros(ubicacion.lat, ubicacion.lng, b.lat, b.lng) : 1e12;
+                return da - db;
+              }).map((l) => {
+                const d = ubicacion && l.lat != null && l.lng != null ? distanciaMetros(ubicacion.lat, ubicacion.lng, l.lat, l.lng) : null;
+                return (
+                  <li key={l.id}>
+                    <b>{l.nombre}</b>
+                    {d != null && <span className="uk-resdist">a {formatDistancia(d)}</span>}
+                    {l.lat != null && l.lng != null && (
+                      <a className="uk-btn-ghost" href={`https://www.google.com/maps/search/?api=1&query=${l.lat},${l.lng}`} target="_blank" rel="noopener">Cómo llegar</a>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {!verComerciosIgual && total != null && total > 0 && (
+            <button type="button" className="uk-btn-ghost uk-servicios-mas" onClick={() => setVerComerciosIgual(true)}>
+              Ver los {total} comercios que coinciden con «{q.trim()}»
+            </button>
+          )}
+        </div>
+      )}
       {(
-        <div className="uk-res-grid" style={vista === "mapa" ? { display: "none" } : undefined}>
+        <div className="uk-res-grid" style={vista === "mapa" || (servicio && !verComerciosIgual) ? { display: "none" } : undefined}>
           {!loading && shown.length === 0 && (
             rubroElegido && q.trim()
               ? (

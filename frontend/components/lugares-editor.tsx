@@ -11,6 +11,10 @@ import { adminListLugares, adminCrearLugar, adminUpdateLugar, adminDeleteLugar, 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 const TIPOS: [string, string][] = [
   ["mercado", "Mercado"], ["galeria", "Galería"], ["paseo", "Paseo"], ["shopping", "Shopping"], ["referencia", "Referencia"],
+  // Servicios (0110): no son comercios, son lo que alguien busca cuando
+  // escribe "baño público" o "cajero". Salen en /guia y en el buscador.
+  ["baño", "🚻 Baño público"], ["estacionamiento", "🅿️ Estacionamiento"], ["cajero", "🏧 Cajero automático"],
+  ["wifi", "📶 Wifi gratis"], ["terminal", "🚌 Terminal de buses"], ["migraciones", "🛂 Migraciones / aduana"],
 ];
 
 export function LugaresEditor() {
