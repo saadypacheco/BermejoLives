@@ -75,7 +75,7 @@ class FakeRepo:
                           "moneda": "BOB", "funciones": {"negocio_digital": True, "redes": True},
                           "activo": True, "visible": True, "descripcion": "", "incluye": []},
             "pro":       {"slug": "pro", "nombre": "Pro", "orden": 3,
-                          "precio_mes": 400, "publicaciones_mes": 120, "publica_meses": None,
+                          "precio_mes": 400, "publicaciones_mes": 150, "publica_meses": None,
                           "precio_publicacion_extra": 5, "permite_extras": True,
                           "moneda": "BOB",
                           "funciones": {"negocio_digital": True, "redes": True, "asistente_24_7": True},
