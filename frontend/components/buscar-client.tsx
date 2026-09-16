@@ -643,7 +643,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
         <>
         {cargandoMapa && (
           <div style={{ padding: "6px 0", fontSize: 12.5, color: "var(--uk-ink-soft)" }}>
-            Cargando los {total ?? ""} comercios en el mapa…
+            Cargando el mapa…
           </div>
         )}
         <MapResults
@@ -710,7 +710,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
           )}
           {!verComerciosIgual && total != null && total > 0 && (
             <button type="button" className="uk-btn-ghost uk-servicios-mas" onClick={() => setVerComerciosIgual(true)}>
-              Ver los {total} comercios que coinciden con «{q.trim()}»
+              Ver también los comercios que coinciden con «{q.trim()}»
             </button>
           )}
         </div>

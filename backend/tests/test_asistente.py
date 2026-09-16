@@ -139,14 +139,16 @@ def test_donde_cambio_dolares_es_un_lugar_no_un_numero(repo, sin_modelo):
     assert r.intent == "casas_de_cambio" and r.nivel == 0
     # Las dos casas, la abierta primero, el mapa, y la cotización al final.
     assert r.texto.index("Cambios Frontera") < r.texto.index("Cambio Central")
-    assert "1 abiertas ahora" in r.texto and "rubro=cambio&vista=mapa" in r.texto and "Hoy: Dólar 11,2 Bs" in r.texto
+    assert "las abiertas ahora primero" in r.texto and "rubro=cambio&vista=mapa" in r.texto and "Hoy: Dólar 11,2 Bs" in r.texto
     assert [f["nombre"] for f in r.fuentes] == ["Cambios Frontera", "Cambio Central"]
     # Las que no tienen dirección se nombran igual (la ubicación la tiene el
     # mapa); se cuentan todas y se muestran las primeras cinco.
     for i in range(6):
         repo.comercios[f"cx{i}"] = {"id": f"cx{i}", "slug": f"casa-de-cambio-{i}", "nombre": "Casa de Cambio", "activo": True, "rubro_slug": "cambio"}
     r3 = asistente.responder(repo, "¿dónde cambio pesos?", ahora=MARTES_13)
-    assert "Hay 8 casas de cambio" in r3.texto and "Ver las 8 en el mapa" in r3.texto and len(r3.fuentes) == 5
+    # Sin cifras para el comprador: cuántas hay lo ve el panel, no el chat.
+    assert "Casas de cambio en Bermejo" in r3.texto and "Ver todas en el mapa" in r3.texto and len(r3.fuentes) == 5
+    assert "8" not in r3.texto.split("\n")[0] and "Ver las 8" not in r3.texto
     # Sin casas cargadas, lo dice y queda anotado.
     repo.comercios.clear()
     r2 = asistente.responder(repo, "casa de cambio", ahora=MARTES_11)

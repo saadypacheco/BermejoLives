@@ -351,11 +351,13 @@ def _casas_de_cambio(repo, ahora: datetime) -> Respuesta:
         et = (hor.etiqueta(hor.abierto_ahora(c["horario"], ahora), ahora) or "").lower() if c.get("horario") else ""
         extra = [x for x in [c.get("direccion"), et] if x]
         lineas.append(f"• {c.get('nombre')}" + (f" — {' · '.join(extra)}" if extra else ""))
-    cabeza = (f"Hay {len(casas)} casas de cambio en Bermejo" +
-              (f", {len(abiertas)} abiertas ahora" if abiertas else "") +
-              (f". Las primeras {len(mostrar)}:" if len(casas) > len(mostrar) else ":"))
+    # Sin cifras: cuántas hay es un dato del panel, no del comprador. Se dice
+    # cuáles y si están abiertas, que es lo que sirve.
+    cabeza = ("Casas de cambio en Bermejo" +
+              (", las abiertas ahora primero" if abiertas else "") +
+              (", para empezar:" if len(casas) > len(mostrar) else ":"))
     texto = (cabeza + "\n" + "\n".join(lineas) +
-             f"\nVer las {len(casas)} en el mapa: {URL_CASAS_DE_CAMBIO}" + (f"\n{cot}" if cot else ""))
+             f"\nVer todas en el mapa: {URL_CASAS_DE_CAMBIO}" + (f"\n{cot}" if cot else ""))
     return Respuesta(texto=texto, nivel=0, intent="casas_de_cambio", fuentes=[_fuente(c) for c in mostrar],
                      sugerencias=[f"Horario de {mostrar[0].get('nombre')}", "¿A cuánto está el dólar?"])
 
@@ -472,8 +474,9 @@ def _buscar_y_contestar(repo, q: str, ahora: datetime) -> Respuesta | None:
         if et:
             extra.append(et.lower())
         lineas.append(f"• {c.get('nombre')}" + (f" — {' · '.join(extra)}" if extra else ""))
-    cabeza = f"Encontré {total} para «{q}»" + (f"; los primeros {len(filas)}:" if total > len(filas) else ":")
-    pie = f"\nTodos, en el mapa: {SITIO}/buscar?q={q.replace(' ', '+')}" if total > len(filas) else ""
+    # Sin cifras: cuántos locales hay es un dato del panel, no del comprador.
+    cabeza = f"Encontré esto para «{q}»" + (", para empezar:" if total > len(filas) else ":")
+    pie = f"\nHay más, en el mapa: {SITIO}/buscar?q={q.replace(' ', '+')}" if total > len(filas) else ""
     return Respuesta(texto=cabeza + "\n" + "\n".join(lineas) + pie, nivel=0, intent="buscar",
                      fuentes=[_fuente(c) for c in filas],
                      sugerencias=[f"Horario de {filas[0].get('nombre')}", f"Dirección de {filas[0].get('nombre')}"])

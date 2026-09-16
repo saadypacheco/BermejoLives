@@ -145,7 +145,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
         )}
         {chips.map((c) => (
           <button type="button" key={c.label} className={`mchip ${cat === c.rubro ? "active" : ""}`} onClick={() => { setCat(c.rubro); setSel(null); }}>
-            {c.label} <span className="mchip-n">{c.n}</span>
+            {c.label}
           </button>
         ))}
       </div>

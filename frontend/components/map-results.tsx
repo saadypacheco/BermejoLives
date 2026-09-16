@@ -282,12 +282,12 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
       {/* Sin esto, un mapa con dos pines sobre una ciudad se lee como "acá no
           hay nada", que es lo contrario de lo que pasa. */}
       {ocultos > 0 && (
-        <div className="hm-aviso">Buscá o elegí una categoría para ver {ocultos} negocios</div>
+        <div className="hm-aviso">Buscá o elegí una categoría para ver los negocios</div>
       )}
 
       {sinCoords > 0 && (
         <p style={{ color: "var(--txt-3)", fontSize: 12.5, marginTop: 10 }}>
-          {sinCoords} comercio(s) sin ubicación todavía (la comparten por WhatsApp). Mientras tanto aparecen en la lista.
+          Algunos comercios no tienen ubicación todavía (la comparten por WhatsApp). Mientras tanto aparecen en la lista.
         </p>
       )}
     </div>

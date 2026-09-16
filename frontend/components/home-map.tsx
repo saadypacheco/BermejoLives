@@ -421,7 +421,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
       {/* No dice "acercá": acercarse ya no muestra nada. Dice qué hacer. */}
       {ocultos > 0 && (
         <div className="hm-aviso">
-          Buscá o elegí una categoría para ver {ocultos} negocios
+          Buscá o elegí una categoría para ver los negocios
         </div>
       )}
     </div>
