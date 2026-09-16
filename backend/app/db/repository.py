@@ -207,6 +207,10 @@ class Repo(Protocol):
     def list_cotizaciones(self) -> list[dict]: ...
     def update_cotizacion(self, clave: str, valor: float) -> dict | None: ...
     def get_clima(self) -> dict | None: ...
+    # La guía del que llega (/guia)
+    def get_frontera_estado(self) -> dict: ...
+    def update_frontera_estado(self, patch: dict) -> dict: ...
+    def list_cotizacion_historial(self, clave: str, limite: int = 8) -> list[dict]: ...
     # Uruku Ayuda (services/asistente.py)
     def buscar_comercios(self, q: str, limite: int = 5, rubro: str | None = None) -> list[dict]: ...
     def list_saber_local(self, solo_activos: bool = True) -> list[dict]: ...
@@ -2126,7 +2130,30 @@ class SupabaseRepo:
             .update({"valor": valor, "actualizado_en": datetime.now(timezone.utc).isoformat()})
             .eq("clave", clave).execute()
         )
+        if res.data:
+            # El historial es lo que permite decir "hoy te dan más que en los
+            # últimos días". Si falla, la cotización igual quedó cargada.
+            try:
+                self._db.table("cotizaciones_historial").insert({"clave": clave, "valor": valor}).execute()
+            except Exception:  # noqa: BLE001
+                logger.warning("cotizacion.historial_fallo", clave=clave)
         return res.data[0] if res.data else None
+
+    def list_cotizacion_historial(self, clave: str, limite: int = 8) -> list[dict]:
+        res = (self._db.table("cotizaciones_historial").select("valor, registrado_en")
+               .eq("clave", clave).order("registrado_en", desc=True).limit(max(1, min(int(limite), 60))).execute())
+        return res.data or []
+
+    def get_frontera_estado(self) -> dict:
+        res = self._db.table("frontera_estado").select("*").eq("id", 1).limit(1).execute()
+        return res.data[0] if res.data else {"puente": "normal", "chalanas": "operando", "rio": "normal", "nota": None, "actualizado_en": None}
+
+    def update_frontera_estado(self, patch: dict) -> dict:
+        from datetime import datetime, timezone
+        res = (self._db.table("frontera_estado")
+               .update({**patch, "actualizado_en": datetime.now(timezone.utc).isoformat()})
+               .eq("id", 1).execute())
+        return res.data[0] if res.data else self.get_frontera_estado()
 
     def get_clima(self) -> dict | None:
         res = self._db.table("clima").select("*").eq("id", 1).limit(1).execute()

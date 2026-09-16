@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getCotizaciones, getClima, getRedes, type Cotizacion, type Clima, type Red } from "@/lib/data";
+import { getCotizaciones, getClima, getRedes, getFronteraEstado, type Cotizacion, type Clima, type Red, type FronteraEstado } from "@/lib/data";
 import {
-  publicadorLogin, hayPub, clearPub, editarCotizacion, overrideClima, refrescarClima,
+  publicadorLogin, hayPub, clearPub, editarCotizacion, overrideClima, refrescarClima, editarFrontera,
   listarVideosPromo, subirVideoPromo, borrarVideoPromo, editarRed, type VideoPromoItem,
 } from "@/lib/publicador";
 
@@ -128,6 +128,10 @@ function Panel({ onLogout }: { onLogout: (motivo?: string) => void }) {
         ))}
       </div>
 
+      {/* La frontera hoy: lo primero que pregunta el que está por cruzar, y
+          no hay ninguna fuente automática. Lo carga una persona, con fecha. */}
+      <FronteraBox flash={flash} fail={fail} />
+
       {/* Clima */}
       <div className="glass" style={box}>
         <h3 style={{ marginTop: 0 }}>🌤️ Clima de Bermejo</h3>
@@ -174,6 +178,46 @@ function Panel({ onLogout }: { onLogout: (motivo?: string) => void }) {
             <button className="btn btn-primary btn-sm" onClick={() => guardarRed(r.clave)}>Guardar</button>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+
+function FronteraBox({ flash, fail }: { flash: (m: string) => void; fail: (e: unknown) => void }) {
+  const [f, setF] = useState<FronteraEstado | null>(null);
+  const [nota, setNota] = useState("");
+  useEffect(() => { getFronteraEstado().then((x) => { setF(x); setNota(x?.nota ?? ""); }); }, []);
+  async function guardar(patch: Record<string, string>) {
+    try { await editarFrontera(patch); const x = await getFronteraEstado(); setF(x); flash("Frontera actualizada ✓"); } catch (e) { fail(e); }
+  }
+  const opciones: [keyof FronteraEstado, string, string[]][] = [
+    ["puente", "Puente internacional", ["normal", "demoras", "cerrado"]],
+    ["chalanas", "Chalanas", ["operando", "suspendidas"]],
+    ["rio", "Río", ["normal", "crecido"]],
+  ];
+  const hace = f?.actualizado_en ? Math.floor((Date.now() - new Date(f.actualizado_en).getTime()) / 3600000) : null;
+  return (
+    <div className="glass" style={{ padding: 18, borderRadius: 16, marginBottom: 14 }}>
+      <h3 style={{ marginTop: 0 }}>🌉 La frontera hoy</h3>
+      <div style={{ fontSize: 12, color: "var(--txt-3)", marginBottom: 10 }}>
+        Se ve en uruku.bo/guia y lo contesta el asistente ("¿cómo está el paso?").
+        {hace != null && <> Última carga: {hace < 1 ? "hace menos de una hora" : hace < 48 ? `hace ${hace} h` : `hace ${Math.floor(hace / 24)} días`}{hace >= 24 ? " — está vieja, cargala de nuevo" : ""}.</>}
+      </div>
+      <div style={{ display: "grid", gap: 8 }}>
+        {opciones.map(([k, label, vals]) => (
+          <div key={k} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <b style={{ fontSize: 13, width: 150 }}>{label}</b>
+            {vals.map((v) => (
+              <button key={v} className={`btn btn-sm ${f?.[k] === v ? "btn-primary" : ""}`} style={f?.[k] === v ? {} : { border: "1px solid var(--stroke)" }}
+                      onClick={() => guardar({ [k]: v })}>{v}</button>
+            ))}
+          </div>
+        ))}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input className="adm-input" style={{ flex: 1 }} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Nota (opcional): filas de dos horas por el feriado, migraciones sin sistema…" />
+          <button className="btn btn-primary btn-sm" onClick={() => guardar({ nota })}>Guardar nota</button>
+        </div>
       </div>
     </div>
   );

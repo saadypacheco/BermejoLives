@@ -6,6 +6,20 @@ import {
   type ConversacionAsistente, type SaberLocal,
 } from "@/lib/api";
 
+// Las secciones de la guía (uruku.bo/guia). Lo que se guarda con sección
+// aparece ahí; "general" sólo lo contesta el asistente.
+const SECCIONES: [string, string][] = [
+  ["general", "General (sólo el asistente)"], ["frontera", "Frontera"], ["documentos", "Documentos"], ["aduana", "Aduana"],
+  ["comercios", "Comercios y pagos"], ["transporte", "Transporte"], ["seguridad", "Seguridad"], ["conectividad", "Chip e internet"],
+];
+function SelectSeccion({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <select className="adm-input" value={value} onChange={(e) => onChange(e.target.value)} aria-label="Sección de la guía">
+      {SECCIONES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+    </select>
+  );
+}
+
 /**
  * Admin › Ayuda. Dos listas y una regla.
  *
@@ -92,12 +106,13 @@ export function AsistentePanel() {
 function Pendiente({ c, onHecho }: { c: ConversacionAsistente; onHecho: () => void }) {
   const [respuesta, setRespuesta] = useState("");
   const [etiquetas, setEtiquetas] = useState("");
+  const [seccion, setSeccion] = useState("general");
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState("");
   async function enviar(guardar: boolean) {
     setGuardando(true); setErr("");
     try {
-      await responderAsistente(c.id, respuesta.trim() || "(sin respuesta)", etiquetas.split(",").map((e) => e.trim()).filter(Boolean), guardar);
+      await responderAsistente(c.id, respuesta.trim() || "(sin respuesta)", etiquetas.split(",").map((e) => e.trim()).filter(Boolean), guardar, seccion);
       onHecho();
     } catch (e) { setErr(e instanceof Error ? e.message : "No se pudo"); }
     finally { setGuardando(false); }
@@ -108,8 +123,11 @@ function Pendiente({ c, onHecho }: { c: ConversacionAsistente; onHecho: () => vo
       <div style={{ fontSize: 12.5, opacity: .7 }}>Contestó: {c.respuesta}</div>
       <textarea className="adm-input" rows={2} value={respuesta} onChange={(e) => setRespuesta(e.target.value)}
                 placeholder="La respuesta, como se la dirías a alguien que llega a Bermejo" />
-      <input className="adm-input" value={etiquetas} onChange={(e) => setEtiquetas(e.target.value)}
-             placeholder="Etiquetas, separadas por coma (feria, jueves, avenida)" />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
+        <input className="adm-input" value={etiquetas} onChange={(e) => setEtiquetas(e.target.value)}
+               placeholder="Etiquetas, separadas por coma (feria, jueves, avenida)" />
+        <SelectSeccion value={seccion} onChange={setSeccion} />
+      </div>
       {err && <span style={{ color: "#c33", fontSize: 12.5 }}>{err}</span>}
       <div style={{ display: "flex", gap: 8 }}>
         <button type="button" className="btn btn-primary btn-sm" disabled={guardando || respuesta.trim().length < 3} onClick={() => enviar(true)}>
@@ -128,11 +146,12 @@ function NuevoSaber({ onGuardado }: { onGuardado: () => void }) {
   const [pregunta, setPregunta] = useState("");
   const [respuesta, setRespuesta] = useState("");
   const [etiquetas, setEtiquetas] = useState("");
+  const [seccion, setSeccion] = useState("general");
   const [err, setErr] = useState("");
   async function guardar() {
     try {
-      await guardarSaberLocal({ pregunta: pregunta.trim(), respuesta: respuesta.trim(), etiquetas: etiquetas.split(",").map((e) => e.trim()).filter(Boolean) });
-      setPregunta(""); setRespuesta(""); setEtiquetas(""); setAbierto(false); setErr(""); onGuardado();
+      await guardarSaberLocal({ pregunta: pregunta.trim(), respuesta: respuesta.trim(), etiquetas: etiquetas.split(",").map((e) => e.trim()).filter(Boolean), seccion });
+      setPregunta(""); setRespuesta(""); setEtiquetas(""); setSeccion("general"); setAbierto(false); setErr(""); onGuardado();
     } catch (e) { setErr(e instanceof Error ? e.message : "No se pudo"); }
   }
   if (!abierto) return <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAbierto(true)}>+ Agregar algo que el asistente tenga que saber</button>;
@@ -140,7 +159,10 @@ function NuevoSaber({ onGuardado }: { onGuardado: () => void }) {
     <div style={{ padding: 12, border: "1px dashed var(--stroke)", borderRadius: 10, display: "grid", gap: 8 }}>
       <input className="adm-input" value={pregunta} onChange={(e) => setPregunta(e.target.value)} placeholder="Cómo lo pregunta la gente: ¿Dónde está la terminal?" />
       <textarea className="adm-input" rows={2} value={respuesta} onChange={(e) => setRespuesta(e.target.value)} placeholder="La respuesta" />
-      <input className="adm-input" value={etiquetas} onChange={(e) => setEtiquetas(e.target.value)} placeholder="Etiquetas, separadas por coma" />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
+        <input className="adm-input" value={etiquetas} onChange={(e) => setEtiquetas(e.target.value)} placeholder="Etiquetas, separadas por coma" />
+        <SelectSeccion value={seccion} onChange={setSeccion} />
+      </div>
       {err && <span style={{ color: "#c33", fontSize: 12.5 }}>{err}</span>}
       <div style={{ display: "flex", gap: 8 }}>
         <button type="button" className="btn btn-primary btn-sm" disabled={pregunta.trim().length < 3 || respuesta.trim().length < 3} onClick={guardar}>Guardar</button>
@@ -154,8 +176,9 @@ function FilaSaber({ s, onCambio }: { s: SaberLocal; onCambio: () => void }) {
   const [editando, setEditando] = useState(false);
   const [respuesta, setRespuesta] = useState(s.respuesta);
   const [etiquetas, setEtiquetas] = useState(s.etiquetas.join(", "));
+  const [seccion, setSeccion] = useState(s.seccion ?? "general");
   async function guardar(activo = s.activo) {
-    await guardarSaberLocal({ id: s.id, pregunta: s.pregunta, respuesta: respuesta.trim(), etiquetas: etiquetas.split(",").map((e) => e.trim()).filter(Boolean), activo });
+    await guardarSaberLocal({ id: s.id, pregunta: s.pregunta, respuesta: respuesta.trim(), etiquetas: etiquetas.split(",").map((e) => e.trim()).filter(Boolean), activo, seccion });
     setEditando(false); onCambio();
   }
   async function borrar() {
@@ -166,12 +189,15 @@ function FilaSaber({ s, onCambio }: { s: SaberLocal; onCambio: () => void }) {
     <div style={{ padding: "10px 12px", border: "1px solid var(--stroke)", borderRadius: 10, opacity: s.activo ? 1 : .55, display: "grid", gap: 6 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
         <b>{s.pregunta}</b>
-        <span style={{ fontSize: 11.5, opacity: .55, whiteSpace: "nowrap" }}>{s.etiquetas.join(" · ")}{!s.activo ? " · apagada" : ""}</span>
+        <span style={{ fontSize: 11.5, opacity: .55, whiteSpace: "nowrap" }}>{s.seccion && s.seccion !== "general" ? `[${s.seccion}] ` : ""}{s.etiquetas.join(" · ")}{!s.activo ? " · apagada" : ""}</span>
       </div>
       {editando ? (
         <>
           <textarea className="adm-input" rows={3} value={respuesta} onChange={(e) => setRespuesta(e.target.value)} />
-          <input className="adm-input" value={etiquetas} onChange={(e) => setEtiquetas(e.target.value)} placeholder="Etiquetas, separadas por coma" />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
+            <input className="adm-input" value={etiquetas} onChange={(e) => setEtiquetas(e.target.value)} placeholder="Etiquetas, separadas por coma" />
+            <SelectSeccion value={seccion} onChange={setSeccion} />
+          </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" className="btn btn-primary btn-sm" onClick={() => guardar()}>Guardar</button>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditando(false)}>Cancelar</button>

@@ -73,3 +73,18 @@ export function diasDesde(iso: string | null): number | null {
 /** A partir de cuántos días la cotización se considera vieja. En la frontera
  *  cambia todos los días; dos sin cargar ya es una guía, no un dato. */
 export const DIAS_VIEJA = 2;
+
+
+/** Hoy contra los últimos registros. Con menos de tres no se opina: un
+ *  promedio de uno no es un promedio. Es la misma regla del asistente. */
+export function cambioFavorable(hist: { valor: number }[]): { nivel: "mejor" | "peor" | "igual"; texto: string; pct: number } | null {
+  if (hist.length < 3) return null;
+  const hoy = hist[0].valor;
+  const previos = hist.slice(1).map((h) => h.valor);
+  const prom = previos.reduce((a, b) => a + b, 0) / previos.length;
+  if (!(prom > 0)) return null;
+  const pct = ((hoy - prom) / prom) * 100;
+  if (pct >= 2) return { nivel: "mejor", pct, texto: `Cambio favorable: hoy te dan ${pct.toFixed(0)}% más bolivianos por tus pesos que en los últimos días.` };
+  if (pct <= -2) return { nivel: "peor", pct, texto: `Hoy te dan ${Math.abs(pct).toFixed(0)}% menos que en los últimos días. Si podés esperar, esperá.` };
+  return { nivel: "igual", pct, texto: "El cambio está parecido a los últimos días." };
+}

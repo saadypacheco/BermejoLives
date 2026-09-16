@@ -80,17 +80,22 @@ def marcar_util(conversacion_id: str, body: UtilIn, repo: Repo = Depends(get_rep
 
 # ------------------------------------------------------------------ admin
 
+SECCIONES = ("aduana", "documentos", "frontera", "comercios", "transporte", "seguridad", "conectividad", "general")
+
+
 class SaberIn(BaseModel):
     id: str | None = None
     pregunta: str = Field(min_length=3, max_length=300)
     respuesta: str = Field(min_length=3, max_length=2000)
     etiquetas: list[str] = Field(default_factory=list)
+    seccion: str = "general"
     activo: bool = True
 
 
 class ResponderIn(BaseModel):
     respuesta: str = Field(min_length=3, max_length=2000)
     etiquetas: list[str] = Field(default_factory=list)
+    seccion: str = "general"
     # Por defecto la respuesta se guarda como saber local, que es el sentido
     # de contestar: que la próxima vez no haga falta. Se puede no guardar.
     guardar: bool = True
@@ -119,6 +124,7 @@ def admin_responder(conversacion_id: str, body: ResponderIn,
         saber = repo.upsert_saber_local({
             "pregunta": conv["pregunta"], "respuesta": body.respuesta.strip(),
             "etiquetas": _etiquetas(body.etiquetas), "activo": True,
+            "seccion": body.seccion if body.seccion in SECCIONES else "general",
             "creado_por": admin.get("email") or "admin",
         })
     repo.marcar_conversacion(conversacion_id, {"resuelta_en": datetime.now(timezone.utc).isoformat()})
@@ -135,6 +141,7 @@ def admin_saber_guardar(body: SaberIn, admin: dict = Depends(auth.require_admin)
                         repo: Repo = Depends(get_repo)) -> dict:
     row = {"pregunta": body.pregunta.strip(), "respuesta": body.respuesta.strip(),
            "etiquetas": _etiquetas(body.etiquetas), "activo": body.activo,
+           "seccion": body.seccion if body.seccion in SECCIONES else "general",
            "creado_por": admin.get("email") or "admin"}
     if body.id:
         row["id"] = body.id

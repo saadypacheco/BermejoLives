@@ -87,7 +87,7 @@ export async function UrukuShell({
                 acá, entre la cotización y la ciudad. Se esconde en el celular,
                 donde la barra de abajo ya los tiene. */}
             <nav className="uk-topnav" aria-label="Secciones">
-              {[["Mapa", "/buscar?vista=mapa"], ["Ofertas", "/buscar?vista=mapa&of=1"], ["Cambio", "/cambio"]].map(([k, href]) => (
+              {[["Guía", "/guia"], ["Mapa", "/buscar?vista=mapa"], ["Ofertas", "/buscar?vista=mapa&of=1"], ["Cambio", "/cambio"]].map(([k, href]) => (
                 <Link key={k} href={href} className={activeNav === k ? "active" : ""}>{k}</Link>
               ))}
             </nav>

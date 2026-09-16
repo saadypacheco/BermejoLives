@@ -121,6 +121,8 @@ class FakeRepo:
         self.clima: dict = {"id": 1, "temp_c": None, "descripcion": None, "override_hasta": None}
         self.saber_local: dict[str, dict] = {}        # id -> row
         self.conversaciones: list[dict] = []          # Uruku Ayuda
+        self.frontera: dict = {"puente": "normal", "chalanas": "operando", "rio": "normal", "nota": None, "actualizado_en": None}
+        self.cotizaciones_historial: list[dict] = []
         self.videos_promo: list[dict] = []
         self.redes: list[dict] = [
             {"clave": "tiktok", "etiqueta": "TikTok", "url": None, "orden": 1},
@@ -754,6 +756,7 @@ class FakeRepo:
                 c["valor"] = valor
                 return c
         return None
+        self.cotizaciones_historial.append({"clave": clave, "valor": valor, "registrado_en": "2026-01-01T00:00:00+00:00"})
 
     def get_clima(self):
         return self.clima
@@ -761,6 +764,18 @@ class FakeRepo:
     def update_clima(self, patch):
         self.clima.update(patch)
         return self.clima
+
+    def list_cotizacion_historial(self, clave, limite=8):
+        return [h for h in reversed(self.cotizaciones_historial) if h["clave"] == clave][:limite]
+
+    def get_frontera_estado(self):
+        return dict(self.frontera)
+
+    def update_frontera_estado(self, patch):
+        from datetime import datetime, timezone
+        self.frontera.update(patch)
+        self.frontera["actualizado_en"] = datetime.now(timezone.utc).isoformat()
+        return dict(self.frontera)
 
     # ------------------------------------------------------------ Uruku Ayuda
     def buscar_comercios(self, q, limite=5, rubro=None):

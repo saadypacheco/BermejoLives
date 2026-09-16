@@ -156,11 +156,70 @@ FAQ: list[tuple[str, str, str]] = [
 ]
 
 SUGERENCIAS_INICIALES = [
+    "¿Cómo está el paso hoy?",
     "¿Dónde cambio dólares?",
+    "¿Qué puedo pasar por la aduana?",
     "¿Qué hay abierto ahora?",
-    "Busco zapatillas",
-    "¿Cómo publico mi negocio?",
 ]
+
+URL_GUIA = f"{SITIO}/guia"
+_ESTADO_TXT = {
+    "puente": {"normal": "el puente funciona normal", "demoras": "el puente está con demoras", "cerrado": "el puente está CERRADO"},
+    "chalanas": {"operando": "las chalanas están cruzando", "suspendidas": "las chalanas están suspendidas"},
+    "rio": {"normal": "el río está normal", "crecido": "el río está crecido"},
+}
+
+
+def _frontera_hoy(repo, ahora: datetime) -> Respuesta:
+    """«¿Cómo está el paso?» Lo que alguien cargó en /contenido, con su fecha:
+    si es de hace días, se dice, porque un "normal" viejo es peor que nada."""
+    f = repo.get_frontera_estado() or {}
+    partes = [_ESTADO_TXT["puente"].get(f.get("puente"), ""), _ESTADO_TXT["chalanas"].get(f.get("chalanas"), ""),
+              _ESTADO_TXT["rio"].get(f.get("rio"), "")]
+    texto = "Hoy en la frontera: " + ", ".join(p for p in partes if p) + "."
+    if f.get("nota"):
+        texto += f" {f['nota'].strip().rstrip('.')}."
+    cuando = f.get("actualizado_en")
+    if cuando:
+        try:
+            dias = (ahora.date() - datetime.fromisoformat(str(cuando).replace("Z", "+00:00")).astimezone(TZ).date()).days
+            texto += " (dato de hoy)" if dias <= 0 else f" (dato de hace {dias} día{'s' if dias != 1 else ''}: confirmá antes de salir)"
+        except ValueError:
+            pass
+    c = _clima(repo)
+    if c:
+        texto += " " + c
+    texto += f" Horarios y cómo cruzar: {URL_GUIA}"
+    return Respuesta(texto=texto, nivel=0, intent="frontera_hoy",
+                     sugerencias=["¿Qué documentos necesito?", "¿Qué puedo pasar por la aduana?", "¿Dónde cambio dólares?"])
+
+
+def _cambio_favorable(repo) -> str | None:
+    """Hoy contra los últimos registros: "te dan más/menos que en los últimos
+    días". Con menos de tres registros no se dice nada — un promedio de uno
+    no es un promedio."""
+    hist = repo.list_cotizacion_historial("ars_bob", 8) or []
+    if len(hist) < 3:
+        return None
+    hoy = float(hist[0]["valor"])
+    previos = [float(h["valor"]) for h in hist[1:]]
+    prom = sum(previos) / len(previos)
+    if prom <= 0:
+        return None
+    dif = (hoy - prom) / prom * 100
+    if dif >= 2:
+        return f"El cambio está favorable: hoy te dan {dif:.0f}% más bolivianos por tus pesos que en los últimos días."
+    if dif <= -2:
+        return f"Hoy te dan {abs(dif):.0f}% menos que en los últimos días; si podés esperar, esperá."
+    return "El cambio está parecido a los últimos días."
+
+
+def _guia(repo) -> Respuesta:
+    secciones = ["la frontera hoy (paso, chalanas, río, horarios)", "documentos", "aduana: franquicia y qué se puede pasar",
+                 "cambio y dónde cambiar", "comercios: horarios, cómo pagar, envíos", "transporte desde Orán, Salta y Tarija",
+                 "seguridad y teléfonos de emergencia", "chip e internet"]
+    return Respuesta(texto="Te puedo contar de: " + "; ".join(secciones) + f". Está todo junto en la guía: {URL_GUIA} — o preguntame lo que necesites.",
+                     nivel=0, intent="guia", sugerencias=SUGERENCIAS_INICIALES)
 
 
 # --------------------------------------------------------------------------- Nivel 0: el sitio
@@ -508,6 +567,10 @@ def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     for patron, texto, intent in FAQ:
         if re.search(patron, p):
             return Respuesta(texto=texto, nivel=0, intent="faq_" + intent)
+    if re.search(r"como esta (el paso|la frontera|el puente|el rio|la chalana|las chalanas)|estado (del paso|de la frontera|del rio|del puente)|(paso|frontera|puente|chalanas?) (esta|estan) (abiert|cerrad|operando|suspendid)|hay (paso|chalanas?) hoy|se puede cruzar hoy", p):
+        return _frontera_hoy(repo, ahora)
+    if re.search(r"que (informacion|info|cosas) (tenes|puedo|me podes|sabes)|que me podes (decir|contar)|guia|que puedo preguntar|ayuda para (el que|los que) (viene|llega|visita)", p):
+        return _guia(repo)
     if re.search(r"cuanto (cuesta|sale|vale)|precio(s)? de (los )?plan|\bplan(es)?\b|es gratis|hay que pagar|chatbot para mi", p):
         return _nivel0_planes(repo)
     # Dos preguntas distintas con las mismas palabras: DÓNDE cambiar (un
@@ -519,9 +582,12 @@ def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     r = _nivel0_conversion(repo, pregunta)
     if r:
         return r
-    if re.search(r"\bdolar|cotiza|cambio\b|peso(s)? argentino|cuanto esta el peso|blue", p):
+    if re.search(r"\bdolar|cotiza|cambio\b|peso(s)? argentino|cuanto esta el peso|blue|conviene cambiar", p):
         t = _cotizaciones(repo)
         if t:
+            fav = _cambio_favorable(repo)
+            if fav:
+                t = t + " " + fav
             return Respuesta(texto=t + f"\nConversor: {URL_CAMBIO} · Casas de cambio, en el mapa: {URL_CASAS_DE_CAMBIO}",
                              nivel=0, intent="cotizacion", sugerencias=["¿Cuánto son 10.000 pesos en bolivianos?", "¿Dónde cambio dólares?"])
     if re.search(r"\bclima|\btiempo\b|lluev|llover|calor|frio|temperatura", p):

@@ -315,3 +315,42 @@ def test_el_dueno_ve_las_preguntas_de_sus_clientes(client, repo, sin_modelo):
     r = client.get("/comercio/asistente/preguntas", headers={"Authorization": f"Bearer {comercio_token(c['id'])}"})
     assert r.status_code == 200 and r.json()["sin_respuesta"] == 1
     assert r.json()["items"][0]["pregunta"] == "¿hacen envíos?"
+
+
+# ------------------------------------------------------------------ la guía
+
+def test_como_esta_el_paso_sale_de_lo_cargado_en_contenido(repo, sin_modelo):
+    repo.update_frontera_estado({"puente": "demoras", "chalanas": "suspendidas", "rio": "crecido", "nota": "Filas de dos horas por el feriado"})
+    r = asistente.responder(repo, "¿cómo está el paso hoy?", ahora=MARTES_11)
+    assert r.intent == "frontera_hoy" and r.nivel == 0
+    assert "con demoras" in r.texto and "suspendidas" in r.texto and "crecido" in r.texto and "Filas de dos horas" in r.texto
+    assert "/guia" in r.texto
+    assert asistente.responder(repo, "se puede cruzar hoy?", ahora=MARTES_11).intent == "frontera_hoy"
+
+
+def test_el_cambio_favorable_compara_con_los_ultimos_registros(repo, sin_modelo):
+    for v in (6.4, 6.5, 6.4, 6.5):
+        repo.cotizaciones_historial.append({"clave": "ars_bob", "valor": v, "registrado_en": "2026-09-10T00:00:00+00:00"})
+    repo.cotizaciones_historial.append({"clave": "ars_bob", "valor": 6.9, "registrado_en": "2026-09-15T00:00:00+00:00"})
+    repo.cotizaciones[1]["valor"] = 6.9
+    r = asistente.responder(repo, "¿a cuánto está el peso argentino?", ahora=MARTES_11)
+    assert r.intent == "cotizacion" and "favorable" in r.texto and "más bolivianos" in r.texto
+    # Con menos de tres registros no se opina.
+    repo.cotizaciones_historial.clear()
+    repo.cotizaciones_historial.append({"clave": "ars_bob", "valor": 6.9, "registrado_en": "2026-09-15T00:00:00+00:00"})
+    assert "favorable" not in asistente.responder(repo, "a cuánto está el peso argentino", ahora=MARTES_11).texto
+
+
+def test_que_informacion_tenes_lista_la_guia(repo, sin_modelo):
+    r = asistente.responder(repo, "¿qué información tenés para el que viene?", ahora=MARTES_11)
+    assert r.intent == "guia" and "aduana" in r.texto and "/guia" in r.texto
+
+
+def test_la_frontera_se_edita_desde_contenido(client, repo, sin_modelo):
+    from app.core import auth as auth_mod
+    tok = auth_mod.make_publicador_token("publicador@x.com")
+    r = client.put("/contenido/frontera", json={"chalanas": "suspendidas", "nota": "río crecido"}, headers={"Authorization": f"Bearer {tok}"})
+    assert r.status_code == 200 and r.json()["frontera"]["chalanas"] == "suspendidas"
+    assert client.put("/contenido/frontera", json={"puente": "volando"}, headers={"Authorization": f"Bearer {tok}"}).status_code == 400
+    assert client.put("/contenido/frontera", json={"puente": "cerrado"}).status_code in (401, 403)
+    assert client.get("/contenido/frontera").json()["nota"] == "río crecido"

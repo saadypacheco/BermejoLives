@@ -638,3 +638,53 @@ export async function getPlanes(): Promise<PlanPublico[]> {
     funciones: (p.funciones as Record<string, boolean> | null) ?? {},
   }));
 }
+
+
+// ============================================================ La guía del que llega (/guia)
+
+export type SaberLocalPublico = { id: string; pregunta: string; respuesta: string; seccion: string };
+
+/** El saber local activo, agrupado por sección. Es la misma tabla que
+ *  contesta el asistente, editable en Admin › Ayuda. */
+export async function getSaberLocalPorSeccion(): Promise<Record<string, SaberLocalPublico[]>> {
+  if (!hasSupabase) return {};
+  const { data } = await supabase.from("saber_local").select("id, pregunta, respuesta, seccion")
+    .eq("activo", true).order("updated_at", { ascending: true });
+  const out: Record<string, SaberLocalPublico[]> = {};
+  for (const r of (data ?? []) as Record<string, unknown>[]) {
+    const sec = String(r.seccion || "general");
+    (out[sec] ??= []).push({ id: String(r.id), pregunta: String(r.pregunta), respuesta: String(r.respuesta), seccion: sec });
+  }
+  return out;
+}
+
+export type FronteraEstado = {
+  puente: "normal" | "demoras" | "cerrado"; chalanas: "operando" | "suspendidas"; rio: "normal" | "crecido";
+  nota: string | null; actualizado_en: string | null;
+};
+
+export async function getFronteraEstado(): Promise<FronteraEstado | null> {
+  if (!hasSupabase) return null;
+  const { data } = await supabase.from("frontera_estado").select("puente, chalanas, rio, nota, actualizado_en").eq("id", 1).limit(1);
+  return (data?.[0] as FronteraEstado) ?? null;
+}
+
+export async function getCotizacionHistorial(clave: string, limit = 8): Promise<{ valor: number; registrado_en: string }[]> {
+  if (!hasSupabase) return [];
+  const { data } = await supabase.from("cotizaciones_historial").select("valor, registrado_en")
+    .eq("clave", clave).order("registrado_en", { ascending: false }).limit(limit);
+  return ((data ?? []) as { valor: number; registrado_en: string }[]).map((r) => ({ valor: Number(r.valor), registrado_en: r.registrado_en }));
+}
+
+export type LugarServicio = { id: string; nombre: string; tipo: string; lat: number | null; lng: number | null };
+export const TIPOS_SERVICIO: Record<string, string> = {
+  "baño": "Baños", estacionamiento: "Estacionamientos", cajero: "Cajeros", wifi: "Wifi", terminal: "Terminal", migraciones: "Migraciones",
+};
+
+/** Baños, estacionamientos, cajeros, wifi: lugares con tipo de servicio (0110). */
+export async function getLugaresServicio(): Promise<LugarServicio[]> {
+  if (!hasSupabase) return [];
+  const { data } = await supabase.from("lugares").select("id, nombre, tipo, lat, lng")
+    .eq("activo", true).in("tipo", Object.keys(TIPOS_SERVICIO)).order("tipo").order("nombre");
+  return ((data ?? []) as LugarServicio[]);
+}

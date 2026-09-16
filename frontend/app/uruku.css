@@ -960,3 +960,52 @@
 .uk-plan li.uk-plan-cuota::before { content: "· "; }
 .uk-plan .uk-btn, .uk-plan .uk-btn-ghost { justify-content: center; text-align: center; }
 .uk-planes-nota { margin: 22px 0 0; font-size: 13.5px; color: var(--uk-ink-soft); max-width: 640px; line-height: 1.5; }
+
+/* ===== /guia: para el que viene a Bermejo ===== */
+.uk-guia { padding: 26px 0 40px; max-width: 900px; }
+.uk-guia h1 { font-size: 30px; margin: 0 0 6px; }
+.uk-guia-sub { margin: 0 0 18px; font-size: 15px; line-height: 1.5; color: var(--uk-ink-soft); max-width: 720px; }
+.uk-guia-hoy { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 22px; }
+.uk-guia-card { padding: 16px 18px; border: 1px solid var(--uk-line); border-radius: 16px; background: var(--uk-surface); display: flex; flex-direction: column; gap: 8px; }
+.uk-guia-card h2, .uk-guia-sec h2 { font-size: 18px; margin: 0; }
+.uk-guia-card small { font-size: 12px; color: var(--uk-ink-soft); }
+.uk-guia-card small.vieja { color: var(--uk-orange); font-weight: 600; }
+.uk-guia-estados { display: flex; flex-wrap: wrap; gap: 6px; }
+.uk-guia-estado { padding: 6px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; }
+.uk-guia-estado.ok { background: color-mix(in srgb, var(--uk-green) 16%, transparent); color: var(--uk-green); }
+.uk-guia-estado.ojo { background: color-mix(in srgb, var(--uk-orange) 18%, transparent); color: var(--uk-orange); }
+.uk-guia-estado.mal { background: color-mix(in srgb, var(--uk-red) 16%, transparent); color: var(--uk-red); }
+.uk-guia-nota { margin: 0; font-size: 13.5px; line-height: 1.45; }
+.uk-guia-tasas { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; }
+.uk-guia-tasas b { font-size: 18px; }
+.uk-guia-fav { margin: 0; padding: 8px 10px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+.uk-guia-fav.mejor { background: color-mix(in srgb, var(--uk-green) 14%, transparent); color: var(--uk-green); }
+.uk-guia-fav.peor { background: color-mix(in srgb, var(--uk-orange) 16%, transparent); color: var(--uk-orange); }
+.uk-guia-fav.igual { background: var(--uk-chip); color: var(--uk-ink-soft); }
+.uk-guia-sec { margin: 0 0 22px; padding-top: 18px; border-top: 1px solid var(--uk-line); scroll-margin-top: 90px; }
+.uk-guia-sec h2 { margin-bottom: 10px; }
+.uk-guia-preguntas { display: flex; flex-direction: column; gap: 6px; }
+.uk-guia-preguntas details { border: 1px solid var(--uk-line); border-radius: 12px; background: var(--uk-surface); }
+.uk-guia-preguntas summary { padding: 11px 14px; font-weight: 700; font-size: 14.5px; cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 10px; }
+.uk-guia-preguntas summary::-webkit-details-marker { display: none; }
+.uk-guia-preguntas summary::after { content: "+"; color: var(--uk-green); font-weight: 800; }
+.uk-guia-preguntas details[open] summary::after { content: "−"; }
+.uk-guia-preguntas p { margin: 0; padding: 0 14px 12px; font-size: 14px; line-height: 1.55; color: var(--uk-ink); }
+.uk-guia-vacio { margin: 0; font-size: 13.5px; color: var(--uk-ink-soft); }
+.uk-guia-abiertos { margin-bottom: 12px; padding: 12px 14px; border: 1px solid var(--uk-line); border-radius: 12px; background: var(--uk-chip); }
+.uk-guia-abiertos-cab { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; font-size: 14px; }
+.uk-guia-abiertos ul { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; }
+.uk-guia-abiertos li { display: flex; justify-content: space-between; gap: 8px; font-size: 13.5px; padding: 6px 8px; background: var(--uk-surface); border-radius: 8px; }
+.uk-guia-abiertos li a { text-decoration: none; color: inherit; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uk-guia-abiertos li a span { color: var(--uk-ink-soft); }
+.uk-guia-abiertos li em { font-style: normal; font-size: 12px; color: var(--uk-green); white-space: nowrap; }
+.uk-guia-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.uk-guia-chips a { padding: 8px 12px; border: 1px solid var(--uk-line); border-radius: 999px; text-decoration: none; color: var(--uk-ink); font-size: 13.5px; font-weight: 600; background: var(--uk-surface); }
+.uk-guia-chips a:hover { border-color: var(--uk-green); color: var(--uk-green); }
+.uk-guia-chips a.uk-btn { border: 0; }
+.uk-guia-servicios { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.uk-guia-servicios ul { list-style: none; padding: 0; margin: 6px 0 0; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; }
+.uk-guia-servicios a { color: var(--uk-green); text-decoration: none; }
+.uk-guia-videos { display: flex; flex-wrap: wrap; gap: 8px; }
+.uk-guia-videos a { padding: 8px 12px; border: 1px solid var(--uk-line); border-radius: 10px; text-decoration: none; color: var(--uk-ink); font-size: 13.5px; }
+.uk-guia-pie { margin: 8px 0 0; font-size: 13.5px; color: var(--uk-ink-soft); }

@@ -15,7 +15,9 @@ const ITEMS = [
   { key: "Inicio", href: "/", d: "M3 11l9-8 9 8M5 10v10h14V10" },
   { key: "Mapa", href: "/buscar?vista=mapa", d: "M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3zM9 3v15M15 6v15" },
   { key: "Ofertas", href: "/buscar?vista=mapa&of=1", d: "M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" },
-  { key: "Guardados", href: "/guardados", d: "M6 3h12v18l-6-4-6 4V3z" },
+  // "Guía" en lugar de "Guardados": el que llega a Bermejo necesita la guía
+  // antes que los favoritos, que siguen en el pie y en el perfil.
+  { key: "Guía", href: "/guia", d: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15zM9 7h7M9 11h5" },
   { key: "Cambio", href: "/cambio", d: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 6.5v11M14.8 9.3c-.3-1.1-1.4-1.8-2.8-1.8-1.6 0-2.8.9-2.8 2.1 0 1.3 1.2 1.8 2.8 2.2 1.6.4 2.8.9 2.8 2.2 0 1.3-1.2 2.2-2.8 2.2-1.5 0-2.6-.8-2.9-1.9" },
 ];
 

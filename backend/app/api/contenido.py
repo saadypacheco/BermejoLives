@@ -41,6 +41,44 @@ def editar_cotizacion(clave: str, body: CotizacionUpdate, _pub: dict = Depends(a
     return {"ok": True, "cotizacion": row}
 
 
+# ---- La frontera hoy ----
+class FronteraIn(BaseModel):
+    puente: str | None = None       # normal | demoras | cerrado
+    chalanas: str | None = None     # operando | suspendidas
+    rio: str | None = None          # normal | crecido
+    nota: str | None = None
+
+
+_FRONTERA_VALORES = {"puente": {"normal", "demoras", "cerrado"}, "chalanas": {"operando", "suspendidas"}, "rio": {"normal", "crecido"}}
+
+
+@router.get("/contenido/frontera")
+def frontera_estado(repo: Repo = Depends(get_repo)) -> dict:
+    """Cómo está el paso hoy. Público: es lo primero que pregunta el que está
+    por cruzar, y no hay ninguna fuente automática — lo carga una persona."""
+    return repo.get_frontera_estado()
+
+
+@router.put("/contenido/frontera")
+def editar_frontera(body: FronteraIn, pub: dict = Depends(auth.require_publicador), repo: Repo = Depends(get_repo)) -> dict:
+    patch = {}
+    for k in ("puente", "chalanas", "rio"):
+        v = getattr(body, k)
+        if v is None:
+            continue
+        if v not in _FRONTERA_VALORES[k]:
+            raise HTTPException(status_code=400, detail=f"{k}: valor inválido")
+        patch[k] = v
+    if body.nota is not None:
+        patch["nota"] = body.nota.strip()[:300] or None
+    if not patch:
+        raise HTTPException(status_code=400, detail="No hay nada que cambiar")
+    patch["actualizado_por"] = pub.get("email")
+    row = repo.update_frontera_estado(patch)
+    logger.info("contenido.frontera", **{k: v for k, v in patch.items() if k != "actualizado_por"})
+    return {"ok": True, "frontera": row}
+
+
 # ---- Clima ----
 class ClimaOverride(BaseModel):
     temp_c: float | None = None
