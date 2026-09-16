@@ -50,10 +50,11 @@ export default async function PlanesPage() {
                 <li className="uk-plan-cuota">
                   {p.publicaciones_mes == null
                     ? "Publicaciones sin límite"
-                    : p.precio_mes === 0 && p.publica_meses
-                      ? `Podés publicar los primeros ${p.publica_meses} meses`
+                    : p.precio_mes === 0
+                      // El gratis no tiene cuota mensual que contar: cada foto se paga.
+                      ? `Podés publicar fotos a Bs ${p.precio_publicacion_extra} cada una`
                       : `Hasta ${p.publicaciones_mes} publicaciones por mes`}
-                  {p.permite_extras && p.publicaciones_mes != null && p.precio_publicacion_extra > 0
+                  {p.precio_mes > 0 && p.permite_extras && p.publicaciones_mes != null && p.precio_publicacion_extra > 0
                     ? ` · la extra, Bs ${p.precio_publicacion_extra}`
                     : ""}
                 </li>
