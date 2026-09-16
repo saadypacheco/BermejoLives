@@ -37,7 +37,8 @@ const SERVICIOS = [
 const CHIPS = [
   { i: "🚻", t: "Baños", href: SERVICIOS[0].href }, { i: "💊", t: "Farmacias", href: SERVICIOS[1].href },
   { i: "🏧", t: "Cajeros", href: SERVICIOS[2].href }, { i: "🅿️", t: "Estacionamiento", href: SERVICIOS[3].href },
-  { i: "💱", t: "Casas de cambio", href: "/cambio" }, { i: "📶", t: "WiFi", href: SERVICIOS[5].href },
+  { i: "💱", t: "Casas de cambio", href: "/cambio" }, { i: "🚕", t: "Taxis", href: SERVICIOS[6].href },
+  { i: "📶", t: "WiFi", href: SERVICIOS[5].href },
   { i: "🚌", t: "Transporte", href: "/guia#transporte" }, { i: "🌉", t: "Frontera", href: "/guia#frontera" },
 ];
 
