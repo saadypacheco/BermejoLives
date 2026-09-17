@@ -37,6 +37,18 @@ export const CATEGORY_STYLE: Record<string, { emoji: string; color: string }> = 
   // 👕 Feria americana / usado
   "ropa-americana": { emoji: "👕", color: "#92766a" }, "calzado-usado": { emoji: "👟", color: "#92766a" },
   usados: { emoji: "♻️", color: "#92766a" },
+  // 🚻 Servicios de la ciudad (rubros no comerciales, 0083/0113) y movilidad
+  banos: { emoji: "🚻", color: "#0ea5e9" }, estacionamiento: { emoji: "🅿️", color: "#0ea5e9" },
+  cajeros: { emoji: "🏧", color: "#0ea5e9" }, wifi: { emoji: "📶", color: "#0ea5e9" },
+  taxis: { emoji: "🚕", color: "#eab308" }, "estacion-servicio": { emoji: "⛽", color: "#64748b" },
+  "taller-mecanico": { emoji: "🔧", color: "#64748b" }, coca: { emoji: "🌿", color: "#22c55e" },
+  nocturna: { emoji: "🌙", color: "#6366f1" }, carpinteria: { emoji: "🪵", color: "#92766a" },
+  herreria: { emoji: "⚒️", color: "#64748b" }, limpieza: { emoji: "🧴", color: "#22c55e" },
+  telas: { emoji: "🧵", color: "#3b82f6" }, gimnasios: { emoji: "🏋️", color: "#f43f5e" },
+  funeraria: { emoji: "🕯️", color: "#64748b" }, carniceria: { emoji: "🥩", color: "#22c55e" },
+  salones: { emoji: "🎊", color: "#f43f5e" }, agro: { emoji: "🚜", color: "#22c55e" },
+  kiosco: { emoji: "🍬", color: "#22c55e" }, lenceria: { emoji: "🩲", color: "#3b82f6" },
+  blanqueria: { emoji: "🛏️", color: "#8b5cf6" }, marroquineria: { emoji: "🧳", color: "#3b82f6" },
   // 📦 Otros
   otros: { emoji: "📦", color: "#FFB020" }, floreria: { emoji: "🌷", color: "#FFB020" },
   // aliases de slugs viejos (comercios cargados antes de la taxonomía v2)
