@@ -356,3 +356,19 @@ def test_la_frontera_se_edita_desde_contenido(client, repo, sin_modelo):
     assert client.put("/contenido/frontera", json={"puente": "volando"}, headers={"Authorization": f"Bearer {tok}"}).status_code == 400
     assert client.put("/contenido/frontera", json={"puente": "cerrado"}).status_code in (401, 403)
     assert client.get("/contenido/frontera").json()["nota"] == "río crecido"
+
+
+def test_donde_hay_un_bano_es_el_rubro_no_el_texto(repo, sin_modelo):
+    """"baño" por texto trae la casa de sanitarios; el servicio se contesta con
+    su rubro, que es lo mismo que abre el chip del home."""
+    repo.comercios["san"] = {"id": "san", "slug": "sanitarios-lopez", "nombre": "Sanitarios López", "activo": True,
+                             "rubro_slug": "ferreteria", "subcategoria": "artículos de baño"}
+    repo.comercios["b1"] = {"id": "b1", "slug": "bano-publico-mercado", "nombre": "Baño público", "activo": True,
+                            "rubro_slug": "banos", "direccion": "Mercado central"}
+    r = asistente.responder(repo, "¿dónde hay un baño?", ahora=MARTES_11)
+    assert r.nivel == 0 and r.intent == "buscar" and not r.sin_respuesta
+    assert "Baños públicos en Bermejo" in r.texto and "Mercado central" in r.texto
+    assert "Sanitarios López" not in r.texto and "rubro=banos&vista=mapa" in r.texto
+    # Sin nada cargado, lo dice y queda anotado.
+    r2 = asistente.responder(repo, "busco un cajero automático", ahora=MARTES_11)
+    assert r2.sin_respuesta and "cajeros y bancos" in r2.texto

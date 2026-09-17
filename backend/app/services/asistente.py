@@ -454,11 +454,44 @@ def _nivel0_busqueda(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     return _buscar_y_contestar(repo, q, ahora)
 
 
+# Los servicios de la ciudad son rubros no comerciales (0083, 0113). "¿Dónde
+# hay un baño?" se contesta con el rubro, no con el texto: por texto "baño"
+# trae la casa de sanitarios y "estacionamiento" las estaciones de servicio.
+# Es el mismo mapa que usa el buscador del sitio (lib/servicios.ts).
+_SERVICIOS = (
+    (re.compile(r"\bban(o|os)\b|sanitarios? publicos?|inodoro|\bwc\b"), "banos", "baños públicos"),
+    (re.compile(r"estacionamiento|estacionar|cochera|parking|dejar el auto"), "estacionamiento", "estacionamientos"),
+    (re.compile(r"cajeros?( automaticos?)?|\batm\b|\bbancos?\b|sacar plata|retirar (plata|dinero|efectivo)"), "cajeros", "cajeros y bancos"),
+    (re.compile(r"\bwi-?fi\b|internet gratis"), "wifi", "wifi gratis"),
+)
+
+
+def _servicio_de(q: str) -> tuple[str, str] | None:
+    p = _norm(q)
+    for patron, rubro, plural in _SERVICIOS:
+        if patron.search(p):
+            return rubro, plural
+    return None
+
+
 def _buscar_y_contestar(repo, q: str, ahora: datetime) -> Respuesta | None:
-    filas = list(repo.buscar_comercios(q, MAX_COMERCIOS) or [])
+    servicio = _servicio_de(q)
+    if servicio:
+        rubro, plural = servicio
+        filas = list(repo.buscar_comercios("", MAX_COMERCIOS, rubro=rubro) or [])
+        url = f"{SITIO}/buscar?rubro={rubro}&vista=mapa"
+        if not filas:
+            return Respuesta(
+                texto=f"Todavía no tengo {plural} cargados en el mapa. Preguntá en cualquier local: en Bermejo se ayuda. Y si sabés de uno, contámelo acá y lo agregamos.",
+                nivel=0, intent="buscar", sin_respuesta=True,
+                sugerencias=["¿Dónde cambio dólares?", "¿Qué hay abierto ahora?"],
+            )
+    else:
+        filas = list(repo.buscar_comercios(q, MAX_COMERCIOS) or [])
+        url = f"{SITIO}/buscar?q={q.replace(' ', '+')}"
     if not filas:
         return Respuesta(
-            texto=f"No encontré «{q}» en Bermejo todavía. Probá con otra palabra, o mirá el mapa: {SITIO}/buscar?q={q.replace(' ', '+')}",
+            texto=f"No encontré «{q}» en Bermejo todavía. Probá con otra palabra, o mirá el mapa: {url}",
             nivel=0, intent="buscar", sin_respuesta=True,
             sugerencias=["¿Qué hay abierto ahora?", "¿Dónde cambio dólares?"],
         )
@@ -475,8 +508,9 @@ def _buscar_y_contestar(repo, q: str, ahora: datetime) -> Respuesta | None:
             extra.append(et.lower())
         lineas.append(f"• {c.get('nombre')}" + (f" — {' · '.join(extra)}" if extra else ""))
     # Sin cifras: cuántos locales hay es un dato del panel, no del comprador.
-    cabeza = f"Encontré esto para «{q}»" + (", para empezar:" if total > len(filas) else ":")
-    pie = f"\nHay más, en el mapa: {SITIO}/buscar?q={q.replace(' ', '+')}" if total > len(filas) else ""
+    cabeza = ((f"{servicio[1].capitalize()} en Bermejo" if servicio else f"Encontré esto para «{q}»")
+              + (", para empezar:" if total > len(filas) else ":"))
+    pie = f"\nHay más, en el mapa: {url}" if total > len(filas) else (f"\nEn el mapa: {url}" if servicio else "")
     return Respuesta(texto=cabeza + "\n" + "\n".join(lineas) + pie, nivel=0, intent="buscar",
                      fuentes=[_fuente(c) for c in filas],
                      sugerencias=[f"Horario de {filas[0].get('nombre')}", f"Dirección de {filas[0].get('nombre')}"])

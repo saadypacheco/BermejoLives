@@ -137,6 +137,42 @@ async function buscar(p, texto) { await p.fill("form.uk-search input", texto); a
   ok(errores.length === 0, `6. sin avisos del vigía (${errores.join(" | ") || "ninguno"})`);
   await ctx.close();
 }
+// 7. Los accesos del home: un servicio es su rubro, escrito o por el chip
+{
+  const { ctx, p, errores, rpcs } = await nueva(false);
+  // Por el chip: rubro=banos → los baños cargados, con su título.
+  await p.goto(`${BASE}/buscar?rubro=banos`, { waitUntil: "networkidle" });
+  await esperarHidratacion(p, rpcs);
+  await p.waitForTimeout(3000);
+  let e = await estado(p);
+  const titulo = ((await p.locator(".uk-servicios-cab h2").textContent().catch(() => "")) || "").trim();
+  ok(e.n > 0 && /Baños públicos/.test(titulo), `7. rubro=banos: ${e.n} tarjetas, título «${titulo}»`);
+  const nombres = await p.locator(".uk-res-grid article a[href^='/comercios/']:not(.uk-resficha):not(.uk-rescover):not(.uk-resdesde)").evaluateAll((as) => as.map((a) => (a.textContent || "").trim().toLowerCase()));
+  ok(nombres.every((n) => n === "" || /ba[ñn]o|sanitario/.test(n)), `7. todos los de rubro=banos son baños (${[...new Set(nombres)].filter(Boolean).slice(0, 4).join(", ")})`);
+  // Escrito: "baño público" busca por el rubro, no por texto.
+  await p.goto(`${BASE}/buscar`, { waitUntil: "networkidle" });
+  await esperarHidratacion(p, rpcs);
+  const antes = rpcs.length;
+  await buscar(p, "baño público");
+  await p.waitForTimeout(5000);
+  const e2 = await estado(p);
+  const pidioRubro = rpcs.slice(antes).some((r) => r.startsWith("-@") || r.startsWith("@"));
+  ok(e2.n === e.n && pidioRubro, `7. escrito «baño público»: ${e2.n} tarjetas (= ${e.n} del rubro), rpcs=${rpcs.slice(antes).join(" ")}`);
+  // Un servicio sin nada cargado dice que no hay, no "probá otra palabra".
+  await p.goto(`${BASE}/buscar?rubro=wifi`, { waitUntil: "networkidle" });
+  await p.waitForTimeout(4000);
+  const vacio = ((await p.locator(".uk-empty").textContent().catch(() => "")) || "").trim();
+  const nWifi = await p.locator(".uk-res-grid article").count();
+  ok(nWifi > 0 || /Todavía no cargamos/.test(vacio), `7. rubro=wifi: ${nWifi} tarjetas, vacío=«${vacio.slice(0, 50)}»`);
+  // Ofertas sin ofertas: lo dice.
+  await p.goto(`${BASE}/buscar?of=1`, { waitUntil: "networkidle" });
+  await p.waitForTimeout(8000);
+  const nOf = await p.locator(".uk-res-grid article").count();
+  const vacioOf = ((await p.locator(".uk-empty").textContent().catch(() => "")) || "").trim();
+  ok(nOf > 0 || /Todavía no hay ofertas/.test(vacioOf), `7. of=1: ${nOf} tarjetas, vacío=«${vacioOf.slice(0, 50)}»`);
+  ok(errores.length === 0, `7. sin avisos del vigía (${errores.join(" | ") || "ninguno"})`);
+  await ctx.close();
+}
 await b.close();
 console.log(fallas ? `${fallas} FALLAS` : "todo ok");
 process.exit(fallas ? 1 : 0);

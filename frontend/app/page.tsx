@@ -20,15 +20,17 @@ export const dynamic = "force-dynamic";
  * tiene su banner al pie, que es donde lo busca el que ya tiene un negocio.
  */
 
-// Los servicios del mapa, con su búsqueda. Baños, estacionamientos, cajeros
-// y wifi son lugares (0110); farmacias y taxis, rubros; el cambio, /cambio.
+// Los servicios del mapa. Todos son RUBROS —baños, cajeros, estacionamientos
+// y wifi son rubros no comerciales (0083, 0113)— así que cada acceso trae
+// exactamente lo cargado bajo ese rubro, no lo que el texto libre encuentre
+// ("estacionamiento" devolvía estaciones de servicio). El cambio va a /cambio.
 const SERVICIOS = [
-  { i: "🚻", t: "Baños cercanos", d: "Ubicaciones", href: "/buscar?q=ba%C3%B1o+p%C3%BAblico&vista=mapa" },
+  { i: "🚻", t: "Baños cercanos", d: "Ubicaciones", href: "/buscar?rubro=banos&vista=mapa" },
   { i: "💊", t: "Farmacias", d: "Turnos y direcciones", href: "/buscar?rubro=farmacia&vista=mapa" },
-  { i: "🏧", t: "Cajeros y bancos", d: "Dónde sacar plata", href: "/buscar?q=cajero&vista=mapa" },
-  { i: "🅿️", t: "Estacionamiento", d: "Dónde dejar el auto", href: "/buscar?q=estacionamiento&vista=mapa" },
+  { i: "🏧", t: "Cajeros y bancos", d: "Dónde sacar plata", href: "/buscar?rubro=cajeros&vista=mapa" },
+  { i: "🅿️", t: "Estacionamiento", d: "Dónde dejar el auto", href: "/buscar?rubro=estacionamiento&vista=mapa" },
   { i: "💱", t: "Casas de cambio", d: "Cotización, calculadora y mapa", href: "/cambio" },
-  { i: "📶", t: "WiFi y chips", d: "Internet y telefonía", href: "/buscar?q=wifi&vista=mapa" },
+  { i: "📶", t: "WiFi y chips", d: "Internet y telefonía", href: "/buscar?rubro=wifi&vista=mapa" },
   { i: "🚕", t: "Taxis y transporte", d: "Cómo moverte", href: "/buscar?rubro=taxis&vista=mapa" },
   { i: "🆘", t: "Salud y emergencias", d: "Hospitales y teléfonos", href: "/guia#seguridad" },
 ];

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
 import {
-  buscarComercios, getClima, getCotizacionHistorial, getCotizaciones, getFronteraEstado, getLugaresServicio,
-  getSaberLocalPorSeccion, getVideosPromo, TIPOS_SERVICIO, type FronteraEstado, type SaberLocalPublico,
+  buscarComercios, getClima, getCotizacionHistorial, getCotizaciones, getFronteraEstado,
+  getSaberLocalPorSeccion, getVideosPromo, RUBROS_SERVICIO, type FronteraEstado, type SaberLocalPublico,
 } from "@/lib/data";
 import { cambioFavorable, diasDesde, DIAS_VIEJA, formatoMonto, tasasDe } from "@/lib/cambio";
 import { abiertoAhora, etiquetaHorario } from "@/lib/horario";
@@ -55,9 +55,11 @@ function Preguntas({ items }: { items: SaberLocalPublico[] }) {
 
 export default async function GuiaPage() {
   const ahora = new Date();
-  const [saber, frontera, clima, cotizaciones, hist, lugares, videos, comercios] = await Promise.all([
+  const [saber, frontera, clima, cotizaciones, hist, videos, comercios, ...servicios] = await Promise.all([
     getSaberLocalPorSeccion(), getFronteraEstado(), getClima(), getCotizaciones(), getCotizacionHistorial("ars_bob", 8),
-    getLugaresServicio(), getVideosPromo(6), buscarComercios({}, 300, 0),
+    getVideosPromo(6), buscarComercios({}, 300, 0),
+    // Los servicios de la ciudad, por rubro: lo mismo que abre cada chip.
+    ...RUBROS_SERVICIO.map(([slug]) => buscarComercios({ rubro: slug }, 40, 0)),
   ]);
   const t = tasasDe(cotizaciones);
   const diasCot = diasDesde(t.actualizado_en);
@@ -66,7 +68,11 @@ export default async function GuiaPage() {
     .filter((c) => c.horario && abiertoAhora(c.horario, ahora).estado === "abierto")
     .slice(0, 12);
   const horasFrontera = frontera?.actualizado_en ? Math.floor((Date.now() - new Date(frontera.actualizado_en).getTime()) / 3600000) : null;
-  const porTipo = lugares.reduce((acc, l) => { (acc[l.tipo] ??= []).push(l); return acc; }, {} as Record<string, typeof lugares>);
+  // Sólo los que tienen el servicio de rubro PRINCIPAL: el filtro también
+  // trae a los que lo tienen de secundario, y en la guía sobran.
+  const porServicio = RUBROS_SERVICIO
+    .map(([slug, titulo], i) => [titulo, slug, (servicios[i] ?? []).filter((c) => c.rubro_slug === slug)] as const)
+    .filter(([, , items]) => items.length > 0);
 
   return (
     <UrukuShell showCatnav={false} activeNav="Guía">
@@ -161,25 +167,26 @@ export default async function GuiaPage() {
             <Link href="/buscar?rubro=hospedaje&vista=mapa">🛏️ Dónde dormir</Link>
             <Link href="/buscar?rubro=celulares&vista=mapa">📱 Celulares y chips</Link>
             <Link href="/buscar?rubro=taxis&vista=mapa">🚕 Taxis</Link>
-            <Link href="/buscar?q=ba%C3%B1o+p%C3%BAblico&vista=mapa">🚻 Baños</Link>
-            <Link href="/buscar?q=estacionamiento&vista=mapa">🅿️ Estacionamientos</Link>
-            <Link href="/buscar?q=cajero&vista=mapa">🏧 Cajeros</Link>
-            <Link href="/buscar?q=wifi&vista=mapa">📶 Wifi</Link>
+            <Link href="/buscar?rubro=banos&vista=mapa">🚻 Baños</Link>
+            <Link href="/buscar?rubro=estacionamiento&vista=mapa">🅿️ Estacionamientos</Link>
+            <Link href="/buscar?rubro=cajeros&vista=mapa">🏧 Cajeros</Link>
+            <Link href="/buscar?rubro=wifi&vista=mapa">📶 Wifi</Link>
           </div>
-          {Object.keys(porTipo).length > 0 ? (
+          {porServicio.length > 0 ? (
             <div className="uk-guia-servicios">
-              {Object.entries(porTipo).map(([tipo, items]) => (
-                <div key={tipo}>
-                  <b>{TIPOS_SERVICIO[tipo] ?? tipo}</b>
+              {porServicio.map(([titulo, slug, items]) => (
+                <div key={slug}>
+                  <b><Link href={`/buscar?rubro=${slug}&vista=mapa`}>{titulo}</Link></b>
                   <ul>
-                    {items.map((l) => (
-                      <li key={l.id}>
-                        {l.nombre}
-                        {l.lat != null && l.lng != null && (
-                          <a href={`https://www.google.com/maps/search/?api=1&query=${l.lat},${l.lng}`} target="_blank" rel="noopener"> · cómo llegar</a>
+                    {items.slice(0, 12).map((c) => (
+                      <li key={c.id}>
+                        {c.nombre}{c.direccion ? ` · ${c.direccion}` : ""}
+                        {c.lat != null && c.lng != null && (
+                          <a href={`https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lng}`} target="_blank" rel="noopener"> · cómo llegar</a>
                         )}
                       </li>
                     ))}
+                    {items.length > 12 && <li><Link href={`/buscar?rubro=${slug}&vista=mapa`}>Ver todos en el mapa →</Link></li>}
                   </ul>
                 </div>
               ))}

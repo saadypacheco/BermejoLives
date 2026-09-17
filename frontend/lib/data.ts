@@ -676,15 +676,9 @@ export async function getCotizacionHistorial(clave: string, limit = 8): Promise<
   return ((data ?? []) as { valor: number; registrado_en: string }[]).map((r) => ({ valor: Number(r.valor), registrado_en: r.registrado_en }));
 }
 
-export type LugarServicio = { id: string; nombre: string; tipo: string; lat: number | null; lng: number | null };
-export const TIPOS_SERVICIO: Record<string, string> = {
-  "baño": "Baños", estacionamiento: "Estacionamientos", cajero: "Cajeros", wifi: "Wifi", terminal: "Terminal", migraciones: "Migraciones",
-};
-
-/** Baños, estacionamientos, cajeros, wifi: lugares con tipo de servicio (0110). */
-export async function getLugaresServicio(): Promise<LugarServicio[]> {
-  if (!hasSupabase) return [];
-  const { data } = await supabase.from("lugares").select("id, nombre, tipo, lat, lng")
-    .eq("activo", true).in("tipo", Object.keys(TIPOS_SERVICIO)).order("tipo").order("nombre");
-  return ((data ?? []) as LugarServicio[]);
-}
+/** Los rubros que son servicios de la ciudad, no negocios: lo que se lista en
+ *  /guia › En el mapa. Son rubros (0083, 0113) y se cargan como comercios. */
+export const RUBROS_SERVICIO: [string, string][] = [
+  ["banos", "🚻 Baños públicos"], ["estacionamiento", "🅿️ Estacionamientos"],
+  ["cajeros", "🏧 Cajeros y bancos"], ["wifi", "📶 Wifi gratis"], ["cambio", "💱 Casas de cambio"],
+];

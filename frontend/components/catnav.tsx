@@ -22,7 +22,10 @@ import type { Rubro } from "@/lib/types";
  * la base, una categoría nueva aparece sola, sin tocar código. */
 export function CatNav({ active }: { active?: string }) {
   const [rubros, setRubros] = useState<Rubro[]>([]);
-  useEffect(() => { getRubros().then(setRubros).catch(() => {}); }, []);
+  // Sólo los rubros comerciales: baños, cajeros, estacionamientos y wifi
+  // son servicios y tienen su fila propia en el home. En una barra de
+  // "qué querés comprar", "Wifi gratis" es ruido.
+  useEffect(() => { getRubros().then((rs) => setRubros(rs.filter((r) => r.comercial !== false))).catch(() => {}); }, []);
   const ref = useRef<HTMLDivElement>(null);
   const [overflow, setOverflow] = useState(false);
   const [atStart, setAtStart] = useState(true);

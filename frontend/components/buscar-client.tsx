@@ -11,8 +11,7 @@ import { type FeedItem, type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD
 import { productosDe } from "@/lib/productos";
 import { distanciaMetros, formatDistancia } from "@/lib/distancia";
 import { pedirUbicacion, permisoUbicacion, ubicacionGuardada, type Ubicacion } from "@/lib/ubicacion";
-import { detectarServicio, SERVICIOS } from "@/lib/servicios";
-import { getLugaresServicio, type LugarServicio } from "@/lib/data";
+import { detectarServicio, SERVICIOS, servicioDeRubro } from "@/lib/servicios";
 import { ReservaBarra } from "@/components/reserva-barra";
 import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
@@ -59,19 +58,13 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   // se enciende el orden por distancia, como si hubiera tocado el chip.
   const [cercaPedido, setCercaPedido] = useState(false);
   // SERVICIOS. "baño público" no es una búsqueda de comercios: es un baño.
-  // Si la búsqueda es un servicio, se muestran los lugares de ese tipo y los
-  // comercios quedan detrás de un enlace. Buscar "baño" y recibir ochenta
-  // casas de sanitarios es lo que hace que alguien no vuelva a buscar.
-  const servicio = detectarServicio(q);
-  const [lugaresServicio, setLugaresServicio] = useState<LugarServicio[]>([]);
-  const [verComerciosIgual, setVerComerciosIgual] = useState(false);
-  useEffect(() => {
-    setVerComerciosIgual(false);
-    if (!servicio) { setLugaresServicio([]); return; }
-    let vivo = true;
-    getLugaresServicio().then((ls) => { if (vivo) setLugaresServicio(ls.filter((l) => l.tipo === servicio)); }).catch(() => {});
-    return () => { vivo = false; };
-  }, [servicio]);
+  // Si lo escrito es un servicio y no hay rubro elegido, se busca por SU
+  // rubro (`banos`, `cajeros`…) en vez de por texto: buscar "estacionamiento"
+  // y recibir estaciones de servicio y un hostal es lo que hace que alguien
+  // no vuelva a buscar. Por el chip del home se llega directo con el rubro,
+  // y `servicioDeRubro` es lo que pone el título en los dos casos.
+  const servicioEscrito = rubro ? null : detectarServicio(q);
+  const servicio = servicioEscrito ?? servicioDeRubro(rubro);
   const [centrarEnMi, setCentrarEnMi] = useState(0);
   useEffect(() => {
     if (!cercaPedido) return;
@@ -177,7 +170,9 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
    *  va a poder bajar. */
   const MIN_PARA_CONTAR = 150;
 
-  const filtros = { q, rubro, subcategoria, modalidad, zona, ciudad, precioMax: precioMax ? Number(precioMax) : undefined };
+  const filtros = servicioEscrito
+    ? { q: "", rubro: SERVICIOS[servicioEscrito].rubro, subcategoria: "", modalidad, zona, ciudad, precioMax: precioMax ? Number(precioMax) : undefined }
+    : { q, rubro, subcategoria, modalidad, zona, ciudad, precioMax: precioMax ? Number(precioMax) : undefined };
 
   useEffect(() => {
     getRubros().then(setRubros);
@@ -400,7 +395,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   // comercios son dos vueltas; el tope de 4000 es un freno de seguridad para
   // que un filtro roto no descargue la base entera al celular de alguien.
   useEffect(() => {
-    if (vista !== "mapa" && !cerca) return;
+    if (vista !== "mapa" && !cerca && !soloOfertas) return;
     let cancelado = false;
     (async () => {
       setCargandoMapa(true);
@@ -440,7 +435,9 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   // más allá de eso nadie mira, y el DOM de un celular lo agradece.
   const base = cerca && ubicacion && resultsMapa
     ? [...resultsMapa].sort((a, b) => (distancia(a) ?? 1e12) - (distancia(b) ?? 1e12)).slice(0, 100)
-    : results;
+    : soloOfertas && resultsMapa
+      ? resultsMapa
+      : results;
   const shown = soloOfertas ? base.filter((r) => r.ofertas > 0) : base;
 
   // VIGÍA: dos cosas que nunca pueden pasar, y si pasan se avisan al servidor
@@ -618,9 +615,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
             resultados" es una respuesta; no decir nada, no. */}
         {hayBusqueda && total != null && (
           <span className="uk-total-res">
-            {servicio && !verComerciosIgual
-              ? `${lugaresServicio.length} ${lugaresServicio.length === 1 ? SERVICIOS[servicio].nombre.toLowerCase() : SERVICIOS[servicio].plural.toLowerCase()}`
-              : total === 1 ? "1 resultado" : `${total} resultados`}
+            {total === 1 ? "1 resultado" : `${total} resultados`}
           </span>
         )}
 
@@ -647,21 +642,12 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
           </div>
         )}
         <MapResults
-          results={
-            // Buscando un servicio, el mapa muestra el servicio: ochenta pines
-            // de comercios alrededor de dos baños es no encontrar el baño.
-            servicio && !verComerciosIgual
-              ? []
-              : soloOfertas
-                ? (resultsMapa ?? results).filter((r) => r.ofertas > 0)
-                : (resultsMapa ?? results)
-          }
+          results={soloOfertas ? (resultsMapa ?? results).filter((r) => r.ofertas > 0) : (resultsMapa ?? results)}
           hayFiltro={Boolean(q.trim() || rubro || subcategoria || modalidad || zona || precioMax || soloOfertas)}
           ciudad={tilesCiudad}
           ubicacion={ubicacion}
           centrarEnMi={centrarEnMi}
           onPedirUbicacion={() => ubicarme(true)}
-          lugares={lugaresServicio}
         />
         {errUbicacion && <p style={{ fontSize: 12.5, color: "var(--uk-red)", margin: "8px 0 0" }}>{errUbicacion}</p>}
         </>
@@ -679,46 +665,30 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
           `[hidden]`, y como la del sitio va después, ganaba y el atributo
           no escondía nada. */}
       {servicio && vista === "lista" && (
-        <div className="uk-servicios">
-          <div className="uk-servicios-cab">
-            <h2>{SERVICIOS[servicio].icono} {SERVICIOS[servicio].plural} en Bermejo</h2>
-            <button type="button" className="uk-btn-ghost" onClick={() => setVista("mapa")}>Ver en el mapa →</button>
-          </div>
-          {lugaresServicio.length === 0 ? (
-            <p className="uk-empty">
-              Todavía no cargamos {SERVICIOS[servicio].plural.toLowerCase()} en el mapa. Mientras tanto, preguntá en cualquier local: en Bermejo se ayuda.
-            </p>
-          ) : (
-            <ul>
-              {[...lugaresServicio].sort((a, b) => {
-                const da = ubicacion && a.lat != null && a.lng != null ? distanciaMetros(ubicacion.lat, ubicacion.lng, a.lat, a.lng) : 1e12;
-                const db = ubicacion && b.lat != null && b.lng != null ? distanciaMetros(ubicacion.lat, ubicacion.lng, b.lat, b.lng) : 1e12;
-                return da - db;
-              }).map((l) => {
-                const d = ubicacion && l.lat != null && l.lng != null ? distanciaMetros(ubicacion.lat, ubicacion.lng, l.lat, l.lng) : null;
-                return (
-                  <li key={l.id}>
-                    <b>{l.nombre}</b>
-                    {d != null && <span className="uk-resdist">a {formatDistancia(d)}</span>}
-                    {l.lat != null && l.lng != null && (
-                      <a className="uk-btn-ghost" href={`https://www.google.com/maps/search/?api=1&query=${l.lat},${l.lng}`} target="_blank" rel="noopener">Cómo llegar</a>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {!verComerciosIgual && total != null && total > 0 && (
-            <button type="button" className="uk-btn-ghost uk-servicios-mas" onClick={() => setVerComerciosIgual(true)}>
-              Ver también los comercios que coinciden con «{q.trim()}»
-            </button>
-          )}
+        <div className="uk-servicios-cab">
+          <h2>{SERVICIOS[servicio].icono} {SERVICIOS[servicio].plural} en Bermejo</h2>
+          <button type="button" className="uk-btn-ghost" onClick={() => setVista("mapa")}>Ver en el mapa →</button>
         </div>
       )}
       {(
-        <div className="uk-res-grid" style={vista === "mapa" || (servicio && !verComerciosIgual) ? { display: "none" } : undefined}>
+        <div className="uk-res-grid" style={vista === "mapa" ? { display: "none" } : undefined}>
           {!loading && shown.length === 0 && (
-            rubroElegido && q.trim()
+            servicio
+              ? (
+                <p className="uk-empty">
+                  Todavía no cargamos {SERVICIOS[servicio].plural.toLowerCase()} en el mapa. Mientras tanto, preguntá en cualquier local: en Bermejo se ayuda.
+                </p>
+              )
+            : soloOfertas && !q.trim() && !rubro
+              ? (
+                <div className="uk-empty">
+                  Todavía no hay ofertas publicadas hoy. Los comercios las mandan por WhatsApp y aparecen acá apenas se aprueban.
+                  <button type="button" className="uk-btn-ghost" style={{ marginTop: 10 }} onClick={() => setSoloOfertas(false)}>
+                    Ver todos los comercios
+                  </button>
+                </div>
+              )
+            : rubroElegido && q.trim()
               ? (
                 // Dice DÓNDE no encontró y ofrece la salida obvia: es la
                 // diferencia entre "no existe" y "no está en este rubro".
