@@ -7,6 +7,7 @@ confirme. La foto va a Supabase Storage (bucket público 'comercios').
 """
 import httpx
 import structlog
+import re
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Request
 from pydantic import BaseModel
 
@@ -427,6 +428,9 @@ class _LeadIn(BaseModel):
     # De qué búsqueda salió este contacto. Vacío si llegó por el mapa, la home
     # o un link compartido: son caminos igual de válidos, no un dato faltante.
     busqueda_id: str | None = None
+    # De dónde llegó (el `?ref=` de la URL): volante-<slug>, mesa-<slug>,
+    # ficha-<slug>, fb, ig. Vacío si entró por el buscador o el mapa.
+    origen: str | None = None
 
 
 @router.post("/lead")
@@ -439,6 +443,9 @@ def registrar_lead(body: _LeadIn, repo: Repo = Depends(get_repo)) -> dict:
     # Viene vacío cuando llegan por el mapa, la home o un link compartido.
     if body.busqueda_id:
         fila["busqueda_id"] = body.busqueda_id
+    origen = re.sub(r"[^a-z0-9_.-]", "", (body.origen or "").strip().lower())[:64]
+    if origen:
+        fila["origen"] = origen
     repo.insert_lead(fila)
     return {"ok": True}
 

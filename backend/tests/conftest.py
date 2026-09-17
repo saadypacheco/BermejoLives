@@ -1000,6 +1000,9 @@ class FakeRepo:
             "ofertas_total": len(self.publicaciones),
             "ofertas_top_comercios": [],
             "contactos_30d": len(self.leads),
+            "llegadas_30d": sum(1 for l in self.leads if l.get("origen")),
+            "llegadas_por_clase": {},
+            "llegadas_top": [],
             "contactos_top_comercios": [],
         }
 

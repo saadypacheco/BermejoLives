@@ -200,15 +200,19 @@ export async function eliminarComercioAgente(id: string): Promise<void> {
 /** Registra un click de contacto (WhatsApp, teléfono, etc.) para un comercio. */
 export type TipoLead = "whatsapp" | "telefono" | "email" | "web" | "vista" | "mapa" | "reserva";
 
-export async function registrarLead(comercio_id: string, tipo: TipoLead = "whatsapp", busqueda_id?: string | null): Promise<void> {
+export async function registrarLead(comercio_id: string, tipo: TipoLead = "whatsapp", busqueda_id?: string | null, origen?: string | null): Promise<void> {
   // Fire-and-forget: no bloqueamos la navegación del usuario
+  const body: Record<string, string> = { comercio_id, tipo };
+  // `busqueda_id` ata el contacto a la búsqueda que lo produjo. Sin ese
+  // puente se sabe qué se mostró y qué se contactó, pero no si una cosa llevó
+  // a la otra — que es justo lo que dice si el buscador acierta.
+  if (busqueda_id) body.busqueda_id = busqueda_id;
+  // `origen` es el `?ref=` con el que llegó (volante, mesa, el QR de la ficha).
+  if (origen) body.origen = origen;
   fetch(`${API}/lead`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    // `busqueda_id` ata el contacto a la búsqueda que lo produjo. Sin ese
-    // puente se sabe qué se mostró y qué se contactó, pero no si una cosa llevó
-    // a la otra — que es justo lo que dice si el buscador acierta.
-    body: JSON.stringify(busqueda_id ? { comercio_id, tipo, busqueda_id } : { comercio_id, tipo }),
+    body: JSON.stringify(body),
   }).catch(() => undefined);
 }
 

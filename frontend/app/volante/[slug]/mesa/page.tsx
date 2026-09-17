@@ -30,7 +30,9 @@ export default async function TarjetaMesaPage({ params }: { params: { slug: stri
   }
 
   const url = `https://uruku.bo/comercios/${comercio.slug}`;
-  const qr = await QRCode.toDataURL(url, {
+  // `?ref=mesa-<slug>`: lo que dice, después, si las tarjetas de mesa
+  // trajeron a alguien (Admin › Panel › Llegadas por QR).
+  const qr = await QRCode.toDataURL(`${url}?ref=mesa-${comercio.slug}`, {
     width: 640, margin: 1, errorCorrectionLevel: "M",
     color: { dark: "#0f2c33", light: "#ffffff" },
   });

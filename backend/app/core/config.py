@@ -241,7 +241,9 @@ class Settings(BaseSettings):
     # función del plan más caro.
     ingesta_requiere_plan: bool = False
     # Planes habilitados a publicar por WhatsApp cuando el gate está prendido.
-    planes_con_ingesta: str = "premium"
+    # Son los de la tabla `planes` (0108): todos los pagos. "premium" quedó
+    # oculto y ya no es un plan que se venda.
+    planes_con_ingesta: str = "publica,destacado,pro,empleado_ia"
 
     # Transcripción de audio del "¿qué vende?".
     #  - Si OPENAI_API_KEY está seteada → usa la API de OpenAI Whisper.

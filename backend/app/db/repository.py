@@ -1629,7 +1629,7 @@ class SupabaseRepo:
         for inicio in range(0, 100000, 1000):
             lote = (
                 self._db.table("leads")
-                .select("comercio_id, tipo, created_at")
+                .select("comercio_id, tipo, created_at, origen")
                 .gte("created_at", hace_30d)
                 .order("created_at")
                 .range(inicio, inicio + 999)
@@ -1648,6 +1648,20 @@ class SupabaseRepo:
         # `contactos_30d` con cada visita a una ficha —que dispara VistaLogger
         # sola— y dejaba el número más importante del panel diciendo cualquier
         # cosa. El top por comercio arrastraba el mismo error.
+        # Llegadas por QR o enlace marcado (`?ref=`), en 30 días: por origen
+        # completo (mesa-rustico) y por clase (mesa, volante, ficha, fb, ig).
+        # Es lo que dice si las tarjetas de mesa trajeron a alguien.
+        por_origen: dict[str, int] = {}
+        por_clase: dict[str, int] = {}
+        for l in leads:
+            o = (l.get("origen") or "").strip()
+            if not o:
+                continue
+            por_origen[o] = por_origen.get(o, 0) + 1
+            clase = o.split("-", 1)[0]
+            por_clase[clase] = por_clase.get(clase, 0) + 1
+        llegadas_top = sorted(({"origen": o, "count": n} for o, n in por_origen.items()), key=lambda x: -x["count"])[:10]
+
         contactos = [l for l in leads if (l.get("tipo") or "") != "vista"]
         conteo_leads: dict[str, int] = {}
         for l in contactos:
@@ -1669,6 +1683,9 @@ class SupabaseRepo:
             # pidieron cómo llegar, cuántos sólo miraron la ficha.
             "contactos_por_tipo": por_tipo,
             "vistas_30d": por_tipo.get("vista", 0),
+            "llegadas_30d": sum(por_clase.values()),
+            "llegadas_por_clase": por_clase,
+            "llegadas_top": llegadas_top,
         }
 
 

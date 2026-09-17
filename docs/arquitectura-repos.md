@@ -37,7 +37,7 @@ Archivo `encontralo-reservalo.code-workspace` (en `c:\repos\proyectosClaude\`):
 Abrir ese archivo → las dos carpetas en una sola ventana.
 
 ### 2) Deploy junto — un comando en el VPS
-Script `deploy-all.sh` (ver `scripts/deploy-all.sh` en este repo). Hace `git pull` + rebuild de los dos:
+~~Script `deploy-all.sh`~~ (borrado el 17/9/2026: tenía los paths de buscadonde y no ponía `GIT_SHA`). URUKU se despliega con `scripts/deploy-prod.sh` (ver `docs/deploy-10-09.md`); Reservalo con su propio `docker compose up -d --build`. Lo que hacía:
 ```bash
 cd /docker/buscadonde && git pull && docker compose -f docker-compose.prod.yml --env-file .env up -d --build
 cd /docker/reservalo  && git pull && docker compose -f docker-compose.prod.yml --env-file .env up -d --build

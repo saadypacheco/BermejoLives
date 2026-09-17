@@ -1081,3 +1081,11 @@
 .uk-permiso li { margin: 3px 0; }
 .uk-permiso .uk-btn, .uk-permiso .uk-btn-ghost { width: auto; display: inline-flex; padding: 9px 14px; font-size: 14px; }
 .uk-permiso-acciones { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ===== 404 ===== */
+.uk-404 { padding: 56px 0 72px; max-width: 560px; }
+.uk-404-num { margin: 0; font-size: 13px; letter-spacing: .12em; color: var(--uk-ink-soft); font-weight: 700; }
+.uk-404 h1 { margin: 6px 0 10px; font-size: 30px; }
+.uk-404 p { color: var(--uk-ink-soft); line-height: 1.5; }
+.uk-404-links { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+.uk-404-links .uk-btn, .uk-404-links .uk-btn-ghost { width: auto; display: inline-flex; }

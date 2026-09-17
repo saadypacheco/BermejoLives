@@ -314,6 +314,11 @@ export type EstadisticasAdmin = {
    *  vista. `contactos_30d` ya excluye las vistas. */
   contactos_por_tipo: Record<string, number>;
   vistas_30d: number;
+  /** Llegadas con `?ref=` en 30 días: total, por clase (mesa, volante, ficha,
+   *  fb, ig) y los diez orígenes más frecuentes (mesa-rustico…). */
+  llegadas_30d?: number;
+  llegadas_por_clase?: Record<string, number>;
+  llegadas_top?: { origen: string; count: number }[];
 };
 
 export async function getEstadisticas(): Promise<EstadisticasAdmin> {

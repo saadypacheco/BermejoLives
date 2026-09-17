@@ -378,3 +378,12 @@ def test_facebook_e_instagram_son_de_destacado_para_arriba(repo, monkeypatch):
         pub = repo.insert_publicacion_directa({"comercio_id": c["id"], "estado": "aprobado"})
         difusion.encolar(repo, pub["id"])
         assert {f["destino"] for f in repo.difusion} == esperado, plan
+
+
+def test_el_enlace_lleva_por_donde_salio():
+    """`?ref=fb` en Facebook, `?ref=ig` en Instagram: es lo que separa después
+    las llegadas de cada red en el panel. Sin destino, el enlace limpio."""
+    fb = difusion.texto_de({"titulo": "Oferta"}, {"nombre": "X", "slug": "x"}, "facebook")
+    ig = difusion.texto_de({"titulo": "Oferta"}, {"nombre": "X", "slug": "x"}, "instagram")
+    sin = difusion.texto_de({"titulo": "Oferta"}, {"nombre": "X", "slug": "x"})
+    assert fb.endswith("/comercios/x?ref=fb") and ig.endswith("/comercios/x?ref=ig") and sin.endswith("/comercios/x")

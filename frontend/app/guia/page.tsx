@@ -178,15 +178,27 @@ export default async function GuiaPage() {
                 <div key={slug}>
                   <b><Link href={`/buscar?rubro=${slug}&vista=mapa`}>{titulo}</Link></b>
                   <ul>
-                    {items.slice(0, 12).map((c) => (
-                      <li key={c.id}>
-                        {c.nombre}{c.direccion ? ` · ${c.direccion}` : ""}
-                        {c.lat != null && c.lng != null && (
-                          <a href={`https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lng}`} target="_blank" rel="noopener"> · cómo llegar</a>
-                        )}
-                      </li>
-                    ))}
-                    {items.length > 12 && <li><Link href={`/buscar?rubro=${slug}&vista=mapa`}>Ver todos en el mapa →</Link></li>}
+                    {/* Nueve renglones iguales de "Baño público · cómo llegar" no
+                        dicen nada: se muestra cada nombre+dirección una vez, y
+                        el resto lo tiene el mapa, que es donde se ve cuál queda
+                        cerca. */}
+                    {(() => {
+                      const vistos = new Set<string>();
+                      const unicos = items.filter((c) => {
+                        const k = `${(c.nombre || "").trim().toLowerCase()}|${(c.direccion || "").trim().toLowerCase()}`;
+                        if (vistos.has(k)) return false;
+                        vistos.add(k); return true;
+                      });
+                      return unicos.slice(0, 6).map((c) => (
+                        <li key={c.id}>
+                          <Link href={`/comercios/${c.slug}`}>{c.nombre}</Link>{c.direccion ? ` · ${c.direccion}` : ""}
+                          {c.lat != null && c.lng != null && (
+                            <a href={`https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lng}`} target="_blank" rel="noopener"> · cómo llegar</a>
+                          )}
+                        </li>
+                      ));
+                    })()}
+                    <li><Link href={`/buscar?rubro=${slug}&vista=mapa`}>Ver todos en el mapa →</Link></li>
                   </ul>
                 </div>
               ))}

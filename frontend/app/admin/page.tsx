@@ -819,6 +819,25 @@ function TabMonitoreo({
             {data.vistas_30d ?? 0} fichas vistas
           </div>
         </div>
+        {/* Llegadas por QR o enlace marcado (?ref=): la única forma de saber
+            si los volantes y las tarjetas de mesa trajeron a alguien. */}
+        <div className="panel-card glass" style={{ padding: 16, borderLeft: "3px solid var(--neon)" }}>
+          <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Llegadas por QR (30d)</div>
+          <div style={{ fontSize: 26, fontWeight: 700 }}>{data.llegadas_30d ?? 0}</div>
+          <div style={{ fontSize: 11, color: "var(--txt-3)", marginTop: 4, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <span title="Tarjetas de mesa">🍽 {data.llegadas_por_clase?.mesa ?? 0}</span>
+            <span title="Volantes">📄 {data.llegadas_por_clase?.volante ?? 0}</span>
+            <span title="El QR de la ficha en el sitio">🔗 {data.llegadas_por_clase?.ficha ?? 0}</span>
+            {(data.llegadas_por_clase?.fb ?? 0) + (data.llegadas_por_clase?.ig ?? 0) > 0 && (
+              <span title="Facebook e Instagram">📣 {(data.llegadas_por_clase?.fb ?? 0) + (data.llegadas_por_clase?.ig ?? 0)}</span>
+            )}
+          </div>
+          {(data.llegadas_top?.length ?? 0) > 0 && (
+            <div style={{ fontSize: 11, color: "var(--txt-3)", marginTop: 2 }} title={data.llegadas_top!.map((l) => `${l.origen}: ${l.count}`).join(" · ")}>
+              Más escaneado: {data.llegadas_top![0].origen} ({data.llegadas_top![0].count})
+            </div>
+          )}
+        </div>
         <div className="panel-card glass" style={{ padding: 16, borderLeft: `3px solid ${totalAlertas > 0 ? "var(--pink)" : "var(--neon)"}` }}>
           <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Bajas / vencidos</div>
           <div style={{ fontSize: 26, fontWeight: 700, color: totalAlertas > 0 ? "var(--pink)" : undefined }}>{totalAlertas}</div>

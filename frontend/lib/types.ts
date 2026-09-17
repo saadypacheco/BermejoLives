@@ -30,7 +30,10 @@ export type Comercio = {
   lat: number | null;
   lng: number | null;
   como_llegar: string | null;
-  plan: "gratis" | "pro" | "premium";
+  /** El slug de la tabla `planes` (gratis, publica, destacado, pro,
+   *  empleado_ia; premium quedó oculto). No es una lista fija: se crean
+   *  desde Admin › Planes. */
+  plan: string;
   modalidad: "mayorista" | "minorista" | "ambos";
   verificado: boolean;
   rating: number;

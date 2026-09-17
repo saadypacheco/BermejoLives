@@ -86,7 +86,13 @@ def _precio(pub: dict) -> str:
     return f"{simbolo} {monto.replace(',', '.')}"
 
 
-def texto_de(pub: dict, comercio: dict | None) -> str:
+# El `?ref=` que lleva el enlace según por dónde sale: es lo que después
+# separa, en Admin › Panel › Llegadas, lo que trajo Facebook de lo que trajo
+# Instagram o el canal (0114).
+_REF_POR_DESTINO = {"facebook": "fb", "instagram": "ig", "wa_canal": "canal"}
+
+
+def texto_de(pub: dict, comercio: dict | None, destino: str | None = None) -> str:
     """El texto que se publica. Mismo cuerpo para las tres redes.
 
     Lleva SIEMPRE el nombre del comercio y el enlace a su ficha. Sin el nombre,
@@ -112,7 +118,8 @@ def texto_de(pub: dict, comercio: dict | None) -> str:
     if nombre:
         partes.append(f"📍 {nombre}, Bermejo")
     if slug:
-        partes.append(f"{settings.sitio_url.rstrip('/')}/comercios/{slug}")
+        ref = _REF_POR_DESTINO.get(destino or "")
+        partes.append(f"{settings.sitio_url.rstrip('/')}/comercios/{slug}" + (f"?ref={ref}" if ref else ""))
 
     return "\n\n".join(partes).strip()
 
@@ -291,7 +298,7 @@ def procesar(repo, fila: dict) -> dict:
             # nunca va a ver publicada.
             repo.marcar_difusion(fila["id"], "pendiente", freno)
             return {"estado": "pendiente", "motivo": freno}
-    texto = texto_de(pub, comercio)
+    texto = texto_de(pub, comercio, destino)
     try:
         url = enviar(destino, texto, pub.get("imagen_url"))
     except DifusionError as exc:

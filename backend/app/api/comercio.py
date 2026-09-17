@@ -30,7 +30,6 @@ router = APIRouter()
 logger = structlog.get_logger()
 
 _TIPOS = {"oferta", "video", "novedad"}
-_PLANES = {"gratis", "pro", "premium"}
 _MODALIDADES = {"mayorista", "minorista", "ambos"}
 
 # Campos que el comercio PUEDE editar de su propio perfil. Todo lo demás

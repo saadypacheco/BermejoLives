@@ -13,6 +13,7 @@ import { RUBROS } from "@/lib/types";
 import { comprimirImagen } from "@/lib/imagen";
 import { useObjectUrl } from "@/lib/object-url";
 import { geoErrorMsg } from "@/lib/geo";
+import { waUruku } from "@/lib/contacto";
 import { PermisoUbicacion } from "@/components/permiso-ubicacion";
 
 type Msg = { from: "bot" | "user"; text: string };
@@ -35,10 +36,10 @@ function QueOfrecemos() {
     <div className="glass" style={{ padding: 20, borderRadius: 16, marginBottom: 18 }}>
       <h2 style={{ fontSize: 18, marginBottom: 10 }}>¿Por qué unirte a URUKU?</h2>
       <ul style={{ display: "flex", flexDirection: "column", gap: 8, color: "var(--txt-2)", fontSize: 14, paddingLeft: 18, listStyle: "none" }}>
-        <li>📍 Tu negocio aparece en el mapa.</li>
-        <li>📢 Publicá ofertas y productos fácilmente.</li>
-        <li>🛒 Accedé a tu propia tienda online.</li>
-        <li>🚀 Llegá a más clientes con <a href="/planes" target="_blank" rel="noopener">nuestros planes</a>.</li>
+        <li>📍 Tu negocio aparece en el mapa y en el buscador.</li>
+        <li>📢 Publicás ofertas mandando una foto por WhatsApp.</li>
+        <li>💬 El comprador te escribe directo a tu WhatsApp.</li>
+        <li>🚀 Con <a href="/planes" target="_blank" rel="noopener">los planes</a>: ficha completa, tus ofertas en las redes de URUKU y un chatbot que atiende por vos.</li>
         <li>💰 Sin comisiones por venta.</li>
       </ul>
     </div>
@@ -75,7 +76,7 @@ function AuthView({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
 
         <p style={{ color: "var(--txt-3)", fontSize: 13, marginTop: 18 }}>
           También podés publicar por{" "}
-          <a href="https://wa.me/59170000000?text=Quiero%20publicar" target="_blank" rel="noopener" style={{ color: "var(--wa)" }}>WhatsApp</a>.
+          <a href={waUruku("Hola, quiero publicar mi negocio en URUKU")} target="_blank" rel="noopener" style={{ color: "var(--wa)" }}>WhatsApp</a>.
         </p>
       </div>
     </>

@@ -31,3 +31,15 @@ def test_log_busqueda_corta_ignora(client, repo):
 def test_vista_como_lead(client, repo):
     r = client.post("/lead", json={"comercio_id": "c1", "tipo": "vista"})
     assert r.status_code == 200 and repo.leads[-1]["tipo"] == "vista"
+
+
+def test_la_vista_guarda_de_donde_llego(client, repo):
+    """El ?ref= del QR (volante, mesa, ficha) queda en la fila de la vista;
+    lo raro se limpia y lo vacío no se guarda. Es lo que dice después si las
+    tarjetas de mesa trajeron a alguien."""
+    client.post("/lead", json={"comercio_id": "c1", "tipo": "vista", "origen": "mesa-rustico"})
+    assert repo.leads[-1]["origen"] == "mesa-rustico"
+    client.post("/lead", json={"comercio_id": "c1", "tipo": "vista", "origen": "  VOLANTE-Rustico "})
+    assert repo.leads[-1]["origen"] == "volante-rustico"
+    client.post("/lead", json={"comercio_id": "c1", "tipo": "vista"})
+    assert "origen" not in repo.leads[-1]

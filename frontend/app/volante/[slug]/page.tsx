@@ -1,4 +1,5 @@
 import QRCode from "qrcode";
+import { WA_URUKU } from "@/lib/contacto";
 import { getComercioBySlug } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -55,7 +56,9 @@ export default async function VolantePage({ params }: { params: { slug: string }
   // Negro sobre blanco y margen 1: un QR impreso con poco contraste o sin borde
   // blanco alrededor no lo lee ningún teléfono, y eso se descubre con cien
   // volantes ya impresos.
-  const qr = await QRCode.toDataURL(url, {
+  // `?ref=volante-<slug>` en el QR (no en el texto impreso): cada ficha
+  // abierta desde este papel queda contada como llegada del volante (0114).
+  const qr = await QRCode.toDataURL(`${url}?ref=volante-${comercio.slug}`, {
     width: 520, margin: 1, errorCorrectionLevel: "M",
     color: { dark: "#0f2c33", light: "#ffffff" },
   });
@@ -92,7 +95,7 @@ export default async function VolantePage({ params }: { params: { slug: string }
           <b>Para publicar una oferta o una novedad</b>
           <span>
             Mande la foto al grupo de WhatsApp <b>URUKU · {comercio.nombre}</b>,
-            con el precio si lo tiene. Sale en su ficha y en el canal de ofertas
+            con el precio si lo tiene. Sale en su ficha y entre las ofertas
             de Bermejo. Sin formularios, sin apps.
           </span>
         </div>
@@ -100,6 +103,10 @@ export default async function VolantePage({ params }: { params: { slug: string }
         {codigo && (
           <p className="vol-cod">Código de su local: <b>URUKU-{codigo}</b> · <a href={`/volante/${comercio.slug}/mesa`}>tarjeta de mesa</a></p>
         )}
+        {/* El contacto de URUKU para el comerciante: el Anfitrión y el correo
+            de comercios. Es lo que se le da en la mano; sin esto, la duda
+            del jueves no tiene a quién ir. */}
+        <p className="vol-cod">Dudas: WhatsApp <b>+591 {WA_URUKU.slice(3, 5)} {WA_URUKU.slice(5)}</b> · comercios@uruku.bo</p>
       </div>
 
       <style>{`

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { UrukuShell } from "@/components/uruku-shell";
 import { MensajeComercioForm } from "@/components/mensaje-comercio-form";
 import { WaLeadLink } from "@/components/wa-lead-link";
@@ -33,13 +34,9 @@ function loQueVende(texto: string | null | undefined): string[] {
 
 export default async function ComercioPage({ params }: { params: { slug: string } }) {
   const comercio = await getComercioBySlug(params.slug);
-  if (!comercio) {
-    return (
-      <UrukuShell showCatnav={false}>
-        <div className="uk-container" style={{ padding: "80px 0" }}>Comercio no encontrado.</div>
-      </UrukuShell>
-    );
-  }
+  // 404 de verdad (app/not-found.tsx): un slug viejo o mal copiado no es
+  // una página que existe, y así lo entienden los buscadores y el navegador.
+  if (!comercio) notFound();
   // El QR de la ficha, el mismo que va en el volante y en la tarjeta de mesa.
   // En pantalla sirve para pasar la ficha de una compu a un celular sin
   // tipear, y para que el dueño la muestre desde su teléfono. Se genera acá,
@@ -48,7 +45,9 @@ export default async function ComercioPage({ params }: { params: { slug: string 
   const urlFicha = `https://uruku.bo/comercios/${comercio.slug}`;
   const [feed, galeria, qr] = await Promise.all([
     getOfertasComercio(comercio.id), getGaleriaComercio(comercio.id),
-    QRCode.toDataURL(urlFicha, { width: 240, margin: 1, errorCorrectionLevel: "M",
+    // Con `?ref=`: la vista que llegue por este QR queda marcada como tal
+    // (0114), distinta de la que llega por el volante o la tarjeta de mesa.
+    QRCode.toDataURL(`${urlFicha}?ref=ficha-${comercio.slug}`, { width: 240, margin: 1, errorCorrectionLevel: "M",
                                  color: { dark: "#0f2c33", light: "#ffffff" } }),
   ]);
 
