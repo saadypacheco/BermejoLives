@@ -4,7 +4,7 @@
 > algo se rompe— está el
 > [manual operativo](manual-operativo-whatsapp.md).**
 >
-> Al 15/9/2026. Ordenado por lo que **desbloquea a lo demás**, no por tamaño.
+> Al 17/9/2026. Ordenado por lo que **desbloquea a lo demás**, no por tamaño.
 > Lo de arriba hace que lo de abajo tenga sentido.
 
 ## Lo que se hizo desde la lista del 10/9
@@ -19,22 +19,39 @@ saber local de compras en Bermejo (14 entradas con fuentes) ✅ · `/cambio` con
 conversor ✅ · dónde estoy y "cerca de mí" ✅ · **planes** en `/planes` y Admin
 › Planes, sin canal, con chatbot desde Pro ✅ · `scripts/deploy-prod.sh` ✅.
 
+**Del 16 y 17/9 (revisión completa del sitio):** el home nuevo ✅ · la guía
+(`/guia`) ✅ · **los servicios son rubros** (baños, estacionamientos, cajeros,
+wifi: una sola forma de cargar, como cualquier comercio) y el rubro principal
+va primero (0113) ✅ · sin cifras de comercios para el público ✅ · el
+cartel de permiso de ubicación con los pasos de cada aparato ✅ · 404 propia
+y `/software` → `/planes` ✅ · el WhatsApp de contacto real (75314737) en el
+alta y el volante ✅ · **`?ref=` en los tres QR** (volante, mesa, ficha) y
+`?ref=fb/ig` en la difusión, con **Llegadas por QR en Admin › Panel** (0114)
+✅ · la Ayuda contesta por rubro («¿dónde como?», «taxi», «farmacia de
+turno») ✅ · cada ficha con su título y su foto al compartirla, y
+`sitemap.xml` ✅ · 0115: el principal sale de la subcategoría (carnicerías,
+kioscos, coca, Rústico) ✅ · deuda §5 cerrada (`_PLANES`, `types.ts`,
+`planes_con_ingesta`, `deploy-all.sh`, contador de Ofertas) ✅ ·
+`scripts/revision-sitio.mjs` recorre todas las rutas en compu y celular ✅.
+
 ---
 
 ## 0. Hoy mismo, porque lo de abajo lo necesita
 
-- [ ] **Desplegar `3a84fcc`** con la 0108 (planes). Prod está en `16fe18e` /
-  backend `496b371`: la página de planes y las reglas de redes/gratis no
-  existen todavía.
-  `bash scripts/deploy-prod.sh --sql selfhost/postgres-init/0108_planes_sin_canal_con_chatbot.sql frontend backend`
-- [ ] **Cargar la cotización de hoy** en `/contenido`. Está del 15 de agosto y
-  el sitio lo dice en naranja. Y decidir **quién la carga cada mañana** (el
-  Anfitrión se la pide a una casa de cambio por WhatsApp; 20 segundos).
+- [ ] **Desplegar lo del 17/9** con la 0114 y la 0115:
+  `bash scripts/deploy-prod.sh --sql selfhost/postgres-init/0114_de_donde_llego.sql --sql selfhost/postgres-init/0115_el_principal_es_lo_que_dice_la_subcategoria.sql frontend backend`
+- [ ] **El 500 al guardar un comercio en el admin** (visto el 16/9, sin
+  traceback todavía). Reproducirlo y mandar:
+  `docker compose -f docker-compose.prod.yml logs --tail 200 backend | grep -B 5 -A 40 Traceback`
+- [x] Cotización cargada (17/9). Falta decidir **quién la carga cada mañana**
+  (el Anfitrión se la pide a una casa de cambio por WhatsApp; 20 segundos).
 - [ ] **Facebook e Instagram**: la app de Meta → `FACEBOOK_PAGE_ID`,
   `FACEBOOK_PAGE_TOKEN`, `INSTAGRAM_USER_ID`. **Ahora es una promesa vendida**:
   Destacado dice "tus ofertas en las redes de URUKU". Sin token, la cola
   espera y nada sale. `difusion-redes.md` tiene el paso a paso.
-- [ ] **La URL de Facebook en `/contenido`** (`https://www.facebook.com/uruku.bo/`).
+- [x] La URL de Facebook en `/contenido` ✅ (17/9).
+- [ ] **El estado de la frontera** en `/contenido`, cada mañana: al 17/9 el
+  dato tenía dos días y la guía lo dice.
 
 ## 1. Los teléfonos (manual operativo, sección 2)
 
@@ -52,7 +69,7 @@ conversor ✅ · dónde estoy y "cerca de mí" ✅ · **planes** en `/planes` y 
 
 ## 2. Los datos, que es lo que hace que todo lo demás sirva
 
-- [ ] **Los horarios.** Ninguno cargado. Ahora pesa más que antes: "¿qué hay
+- [ ] **Los horarios.** Uno solo cargado de 1.000 activos. Ahora pesa más que antes: "¿qué hay
   abierto?", "¿está abierto Rústico?" y "casas de cambio abiertas ahora" del
   asistente contestan "no tiene horario" hasta que estén. Empezar por las 27
   casas de cambio, los restaurantes y los que tienen grupo.
@@ -65,7 +82,19 @@ conversor ✅ · dónde estoy y "cerca de mí" ✅ · **planes** en `/planes` y 
 - [ ] **Mirar Admin › Ayuda › Sin respuesta** cada dos o tres días y contestar.
   Es la cola que hace crecer al asistente.
 - [ ] **43 comercios sin WhatsApp** (de los 67 nuevos): sin número no hay lead.
-- [ ] **194 comercios en la cola de revisión de rubros.**
+- [ ] **194 comercios en la cola de revisión de rubros.** La 0115 resuelve
+  sola los que tienen la subcategoría clara (carnicería, kiosco, coca,
+  peluquería, restaurante); el resto sigue en Admin › Rubros. Y dos a mano
+  que son vidriera: **CITY TRIKE** tiene `taxis` de secundario (aparece en
+  el chip Taxis: destildarlo en su ficha) y **Vidriería Pacheco** queda en
+  ferretería porque no hay rubro vidriería.
+- [ ] **Cargar los servicios como comercios**: cajeros (hay cero), más baños,
+  estacionamientos y wifi, y los taxis reales. Desde campo o Admin ›
+  Comercios, con el rubro Baños públicos / Estacionamientos / Cajeros y
+  bancos / Wifi gratis / Taxis. Los chips del home y la Ayuda los muestran
+  apenas están.
+- [ ] **927 de 1.000 comercios sin WhatsApp** y **431 que se llaman
+  "Comercio"**: es lo que más se nota en la Ayuda y en las listas.
 - [ ] **Nombres "Comercio"**: cientos de fichas se llaman así. Son a propósito
   (cargados desde la calle), pero en el asistente y en las listas se ven
   como cinco iguales. Cuando se les ponga nombre, todo mejora solo.
@@ -77,12 +106,13 @@ conversor ✅ · dónde estoy y "cerca de mí" ✅ · **planes** en `/planes` y 
   no el tope: no prometer plata antes de esto.
 - [ ] **`usuarios.ultima_actividad`** — no se guarda; sin eso no se sabe si un
   usuario traído volvió.
-- [ ] **`?ref=` en los QR** del volante y la tarjeta (`ref=volante-<slug>`,
-  `ref=mesa-<slug>`) y el conteo de llegadas por `ref` en el admin. Sin
-  esto no se sabe si las tarjetas de mesa trajeron a alguien.
-  `estrategia-marca-uruku.md` §4.
-- [ ] **Panel de marca**: llegadas por `ref`, preguntas al asistente por día,
-  👍/👎, comercios con papel. Cuatro números, una vez por semana.
+- [x] **`?ref=` en los QR** ✅ (17/9, 0114): `volante-<slug>`, `mesa-<slug>`,
+  `ficha-<slug>`, y `fb`/`ig` en la difusión. **Admin › Panel › Llegadas por
+  QR (30d)** los cuenta por clase y muestra el más escaneado. Los volantes
+  y tarjetas impresos ANTES del 17/9 no llevan el `ref`: reimprimir los que
+  se repartan de acá en más.
+- [ ] **Panel de marca**: faltan preguntas al asistente por día y 👍/👎
+  (están en la base: `asistente_conversaciones`), y comercios con papel.
 - [ ] La base de 4.316 contactos: decidido el 13/9, **todavía no** (y nunca
   como difusión desde los números de la marca).
 
@@ -109,20 +139,18 @@ conversor ✅ · dónde estoy y "cerca de mí" ✅ · **planes** en `/planes` y 
 
 ## 5. Deuda técnica, chica y concreta
 
-- [ ] `/buscar?of=1` (Ofertas): el contador dice "N resultados" y la lista
-  muestra sólo los que tienen oferta. Contar lo que se muestra.
-- [ ] **`_PLANES` en `comercio.py:33`** es código muerto; **`frontend/lib/types.ts:33`**
-  declara un `plan` que no coincide con la base; **`planes_con_ingesta = "premium"`**
-  en config apunta a un plan oculto.
-- [ ] `scripts/deploy-all.sh` está viejo (paths y sin GIT_SHA); `deploy-prod.sh`
-  lo reemplaza. Borrarlo o apuntar la doc.
-- [ ] **Marcar los enlaces por red** (`?ref=fb`, `?ref=ig`) en la difusión.
+- [x] `/buscar?of=1` cuenta lo que muestra («N con ofertas») ✅.
+- [x] `_PLANES`, `types.ts`, `planes_con_ingesta` (ahora los planes pagos de
+  la tabla), `deploy-all.sh` borrado ✅.
+- [x] `?ref=fb` / `?ref=ig` en la difusión ✅.
+- [ ] `usuarios.ultima_actividad`: sigue sin guardarse (sólo importa cuando
+  exista la recompensa por traer usuarios).
 
 ---
 
 ## Lo que yo haría en este orden
 
-1. **Desplegar `3a84fcc`** y cargar la cotización de hoy (0). Diez minutos.
+1. **Desplegar lo del 17/9** (0114 + 0115) y mandar el traceback del 500 (0).
 2. **Los tokens de Facebook e Instagram** (0): es lo único que hace que
    Destacado cumpla lo que dice.
 3. **Horarios de casas de cambio, restaurantes y los que tienen grupo**, y el
