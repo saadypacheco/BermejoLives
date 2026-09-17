@@ -372,3 +372,20 @@ def test_donde_hay_un_bano_es_el_rubro_no_el_texto(repo, sin_modelo):
     # Sin nada cargado, lo dice y queda anotado.
     r2 = asistente.responder(repo, "busco un cajero automático", ahora=MARTES_11)
     assert r2.sin_respuesta and "cajeros y bancos" in r2.texto
+
+
+def test_una_pregunta_que_es_un_rubro_se_contesta_con_el_rubro(repo, sin_modelo):
+    """"¿Dónde como?" no nombra ningún local ni dice "busco": es el rubro
+    restaurantes. Y "wifi" sin nada cargado no pisa la nota de los chips."""
+    repo.comercios["r1"] = {"id": "r1", "slug": "comedor-dona-rosa", "nombre": "Comedor Doña Rosa", "activo": True,
+                            "rubro_slug": "restaurantes", "subcategoria": "comedor"}
+    r = asistente.responder(repo, "¿dónde como?", ahora=MARTES_11)
+    assert r.nivel == 0 and r.intent == "buscar" and "Comedor Doña Rosa" in r.texto and "rubro=restaurantes" in r.texto
+    repo.saber_local["s-chip"] = {"id": "s-chip", "pregunta": "¿Qué chip compro?", "respuesta": "Entel o Tigo, en cualquier kiosco.",
+                                  "etiquetas": ["chip", "wifi", "internet"], "activo": True}
+    r2 = asistente.responder(repo, "¿hay wifi gratis?", ahora=MARTES_11)
+    assert r2.intent == "saber_local" and "Entel" in r2.texto
+    # Con un wifi cargado, gana el rubro.
+    repo.comercios["w1"] = {"id": "w1", "slug": "zona-wifi-plaza", "nombre": "Zona wifi plaza", "activo": True, "rubro_slug": "wifi"}
+    r3 = asistente.responder(repo, "¿hay wifi gratis?", ahora=MARTES_11)
+    assert r3.intent == "buscar" and "Zona wifi plaza" in r3.texto

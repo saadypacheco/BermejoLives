@@ -137,8 +137,8 @@ FAQ: list[tuple[str, str, str]] = [
      "registrar"),
     (r"(publicar|subir|mandar|cargar).*(oferta|promo|novedad|foto)|como (publico|subo) (una )?oferta",
      "Las ofertas se publican mandando una foto al grupo de WhatsApp que URUKU le crea a cada local "
-     "(«URUKU · nombre del local»), con el precio si lo tiene. Sale en la ficha del negocio y en el canal "
-     "de ofertas de Bermejo. Si tu local todavía no tiene el grupo, registralo y te lo creamos.",
+     "(«URUKU · nombre del local»), con el precio si lo tiene. Sale en la ficha del negocio y entre las "
+     "ofertas de Bermejo. Si tu local todavía no tiene el grupo, registralo y te lo creamos.",
      "publicar_oferta"),
     # Los planes se contestan aparte, leyendo la base: ver _nivel0_planes.
     (r"\bcomision|se paga por venta|cobran por vender",
@@ -150,8 +150,9 @@ FAQ: list[tuple[str, str, str]] = [
      f"en {SITIO}/reclamos y lo revisamos. Si es una estafa, hacé también la denuncia en la policía.",
      "reclamo"),
     (r"\bcanal\b.*(whatsapp|ofertas)|ofertas del dia|ver (las )?ofertas",
-     f"Las ofertas de toda la ciudad están en {SITIO}/buscar?of=1, y también en el canal de WhatsApp "
-     "de URUKU, que podés seguir desde el sitio.",
+     f"Las ofertas de toda la ciudad están en {SITIO}/buscar?of=1: las que los comercios mandan por "
+     "WhatsApp y se aprueban en el día. Y en el Instagram y el Facebook de URUKU salen las de los "
+     "locales con plan Destacado.",
      "ofertas"),
 ]
 
@@ -443,7 +444,10 @@ def _nivel0_comercio_nombrado(repo, pregunta: str, ahora: datetime) -> Respuesta
     return None
 
 
-def _nivel0_busqueda(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
+def _nivel0_busqueda(repo, pregunta: str, ahora: datetime, definitivo: bool = True) -> Respuesta | None:
+    """"¿Dónde consigo X?", "busco X". Con `definitivo=False` sólo contesta
+    si encontró algo: "¿qué días hay feria?" también parece una búsqueda, y
+    si no hay resultados tiene que poder contestarla el saber local."""
     p = _norm(pregunta)
     m = re.search(r"(?:donde (?:consigo|compro|venden|hay|encuentro)|quien vende|busco|necesito|quiero comprar|hay)\s+(.+)$", p)
     if not m:
@@ -451,7 +455,10 @@ def _nivel0_busqueda(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     q = " ".join(t for t in m.group(1).split() if t not in _STOP)
     if not q:
         return None
-    return _buscar_y_contestar(repo, q, ahora)
+    r = _buscar_y_contestar(repo, q, ahora)
+    if r and r.sin_respuesta and not definitivo:
+        return None
+    return r
 
 
 # Los servicios de la ciudad son rubros no comerciales (0083, 0113). "¿Dónde
@@ -460,9 +467,19 @@ def _nivel0_busqueda(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
 # Es el mismo mapa que usa el buscador del sitio (lib/servicios.ts).
 _SERVICIOS = (
     (re.compile(r"\bban(o|os)\b|sanitarios? publicos?|inodoro|\bwc\b"), "banos", "baños públicos"),
-    (re.compile(r"estacionamiento|estacionar|cochera|parking|dejar el auto"), "estacionamiento", "estacionamientos"),
+    (re.compile(r"estacionamiento|estacionar|estaciono|cochera|parking|dejar el auto"), "estacionamiento", "estacionamientos"),
     (re.compile(r"cajeros?( automaticos?)?|\batm\b|\bbancos?\b|sacar plata|retirar (plata|dinero|efectivo)"), "cajeros", "cajeros y bancos"),
     (re.compile(r"\bwi-?fi\b|internet gratis"), "wifi", "wifi gratis"),
+    # Y los rubros comerciales que el visitante pide sin nombrar un local:
+    # "¿dónde como?", "¿dónde duermo?", "taxi", "farmacia de turno".
+    (re.compile(r"\b(donde|quiero|para) (como|comer|almorzar|cenar|desayunar)\b|\brestaurantes?\b|\bcomida\b"), "restaurantes", "lugares para comer"),
+    (re.compile(r"\bdonde (duermo|dormir|me quedo|me alojo)\b|\bhotel(es)?\b|\bhostal(es)?\b|alojamiento|hospedaje|residencial"), "hospedaje", "lugares para dormir"),
+    (re.compile(r"\btaxis?\b|\bremis(es)?\b|mototaxi|\btrufis?\b|radio ?taxi"), "taxis", "taxis y movilidad"),
+    (re.compile(r"\bfarmacias?\b|\bremedios?\b|medicamentos?"), "farmacia", "farmacias"),
+    (re.compile(r"\bpeluquer|\bbarber|corte de pelo"), "peluqueria", "peluquerías y barberías"),
+    (re.compile(r"\bgasolina\b|\bnafta\b|estacion de servicio|surtidor|cargar combustible"), "estacion-servicio", "estaciones de servicio"),
+    (re.compile(r"\bpanader|\bpan\b|\bfacturas\b"), "panaderia", "panaderías"),
+    (re.compile(r"\bhelad|\bcafe\b|cafeteria|\bpostres?\b"), "cafeteria", "cafeterías y heladerías"),
 )
 
 
@@ -472,6 +489,27 @@ def _servicio_de(q: str) -> tuple[str, str] | None:
         if patron.search(p):
             return rubro, plural
     return None
+
+
+def _nivel0_servicio(repo, pregunta: str, ahora: datetime, solo_con_datos: bool) -> Respuesta | None:
+    """Una pregunta que ES un rubro ("¿dónde como?", "busco un cajero").
+
+    Corre dos veces: antes del saber local sólo si hay locales cargados de
+    ese rubro (para que "wifi" no pise la nota sobre los chips cuando no hay
+    ningún wifi cargado), y al final para decir que todavía no hay."""
+    sv = _servicio_de(pregunta)
+    if not sv:
+        return None
+    if solo_con_datos:
+        filas = list(repo.buscar_comercios("", 1, rubro=sv[0]) or [])
+        if not filas:
+            return None
+    return _buscar_y_contestar(repo, pregunta, ahora)
+
+
+# Servicios de la ciudad: la subcategoría es la del formulario de carga y
+# rara vez dice algo ("Baño público — ojota").
+_RUBROS_SIN_SUBCATEGORIA = {"banos", "estacionamiento", "cajeros", "wifi"}
 
 
 def _buscar_y_contestar(repo, q: str, ahora: datetime) -> Respuesta | None:
@@ -499,7 +537,7 @@ def _buscar_y_contestar(repo, q: str, ahora: datetime) -> Respuesta | None:
     lineas = []
     for c in filas:
         extra = []
-        if c.get("subcategoria"):
+        if c.get("subcategoria") and not (servicio and servicio[0] in _RUBROS_SIN_SUBCATEGORIA):
             extra.append(c["subcategoria"])
         if c.get("direccion"):
             extra.append(c["direccion"])
@@ -631,20 +669,36 @@ def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
         t = _clima(repo)
         if t:
             return Respuesta(texto=t, nivel=0, intent="clima")
+    # Los mercados y galerías ANTES que un comercio nombrado: "¿dónde está
+    # el mercado?" encontraba al "Comedor Mercado Bolívar" por el nombre.
+    r = _nivel0_lugares(repo, pregunta)
+    if r:
+        return r
     r = _nivel0_comercio_nombrado(repo, pregunta, ahora)
     if r:
         return r
     r = _nivel0_abierto_ahora(repo, pregunta, ahora)
     if r:
         return r
-    r = _nivel0_lugares(repo, pregunta)
+    # "busco zapatillas" es una búsqueda, no la nota general sobre qué
+    # comprar en Bermejo: la búsqueda va antes que el saber local. Y una
+    # pregunta que es un rubro con locales cargados ("¿dónde como?") también.
+    r = _nivel0_busqueda(repo, pregunta, ahora, definitivo=False)
+    if r:
+        return r
+    r = _nivel0_servicio(repo, pregunta, ahora, solo_con_datos=True)
     if r:
         return r
     s, _ = _saber_local(repo, pregunta)
     if s:
         return Respuesta(texto=s["respuesta"], nivel=0, intent="saber_local",
                          fuentes=[{"tipo": "saber", "nombre": s.get("pregunta"), "url": ""}])
-    r = _nivel0_busqueda(repo, pregunta, ahora)
+    # Sin saber local que la conteste: la búsqueda dice que no encontró (y
+    # queda anotada), o el rubro dice que todavía no hay nada cargado.
+    r = _nivel0_busqueda(repo, pregunta, ahora, definitivo=True)
+    if r:
+        return r
+    r = _nivel0_servicio(repo, pregunta, ahora, solo_con_datos=False)
     if r:
         return r
     return None
