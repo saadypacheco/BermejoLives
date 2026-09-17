@@ -18,6 +18,7 @@ import { medirMemoria } from "@/lib/memoria";
 import { GaleriaUploader } from "@/components/galeria-uploader";
 import { AdminMap } from "@/components/admin-map";
 import { geoErrorMsg } from "@/lib/geo";
+import { PermisoUbicacion } from "@/components/permiso-ubicacion";
 import { encolarAlta, sincronizarPendientes, listarPendientes,
          descartarPendiente, esIrrecuperable, type AltaPendiente } from "@/lib/offline-altas";
 
@@ -992,7 +993,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
             <Pin style={{ width: 17, height: 17 }} /> {coords ? "Ubicación tomada ✓ — tomar de nuevo" : "Usar mi ubicación actual"}
           </button>
           {coords && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>📍 {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} (±{coords.acc} m)</div>}
-          {geoMsg && <div style={{ fontSize: 12.5, color: "var(--amber)", marginTop: 6 }}>{geoMsg}</div>}
+          {geoMsg && <PermisoUbicacion mensaje={geoMsg} onPedir={ubicar} motivo="Para ubicar el comercio en el mapa" />}
         </div>
 
         {/* ── ¿Dentro de un mercado / galería? ── */}

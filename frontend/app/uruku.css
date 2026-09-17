@@ -1072,3 +1072,12 @@
   .uk-home-grid-4 { grid-template-columns: 1fr 1fr; }
   .uk-home-grid-3 { grid-template-columns: 1fr; }
 }
+
+/* ===== El cartel de permiso de ubicación ===== */
+.uk-permiso { margin: 12px 0; padding: 14px 16px; border: 1px solid var(--uk-line); border-radius: 14px; background: var(--uk-surface); font-size: 14px; line-height: 1.5; }
+.uk-permiso.bloqueado { border-color: #e2b23a; background: #fff8e6; color: #3a2c12; }
+.uk-permiso p { margin: 0 0 10px; }
+.uk-permiso ol { margin: 0 0 12px; padding-left: 22px; list-style: decimal; }
+.uk-permiso li { margin: 3px 0; }
+.uk-permiso .uk-btn, .uk-permiso .uk-btn-ghost { width: auto; display: inline-flex; padding: 9px 14px; font-size: 14px; }
+.uk-permiso-acciones { display: flex; gap: 8px; flex-wrap: wrap; }

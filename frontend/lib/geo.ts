@@ -1,9 +1,11 @@
-// Mensaje de error consistente para navigator.geolocation.getCurrentPosition,
-// con instrucciones para el aparato en el que está la persona. Cada uno
-// guarda el "no" en un lugar distinto y ninguno vuelve a preguntar solo:
-// decirle a alguien en Chrome de Windows que vaya a Ajustes del iPhone es
-// mandarlo a buscar un menú que no existe.
-function aparato(): "iphone" | "android" | "escritorio" {
+// La ubicación: el mensaje de error de navigator.geolocation y los pasos para
+// destrabarla, según el aparato en el que está la persona. Cada uno guarda el
+// "no" en un lugar distinto y ninguno vuelve a preguntar solo: decirle a
+// alguien en Chrome de Windows que vaya a Ajustes del iPhone es mandarlo a
+// buscar un menú que no existe.
+export type Aparato = "iphone" | "android" | "escritorio";
+
+export function aparato(): Aparato {
   if (typeof navigator === "undefined") return "escritorio";
   const ua = navigator.userAgent || "";
   // iPadOS se presenta como Mac; lo delata la pantalla táctil.
@@ -12,31 +14,43 @@ function aparato(): "iphone" | "android" | "escritorio" {
   return "escritorio";
 }
 
+/** Los pasos para volver a dar el permiso cuando el navegador lo tiene
+ *  bloqueado. Ninguna página puede abrir ese ajuste por la persona: lo único
+ *  honesto es decirle dónde está, en tres renglones. */
+export function pasosPermisoUbicacion(donde: Aparato = aparato()): { pasos: string[]; recargar: boolean } {
+  if (donde === "iphone") {
+    return {
+      pasos: [
+        "Abrí Ajustes del iPhone → Privacidad y seguridad → Localización.",
+        "Activá el interruptor general y, en Safari (o en URUKU si la agregaste a la pantalla de inicio), elegí «Mientras se usa la app».",
+        "Volvé acá y tocá «Probar de nuevo».",
+      ],
+      recargar: false,
+    };
+  }
+  if (donde === "android") {
+    return {
+      pasos: [
+        "Tocá el candado 🔒 (o el ícono de ajustes) a la izquierda de la dirección.",
+        "Entrá a Permisos → Ubicación y elegí «Permitir».",
+        "Si el celular tiene la ubicación apagada, encendela desde la barra de arriba. Después, «Probar de nuevo».",
+      ],
+      recargar: false,
+    };
+  }
+  return {
+    pasos: [
+      "Hacé clic en el ícono a la izquierda de la dirección (el candado 🔒 o el de ajustes).",
+      "Buscá «Ubicación» y elegí «Permitir».",
+      "Recargá la página. En una computadora sin GPS la ubicación es aproximada: sale de la red.",
+    ],
+    recargar: true,
+  };
+}
+
 export function geoErrorMsg(e: GeolocationPositionError): string {
   if (e.code === e.PERMISSION_DENIED) {
-    const donde = aparato();
-    if (donde === "iphone") {
-      return (
-        "Permiso de ubicación denegado. En iPhone: Ajustes → Privacidad y Seguridad → " +
-        "Localización, activá el interruptor general y elegí \"Mientras se usa la app\" " +
-        "para Safari (o para esta app si la agregaste a la pantalla de inicio). Si ya " +
-        "habías elegido \"No permitir\" antes, Safari no vuelve a preguntar solo — hay " +
-        "que cambiarlo ahí manualmente."
-      );
-    }
-    if (donde === "android") {
-      return (
-        "Permiso de ubicación denegado. Tocá el candado (o el ícono de ajustes) a la " +
-        "izquierda de la dirección, entrá a Permisos → Ubicación y elegí \"Permitir\". " +
-        "Si el celular tiene la ubicación apagada, encendela desde la barra de arriba."
-      );
-    }
-    return (
-      "Permiso de ubicación denegado. Hacé clic en el ícono a la izquierda de la " +
-      "dirección (el candado o el de ajustes), buscá \"Ubicación\" y elegí \"Permitir\"; " +
-      "después recargá la página. En una computadora sin GPS la ubicación es " +
-      "aproximada (sale de la red)."
-    );
+    return "Permiso de ubicación denegado. " + pasosPermisoUbicacion().pasos.join(" ");
   }
   if (e.code === e.TIMEOUT) return "Se demoró demasiado en obtener la ubicación. Probá de nuevo.";
   return "No se pudo obtener la ubicación. Revisá que la localización esté activada.";

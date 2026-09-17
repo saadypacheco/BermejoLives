@@ -13,6 +13,7 @@ import { RUBROS } from "@/lib/types";
 import { comprimirImagen } from "@/lib/imagen";
 import { useObjectUrl } from "@/lib/object-url";
 import { geoErrorMsg } from "@/lib/geo";
+import { PermisoUbicacion } from "@/components/permiso-ubicacion";
 
 type Msg = { from: "bot" | "user"; text: string };
 type Step = "tipo" | "titulo" | "precio" | "descripcion" | "tiktok" | "imagen" | "confirm" | "done";
@@ -354,7 +355,7 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
         <button type="button" className={`btn ${coords ? "btn-ghost" : "btn-primary"}`} style={{ width: "100%" }} onClick={ubicar}>
           {coords ? "Ubicación tomada ✓ — tomar de nuevo" : "📍 Usar mi ubicación actual"}
         </button>
-        {geoMsg && <div style={{ fontSize: 12.5, color: "var(--amber)", marginTop: 6 }}>{geoMsg}</div>}
+        {geoMsg && <PermisoUbicacion mensaje={geoMsg} onPedir={ubicar} motivo="Para poner tu negocio en el mapa" />}
       </div>
 
       <div>

@@ -12,6 +12,7 @@ import { productosDe } from "@/lib/productos";
 import { distanciaMetros, formatDistancia } from "@/lib/distancia";
 import { pedirUbicacion, permisoUbicacion, ubicacionGuardada, type Ubicacion } from "@/lib/ubicacion";
 import { detectarServicio, SERVICIOS, servicioDeRubro } from "@/lib/servicios";
+import { PermisoUbicacion } from "@/components/permiso-ubicacion";
 import { ReservaBarra } from "@/components/reserva-barra";
 import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
@@ -69,8 +70,10 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
   useEffect(() => {
     if (!cercaPedido) return;
     setCercaPedido(false);
-    (ubicacion ? Promise.resolve(ubicacion) : pedirUbicacion().then((u) => { setUbicacion(u); return u; }).catch(() => null))
-      .then((u) => { if (u) setCerca(true); });
+    // Por `ubicarme` y no por `pedirUbicacion` a secas: si el permiso está
+    // bloqueado, el cartel con los pasos tiene que aparecer. Antes el error
+    // se tragaba y "Qué hay cerca tuyo" desde el home no hacía nada.
+    (ubicacion ? Promise.resolve(ubicacion) : ubicarme(false)).then((u) => { if (u) setCerca(true); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cercaPedido]);
   const [errUbicacion, setErrUbicacion] = useState("");
@@ -649,8 +652,10 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
           centrarEnMi={centrarEnMi}
           onPedirUbicacion={() => ubicarme(true)}
         />
-        {errUbicacion && <p style={{ fontSize: 12.5, color: "var(--uk-red)", margin: "8px 0 0" }}>{errUbicacion}</p>}
         </>
+      )}
+      {errUbicacion && (
+        <PermisoUbicacion mensaje={errUbicacion} onPedir={() => ubicarme(vista === "mapa")} />
       )}
       {/* LA LISTA NO SE DESMONTA AL IR AL MAPA: SE ESCONDE.
 

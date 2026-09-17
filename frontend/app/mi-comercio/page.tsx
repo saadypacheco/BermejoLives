@@ -37,6 +37,7 @@ import { GaleriaUploader } from "@/components/galeria-uploader";
 import { comprimirImagen } from "@/lib/imagen";
 import { RUBROS } from "@/lib/types";
 import { geoErrorMsg } from "@/lib/geo";
+import { PermisoUbicacion } from "@/components/permiso-ubicacion";
 
 export default function MiComercioPage() {
   const [sess, setSess] = useState<ComercioSession | null>(null);
@@ -750,7 +751,7 @@ function PerfilTab() {
             </a>
           )}
         </div>
-        {geoMsg && <div style={{ fontSize: 12.5, color: "var(--amber)", marginTop: 6 }}>{geoMsg}</div>}
+        {geoMsg && <PermisoUbicacion mensaje={geoMsg} onPedir={ubicar} motivo="Para poner tu negocio en el mapa" />}
       </div>
 
       {/* CONTACTO */}
