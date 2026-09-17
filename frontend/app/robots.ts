@@ -24,6 +24,6 @@ import type { MetadataRoute } from "next";
 export default function robots(): MetadataRoute.Robots {
   const esProd = (process.env.NEXT_PUBLIC_ENV_LABEL || "").toLowerCase() === "prod";
   return esProd
-    ? { rules: { userAgent: "*", allow: "/" } }
+    ? { rules: { userAgent: "*", allow: "/", disallow: ["/admin", "/contenido", "/publicar", "/campo", "/mi-comercio", "/volante/"] }, sitemap: "https://uruku.bo/sitemap.xml" }
     : { rules: { userAgent: "*", disallow: "/" } };
 }

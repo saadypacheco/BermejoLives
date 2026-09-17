@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { UrukuShell } from "@/components/uruku-shell";
@@ -20,6 +21,29 @@ import {
 } from "@/components/icons";
 
 export const dynamic = "force-dynamic"; // el header (ciudad por cookie) es dinámico
+
+/** El título y la vista previa de la ficha: es lo que se ve cuando alguien
+ *  la comparte por WhatsApp o la encuentra en Google. Sin esto todas las
+ *  fichas decían "URUKU — Comercios y ofertas en el mapa" y sin foto: un
+ *  enlace compartido que no dice qué local es no se abre. */
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const c = await getComercioBySlug(params.slug);
+  if (!c) return { title: "Comercio no encontrado — URUKU" };
+  const que = c.subcategoria || c.rubro_nombre?.replace(/^\S+\s/, "") || "";
+  const titulo = `${c.nombre.trim()}${que ? ` — ${que}` : ""} en Bermejo | URUKU`;
+  const vende = (c.prod_obs_human || c.prod_det_ia || "").split(/[,;·]/).map((t) => t.trim()).filter(Boolean).slice(0, 6).join(", ");
+  const descripcion = (c.descripcion?.trim() || (vende ? `Vende ${vende}.` : `${c.nombre.trim()} en el mapa de Bermejo.`))
+    + " Cómo llegar, WhatsApp y ofertas en URUKU.";
+  const imagen = c.portada_url || c.logo_url || "https://uruku.bo/logouruku.png";
+  return {
+    title: titulo,
+    description: descripcion.slice(0, 300),
+    alternates: { canonical: `https://uruku.bo/comercios/${c.slug}` },
+    openGraph: { title: titulo, description: descripcion.slice(0, 300), url: `https://uruku.bo/comercios/${c.slug}`,
+                 siteName: "URUKU", type: "website", locale: "es_BO", images: [{ url: imagen }] },
+    twitter: { card: "summary_large_image", title: titulo, description: descripcion.slice(0, 200), images: [imagen] },
+  };
+}
 
 /** Lo que vende, partido en fichas. Viene como texto separado por comas —lo
  *  escribió el agente o lo leyó la IA de la vidriera— y en una sola línea larga

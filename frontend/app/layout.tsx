@@ -8,9 +8,11 @@ import { WebVitalsReporter } from "@/components/web-vitals-reporter";
 import { RefCapture } from "@/components/ref-capture";
 
 export const metadata: Metadata = {
-  title: "URUKU — Comercios y ofertas en el mapa",
+  title: "URUKU — Todo Bermejo en un solo lugar",
   description:
-    "URUKU en el mapa. Reservalo en la tienda. Todo lo que se vende en tu ciudad, en tiempo real.",
+    "Comercios, ofertas, cambio, servicios y la guía para tu visita a Bermejo: qué se vende, dónde, cómo llegar y el WhatsApp de cada local.",
+  metadataBase: new URL("https://uruku.bo"),
+  openGraph: { siteName: "URUKU", locale: "es_BO", type: "website", images: [{ url: "/logouruku.png" }] },
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "URUKU" },
   icons: { icon: "/logouruku-mark.png", apple: "/logouruku.png" },
 };
