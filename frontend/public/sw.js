@@ -18,7 +18,10 @@
 // Ya no depende de este bump: components/version-check.tsx compara el commit
 // del bundle con /version y recarga sola. El bump acá sólo limpia las cachés
 // de estáticos viejos que quedaron.
-const VERSION = "uruku-v28";
+// v29 (2026-09-17): el home nuevo, la guía, /cambio, los servicios por rubro y
+// el cartel de permiso de ubicación: una semana de estáticos nuevos. Limpia
+// las cachés viejas; la recarga la sigue haciendo version-check.tsx.
+const VERSION = "uruku-v29";
 const SHELL = `${VERSION}-shell`;
 const STATIC = `${VERSION}-static`;
 const TILES = `${VERSION}-tiles`;
