@@ -12,7 +12,7 @@ from app.core.auth import require_admin, require_moderador
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp
-from app.services import clasificador, demanda, difusion, planes, revision_ia, wa_grupos, wa_sesion
+from app.services import clasificador, contactos, demanda, difusion, planes, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
@@ -288,6 +288,44 @@ def editar_comercio(
         aplicar_rubros(repo, updated, body.rubro_slugs or repo.get_comercio_rubros(comercio_id))
     logger.info("moderacion.comercio_editado", comercio=comercio_id, campos=list(patch.keys()), by=admin["email"])
     return {"ok": True, "comercio": updated}
+
+
+# ── La base de compradores: importar el Excel y ver de dónde vienen ───────────
+class ContactoFila(BaseModel):
+    telefono: str | None = None
+    grupo: str | None = None
+    ciudad: str | None = None
+    nombre: str | None = None
+
+
+class ImportarContactosBody(BaseModel):
+    filas: list[ContactoFila] = Field(default_factory=list, max_length=20000)
+    origen: str = "excel"
+    pais: str = "AR"
+
+
+@router.post("/admin/contactos/importar")
+def importar_contactos(
+    body: ImportarContactosBody,
+    admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """El Excel de compradores, ya leído por el panel (fila por fila, con
+    las columnas mapeadas). Normaliza los números, deduplica por (teléfono,
+    grupo) e inserta lo nuevo. No manda nada a nadie: es una base para
+    saber de dónde vienen y para darle un ?ref= a cada grupo."""
+    buenas, malas = contactos.preparar_filas([f.model_dump() for f in body.filas], body.origen, body.pais)
+    r = repo.upsert_contactos_base(buenas) if buenas else {"nuevos": 0, "repetidos": 0}
+    logger.info("contactos.importados", nuevos=r["nuevos"], repetidos=r["repetidos"], invalidos=len(malas),
+                origen=body.origen, by=admin["email"])
+    return {"ok": True, **r, "invalidos": len(malas), "ejemplos_invalidos": malas[:20]}
+
+
+@router.get("/admin/contactos/resumen")
+def resumen_contactos(_admin: dict = Depends(require_admin), repo: Repo = Depends(get_repo)) -> dict:
+    """Conteos por grupo y por ciudad, y cuántos ya usan URUKU. Nunca la
+    lista de números."""
+    return repo.resumen_contactos_base()
 
 
 # ── Lugares (mercados / galerías / referencias): ABM desde el admin ─────────────

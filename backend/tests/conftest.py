@@ -120,6 +120,7 @@ class FakeRepo:
         ]
         self.clima: dict = {"id": 1, "temp_c": None, "descripcion": None, "override_hasta": None}
         self.saber_local: dict[str, dict] = {}        # id -> row
+        self.contactos_base: dict[tuple, dict] = {}   # (telefono, grupo_slug) -> row
         self.conversaciones: list[dict] = []          # Uruku Ayuda
         self.frontera: dict = {"puente": "normal", "chalanas": "operando", "rio": "normal", "nota": None, "actualizado_en": None}
         self.cotizaciones_historial: list[dict] = []
@@ -670,6 +671,29 @@ class FakeRepo:
             if u["whatsapp"] == digitos and u.get("activo", True):
                 return u
         return None
+
+    def upsert_contactos_base(self, filas):
+        nuevos = 0
+        for f in filas:
+            k = (f["telefono"], f["grupo_slug"])
+            if k in self.contactos_base:
+                continue
+            self.contactos_base[k] = dict(f)
+            nuevos += 1
+        return {"nuevos": nuevos, "repetidos": len(filas) - nuevos}
+
+    def resumen_contactos_base(self):
+        en_uruku = {u["whatsapp"] for u in self.compradores.values()}
+        grupos = {}
+        for (tel, gs), f in self.contactos_base.items():
+            g = grupos.setdefault(gs, {"grupo": f["grupo"], "slug": gs, "contactos": 0, "en_uruku": 0})
+            g["contactos"] += 1
+            if tel in en_uruku:
+                g["en_uruku"] += 1
+        return {"total": len(self.contactos_base), "telefonos_distintos": len({t for t, _ in self.contactos_base}),
+                "invalidos": sum(1 for f in self.contactos_base.values() if not f.get("valido", True)),
+                "en_uruku": len({t for (t, _), f in self.contactos_base.items() if t in en_uruku}),
+                "usuarios_total": len(en_uruku), "grupos": sorted(grupos.values(), key=lambda x: -x["contactos"]), "ciudades": []}
 
     def crear_usuario(self, whatsapp, ref=None):
         digitos = "".join(c for c in whatsapp if c.isdigit())

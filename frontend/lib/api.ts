@@ -1176,6 +1176,26 @@ export type PlanAdmin = {
   descripcion: string | null; incluye: string[]; funciones: Record<string, boolean>; activo: boolean; visible: boolean;
 };
 
+// ---- La base de compradores (Admin › Compradores) ----
+export type ResumenContactos = {
+  total: number; telefonos_distintos: number; invalidos: number; en_uruku: number; usuarios_total: number;
+  grupos: { grupo: string; slug: string; contactos: number; en_uruku: number }[];
+  ciudades: { ciudad: string; contactos: number }[];
+};
+export async function getResumenContactos(): Promise<ResumenContactos> {
+  const res = await authFetch(`/admin/contactos/resumen`);
+  return res.json();
+}
+export async function importarContactos(
+  filas: { telefono: string; grupo: string; ciudad: string; nombre: string }[], origen: string, pais: "AR" | "BO",
+): Promise<{ nuevos: number; repetidos: number; invalidos: number; ejemplos_invalidos: { telefono: string; grupo: string; motivo: string }[] }> {
+  const res = await authFetch(`/admin/contactos/importar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filas, origen, pais }),
+  });
+  if (!res.ok) throw new Error((await res.json()).detail ?? "No se pudo importar");
+  return res.json();
+}
+
 export async function getPlanesAdmin(): Promise<PlanAdmin[]> {
   const res = await authFetch(`/admin/planes`);
   return (await res.json()).items;

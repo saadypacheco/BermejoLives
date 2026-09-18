@@ -211,6 +211,9 @@ class Repo(Protocol):
     def get_frontera_estado(self) -> dict: ...
     def update_frontera_estado(self, patch: dict) -> dict: ...
     def list_cotizacion_historial(self, clave: str, limite: int = 8) -> list[dict]: ...
+    # La base de compradores (services/contactos.py)
+    def upsert_contactos_base(self, filas: list[dict]) -> dict: ...
+    def resumen_contactos_base(self) -> dict: ...
     # Uruku Ayuda (services/asistente.py)
     def buscar_comercios(self, q: str, limite: int = 5, rubro: str | None = None) -> list[dict]: ...
     def list_saber_local(self, solo_activos: bool = True) -> list[dict]: ...
@@ -2196,6 +2199,56 @@ class SupabaseRepo:
             "p_limit": max(1, min(int(limite), 100)), "p_offset": 0, "p_subcategoria": None,
         }).execute()
         return res.data or []
+
+    # ── la base de compradores ───────────────────────────────────────────────
+
+    def upsert_contactos_base(self, filas: list[dict]) -> dict:
+        """Inserta lo nuevo y deja lo que ya estaba: la clave es (teléfono,
+        grupo). Devuelve cuántos entraron y cuántos ya estaban."""
+        if not filas:
+            return {"nuevos": 0, "repetidos": 0}
+        claves = [(f["telefono"], f["grupo_slug"]) for f in filas]
+        telefonos = sorted({t for t, _ in claves})
+        ya: set[tuple[str, str]] = set()
+        for i in range(0, len(telefonos), 200):
+            res = (self._db.table("contactos_base").select("telefono, grupo_slug")
+                   .in_("telefono", telefonos[i:i + 200]).execute())
+            ya.update((r["telefono"], r["grupo_slug"]) for r in (res.data or []))
+        nuevas = [f for f, k in zip(filas, claves) if k not in ya]
+        for i in range(0, len(nuevas), 500):
+            self._db.table("contactos_base").insert(nuevas[i:i + 500]).execute()
+        return {"nuevos": len(nuevas), "repetidos": len(filas) - len(nuevas)}
+
+    def resumen_contactos_base(self) -> dict:
+        """Conteos, nunca listas de números: total, por grupo, por ciudad, y
+        cuántos de la base ya entraron a URUKU con su WhatsApp (`usuarios`)."""
+        filas = self._traer_todo("contactos_base", "telefono, grupo, grupo_slug, ciudad, valido", "id")
+        usuarios = self._traer_todo("usuarios", "whatsapp, ref, created_at", "id",
+                                    filtrar=lambda q: q.eq("activo", True))
+        en_uruku = {u["whatsapp"] for u in usuarios if u.get("whatsapp")}
+        por_grupo: dict[str, dict] = {}
+        por_ciudad: dict[str, int] = {}
+        distintos: set[str] = set()
+        en_base_y_uruku: set[str] = set()
+        invalidos = 0
+        for f in filas:
+            g = por_grupo.setdefault(f["grupo_slug"], {"grupo": f["grupo"], "slug": f["grupo_slug"], "contactos": 0, "en_uruku": 0})
+            g["contactos"] += 1
+            if f["telefono"] in en_uruku:
+                g["en_uruku"] += 1
+                en_base_y_uruku.add(f["telefono"])
+            distintos.add(f["telefono"])
+            if f.get("ciudad"):
+                por_ciudad[f["ciudad"]] = por_ciudad.get(f["ciudad"], 0) + 1
+            if not f.get("valido", True):
+                invalidos += 1
+        grupos = sorted(por_grupo.values(), key=lambda x: -x["contactos"])
+        return {
+            "total": len(filas), "telefonos_distintos": len(distintos), "invalidos": invalidos,
+            "en_uruku": len(en_base_y_uruku), "usuarios_total": len(en_uruku),
+            "grupos": grupos,
+            "ciudades": sorted(({"ciudad": c, "contactos": n} for c, n in por_ciudad.items()), key=lambda x: -x["contactos"]),
+        }
 
     def list_saber_local(self, solo_activos: bool = True) -> list[dict]:
         q = self._db.table("saber_local").select("*").order("updated_at", desc=True).limit(500)

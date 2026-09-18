@@ -41,6 +41,7 @@ import { DifusionPanel } from "@/components/difusion-panel";
 import { DemandaPanel } from "@/components/demanda-panel";
 import { AsistentePanel } from "@/components/asistente-panel";
 import { PlanesPanel } from "@/components/planes-panel";
+import { ContactosPanel } from "@/components/contactos-panel";
 import { RubroRecalcular } from "@/components/rubro-recalcular";
 import { CatalogoPanel } from "@/components/catalogo-panel";
 import { ImageLightbox } from "@/components/image-lightbox";
@@ -54,7 +55,7 @@ export default function AdminPage() {
   const [email, setEmail] = useState("admin@bermejolive.com");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"publicaciones" | "comercios" | "lugares" | "adornos" | "catalogo" | "importados" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero" | "vencimientos" | "rubros" | "revision-rubros" | "whatsapp" | "difusion" | "demanda" | "ayuda" | "planes">("comercios");
+  const [tab, setTab] = useState<"publicaciones" | "comercios" | "lugares" | "adornos" | "catalogo" | "importados" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero" | "vencimientos" | "rubros" | "revision-rubros" | "whatsapp" | "difusion" | "demanda" | "ayuda" | "planes" | "compradores">("comercios");
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [items, setItems] = useState<PendingPub[]>([]);
   const [comercios, setComercios] = useState<ComercioPorVerificar[]>([]);
@@ -296,6 +297,9 @@ export default function AdminPage() {
         <button className={tab === "ayuda" ? "active" : ""} onClick={() => setTab("ayuda")}>
           Ayuda
         </button>
+        <button className={tab === "compradores" ? "active" : ""} onClick={() => setTab("compradores")}>
+          Compradores
+        </button>
         <button className={tab === "planes" ? "active" : ""} onClick={() => setTab("planes")}>
           Planes
         </button>
@@ -350,6 +354,7 @@ export default function AdminPage() {
       {tab === "demanda" && <DemandaPanel />}
       {tab === "ayuda" && <AsistentePanel />}
       {tab === "planes" && <PlanesPanel />}
+      {tab === "compradores" && <ContactosPanel />}
       {tab === "importados" && <ImportadosPanel rubros={rubros} />}
 
       {tab === "comercios" && (
