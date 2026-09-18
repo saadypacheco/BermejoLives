@@ -850,6 +850,21 @@ function TabMonitoreo({
         </div>
       </div>
 
+      {(data.no_contestan?.length ?? 0) > 0 && (
+        <div className="panel-card glass" style={{ padding: "12px 16px", border: "1px solid var(--amber)", fontSize: 13 }}>
+          <b style={{ color: "var(--amber)" }}>📵 No contestan el WhatsApp</b>
+          <span style={{ opacity: .7 }}> — lo dijeron los compradores («¿te contestó?»). Casi siempre es un número viejo o un teléfono apagado: llamarlos.</span>
+          <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+            {data.no_contestan!.map((c) => (
+              <li key={c.id}>
+                {c.slug ? <a href={`/comercios/${c.slug}`} target="_blank" rel="noopener">{c.nombre}</a> : c.nombre}
+                {" "}· {c.contacto_no} no / {c.contacto_ok} sí{c.whatsapp ? ` · ${c.whatsapp}` : " · sin WhatsApp cargado"}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {totalAlertas > 0 && (
         <div className="panel-card glass" style={{ padding: "12px 16px", border: "1px solid var(--pink)", color: "var(--pink)", fontSize: 13 }}>
           ⚠️ {data.alertas.vencido} comercio(s) vencido(s) y {data.alertas.suspendido} suspendido(s). Revisá la pestaña "Suscripciones".

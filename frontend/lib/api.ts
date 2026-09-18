@@ -319,6 +319,8 @@ export type EstadisticasAdmin = {
   llegadas_30d?: number;
   llegadas_por_clase?: Record<string, number>;
   llegadas_top?: { origen: string; count: number }[];
+  /** «¿Te contestó?»: los que más «no» juntaron (0120). */
+  no_contestan?: { id: string; nombre: string; slug: string | null; whatsapp: string | null; contacto_ok: number; contacto_no: number }[];
 };
 
 export async function getEstadisticas(): Promise<EstadisticasAdmin> {

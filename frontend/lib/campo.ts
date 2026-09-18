@@ -200,7 +200,7 @@ export async function eliminarComercioAgente(id: string): Promise<void> {
 /** Registra un click de contacto (WhatsApp, teléfono, etc.) para un comercio. */
 export type TipoLead = "whatsapp" | "telefono" | "email" | "web" | "vista" | "mapa" | "reserva";
 
-export async function registrarLead(comercio_id: string, tipo: TipoLead = "whatsapp", busqueda_id?: string | null, origen?: string | null): Promise<void> {
+export async function registrarLead(comercio_id: string, tipo: TipoLead = "whatsapp", busqueda_id?: string | null, origen?: string | null, nombre?: string | null): Promise<void> {
   // Fire-and-forget: no bloqueamos la navegación del usuario
   const body: Record<string, string> = { comercio_id, tipo };
   // `busqueda_id` ata el contacto a la búsqueda que lo produjo. Sin ese
@@ -213,6 +213,22 @@ export async function registrarLead(comercio_id: string, tipo: TipoLead = "whats
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+  }).then(async (r) => {
+    // Un contacto de WhatsApp queda anotado para preguntar después «¿te
+    // contestó?» (components/pregunta-contesto.tsx). Las vistas, no.
+    if (tipo !== "whatsapp" && tipo !== "telefono") return;
+    const j = await r.json().catch(() => null);
+    if (j?.id) {
+      const { anotarContacto } = await import("@/lib/contestaron");
+      anotarContacto(j.id, comercio_id, nombre || "el local");
+    }
+  }).catch(() => undefined);
+}
+
+/** «¿Te contestó?»: sí o no sobre un contacto propio. Fire-and-forget. */
+export function responderContesto(leadId: string, respondio: boolean): void {
+  fetch(`${API}/lead/${encodeURIComponent(leadId)}/respondio`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ respondio }),
   }).catch(() => undefined);
 }
 

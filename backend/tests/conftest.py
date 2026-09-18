@@ -1024,6 +1024,7 @@ class FakeRepo:
             "ofertas_total": len(self.publicaciones),
             "ofertas_top_comercios": [],
             "contactos_30d": len(self.leads),
+            "no_contestan": self.list_no_contestan(10),
             "llegadas_30d": sum(1 for l in self.leads if l.get("origen")),
             "llegadas_por_clase": {},
             "llegadas_top": [],
@@ -1327,7 +1328,28 @@ class FakeRepo:
 
     # ---- leads ----
     def insert_lead(self, row):
-        self.leads.append({"id": self._id("lead"), **row})
+        fila = {"id": self._id("lead"), **row}
+        self.leads.append(fila)
+        return fila
+
+    def get_lead(self, lead_id):
+        return next((l for l in self.leads if l["id"] == lead_id), None)
+
+    def marcar_lead_respondio(self, lead_id, respondio):
+        for l in self.leads:
+            if l["id"] == lead_id:
+                l["respondio"] = respondio
+
+    def recontar_contactos(self, comercio_id, dias=90):
+        mios = [l for l in self.leads if l.get("comercio_id") == comercio_id and l.get("respondio") is not None]
+        ok = sum(1 for l in mios if l["respondio"]); no = len(mios) - ok
+        if comercio_id in self.comercios:
+            self.comercios[comercio_id].update({"contacto_ok": ok, "contacto_no": no})
+        return {"contacto_ok": ok, "contacto_no": no}
+
+    def list_no_contestan(self, limite=10):
+        cs = [c for c in self.comercios.values() if c.get("contacto_no", 0) > 0]
+        return sorted(cs, key=lambda c: -c["contacto_no"])[:limite]
 
     def list_leads_by_comercio(self, comercio_id, dias=30):
         return [l for l in self.leads if l.get("comercio_id") == comercio_id]

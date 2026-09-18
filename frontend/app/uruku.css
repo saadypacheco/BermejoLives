@@ -1118,3 +1118,16 @@
 .uk-comunidad-admins p { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--uk-ink-soft); }
 .uk-comunidad-admins a { color: var(--uk-green); }
 @media (max-width: 760px) { .uk-comunidad-grid { grid-template-columns: 1fr; } }
+
+/* ===== «¿Te contestó?» ===== */
+.uk-contesto { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; max-width: min(92vw, 520px); padding: 12px 16px; border-radius: 16px; background: #0f2c33; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.28); font-size: 14px; }
+@media (min-width: 900px) { .uk-contesto { bottom: 24px; } }
+.uk-contesto-btns { display: flex; gap: 6px; }
+.uk-contesto-btns button { border: 0; border-radius: 10px; padding: 8px 14px; font-weight: 800; cursor: pointer; background: #fff; color: #0f2c33; }
+.uk-contesto-btns button.suave { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.35); font-weight: 600; }
+.uk-contesto-gracias { font-weight: 600; }
+.uk-responde { color: var(--uk-green); font-weight: 700; }
+.uk-no-responde { color: #b45309; }
+.uk-aviso-taxi { margin: 0 0 14px; padding: 10px 14px; border-radius: 12px; background: #fff8e6; border: 1px solid #f2d27a; font-size: 13.5px; line-height: 1.5; }
+.uk-ficha-responde { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 700; color: var(--uk-green); }
+.uk-ficha-no-responde { display: inline-flex; font-size: 12.5px; font-weight: 700; color: #b45309; }

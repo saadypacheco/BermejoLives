@@ -43,3 +43,21 @@ def test_la_vista_guarda_de_donde_llego(client, repo):
     assert repo.leads[-1]["origen"] == "volante-rustico"
     client.post("/lead", json={"comercio_id": "c1", "tipo": "vista"})
     assert "origen" not in repo.leads[-1]
+
+
+def test_te_contesto_cuenta_por_comercio_y_una_sola_vez(client, repo):
+    """El clic devuelve un id; con ese id el comprador dice si le contestaron.
+    Una sola vez por contacto, y el comercio suma sí/no."""
+    repo.comercios["c1"] = {"id": "c1", "slug": "c1", "nombre": "C1", "activo": True}
+    r = client.post("/lead", json={"comercio_id": "c1", "tipo": "whatsapp"}).json()
+    assert r["id"]
+    ok = client.post(f"/lead/{r['id']}/respondio", json={"respondio": False}).json()
+    assert ok == {"ok": True, "contacto_ok": 0, "contacto_no": 1}
+    assert repo.comercios["c1"]["contacto_no"] == 1
+    # Otra vez el mismo contacto: no suma.
+    assert client.post(f"/lead/{r['id']}/respondio", json={"respondio": False}).json()["ya"] is True
+    assert repo.comercios["c1"]["contacto_no"] == 1
+    # Una vista no es un contacto: no se pregunta.
+    v = client.post("/lead", json={"comercio_id": "c1", "tipo": "vista"}).json()
+    assert client.post(f"/lead/{v['id']}/respondio", json={"respondio": True}).status_code == 404
+    assert client.post("/lead/no-existe/respondio", json={"respondio": True}).status_code == 404

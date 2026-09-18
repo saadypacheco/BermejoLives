@@ -8,6 +8,8 @@ export type Zona = {
 };
 
 export type Comercio = {
+  contacto_ok?: number;
+  contacto_no?: number;
   id: string;
   slug: string;
   nombre: string;
@@ -90,6 +92,9 @@ export type Ciudad = {
 };
 
 export type ResultadoBusqueda = {
+  /** «¿Te contestó?»: síes y noes de los últimos 90 días (0120). */
+  contacto_ok?: number;
+  contacto_no?: number;
   id: string;
   slug: string;
   nombre: string;

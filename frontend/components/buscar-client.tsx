@@ -682,6 +682,12 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
           <button type="button" className="uk-btn-ghost" onClick={() => setVista("mapa")}>Ver en el mapa →</button>
         </div>
       )}
+      {rubro === "taxis" && vista === "lista" && (
+        <p className="uk-aviso-taxi">
+          🚕 Escribile al primero; si en unos minutos no te contesta, probá con el siguiente. Después te preguntamos si
+          te contestó: así los que responden aparecen primero.
+        </p>
+      )}
       {(
         <div className="uk-res-grid" style={vista === "mapa" ? { display: "none" } : undefined}>
           {!loading && shown.length === 0 && (
@@ -813,6 +819,15 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
                   {r.rubro_slug === "taxis" && !r.direccion && r.lat == null && (
                     <div className="uk-resdir">🚕 Atiende en toda la ciudad · se pide por WhatsApp</div>
                   )}
+                  {/* Lo que dijeron los que ya le escribieron: «✓ Responde» con
+                      tres síes y buena proporción; «últimamente no contesta»
+                      con cinco noes y ningún sí. Entre medio, nada. */}
+                  {(r.contacto_ok ?? 0) >= 3 && (r.contacto_ok ?? 0) >= 2 * (r.contacto_no ?? 0) && (
+                    <div className="uk-resdir uk-responde">✓ Responde por WhatsApp</div>
+                  )}
+                  {(r.contacto_no ?? 0) >= 5 && (r.contacto_ok ?? 0) === 0 && (
+                    <div className="uk-resdir uk-no-responde">Últimamente no contesta el WhatsApp</div>
+                  )}
                   {(r.direccion || distancia(r) != null) && (
                     <div className="uk-resdir">
                       <Pin style={{ width: 13, height: 13 }} />
@@ -831,7 +846,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
                     {r.whatsapp && (
                       <a className="uk-resic" title="WhatsApp" aria-label="WhatsApp"
                          href={waLink(r.whatsapp, `Hola, te vi en URUKU`)} target="_blank" rel="noopener"
-                         onClick={() => registrarLead(r.id, "whatsapp", busquedaId)}>
+                         onClick={() => registrarLead(r.id, "whatsapp", busquedaId, null, r.nombre)}>
                         <WhatsApp style={{ width: 17, height: 17 }} />
                       </a>
                     )}

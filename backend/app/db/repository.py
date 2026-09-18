@@ -122,8 +122,13 @@ class Repo(Protocol):
     def quitar_rubro_comercio(self, comercio_id: str, rubro_id: str) -> None: ...
     def reemplazar_comercio_rubros(self, comercio_id: str, rubro_ids: list[str]) -> None: ...
     def get_comercio_rubros(self, comercio_id: str) -> list[str]: ...
-    def insert_lead(self, row: dict) -> None: ...
+    def insert_lead(self, row: dict) -> dict: ...
     def list_leads_by_comercio(self, comercio_id: str, dias: int) -> list[dict]: ...
+    # «¿Te contestó?» (0120)
+    def get_lead(self, lead_id: str) -> dict | None: ...
+    def marcar_lead_respondio(self, lead_id: str, respondio: bool) -> None: ...
+    def recontar_contactos(self, comercio_id: str, dias: int = 90) -> dict: ...
+    def list_no_contestan(self, limite: int = 10) -> list[dict]: ...
     def stats_admin(self) -> dict: ...
     def estadisticas_admin(self) -> dict: ...
     def altas_por_dia(self, dias: int = 60) -> list[dict]: ...
@@ -1493,8 +1498,39 @@ class SupabaseRepo:
         return res.data[0] if res.data else {}
 
     # ---- leads ----
-    def insert_lead(self, row: dict) -> None:
-        self._db.table("leads").insert(row).execute()
+    def insert_lead(self, row: dict) -> dict:
+        # Devuelve la fila: el id es lo que después ata el «¿te contestó?».
+        res = self._db.table("leads").insert(row).execute()
+        return (res.data or [row])[0]
+
+    def get_lead(self, lead_id: str) -> dict | None:
+        res = self._db.table("leads").select("id, comercio_id, tipo, created_at, respondio").eq("id", lead_id).limit(1).execute()
+        return res.data[0] if res.data else None
+
+    def marcar_lead_respondio(self, lead_id: str, respondio: bool) -> None:
+        from datetime import datetime, timezone
+        self._db.table("leads").update({"respondio": respondio, "respondio_en": datetime.now(timezone.utc).isoformat()}) \
+            .eq("id", lead_id).execute()
+
+    def recontar_contactos(self, comercio_id: str, dias: int = 90) -> dict:
+        """contacto_ok / contacto_no del comercio: los «sí» y los «no» de los
+        últimos `dias`. Se recalcula entero cada vez (son decenas de filas)
+        en vez de sumar de a uno: así una respuesta cambiada o un lead
+        borrado no dejan el contador mintiendo."""
+        from datetime import datetime, timezone, timedelta
+        desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+        res = (self._db.table("leads").select("respondio").eq("comercio_id", comercio_id)
+               .gte("created_at", desde).not_.is_("respondio", "null").execute())
+        ok = sum(1 for l in (res.data or []) if l.get("respondio") is True)
+        no = sum(1 for l in (res.data or []) if l.get("respondio") is False)
+        self._db.table("comercios").update({"contacto_ok": ok, "contacto_no": no}).eq("id", comercio_id).execute()
+        return {"contacto_ok": ok, "contacto_no": no}
+
+    def list_no_contestan(self, limite: int = 10) -> list[dict]:
+        """Los que más «no me contestó» juntaron, para llamarlos."""
+        res = (self._db.table("comercios").select("id, nombre, slug, whatsapp, contacto_ok, contacto_no")
+               .eq("activo", True).gt("contacto_no", 0).order("contacto_no", desc=True).limit(limite).execute())
+        return res.data or []
 
     def list_leads_by_comercio(self, comercio_id: str, dias: int = 30) -> list[dict]:
         from datetime import datetime, timezone, timedelta
@@ -1686,6 +1722,8 @@ class SupabaseRepo:
             # pidieron cómo llegar, cuántos sólo miraron la ficha.
             "contactos_por_tipo": por_tipo,
             "vistas_30d": por_tipo.get("vista", 0),
+            # «¿Te contestó?»: los que más «no» juntaron, para llamarlos.
+            "no_contestan": self.list_no_contestan(10),
             "llegadas_30d": sum(por_clase.values()),
             "llegadas_por_clase": por_clase,
             "llegadas_top": llegadas_top,

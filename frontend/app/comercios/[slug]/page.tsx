@@ -63,6 +63,8 @@ export default async function ComercioPage({ params }: { params: { slug: string 
   if (!comercio) notFound();
   // Un taxi, remis o chofer sin parada fija: no hay "cómo llegar", se lo llama.
   const sinParada = comercio.rubro_slug === "taxis" && !comercio.direccion && !comercio.lat;
+  const responde = (comercio.contacto_ok ?? 0) >= 3 && (comercio.contacto_ok ?? 0) >= 2 * (comercio.contacto_no ?? 0);
+  const noResponde = (comercio.contacto_no ?? 0) >= 5 && (comercio.contacto_ok ?? 0) === 0;
   // El QR de la ficha, el mismo que va en el volante y en la tarjeta de mesa.
   // En pantalla sirve para pasar la ficha de una compu a un celular sin
   // tipear, y para que el dueño la muestre desde su teléfono. Se genera acá,
@@ -154,6 +156,8 @@ export default async function ComercioPage({ params }: { params: { slug: string 
 
             <div className="uk-ficha-pills">
               {comercio.rubro_nombre && <span className="uk-pill green">{comercio.rubro_nombre}</span>}
+              {responde && <span className="uk-pill green" title="Los que le escribieron dicen que contesta">✓ Responde</span>}
+              {noResponde && <span className="uk-pill" style={{ color: "#b45309" }} title="Los que le escribieron dicen que no contestó">Últimamente no contesta</span>}
               {comercio.modalidad && (
                 <span className="uk-pill blue">{MODALIDAD_LABEL[comercio.modalidad] ?? comercio.modalidad}</span>
               )}
@@ -171,7 +175,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
             )}
 
             {comercio.whatsapp ? (
-              <WaLeadLink className="uk-ficha-wa" comercioId={comercio.id} whatsapp={comercio.whatsapp}
+              <WaLeadLink className="uk-ficha-wa" comercioId={comercio.id} whatsapp={comercio.whatsapp} nombre={comercio.nombre}
                           mensaje={`Hola ${comercio.nombre}, te contacto desde URUKU`}>
                 <WhatsApp style={{ width: 20, height: 20 }} />
                 <span>WhatsApp<small>+{comercio.whatsapp}</small></span>

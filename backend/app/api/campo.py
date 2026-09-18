@@ -446,8 +446,40 @@ def registrar_lead(body: _LeadIn, repo: Repo = Depends(get_repo)) -> dict:
     origen = re.sub(r"[^a-z0-9_.-]", "", (body.origen or "").strip().lower())[:64]
     if origen:
         fila["origen"] = origen
-    repo.insert_lead(fila)
-    return {"ok": True}
+    creado = repo.insert_lead(fila) or {}
+    # El id vuelve para que el sitio pueda preguntar después «¿te contestó?».
+    return {"ok": True, "id": creado.get("id")}
+
+
+class _RespondioIn(BaseModel):
+    respondio: bool
+
+
+@router.post("/lead/{lead_id}/respondio")
+def lead_respondio(lead_id: str, body: _RespondioIn, repo: Repo = Depends(get_repo)) -> dict:
+    """«¿Te contestó?»: el comprador dice sí o no sobre un contacto suyo.
+
+    Sólo sobre un contacto de WhatsApp de la última semana y una sola vez:
+    el id es un uuid que sólo tiene quien hizo el clic, y con eso alcanza
+    para que nadie pueda hundir a un comercio a fuerza de «no». Después se
+    recuentan los contadores del comercio (últimos 90 días)."""
+    from datetime import datetime, timezone, timedelta
+    lead = repo.get_lead(lead_id)
+    if not lead or lead.get("tipo") not in ("whatsapp", "telefono"):
+        raise HTTPException(status_code=404, detail="contacto no encontrado")
+    if lead.get("respondio") is not None:
+        return {"ok": True, "ya": True}
+    creado = lead.get("created_at")
+    if isinstance(creado, str):
+        try:
+            hace = datetime.now(timezone.utc) - datetime.fromisoformat(creado.replace("Z", "+00:00"))
+            if hace > timedelta(days=7):
+                raise HTTPException(status_code=410, detail="ese contacto es de hace más de una semana")
+        except ValueError:
+            pass
+    repo.marcar_lead_respondio(lead_id, body.respondio)
+    conteo = repo.recontar_contactos(lead["comercio_id"])
+    return {"ok": True, **conteo}
 
 
 class _BusquedaIn(BaseModel):
