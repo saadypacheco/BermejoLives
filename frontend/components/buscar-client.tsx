@@ -13,6 +13,7 @@ import { distanciaMetros, formatDistancia } from "@/lib/distancia";
 import { pedirUbicacion, permisoUbicacion, ubicacionGuardada, type Ubicacion } from "@/lib/ubicacion";
 import { detectarServicio, SERVICIOS, servicioDeRubro } from "@/lib/servicios";
 import { PermisoUbicacion } from "@/components/permiso-ubicacion";
+import { VolverAtras } from "@/components/volver-atras";
 import { ReservaBarra } from "@/components/reserva-barra";
 import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
@@ -570,6 +571,10 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
           El total de comercios se fue de acá. Decir "887" antes de que alguien
           busque no le sirve al comprador —no le dice si ESTÁ lo que quiere— y
           en la etapa de captación es un número que no conviene mostrar. */}
+      {/* «← Volver» cuando se llegó con algo puesto (un rubro del home, una
+          búsqueda compartida): sin esto, la pantalla de Taxis o Baños no
+          tenía salida más que la flecha del navegador. */}
+      {hayBusqueda && <VolverAtras />}
       <div className="uk-resbar">
         {/* Los filtros están apagados mientras el catálogo crece
             (APAGADAS.filtrosBuscador). Un filtro sirve cuando hay demasiado y
