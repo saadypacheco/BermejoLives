@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { UrukuShell } from "@/components/uruku-shell";
 import { CambioCalculadora } from "@/components/cambio-calculadora";
+import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { buscarComercios, getCotizaciones } from "@/lib/data";
 import { DIAS_VIEJA, diasDesde, tasasDe } from "@/lib/cambio";
 
@@ -43,6 +44,7 @@ export default async function CambioPage() {
           Ingresá la cotización que te ofrece la casa de cambio y calculá fácil cuánto recibís.
           Las casas de cambio hacen la cuenta con un factor: <em>pesos × 0,0068</em>, por ejemplo.
         </p>
+        <UnirmeComunidad variante="chico" />
         <CambioCalculadora
           referencia={{
             ars_1000_bs: t.ars_bob != null ? t.ars_bob * 1000 : null,

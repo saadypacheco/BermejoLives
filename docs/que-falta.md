@@ -52,6 +52,13 @@ kioscos, coca, Rústico) ✅ · deuda §5 cerrada (`_PLANES`, `types.ts`,
 - [x] La URL de Facebook en `/contenido` ✅ (17/9).
 - [ ] **El estado de la frontera** en `/contenido`, cada mañana: al 17/9 el
   dato tenía dos días y la guía lo dice.
+- [ ] **La Comunidad de WhatsApp de compradores** (18/9): crearla desde el
+  Samsung (Anfitrión) con la tablet de segundo admin —grupo de avisos +
+  un grupo por ciudad— y **pegar el enlace de invitación en `/contenido` ›
+  Redes › Comunidad de WhatsApp**. Recién ahí aparece el botón «Unite a la
+  comunidad» en el home, la guía y `/cambio`, y `/comunidad` muestra el QR.
+  Después: subir el Excel en **Admin › Compradores** y darle a cada
+  administrador de grupo su enlace `?ref=grupo-…` con el QR de la comunidad.
 
 ## 1. Los teléfonos (manual operativo, sección 2)
 

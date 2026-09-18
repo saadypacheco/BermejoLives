@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
+import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import {
   buscarComercios, getClima, getCotizacionHistorial, getCotizaciones, getFronteraEstado,
   getSaberLocalPorSeccion, getVideosPromo, RUBROS_SERVICIO, type FronteraEstado, type SaberLocalPublico,
@@ -82,6 +83,7 @@ export default async function GuiaPage() {
           Lo que hay que saber antes de cruzar y mientras estás acá. Lo de hoy —el paso, el clima, el cambio— se
           actualiza en el día. Y lo que no esté acá, preguntalo al botón de <b>Ayuda</b>.
         </p>
+        <UnirmeComunidad variante="chico" />
 
         {/* ---------- HOY ---------- */}
         <section className="uk-guia-hoy">

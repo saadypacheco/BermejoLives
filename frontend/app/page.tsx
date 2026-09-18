@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
+import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { AbrirAyuda } from "@/components/abrir-ayuda";
 import { getClima, getCotizaciones, getFeed, getFronteraEstado, getVideosPromo } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
@@ -138,6 +139,9 @@ export default async function InicioPage() {
           </aside>
         </div>
       </section>
+
+      {/* ===== La comunidad (sólo cuando hay enlace cargado) ===== */}
+      <UnirmeComunidad variante="banner" />
 
       {/* ===== Servicios útiles ===== */}
       <section className="uk-container uk-home-sec">

@@ -127,6 +127,7 @@ export async function UrukuShell({
                 <Link href="/buscar?of=1" className="uk-foot-link"><Ic d="M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" /><span>Ofertas</span><i>›</i></Link>
                 <Link href="/buscar" className="uk-foot-link"><Ic d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3" /><span>Buscar</span><i>›</i></Link>
                 <Link href="/guardados" className="uk-foot-link"><Ic d="M6 3h12v18l-6-4-6 4V3z" /><span>Guardados</span><i>›</i></Link>
+                <Link href="/comunidad" className="uk-foot-link"><Ic d="M4 4h16v12H7l-3 3V4z" /><span>Comunidad</span><i>›</i></Link>
               </div>
               <div className="uk-foot-col">
                 <h4>Para comercios</h4>
