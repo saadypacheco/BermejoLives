@@ -681,4 +681,5 @@ export async function getCotizacionHistorial(clave: string, limit = 8): Promise<
 export const RUBROS_SERVICIO: [string, string][] = [
   ["banos", "🚻 Baños públicos"], ["estacionamiento", "🅿️ Estacionamientos"],
   ["cajeros", "🏧 Cajeros y bancos"], ["wifi", "📶 Wifi gratis"], ["cambio", "💱 Casas de cambio"],
+  ["emergencias", "🚓 Policía y emergencias"],
 ];

@@ -173,6 +173,8 @@ export default async function GuiaPage() {
             <Link href="/buscar?rubro=estacionamiento&vista=mapa">🅿️ Estacionamientos</Link>
             <Link href="/buscar?rubro=cajeros&vista=mapa">🏧 Cajeros</Link>
             <Link href="/buscar?rubro=wifi&vista=mapa">📶 Wifi</Link>
+            <Link href="/buscar?rubro=emergencias&vista=mapa">🚓 Policía y emergencias</Link>
+            <Link href="/buscar?rubro=alquiler&vista=mapa">🏠 Alquileres</Link>
           </div>
           {porServicio.length > 0 ? (
             <div className="uk-guia-servicios">

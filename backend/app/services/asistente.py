@@ -480,6 +480,9 @@ _SERVICIOS = (
     (re.compile(r"\bgasolina\b|\bnafta\b|estacion de servicio|surtidor|cargar combustible"), "estacion-servicio", "estaciones de servicio"),
     (re.compile(r"\bpanader|\bpan\b|\bfacturas\b"), "panaderia", "panaderías"),
     (re.compile(r"\bhelad|\bcafe\b|cafeteria|\bpostres?\b"), "cafeteria", "cafeterías y heladerías"),
+    (re.compile(r"\bpolicia\b|comisaria|\bbomberos?\b|\bfelcc\b|\bhospital\b|posta sanitaria|centro de salud|\burgencias?\b|me robaron|un accidente"), "emergencias", "policía y emergencias"),
+    (re.compile(r"\balquil|inmobiliaria|arriendo|anticretico|(departamento|habitacion|casa|local|galpon) (en alquiler|para alquilar)|donde (me quedo|vivo) (un mes|unos meses)"), "alquiler", "alquileres"),
+    (re.compile(r"servicio tecnico|reparaci?on de|arregl(o|ar|en) (el |mi |un )?(celular|telefono|compu|notebook|heladera|lavarropas|tv|aire)|tecnico (en|de) (celulares|computadoras|heladeras|aire)|electricista|plomero|gasista|refrigeracion"), "servicio-tecnico", "servicios técnicos"),
 )
 
 
@@ -509,7 +512,7 @@ def _nivel0_servicio(repo, pregunta: str, ahora: datetime, solo_con_datos: bool)
 
 # Servicios de la ciudad: la subcategoría es la del formulario de carga y
 # rara vez dice algo ("Baño público — ojota").
-_RUBROS_SIN_SUBCATEGORIA = {"banos", "estacionamiento", "cajeros", "wifi"}
+_RUBROS_SIN_SUBCATEGORIA = {"banos", "estacionamiento", "cajeros", "wifi", "emergencias"}
 
 
 def _buscar_y_contestar(repo, q: str, ahora: datetime) -> Respuesta | None:

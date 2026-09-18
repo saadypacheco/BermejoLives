@@ -33,7 +33,7 @@ const SERVICIOS = [
   { i: "💱", t: "Casas de cambio", d: "Cotización, calculadora y mapa", href: "/cambio" },
   { i: "📶", t: "WiFi y chips", d: "Internet y telefonía", href: "/buscar?rubro=wifi&vista=mapa" },
   { i: "🚕", t: "Taxis y transporte", d: "Cómo moverte", href: "/buscar?rubro=taxis&vista=mapa" },
-  { i: "🆘", t: "Salud y emergencias", d: "Hospitales y teléfonos", href: "/guia#seguridad" },
+  { i: "🚓", t: "Policía y emergencias", d: "Dónde están, y los teléfonos", href: "/buscar?rubro=emergencias&vista=mapa" },
 ];
 
 // La fila de accesos debajo del buscador: los mismos destinos, en una palabra.
@@ -42,6 +42,7 @@ const CHIPS = [
   { i: "🏧", t: "Cajeros", href: SERVICIOS[2].href }, { i: "🅿️", t: "Estacionamiento", href: SERVICIOS[3].href },
   { i: "💱", t: "Casas de cambio", href: "/cambio" }, { i: "🚕", t: "Taxis", href: SERVICIOS[6].href },
   { i: "📶", t: "WiFi", href: SERVICIOS[5].href },
+  { i: "🚓", t: "Policía", href: SERVICIOS[7].href },
   { i: "🚌", t: "Transporte", href: "/guia#transporte" }, { i: "🌉", t: "Frontera", href: "/guia#frontera" },
 ];
 
@@ -62,7 +63,7 @@ const HERRAMIENTAS = [
 const INFO = [
   { i: "💳", t: "Medios de pago", d: "Pesos, bolivianos, dólares, QR", href: "/guia#comercios" },
   { i: "🛡️", t: "Seguridad y consejos", d: "Para la primera vez", href: "/guia#seguridad" },
-  { i: "📞", t: "Teléfonos útiles", d: "110 · 119 · 168", href: "/guia#seguridad" },
+  { i: "📞", t: "Teléfonos útiles", d: "110 · 119 · 168 y dónde queda la policía", href: "/guia#seguridad" },
   { i: "📱", t: "Comprar chip o eSIM", d: "Entel y Tigo", href: "/guia#conectividad" },
   { i: "▶️", t: "Videos guía", d: "Recorridos y tips", href: "/guia#ofertas" },
   { i: "⭐", t: "Top de ofertas", d: "Lo más buscado", href: "/buscar?of=1" },

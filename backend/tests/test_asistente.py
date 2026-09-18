@@ -389,3 +389,18 @@ def test_una_pregunta_que_es_un_rubro_se_contesta_con_el_rubro(repo, sin_modelo)
     repo.comercios["w1"] = {"id": "w1", "slug": "zona-wifi-plaza", "nombre": "Zona wifi plaza", "activo": True, "rubro_slug": "wifi"}
     r3 = asistente.responder(repo, "¿hay wifi gratis?", ahora=MARTES_11)
     assert r3.intent == "buscar" and "Zona wifi plaza" in r3.texto
+
+
+def test_la_policia_y_el_alquiler_son_rubros_que_se_ubican(repo, sin_modelo):
+    repo.comercios["pol"] = {"id": "pol", "slug": "policia-bermejo", "nombre": "Policía Boliviana · Bermejo", "activo": True,
+                             "rubro_slug": "emergencias", "direccion": "Av. Barrientos", "subcategoria": "otro"}
+    r = asistente.responder(repo, "¿dónde está la policía?", ahora=MARTES_11)
+    # Con una sola comisaría cargada la encuentra por el nombre (dirección y
+    # cómo llegar); con varias, o preguntando "comisaría", va por el rubro.
+    assert r.intent in ("buscar", "direccion") and "Policía Boliviana" in r.texto and "Barrientos" in r.texto
+    r1 = asistente.responder(repo, "busco una comisaría", ahora=MARTES_11)
+    assert r1.intent == "buscar" and "rubro=emergencias" in r1.texto and "otro" not in r1.texto
+    repo.comercios["alq"] = {"id": "alq", "slug": "dpto-centro", "nombre": "Departamento centro", "activo": True,
+                             "rubro_slug": "alquiler", "subcategoria": "departamento"}
+    r2 = asistente.responder(repo, "busco un departamento en alquiler", ahora=MARTES_11)
+    assert r2.intent == "buscar" and "Departamento centro" in r2.texto and "rubro=alquiler" in r2.texto

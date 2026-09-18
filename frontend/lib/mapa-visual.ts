@@ -40,6 +40,8 @@ export const CATEGORY_STYLE: Record<string, { emoji: string; color: string }> = 
   // 🚻 Servicios de la ciudad (rubros no comerciales, 0083/0113) y movilidad
   banos: { emoji: "🚻", color: "#0ea5e9" }, estacionamiento: { emoji: "🅿️", color: "#0ea5e9" },
   cajeros: { emoji: "🏧", color: "#0ea5e9" }, wifi: { emoji: "📶", color: "#0ea5e9" },
+  emergencias: { emoji: "🚓", color: "#ef4444" }, alquiler: { emoji: "🏠", color: "#8b5cf6" },
+  "servicio-tecnico": { emoji: "🛠️", color: "#64748b" },
   taxis: { emoji: "🚕", color: "#eab308" }, "estacion-servicio": { emoji: "⛽", color: "#64748b" },
   "taller-mecanico": { emoji: "🔧", color: "#64748b" }, coca: { emoji: "🌿", color: "#22c55e" },
   nocturna: { emoji: "🌙", color: "#6366f1" }, carpinteria: { emoji: "🪵", color: "#92766a" },

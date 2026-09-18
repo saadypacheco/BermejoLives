@@ -9,13 +9,16 @@
 // la casa de sanitarios: quiere un baño. Por eso el buscador detecta el
 // servicio y busca por SU rubro en vez de por texto, que es lo que hace que
 // "estacionamiento" no devuelva estaciones de servicio.
-export type TipoServicio = "baño" | "estacionamiento" | "cajero" | "wifi";
+export type TipoServicio = "baño" | "estacionamiento" | "cajero" | "wifi" | "emergencias" | "alquiler" | "servicio-tecnico";
 
 export const SERVICIOS: Record<TipoServicio, { rubro: string; nombre: string; plural: string; icono: string; patron: RegExp }> = {
   "baño":          { rubro: "banos", nombre: "Baño público", plural: "Baños públicos", icono: "🚻", patron: /\bba[ñn]os?\b|sanitarios? p[uú]blicos?|inodoro|\bwc\b/ },
   estacionamiento: { rubro: "estacionamiento", nombre: "Estacionamiento", plural: "Estacionamientos", icono: "🅿️", patron: /estacionamiento|estacionar|cochera|parking|playa de estacionamiento|d[oó]nde dejo el auto/ },
   cajero:          { rubro: "cajeros", nombre: "Cajero automático", plural: "Cajeros y bancos", icono: "🏧", patron: /cajeros?( autom[aá]ticos?)?|\batm\b|\bbancos?\b|sacar plata|retirar (plata|dinero|efectivo)/ },
   wifi:            { rubro: "wifi", nombre: "Wifi", plural: "Wifi gratis", icono: "📶", patron: /\bwi-?fi\b|internet gratis/ },
+  emergencias:     { rubro: "emergencias", nombre: "Policía o emergencia", plural: "Policía y emergencias", icono: "🚓", patron: /\bpolic[ií]a\b|comisar[ií]a|bomberos?|\bfelcc\b|\bhospital\b|posta sanitaria|centro de salud|emergencias?\b/ },
+  alquiler:        { rubro: "alquiler", nombre: "Alquiler", plural: "Alquileres", icono: "🏠", patron: /\balquil|inmobiliaria|arriendo|anticr[eé]tico|departamento en alquiler|habitaci[oó]n en alquiler/ },
+  "servicio-tecnico": { rubro: "servicio-tecnico", nombre: "Servicio técnico", plural: "Servicio técnico", icono: "🛠️", patron: /servicio t[eé]cnico|reparaci[oó]n de|arreglo de (celular|tel[eé]fono|compu|notebook|heladera|lavarropas|tv)|t[eé]cnico (en|de) (celulares|computadoras|heladeras|aire)|electricista|plomero|gasista|refrigeraci[oó]n/ },
 };
 
 function norm(s: string): string {
