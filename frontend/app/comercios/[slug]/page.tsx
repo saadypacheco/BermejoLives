@@ -61,6 +61,8 @@ export default async function ComercioPage({ params }: { params: { slug: string 
   // 404 de verdad (app/not-found.tsx): un slug viejo o mal copiado no es
   // una página que existe, y así lo entienden los buscadores y el navegador.
   if (!comercio) notFound();
+  // Un taxi, remis o chofer sin parada fija: no hay "cómo llegar", se lo llama.
+  const sinParada = comercio.rubro_slug === "taxis" && !comercio.direccion && !comercio.lat;
   // El QR de la ficha, el mismo que va en el volante y en la tarjeta de mesa.
   // En pantalla sirve para pasar la ficha de una compu a un celular sin
   // tipear, y para que el dueño la muestre desde su teléfono. Se genera acá,
@@ -182,9 +184,11 @@ export default async function ComercioPage({ params }: { params: { slug: string 
             ) : null}
 
             <div className="uk-ficha-acciones">
-              <LeadLink className="uk-btn-ghost" href={mapsHref} tipo="mapa" comercioId={comercio.id}>
-                <Pin style={{ width: 16, height: 16 }} /> Cómo llegar
-              </LeadLink>
+              {!sinParada && (
+                <LeadLink className="uk-btn-ghost" href={mapsHref} tipo="mapa" comercioId={comercio.id}>
+                  <Pin style={{ width: 16, height: 16 }} /> Cómo llegar
+                </LeadLink>
+              )}
               {comercio.telefono && comercio.whatsapp && (
                 <a className="uk-btn-ghost" href={`tel:${comercio.telefono.replace(/[^\d+]/g, "")}`}>
                   <Phone style={{ width: 16, height: 16 }} /> Llamar
@@ -338,6 +342,14 @@ export default async function ComercioPage({ params }: { params: { slug: string 
               ))}
             </div>
 
+            {sinParada && (
+              <div className="uk-info-card" id="ubicacion">
+                <h3>Dónde atiende</h3>
+                <p style={{ color: "var(--uk-ink-soft)", fontSize: 13, margin: 0 }}>
+                  En toda la ciudad: no tiene parada fija, se pide por WhatsApp{comercio.telefono ? " o por teléfono" : ""}.
+                </p>
+              </div>
+            )}
             {(comercio.direccion || comercio.lat) && (
               <div className="uk-info-card" id="ubicacion">
                 <h3>Ubicación</h3>

@@ -808,6 +808,11 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
                     );
                   })()}
 
+                  {/* Un taxi o un chofer no tiene dirección: se lo llama. Decirlo
+                      evita el "sin ubicación" que suena a dato faltante. */}
+                  {r.rubro_slug === "taxis" && !r.direccion && r.lat == null && (
+                    <div className="uk-resdir">🚕 Atiende en toda la ciudad · se pide por WhatsApp</div>
+                  )}
                   {(r.direccion || distancia(r) != null) && (
                     <div className="uk-resdir">
                       <Pin style={{ width: 13, height: 13 }} />
@@ -834,11 +839,13 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
                         indicaciones para un local al que no piensa ir. Sin
                         registrarlo, el comercio que se descubre por el mapa y
                         se visita caminando figuraba con cero. */}
-                    <a className="uk-resic" title="Cómo llegar" aria-label="Cómo llegar"
-                       href={comoLlegarHref(r)} target="_blank" rel="noopener"
-                       onClick={() => registrarLead(r.id, "mapa", busquedaId)}>
-                      <Pin style={{ width: 17, height: 17 }} />
-                    </a>
+                    {!(r.rubro_slug === "taxis" && r.lat == null && !r.direccion) && (
+                      <a className="uk-resic" title="Cómo llegar" aria-label="Cómo llegar"
+                         href={comoLlegarHref(r)} target="_blank" rel="noopener"
+                         onClick={() => registrarLead(r.id, "mapa", busquedaId)}>
+                        <Pin style={{ width: 17, height: 17 }} />
+                      </a>
+                    )}
                     {/* A la ficha se llegaba sólo por la foto o por el nombre, sin
                         que nada lo dijera. Los dos botones que sí se veían sacan
                         del sitio (WhatsApp, Maps), así que lo único que muestra
