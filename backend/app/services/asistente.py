@@ -166,7 +166,8 @@ SUGERENCIAS_INICIALES = [
 URL_GUIA = f"{SITIO}/guia"
 _ESTADO_TXT = {
     "puente": {"normal": "el puente funciona normal", "demoras": "el puente está con demoras", "cerrado": "el puente está CERRADO"},
-    "chalanas": {"operando": "las chalanas están cruzando", "suspendidas": "las chalanas están suspendidas"},
+    "chalanas": {"operando": "las chalanas están cruzando", "limitadas": "las chalanas cruzan con restricciones",
+                 "suspendidas": "las chalanas están suspendidas"},
     "rio": {"normal": "el río está normal", "crecido": "el río está crecido"},
 }
 
@@ -175,8 +176,11 @@ def _frontera_hoy(repo, ahora: datetime) -> Respuesta:
     """«¿Cómo está el paso?» Lo que alguien cargó en /contenido, con su fecha:
     si es de hace días, se dice, porque un "normal" viejo es peor que nada."""
     f = repo.get_frontera_estado() or {}
-    partes = [_ESTADO_TXT["puente"].get(f.get("puente"), ""), _ESTADO_TXT["chalanas"].get(f.get("chalanas"), ""),
-              _ESTADO_TXT["rio"].get(f.get("rio"), "")]
+    chal = _ESTADO_TXT["chalanas"].get(f.get("chalanas"), "")
+    # El horario de las chalanas, si está cargado y cruzan.
+    if chal and f.get("chalanas") != "suspendidas" and f.get("chalanas_horario"):
+        chal += f" ({f['chalanas_horario'].strip()})"
+    partes = [_ESTADO_TXT["puente"].get(f.get("puente"), ""), chal, _ESTADO_TXT["rio"].get(f.get("rio"), "")]
     texto = "Hoy en la frontera: " + ", ".join(p for p in partes if p) + "."
     if f.get("nota"):
         texto += f" {f['nota'].strip().rstrip('.')}."

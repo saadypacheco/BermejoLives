@@ -44,12 +44,15 @@ def editar_cotizacion(clave: str, body: CotizacionUpdate, _pub: dict = Depends(a
 # ---- La frontera hoy ----
 class FronteraIn(BaseModel):
     puente: str | None = None       # normal | demoras | cerrado
-    chalanas: str | None = None     # operando | suspendidas
+    chalanas: str | None = None     # operando | limitadas | suspendidas
     rio: str | None = None          # normal | crecido
     nota: str | None = None
+    # El horario de hoy de las chalanas ("7:00 a 18:00", "sólo de mañana").
+    # Vacío = se borra: no se deja un horario viejo diciendo cualquier cosa.
+    chalanas_horario: str | None = None
 
 
-_FRONTERA_VALORES = {"puente": {"normal", "demoras", "cerrado"}, "chalanas": {"operando", "suspendidas"}, "rio": {"normal", "crecido"}}
+_FRONTERA_VALORES = {"puente": {"normal", "demoras", "cerrado"}, "chalanas": {"operando", "limitadas", "suspendidas"}, "rio": {"normal", "crecido"}}
 
 
 @router.get("/contenido/frontera")
@@ -71,6 +74,8 @@ def editar_frontera(body: FronteraIn, pub: dict = Depends(auth.require_publicado
         patch[k] = v
     if body.nota is not None:
         patch["nota"] = body.nota.strip()[:300] or None
+    if body.chalanas_horario is not None:
+        patch["chalanas_horario"] = body.chalanas_horario.strip()[:80] or None
     if not patch:
         raise HTTPException(status_code=400, detail="No hay nada que cambiar")
     patch["actualizado_por"] = pub.get("email")

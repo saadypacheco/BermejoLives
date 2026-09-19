@@ -659,13 +659,14 @@ export async function getSaberLocalPorSeccion(): Promise<Record<string, SaberLoc
 }
 
 export type FronteraEstado = {
-  puente: "normal" | "demoras" | "cerrado"; chalanas: "operando" | "suspendidas"; rio: "normal" | "crecido";
+  puente: "normal" | "demoras" | "cerrado"; chalanas: "operando" | "limitadas" | "suspendidas"; rio: "normal" | "crecido";
+  chalanas_horario?: string | null;
   nota: string | null; actualizado_en: string | null;
 };
 
 export async function getFronteraEstado(): Promise<FronteraEstado | null> {
   if (!hasSupabase) return null;
-  const { data } = await supabase.from("frontera_estado").select("puente, chalanas, rio, nota, actualizado_en").eq("id", 1).limit(1);
+  const { data } = await supabase.from("frontera_estado").select("puente, chalanas, rio, nota, actualizado_en, chalanas_horario").eq("id", 1).limit(1);
   return (data?.[0] as FronteraEstado) ?? null;
 }
 

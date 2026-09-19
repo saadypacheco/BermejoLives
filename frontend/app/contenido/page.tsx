@@ -187,13 +187,14 @@ function Panel({ onLogout }: { onLogout: (motivo?: string) => void }) {
 function FronteraBox({ flash, fail }: { flash: (m: string) => void; fail: (e: unknown) => void }) {
   const [f, setF] = useState<FronteraEstado | null>(null);
   const [nota, setNota] = useState("");
-  useEffect(() => { getFronteraEstado().then((x) => { setF(x); setNota(x?.nota ?? ""); }); }, []);
+  const [horarioChalanas, setHorarioChalanas] = useState("");
+  useEffect(() => { getFronteraEstado().then((x) => { setF(x); setNota(x?.nota ?? ""); setHorarioChalanas(x?.chalanas_horario ?? ""); }); }, []);
   async function guardar(patch: Record<string, string>) {
     try { await editarFrontera(patch); const x = await getFronteraEstado(); setF(x); flash("Frontera actualizada ✓"); } catch (e) { fail(e); }
   }
   const opciones: [keyof FronteraEstado, string, string[]][] = [
     ["puente", "Puente internacional", ["normal", "demoras", "cerrado"]],
-    ["chalanas", "Chalanas", ["operando", "suspendidas"]],
+    ["chalanas", "Chalanas", ["operando", "limitadas", "suspendidas"]],
     ["rio", "Río", ["normal", "crecido"]],
   ];
   const hace = f?.actualizado_en ? Math.floor((Date.now() - new Date(f.actualizado_en).getTime()) / 3600000) : null;
@@ -214,6 +215,11 @@ function FronteraBox({ flash, fail }: { flash: (m: string) => void; fail: (e: un
             ))}
           </div>
         ))}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <b style={{ fontSize: 13, width: 150 }}>Horario chalanas</b>
+          <input className="adm-input" style={{ flex: 1 }} value={horarioChalanas} onChange={(e) => setHorarioChalanas(e.target.value)} placeholder="ej. 7:00 a 18:00 · sólo de mañana · vacío = no se muestra" />
+          <button className="btn btn-primary btn-sm" onClick={() => guardar({ chalanas_horario: horarioChalanas })}>Guardar horario</button>
+        </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input className="adm-input" style={{ flex: 1 }} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Nota (opcional): filas de dos horas por el feriado, migraciones sin sistema…" />
           <button className="btn btn-primary btn-sm" onClick={() => guardar({ nota })}>Guardar nota</button>

@@ -71,7 +71,7 @@ const INFO = [
 
 const ESTADO: Record<string, Record<string, [string, string]>> = {
   puente: { normal: ["habilitada", "ok"], demoras: ["con demoras", "ojo"], cerrado: ["cerrada", "mal"] },
-  chalanas: { operando: ["operando", "ok"], suspendidas: ["suspendidas", "mal"] },
+  chalanas: { operando: ["operando", "ok"], limitadas: ["con restricciones", "ojo"], suspendidas: ["suspendidas", "mal"] },
   rio: { normal: ["normal", "ok"], crecido: ["crecido", "ojo"] },
 };
 
@@ -128,7 +128,8 @@ export default async function InicioPage() {
             <ul>
               {frontera && (["puente", "chalanas"] as const).map((k) => {
                 const [txt, nivel] = ESTADO[k][frontera[k]] ?? [frontera[k], "ojo"];
-                return <li key={k}><span>{k === "puente" ? "🌉" : "⛵"}</span>{k === "puente" ? "Frontera" : "Chalanas"}: <b className={nivel}>{txt}</b></li>;
+                const horario = k === "chalanas" && frontera.chalanas !== "suspendidas" && frontera.chalanas_horario ? ` · ${frontera.chalanas_horario}` : "";
+                return <li key={k}><span>{k === "puente" ? "🌉" : "⛵"}</span>{k === "puente" ? "Frontera" : "Chalanas"}: <b className={nivel}>{txt}</b>{horario}</li>;
               })}
               {frontera?.rio === "crecido" && <li><span>🌊</span>Río: <b className="ojo">crecido</b></li>}
               {clima?.temp_c != null && <li><span>{clima.icono || "☀"}</span>Clima: <b>{Math.round(clima.temp_c)}°</b>{clima.descripcion ? ` · ${clima.descripcion}` : ""}</li>}

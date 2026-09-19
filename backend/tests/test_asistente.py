@@ -404,3 +404,17 @@ def test_la_policia_y_el_alquiler_son_rubros_que_se_ubican(repo, sin_modelo):
                              "rubro_slug": "alquiler", "subcategoria": "departamento"}
     r2 = asistente.responder(repo, "busco un departamento en alquiler", ahora=MARTES_11)
     assert r2.intent == "buscar" and "Departamento centro" in r2.texto and "rubro=alquiler" in r2.texto
+
+
+def test_las_chalanas_con_restricciones_y_su_horario(repo, sin_modelo, client, admin_token):
+    """«limitadas» es el estado del medio, y el horario cargado sale en la
+    respuesta; suspendidas, sin horario, porque no cruzan."""
+    h = {"Authorization": f"Bearer {admin_token}"}
+    r = client.put("/contenido/frontera", headers=h, json={"chalanas": "limitadas", "chalanas_horario": " 7:00 a 12:00 "})
+    assert r.status_code == 200 and r.json()["frontera"]["chalanas_horario"] == "7:00 a 12:00"
+    t = asistente.responder(repo, "¿cómo está el paso hoy?", ahora=MARTES_11).texto
+    assert "cruzan con restricciones (7:00 a 12:00)" in t
+    client.put("/contenido/frontera", headers=h, json={"chalanas": "suspendidas"})
+    t2 = asistente.responder(repo, "¿cómo está el paso hoy?", ahora=MARTES_11).texto
+    assert "suspendidas" in t2 and "7:00" not in t2
+    assert client.put("/contenido/frontera", headers=h, json={"chalanas": "medio"}).status_code == 400

@@ -36,7 +36,7 @@ const SECCION: Record<string, { titulo: string; icono: string }> = {
 
 const ESTADO: Record<string, Record<string, [string, "ok" | "ojo" | "mal"]>> = {
   puente: { normal: ["Puente: normal", "ok"], demoras: ["Puente: con demoras", "ojo"], cerrado: ["Puente: CERRADO", "mal"] },
-  chalanas: { operando: ["Chalanas: cruzando", "ok"], suspendidas: ["Chalanas: suspendidas", "mal"] },
+  chalanas: { operando: ["Chalanas: cruzando", "ok"], limitadas: ["Chalanas: con restricciones", "ojo"], suspendidas: ["Chalanas: suspendidas", "mal"] },
   rio: { normal: ["Río: normal", "ok"], crecido: ["Río: crecido", "ojo"] },
 };
 
@@ -97,6 +97,9 @@ export default async function GuiaPage() {
                     return <span key={k} className={`uk-guia-estado ${nivel}`}>{txt}</span>;
                   })}
                 </div>
+                {frontera.chalanas !== "suspendidas" && frontera.chalanas_horario && (
+                  <p className="uk-guia-nota">⛵ Chalanas hoy: {frontera.chalanas_horario}</p>
+                )}
                 {frontera.nota && <p className="uk-guia-nota">{frontera.nota}</p>}
                 <small className={horasFrontera != null && horasFrontera >= 24 ? "vieja" : ""}>
                   {horasFrontera == null ? "Sin dato cargado todavía"
