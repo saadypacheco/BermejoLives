@@ -75,7 +75,10 @@ async def comercio_registro(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    ciudad_id = repo.get_ciudad_id("bermejo")
+    # La ciudad, por dónde está el negocio: el que se registra en Santa Cruz
+    # es de Santa Cruz. Bermejo sólo si no hay ciudad con coordenadas.
+    cercana = repo.ciudad_mas_cercana(lat, lng)
+    ciudad_id = (cercana or {}).get("id") or repo.get_ciudad_id("bermejo")
     # Detección automática del lugar por GPS: si el punto cae dentro de la manzana de
     # un mercado/galería (o muy cerca de su punto), lo asignamos solo.
     lugares = repo.list_lugares(ciudad_id)

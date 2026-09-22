@@ -21,8 +21,10 @@ import { HorarioBadge } from "@/components/horario-badge";
 import { registrarLead, logBusqueda } from "@/lib/campo";
 
 
-export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
+export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiudad = "" }: {
   ciudadInicial?: string;
+  /** El nombre de la ciudad elegida, para los títulos ("Baños públicos en Yacuiba"). */
+  nombreCiudad?: string;
   /** De dónde saca el mapa base esta ciudad. NULL = la del código. */
   tilesCiudad?: { tiles_url?: string | null; tiles_atribucion?: string | null } | null;
 }) {
@@ -683,7 +685,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
           no escondía nada. */}
       {servicio && vista === "lista" && (
         <div className="uk-servicios-cab">
-          <h2>{SERVICIOS[servicio].icono} {SERVICIOS[servicio].plural} en Bermejo</h2>
+          <h2>{SERVICIOS[servicio].icono} {SERVICIOS[servicio].plural}{nombreCiudad ? ` en ${nombreCiudad}` : ""}</h2>
           <button type="button" className="uk-btn-ghost" onClick={() => setVista("mapa")}>Ver en el mapa →</button>
         </div>
       )}
@@ -699,7 +701,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null }: {
             servicio
               ? (
                 <p className="uk-empty">
-                  Todavía no cargamos {SERVICIOS[servicio].plural.toLowerCase()} en el mapa. Mientras tanto, preguntá en cualquier local: en Bermejo se ayuda.
+                  Todavía no cargamos {SERVICIOS[servicio].plural.toLowerCase()}{nombreCiudad ? ` de ${nombreCiudad}` : ""} en el mapa. Mientras tanto, preguntá en cualquier local.
                 </p>
               )
             : soloOfertas && !q.trim() && !rubro

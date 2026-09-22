@@ -87,6 +87,7 @@ class Repo(Protocol):
     def get_rubro_nombre(self, slug: str) -> str | None: ...
     def get_ciudad_id(self, slug: str) -> str | None: ...
     def get_ciudad(self, slug: str) -> dict | None: ...
+    def ciudad_mas_cercana(self, lat: float, lng: float) -> dict | None: ...
     def crear_comercio(self, row: dict) -> dict: ...
     def get_comercio_por_codigo(self, codigo: str) -> dict | None: ...
     def crear_comercio_usuario(self, row: dict) -> dict: ...
@@ -220,7 +221,7 @@ class Repo(Protocol):
     def upsert_contactos_base(self, filas: list[dict]) -> dict: ...
     def resumen_contactos_base(self) -> dict: ...
     # Uruku Ayuda (services/asistente.py)
-    def buscar_comercios(self, q: str, limite: int = 5, rubro: str | None = None) -> list[dict]: ...
+    def buscar_comercios(self, q: str, limite: int = 5, rubro: str | None = None, ciudad: str | None = None) -> list[dict]: ...
     def list_saber_local(self, solo_activos: bool = True) -> list[dict]: ...
     def upsert_saber_local(self, row: dict) -> dict: ...
     def borrar_saber_local(self, saber_id: str) -> None: ...
@@ -796,6 +797,21 @@ class SupabaseRepo:
     def get_rubro_nombre(self, slug: str) -> str | None:
         res = self._db.table("rubros").select("nombre").eq("slug", slug).limit(1).execute()
         return res.data[0]["nombre"] if res.data else None
+
+    def ciudad_mas_cercana(self, lat: float, lng: float) -> dict | None:
+        """La ciudad activa más cercana a un punto. Para el alta de un negocio:
+        el que se registra desde Santa Cruz es de Santa Cruz, no de Bermejo
+        porque Bermejo fue la primera. Distancia plana: entre ciudades a
+        cientos de kilómetros alcanza y sobra."""
+        res = self._db.table("ciudades").select("id, slug, nombre, lat, lng").eq("activa", True).execute()
+        mejor, dist = None, None
+        for c in res.data or []:
+            if c.get("lat") is None or c.get("lng") is None:
+                continue
+            d = (c["lat"] - lat) ** 2 + (c["lng"] - lng) ** 2
+            if dist is None or d < dist:
+                mejor, dist = c, d
+        return mejor
 
     def get_ciudad_id(self, slug: str) -> str | None:
         res = self._db.table("ciudades").select("id").eq("slug", slug).limit(1).execute()
@@ -2227,13 +2243,13 @@ class SupabaseRepo:
         return res.data[0] if res.data else None
 
     # ------------------------------------------------------------ Uruku Ayuda
-    def buscar_comercios(self, q: str, limite: int = 5, rubro: str | None = None) -> list[dict]:
+    def buscar_comercios(self, q: str, limite: int = 5, rubro: str | None = None, ciudad: str | None = None) -> list[dict]:
         """La MISMA búsqueda del sitio (la función `buscar_comercios` de la
         base), para que el asistente conteste con lo que el buscador
         mostraría. Dos buscadores que no coinciden son dos verdades."""
         res = self._db.rpc("buscar_comercios", {
             "q": q or None, "p_rubro": rubro or None, "p_modalidad": None, "p_zona": None,
-            "p_precio_min": None, "p_precio_max": None, "p_ciudad": None,
+            "p_precio_min": None, "p_precio_max": None, "p_ciudad": ciudad or None,
             "p_limit": max(1, min(int(limite), 100)), "p_offset": 0, "p_subcategoria": None,
         }).execute()
         return res.data or []

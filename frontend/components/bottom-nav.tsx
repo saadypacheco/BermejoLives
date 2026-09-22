@@ -21,10 +21,18 @@ const ITEMS = [
   { key: "Cambio", href: "/cambio", d: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 6.5v11M14.8 9.3c-.3-1.1-1.4-1.8-2.8-1.8-1.6 0-2.8.9-2.8 2.1 0 1.3 1.2 1.8 2.8 2.2 1.6.4 2.8.9 2.8 2.2 0 1.3-1.2 2.2-2.8 2.2-1.5 0-2.6-.8-2.9-1.9" },
 ];
 
-export function BottomNav({ active = "Mapa" }: { active?: string }) {
+// Sin la guía (que hoy es la de Bermejo) no hay Guía ni Cambio en la barra:
+// vuelven Guardados y Perfil, que tienen sentido en cualquier ciudad.
+const ITEMS_SIN_GUIA = [
+  ITEMS[0], ITEMS[1], ITEMS[2],
+  { key: "Guardados", href: "/guardados", d: "M6 3h12v18l-6-4-6 4V3z" },
+  { key: "Perfil", href: "/perfil", d: "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" },
+];
+
+export function BottomNav({ active = "Mapa", conGuia = true }: { active?: string; conGuia?: boolean }) {
   return (
     <nav className="bottomnav">
-      {ITEMS.map((it) => (
+      {(conGuia ? ITEMS : ITEMS_SIN_GUIA).map((it) => (
         <Link key={it.key} href={it.href} className={`bn-item ${active === it.key ? "active" : ""}`}>
           {ic(it.d)}<span>{it.key}</span>
         </Link>

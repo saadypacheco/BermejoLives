@@ -25,6 +25,8 @@ class PreguntaIn(BaseModel):
     pregunta: str = Field(min_length=1, max_length=500)
     sesion: str = Field(min_length=6, max_length=80)
     comercio_id: str | None = None
+    # La ciudad elegida en el sitio (slug). Sin ella, Bermejo.
+    ciudad: str | None = None
 
 
 class UtilIn(BaseModel):
@@ -50,7 +52,9 @@ def preguntar(body: PreguntaIn, repo: Repo = Depends(get_repo)) -> dict:
         raise HTTPException(status_code=429, detail="Llegaste al máximo de preguntas por hoy. Mañana seguimos.")
 
     comercio = _comercio_con_asistente(repo, body.comercio_id) if body.comercio_id else None
-    r = asistente.responder(repo, body.pregunta, comercio=comercio)
+    ciudad = repo.get_ciudad(body.ciudad) if body.ciudad else None
+    r = asistente.responder(repo, body.pregunta, comercio=comercio,
+                            ciudad={"slug": ciudad["slug"], "nombre": ciudad.get("nombre")} if ciudad else None)
     fila = repo.insert_conversacion({
         "sesion": body.sesion,
         "canal": "ficha" if comercio else "sitio",

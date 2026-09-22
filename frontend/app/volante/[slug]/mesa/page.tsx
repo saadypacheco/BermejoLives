@@ -1,4 +1,5 @@
 import QRCode from "qrcode";
+import { nombreCiudadDe } from "@/lib/data";
 import { getComercioBySlug } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,7 @@ export default async function TarjetaMesaPage({ params }: { params: { slug: stri
   }
 
   const url = `https://uruku.bo/comercios/${comercio.slug}`;
+  const ciudadNombre = await nombreCiudadDe(comercio.ciudad_id);
   // `?ref=mesa-<slug>`: lo que dice, después, si las tarjetas de mesa
   // trajeron a alguien (Admin › Panel › Llegadas por QR).
   const qr = await QRCode.toDataURL(`${url}?ref=mesa-${comercio.slug}`, {
@@ -52,7 +54,7 @@ export default async function TarjetaMesaPage({ params }: { params: { slug: stri
       <div className="mesa-detalle">{detalle}</div>
       <div className="mesa-pie">
         <b>uruku.bo</b>
-        <span>Todo lo que se vende en Bermejo, en el mapa</span>
+        <span>Todo lo que se vende en {ciudadNombre}, en el mapa</span>
       </div>
     </div>
   );

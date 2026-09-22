@@ -1107,10 +1107,10 @@ export type RespuestaAsistente = {
 
 /** Público. `sesion` identifica al navegador para el tope diario; `comercioId`
  *  acota el asistente a ese local (plan Empleado Digital). */
-export async function preguntarAsistente(pregunta: string, sesion: string, comercioId?: string): Promise<RespuestaAsistente> {
+export async function preguntarAsistente(pregunta: string, sesion: string, comercioId?: string, ciudad?: string): Promise<RespuestaAsistente> {
   const res = await fetch(`${API}/asistente/preguntar`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pregunta, sesion, comercio_id: comercioId ?? null }),
+    body: JSON.stringify({ pregunta, sesion, comercio_id: comercioId ?? null, ciudad: ciudad ?? null }),
   });
   if (!res.ok) {
     let detail = "No pude contestar ahora.";

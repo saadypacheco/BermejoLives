@@ -418,3 +418,24 @@ def test_las_chalanas_con_restricciones_y_su_horario(repo, sin_modelo, client, a
     t2 = asistente.responder(repo, "¿cómo está el paso hoy?", ahora=MARTES_11).texto
     assert "suspendidas" in t2 and "7:00" not in t2
     assert client.put("/contenido/frontera", headers=h, json={"chalanas": "medio"}).status_code == 400
+
+
+def test_en_otra_ciudad_no_hay_frontera_ni_saber_de_bermejo(client, repo, sin_modelo):
+    """Yacuiba no es frontera (en el fake): el paso, la aduana y las chalanas
+    no se contestan; la búsqueda se acota a la ciudad y los textos la nombran."""
+    repo.comercios["f1"] = {"id": "f1", "slug": "farmacia-yacuiba", "nombre": "Farmacia Yacuiba", "activo": True,
+                            "rubro_slug": "farmacia", "ciudad_slug": "yacuiba"}
+    repo.comercios["f2"] = {"id": "f2", "slug": "farmacia-bermejo", "nombre": "Farmacia Bermejo", "activo": True,
+                            "rubro_slug": "farmacia", "ciudad_slug": "bermejo"}
+    repo.saber_local["s1"] = {"id": "s1", "pregunta": "¿Cómo está el paso?", "respuesta": "Por el puente, 24 h.",
+                              "etiquetas": ["paso", "puente", "frontera"], "activo": True, "seccion": "frontera"}
+    yac = {"slug": "yacuiba", "nombre": "Yacuiba"}
+    r = client.post("/asistente/preguntar", json={"pregunta": "¿dónde hay una farmacia?", "sesion": "sesion-yac-1", "ciudad": "yacuiba"}).json()
+    assert "Farmacia Yacuiba" in r["texto"] and "Farmacia Bermejo" not in r["texto"] and "en Yacuiba" in r["texto"]
+    r2 = asistente.responder(repo, "¿cómo está el paso hoy?", ahora=MARTES_11, ciudad=yac)
+    assert r2.intent != "frontera_hoy" and r2.intent != "saber_local"
+    r3 = asistente.responder(repo, "¿qué es uruku?", ahora=MARTES_11, ciudad=yac)
+    assert "Yacuiba" in r3.texto and "Bermejo" not in r3.texto
+    # Sin ciudad, todo como siempre: Bermejo y su frontera.
+    r4 = asistente.responder(repo, "¿cómo está el paso hoy?", ahora=MARTES_11)
+    assert r4.intent == "frontera_hoy"

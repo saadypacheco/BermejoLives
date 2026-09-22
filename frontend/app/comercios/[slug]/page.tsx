@@ -11,7 +11,7 @@ import { GuardarBoton } from "@/components/guardar-boton";
 import { HorarioBadge } from "@/components/horario-badge";
 import { CompartirBoton } from "@/components/compartir-boton";
 import QRCode from "qrcode";
-import { getComercioBySlug, getOfertasComercio, getGaleriaComercio } from "@/lib/data";
+import { getComercioBySlug, getOfertasComercio, getGaleriaComercio, nombreCiudadDe } from "@/lib/data";
 import { FichaGaleria } from "@/components/ficha-galeria";
 import { VistaLogger } from "@/components/vista-logger";
 import { VolverAResultados } from "@/components/volver-a-resultados";
@@ -29,10 +29,11 @@ export const dynamic = "force-dynamic"; // el header (ciudad por cookie) es din�
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   const c = await getComercioBySlug(params.slug);
   if (!c) return { title: "Comercio no encontrado — URUKU" };
+  const ciudad = await nombreCiudadDe(c.ciudad_id);
   const que = c.subcategoria || c.rubro_nombre?.replace(/^\S+\s/, "") || "";
-  const titulo = `${c.nombre.trim()}${que ? ` — ${que}` : ""} en Bermejo | URUKU`;
+  const titulo = `${c.nombre.trim()}${que ? ` — ${que}` : ""} en ${ciudad} | URUKU`;
   const vende = (c.prod_obs_human || c.prod_det_ia || "").split(/[,;·]/).map((t) => t.trim()).filter(Boolean).slice(0, 6).join(", ");
-  const descripcion = (c.descripcion?.trim() || (vende ? `Vende ${vende}.` : `${c.nombre.trim()} en el mapa de Bermejo.`))
+  const descripcion = (c.descripcion?.trim() || (vende ? `Vende ${vende}.` : `${c.nombre.trim()} en el mapa de ${ciudad}.`))
     + " Cómo llegar, WhatsApp y ofertas en URUKU.";
   const imagen = c.portada_url || c.logo_url || "https://uruku.bo/logouruku.png";
   return {
@@ -61,6 +62,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
   // 404 de verdad (app/not-found.tsx): un slug viejo o mal copiado no es
   // una página que existe, y así lo entienden los buscadores y el navegador.
   if (!comercio) notFound();
+  const ciudadNombre = await nombreCiudadDe(comercio.ciudad_id);
   // Un taxi, remis o chofer sin parada fija: no hay "cómo llegar", se lo llama.
   const sinParada = comercio.rubro_slug === "taxis" && !comercio.direccion && !comercio.lat;
   const responde = (comercio.contacto_ok ?? 0) >= 3 && (comercio.contacto_ok ?? 0) >= 2 * (comercio.contacto_no ?? 0);
@@ -104,7 +106,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
     comercio.como_llegar ??
     (comercio.lat && comercio.lng
       ? `https://www.google.com/maps/search/?api=1&query=${comercio.lat},${comercio.lng}`
-      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(comercio.direccion ?? "Bermejo")}`);
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(comercio.direccion ?? ciudadNombre)}`);
 
   // Las secciones que existen de verdad, para la barra de anclas. Se arma con
   // datos y no con una lista fija: una pestaña "Productos" que lleva a un hueco

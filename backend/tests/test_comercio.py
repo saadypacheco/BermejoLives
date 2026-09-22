@@ -559,3 +559,15 @@ def test_ocultar_comercios_vencidos(repo):
     assert repo.comercios["c-venc"]["activo"] is False
     assert repo.comercios["c-grac"]["activo"] is True
     assert repo.comercios["c-grat"]["activo"] is True
+
+
+def test_registro_toma_la_ciudad_mas_cercana(client, repo):
+    """El que se registra desde Santa Cruz es de Santa Cruz, no de Bermejo
+    por haber sido la primera ciudad."""
+    r = client.post("/auth/comercio/registro", data=_registro(nombre="Tienda Cruceña", whatsapp="59170002222", lat="-17.78", lng="-63.18"), files=_foto_test())
+    assert r.status_code == 200, r.text
+    creado = next(c for c in repo.comercios.values() if c["nombre"] == "Tienda Cruceña")
+    assert creado["ciudad_id"] == "ciu-sc"
+    client.post("/auth/comercio/registro", data=_registro(nombre="Tienda Bermejeña", whatsapp="59170003333"), files=_foto_test())
+    creado2 = next(c for c in repo.comercios.values() if c["nombre"] == "Tienda Bermejeña")
+    assert creado2["ciudad_id"] == "ciu-1"

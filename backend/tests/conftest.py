@@ -287,6 +287,12 @@ class FakeRepo:
         return {"id": f"ciudad-{slug}", "slug": slug, "nombre": slug.title(),
                 "lat": -22.7361, "lng": -64.3433}
 
+    def ciudad_mas_cercana(self, lat, lng):
+        # Dos ciudades en el fake: Bermejo y Santa Cruz.
+        ciudades = [{"id": "ciu-1", "slug": "bermejo", "nombre": "Bermejo", "lat": -22.7361, "lng": -64.3433},
+                    {"id": "ciu-sc", "slug": "santa-cruz", "nombre": "Santa Cruz", "lat": -17.7833, "lng": -63.1821}]
+        return min(ciudades, key=lambda c: (c["lat"] - lat) ** 2 + (c["lng"] - lng) ** 2)
+
     def agregar_numero_comercio(self, comercio_id, numero, etiqueta, by):
         from app.core.telefono import normalizar_whatsapp
         num = normalizar_whatsapp(numero)
@@ -802,7 +808,7 @@ class FakeRepo:
         return dict(self.frontera)
 
     # ------------------------------------------------------------ Uruku Ayuda
-    def buscar_comercios(self, q, limite=5, rubro=None):
+    def buscar_comercios(self, q, limite=5, rubro=None, ciudad=None):
         """Lo que el fake puede: nombre, subcategoría y productos, por
         substring de cada palabra. La función real rankea; acá alcanza con
         que aparezca lo que debería."""
@@ -816,6 +822,8 @@ class FakeRepo:
             if not c.get("activo", True):
                 continue
             if rubro and rubro not in ([c.get("rubro_slug")] + list(c.get("rubro_slugs") or [])):
+                continue
+            if ciudad and (c.get("ciudad_slug") or "bermejo") != ciudad:
                 continue
             pajar = _sin_acentos(" ".join(str(c.get(k) or "") for k in ("nombre", "subcategoria", "prod_obs_human", "prod_det_ia")))
             aciertos = sum(1 for t in terms if t in pajar)

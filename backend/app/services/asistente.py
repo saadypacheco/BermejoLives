@@ -27,6 +27,7 @@ mostrador, con un cliente que vino por eso.
 """
 from __future__ import annotations
 
+import contextvars
 import json
 import re
 import unicodedata
@@ -45,6 +46,40 @@ logger = structlog.get_logger()
 
 TZ = ZoneInfo("America/La_Paz")
 SITIO = "https://uruku.bo"
+
+# LA CIUDAD. El asistente nació para Bermejo y lo decía en cada frase. Con
+# más ciudades, la ciudad viaja con la pregunta (`responder(..., ciudad=)`),
+# queda en este contexto mientras se contesta, y de acá salen el nombre para
+# los textos y la pregunta de si es frontera. Sin ciudad: Bermejo, como
+# siempre. Es un ContextVar y no un global: dos pedidos a la vez no se pisan.
+_CIUDAD: contextvars.ContextVar[dict | None] = contextvars.ContextVar("ciudad", default=None)
+
+
+def _C() -> str:
+    """El nombre de la ciudad de la pregunta."""
+    return ((_CIUDAD.get() or {}).get("nombre") or "Bermejo").strip()
+
+
+def _con_guia() -> bool:
+    """Lo del paso, las chalanas, la aduana y el saber local del que cruza está
+    cargado para Bermejo: se contesta ahí y no en otra ciudad. (Otra frontera
+    tendrá lo suyo cuando se cargue.) Sin ciudad: Bermejo."""
+    c = _CIUDAD.get()
+    return True if not c else (c.get("slug") == "bermejo")
+
+
+class _RepoEnCiudad:
+    """El mismo repo, con la búsqueda acotada a la ciudad de la pregunta.
+    Envuelve en vez de tocar las siete llamadas a `buscar_comercios`."""
+
+    def __init__(self, repo, ciudad_slug: str):
+        self._repo, self._slug = repo, ciudad_slug
+
+    def buscar_comercios(self, q: str, limite: int = 5, rubro: str | None = None, ciudad: str | None = None):
+        return self._repo.buscar_comercios(q, limite, rubro, ciudad=ciudad or self._slug)
+
+    def __getattr__(self, name):
+        return getattr(self._repo, name)
 
 # Cuántos comercios se muestran en una respuesta. Cinco entran en una pantalla
 # de celular sin scroll; el "ver todos" lleva al buscador.
@@ -117,7 +152,7 @@ def _maps(c: dict) -> str | None:
     if c.get("lat") and c.get("lng"):
         return f"https://www.google.com/maps/search/?api=1&query={c['lat']},{c['lng']}"
     if c.get("direccion"):
-        return "https://www.google.com/maps/search/?api=1&query=" + quote_plus(f"{c['direccion']}, Bermejo, Bolivia")
+        return "https://www.google.com/maps/search/?api=1&query=" + quote_plus(f"{c['direccion']}, {_C()}, Bolivia")
     return None
 
 
@@ -358,7 +393,7 @@ def _casas_de_cambio(repo, ahora: datetime) -> Respuesta:
         lineas.append(f"• {c.get('nombre')}" + (f" — {' · '.join(extra)}" if extra else ""))
     # Sin cifras: cuántas hay es un dato del panel, no del comprador. Se dice
     # cuáles y si están abiertas, que es lo que sirve.
-    cabeza = ("Casas de cambio en Bermejo" +
+    cabeza = (f"Casas de cambio en {_C()}" +
               (", las abiertas ahora primero" if abiertas else "") +
               (", para empezar:" if len(casas) > len(mostrar) else ":"))
     texto = (cabeza + "\n" + "\n".join(lineas) +
@@ -372,7 +407,7 @@ def _clima(repo) -> str | None:
     if c.get("temp_c") is None:
         return None
     desc = f", {c['descripcion']}" if c.get("descripcion") else ""
-    return f"En Bermejo ahora hay {round(c['temp_c'])}°{desc}."
+    return f"En {_C()} ahora hay {round(c['temp_c'])}°{desc}."
 
 
 def _comercio_por_nombre(repo, nombre: str) -> list[dict]:
@@ -527,7 +562,7 @@ def _buscar_y_contestar(repo, q: str, ahora: datetime) -> Respuesta | None:
         url = f"{SITIO}/buscar?rubro={rubro}&vista=mapa"
         if not filas:
             return Respuesta(
-                texto=f"Todavía no tengo {plural} cargados en el mapa. Preguntá en cualquier local: en Bermejo se ayuda. Y si sabés de uno, contámelo acá y lo agregamos.",
+                texto=f"Todavía no tengo {plural} de {_C()} cargados en el mapa. Preguntá en cualquier local, y si sabés de uno, contámelo acá y lo agregamos.",
                 nivel=0, intent="buscar", sin_respuesta=True,
                 sugerencias=["¿Dónde cambio dólares?", "¿Qué hay abierto ahora?"],
             )
@@ -536,7 +571,7 @@ def _buscar_y_contestar(repo, q: str, ahora: datetime) -> Respuesta | None:
         url = f"{SITIO}/buscar?q={q.replace(' ', '+')}"
     if not filas:
         return Respuesta(
-            texto=f"No encontré «{q}» en Bermejo todavía. Probá con otra palabra, o mirá el mapa: {url}",
+            texto=f"No encontré «{q}» en {_C()} todavía. Probá con otra palabra, o mirá el mapa: {url}",
             nivel=0, intent="buscar", sin_respuesta=True,
             sugerencias=["¿Qué hay abierto ahora?", "¿Dónde cambio dólares?"],
         )
@@ -553,7 +588,7 @@ def _buscar_y_contestar(repo, q: str, ahora: datetime) -> Respuesta | None:
             extra.append(et.lower())
         lineas.append(f"• {c.get('nombre')}" + (f" — {' · '.join(extra)}" if extra else ""))
     # Sin cifras: cuántos locales hay es un dato del panel, no del comprador.
-    cabeza = ((f"{servicio[1].capitalize()} en Bermejo" if servicio else f"Encontré esto para «{q}»")
+    cabeza = ((f"{servicio[1].capitalize()} en {_C()}" if servicio else f"Encontré esto para «{q}»")
               + (", para empezar:" if total > len(filas) else ":"))
     pie = f"\nHay más, en el mapa: {url}" if total > len(filas) else (f"\nEn el mapa: {url}" if servicio else "")
     return Respuesta(texto=cabeza + "\n" + "\n".join(lineas) + pie, nivel=0, intent="buscar",
@@ -588,7 +623,7 @@ def _nivel0_lugares(repo, pregunta: str) -> Respuesta | None:
     if not lugares:
         return None
     lineas = [f"• {l.get('nombre')}" + (f" ({l.get('tipo')})" if l.get("tipo") else "") for l in lugares[:8]]
-    return Respuesta(texto="Los mercados y galerías de Bermejo:\n" + "\n".join(lineas) +
+    return Respuesta(texto=f"Los mercados y galerías de {_C()}:\n" + "\n".join(lineas) +
                      f"\nEn el mapa: {SITIO}/mapa", nivel=0, intent="lugares",
                      sugerencias=["Busco ropa", "Busco zapatillas"])
 
@@ -640,7 +675,7 @@ def _nivel0_planes(repo) -> Respuesta:
 def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     p = _norm(pregunta)
     if re.fullmatch(r"(hola|buenas|buen dia|buenos dias|buenas tardes|buenas noches|hey|holis)( uruku)?", p):
-        return Respuesta(texto="¡Hola! Soy la ayuda de URUKU. Preguntame dónde conseguir algo en Bermejo, "
+        return Respuesta(texto=f"¡Hola! Soy la ayuda de URUKU. Preguntame dónde conseguir algo en {_C()}, "
                                "si un local está abierto, el dólar, o cómo publicar tu negocio.",
                          nivel=0, intent="saludo", sugerencias=SUGERENCIAS_INICIALES)
     if re.fullmatch(r"(gracias|muchas gracias|ok gracias|genial|perfecto|dale)( uruku)?", p):
@@ -648,10 +683,10 @@ def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
                          sugerencias=SUGERENCIAS_INICIALES)
     for patron, texto, intent in FAQ:
         if re.search(patron, p):
-            return Respuesta(texto=texto, nivel=0, intent="faq_" + intent)
-    if re.search(r"como esta (el paso|la frontera|el puente|el rio|la chalana|las chalanas)|estado (del paso|de la frontera|del rio|del puente)|(paso|frontera|puente|chalanas?) (esta|estan) (abiert|cerrad|operando|suspendid)|hay (paso|chalanas?) hoy|se puede cruzar hoy", p):
+            return Respuesta(texto=texto.replace("Bermejo", _C()), nivel=0, intent="faq_" + intent)
+    if _con_guia() and re.search(r"como esta (el paso|la frontera|el puente|el rio|la chalana|las chalanas)|estado (del paso|de la frontera|del rio|del puente)|(paso|frontera|puente|chalanas?) (esta|estan) (abiert|cerrad|operando|suspendid)|hay (paso|chalanas?) hoy|se puede cruzar hoy", p):
         return _frontera_hoy(repo, ahora)
-    if re.search(r"que (informacion|info|cosas) (tenes|puedo|me podes|sabes)|que me podes (decir|contar)|guia|que puedo preguntar|ayuda para (el que|los que) (viene|llega|visita)", p):
+    if _con_guia() and re.search(r"que (informacion|info|cosas) (tenes|puedo|me podes|sabes)|que me podes (decir|contar)|guia|que puedo preguntar|ayuda para (el que|los que) (viene|llega|visita)", p):
         return _guia(repo)
     if re.search(r"cuanto (cuesta|sale|vale)|precio(s)? de (los )?plan|\bplan(es)?\b|es gratis|hay que pagar|chatbot para mi", p):
         return _nivel0_planes(repo)
@@ -696,7 +731,9 @@ def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     r = _nivel0_servicio(repo, pregunta, ahora, solo_con_datos=True)
     if r:
         return r
-    s, _ = _saber_local(repo, pregunta)
+    # El saber local es el de Bermejo (aduana, chalanas, tours): en otra
+    # ciudad no se contesta con eso.
+    s, _ = _saber_local(repo, pregunta) if _con_guia() else (None, 0)
     if s:
         return Respuesta(texto=s["respuesta"], nivel=0, intent="saber_local",
                          fuentes=[{"tipo": "saber", "nombre": s.get("pregunta"), "url": ""}])
@@ -804,10 +841,10 @@ def _nivel1_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     cot = _cotizaciones(repo)
     if cot:
         datos.append(cot)
-    datos.append("Sobre URUKU: directorio de comercios de Bermejo (Bolivia) con mapa, búsqueda por lo que se vende y "
+    datos.append(f"Sobre URUKU: directorio de comercios de {_C()} (Bolivia) con mapa, búsqueda por lo que se vende y "
                  "WhatsApp directo. Registrar un negocio es gratis en uruku.bo/autoregistro. Las ofertas se publican "
                  "mandando una foto al grupo de WhatsApp del local. Sin comisión por venta.")
-    prompt = (f"Sos «Uruku Ayuda», el asistente de URUKU. Fecha y hora en Bermejo: {ahora.strftime('%A %d/%m %H:%M')}.\n"
+    prompt = (f"Sos «Uruku Ayuda», el asistente de URUKU. Fecha y hora en {_C()}: {ahora.strftime('%A %d/%m %H:%M')}.\n"
               f"{_REGLAS}\n\nDATOS:\n" + "\n\n".join(datos) + f"\n\nPREGUNTA: {pregunta.strip()}")
     j = _json_de(_gemini(prompt))
     if not j or not j.get("respuesta"):
@@ -831,7 +868,7 @@ def _nivel1_comercio(repo, c: dict, pregunta: str, ahora: datetime) -> Respuesta
         datos.append("Ofertas publicadas:\n" + "\n".join(
             f"- {o.get('titulo') or 'Oferta'}: {o.get('descripcion') or ''} {('— ' + str(o['precio']) + ' ' + (o.get('moneda') or 'Bs')) if o.get('precio') else ''}".strip()
             for o in ofertas[:15]))
-    prompt = (f"Sos el asistente de {c.get('nombre')}, un comercio de Bermejo (Bolivia) que está en URUKU. "
+    prompt = (f"Sos el asistente de {c.get('nombre')}, un comercio de {_C()} (Bolivia) que está en URUKU. "
               f"Atendés a sus clientes. Fecha y hora: {ahora.strftime('%A %d/%m %H:%M')}.\n{_REGLAS}\n\nDATOS:\n"
               + "\n\n".join(datos) + f"\n\nPREGUNTA DEL CLIENTE: {pregunta.strip()}")
     j = _json_de(_gemini(prompt))
@@ -861,9 +898,21 @@ def _nivel3_comercio(c: dict) -> Respuesta:
 
 # --------------------------------------------------------------------------- entrada
 
-def responder(repo, pregunta: str, comercio: dict | None = None, ahora: datetime | None = None) -> Respuesta:
+def responder(repo, pregunta: str, comercio: dict | None = None, ahora: datetime | None = None,
+              ciudad: dict | None = None) -> Respuesta:
     """La pregunta de una persona → la respuesta, por el nivel más barato que
-    la pueda contestar. `comercio` acota el asistente a ese local."""
+    la pueda contestar. `comercio` acota el asistente a ese local; `ciudad`
+    ({slug, nombre, es_frontera}) acota la búsqueda y los textos a esa ciudad."""
+    token = _CIUDAD.set(ciudad)
+    try:
+        if ciudad and ciudad.get("slug"):
+            repo = _RepoEnCiudad(repo, ciudad["slug"])
+        return _responder(repo, pregunta, comercio, ahora)
+    finally:
+        _CIUDAD.reset(token)
+
+
+def _responder(repo, pregunta: str, comercio: dict | None, ahora: datetime | None) -> Respuesta:
     ahora = ahora or datetime.now(TZ)
     pregunta = (pregunta or "").strip()
     if not pregunta:

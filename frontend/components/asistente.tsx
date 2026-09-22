@@ -36,8 +36,11 @@ function sesionId(): string {
 }
 
 const SUGERENCIAS = ["¿Dónde cambio dólares?", "¿Qué hay abierto ahora?", "Busco zapatillas", "¿Cómo publico mi negocio?"];
+const SUGERENCIAS_SIN_GUIA = ["¿Dónde hay una farmacia?", "Busco zapatillas", "¿Dónde como?", "¿Cómo publico mi negocio?"];
 
-export function Asistente({ comercio }: { comercio?: { id: string; nombre: string } }) {
+export function Asistente({ comercio, ciudad }: { comercio?: { id: string; nombre: string }; ciudad?: { slug: string; nombre: string; con_guia: boolean } }) {
+  const nombreCiudad = ciudad?.nombre ?? "Bermejo";
+  const conGuia = ciudad?.con_guia ?? true;
   const [abierto, setAbierto] = useState(false);
   const [texto, setTexto] = useState("");
   const [pensando, setPensando] = useState(false);
@@ -48,8 +51,8 @@ export function Asistente({ comercio }: { comercio?: { id: string; nombre: strin
   const bienvenida: Mensaje = comercio
     ? { de: "uruku", texto: `Hola, soy el asistente de ${comercio.nombre}. Preguntame por horarios, precios, ofertas o cómo llegar.`,
         sugerencias: ["¿Están abiertos ahora?", "¿Qué ofertas tienen?", "¿Dónde quedan?"] }
-    : { de: "uruku", texto: "Hola, soy la ayuda de URUKU. Preguntame dónde conseguir algo en Bermejo, si un local está abierto, el dólar, o cómo publicar tu negocio.",
-        sugerencias: SUGERENCIAS };
+    : { de: "uruku", texto: `Hola, soy la ayuda de URUKU. Preguntame dónde conseguir algo en ${nombreCiudad}, si un local está abierto, ${conGuia ? "el dólar" : "cómo llegar"}, o cómo publicar tu negocio.`,
+        sugerencias: conGuia ? SUGERENCIAS : SUGERENCIAS_SIN_GUIA };
 
   useEffect(() => {
     try { if (sessionStorage.getItem(CLAVE_ABIERTO) === "1") setAbierto(true); } catch { /* modo privado */ }
@@ -71,7 +74,7 @@ export function Asistente({ comercio }: { comercio?: { id: string; nombre: strin
     setMensajes((m) => [...m, { de: "yo", texto: pregunta }]);
     setPensando(true);
     try {
-      const r = await preguntarAsistente(pregunta, sesionId(), comercio?.id);
+      const r = await preguntarAsistente(pregunta, sesionId(), comercio?.id, ciudad?.slug);
       setMensajes((m) => [...m, { de: "uruku", texto: r.texto, id: r.id, fuentes: r.fuentes, sugerencias: r.sugerencias, util: null }]);
     } catch (e) {
       setMensajes((m) => [...m, { de: "uruku", texto: e instanceof Error ? e.message : "No pude contestar ahora.", error: true }]);

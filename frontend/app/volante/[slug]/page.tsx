@@ -1,5 +1,6 @@
 import QRCode from "qrcode";
 import { WA_URUKU } from "@/lib/contacto";
+import { nombreCiudadDe } from "@/lib/data";
 import { getComercioBySlug } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +54,7 @@ export default async function VolantePage({ params }: { params: { slug: string }
   // tipo, que lo haría aparecer en el autocompletado de todo el sitio.
   const codigo = (comercio as { codigo?: string | null }).codigo ?? null;
   const url = `https://uruku.bo/comercios/${comercio.slug}`;
+  const ciudadNombre = await nombreCiudadDe(comercio.ciudad_id);
   // Negro sobre blanco y margen 1: un QR impreso con poco contraste o sin borde
   // blanco alrededor no lo lee ningún teléfono, y eso se descubre con cien
   // volantes ya impresos.
@@ -70,7 +72,7 @@ export default async function VolantePage({ params }: { params: { slug: string }
 
         <h1>Su negocio ya está en URUKU</h1>
         <p className="vol-sub">
-          En Bermejo lo buscan por lo que vende, no por el nombre del local.
+          En {ciudadNombre} lo buscan por lo que vende, no por el nombre del local.
           Acá lo encuentran, le escriben al WhatsApp y saben cómo llegar.
         </p>
 
@@ -96,7 +98,7 @@ export default async function VolantePage({ params }: { params: { slug: string }
           <span>
             Mande la foto al grupo de WhatsApp <b>URUKU · {comercio.nombre}</b>,
             con el precio si lo tiene. Sale en su ficha y entre las ofertas
-            de Bermejo. Sin formularios, sin apps.
+            de {ciudadNombre}. Sin formularios, sin apps.
           </span>
         </div>
 

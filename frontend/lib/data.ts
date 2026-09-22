@@ -227,14 +227,26 @@ export async function getRubros(): Promise<Rubro[]> {
  * datos demo para que el front se vea aún sin backend (degradación suave).
  */
 
-export async function getFeed(limit = 8): Promise<FeedItem[]> {
+/** El nombre de la ciudad de un comercio, por su id. "Bermejo" si no se sabe:
+ *  fue la primera y es la única con datos sin ciudad. */
+export async function nombreCiudadDe(ciudadId: string | null | undefined): Promise<string> {
+  if (!ciudadId) return "Bermejo";
+  const c = (await getCiudades()).find((x) => x.id === ciudadId);
+  return c?.nombre ?? "Bermejo";
+}
+
+export async function getFeed(limit = 8, ciudadSlug?: string | null): Promise<FeedItem[]> {
   if (hasSupabase) {
-    const { data, error } = await supabase
-      .from("feed_publico")
-      .select("*")
-      .limit(limit);
-    if (error) logSupaError("getFeed", error);
-    if (!error && data) return data as FeedItem[];
+    let q = supabase.from("feed_publico").select("*").limit(limit);
+    // Las ofertas de la ciudad elegida: sin esto el home de otra ciudad
+    // mostraba las de Bermejo (0123).
+    if (ciudadSlug) q = q.eq("ciudad_slug", ciudadSlug);
+    const { data, error } = await q;
+    // Con base y error, vacío: el feed de muestra es para desarrollar sin
+    // base, no para que producción muestre un "iPhone 13 a USD 499" que no
+    // existe porque una consulta falló.
+    if (error) { logSupaError("getFeed", error); return []; }
+    return (data ?? []) as FeedItem[];
   } else {
     console.warn("getFeed: hasSupabase=false — faltan NEXT_PUBLIC_SUPABASE_URL/ANON_KEY");
   }

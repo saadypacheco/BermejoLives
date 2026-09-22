@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
 import { UnirmeComunidad } from "@/components/unirme-comunidad";
@@ -36,6 +37,11 @@ const SERVICIOS = [
   { i: "🚓", t: "Policía y emergencias", d: "Dónde están, y los teléfonos", href: "/buscar?rubro=emergencias&vista=mapa" },
 ];
 
+// Sin frontera: el cambio es un rubro más (casas de cambio en el mapa), no
+// la página de pesos argentinos.
+const SERVICIOS_SIN_GUIA = SERVICIOS.map((s) =>
+  s.href === "/cambio" ? { ...s, d: "Dólares y otras monedas", href: "/buscar?rubro=cambio&vista=mapa" } : s);
+
 // La fila de accesos debajo del buscador: los mismos destinos, en una palabra.
 const CHIPS = [
   { i: "🚻", t: "Baños", href: SERVICIOS[0].href }, { i: "💊", t: "Farmacias", href: SERVICIOS[1].href },
@@ -45,6 +51,9 @@ const CHIPS = [
   { i: "🚓", t: "Policía", href: SERVICIOS[7].href },
   { i: "🚌", t: "Transporte", href: "/guia#transporte" }, { i: "🌉", t: "Frontera", href: "/guia#frontera" },
 ];
+const CHIPS_SIN_GUIA = CHIPS
+  .filter((c) => !c.href.startsWith("/guia"))
+  .map((c) => (c.href === "/cambio" ? { ...c, t: "Cambio", href: "/buscar?rubro=cambio&vista=mapa" } : c));
 
 const GUIAS = [
   { i: "🛃", t: "Aduana", d: "Franquicia, qué podés pasar y qué no.", href: "/guia#aduana" },
@@ -58,6 +67,11 @@ const HERRAMIENTAS = [
   { i: "🏔️", t: "De Bermejo a Tarija", href: "/guia#transporte" },
   { i: "🕒", t: "Qué está abierto ahora", href: "/guia#comercios" },
   { i: "📍", t: "Qué hay cerca tuyo", href: "/buscar?cerca=1" },
+];
+const HERRAMIENTAS_SIN_GUIA = [
+  { i: "📍", t: "Qué hay cerca tuyo", href: "/buscar?cerca=1" },
+  { i: "🗺️", t: "Todo en el mapa", href: "/buscar?vista=mapa" },
+  { i: "🏷️", t: "Las ofertas de hoy", href: "/buscar?of=1" },
 ];
 
 const INFO = [
@@ -84,12 +98,35 @@ function hace(iso: string | null | undefined): string | null {
   return `hace ${Math.floor(min / 1440)} días`;
 }
 
+export async function generateMetadata(): Promise<Metadata> {
+  const { ciudad } = await ciudadActual();
+  const nombre = ciudad?.nombre ?? "Bermejo";
+  const conGuia = (ciudad?.slug ?? "bermejo") === "bermejo";
+  return {
+    title: `URUKU — Todo ${nombre} en un solo lugar`,
+    description: conGuia
+      ? "Comercios, ofertas, cambio, servicios y la guía para tu visita a Bermejo: qué se vende, dónde, cómo llegar y el WhatsApp de cada local."
+      : `Comercios, ofertas y servicios de ${nombre}: qué se vende, dónde, cómo llegar y el WhatsApp de cada local.`,
+  };
+}
+
 export default async function InicioPage() {
-  const [{ ciudad }, feed, videos, frontera, clima, cotizaciones] = await Promise.all([
-    ciudadActual(), getFeed(12), getVideosPromo(6), getFronteraEstado(), getClima(), getCotizaciones(),
+  const { ciudad } = await ciudadActual();
+  // Lo de la frontera —el paso, las chalanas, la guía del que cruza, la
+  // comunidad, los videos— está cargado para Bermejo. En otra ciudad no se
+  // muestra: un "Frontera: habilitada" en Santa Cruz es un dato inventado.
+  // (Otra frontera, Yacuiba o Villazón, tendrá lo suyo cuando se cargue.)
+  const conGuia = (ciudad?.slug ?? "bermejo") === "bermejo";
+  // El peso argentino, en cualquier ciudad de frontera.
+  const esFrontera = ciudad?.es_frontera ?? true;
+  const [feed, videos, frontera, clima, cotizaciones] = await Promise.all([
+    getFeed(12, ciudad?.slug), conGuia ? getVideosPromo(6) : Promise.resolve([]),
+    conGuia ? getFronteraEstado() : Promise.resolve(null), conGuia ? getClima() : Promise.resolve(null), getCotizaciones(),
   ]);
   const nombre = ciudad?.nombre ?? "Bermejo";
-  const heroImg = ciudad?.hero_url || "/bermejo-ciudad4.png";
+  // La foto del hero es de la ciudad; sin foto propia, la de Bermejo sólo en
+  // Bermejo. Otra ciudad sin foto va con el fondo liso, no con el río de otra.
+  const heroImg = ciudad?.hero_url || (conGuia ? "/bermejo-ciudad4.png" : "");
   const ofertas = feed.filter((f) => f.tipo === "oferta");
   const cards = (ofertas.length ? ofertas : feed.filter((f) => f.tipo !== "video")).slice(0, 4);
   const t = tasasDe(cotizaciones);
@@ -100,26 +137,27 @@ export default async function InicioPage() {
     <UrukuShell activeCat="Todos" activeNav="Inicio">
       {/* ===== Los accesos rápidos, debajo del buscador ===== */}
       <nav className="uk-container uk-home-chips" aria-label="Servicios">
-        {CHIPS.map((c) => <Link key={c.t} href={c.href}><span aria-hidden>{c.i}</span>{c.t}</Link>)}
+        {(conGuia ? CHIPS : CHIPS_SIN_GUIA).map((c) => <Link key={c.t} href={c.href}><span aria-hidden>{c.i}</span>{c.t}</Link>)}
       </nav>
 
       {/* ===== Hero: qué es esto, y cómo está Bermejo hoy ===== */}
-      <section className="uk-hero uk-home-hero" style={{ backgroundImage: `url('${heroImg}')` }}>
+      <section className="uk-hero uk-home-hero" style={heroImg ? { backgroundImage: `url('${heroImg}')` } : undefined}>
         <div className="uk-container uk-home-hero-grid">
           <div>
             <h1>Todo <span>{nombre}</span><br />en un solo lugar</h1>
-            <p>Comercios, ofertas, cambio, servicios y datos útiles para tu visita.</p>
+            <p>{conGuia ? "Comercios, ofertas, cambio, servicios y datos útiles para tu visita." : `Comercios, ofertas y servicios de ${nombre}, en el mapa y con el WhatsApp de cada local.`}</p>
             <div className="uk-hero-actions">
               <Link href="/buscar?of=1" className="uk-btn uk-btn-primary">🏷️ Ver ofertas del día</Link>
-              <Link href="/guia" className="uk-btn uk-btn-ghost uk-home-btn-claro">🧭 Explorar servicios</Link>
+              <Link href={conGuia ? "/guia" : "/buscar?vista=mapa"} className="uk-btn uk-btn-ghost uk-home-btn-claro">{conGuia ? "🧭 Explorar servicios" : "🗺️ Ver el mapa"}</Link>
             </div>
             <div className="uk-home-props">
-              <div><b>Comercios locales</b><span>Cientos de locales con productos y ofertas</span></div>
+              <div><b>Comercios locales</b><span>Locales con productos y ofertas</span></div>
               <div><b>Información confiable</b><span>Cargada por gente de {nombre}</span></div>
-              <div><b>Tu visita más fácil</b><span>Todo lo que necesitás, en un solo lugar</span></div>
+              <div><b>{conGuia ? "Tu visita más fácil" : "Directo al WhatsApp"}</b><span>{conGuia ? "Todo lo que necesitás, en un solo lugar" : "Le escribís al local y sabés cómo llegar"}</span></div>
             </div>
           </div>
 
+          {(conGuia || t.usd_bob != null) && (
           <aside className="uk-home-hoy">
             <div className="uk-home-hoy-cab">
               <h3>Hoy en {nombre}</h3>
@@ -134,16 +172,19 @@ export default async function InicioPage() {
               {frontera?.rio === "crecido" && <li><span>🌊</span>Río: <b className="ojo">crecido</b></li>}
               {clima?.temp_c != null && <li><span>{clima.icono || "☀"}</span>Clima: <b>{Math.round(clima.temp_c)}°</b>{clima.descripcion ? ` · ${clima.descripcion}` : ""}</li>}
               {t.usd_bob != null && <li><span>🇺🇸</span>1 USD = <b>{formatoMonto(t.usd_bob, "BOB")} Bs</b></li>}
-              {t.ars_bob != null && <li><span>🇦🇷</span>1.000 ARS = <b>{formatoMonto(t.ars_bob * 1000, "BOB")} Bs</b></li>}
+              {esFrontera && t.ars_bob != null && <li><span>🇦🇷</span>1.000 ARS = <b>{formatoMonto(t.ars_bob * 1000, "BOB")} Bs</b></li>}
               {frontera?.nota && <li className="uk-home-hoy-nota">{frontera.nota}</li>}
             </ul>
-            <Link href="/cambio" className="uk-home-hoy-link">📍 Casas de cambio y calculadora <span>›</span></Link>
+            {conGuia
+              ? <Link href="/cambio" className="uk-home-hoy-link">📍 Casas de cambio y calculadora <span>›</span></Link>
+              : <Link href="/buscar?rubro=cambio&vista=mapa" className="uk-home-hoy-link">📍 Casas de cambio en el mapa <span>›</span></Link>}
           </aside>
+          )}
         </div>
       </section>
 
-      {/* ===== La comunidad (sólo cuando hay enlace cargado) ===== */}
-      <UnirmeComunidad variante="banner" />
+      {/* ===== La comunidad (sólo cuando hay enlace cargado; es la de los que cruzan a Bermejo) ===== */}
+      {conGuia && <UnirmeComunidad variante="banner" />}
 
       {/* ===== Servicios útiles ===== */}
       <section className="uk-container uk-home-sec">
@@ -152,7 +193,7 @@ export default async function InicioPage() {
           <Link href="/guia#mapa">Ver todos →</Link>
         </div>
         <div className="uk-home-grid uk-home-grid-4">
-          {SERVICIOS.map((s) => (
+          {(conGuia ? SERVICIOS : SERVICIOS_SIN_GUIA).map((s) => (
             <Link key={s.t} href={s.href} className="uk-home-card">
               <span className="uk-home-ic">{s.i}</span>
               <b>{s.t}</b><small>{s.d}</small>
@@ -162,7 +203,8 @@ export default async function InicioPage() {
       </section>
 
       {/* ===== Antes de comprar + Herramientas ===== */}
-      <section className="uk-container uk-home-sec uk-home-dos">
+      <section className={`uk-container uk-home-sec${conGuia ? " uk-home-dos" : ""}`}>
+        {conGuia && (
         <div>
           <div className="uk-section-head">
             <h2>Antes de comprar <small>Lo que hay que saber para tu visita.</small></h2>
@@ -178,12 +220,13 @@ export default async function InicioPage() {
             ))}
           </div>
         </div>
+        )}
         <div>
           <div className="uk-section-head">
-            <h2>Herramientas útiles <small>Planeá tu visita.</small></h2>
+            <h2>Herramientas útiles <small>{conGuia ? "Planeá tu visita." : `Para moverte por ${nombre}.`}</small></h2>
           </div>
-          <div className="uk-home-grid uk-home-grid-2">
-            {HERRAMIENTAS.map((h) => (
+          <div className={`uk-home-grid ${conGuia ? "uk-home-grid-2" : "uk-home-grid-4"}`}>
+            {(conGuia ? HERRAMIENTAS : HERRAMIENTAS_SIN_GUIA).map((h) => (
               <Link key={h.t} href={h.href} className="uk-home-card uk-home-card-c">
                 <span className="uk-home-ic">{h.i}</span>
                 <b>{h.t}</b>
@@ -222,7 +265,8 @@ export default async function InicioPage() {
         </section>
       )}
 
-      {/* ===== Información para tu visita ===== */}
+      {/* ===== Información para tu visita (lo de la guía: sólo en la frontera) ===== */}
+      {conGuia && (
       <section className="uk-container uk-home-sec">
         <div className="uk-section-head">
           <h2>Información para tu visita <small>Consejos y recursos.</small></h2>
@@ -236,6 +280,7 @@ export default async function InicioPage() {
           ))}
         </div>
       </section>
+      )}
 
       {/* ===== Videos ===== */}
       {videos.length > 0 && (

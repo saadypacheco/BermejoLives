@@ -26,6 +26,7 @@ export default async function BuscarPage() {
             durante unos días la columna existía y no la miraba nadie. */}
         <BuscarClient
           ciudadInicial={ciudad?.slug ?? ""}
+          nombreCiudad={ciudad?.nombre ?? ""}
           tilesCiudad={ciudad ? { tiles_url: ciudad.tiles_url ?? null, tiles_atribucion: ciudad.tiles_atribucion ?? null } : null}
         />
       </Suspense>

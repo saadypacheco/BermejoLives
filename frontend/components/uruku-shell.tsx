@@ -49,7 +49,16 @@ export async function UrukuShell({
     ciudadActual(), getClima(), getCotizaciones(), getRedes(),
   ]);
   const nombre = ciudad?.nombre ?? "tu ciudad";
-  const cot2 = cotizaciones.slice(0, 2);
+  // Dos preguntas distintas. `esFrontera` (columna de la ciudad): si el
+  // peso argentino le importa. `conGuia`: si lo que hoy está cargado —la
+  // guía del que cruza, el estado del paso, el clima, el conversor de
+  // pesos, la comunidad— es de ESTA ciudad. Todo eso es de Bermejo; otra
+  // frontera (Yacuiba, Villazón) tendrá lo suyo cuando se cargue. Sin ciudad
+  // conocida: Bermejo, la primera.
+  const esFrontera = ciudad?.es_frontera ?? true;
+  const conGuia = (ciudad?.slug ?? "bermejo") === "bermejo";
+  // El dólar sirve en cualquier ciudad; el peso argentino, en la frontera.
+  const cot2 = cotizaciones.filter((c) => esFrontera || c.clave === "usd_bob").slice(0, 2);
 
   const showFoot = showFooter && !fill;
 
@@ -72,13 +81,13 @@ export async function UrukuShell({
             <div className="uk-head-strip">
               <SocialLinks redes={redes} cls="uk-social-links" />
               <div className="uk-topinfo">
-                {clima?.temp_c != null && (
+                {conGuia && clima?.temp_c != null && (
                   <span className="uk-top-item">{clima.icono || "☀"} {Math.round(clima.temp_c)}°</span>
                 )}
                 {/* La tira lleva al conversor: el que mira el dólar arriba
                     quiere saber cuánto son SUS pesos, y eso está en /cambio. */}
                 {cot2.map((c) => (
-                  <Link key={c.clave} href="/cambio" className="uk-top-item" title="Calculadora y casas de cambio">{c.detalle} = <b>{money(c.valor)}</b> {c.unidad}</Link>
+                  <Link key={c.clave} href={conGuia ? "/cambio" : "/buscar?rubro=cambio&vista=mapa"} className="uk-top-item" title={conGuia ? "Calculadora y casas de cambio" : "Casas de cambio en el mapa"}>{c.detalle} = <b>{money(c.valor)}</b> {c.unidad}</Link>
                 ))}
               </div>
             </div>
@@ -87,7 +96,10 @@ export async function UrukuShell({
                 acá, entre la cotización y la ciudad. Se esconde en el celular,
                 donde la barra de abajo ya los tiene. */}
             <nav className="uk-topnav" aria-label="Secciones">
-              {[["Guía", "/guia"], ["Mapa", "/buscar?vista=mapa"], ["Ofertas", "/buscar?vista=mapa&of=1"], ["Cambio", "/cambio"]].map(([k, href]) => (
+              {(conGuia
+                ? [["Guía", "/guia"], ["Mapa", "/buscar?vista=mapa"], ["Ofertas", "/buscar?vista=mapa&of=1"], ["Cambio", "/cambio"]]
+                : [["Mapa", "/buscar?vista=mapa"], ["Ofertas", "/buscar?vista=mapa&of=1"], ["Guardados", "/guardados"]]
+              ).map(([k, href]) => (
                 <Link key={k} href={href} className={activeNav === k ? "active" : ""}>{k}</Link>
               ))}
             </nav>
@@ -127,7 +139,7 @@ export async function UrukuShell({
                 <Link href="/buscar?of=1" className="uk-foot-link"><Ic d="M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" /><span>Ofertas</span><i>›</i></Link>
                 <Link href="/buscar" className="uk-foot-link"><Ic d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3" /><span>Buscar</span><i>›</i></Link>
                 <Link href="/guardados" className="uk-foot-link"><Ic d="M6 3h12v18l-6-4-6 4V3z" /><span>Guardados</span><i>›</i></Link>
-                <Link href="/comunidad" className="uk-foot-link"><Ic d="M4 4h16v12H7l-3 3V4z" /><span>Comunidad</span><i>›</i></Link>
+                {conGuia && <Link href="/comunidad" className="uk-foot-link"><Ic d="M4 4h16v12H7l-3 3V4z" /><span>Comunidad</span><i>›</i></Link>}
               </div>
               <div className="uk-foot-col">
                 <h4>Para comercios</h4>
@@ -163,8 +175,11 @@ export async function UrukuShell({
       )}
 
       {!fill && <div style={{ height: 20 }} />}
-      <BottomNav active={activeNav ?? ""} />
-      {asistente !== false && <Asistente comercio={asistente || undefined} />}
+      <BottomNav active={activeNav ?? ""} conGuia={conGuia} />
+      {asistente !== false && (
+        <Asistente comercio={asistente || undefined}
+                   ciudad={ciudad ? { slug: ciudad.slug, nombre: ciudad.nombre, con_guia: conGuia } : undefined} />
+      )}
     </div>
   );
 }
