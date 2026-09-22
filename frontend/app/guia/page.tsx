@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { UrukuShell } from "@/components/uruku-shell";
+import { ciudadActual } from "@/lib/ciudad-server";
 import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import {
   buscarComercios, getClima, getCotizacionHistorial, getCotizaciones, getFronteraEstado,
@@ -11,10 +13,14 @@ import { abiertoAhora, etiquetaHorario } from "@/lib/horario";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Guía para venir a Bermejo — URUKU",
-  description: "Cómo está el paso hoy, documentos, aduana y franquicia, cambio, dónde comprar y a qué hora, transporte desde Orán y Salta, seguridad, chip e internet.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { ciudad } = await ciudadActual();
+  const n = ciudad?.nombre ?? "Bermejo";
+  return {
+    title: `Guía para venir a ${n} — URUKU`,
+    description: `Cómo está el paso hoy, documentos, aduana y franquicia, cambio, dónde comprar y a qué hora, transporte, seguridad, chip e internet en ${n}.`,
+  };
+}
 
 /**
  * /guia — todo lo que necesita saber el que viene a Bermejo, en una página.
@@ -56,9 +62,17 @@ function Preguntas({ items }: { items: SaberLocalPublico[] }) {
 
 export default async function GuiaPage() {
   const ahora = new Date();
+  const { ciudad } = await ciudadActual();
+  // Cada frontera tiene su guía (0124). La ciudad que todavía no la cargó no
+  // muestra la de otra: 404, y el menú tampoco la ofrece.
+  if (ciudad && !(ciudad.guia_activa ?? ciudad.slug === "bermejo")) notFound();
+  const nombre = ciudad?.nombre ?? "Bermejo";
+  const paso = ciudad?.paso_nombre ?? "Aguas Blancas";
+  const monedaVecina = ciudad?.moneda_vecina ?? "ARS";
+  const claveVecina = monedaVecina === "BRL" ? "brl_bob" : monedaVecina === "PEN" ? "pen_bob" : "ars_bob";
   const [saber, frontera, clima, cotizaciones, hist, videos, comercios, ...servicios] = await Promise.all([
-    getSaberLocalPorSeccion(), getFronteraEstado(), getClima(), getCotizaciones(), getCotizacionHistorial("ars_bob", 8),
-    getVideosPromo(6), buscarComercios({}, 300, 0),
+    getSaberLocalPorSeccion(ciudad?.id), getFronteraEstado(ciudad?.id), getClima(), getCotizaciones(), getCotizacionHistorial(claveVecina, 8),
+    getVideosPromo(6), buscarComercios({ ciudad: ciudad?.slug }, 300, 0),
     // Los servicios de la ciudad, por rubro: lo mismo que abre cada chip.
     ...RUBROS_SERVICIO.map(([slug]) => buscarComercios({ rubro: slug }, 40, 0)),
   ]);
@@ -78,7 +92,7 @@ export default async function GuiaPage() {
   return (
     <UrukuShell showCatnav={false} activeNav="Guía">
       <div className="uk-container uk-guia">
-        <h1>Para el que viene a Bermejo</h1>
+        <h1>Para el que viene a {nombre}</h1>
         <p className="uk-guia-sub">
           Lo que hay que saber antes de cruzar y mientras estás acá. Lo de hoy —el paso, el clima, el cambio— se
           actualiza en el día. Y lo que no esté acá, preguntalo al botón de <b>Ayuda</b>.
@@ -88,11 +102,12 @@ export default async function GuiaPage() {
         {/* ---------- HOY ---------- */}
         <section className="uk-guia-hoy">
           <div className="uk-guia-card">
-            <h2>🌉 La frontera hoy</h2>
+            <h2>🌉 La frontera hoy <small>con {paso}</small></h2>
             {frontera ? (
               <>
                 <div className="uk-guia-estados">
-                  {(["puente", "chalanas", "rio"] as const).map((k) => {
+                  {/* "no_aplica": esta frontera no tiene chalanas ni río. */}
+                  {(["puente", "chalanas", "rio"] as const).filter((k) => frontera[k] !== "no_aplica").map((k) => {
                     const [txt, nivel] = ESTADO[k][frontera[k]] ?? [`${k}: ${frontera[k]}`, "ojo"];
                     return <span key={k} className={`uk-guia-estado ${nivel}`}>{txt}</span>;
                   })}
@@ -117,7 +132,7 @@ export default async function GuiaPage() {
             {t.ars_bob != null ? (
               <>
                 <div className="uk-guia-tasas">
-                  <span>1.000 pesos = <b>Bs {formatoMonto(t.ars_bob * 1000, "BOB")}</b></span>
+                  <span>1.000 {monedaVecina === "BRL" ? "reales" : monedaVecina === "PEN" ? "soles" : "pesos"} = <b>Bs {formatoMonto(t.ars_bob * 1000, "BOB")}</b></span>
                   {t.usd_bob != null && <span>1 dólar = <b>Bs {formatoMonto(t.usd_bob, "BOB")}</b></span>}
                 </div>
                 {favorable && <p className={`uk-guia-fav ${favorable.nivel}`}>{favorable.texto}</p>}
@@ -164,7 +179,7 @@ export default async function GuiaPage() {
 
         {/* ---------- MAPA DE SERVICIOS ---------- */}
         <section className="uk-guia-sec" id="mapa">
-          <h2>🗺️ En el mapa</h2>
+          <h2>🗺️ En el mapa de {nombre}</h2>
           <div className="uk-guia-chips">
             <Link href="/buscar?rubro=farmacia&vista=mapa">💊 Farmacias</Link>
             <Link href="/buscar?rubro=cambio&vista=mapa">💱 Casas de cambio</Link>
@@ -238,7 +253,7 @@ export default async function GuiaPage() {
         </section>
 
         <p className="uk-guia-pie">
-          ¿Falta algo? Preguntalo al botón de Ayuda: lo que no sepa queda anotado y lo agregamos acá.
+          ¿Falta algo de {nombre}? Preguntalo al botón de Ayuda: lo que no sepa queda anotado y lo agregamos acá.
         </p>
       </div>
     </UrukuShell>

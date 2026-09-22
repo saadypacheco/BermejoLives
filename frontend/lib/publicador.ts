@@ -45,7 +45,7 @@ export const editarCotizacion = (clave: string, valor: number) =>
 export const overrideClima = (b: { temp_c?: number; descripcion?: string; icono?: string; horas?: number }) =>
   pFetch("/contenido/clima", { method: "PUT", body: JSON.stringify(b) });
 export const refrescarClima = () => pFetch("/contenido/clima/refresh", { method: "POST" });
-export type FronteraPatch = { puente?: string; chalanas?: string; rio?: string; nota?: string; chalanas_horario?: string };
+export type FronteraPatch = { puente?: string; chalanas?: string; rio?: string; nota?: string; chalanas_horario?: string; ciudad?: string };
 export const editarFrontera = (b: FronteraPatch) => pFetch("/contenido/frontera", { method: "PUT", body: JSON.stringify(b) });
 
 export type VideoPromoItem = { id: string; titulo: string | null; url: string };

@@ -60,6 +60,27 @@ kioscos, coca, Rústico) ✅ · deuda §5 cerrada (`_PLANES`, `types.ts`,
   Después: subir el Excel en **Admin › Compradores** y darle a cada
   administrador de grupo su enlace `?ref=grupo-…` con el QR de la comunidad.
 
+## 0.b Abrir una ciudad nueva (18-22/9/2026)
+
+El sitio ya separa lo de cada ciudad. Para abrir una:
+
+1. **`ciudades`**: `activa = true`. Si es frontera, cargar también
+   `pais_vecino`, `moneda_vecina` (ARS | BRL | PEN), `paso_nombre` y, cuando
+   tenga foto, `hero_url`.
+2. **Cargar comercios** (campo o Admin › Comercios). El alta toma la ciudad
+   activa más cercana a la ubicación, así que no hay nada que elegir.
+3. **Si es frontera**: cargar su saber local en **Admin › Ayuda** eligiendo
+   esa ciudad (lo que vale para todas —la aduana boliviana— se deja en «Todas
+   las fronteras»), y su estado del paso en **/contenido › La frontera hoy**
+   con el selector de ciudad. Recién entonces `ciudades.guia_activa = true`:
+   hasta ahí, esa ciudad no muestra `/guia` ni el menú de la guía, que es lo
+   correcto — la guía de Bermejo no sirve en Villazón.
+4. **Si no es frontera**: nada más. No hay guía, ni paso, ni `/cambio`.
+
+- [ ] Pendiente: **cargar las cotizaciones del real y el sol** (`brl_bob`,
+  `pen_bob`, creadas vacías por la 0124) el día que se abra Cobija, Puerto
+  Quijarro o Desaguadero.
+
 ## 1. Los teléfonos (manual operativo, sección 2)
 
 - [ ] **PIN de dos pasos** en la tablet y en el Samsung, con correo de recuperación.

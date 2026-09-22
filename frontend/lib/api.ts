@@ -1143,10 +1143,10 @@ export async function getAsistenteConversaciones(filtro: "sin_respuesta" | "toda
   return (await res.json()).items;
 }
 
-export async function responderAsistente(id: string, respuesta: string, etiquetas: string[], guardar = true, seccion = "general"): Promise<{ ok: boolean; saber: SaberLocal | null }> {
+export async function responderAsistente(id: string, respuesta: string, etiquetas: string[], guardar = true, seccion = "general", ciudad?: string): Promise<{ ok: boolean; saber: SaberLocal | null }> {
   const res = await authFetch(`/admin/asistente/conversaciones/${id}/responder`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ respuesta, etiquetas, guardar, seccion }),
+    body: JSON.stringify({ respuesta, etiquetas, guardar, seccion, ciudad: ciudad ?? null }),
   });
   if (!res.ok) throw new Error((await res.json()).detail ?? "No se pudo guardar");
   return res.json();
@@ -1157,7 +1157,7 @@ export async function getSaberLocal(): Promise<SaberLocal[]> {
   return (await res.json()).items;
 }
 
-export async function guardarSaberLocal(item: { id?: string; pregunta: string; respuesta: string; etiquetas: string[]; activo?: boolean; seccion?: string }): Promise<SaberLocal> {
+export async function guardarSaberLocal(item: { id?: string; pregunta: string; respuesta: string; etiquetas: string[]; activo?: boolean; seccion?: string; ciudad?: string }): Promise<SaberLocal> {
   const res = await authFetch(`/admin/asistente/saber`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item),
   });

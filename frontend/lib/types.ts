@@ -88,6 +88,12 @@ export type Ciudad = {
   /** Fondo del hero y foto secundaria. NULL → el frontend usa las por defecto,
    *  así una ciudad recién abierta se ve bien aunque todavía no tenga material. */
   hero_url?: string | null;
+  /** De qué frontera es esta ciudad (0124). `guia_activa` dice si su guía ya
+   *  está cargada: hasta entonces no se muestra la de otra. */
+  pais_vecino?: string | null;
+  moneda_vecina?: string | null;   // ARS | BRL | PEN
+  paso_nombre?: string | null;     // "Aguas Blancas", "La Quiaca"
+  guia_activa?: boolean;
   foto_url?: string | null;
 };
 

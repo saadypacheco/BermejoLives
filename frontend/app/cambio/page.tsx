@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { UrukuShell } from "@/components/uruku-shell";
+import { ciudadActual } from "@/lib/ciudad-server";
 import { CambioCalculadora } from "@/components/cambio-calculadora";
 import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { buscarComercios, getCotizaciones } from "@/lib/data";
@@ -26,6 +28,10 @@ export const metadata: Metadata = {
  * el mostrador, y por eso los valores se pueden cambiar.
  */
 export default async function CambioPage() {
+  const { ciudad } = await ciudadActual();
+  // El conversor es el de una frontera: cuánto son los pesos (o reales, o
+  // soles) del otro lado. En una ciudad que no es frontera no tiene sentido.
+  if (ciudad && !ciudad.es_frontera) notFound();
   const [cotizaciones, casas] = await Promise.all([
     getCotizaciones(),
     buscarComercios({ rubro: "cambio" }, 60, 0),

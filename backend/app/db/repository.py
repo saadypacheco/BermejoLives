@@ -214,15 +214,15 @@ class Repo(Protocol):
     def update_cotizacion(self, clave: str, valor: float) -> dict | None: ...
     def get_clima(self) -> dict | None: ...
     # La guía del que llega (/guia)
-    def get_frontera_estado(self) -> dict: ...
-    def update_frontera_estado(self, patch: dict) -> dict: ...
+    def get_frontera_estado(self, ciudad_slug: str = "bermejo") -> dict: ...
+    def update_frontera_estado(self, patch: dict, ciudad_slug: str = "bermejo") -> dict: ...
     def list_cotizacion_historial(self, clave: str, limite: int = 8) -> list[dict]: ...
     # La base de compradores (services/contactos.py)
     def upsert_contactos_base(self, filas: list[dict]) -> dict: ...
     def resumen_contactos_base(self) -> dict: ...
     # Uruku Ayuda (services/asistente.py)
     def buscar_comercios(self, q: str, limite: int = 5, rubro: str | None = None, ciudad: str | None = None) -> list[dict]: ...
-    def list_saber_local(self, solo_activos: bool = True) -> list[dict]: ...
+    def list_saber_local(self, solo_activos: bool = True, ciudad_slug: str | None = None) -> list[dict]: ...
     def upsert_saber_local(self, row: dict) -> dict: ...
     def borrar_saber_local(self, saber_id: str) -> None: ...
     def insert_conversacion(self, row: dict) -> dict: ...
@@ -2218,16 +2218,27 @@ class SupabaseRepo:
                .eq("clave", clave).order("registrado_en", desc=True).limit(max(1, min(int(limite), 60))).execute())
         return res.data or []
 
-    def get_frontera_estado(self) -> dict:
-        res = self._db.table("frontera_estado").select("*").eq("id", 1).limit(1).execute()
-        return res.data[0] if res.data else {"puente": "normal", "chalanas": "operando", "rio": "normal", "nota": None, "actualizado_en": None}
+    def get_frontera_estado(self, ciudad_slug: str = "bermejo") -> dict:
+        """El estado del paso de UNA frontera (0124). Cada ciudad tiene el
+        suyo: el puente de Bermejo no dice nada del de Villazón."""
+        ciudad_id = self.get_ciudad_id(ciudad_slug)
+        if ciudad_id:
+            res = self._db.table("frontera_estado").select("*").eq("ciudad_id", ciudad_id).limit(1).execute()
+            if res.data:
+                return res.data[0]
+        return {"puente": "normal", "chalanas": "operando", "rio": "normal", "nota": None, "actualizado_en": None}
 
-    def update_frontera_estado(self, patch: dict) -> dict:
+    def update_frontera_estado(self, patch: dict, ciudad_slug: str = "bermejo") -> dict:
         from datetime import datetime, timezone
-        res = (self._db.table("frontera_estado")
-               .update({**patch, "actualizado_en": datetime.now(timezone.utc).isoformat()})
-               .eq("id", 1).execute())
-        return res.data[0] if res.data else self.get_frontera_estado()
+        ciudad_id = self.get_ciudad_id(ciudad_slug)
+        fila = {**patch, "actualizado_en": datetime.now(timezone.utc).isoformat()}
+        existe = (self._db.table("frontera_estado").select("id").eq("ciudad_id", ciudad_id).limit(1).execute()).data
+        if existe:
+            res = self._db.table("frontera_estado").update(fila).eq("ciudad_id", ciudad_id).execute()
+        else:
+            # La primera vez que se carga una ciudad nueva.
+            res = self._db.table("frontera_estado").insert({**fila, "ciudad_id": ciudad_id}).execute()
+        return res.data[0] if res.data else self.get_frontera_estado(ciudad_slug)
 
     def get_clima(self) -> dict | None:
         res = self._db.table("clima").select("*").eq("id", 1).limit(1).execute()
@@ -2304,11 +2315,17 @@ class SupabaseRepo:
             "ciudades": sorted(({"ciudad": c, "contactos": n} for c, n in por_ciudad.items()), key=lambda x: -x["contactos"]),
         }
 
-    def list_saber_local(self, solo_activos: bool = True) -> list[dict]:
+    def list_saber_local(self, solo_activos: bool = True, ciudad_slug: str | None = None) -> list[dict]:
         q = self._db.table("saber_local").select("*").order("updated_at", desc=True).limit(500)
         if solo_activos:
             q = q.eq("activo", True)
-        return q.execute().data or []
+        filas = q.execute().data or []
+        if ciudad_slug is None:
+            return filas
+        # Lo de ESA ciudad más lo que vale para todas (ciudad_id NULL): la
+        # aduana boliviana sirve en cualquier frontera; las chalanas, no.
+        ciudad_id = self.get_ciudad_id(ciudad_slug)
+        return [f for f in filas if f.get("ciudad_id") in (None, ciudad_id)]
 
     def upsert_saber_local(self, row: dict) -> dict:
         from datetime import datetime, timezone

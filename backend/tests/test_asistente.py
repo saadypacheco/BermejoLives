@@ -439,3 +439,29 @@ def test_en_otra_ciudad_no_hay_frontera_ni_saber_de_bermejo(client, repo, sin_mo
     # Sin ciudad, todo como siempre: Bermejo y su frontera.
     r4 = asistente.responder(repo, "¿cómo está el paso hoy?", ahora=MARTES_11)
     assert r4.intent == "frontera_hoy"
+
+
+def test_cada_frontera_tiene_su_guia(repo, sin_modelo):
+    """El saber local de Bermejo no se contesta en Villazón; el de Villazón
+    sí, y lo que vale para todas las fronteras (ciudad_id NULL), también."""
+    repo.saber_local["b"] = {"id": "b", "pregunta": "¿Por dónde se cruza la frontera?", "respuesta": "Por el puente o en chalana.",
+                             "etiquetas": ["cruza", "frontera", "chalana"], "activo": True, "ciudad_id": "ciu-1"}
+    repo.saber_local["v"] = {"id": "v", "pregunta": "¿Por dónde se cruza la frontera?", "respuesta": "Por el puente peatonal a La Quiaca.",
+                             "etiquetas": ["cruza", "frontera", "peatonal"], "activo": True, "ciudad_id": "ciu-villazon"}
+    repo.saber_local["todas"] = {"id": "todas", "pregunta": "¿Cuánto puedo traer sin pagar impuestos?",
+                                 "respuesta": "Hasta 1.000 dólares, régimen de viajeros.",
+                                 "etiquetas": ["aduana", "impuestos", "franquicia"], "activo": True, "ciudad_id": None}
+    villazon = {"slug": "villazon", "nombre": "Villazón", "guia_activa": True, "paso_nombre": "La Quiaca"}
+    r = asistente.responder(repo, "¿por dónde se cruza la frontera?", ahora=MARTES_11, ciudad=villazon)
+    assert "peatonal a La Quiaca" in r.texto and "chalana" not in r.texto
+    # Lo que vale para todas, se contesta en las dos.
+    assert "1.000 dólares" in asistente.responder(repo, "¿cuánto puedo traer sin pagar impuestos?", ahora=MARTES_11, ciudad=villazon).texto
+    assert "1.000 dólares" in asistente.responder(repo, "¿cuánto puedo traer sin pagar impuestos?", ahora=MARTES_11).texto
+    # El estado del paso es el de SU frontera, y lo nombra.
+    repo.update_frontera_estado({"puente": "demoras"}, "villazon")
+    t = asistente.responder(repo, "¿cómo está el paso hoy?", ahora=MARTES_11, ciudad=villazon).texto
+    assert "La Quiaca" in t and "demoras" in t
+    assert "normal" in asistente.responder(repo, "¿cómo está el paso hoy?", ahora=MARTES_11).texto
+    # Una frontera sin guía cargada todavía no contesta con la de otra.
+    sin_guia = {"slug": "cobija", "nombre": "Cobija", "guia_activa": False}
+    assert asistente.responder(repo, "¿por dónde se cruza la frontera?", ahora=MARTES_11, ciudad=sin_guia).intent != "saber_local"

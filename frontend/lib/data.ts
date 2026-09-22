@@ -658,10 +658,13 @@ export type SaberLocalPublico = { id: string; pregunta: string; respuesta: strin
 
 /** El saber local activo, agrupado por sección. Es la misma tabla que
  *  contesta el asistente, editable en Admin › Ayuda. */
-export async function getSaberLocalPorSeccion(): Promise<Record<string, SaberLocalPublico[]>> {
+export async function getSaberLocalPorSeccion(ciudadId?: string | null): Promise<Record<string, SaberLocalPublico[]>> {
   if (!hasSupabase) return {};
-  const { data } = await supabase.from("saber_local").select("id, pregunta, respuesta, seccion")
+  // De esta ciudad y lo que vale para todas las fronteras (ciudad_id NULL).
+  let q = supabase.from("saber_local").select("id, pregunta, respuesta, seccion, ciudad_id")
     .eq("activo", true).order("updated_at", { ascending: true });
+  if (ciudadId) q = q.or(`ciudad_id.eq.${ciudadId},ciudad_id.is.null`);
+  const { data } = await q;
   const out: Record<string, SaberLocalPublico[]> = {};
   for (const r of (data ?? []) as Record<string, unknown>[]) {
     const sec = String(r.seccion || "general");
@@ -671,14 +674,20 @@ export async function getSaberLocalPorSeccion(): Promise<Record<string, SaberLoc
 }
 
 export type FronteraEstado = {
-  puente: "normal" | "demoras" | "cerrado"; chalanas: "operando" | "limitadas" | "suspendidas"; rio: "normal" | "crecido";
+  // "no_aplica": esta frontera no tiene chalanas o no tiene río (0124).
+  puente: "normal" | "demoras" | "cerrado";
+  chalanas: "operando" | "limitadas" | "suspendidas" | "no_aplica";
+  rio: "normal" | "crecido" | "no_aplica";
   chalanas_horario?: string | null;
   nota: string | null; actualizado_en: string | null;
 };
 
-export async function getFronteraEstado(): Promise<FronteraEstado | null> {
+export async function getFronteraEstado(ciudadId?: string | null): Promise<FronteraEstado | null> {
   if (!hasSupabase) return null;
-  const { data } = await supabase.from("frontera_estado").select("puente, chalanas, rio, nota, actualizado_en, chalanas_horario").eq("id", 1).limit(1);
+  // El paso de ESTA frontera (0124): una fila por ciudad.
+  let q = supabase.from("frontera_estado").select("puente, chalanas, rio, nota, actualizado_en, chalanas_horario, ciudad_id").limit(1);
+  q = ciudadId ? q.eq("ciudad_id", ciudadId) : q.order("id").limit(1);
+  const { data } = await q;
   return (data?.[0] as FronteraEstado) ?? null;
 }
 

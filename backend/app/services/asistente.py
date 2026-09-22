@@ -61,11 +61,21 @@ def _C() -> str:
 
 
 def _con_guia() -> bool:
-    """Lo del paso, las chalanas, la aduana y el saber local del que cruza está
-    cargado para Bermejo: se contesta ahí y no en otra ciudad. (Otra frontera
-    tendrá lo suyo cuando se cargue.) Sin ciudad: Bermejo."""
+    """¿Esta ciudad tiene su guía cargada? Cada frontera tiene la suya —el paso,
+    la aduana, cómo se cruza— y hasta que esté cargada no se contesta con la de
+    otra: decirle a alguien en Villazón que cruce por las chalanas de Bermejo es
+    peor que no contestarle. Sin ciudad: Bermejo, que la tiene."""
     c = _CIUDAD.get()
-    return True if not c else (c.get("slug") == "bermejo")
+    return True if not c else bool(c.get("guia_activa"))
+
+
+def _ciudad_slug() -> str | None:
+    return (_CIUDAD.get() or {}).get("slug")
+
+
+def _paso() -> str:
+    """Cómo se llama el paso de esta frontera ("Aguas Blancas")."""
+    return ((_CIUDAD.get() or {}).get("paso_nombre") or "la frontera").strip()
 
 
 class _RepoEnCiudad:
@@ -199,6 +209,8 @@ SUGERENCIAS_INICIALES = [
 ]
 
 URL_GUIA = f"{SITIO}/guia"
+# "no_aplica" no está en esta tabla a propósito: una frontera sin chalanas ni
+# río no dice nada de ellas (Villazón cruza por un puente peatonal).
 _ESTADO_TXT = {
     "puente": {"normal": "el puente funciona normal", "demoras": "el puente está con demoras", "cerrado": "el puente está CERRADO"},
     "chalanas": {"operando": "las chalanas están cruzando", "limitadas": "las chalanas cruzan con restricciones",
@@ -210,13 +222,13 @@ _ESTADO_TXT = {
 def _frontera_hoy(repo, ahora: datetime) -> Respuesta:
     """«¿Cómo está el paso?» Lo que alguien cargó en /contenido, con su fecha:
     si es de hace días, se dice, porque un "normal" viejo es peor que nada."""
-    f = repo.get_frontera_estado() or {}
+    f = repo.get_frontera_estado(_ciudad_slug() or "bermejo") or {}
     chal = _ESTADO_TXT["chalanas"].get(f.get("chalanas"), "")
     # El horario de las chalanas, si está cargado y cruzan.
     if chal and f.get("chalanas") != "suspendidas" and f.get("chalanas_horario"):
         chal += f" ({f['chalanas_horario'].strip()})"
     partes = [_ESTADO_TXT["puente"].get(f.get("puente"), ""), chal, _ESTADO_TXT["rio"].get(f.get("rio"), "")]
-    texto = "Hoy en la frontera: " + ", ".join(p for p in partes if p) + "."
+    texto = f"Hoy en la frontera con {_paso()}: " + ", ".join(p for p in partes if p) + "."
     if f.get("nota"):
         texto += f" {f['nota'].strip().rstrip('.')}."
     cuando = f.get("actualizado_en")
@@ -640,7 +652,9 @@ def _saber_local(repo, pregunta: str, minimo: int = 2) -> tuple[dict | None, int
     if not terms:
         return None, 0
     mejor, puntos, mejor_peso = None, 0, -1
-    for s in repo.list_saber_local(True) or []:
+    # De ESTA ciudad y lo que vale para todas: el saber local de una frontera
+    # no sirve en otra (0124).
+    for s in repo.list_saber_local(True, _ciudad_slug()) or []:
         etiquetas = {_norm(e) for e in (s.get("etiquetas") or [])}
         en_etiquetas = terms & etiquetas
         en_pregunta = terms & set(_terminos(s.get("pregunta", "")))

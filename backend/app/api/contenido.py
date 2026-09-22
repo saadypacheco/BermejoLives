@@ -50,16 +50,23 @@ class FronteraIn(BaseModel):
     # El horario de hoy de las chalanas ("7:00 a 18:00", "sólo de mañana").
     # Vacío = se borra: no se deja un horario viejo diciendo cualquier cosa.
     chalanas_horario: str | None = None
+    # De qué frontera es este estado. Cada ciudad tiene el suyo (0124).
+    ciudad: str | None = None
 
 
-_FRONTERA_VALORES = {"puente": {"normal", "demoras", "cerrado"}, "chalanas": {"operando", "limitadas", "suspendidas"}, "rio": {"normal", "crecido"}}
+# "no_aplica": esta frontera no tiene chalanas o no tiene río (Villazón cruza
+# por un puente peatonal y no hay chalana que valga).
+_FRONTERA_VALORES = {"puente": {"normal", "demoras", "cerrado"},
+                     "chalanas": {"operando", "limitadas", "suspendidas", "no_aplica"},
+                     "rio": {"normal", "crecido", "no_aplica"}}
 
 
 @router.get("/contenido/frontera")
-def frontera_estado(repo: Repo = Depends(get_repo)) -> dict:
-    """Cómo está el paso hoy. Público: es lo primero que pregunta el que está
-    por cruzar, y no hay ninguna fuente automática — lo carga una persona."""
-    return repo.get_frontera_estado()
+def frontera_estado(ciudad: str = "bermejo", repo: Repo = Depends(get_repo)) -> dict:
+    """Cómo está el paso hoy, en ESA frontera. Público: es lo primero que
+    pregunta el que está por cruzar, y no hay ninguna fuente automática — lo
+    carga una persona, una por ciudad (0124)."""
+    return repo.get_frontera_estado(ciudad)
 
 
 @router.put("/contenido/frontera")
@@ -79,7 +86,7 @@ def editar_frontera(body: FronteraIn, pub: dict = Depends(auth.require_publicado
     if not patch:
         raise HTTPException(status_code=400, detail="No hay nada que cambiar")
     patch["actualizado_por"] = pub.get("email")
-    row = repo.update_frontera_estado(patch)
+    row = repo.update_frontera_estado(patch, body.ciudad or "bermejo")
     logger.info("contenido.frontera", **{k: v for k, v in patch.items() if k != "actualizado_por"})
     return {"ok": True, "frontera": row}
 

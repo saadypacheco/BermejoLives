@@ -56,9 +56,13 @@ export async function UrukuShell({
   // frontera (Yacuiba, Villazón) tendrá lo suyo cuando se cargue. Sin ciudad
   // conocida: Bermejo, la primera.
   const esFrontera = ciudad?.es_frontera ?? true;
-  const conGuia = (ciudad?.slug ?? "bermejo") === "bermejo";
+  // Cada frontera tiene su guía (0124): se muestra cuando está cargada.
+  const conGuia = ciudad ? (ciudad.guia_activa ?? ciudad.slug === "bermejo") : true;
   // El dólar sirve en cualquier ciudad; el peso argentino, en la frontera.
-  const cot2 = cotizaciones.filter((c) => esFrontera || c.clave === "usd_bob").slice(0, 2);
+  // El dólar en todas; la moneda del país vecino, en su frontera (peso en
+  // Bermejo/Yacuiba/Villazón, real en Cobija, sol en Desaguadero).
+  const claveVecina = { ARS: "ars_bob", BRL: "brl_bob", PEN: "pen_bob" }[ciudad?.moneda_vecina ?? "ARS"] ?? "ars_bob";
+  const cot2 = cotizaciones.filter((c) => c.clave === "usd_bob" || (esFrontera && c.clave === claveVecina)).slice(0, 2);
 
   const showFoot = showFooter && !fill;
 

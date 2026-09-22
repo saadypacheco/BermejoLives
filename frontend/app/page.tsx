@@ -63,8 +63,8 @@ const GUIAS = [
 ];
 
 const HERRAMIENTAS = [
-  { i: "🚌", t: "Cómo llegar desde Orán o Salta", href: "/guia#transporte" },
-  { i: "🏔️", t: "De Bermejo a Tarija", href: "/guia#transporte" },
+  { i: "🚌", t: "Cómo llegar", href: "/guia#transporte" },
+  { i: "🏔️", t: "Cómo salir de la ciudad", href: "/guia#transporte" },
   { i: "🕒", t: "Qué está abierto ahora", href: "/guia#comercios" },
   { i: "📍", t: "Qué hay cerca tuyo", href: "/buscar?cerca=1" },
 ];
@@ -101,7 +101,8 @@ function hace(iso: string | null | undefined): string | null {
 export async function generateMetadata(): Promise<Metadata> {
   const { ciudad } = await ciudadActual();
   const nombre = ciudad?.nombre ?? "Bermejo";
-  const conGuia = (ciudad?.slug ?? "bermejo") === "bermejo";
+  // Cada frontera tiene su guía y su estado del paso (0124).
+  const conGuia = ciudad ? (ciudad.guia_activa ?? ciudad.slug === "bermejo") : true;
   return {
     title: `URUKU — Todo ${nombre} en un solo lugar`,
     description: conGuia
@@ -121,7 +122,7 @@ export default async function InicioPage() {
   const esFrontera = ciudad?.es_frontera ?? true;
   const [feed, videos, frontera, clima, cotizaciones] = await Promise.all([
     getFeed(12, ciudad?.slug), conGuia ? getVideosPromo(6) : Promise.resolve([]),
-    conGuia ? getFronteraEstado() : Promise.resolve(null), conGuia ? getClima() : Promise.resolve(null), getCotizaciones(),
+    conGuia ? getFronteraEstado(ciudad?.id) : Promise.resolve(null), conGuia ? getClima() : Promise.resolve(null), getCotizaciones(),
   ]);
   const nombre = ciudad?.nombre ?? "Bermejo";
   // La foto del hero es de la ciudad; sin foto propia, la de Bermejo sólo en
@@ -164,7 +165,7 @@ export default async function InicioPage() {
               {ultima && <small>Actualizado {hace(ultima)}</small>}
             </div>
             <ul>
-              {frontera && (["puente", "chalanas"] as const).map((k) => {
+              {frontera && (["puente", "chalanas"] as const).filter((k) => frontera[k] !== "no_aplica").map((k) => {
                 const [txt, nivel] = ESTADO[k][frontera[k]] ?? [frontera[k], "ojo"];
                 const horario = k === "chalanas" && frontera.chalanas !== "suspendidas" && frontera.chalanas_horario ? ` · ${frontera.chalanas_horario}` : "";
                 return <li key={k}><span>{k === "puente" ? "🌉" : "⛵"}</span>{k === "puente" ? "Frontera" : "Chalanas"}: <b className={nivel}>{txt}</b>{horario}</li>;
@@ -172,7 +173,9 @@ export default async function InicioPage() {
               {frontera?.rio === "crecido" && <li><span>🌊</span>Río: <b className="ojo">crecido</b></li>}
               {clima?.temp_c != null && <li><span>{clima.icono || "☀"}</span>Clima: <b>{Math.round(clima.temp_c)}°</b>{clima.descripcion ? ` · ${clima.descripcion}` : ""}</li>}
               {t.usd_bob != null && <li><span>🇺🇸</span>1 USD = <b>{formatoMonto(t.usd_bob, "BOB")} Bs</b></li>}
-              {esFrontera && t.ars_bob != null && <li><span>🇦🇷</span>1.000 ARS = <b>{formatoMonto(t.ars_bob * 1000, "BOB")} Bs</b></li>}
+              {esFrontera && t.ars_bob != null && (ciudad?.moneda_vecina ?? "ARS") === "ARS" && (
+                <li><span>🇦🇷</span>1.000 ARS = <b>{formatoMonto(t.ars_bob * 1000, "BOB")} Bs</b></li>
+              )}
               {frontera?.nota && <li className="uk-home-hoy-nota">{frontera.nota}</li>}
             </ul>
             {conGuia

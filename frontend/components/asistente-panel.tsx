@@ -1,5 +1,6 @@
 "use client";
 
+import { getCiudades } from "@/lib/data";
 import { useCallback, useEffect, useState } from "react";
 import {
   borrarSaberLocal, getAsistenteConversaciones, getSaberLocal, guardarSaberLocal, responderAsistente,
@@ -12,6 +13,21 @@ const SECCIONES: [string, string][] = [
   ["general", "General (sólo el asistente)"], ["frontera", "Frontera"], ["documentos", "Documentos"], ["aduana", "Aduana"],
   ["comercios", "Comercios y pagos"], ["transporte", "Transporte"], ["seguridad", "Seguridad"], ["conectividad", "Chip e internet"],
 ];
+/** De qué frontera es lo que se está cargando. Vacío = todas: la aduana
+ *  boliviana o cómo funciona URUKU sirven en cualquier ciudad; las chalanas,
+ *  sólo en Bermejo (0124). */
+function SelectCiudad({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [ciudades, setCiudades] = useState<{ slug: string; nombre: string }[]>([]);
+  useEffect(() => { getCiudades().then((cs) => setCiudades(cs.filter((c) => c.es_frontera && c.activa))).catch(() => {}); }, []);
+  if (ciudades.length < 2 && !value) return null;
+  return (
+    <select className="adm-input" style={{ width: "auto" }} value={value} onChange={(e) => onChange(e.target.value)} title="De qué ciudad es">
+      <option value="">Todas las fronteras</option>
+      {ciudades.map((c) => <option key={c.slug} value={c.slug}>{c.nombre}</option>)}
+    </select>
+  );
+}
+
 function SelectSeccion({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <select className="adm-input" value={value} onChange={(e) => onChange(e.target.value)} aria-label="Sección de la guía">
@@ -107,12 +123,13 @@ function Pendiente({ c, onHecho }: { c: ConversacionAsistente; onHecho: () => vo
   const [respuesta, setRespuesta] = useState("");
   const [etiquetas, setEtiquetas] = useState("");
   const [seccion, setSeccion] = useState("general");
+  const [ciudadSaber, setCiudadSaber] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState("");
   async function enviar(guardar: boolean) {
     setGuardando(true); setErr("");
     try {
-      await responderAsistente(c.id, respuesta.trim() || "(sin respuesta)", etiquetas.split(",").map((e) => e.trim()).filter(Boolean), guardar, seccion);
+      await responderAsistente(c.id, respuesta.trim() || "(sin respuesta)", etiquetas.split(",").map((e) => e.trim()).filter(Boolean), guardar, seccion, ciudadSaber);
       onHecho();
     } catch (e) { setErr(e instanceof Error ? e.message : "No se pudo"); }
     finally { setGuardando(false); }
@@ -127,6 +144,7 @@ function Pendiente({ c, onHecho }: { c: ConversacionAsistente; onHecho: () => vo
         <input className="adm-input" value={etiquetas} onChange={(e) => setEtiquetas(e.target.value)}
                placeholder="Etiquetas, separadas por coma (feria, jueves, avenida)" />
         <SelectSeccion value={seccion} onChange={setSeccion} />
+        <SelectCiudad value={ciudadSaber} onChange={setCiudadSaber} />
       </div>
       {err && <span style={{ color: "#c33", fontSize: 12.5 }}>{err}</span>}
       <div style={{ display: "flex", gap: 8 }}>
@@ -147,10 +165,11 @@ function NuevoSaber({ onGuardado }: { onGuardado: () => void }) {
   const [respuesta, setRespuesta] = useState("");
   const [etiquetas, setEtiquetas] = useState("");
   const [seccion, setSeccion] = useState("general");
+  const [ciudadSaber, setCiudadSaber] = useState("");
   const [err, setErr] = useState("");
   async function guardar() {
     try {
-      await guardarSaberLocal({ pregunta: pregunta.trim(), respuesta: respuesta.trim(), etiquetas: etiquetas.split(",").map((e) => e.trim()).filter(Boolean), seccion });
+      await guardarSaberLocal({ pregunta: pregunta.trim(), respuesta: respuesta.trim(), etiquetas: etiquetas.split(",").map((e) => e.trim()).filter(Boolean), seccion, ciudad: ciudadSaber || undefined });
       setPregunta(""); setRespuesta(""); setEtiquetas(""); setSeccion("general"); setAbierto(false); setErr(""); onGuardado();
     } catch (e) { setErr(e instanceof Error ? e.message : "No se pudo"); }
   }
@@ -162,6 +181,7 @@ function NuevoSaber({ onGuardado }: { onGuardado: () => void }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
         <input className="adm-input" value={etiquetas} onChange={(e) => setEtiquetas(e.target.value)} placeholder="Etiquetas, separadas por coma" />
         <SelectSeccion value={seccion} onChange={setSeccion} />
+        <SelectCiudad value={ciudadSaber} onChange={setCiudadSaber} />
       </div>
       {err && <span style={{ color: "#c33", fontSize: 12.5 }}>{err}</span>}
       <div style={{ display: "flex", gap: 8 }}>

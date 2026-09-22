@@ -123,6 +123,7 @@ class FakeRepo:
         self.contactos_base: dict[tuple, dict] = {}   # (telefono, grupo_slug) -> row
         self.conversaciones: list[dict] = []          # Uruku Ayuda
         self.frontera: dict = {"puente": "normal", "chalanas": "operando", "rio": "normal", "nota": None, "actualizado_en": None}
+        self.fronteras: dict[str, dict] = {}     # una por ciudad (0124)
         self.cotizaciones_historial: list[dict] = []
         self.videos_promo: list[dict] = []
         self.redes: list[dict] = [
@@ -798,11 +799,12 @@ class FakeRepo:
     def list_cotizacion_historial(self, clave, limite=8):
         return [h for h in reversed(self.cotizaciones_historial) if h["clave"] == clave][:limite]
 
-    def get_frontera_estado(self):
-        return dict(self.frontera)
+    def get_frontera_estado(self, ciudad_slug="bermejo"):
+        return dict(self.fronteras.setdefault(ciudad_slug, dict(self.frontera)))
 
-    def update_frontera_estado(self, patch):
+    def update_frontera_estado(self, patch, ciudad_slug="bermejo"):
         from datetime import datetime, timezone
+        self.frontera = self.fronteras.setdefault(ciudad_slug, dict(self.frontera))
         self.frontera.update(patch)
         self.frontera["actualizado_en"] = datetime.now(timezone.utc).isoformat()
         return dict(self.frontera)
@@ -836,8 +838,11 @@ class FakeRepo:
             c["total"] = len(filas)
         return filas[:limite]
 
-    def list_saber_local(self, solo_activos=True):
-        return [s for s in self.saber_local.values() if not solo_activos or s.get("activo", True)]
+    def list_saber_local(self, solo_activos=True, ciudad_slug=None):
+        filas = [s for s in self.saber_local.values() if not solo_activos or s.get("activo", True)]
+        if ciudad_slug is None:
+            return filas
+        return [f for f in filas if f.get("ciudad_id") in (None, self.get_ciudad_id(ciudad_slug))]
 
     def upsert_saber_local(self, row):
         import uuid
@@ -1313,7 +1318,7 @@ class FakeRepo:
         return slug.title() if self.rubros.get(slug) else None
 
     def get_ciudad_id(self, slug):
-        return {"bermejo": "ciu-1"}.get(slug)
+        return {"bermejo": "ciu-1"}.get(slug) or f"ciu-{slug}"
 
     def update_comercio(self, comercio_id, patch, rubro_slugs=None):
         c = self.comercios.get(comercio_id)

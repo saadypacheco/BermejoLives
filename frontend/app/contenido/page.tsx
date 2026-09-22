@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getCotizaciones, getClima, getRedes, getFronteraEstado, type Cotizacion, type Clima, type Red, type FronteraEstado } from "@/lib/data";
+import { getCotizaciones, getClima, getRedes, getFronteraEstado, getCiudades, type Cotizacion, type Clima, type Red, type FronteraEstado } from "@/lib/data";
+import type { Ciudad } from "@/lib/types";
 import {
   publicadorLogin, hayPub, clearPub, editarCotizacion, overrideClima, refrescarClima, editarFrontera,
   listarVideosPromo, subirVideoPromo, borrarVideoPromo, editarRed, type VideoPromoItem,
@@ -188,21 +189,42 @@ function FronteraBox({ flash, fail }: { flash: (m: string) => void; fail: (e: un
   const [f, setF] = useState<FronteraEstado | null>(null);
   const [nota, setNota] = useState("");
   const [horarioChalanas, setHorarioChalanas] = useState("");
-  useEffect(() => { getFronteraEstado().then((x) => { setF(x); setNota(x?.nota ?? ""); setHorarioChalanas(x?.chalanas_horario ?? ""); }); }, []);
+  // Una frontera por ciudad (0124): se elige cuál se está cargando.
+  const [fronteras, setFronteras] = useState<Ciudad[]>([]);
+  const [ciudadSlug, setCiudadSlug] = useState("bermejo");
+  useEffect(() => { getCiudades().then((cs) => setFronteras(cs.filter((c) => c.es_frontera && c.activa))).catch(() => {}); }, []);
+  const ciudadSel = fronteras.find((c) => c.slug === ciudadSlug);
+  useEffect(() => {
+    getFronteraEstado(ciudadSel?.id).then((x) => { setF(x); setNota(x?.nota ?? ""); setHorarioChalanas(x?.chalanas_horario ?? ""); });
+  }, [ciudadSel?.id]);
   async function guardar(patch: Record<string, string>) {
-    try { await editarFrontera(patch); const x = await getFronteraEstado(); setF(x); flash("Frontera actualizada ✓"); } catch (e) { fail(e); }
+    try {
+      await editarFrontera({ ...patch, ciudad: ciudadSlug });
+      const x = await getFronteraEstado(ciudadSel?.id);
+      setF(x); flash("Frontera actualizada ✓");
+    } catch (e) { fail(e); }
   }
   const opciones: [keyof FronteraEstado, string, string[]][] = [
     ["puente", "Puente internacional", ["normal", "demoras", "cerrado"]],
-    ["chalanas", "Chalanas", ["operando", "limitadas", "suspendidas"]],
-    ["rio", "Río", ["normal", "crecido"]],
+    // "no aplica" para la frontera que no tiene chalanas ni río (Villazón
+    // cruza por un puente peatonal): así no se muestra el renglón.
+    ["chalanas", "Chalanas", ["operando", "limitadas", "suspendidas", "no_aplica"]],
+    ["rio", "Río", ["normal", "crecido", "no_aplica"]],
   ];
   const hace = f?.actualizado_en ? Math.floor((Date.now() - new Date(f.actualizado_en).getTime()) / 3600000) : null;
   return (
     <div className="glass" style={{ padding: 18, borderRadius: 16, marginBottom: 14 }}>
-      <h3 style={{ marginTop: 0 }}>🌉 La frontera hoy</h3>
+      <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        🌉 La frontera hoy
+        {fronteras.length > 1 && (
+          <select className="adm-input" style={{ width: "auto", fontSize: 13 }} value={ciudadSlug} onChange={(e) => setCiudadSlug(e.target.value)}>
+            {fronteras.map((c) => <option key={c.slug} value={c.slug}>{c.nombre}{c.paso_nombre ? ` → ${c.paso_nombre}` : ""}</option>)}
+          </select>
+        )}
+      </h3>
       <div style={{ fontSize: 12, color: "var(--txt-3)", marginBottom: 10 }}>
-        Se ve en uruku.bo/guia y lo contesta el asistente ("¿cómo está el paso?").
+        Se ve en uruku.bo/guia y lo contesta el asistente ("¿cómo está el paso?"). Cada frontera tiene el suyo.
+        {ciudadSel && !ciudadSel.guia_activa && <> <b style={{ color: "var(--amber)" }}>La guía de {ciudadSel.nombre} todavía no está activa</b> — se prende cuando tenga su saber local cargado (Admin › Ayuda).</>}
         {hace != null && <> Última carga: {hace < 1 ? "hace menos de una hora" : hace < 48 ? `hace ${hace} h` : `hace ${Math.floor(hace / 24)} días`}{hace >= 24 ? " — está vieja, cargala de nuevo" : ""}.</>}
       </div>
       <div style={{ display: "grid", gap: 8 }}>
@@ -211,7 +233,7 @@ function FronteraBox({ flash, fail }: { flash: (m: string) => void; fail: (e: un
             <b style={{ fontSize: 13, width: 150 }}>{label}</b>
             {vals.map((v) => (
               <button key={v} className={`btn btn-sm ${f?.[k] === v ? "btn-primary" : ""}`} style={f?.[k] === v ? {} : { border: "1px solid var(--stroke)" }}
-                      onClick={() => guardar({ [k]: v })}>{v}</button>
+                      onClick={() => guardar({ [k]: v })}>{v === "no_aplica" ? "no aplica" : v}</button>
             ))}
           </div>
         ))}

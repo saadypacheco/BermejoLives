@@ -54,7 +54,9 @@ def preguntar(body: PreguntaIn, repo: Repo = Depends(get_repo)) -> dict:
     comercio = _comercio_con_asistente(repo, body.comercio_id) if body.comercio_id else None
     ciudad = repo.get_ciudad(body.ciudad) if body.ciudad else None
     r = asistente.responder(repo, body.pregunta, comercio=comercio,
-                            ciudad={"slug": ciudad["slug"], "nombre": ciudad.get("nombre")} if ciudad else None)
+                            ciudad={"slug": ciudad["slug"], "nombre": ciudad.get("nombre"),
+                                    "guia_activa": ciudad.get("guia_activa", False),
+                                    "paso_nombre": ciudad.get("paso_nombre")} if ciudad else None)
     fila = repo.insert_conversacion({
         "sesion": body.sesion,
         "canal": "ficha" if comercio else "sitio",
@@ -94,12 +96,16 @@ class SaberIn(BaseModel):
     etiquetas: list[str] = Field(default_factory=list)
     seccion: str = "general"
     activo: bool = True
+    # De qué frontera es esto. Vacío = vale para todas (la aduana boliviana,
+    # cómo funciona URUKU). Con ciudad, es de esa ciudad (0124).
+    ciudad: str | None = None
 
 
 class ResponderIn(BaseModel):
     respuesta: str = Field(min_length=3, max_length=2000)
     etiquetas: list[str] = Field(default_factory=list)
     seccion: str = "general"
+    ciudad: str | None = None
     # Por defecto la respuesta se guarda como saber local, que es el sentido
     # de contestar: que la próxima vez no haga falta. Se puede no guardar.
     guardar: bool = True
@@ -129,6 +135,7 @@ def admin_responder(conversacion_id: str, body: ResponderIn,
             "pregunta": conv["pregunta"], "respuesta": body.respuesta.strip(),
             "etiquetas": _etiquetas(body.etiquetas), "activo": True,
             "seccion": body.seccion if body.seccion in SECCIONES else "general",
+            "ciudad_id": repo.get_ciudad_id(body.ciudad) if body.ciudad else None,
             "creado_por": admin.get("email") or "admin",
         })
     repo.marcar_conversacion(conversacion_id, {"resuelta_en": datetime.now(timezone.utc).isoformat()})
@@ -146,6 +153,7 @@ def admin_saber_guardar(body: SaberIn, admin: dict = Depends(auth.require_admin)
     row = {"pregunta": body.pregunta.strip(), "respuesta": body.respuesta.strip(),
            "etiquetas": _etiquetas(body.etiquetas), "activo": body.activo,
            "seccion": body.seccion if body.seccion in SECCIONES else "general",
+           "ciudad_id": repo.get_ciudad_id(body.ciudad) if body.ciudad else None,
            "creado_por": admin.get("email") or "admin"}
     if body.id:
         row["id"] = body.id
