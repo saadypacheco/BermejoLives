@@ -664,6 +664,7 @@
 /* En celular la pantalla es angosta y alta: 4:3 muestra bastante más de la
    vidriera sin dejar la ficha abajo de todo. */
 @media (max-width: 720px) { .uk-cover { aspect-ratio: 4 / 3; max-height: 52vh; } }
+.uk-empty .uk-btn-ghost, .uk-empty .uk-btn { display: inline-flex; flex: 0 0 auto; width: auto; margin-top: 10px; }
 .uk-back { display: inline-flex; align-items: center; gap: 6px; color: var(--uk-ink-soft); font-size: 14px; margin: 16px 0; }
 .uk-profile-head { display: flex; gap: 18px; align-items: flex-start; margin-top: -50px; position: relative; flex-wrap: wrap; }
 .uk-profile-logo { width: 96px; height: 96px; border-radius: 20px; border: 3px solid var(--uk-surface); object-fit: cover; background: var(--uk-surface); box-shadow: var(--uk-shadow-soft); }

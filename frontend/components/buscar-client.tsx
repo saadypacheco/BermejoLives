@@ -629,7 +629,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiu
                 oferta— y no el total de la búsqueda, que es otro número. */}
             {(() => {
               const n = soloOfertas ? (resultsMapa ? shown.length : null) : total;
-              if (n == null) return soloOfertas ? "buscando ofertas…" : null;
+              if (n == null) return null;
               if (soloOfertas) return n === 1 ? "1 con ofertas" : `${n} con ofertas`;
               return n === 1 ? "1 resultado" : `${n} resultados`;
             })()}
