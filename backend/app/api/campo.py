@@ -36,10 +36,24 @@ _TIPOS_LEAD  = {"whatsapp", "telefono", "email", "web", "vista", "mapa", "reserv
 
 
 @router.post("/auth/campo/login")
-def campo_login(body: LoginBody) -> dict:
-    if not auth.mismo_email(body.email, settings.agente_email) or body.password != settings.agente_password:
-        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
-    return {"access_token": auth.make_agente_token(body.email), "agente": {"email": body.email}}
+def campo_login(body: LoginBody, repo: Repo = Depends(get_repo)) -> dict:
+    """Entra un agente de campo.
+
+    Primero la tabla `agentes` (0125): varios agentes, cada uno con su
+    ciudad. Si no está ahí, la cuenta única del `.env`, que es la que está
+    cargada en los teléfonos desde el principio y sigue andando."""
+    from datetime import datetime, timezone
+
+    a = repo.get_agente(body.email)
+    if a and auth.verify_password(body.password, a.get("password_hash") or ""):
+        ciudad = repo.get_ciudad_por_id(a.get("ciudad_id")) if a.get("ciudad_id") else None
+        repo.update_agente(a["id"], {"ultimo_acceso": datetime.now(timezone.utc).isoformat()})
+        return {"access_token": auth.make_agente_token(a["email"], (ciudad or {}).get("slug"), a.get("nombre")),
+                "agente": {"email": a["email"], "nombre": a.get("nombre"),
+                           "ciudad": (ciudad or {}).get("slug"), "ciudad_nombre": (ciudad or {}).get("nombre")}}
+    if auth.mismo_email(body.email, settings.agente_email) and body.password == settings.agente_password:
+        return {"access_token": auth.make_agente_token(body.email), "agente": {"email": body.email}}
+    raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
 
 @router.post("/campo/transcribir")
@@ -164,7 +178,14 @@ async def alta_campo(
         )
         raise HTTPException(status_code=400, detail="Falta la ubicación")
     # Alta mínima: solo la ubicación es obligatoria; whatsapp/teléfono/descripción/foto opcionales.
-    ciudad_id = repo.get_ciudad_id(ciudad_slug) or repo.get_ciudad_id("bermejo")
+    # La ciudad la deciden las COORDENADAS, no el selector: un comercio está
+    # donde está, y así nadie carga treinta locales en la ciudad equivocada
+    # por un desplegable que quedó como estaba. Si el punto no cae cerca de
+    # ninguna ciudad activa, manda la ciudad del agente (0125) y, si tampoco
+    # tiene, lo que vino del formulario.
+    cercana = repo.ciudad_mas_cercana(lat, lng) or {}
+    ciudad_slug = cercana.get("slug") or agente.get("ciudad") or ciudad_slug
+    ciudad_id = cercana.get("id") or repo.get_ciudad_id(ciudad_slug) or repo.get_ciudad_id("bermejo")
 
     # rubros: resuelve los slugs a ids; el 1º es el principal
     rubro_ids = [rid for rid in (repo.get_rubro_id(s) for s in rubro_slugs if s) if rid]

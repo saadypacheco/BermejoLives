@@ -9,6 +9,8 @@ import { rubroStyle, loadLeaflet } from "@/lib/mapa-visual";
 import { adornoHTML, MEDIDAS, ZOOM_MIN_ADORNOS, type Adorno } from "@/lib/adornos";
 import { getAdornosMapa } from "@/lib/data";
 
+// Dónde arranca el mapa si la ciudad no trae coordenadas. Bermejo fue la
+// primera; con otra ciudad elegida manda la suya (ver `centro`).
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 
 /** El popup se arma con texto, no con React: una comilla en una URL rompía el
@@ -38,7 +40,7 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
   /** El mapa base de esta ciudad, si tiene uno propio (migración 0068). Es lo
    *  que permite cambiar de proveedor con un UPDATE y no con un deploy — que es
    *  el arreglo que faltó el día que CARTO cortó. */
-  ciudad?: { tiles_url?: string | null; tiles_atribucion?: string | null } | null;
+  ciudad?: { id?: string; tiles_url?: string | null; tiles_atribucion?: string | null; lat?: number | null; lng?: number | null } | null;
   /** Sin filtro puesto el mapa muestra los adornos y nada más, salvo los
    *  destacados y los que pagan. 887 pines sobre Bermejo no son un mapa, son
    *  una mancha — y aparece justo cuando alguien todavía no sabe qué busca. */
@@ -55,6 +57,7 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
   // Sube cuando Leaflet terminó de cargar: los efectos que dibujan encima
   // (servicios, el punto azul) corren antes de eso y tienen que repetirse.
   const [listo, setListo] = useState(0);
+  const centro: [number, number] = ciudad?.lat != null && ciudad?.lng != null ? [ciudad.lat, ciudad.lng] : BERMEJO;
 
   useEffect(() => {
     let cancelled = false;
@@ -62,7 +65,9 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
       if (cancelled || !elRef.current) return;
       LRef.current = L;
       if (!mapRef.current) {
-        mapRef.current = L.map(elRef.current, { zoomControl: true, attributionControl: true }).setView(BERMEJO, 15);
+        // El centro es el de la ciudad elegida. Sin esto, Santa Cruz abría el
+        // mapa sobre Bermejo y sólo se corregía si la búsqueda traía pines.
+        mapRef.current = L.map(elRef.current, { zoomControl: true, attributionControl: true }).setView(centro, 14);
         // El botón 📍, debajo del zoom. Un control de Leaflet y no un botón
         // de React encima: así respeta el mismo margen, el mismo estilo y el
         // mismo orden que el + y el −.
@@ -108,7 +113,7 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
 
         // Llegan después de la primera pintada, a propósito: el mapa se dibuja
         // con los comercios y la decoración aparece cuando esté.
-        getAdornosMapa().then((items) => {
+        getAdornosMapa(ciudad?.id ?? null).then((items) => {
           adornosRef.current = items;
           pintarAdornos(L);
         }).catch(() => { /* sin adornos el mapa sigue sirviendo */ });
@@ -240,6 +245,9 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
     }
     if (bounds.length > 1) mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
     else if (bounds.length === 1) mapRef.current.setView(bounds[0], 16);
+    // Sin ningún pin (una ciudad que se está cargando), el mapa se queda en
+    // su ciudad y no en la de la búsqueda anterior.
+    else mapRef.current.setView(centro, 14);
   }
 
   const sinCoords = results.filter((r) => r.lat == null || r.lng == null).length;

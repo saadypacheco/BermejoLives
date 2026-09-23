@@ -124,6 +124,7 @@ class FakeRepo:
         self.conversaciones: list[dict] = []          # Uruku Ayuda
         self.frontera: dict = {"puente": "normal", "chalanas": "operando", "rio": "normal", "nota": None, "actualizado_en": None}
         self.fronteras: dict[str, dict] = {}     # una por ciudad (0124)
+        self.agentes: dict[str, dict] = {}       # agentes de campo (0125)
         self.cotizaciones_historial: list[dict] = []
         self.videos_promo: list[dict] = []
         self.redes: list[dict] = [
@@ -291,7 +292,7 @@ class FakeRepo:
     def ciudad_mas_cercana(self, lat, lng):
         # Dos ciudades en el fake: Bermejo y Santa Cruz.
         ciudades = [{"id": "ciu-1", "slug": "bermejo", "nombre": "Bermejo", "lat": -22.7361, "lng": -64.3433},
-                    {"id": "ciu-sc", "slug": "santa-cruz", "nombre": "Santa Cruz", "lat": -17.7833, "lng": -63.1821}]
+                    {"id": "ciu-santa-cruz", "slug": "santa-cruz", "nombre": "Santa Cruz", "lat": -17.7833, "lng": -63.1821}]
         return min(ciudades, key=lambda c: (c["lat"] - lat) ** 2 + (c["lng"] - lng) ** 2)
 
     def agregar_numero_comercio(self, comercio_id, numero, etiqueta, by):
@@ -1316,6 +1317,36 @@ class FakeRepo:
 
     def get_rubro_nombre(self, slug):
         return slug.title() if self.rubros.get(slug) else None
+
+    def list_ciudades(self):
+        return [{"id": "ciu-1", "slug": "bermejo", "nombre": "Bermejo", "activa": True, "es_frontera": True},
+                {"id": "ciu-santa-cruz", "slug": "santa-cruz", "nombre": "Santa Cruz", "activa": True, "es_frontera": False}]
+
+    def get_ciudad_por_id(self, ciudad_id):
+        if not ciudad_id:
+            return None
+        slug = str(ciudad_id).replace("ciu-", "").replace("ciudad-", "")
+        if slug == "1":
+            slug = "bermejo"
+        return {"id": ciudad_id, "slug": slug, "nombre": slug.replace("-", " ").title()}
+
+    def get_agente(self, email):
+        e = (email or "").strip().lower()
+        return next((a for a in self.agentes.values() if a["email"] == e and a.get("activo", True)), None)
+
+    def list_agentes(self):
+        return [{k: v for k, v in a.items() if k != "password_hash"} for a in self.agentes.values()]
+
+    def crear_agente(self, row):
+        fila = {"id": self._id("agente"), **row}
+        self.agentes[fila["id"]] = fila
+        return fila
+
+    def update_agente(self, agente_id, patch):
+        if agente_id not in self.agentes:
+            return None
+        self.agentes[agente_id].update(patch)
+        return self.agentes[agente_id]
 
     def get_ciudad_id(self, slug):
         return {"bermejo": "ciu-1"}.get(slug) or f"ciu-{slug}"

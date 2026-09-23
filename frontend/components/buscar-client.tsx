@@ -26,7 +26,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiu
   /** El nombre de la ciudad elegida, para los títulos ("Baños públicos en Yacuiba"). */
   nombreCiudad?: string;
   /** De dónde saca el mapa base esta ciudad. NULL = la del código. */
-  tilesCiudad?: { tiles_url?: string | null; tiles_atribucion?: string | null } | null;
+  tilesCiudad?: { id?: string; tiles_url?: string | null; tiles_atribucion?: string | null; lat?: number | null; lng?: number | null } | null;
 }) {
   const [q, setQ] = useState("");
   // Lo que la persona está escribiendo, separado de lo que se BUSCA (`q`).

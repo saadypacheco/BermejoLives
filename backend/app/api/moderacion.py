@@ -8,7 +8,7 @@ import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
-from app.core.auth import require_admin, require_moderador
+from app.core.auth import hash_password, require_admin, require_moderador
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp
@@ -288,6 +288,65 @@ def editar_comercio(
         aplicar_rubros(repo, updated, body.rubro_slugs or repo.get_comercio_rubros(comercio_id))
     logger.info("moderacion.comercio_editado", comercio=comercio_id, campos=list(patch.keys()), by=admin["email"])
     return {"ok": True, "comercio": updated}
+
+
+# ── Agentes de campo: uno por ciudad, creados desde el panel (0125) ───────────
+class AgenteBody(BaseModel):
+    email: str
+    password: str | None = None      # al crear, obligatoria; al editar, opcional
+    nombre: str | None = None
+    ciudad_slug: str | None = None
+    activo: bool = True
+
+
+@router.get("/admin/agentes")
+def listar_agentes(_admin: dict = Depends(require_admin), repo: Repo = Depends(get_repo)) -> dict:
+    """Los agentes de campo, con su ciudad. Nunca la contraseña."""
+    ciudades = {c["id"]: c for c in (repo.list_ciudades() or [])}
+    items = []
+    for a in repo.list_agentes():
+        ciudad = ciudades.get(a.get("ciudad_id")) or {}
+        items.append({**a, "ciudad_slug": ciudad.get("slug"), "ciudad_nombre": ciudad.get("nombre")})
+    return {"items": items}
+
+
+@router.post("/admin/agentes")
+def crear_agente(body: AgenteBody, admin: dict = Depends(require_admin), repo: Repo = Depends(get_repo)) -> dict:
+    email = (body.email or "").strip().lower()
+    if "@" not in email:
+        raise HTTPException(status_code=400, detail="Poné un correo")
+    if not body.password or len(body.password) < 6:
+        raise HTTPException(status_code=400, detail="La contraseña necesita al menos 6 caracteres")
+    if repo.get_agente(email):
+        raise HTTPException(status_code=409, detail="Ya hay un agente con ese correo")
+    fila = {
+        "email": email, "password_hash": hash_password(body.password),
+        "nombre": (body.nombre or "").strip() or None,
+        "ciudad_id": repo.get_ciudad_id(body.ciudad_slug) if body.ciudad_slug else None,
+        "activo": True, "creado_por": admin.get("email"),
+    }
+    creado = repo.crear_agente(fila)
+    logger.info("admin.agente_creado", email=email, ciudad=body.ciudad_slug, by=admin.get("email"))
+    return {"ok": True, "agente": {k: v for k, v in creado.items() if k != "password_hash"}}
+
+
+@router.put("/admin/agentes/{agente_id}")
+def editar_agente(agente_id: str, body: AgenteBody, admin: dict = Depends(require_admin),
+                  repo: Repo = Depends(get_repo)) -> dict:
+    patch: dict = {"activo": body.activo}
+    if body.nombre is not None:
+        patch["nombre"] = body.nombre.strip() or None
+    if body.ciudad_slug is not None:
+        patch["ciudad_id"] = repo.get_ciudad_id(body.ciudad_slug) if body.ciudad_slug else None
+    if body.password:
+        if len(body.password) < 6:
+            raise HTTPException(status_code=400, detail="La contraseña necesita al menos 6 caracteres")
+        patch["password_hash"] = hash_password(body.password)
+    actualizado = repo.update_agente(agente_id, patch)
+    if not actualizado:
+        raise HTTPException(status_code=404, detail="No existe ese agente")
+    logger.info("admin.agente_editado", agente=agente_id, campos=list(patch.keys()), by=admin.get("email"))
+    return {"ok": True, "agente": {k: v for k, v in actualizado.items() if k != "password_hash"}}
 
 
 # ── La base de compradores: importar el Excel y ver de dónde vienen ───────────

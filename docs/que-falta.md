@@ -67,15 +67,20 @@ El sitio ya separa lo de cada ciudad. Para abrir una:
 1. **`ciudades`**: `activa = true`. Si es frontera, cargar también
    `pais_vecino`, `moneda_vecina` (ARS | BRL | PEN), `paso_nombre` y, cuando
    tenga foto, `hero_url`.
-2. **Cargar comercios** (campo o Admin › Comercios). El alta toma la ciudad
-   activa más cercana a la ubicación, así que no hay nada que elegir.
-3. **Si es frontera**: cargar su saber local en **Admin › Ayuda** eligiendo
+2. **Crear los agentes** de esa ciudad en **Admin › Agentes**: correo,
+   contraseña y ciudad. El panel te arma el mensaje para mandarle por
+   WhatsApp (uruku.bo/publicar + usuario + contraseña). La contraseña no se
+   puede volver a ver: si se pierde, se pone una nueva desde ahí.
+3. **Cargar comercios** (campo o Admin › Comercios). La ciudad la deciden
+   las **coordenadas** del local, no el selector: no hay forma de cargar
+   treinta locales en la ciudad equivocada.
+4. **Si es frontera**: cargar su saber local en **Admin › Ayuda** eligiendo
    esa ciudad (lo que vale para todas —la aduana boliviana— se deja en «Todas
    las fronteras»), y su estado del paso en **/contenido › La frontera hoy**
    con el selector de ciudad. Recién entonces `ciudades.guia_activa = true`:
    hasta ahí, esa ciudad no muestra `/guia` ni el menú de la guía, que es lo
    correcto — la guía de Bermejo no sirve en Villazón.
-4. **Si no es frontera**: nada más. No hay guía, ni paso, ni `/cambio`.
+5. **Si no es frontera**: nada más. No hay guía, ni paso, ni `/cambio`.
 
 - [ ] Pendiente: **cargar las cotizaciones del real y el sol** (`brl_bob`,
   `pen_bob`, creadas vacías por la 0124) el día que se abra Cobija, Puerto

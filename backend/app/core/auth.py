@@ -42,13 +42,19 @@ def make_token(email: str, rol: str = "moderador") -> str:
     return pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 
-def make_agente_token(email: str) -> str:
+def make_agente_token(email: str, ciudad_slug: str | None = None, nombre: str | None = None) -> str:
+    """El token del agente de campo. Lleva SU ciudad: lo que carga nace ahí,
+    sin que tenga que elegirla en el formulario (0125)."""
     payload = {
         "sub": email,
         "email": email,
         "rol": "agente",
         "exp": int(time.time()) + settings.jwt_ttl_hours * 3600,
     }
+    if ciudad_slug:
+        payload["ciudad"] = ciudad_slug
+    if nombre:
+        payload["nombre"] = nombre
     return pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 

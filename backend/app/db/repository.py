@@ -85,6 +85,13 @@ class Repo(Protocol):
     def get_zona_id(self, slug: str) -> str | None: ...
     def get_rubro_id(self, slug: str) -> str | None: ...
     def get_rubro_nombre(self, slug: str) -> str | None: ...
+    def get_ciudad_por_id(self, ciudad_id: str | None) -> dict | None: ...
+    def list_ciudades(self) -> list[dict]: ...
+    # Agentes de campo (0125)
+    def get_agente(self, email: str) -> dict | None: ...
+    def list_agentes(self) -> list[dict]: ...
+    def crear_agente(self, row: dict) -> dict: ...
+    def update_agente(self, agente_id: str, patch: dict) -> dict | None: ...
     def get_ciudad_id(self, slug: str) -> str | None: ...
     def get_ciudad(self, slug: str) -> dict | None: ...
     def ciudad_mas_cercana(self, lat: float, lng: float) -> dict | None: ...
@@ -812,6 +819,37 @@ class SupabaseRepo:
             if dist is None or d < dist:
                 mejor, dist = c, d
         return mejor
+
+    def list_ciudades(self) -> list[dict]:
+        res = self._db.table("ciudades").select("id, slug, nombre, activa, es_frontera").order("orden").execute()
+        return res.data or []
+
+    def get_ciudad_por_id(self, ciudad_id: str | None) -> dict | None:
+        if not ciudad_id:
+            return None
+        res = self._db.table("ciudades").select("*").eq("id", ciudad_id).limit(1).execute()
+        return res.data[0] if res.data else None
+
+    # ── agentes de campo ─────────────────────────────────────────────────────
+
+    def get_agente(self, email: str) -> dict | None:
+        res = (self._db.table("agentes").select("*")
+               .eq("email", (email or "").strip().lower()).eq("activo", True).limit(1).execute())
+        return res.data[0] if res.data else None
+
+    def list_agentes(self) -> list[dict]:
+        """Sin el hash de la contraseña: este listado va al panel."""
+        res = (self._db.table("agentes").select("id, email, nombre, ciudad_id, activo, created_at, ultimo_acceso")
+               .order("created_at").execute())
+        return res.data or []
+
+    def crear_agente(self, row: dict) -> dict:
+        res = self._db.table("agentes").insert(row).execute()
+        return (res.data or [row])[0]
+
+    def update_agente(self, agente_id: str, patch: dict) -> dict | None:
+        res = self._db.table("agentes").update(patch).eq("id", agente_id).execute()
+        return res.data[0] if res.data else None
 
     def get_ciudad_id(self, slug: str) -> str | None:
         res = self._db.table("ciudades").select("id").eq("slug", slug).limit(1).execute()

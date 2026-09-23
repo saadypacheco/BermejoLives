@@ -1178,6 +1178,31 @@ export type PlanAdmin = {
   descripcion: string | null; incluye: string[]; funciones: Record<string, boolean>; activo: boolean; visible: boolean;
 };
 
+// ---- Agentes de campo (Admin › Agentes) ----
+export type AgenteAdmin = {
+  id: string; email: string; nombre: string | null; activo: boolean;
+  ciudad_id: string | null; ciudad_slug?: string | null; ciudad_nombre?: string | null;
+  created_at?: string; ultimo_acceso?: string | null;
+};
+export async function getAgentes(): Promise<AgenteAdmin[]> {
+  const res = await authFetch(`/admin/agentes`);
+  return (await res.json()).items;
+}
+export async function crearAgente(body: { email: string; password: string; nombre?: string; ciudad_slug?: string }): Promise<AgenteAdmin> {
+  const res = await authFetch(`/admin/agentes`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error((await res.json()).detail ?? "No se pudo crear");
+  return (await res.json()).agente;
+}
+export async function editarAgente(id: string, body: { email: string; activo?: boolean; password?: string; nombre?: string; ciudad_slug?: string }): Promise<AgenteAdmin> {
+  const res = await authFetch(`/admin/agentes/${id}`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error((await res.json()).detail ?? "No se pudo guardar");
+  return (await res.json()).agente;
+}
+
 // ---- La base de compradores (Admin › Compradores) ----
 export type ResumenContactos = {
   total: number; telefonos_distintos: number; invalidos: number; en_uruku: number; usuarios_total: number;

@@ -609,7 +609,7 @@ export const DEMO_FEED: FeedItem[] = [
  * no existe o la consulta se cae, el mapa tiene que dibujarse igual con sus
  * comercios. Quedarse sin un lapacho no es un problema; quedarse sin el mapa sí.
  */
-export async function getAdornosMapa(): Promise<Adorno[]> {
+export async function getAdornosMapa(ciudadId?: string | null): Promise<Adorno[]> {
   if (!hasSupabase) return [];
   try {
     const { data } = await supabase
@@ -618,7 +618,10 @@ export async function getAdornosMapa(): Promise<Adorno[]> {
       // ella todas se dibujarían con el color por defecto y el mapa mostraría
       // la bandera equivocada, que es peor que no mostrar ninguna.
       .select("id, tipo, variante, lat, lng, giro, escala")
-      .eq("activo", true);
+      .eq("activo", true)
+      // Los adornos son de una ciudad: las chalanas del río Bermejo no van
+      // en el mapa de Santa Cruz.
+      .eq("ciudad_id", ciudadId ?? "");
     return (data ?? []) as Adorno[];
   } catch {
     return [];

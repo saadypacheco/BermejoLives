@@ -27,7 +27,7 @@ export default async function BuscarPage() {
         <BuscarClient
           ciudadInicial={ciudad?.slug ?? ""}
           nombreCiudad={ciudad?.nombre ?? ""}
-          tilesCiudad={ciudad ? { tiles_url: ciudad.tiles_url ?? null, tiles_atribucion: ciudad.tiles_atribucion ?? null } : null}
+          tilesCiudad={ciudad ? { id: ciudad.id, tiles_url: ciudad.tiles_url ?? null, tiles_atribucion: ciudad.tiles_atribucion ?? null, lat: ciudad.lat, lng: ciudad.lng } : null}
         />
       </Suspense>
     </UrukuShell>
