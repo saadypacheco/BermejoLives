@@ -30,8 +30,12 @@ async function authFetch(path: string, opts: RequestInit = {}) {
     cache: "no-store",
   });
   if (res.status === 401) {
+    // Un token vencido sigue siendo "un token": sin este aviso el panel se
+    // dibujaba entero y TODOS los pedidos fallaban con 401 en silencio, con
+    // un «No autenticado» chiquito y ningún lugar donde volver a entrar.
     clearToken();
-    throw new Error("No autenticado");
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("uk-sesion-vencida"));
+    throw new Error("Se venció la sesión. Entrá de nuevo.");
   }
   // Un error del server LANZA acá, no más abajo.
   //

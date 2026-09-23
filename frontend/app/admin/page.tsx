@@ -75,6 +75,14 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [veredictos, setVeredictos] = useState<Record<string, VeredictoIA | "cargando">>({});
 
+  // La sesión se venció en medio de la pantalla: se vuelve al ingreso con el
+  // aviso, en vez de dejar el panel dibujado con todo fallando.
+  useEffect(() => {
+    const vencida = () => { setAuthed(false); setErr("Se venció la sesión. Entrá de nuevo."); };
+    window.addEventListener("uk-sesion-vencida", vencida);
+    return () => window.removeEventListener("uk-sesion-vencida", vencida);
+  }, []);
+
   useEffect(() => {
     if (getToken()) {
       setAuthed(true);

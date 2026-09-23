@@ -30,6 +30,7 @@ async function pFetch(path: string, init?: RequestInit) {
   // mientras cada Guardar contesta "token expirado". No hay forma de salir de
   // ahí salvo saber que existe el botón de cerrar sesión.
   if (res.status === 401) {
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("uk-sesion-vencida"));
     clearPub();
     throw new Error("Tu sesión venció. Volvé a entrar.");
   }
