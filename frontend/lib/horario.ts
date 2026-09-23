@@ -79,7 +79,24 @@ function rangosHorarios(seg: string): Array<{ desde: number; hasta: number }> {
 }
 
 /** Interpreta el horario libre y decide si está abierto AHORA. `now` inyectable para tests. */
-export function abiertoAhora(horario: string | null | undefined, now: Date = new Date()): EstadoHorario {
+/** La hora de BOLIVIA, venga de donde venga el que mira.
+ *
+ *  El «abierto ahora» se calculaba con la hora del aparato: desde Argentina
+ *  —que va una hora adelante— un local que cierra a las 16:00 figuraba
+ *  cerrado desde las 15:00 de Bolivia, y la mitad de los compradores de
+ *  Bermejo miran desde el otro lado. En el servidor era peor: corre en UTC,
+ *  cuatro horas de diferencia.
+ *
+ *  Devuelve un Date cuyos `getHours()`/`getDay()` ya son los de Bolivia. */
+export function ahoraEnBolivia(base: Date = new Date()): Date {
+  try {
+    return new Date(base.toLocaleString("en-US", { timeZone: "America/La_Paz" }));
+  } catch {
+    return base;   // un navegador sin husos: mejor la hora del aparato que nada
+  }
+}
+
+export function abiertoAhora(horario: string | null | undefined, now: Date = ahoraEnBolivia()): EstadoHorario {
   if (!horario || !horario.trim()) return { estado: "desconocido" };
   const texto = norm(horario);
 
@@ -141,7 +158,7 @@ export function abiertoAhora(horario: string | null | undefined, now: Date = new
 }
 
 /** Texto corto para el badge, ej. "Abierto · cierra 19:00" / "Cerrado · abre 9:00". */
-export function etiquetaHorario(e: EstadoHorario, now: Date = new Date()): string | null {
+export function etiquetaHorario(e: EstadoHorario, now: Date = ahoraEnBolivia()): string | null {
   if (e.estado === "desconocido") return null;
   const fmt = (min: number) => {
     const t = new Date(now.getTime() + min * 60000);

@@ -465,3 +465,13 @@ def test_cada_frontera_tiene_su_guia(repo, sin_modelo):
     # Una frontera sin guía cargada todavía no contesta con la de otra.
     sin_guia = {"slug": "cobija", "nombre": "Cobija", "guia_activa": False}
     assert asistente.responder(repo, "¿por dónde se cruza la frontera?", ahora=MARTES_11, ciudad=sin_guia).intent != "saber_local"
+
+
+def test_el_horario_de_las_chalanas_entra_entero(client, repo, admin_token):
+    """El caso real no es una hora: son turnos. «6:00 a 18:00 todas, hasta las
+    20:00 una sola cooperativa» tiene que entrar completo y salir completo."""
+    h = {"Authorization": f"Bearer {admin_token}"}
+    frase = "6:00 a 18:00 todas · hasta las 20:00 queda una cooperativa (rota cada semana)"
+    r = client.put("/contenido/frontera", headers=h, json={"chalanas": "operando", "chalanas_horario": frase})
+    assert r.status_code == 200 and r.json()["frontera"]["chalanas_horario"] == frase
+    assert frase in asistente.responder(repo, "¿cómo está el paso hoy?", ahora=MARTES_11).texto

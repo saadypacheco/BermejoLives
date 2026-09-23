@@ -239,11 +239,17 @@ function FronteraBox({ flash, fail }: { flash: (m: string) => void; fail: (e: un
         ))}
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <b style={{ fontSize: 13, width: 150 }}>Horario chalanas</b>
-          <input className="adm-input" style={{ flex: 1 }} value={horarioChalanas} onChange={(e) => setHorarioChalanas(e.target.value)} placeholder="ej. 7:00 a 18:00 · sólo de mañana · vacío = no se muestra" />
+          <input className="adm-input" style={{ flex: 1 }} value={horarioChalanas} onChange={(e) => setHorarioChalanas(e.target.value)} maxLength={160}
+                 placeholder="ej. 6:00 a 18:00 todas · hasta las 20:00 queda una cooperativa (rota cada semana)" />
           <button className="btn btn-primary btn-sm" onClick={() => guardar({ chalanas_horario: horarioChalanas })}>Guardar horario</button>
         </div>
+        <div style={{ fontSize: 11.5, color: "var(--txt-3)", marginTop: -4 }}>
+          Escribilo como se lo dirías a alguien. Si hay turnos, ponelos: «6:00 a 18:00 todas · hasta las 20:00 queda
+          una cooperativa». Sale en la guía, en el home y en la Ayuda. Vacío = no se muestra.
+        </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input className="adm-input" style={{ flex: 1 }} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Nota (opcional): filas de dos horas por el feriado, migraciones sin sistema…" />
+          <input className="adm-input" style={{ flex: 1 }} value={nota} onChange={(e) => setNota(e.target.value)} maxLength={300}
+                 placeholder="Nota (opcional): filas de dos horas por el feriado, migraciones sin sistema…" />
           <button className="btn btn-primary btn-sm" onClick={() => guardar({ nota })}>Guardar nota</button>
         </div>
       </div>

@@ -9,7 +9,7 @@ import {
   getSaberLocalPorSeccion, getVideosPromo, RUBROS_SERVICIO, type FronteraEstado, type SaberLocalPublico,
 } from "@/lib/data";
 import { cambioFavorable, diasDesde, DIAS_VIEJA, formatoMonto, tasasDe } from "@/lib/cambio";
-import { abiertoAhora, etiquetaHorario } from "@/lib/horario";
+import { abiertoAhora, ahoraEnBolivia, etiquetaHorario } from "@/lib/horario";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +61,9 @@ function Preguntas({ items }: { items: SaberLocalPublico[] }) {
 }
 
 export default async function GuiaPage() {
-  const ahora = new Date();
+  // Hora de Bolivia: el servidor corre en UTC y «abierto ahora» tiene que ser
+  // el de acá, no el de Londres.
+  const ahora = ahoraEnBolivia();
   const { ciudad } = await ciudadActual();
   // Cada frontera tiene su guía (0124). La ciudad que todavía no la cargó no
   // muestra la de otra: 404, y el menú tampoco la ofrece.
