@@ -39,21 +39,15 @@ _TIPOS_LEAD  = {"whatsapp", "telefono", "email", "web", "vista", "mapa", "reserv
 def campo_login(body: LoginBody, repo: Repo = Depends(get_repo)) -> dict:
     """Entra un agente de campo.
 
-    Primero la tabla `agentes` (0125): varios agentes, cada uno con su
-    ciudad. Si no está ahí, la cuenta única del `.env`, que es la que está
-    cargada en los teléfonos desde el principio y sigue andando."""
-    from datetime import datetime, timezone
+    La misma puerta que el panel (0126): la cuenta está en `usuarios_panel`
+    con el rol «agente» y su ciudad. La cuenta del `.env` queda de respaldo —
+    es la que está en los teléfonos desde el principio."""
+    from app.api.auth import entrar
 
-    a = repo.get_agente(body.email)
-    if a and auth.verify_password(body.password, a.get("password_hash") or ""):
-        ciudad = repo.get_ciudad_por_id(a.get("ciudad_id")) if a.get("ciudad_id") else None
-        repo.update_agente(a["id"], {"ultimo_acceso": datetime.now(timezone.utc).isoformat()})
-        return {"access_token": auth.make_agente_token(a["email"], (ciudad or {}).get("slug"), a.get("nombre")),
-                "agente": {"email": a["email"], "nombre": a.get("nombre"),
-                           "ciudad": (ciudad or {}).get("slug"), "ciudad_nombre": (ciudad or {}).get("nombre")}}
-    if auth.mismo_email(body.email, settings.agente_email) and body.password == settings.agente_password:
-        return {"access_token": auth.make_agente_token(body.email), "agente": {"email": body.email}}
-    raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+    r = entrar(repo, body.email, body.password, "agente")
+    if not r:
+        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+    return {**r, "agente": r["user"]}
 
 
 @router.post("/campo/transcribir")

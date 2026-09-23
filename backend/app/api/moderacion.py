@@ -8,7 +8,8 @@ import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
-from app.core.auth import hash_password, require_admin, require_moderador
+from app.core.auth import hash_password, require_moderador, require_permiso
+from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp
@@ -274,7 +275,7 @@ class EditarComercioBody(BaseModel):
 def editar_comercio(
     comercio_id: str,
     body: EditarComercioBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Edita campos de un comercio desde el panel admin."""
@@ -290,49 +291,67 @@ def editar_comercio(
     return {"ok": True, "comercio": updated}
 
 
-# ── Agentes de campo: uno por ciudad, creados desde el panel (0125) ───────────
-class AgenteBody(BaseModel):
+# ── El equipo: usuarios, roles y permisos (0126) ──────────────────────────────
+class UsuarioPanelBody(BaseModel):
     email: str
     password: str | None = None      # al crear, obligatoria; al editar, opcional
     nombre: str | None = None
     ciudad_slug: str | None = None
+    roles: list[str] = Field(default_factory=list)
     activo: bool = True
 
 
-@router.get("/admin/agentes")
-def listar_agentes(_admin: dict = Depends(require_admin), repo: Repo = Depends(get_repo)) -> dict:
-    """Los agentes de campo, con su ciudad. Nunca la contraseña."""
+class RolBody(BaseModel):
+    slug: str
+    nombre: str
+    descripcion: str | None = None
+    permisos: list[str] = Field(default_factory=list)
+
+
+@router.get("/admin/equipo")
+def listar_equipo(_: dict = Depends(require_permiso("equipo")), repo: Repo = Depends(get_repo)) -> dict:
+    """El equipo con sus roles, los roles con sus permisos, y el catálogo de
+    permisos que el código sabe mirar. Nunca una contraseña."""
     ciudades = {c["id"]: c for c in (repo.list_ciudades() or [])}
-    items = []
-    for a in repo.list_agentes():
-        ciudad = ciudades.get(a.get("ciudad_id")) or {}
-        items.append({**a, "ciudad_slug": ciudad.get("slug"), "ciudad_nombre": ciudad.get("nombre")})
-    return {"items": items}
+    usuarios = []
+    for u in repo.list_usuarios_panel():
+        ciudad = ciudades.get(u.get("ciudad_id")) or {}
+        usuarios.append({**u, "ciudad_slug": ciudad.get("slug"), "ciudad_nombre": ciudad.get("nombre")})
+    return {
+        "usuarios": usuarios,
+        "roles": repo.list_roles(),
+        "permisos": [{"clave": p, "que_hace": q, "grupo": g} for p, q, g in CATALOGO],
+    }
 
 
-@router.post("/admin/agentes")
-def crear_agente(body: AgenteBody, admin: dict = Depends(require_admin), repo: Repo = Depends(get_repo)) -> dict:
+@router.post("/admin/equipo")
+def crear_usuario_panel(body: UsuarioPanelBody, admin: dict = Depends(require_permiso("equipo")),
+                        repo: Repo = Depends(get_repo)) -> dict:
     email = (body.email or "").strip().lower()
     if "@" not in email:
         raise HTTPException(status_code=400, detail="Poné un correo")
     if not body.password or len(body.password) < 6:
         raise HTTPException(status_code=400, detail="La contraseña necesita al menos 6 caracteres")
-    if repo.get_agente(email):
-        raise HTTPException(status_code=409, detail="Ya hay un agente con ese correo")
+    if repo.get_usuario_panel(email):
+        raise HTTPException(status_code=409, detail="Ya hay alguien con ese correo")
+    validos = {r["slug"] for r in (repo.list_roles() or [])}
+    roles = [r for r in body.roles if r in validos]
+    if not roles:
+        raise HTTPException(status_code=400, detail="Elegí al menos un rol")
     fila = {
         "email": email, "password_hash": hash_password(body.password),
         "nombre": (body.nombre or "").strip() or None,
         "ciudad_id": repo.get_ciudad_id(body.ciudad_slug) if body.ciudad_slug else None,
         "activo": True, "creado_por": admin.get("email"),
     }
-    creado = repo.crear_agente(fila)
-    logger.info("admin.agente_creado", email=email, ciudad=body.ciudad_slug, by=admin.get("email"))
-    return {"ok": True, "agente": {k: v for k, v in creado.items() if k != "password_hash"}}
+    creado = repo.crear_usuario_panel(fila, roles)
+    logger.info("admin.usuario_creado", email=email, roles=roles, ciudad=body.ciudad_slug, by=admin.get("email"))
+    return {"ok": True, "usuario": {k: v for k, v in creado.items() if k != "password_hash"}}
 
 
-@router.put("/admin/agentes/{agente_id}")
-def editar_agente(agente_id: str, body: AgenteBody, admin: dict = Depends(require_admin),
-                  repo: Repo = Depends(get_repo)) -> dict:
+@router.put("/admin/equipo/{usuario_id}")
+def editar_usuario_panel(usuario_id: str, body: UsuarioPanelBody, admin: dict = Depends(require_permiso("equipo")),
+                         repo: Repo = Depends(get_repo)) -> dict:
     patch: dict = {"activo": body.activo}
     if body.nombre is not None:
         patch["nombre"] = body.nombre.strip() or None
@@ -342,11 +361,44 @@ def editar_agente(agente_id: str, body: AgenteBody, admin: dict = Depends(requir
         if len(body.password) < 6:
             raise HTTPException(status_code=400, detail="La contraseña necesita al menos 6 caracteres")
         patch["password_hash"] = hash_password(body.password)
-    actualizado = repo.update_agente(agente_id, patch)
+    validos = {r["slug"] for r in (repo.list_roles() or [])}
+    roles = [r for r in body.roles if r in validos] if body.roles else None
+    actualizado = repo.update_usuario_panel(usuario_id, patch, roles)
     if not actualizado:
-        raise HTTPException(status_code=404, detail="No existe ese agente")
-    logger.info("admin.agente_editado", agente=agente_id, campos=list(patch.keys()), by=admin.get("email"))
-    return {"ok": True, "agente": {k: v for k, v in actualizado.items() if k != "password_hash"}}
+        raise HTTPException(status_code=404, detail="No existe esa persona")
+    logger.info("admin.usuario_editado", usuario=usuario_id, campos=list(patch.keys()), by=admin.get("email"))
+    return {"ok": True, "usuario": {k: v for k, v in actualizado.items() if k != "password_hash"}}
+
+
+@router.put("/admin/roles/{slug}")
+def guardar_rol(slug: str, body: RolBody, admin: dict = Depends(require_permiso("equipo")),
+                repo: Repo = Depends(get_repo)) -> dict:
+    """Crea o cambia un rol. Los permisos se validan contra el catálogo del
+    código: un permiso inventado no lo mira ningún endpoint, y un tilde que no
+    hace nada es peor que no tener el tilde."""
+    slug = re.sub(r"[^a-z0-9-]", "", (slug or "").strip().lower())[:32]
+    if not slug:
+        raise HTTPException(status_code=400, detail="Poné un nombre corto para el rol")
+    permisos = [p for p in body.permisos if p in TODOS or p == TODO_PERMISO]
+    fila = {"slug": slug, "nombre": body.nombre.strip() or slug,
+            "descripcion": (body.descripcion or "").strip() or None, "permisos": permisos}
+    # Un rol del sistema no cambia de nombre ni se le saca la marca.
+    existente = next((r for r in (repo.list_roles() or []) if r["slug"] == slug), None)
+    if existente and existente.get("del_sistema"):
+        fila["del_sistema"] = True
+    guardado = repo.upsert_rol(fila)
+    logger.info("admin.rol_guardado", rol=slug, permisos=permisos, by=admin.get("email"))
+    return {"ok": True, "rol": guardado}
+
+
+@router.delete("/admin/roles/{slug}")
+def borrar_rol(slug: str, admin: dict = Depends(require_permiso("equipo")), repo: Repo = Depends(get_repo)) -> dict:
+    rol = next((r for r in (repo.list_roles() or []) if r["slug"] == slug), None)
+    if rol and rol.get("del_sistema"):
+        raise HTTPException(status_code=400, detail="Ese rol es del sistema: no se borra")
+    repo.borrar_rol(slug)
+    logger.info("admin.rol_borrado", rol=slug, by=admin.get("email"))
+    return {"ok": True}
 
 
 # ── La base de compradores: importar el Excel y ver de dónde vienen ───────────
@@ -366,7 +418,7 @@ class ImportarContactosBody(BaseModel):
 @router.post("/admin/contactos/importar")
 def importar_contactos(
     body: ImportarContactosBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("datos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """El Excel de compradores, ya leído por el panel (fila por fila, con
@@ -381,7 +433,7 @@ def importar_contactos(
 
 
 @router.get("/admin/contactos/resumen")
-def resumen_contactos(_admin: dict = Depends(require_admin), repo: Repo = Depends(get_repo)) -> dict:
+def resumen_contactos(_admin: dict = Depends(require_permiso("datos")), repo: Repo = Depends(get_repo)) -> dict:
     """Conteos por grupo y por ciudad, y cuántos ya usan URUKU. Nunca la
     lista de números."""
     return repo.resumen_contactos_base()
@@ -400,7 +452,7 @@ class LugarAdminBody(BaseModel):
 @router.get("/admin/lugares")
 def admin_list_lugares(
     ciudad_slug: str = Query(default="bermejo"),
-    _mod: dict = Depends(require_moderador),
+    _mod: dict = Depends(require_permiso("lugares")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     ciudad_id = repo.get_ciudad_id(ciudad_slug) or repo.get_ciudad_id("bermejo")
@@ -410,7 +462,7 @@ def admin_list_lugares(
 @router.post("/admin/lugares")
 def admin_crear_lugar(
     body: LugarAdminBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("lugares")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     nombre = (body.nombre or "").strip()
@@ -426,7 +478,7 @@ def admin_crear_lugar(
 def admin_update_lugar(
     lugar_id: str,
     body: LugarAdminBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("lugares")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     patch: dict = {}
@@ -448,7 +500,7 @@ def admin_update_lugar(
 @router.delete("/admin/lugares/{lugar_id}")
 def admin_delete_lugar(
     lugar_id: str,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("lugares")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     repo.update_lugar(lugar_id, {"activo": False})
@@ -467,7 +519,7 @@ class PagoBody(BaseModel):
 
 @router.get("/admin/suscripciones")
 def listar_suscripciones(
-    _admin: dict = Depends(require_admin),
+    _admin: dict = Depends(require_permiso("pagos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Lista todos los comercios con su estado de suscripción."""
@@ -477,7 +529,7 @@ def listar_suscripciones(
 
 @router.get("/admin/estadisticas")
 def estadisticas(
-    _admin: dict = Depends(require_admin),
+    _admin: dict = Depends(require_permiso("datos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Monitoreo: usuarios nuevos, alertas de baja, ofertas y contactos."""
@@ -485,7 +537,7 @@ def estadisticas(
 
 
 @router.get("/admin/kpis")
-def kpis(_admin: dict = Depends(require_admin), repo: Repo = Depends(get_repo)) -> dict:
+def kpis(_admin: dict = Depends(require_permiso("datos")), repo: Repo = Depends(get_repo)) -> dict:
     """KPIs del sitio: búsquedas top, búsquedas sin resultado, locales más
     visitados/contactados y resumen de monetización."""
     return repo.kpis_admin()
@@ -498,7 +550,7 @@ class ResponderReclamoBody(BaseModel):
 @router.get("/admin/reclamos")
 def listar_reclamos(
     estado: str | None = Query(default=None),
-    _admin: dict = Depends(require_admin),
+    _admin: dict = Depends(require_permiso("panel")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     items = repo.list_reclamos(estado)
@@ -509,7 +561,7 @@ def listar_reclamos(
 def responder_reclamo(
     reclamo_id: str,
     body: ResponderReclamoBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("panel")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     updated = repo.responder_reclamo(reclamo_id, body.respuesta, admin["email"])
@@ -523,7 +575,7 @@ def responder_reclamo(
 
 @router.get("/admin/reservalo/resumen")
 def reservalo_resumen(
-    _admin: dict = Depends(require_admin),
+    _admin: dict = Depends(require_permiso("panel")),
     cliente: ReservaloSyncClient = Depends(get_reservalo_sync_client),
 ) -> dict:
     return cliente.resumen() or {}
@@ -532,7 +584,7 @@ def reservalo_resumen(
 @router.get("/admin/reservalo/consultas")
 def reservalo_consultas(
     estado: str | None = Query(default=None),
-    _admin: dict = Depends(require_admin),
+    _admin: dict = Depends(require_permiso("panel")),
     cliente: ReservaloSyncClient = Depends(get_reservalo_sync_client),
 ) -> dict:
     items = cliente.list_consultas(estado)
@@ -547,7 +599,7 @@ class ResponderConsultaReservaloBody(BaseModel):
 def reservalo_responder_consulta(
     consulta_id: int,
     body: ResponderConsultaReservaloBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("panel")),
     cliente: ReservaloSyncClient = Depends(get_reservalo_sync_client),
 ) -> dict:
     try:
@@ -605,7 +657,7 @@ def _asegurar_login(repo: Repo, comercio_id: str | None) -> bool:
 def registrar_pago(
     comercio_id: str,
     body: PagoBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("pagos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Registra un pago y extiende paga_hasta. Reactiva si estaba suspendido."""
@@ -629,7 +681,7 @@ def registrar_pago(
 @router.post("/admin/comercio/{comercio_id}/suspender")
 def suspender_comercio(
     comercio_id: str,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("pagos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Suspende un comercio (oculta de búsquedas)."""
@@ -641,7 +693,7 @@ def suspender_comercio(
 @router.post("/admin/comercio/{comercio_id}/activar")
 def activar_comercio(
     comercio_id: str,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("pagos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Reactiva un comercio suspendido."""
@@ -657,7 +709,7 @@ class ConfirmarPagoBody(BaseModel):
 
 @router.get("/admin/pagos/pendientes")
 def listar_pagos_pendientes(
-    _admin: dict = Depends(require_admin),
+    _admin: dict = Depends(require_permiso("pagos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Pagos QR que los comercios subieron y esperan confirmación."""
@@ -669,7 +721,7 @@ def listar_pagos_pendientes(
 def confirmar_pago(
     pago_id: str,
     body: ConfirmarPagoBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("pagos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Confirma un pago pendiente: lo marca confirmado y extiende paga_hasta."""
@@ -692,7 +744,7 @@ class MensajeAdminBody(BaseModel):
 def enviar_mensaje_comercio(
     comercio_id: str,
     body: MensajeAdminBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """El admin le envía un mensaje/notificación al comercio (aparece en su bandeja)."""
@@ -711,7 +763,7 @@ def enviar_mensaje_comercio(
 @router.get("/admin/solicitudes-cambio-numero")
 def listar_solicitudes_cambio_numero(
     estado: str | None = Query(default="pendiente"),
-    _admin: dict = Depends(require_admin),
+    _admin: dict = Depends(require_permiso("panel")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     items = repo.list_solicitudes_cambio_numero(estado)
@@ -721,7 +773,7 @@ def listar_solicitudes_cambio_numero(
 @router.post("/admin/solicitudes-cambio-numero/{solicitud_id}/aprobar")
 def aprobar_solicitud_cambio_numero(
     solicitud_id: str,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("panel")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Actualiza el WhatsApp del comercio al número nuevo. Siempre manual."""
@@ -735,7 +787,7 @@ def aprobar_solicitud_cambio_numero(
 @router.post("/admin/solicitudes-cambio-numero/{solicitud_id}/rechazar")
 def rechazar_solicitud_cambio_numero(
     solicitud_id: str,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("panel")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     updated = repo.rechazar_solicitud_cambio_numero(solicitud_id, admin["email"])
@@ -754,7 +806,7 @@ class ConfiableBody(BaseModel):
 def set_confiable(
     comercio_id: str,
     body: ConfiableBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Marca (o desmarca) un comercio como confiable.
@@ -777,7 +829,7 @@ class NumeroBody(BaseModel):
 @router.get("/admin/comercio/{comercio_id}/numeros")
 def listar_numeros(
     comercio_id: str,
-    _admin: dict = Depends(require_admin),
+    _admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     items = repo.list_numeros_comercio(comercio_id)
@@ -788,7 +840,7 @@ def listar_numeros(
 def agregar_numero(
     comercio_id: str,
     body: NumeroBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Autoriza un número a publicar en nombre del comercio.
@@ -818,7 +870,7 @@ class GrupoBody(BaseModel):
 @router.get("/admin/comercio/{comercio_id}/grupos")
 def listar_grupos(
     comercio_id: str,
-    _admin: dict = Depends(require_admin),
+    _admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     items = repo.list_grupos_comercio(comercio_id)
@@ -833,7 +885,7 @@ def listar_grupos(
 def atar_grupo(
     comercio_id: str,
     body: GrupoBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Ata un grupo a mano, para cuando no se puede usar el código.
@@ -867,7 +919,7 @@ def atar_grupo(
 def soltar_grupo(
     comercio_id: str,
     grupo_jid: str,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Suelta el grupo. Las publicaciones que ya entraron por ahí quedan: son
@@ -894,7 +946,7 @@ def listar_importados(
     ciudad_id: str | None = None,
     q: str | None = None,
     limite: int = 200,
-    _admin: dict = Depends(require_admin),
+    _admin: dict = Depends(require_permiso("panel")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     items = repo.list_importados(estado or None, ciudad_id, q, min(limite, 500))
@@ -905,7 +957,7 @@ def listar_importados(
 def promover_importado(
     importado_id: str,
     body: PromoverBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("panel")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Crea el comercio de URUKU a partir del importado.
@@ -963,7 +1015,7 @@ def promover_importado(
 def descartar_importado(
     importado_id: str,
     motivo: str = "",
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("panel")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Descarta sin borrar: la fila queda para que la próxima importación no lo
@@ -985,7 +1037,7 @@ def _ahora() -> str:
 @router.post("/admin/comercio/{comercio_id}/grupo")
 def crear_grupo_comercio(
     comercio_id: str,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Arma el grupo de WhatsApp del comercio y lo deja atado.
@@ -1071,7 +1123,7 @@ def listar_rubros_comercio(
 def editar_rubros_comercio(
     comercio_id: str,
     body: RubrosBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Deja el comercio con EXACTAMENTE estos rubros.
@@ -1104,7 +1156,7 @@ def editar_rubros_comercio(
 # ---- Bajas del mapa: disparo manual ----
 @router.post("/admin/bajas/ejecutar")
 def ejecutar_bajas(
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("panel")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Corre la baja de comercios vencidos ahora mismo.
@@ -1125,7 +1177,7 @@ def ejecutar_bajas(
 def reclasificar_rubros(
     aplicar: bool = Query(False, description="false = previsualizar; true = escribir"),
     limite: int = Query(500, ge=1, le=2000),
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("rubros")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Deduce los rubros de los comercios ya cargados, desde nombre + productos +
@@ -1247,7 +1299,7 @@ def admin_borrar_foto(
 async def analizar_comercio(
     comercio_id: str,
     aplicar: bool = Query(False, description="false = sólo proponer; true = escribir"),
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Mira las fotos del local y propone productos, descripción, subcategoría y rubros.
@@ -1320,7 +1372,7 @@ async def analizar_comercio(
 # ---- Análisis por fotos en tanda ----
 @router.get("/admin/comercios/pendientes-analisis")
 def pendientes_analisis(
-    _admin: dict = Depends(require_admin),
+    _admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     return {"pendientes": repo.contar_sin_analizar()}
@@ -1330,7 +1382,7 @@ def pendientes_analisis(
 async def analizar_tanda(
     limite: int = Query(5, ge=1, le=20),
     aplicar: bool = Query(True),
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Analiza un puñado de comercios pendientes y devuelve el avance.
@@ -1436,7 +1488,7 @@ def admin_list_adornos(
 @router.post("/admin/adornos")
 def admin_crear_adorno(
     body: AdornoBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("panel")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     tipo = (body.tipo or "").strip()
@@ -1462,7 +1514,7 @@ def admin_crear_adorno(
 def admin_update_adorno(
     adorno_id: str,
     body: AdornoBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("panel")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     patch: dict = {}
@@ -1482,7 +1534,7 @@ def admin_update_adorno(
 @router.delete("/admin/adornos/{adorno_id}")
 def admin_delete_adorno(
     adorno_id: str,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("panel")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     # Baja lógica, igual que los lugares: un adorno borrado por error se
@@ -1542,7 +1594,7 @@ class OptimizarFotosBody(BaseModel):
 @router.post("/admin/fotos/optimizar")
 async def admin_fotos_optimizar(
     body: OptimizarFotosBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("panel")),
 ) -> dict:
     """Recomprime las imágenes que pasan `max_kb`. Irreversible.
 
@@ -1612,7 +1664,7 @@ async def admin_vencimientos(
 @router.post("/admin/vencimientos")
 def admin_crear_vencimiento(
     body: VencimientoBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("pagos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     if not (body.nombre or "").strip():
@@ -1629,7 +1681,7 @@ def admin_crear_vencimiento(
 def admin_editar_vencimiento(
     vid: str,
     body: VencimientoBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("pagos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     if body.tipo and body.tipo not in _TIPOS_VENC:
@@ -1646,7 +1698,7 @@ def admin_editar_vencimiento(
 @router.delete("/admin/vencimientos/{vid}")
 def admin_borrar_vencimiento(
     vid: str,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("pagos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     repo.borrar_vencimiento(vid)
@@ -1694,7 +1746,7 @@ _RE_SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 @router.post("/admin/rubros")
 def admin_crear_rubro(
     body: RubroNuevoBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("rubros")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     if not _RE_SLUG.match(body.slug):
@@ -1728,7 +1780,7 @@ class SinonimoBody(BaseModel):
 @router.post("/admin/rubros/palabras")
 def admin_agregar_palabras(
     body: SinonimoBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("rubros")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     if not any(r["slug"] == body.rubro_slug for r in repo.list_rubros()):
@@ -1763,7 +1815,7 @@ def _patron_de(palabras: str) -> str:
 async def admin_completar_rubros(
     aplicar: bool = Query(default=False),
     rubros: str = Query(default=""),
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("rubros")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Simula —o aplica— los rubros que los productos de cada comercio sugieren.
@@ -1857,7 +1909,7 @@ def admin_pubs_pendientes_analisis(
 async def admin_analizar_ofertas(
     limite: int = Query(default=3, ge=1, le=10),
     aplicar: bool = Query(default=True),
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("panel")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Lee las fotos de las ofertas: qué son, con qué palabras se buscan y el
@@ -1987,7 +2039,7 @@ async def admin_wa_entrantes(
 async def admin_recalcular_principal(
     aplicar: bool = Query(default=False),
     modo: str = Query(default="principal"),
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("rubros")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Recalcula los rubros de los que no cierran. Dos modos, y la diferencia
@@ -2196,7 +2248,7 @@ async def admin_rubros_revision(
 async def admin_revisar_rubro(
     comercio_id: str,
     body: RevisionRubroBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("rubros")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Guarda el veredicto y, si hubo corrección, la aplica.
@@ -2261,7 +2313,7 @@ async def admin_revisar_rubro(
 @router.post("/admin/rubros/aplicar-patron")
 async def admin_aplicar_patron(
     body: AplicarPatronBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("rubros")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Le agrega el rubro a los comercios que esta palabra alcanza, ahora.
@@ -2316,7 +2368,7 @@ class AgregarAGruposBody(BaseModel):
 @router.post("/admin/whatsapp/grupos/agregar-numero")
 async def admin_agregar_numero_a_grupos(
     body: AgregarAGruposBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("whatsapp")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Suma un número de URUKU a los grupos de comercios que YA existen.
@@ -2442,7 +2494,7 @@ async def admin_difusion(
 @router.post("/admin/difusion/enviar")
 async def admin_difusion_enviar(
     limite: int = Query(default=10, ge=1, le=50),
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("difusion")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Manda lo que está esperando, sin filtrar por automático.
@@ -2458,7 +2510,7 @@ async def admin_difusion_enviar(
 @router.post("/admin/difusion/{fila_id}/reintentar")
 async def admin_difusion_reintentar(
     fila_id: str,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("difusion")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Vuelve a intentar UNA fila que falló."""
@@ -2504,7 +2556,7 @@ async def admin_planes(
 async def admin_editar_plan(
     slug: str,
     body: PlanBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("planes")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Cambia un plan, o crea uno nuevo.
@@ -2589,7 +2641,7 @@ class PruebaCloudBody(BaseModel):
 @router.post("/admin/whatsapp/cloud/prueba")
 async def admin_cloud_prueba(
     body: PruebaCloudBody,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("whatsapp")),
 ) -> dict:
     """Manda un mensaje de prueba por la API oficial, a un número tuyo.
 
@@ -2627,7 +2679,7 @@ async def admin_cloud_prueba(
 @router.post("/admin/whatsapp/entrantes/{wa_message_id}/reprocesar")
 async def admin_wa_reprocesar(
     wa_message_id: str,
-    admin: dict = Depends(require_admin),
+    admin: dict = Depends(require_permiso("whatsapp")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Vuelve a pasar por la ingesta un mensaje que quedó "sin registrar".

@@ -67,7 +67,7 @@ El sitio ya separa lo de cada ciudad. Para abrir una:
 1. **`ciudades`**: `activa = true`. Si es frontera, cargar también
    `pais_vecino`, `moneda_vecina` (ARS | BRL | PEN), `paso_nombre` y, cuando
    tenga foto, `hero_url`.
-2. **Crear los agentes** de esa ciudad en **Admin › Agentes**: correo,
+2. **Crear los agentes** de esa ciudad en **Admin › Equipo**: correo,
    contraseña y ciudad. El panel te arma el mensaje para mandarle por
    WhatsApp (uruku.bo/publicar + usuario + contraseña). La contraseña no se
    puede volver a ver: si se pierde, se pone una nueva desde ahí.
@@ -85,6 +85,28 @@ El sitio ya separa lo de cada ciudad. Para abrir una:
 - [ ] Pendiente: **cargar las cotizaciones del real y el sol** (`brl_bob`,
   `pen_bob`, creadas vacías por la 0124) el día que se abra Cobija, Puerto
   Quijarro o Desaguadero.
+
+## 0.c Equipo, roles y permisos (23/9/2026)
+
+Quién entra y qué puede hacer se maneja en **Admin › Equipo**:
+
+- **Personas**: correo, contraseña y uno o más roles. El panel arma el
+  mensaje para mandar por WhatsApp. La contraseña queda cifrada y no se
+  puede volver a ver: si se pierde, se pone una nueva.
+- **Roles y permisos**: los cuatro del sistema (Administrador, Moderador,
+  Publicador, Agente) no se borran, pero se les cambian los permisos; y se
+  pueden crear los que hagan falta («Cargador de Santa Cruz»).
+- El **catálogo de permisos** lo define el código (`app/core/permisos.py`):
+  un permiso nuevo es una línea ahí más la guardia del endpoint. Un tilde que
+  no corresponde a ningún endpoint sería mentira, por eso no se inventan
+  desde el panel.
+
+- [ ] **Crear tu cuenta de admin en la tabla** y, cuando haya al menos dos
+  personas con el rol Administrador, **vaciar `ADMIN_PASSWORD` del `.env`**:
+  hoy esa clave está en texto plano en el servidor y es compartida. Queda
+  como llave de emergencia mientras tanto.
+- [ ] Repartir el permiso `panel`: quedan 17 endpoints sin permiso propio
+  (el cajón «el resto del panel»). No urge; se van separando de a poco.
 
 ## 1. Los teléfonos (manual operativo, sección 2)
 

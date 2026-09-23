@@ -87,11 +87,14 @@ class Repo(Protocol):
     def get_rubro_nombre(self, slug: str) -> str | None: ...
     def get_ciudad_por_id(self, ciudad_id: str | None) -> dict | None: ...
     def list_ciudades(self) -> list[dict]: ...
-    # Agentes de campo (0125)
-    def get_agente(self, email: str) -> dict | None: ...
-    def list_agentes(self) -> list[dict]: ...
-    def crear_agente(self, row: dict) -> dict: ...
-    def update_agente(self, agente_id: str, patch: dict) -> dict | None: ...
+    # El equipo y sus roles (0126)
+    def get_usuario_panel(self, email: str) -> dict | None: ...
+    def list_usuarios_panel(self) -> list[dict]: ...
+    def crear_usuario_panel(self, row: dict, roles: list[str]) -> dict: ...
+    def update_usuario_panel(self, usuario_id: str, patch: dict, roles: list[str] | None) -> dict | None: ...
+    def list_roles(self) -> list[dict]: ...
+    def upsert_rol(self, row: dict) -> dict: ...
+    def borrar_rol(self, slug: str) -> None: ...
     def get_ciudad_id(self, slug: str) -> str | None: ...
     def get_ciudad(self, slug: str) -> dict | None: ...
     def ciudad_mas_cercana(self, lat: float, lng: float) -> dict | None: ...
@@ -830,26 +833,72 @@ class SupabaseRepo:
         res = self._db.table("ciudades").select("*").eq("id", ciudad_id).limit(1).execute()
         return res.data[0] if res.data else None
 
-    # ── agentes de campo ─────────────────────────────────────────────────────
+    # ── el equipo y sus roles (0126) ─────────────────────────────────────────
 
-    def get_agente(self, email: str) -> dict | None:
-        res = (self._db.table("agentes").select("*")
+    def _roles_de(self, usuario_ids: list[str]) -> dict[str, list[str]]:
+        if not usuario_ids:
+            return {}
+        res = self._db.table("usuario_roles").select("usuario_id, rol_slug").in_("usuario_id", usuario_ids).execute()
+        salida: dict[str, list[str]] = {}
+        for r in res.data or []:
+            salida.setdefault(r["usuario_id"], []).append(r["rol_slug"])
+        return salida
+
+    def get_usuario_panel(self, email: str) -> dict | None:
+        """Quién es, con sus roles. Para el ingreso: incluye el hash."""
+        res = (self._db.table("usuarios_panel").select("*")
                .eq("email", (email or "").strip().lower()).eq("activo", True).limit(1).execute())
-        return res.data[0] if res.data else None
+        if not res.data:
+            return None
+        u = res.data[0]
+        u["roles"] = self._roles_de([u["id"]]).get(u["id"], [])
+        return u
 
-    def list_agentes(self) -> list[dict]:
-        """Sin el hash de la contraseña: este listado va al panel."""
-        res = (self._db.table("agentes").select("id, email, nombre, ciudad_id, activo, created_at, ultimo_acceso")
+    def list_usuarios_panel(self) -> list[dict]:
+        """El equipo, sin contraseñas: este listado va al panel."""
+        res = (self._db.table("usuarios_panel")
+               .select("id, email, nombre, ciudad_id, activo, created_at, ultimo_acceso, creado_por")
                .order("created_at").execute())
+        filas = res.data or []
+        roles = self._roles_de([f["id"] for f in filas])
+        return [{**f, "roles": roles.get(f["id"], [])} for f in filas]
+
+    def _set_roles(self, usuario_id: str, roles: list[str]) -> None:
+        self._db.table("usuario_roles").delete().eq("usuario_id", usuario_id).execute()
+        filas = [{"usuario_id": usuario_id, "rol_slug": r} for r in dict.fromkeys(roles) if r]
+        if filas:
+            self._db.table("usuario_roles").insert(filas).execute()
+
+    def crear_usuario_panel(self, row: dict, roles: list[str]) -> dict:
+        res = self._db.table("usuarios_panel").insert(row).execute()
+        creado = (res.data or [row])[0]
+        self._set_roles(creado["id"], roles)
+        return {**creado, "roles": roles}
+
+    def update_usuario_panel(self, usuario_id: str, patch: dict, roles: list[str] | None) -> dict | None:
+        if patch:
+            res = self._db.table("usuarios_panel").update(patch).eq("id", usuario_id).execute()
+            fila = res.data[0] if res.data else None
+        else:
+            res = self._db.table("usuarios_panel").select("*").eq("id", usuario_id).limit(1).execute()
+            fila = res.data[0] if res.data else None
+        if not fila:
+            return None
+        if roles is not None:
+            self._set_roles(usuario_id, roles)
+        fila["roles"] = roles if roles is not None else self._roles_de([usuario_id]).get(usuario_id, [])
+        return fila
+
+    def list_roles(self) -> list[dict]:
+        res = self._db.table("roles").select("*").order("slug").execute()
         return res.data or []
 
-    def crear_agente(self, row: dict) -> dict:
-        res = self._db.table("agentes").insert(row).execute()
+    def upsert_rol(self, row: dict) -> dict:
+        res = self._db.table("roles").upsert(row, on_conflict="slug").execute()
         return (res.data or [row])[0]
 
-    def update_agente(self, agente_id: str, patch: dict) -> dict | None:
-        res = self._db.table("agentes").update(patch).eq("id", agente_id).execute()
-        return res.data[0] if res.data else None
+    def borrar_rol(self, slug: str) -> None:
+        self._db.table("roles").delete().eq("slug", slug).eq("del_sistema", False).execute()
 
     def get_ciudad_id(self, slug: str) -> str | None:
         res = self._db.table("ciudades").select("id").eq("slug", slug).limit(1).execute()

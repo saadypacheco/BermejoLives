@@ -117,7 +117,7 @@ def _etiquetas(lista: list[str]) -> list[str]:
 
 @router.get("/admin/asistente/conversaciones")
 def admin_conversaciones(filtro: str = "sin_respuesta", limite: int = 100,
-                         _: dict = Depends(auth.require_admin), repo: Repo = Depends(get_repo)) -> dict:
+                         _: dict = Depends(auth.require_permiso("ayuda")), repo: Repo = Depends(get_repo)) -> dict:
     if filtro not in ("sin_respuesta", "todas"):
         filtro = "sin_respuesta"
     return {"items": repo.list_conversaciones(filtro, limite)}
@@ -125,7 +125,7 @@ def admin_conversaciones(filtro: str = "sin_respuesta", limite: int = 100,
 
 @router.post("/admin/asistente/conversaciones/{conversacion_id}/responder")
 def admin_responder(conversacion_id: str, body: ResponderIn,
-                    admin: dict = Depends(auth.require_admin), repo: Repo = Depends(get_repo)) -> dict:
+                    admin: dict = Depends(auth.require_permiso("ayuda")), repo: Repo = Depends(get_repo)) -> dict:
     conv = next((c for c in repo.list_conversaciones("todas", 500) if c["id"] == conversacion_id), None)
     if not conv:
         raise HTTPException(status_code=404, detail="No existe esa pregunta")
@@ -143,12 +143,12 @@ def admin_responder(conversacion_id: str, body: ResponderIn,
 
 
 @router.get("/admin/asistente/saber")
-def admin_saber(_: dict = Depends(auth.require_admin), repo: Repo = Depends(get_repo)) -> dict:
+def admin_saber(_: dict = Depends(auth.require_permiso("ayuda")), repo: Repo = Depends(get_repo)) -> dict:
     return {"items": repo.list_saber_local(False)}
 
 
 @router.post("/admin/asistente/saber")
-def admin_saber_guardar(body: SaberIn, admin: dict = Depends(auth.require_admin),
+def admin_saber_guardar(body: SaberIn, admin: dict = Depends(auth.require_permiso("ayuda")),
                         repo: Repo = Depends(get_repo)) -> dict:
     row = {"pregunta": body.pregunta.strip(), "respuesta": body.respuesta.strip(),
            "etiquetas": _etiquetas(body.etiquetas), "activo": body.activo,
@@ -161,7 +161,7 @@ def admin_saber_guardar(body: SaberIn, admin: dict = Depends(auth.require_admin)
 
 
 @router.delete("/admin/asistente/saber/{saber_id}")
-def admin_saber_borrar(saber_id: str, _: dict = Depends(auth.require_admin),
+def admin_saber_borrar(saber_id: str, _: dict = Depends(auth.require_permiso("ayuda")),
                        repo: Repo = Depends(get_repo)) -> dict:
     repo.borrar_saber_local(saber_id)
     return {"ok": True}

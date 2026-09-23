@@ -42,7 +42,8 @@ import { DemandaPanel } from "@/components/demanda-panel";
 import { AsistentePanel } from "@/components/asistente-panel";
 import { PlanesPanel } from "@/components/planes-panel";
 import { ContactosPanel } from "@/components/contactos-panel";
-import { AgentesPanel } from "@/components/agentes-panel";
+import { EquipoPanel } from "@/components/equipo-panel";
+import { puedo } from "@/lib/api";
 import { RubroRecalcular } from "@/components/rubro-recalcular";
 import { CatalogoPanel } from "@/components/catalogo-panel";
 import { ImageLightbox } from "@/components/image-lightbox";
@@ -56,7 +57,7 @@ export default function AdminPage() {
   const [email, setEmail] = useState("admin@bermejolive.com");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"publicaciones" | "comercios" | "lugares" | "adornos" | "catalogo" | "importados" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero" | "vencimientos" | "rubros" | "revision-rubros" | "whatsapp" | "difusion" | "demanda" | "ayuda" | "planes" | "compradores" | "agentes">("comercios");
+  const [tab, setTab] = useState<"publicaciones" | "comercios" | "lugares" | "adornos" | "catalogo" | "importados" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero" | "vencimientos" | "rubros" | "revision-rubros" | "whatsapp" | "difusion" | "demanda" | "ayuda" | "planes" | "compradores" | "equipo">("comercios");
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [items, setItems] = useState<PendingPub[]>([]);
   const [comercios, setComercios] = useState<ComercioPorVerificar[]>([]);
@@ -280,47 +281,73 @@ export default function AdminPage() {
           Negocios <span className="badge">{todosLosComercios.length}</span>
           {comercios.length > 0 && <span className="badge alerta">{comercios.length} pend.</span>}
         </button>
+        {puedo("lugares") && (
         <button className={tab === "lugares" ? "active" : ""} onClick={() => setTab("lugares")}>
           Lugares
         </button>
+        )}
+        {puedo("datos") && (
         <button className={tab === "catalogo" ? "active" : ""} onClick={() => setTab("catalogo")}>
           Catálogo
         </button>
+        )}
         {/* Al lado de Catálogo: Catálogo dice QUÉ hay, Rubros dice qué falta y
             deja arreglarlo. Antes esto se hacía por SSH. */}
+        {puedo("rubros") && (
         <button className={tab === "rubros" ? "active" : ""} onClick={() => setTab("rubros")}>
           Rubros
         </button>
+        )}
+        {puedo("rubros") && (
         <button className={tab === "revision-rubros" ? "active" : ""} onClick={() => setTab("revision-rubros")}>
           Revisar rubros
         </button>
+        )}
+        {puedo("whatsapp") && (
         <button className={tab === "whatsapp" ? "active" : ""} onClick={() => setTab("whatsapp")}>
           Recepción
         </button>
+        )}
+        {puedo("difusion") && (
         <button className={tab === "difusion" ? "active" : ""} onClick={() => setTab("difusion")}>
           Difusión
         </button>
+        )}
+        {puedo("datos") && (
         <button className={tab === "demanda" ? "active" : ""} onClick={() => setTab("demanda")}>
           Demanda
         </button>
+        )}
+        {puedo("ayuda") && (
         <button className={tab === "ayuda" ? "active" : ""} onClick={() => setTab("ayuda")}>
           Ayuda
         </button>
-        <button className={tab === "agentes" ? "active" : ""} onClick={() => setTab("agentes")}>
-          Agentes
-        </button>
+        )}
+        {puedo("equipo") && (
+          <button className={tab === "equipo" ? "active" : ""} onClick={() => setTab("equipo")}>
+            Equipo
+          </button>
+        )}
+        {puedo("datos") && (
         <button className={tab === "compradores" ? "active" : ""} onClick={() => setTab("compradores")}>
           Compradores
         </button>
+        )}
+        {puedo("planes") && (
         <button className={tab === "planes" ? "active" : ""} onClick={() => setTab("planes")}>
           Planes
         </button>
+        )}
+        {puedo("datos") && (
         <button className={tab === "importados" ? "active" : ""} onClick={() => setTab("importados")}>
           Importados
         </button>
+        )}
+        {puedo("lugares") && (
         <button className={tab === "adornos" ? "active" : ""} onClick={() => setTab("adornos")}>
           Adornos
         </button>
+        )}
         <button className={tab === "publicaciones" ? "active" : ""} onClick={() => setTab("publicaciones")}>
           Publicaciones {items.length > 0 && <span className="badge">{items.length}</span>}
         </button>
@@ -367,7 +394,7 @@ export default function AdminPage() {
       {tab === "ayuda" && <AsistentePanel />}
       {tab === "planes" && <PlanesPanel />}
       {tab === "compradores" && <ContactosPanel />}
-      {tab === "agentes" && <AgentesPanel />}
+      {tab === "equipo" && <EquipoPanel />}
       {tab === "importados" && <ImportadosPanel rubros={rubros} />}
 
       {tab === "comercios" && (

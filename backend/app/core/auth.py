@@ -13,6 +13,7 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
+from app.core.permisos import permisos_de_roles, tiene as tiene_permiso
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -32,23 +33,23 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
-def make_token(email: str, rol: str = "moderador") -> str:
+def make_token(email: str, rol: str = "moderador", roles: list[str] | None = None,
+               permisos: list[str] | None = None, ciudad_slug: str | None = None,
+               nombre: str | None = None) -> str:
+    """El token de alguien del equipo.
+
+    Lleva los PERMISOS ya resueltos, no sólo el rol: así cada endpoint
+    pregunta «¿puede hacer esto?» en vez de «¿es admin?», y un rol nuevo
+    creado desde el panel funciona sin tocar código. `rol` sigue viajando
+    para lo que todavía lo mire y para los tokens que ya están dando vuelta.
+    """
+    roles = roles or [rol]
     payload = {
         "sub": email,
         "email": email,
-        "rol": rol,
-        "exp": int(time.time()) + settings.jwt_ttl_hours * 3600,
-    }
-    return pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256")
-
-
-def make_agente_token(email: str, ciudad_slug: str | None = None, nombre: str | None = None) -> str:
-    """El token del agente de campo. Lleva SU ciudad: lo que carga nace ahí,
-    sin que tenga que elegirla en el formulario (0125)."""
-    payload = {
-        "sub": email,
-        "email": email,
-        "rol": "agente",
+        "rol": roles[0] if roles else rol,
+        "roles": roles,
+        "permisos": permisos if permisos is not None else permisos_de_roles(roles),
         "exp": int(time.time()) + settings.jwt_ttl_hours * 3600,
     }
     if ciudad_slug:
@@ -56,6 +57,12 @@ def make_agente_token(email: str, ciudad_slug: str | None = None, nombre: str | 
     if nombre:
         payload["nombre"] = nombre
     return pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+
+
+def make_agente_token(email: str, ciudad_slug: str | None = None, nombre: str | None = None) -> str:
+    """El token del agente de campo. Lleva SU ciudad: lo que carga nace ahí,
+    sin que tenga que elegirla en el formulario (0125)."""
+    return make_token(email, "agente", ciudad_slug=ciudad_slug, nombre=nombre)
 
 
 def make_publicador_token(email: str) -> str:
@@ -95,57 +102,50 @@ def _decode(token: str) -> dict:
     return pyjwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
 
 
-def require_admin(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
-    """Exige Bearer válido de un moderador/admin."""
+def _claims(creds: HTTPAuthorizationCredentials | None) -> dict:
     if not creds:
         raise HTTPException(status_code=401, detail="No autenticado")
     try:
-        claims = _decode(creds.credentials)
+        return _decode(creds.credentials)
     except Exception as exc:
         raise HTTPException(status_code=401, detail="Token inválido o expirado") from exc
-    if claims.get("rol") not in {"admin", "moderador"}:
-        raise HTTPException(status_code=403, detail="Requiere rol de moderador")
+
+
+def _con_permiso(creds: HTTPAuthorizationCredentials | None, permiso: str) -> dict:
+    claims = _claims(creds)
+    if not tiene_permiso(claims, permiso):
+        raise HTTPException(status_code=403, detail="Tu cuenta no tiene permiso para esto")
     return claims
+
+
+def require_permiso(permiso: str):
+    """La guardia de un endpoint: «hace falta ESTE permiso».
+
+    Se usa así:  _: dict = Depends(require_permiso("pagos"))
+    Quién lo tiene lo decide el rol, y el rol se arma desde el panel."""
+    def dep(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
+        return _con_permiso(creds, permiso)
+    return dep
+
+
+def require_admin(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
+    """Cosas de administración. Hoy es el permiso `equipo`: crear usuarios, cambiar planes, ver la plata."""
+    return _con_permiso(creds, "equipo")
 
 
 def require_agente(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
-    """Exige Bearer de un agente de campo (o admin)."""
-    if not creds:
-        raise HTTPException(status_code=401, detail="No autenticado")
-    try:
-        claims = _decode(creds.credentials)
-    except Exception as exc:
-        raise HTTPException(status_code=401, detail="Token inválido o expirado") from exc
-    if claims.get("rol") not in {"agente", "admin"}:
-        raise HTTPException(status_code=403, detail="Requiere cuenta de agente de campo")
-    return claims
+    """La app de campo: cargar comercios desde la calle."""
+    return _con_permiso(creds, "comercios.cargar")
 
 
 def require_publicador(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
-    """Exige Bearer de un publicador de contenido del sitio (o admin)."""
-    if not creds:
-        raise HTTPException(status_code=401, detail="No autenticado")
-    try:
-        claims = _decode(creds.credentials)
-    except Exception as exc:
-        raise HTTPException(status_code=401, detail="Token inválido o expirado") from exc
-    if claims.get("rol") not in {"publicador", "admin", "moderador"}:
-        raise HTTPException(status_code=403, detail="Requiere cuenta de publicador")
-    return claims
+    """El contenido del sitio: cotización, frontera, videos, redes."""
+    return _con_permiso(creds, "contenido")
 
 
 def require_moderador(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
-    """Panel de moderación de contenido: admin, moderador o publicador.
-    Amplía el acceso de la cola de revisión al publicador (no solo admin)."""
-    if not creds:
-        raise HTTPException(status_code=401, detail="No autenticado")
-    try:
-        claims = _decode(creds.credentials)
-    except Exception as exc:
-        raise HTTPException(status_code=401, detail="Token inválido o expirado") from exc
-    if claims.get("rol") not in {"admin", "moderador", "publicador"}:
-        raise HTTPException(status_code=403, detail="Requiere rol de moderación")
-    return claims
+    """La cola de moderación y lo que la rodea."""
+    return _con_permiso(creds, "moderar")
 
 
 def require_comercio(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:

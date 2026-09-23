@@ -1182,29 +1182,57 @@ export type PlanAdmin = {
   descripcion: string | null; incluye: string[]; funciones: Record<string, boolean>; activo: boolean; visible: boolean;
 };
 
-// ---- Agentes de campo (Admin › Agentes) ----
-export type AgenteAdmin = {
-  id: string; email: string; nombre: string | null; activo: boolean;
+// ---- El equipo, los roles y los permisos (Admin › Equipo) ----
+export type UsuarioPanel = {
+  id: string; email: string; nombre: string | null; activo: boolean; roles: string[];
   ciudad_id: string | null; ciudad_slug?: string | null; ciudad_nombre?: string | null;
   created_at?: string; ultimo_acceso?: string | null;
 };
-export async function getAgentes(): Promise<AgenteAdmin[]> {
-  const res = await authFetch(`/admin/agentes`);
-  return (await res.json()).items;
+export type RolAdmin = { slug: string; nombre: string; descripcion: string | null; permisos: string[]; del_sistema?: boolean };
+export type EquipoData = {
+  usuarios: UsuarioPanel[];
+  roles: RolAdmin[];
+  /** El catálogo que el código sabe mirar: un permiso que no esté acá no lo
+   *  revisa ningún endpoint, así que no se puede tildar. */
+  permisos: { clave: string; que_hace: string; grupo: string }[];
+};
+export async function getEquipo(): Promise<EquipoData> {
+  const res = await authFetch(`/admin/equipo`);
+  return res.json();
 }
-export async function crearAgente(body: { email: string; password: string; nombre?: string; ciudad_slug?: string }): Promise<AgenteAdmin> {
-  const res = await authFetch(`/admin/agentes`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-  });
+export async function crearUsuarioPanel(body: { email: string; password: string; nombre?: string; ciudad_slug?: string; roles: string[] }): Promise<UsuarioPanel> {
+  const res = await authFetch(`/admin/equipo`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!res.ok) throw new Error((await res.json()).detail ?? "No se pudo crear");
-  return (await res.json()).agente;
+  return (await res.json()).usuario;
 }
-export async function editarAgente(id: string, body: { email: string; activo?: boolean; password?: string; nombre?: string; ciudad_slug?: string }): Promise<AgenteAdmin> {
-  const res = await authFetch(`/admin/agentes/${id}`, {
-    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-  });
+export async function editarUsuarioPanel(id: string, body: { email: string; activo?: boolean; password?: string; nombre?: string; ciudad_slug?: string; roles?: string[] }): Promise<UsuarioPanel> {
+  const res = await authFetch(`/admin/equipo/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!res.ok) throw new Error((await res.json()).detail ?? "No se pudo guardar");
-  return (await res.json()).agente;
+  return (await res.json()).usuario;
+}
+export async function guardarRol(slug: string, body: { slug: string; nombre: string; descripcion?: string; permisos: string[] }): Promise<RolAdmin> {
+  const res = await authFetch(`/admin/roles/${slug}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error((await res.json()).detail ?? "No se pudo guardar");
+  return (await res.json()).rol;
+}
+export async function borrarRol(slug: string): Promise<void> {
+  const res = await authFetch(`/admin/roles/${slug}`, { method: "DELETE" });
+  if (!res.ok) throw new Error((await res.json()).detail ?? "No se pudo borrar");
+}
+
+/** Los permisos de quien está usando el panel, sacados del token. El menú se
+ *  arma con esto: no tiene sentido mostrar una pestaña que va a dar 403. */
+export function misPermisos(): string[] {
+  const t = getToken();
+  if (!t) return [];
+  try {
+    const carga = JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return carga.permisos ?? (carga.rol === "admin" ? ["*"] : []);
+  } catch { return []; }
+}
+export function puedo(permiso: string): boolean {
+  const p = misPermisos();
+  return p.includes("*") || p.includes(permiso);
 }
 
 // ---- La base de compradores (Admin › Compradores) ----

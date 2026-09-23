@@ -124,7 +124,9 @@ class FakeRepo:
         self.conversaciones: list[dict] = []          # Uruku Ayuda
         self.frontera: dict = {"puente": "normal", "chalanas": "operando", "rio": "normal", "nota": None, "actualizado_en": None}
         self.fronteras: dict[str, dict] = {}     # una por ciudad (0124)
-        self.agentes: dict[str, dict] = {}       # agentes de campo (0125)
+        self.agentes: dict[str, dict] = {}       # el equipo (0126: usuarios_panel)
+        self.usuario_roles: dict[str, list] = {}
+        self.roles: dict[str, dict] = {}
         self.cotizaciones_historial: list[dict] = []
         self.videos_promo: list[dict] = []
         self.redes: list[dict] = [
@@ -1330,23 +1332,41 @@ class FakeRepo:
             slug = "bermejo"
         return {"id": ciudad_id, "slug": slug, "nombre": slug.replace("-", " ").title()}
 
-    def get_agente(self, email):
+    def get_usuario_panel(self, email):
         e = (email or "").strip().lower()
-        return next((a for a in self.agentes.values() if a["email"] == e and a.get("activo", True)), None)
+        u = next((a for a in self.agentes.values() if a["email"] == e and a.get("activo", True)), None)
+        return {**u, "roles": self.usuario_roles.get(u["id"], [])} if u else None
 
-    def list_agentes(self):
-        return [{k: v for k, v in a.items() if k != "password_hash"} for a in self.agentes.values()]
+    def list_usuarios_panel(self):
+        return [{**{k: v for k, v in a.items() if k != "password_hash"}, "roles": self.usuario_roles.get(a["id"], [])}
+                for a in self.agentes.values()]
 
-    def crear_agente(self, row):
-        fila = {"id": self._id("agente"), **row}
+    def crear_usuario_panel(self, row, roles):
+        fila = {"id": self._id("usuario"), **row}
         self.agentes[fila["id"]] = fila
-        return fila
+        self.usuario_roles[fila["id"]] = list(roles)
+        return {**fila, "roles": list(roles)}
 
-    def update_agente(self, agente_id, patch):
-        if agente_id not in self.agentes:
+    def update_usuario_panel(self, usuario_id, patch, roles):
+        if usuario_id not in self.agentes:
             return None
-        self.agentes[agente_id].update(patch)
-        return self.agentes[agente_id]
+        self.agentes[usuario_id].update(patch)
+        if roles is not None:
+            self.usuario_roles[usuario_id] = list(roles)
+        return {**self.agentes[usuario_id], "roles": self.usuario_roles.get(usuario_id, [])}
+
+    def list_roles(self):
+        from app.core.permisos import ROLES_BASE
+        base = [{"slug": k, "nombre": v["nombre"], "descripcion": v["descripcion"],
+                 "permisos": list(v["permisos"]), "del_sistema": True} for k, v in ROLES_BASE.items()]
+        return base + [r for r in self.roles.values() if r["slug"] not in ROLES_BASE]
+
+    def upsert_rol(self, row):
+        self.roles[row["slug"]] = {**self.roles.get(row["slug"], {}), **row}
+        return self.roles[row["slug"]]
+
+    def borrar_rol(self, slug):
+        self.roles.pop(slug, None)
 
     def get_ciudad_id(self, slug):
         return {"bermejo": "ciu-1"}.get(slug) or f"ciu-{slug}"
