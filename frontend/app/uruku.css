@@ -1092,13 +1092,17 @@
 .uk-404-links .uk-btn, .uk-404-links .uk-btn-ghost { width: auto; display: inline-flex; flex: 0 0 auto; padding: 12px 18px; }
 
 /* ===== La comunidad de compradores ===== */
-.uk-comunidad-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 18px 0 4px; padding: 16px 18px; border: 1px solid #b7e4c7; border-radius: 16px; background: linear-gradient(135deg, #eaf8ef, #f3fbf6); }
+.uk-comunidad-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 18px 0 4px; padding: 16px 18px; border-radius: 16px; color: var(--uk-ink);
+  border: 1px solid color-mix(in srgb, var(--uk-green) 35%, var(--uk-line));
+  background: color-mix(in srgb, var(--uk-green) 9%, var(--uk-surface)); }
 .uk-comunidad-texto { display: grid; gap: 4px; flex: 1 1 320px; }
 .uk-comunidad-texto b { font-size: 16px; }
 .uk-comunidad-texto span { font-size: 13.5px; color: var(--uk-ink-soft); line-height: 1.45; }
 .uk-comunidad-acciones { display: flex; gap: 8px; flex-wrap: wrap; }
 .uk-comunidad-acciones .uk-btn, .uk-comunidad-acciones .uk-btn-ghost { flex: 0 0 auto; width: auto; padding: 11px 16px; }
-.uk-comunidad-chico { margin: 10px 0 18px; padding: 10px 14px; border-radius: 12px; background: #eaf8ef; border: 1px solid #b7e4c7; font-size: 13.5px; line-height: 1.5; }
+.uk-comunidad-chico { margin: 10px 0 18px; padding: 10px 14px; border-radius: 12px; font-size: 13.5px; line-height: 1.5; color: var(--uk-ink);
+  background: color-mix(in srgb, var(--uk-green) 9%, var(--uk-surface));
+  border: 1px solid color-mix(in srgb, var(--uk-green) 35%, var(--uk-line)); }
 .uk-comunidad-chico a { color: var(--uk-green); }
 .uk-comunidad { padding: 20px 0 48px; }
 .uk-comunidad h1 { margin: 0 0 8px; font-size: 28px; }
@@ -1129,7 +1133,8 @@
 .uk-contesto-gracias { font-weight: 600; }
 .uk-responde { color: var(--uk-green); font-weight: 700; }
 .uk-no-responde { color: #b45309; }
-.uk-aviso-taxi { margin: 0 0 14px; padding: 10px 14px; border-radius: 12px; background: #fff8e6; border: 1px solid #f2d27a; font-size: 13.5px; line-height: 1.5; }
+.uk-aviso-taxi { margin: 0 0 14px; padding: 10px 14px; border-radius: 12px; font-size: 13.5px; line-height: 1.5;
+  background: #fff8e6; border: 1px solid #f2d27a; color: #3a2c12; }
 .uk-ficha-responde { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 700; color: var(--uk-green); }
 .uk-ficha-no-responde { display: inline-flex; font-size: 12.5px; font-weight: 700; color: #b45309; }
 
@@ -1154,8 +1159,9 @@
 .uk-ayuda-msg.uruku .uk-ayuda-sug { grid-column: 2; }
 
 /* ===== El anuncio del lanzamiento de las ofertas ===== */
-.uk-lanzamiento { margin: 6px 0 18px; padding: 22px 20px; border-radius: 18px; border: 1px solid #b7e4c7;
-                  background: linear-gradient(140deg, #eaf8ef, #f6fbf7 60%); display: grid; gap: 10px; }
+.uk-lanzamiento { margin: 6px 0 18px; padding: 22px 20px; border-radius: 18px; display: grid; gap: 10px; color: var(--uk-ink);
+  border: 1px solid color-mix(in srgb, var(--uk-green) 35%, var(--uk-line));
+  background: color-mix(in srgb, var(--uk-green) 9%, var(--uk-surface)); }
 .uk-lanzamiento-tag { justify-self: start; font-size: 11.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
                       color: #fff; background: var(--uk-green); border-radius: 999px; padding: 5px 12px; }
 .uk-lanzamiento h2 { margin: 0; font-size: 22px; line-height: 1.2; }
