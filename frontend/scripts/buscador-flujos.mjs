@@ -170,8 +170,10 @@ async function buscar(p, texto) { await p.fill("form.uk-search input", texto); a
   await p.goto(`${BASE}/buscar?of=1`, { waitUntil: "networkidle" });
   await p.waitForTimeout(8000);
   const nOf = await p.locator(".uk-res-grid article").count();
-  const vacioOf = ((await p.locator(".uk-empty").textContent().catch(() => "")) || "").trim();
-  ok(nOf > 0 || /Todavía no hay ofertas/.test(vacioOf), `7. of=1: ${nOf} tarjetas, vacío=«${vacioOf.slice(0, 50)}»`);
+  // Con ofertas, tarjetas; sin ofertas, o el anuncio del lanzamiento (hasta
+  // el 28/9) o el texto de siempre. Lo que no puede pasar es la nada.
+  const vacioOf = ((await p.locator(".uk-empty, .uk-lanzamiento").first().textContent().catch(() => "")) || "").trim();
+  ok(nOf > 0 || /Todavía no hay ofertas|empiezan el/.test(vacioOf), `7. of=1: ${nOf} tarjetas, vacío=«${vacioOf.slice(0, 60)}»`);
   ok(errores.length === 0, `7. sin avisos del vigía (${errores.join(" | ") || "ninguno"})`);
   await ctx.close();
 }
