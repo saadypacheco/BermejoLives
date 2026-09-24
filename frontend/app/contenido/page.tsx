@@ -257,6 +257,13 @@ function FronteraBox({ flash, fail }: { flash: (m: string) => void; fail: (e: un
           <button className="btn btn-primary btn-sm" onClick={() => guardar({ chalanas_horario: horarioChalanas })}>Guardar horario</button>
           </div>
         </div>
+        {f?.chalanas === "no_aplica" && (horarioChalanas.trim() || f?.chalanas_horario) && (
+          <div style={{ fontSize: 12.5, color: "var(--amber)", border: "1px solid var(--amber)", borderRadius: 10, padding: "8px 10px" }}>
+            ⚠️ Las chalanas están en <b>«no aplica»</b> y tienen horario cargado: el sitio no muestra ninguna de las dos
+            cosas. Si en esta frontera hay chalanas, poné <b>operando</b> (o «limitadas»); «no aplica» es para la
+            frontera que cruza sólo por puente.
+          </div>
+        )}
         <div style={{ fontSize: 11.5, color: "var(--txt-3)", marginTop: -4 }}>
           Escribilo como se lo dirías a alguien. Si hay turnos, ponelos: «6:00 a 18:00 todas · hasta las 20:00 queda
           una cooperativa». Sale en la guía, en el home y en la Ayuda. Vacío = no se muestra.
