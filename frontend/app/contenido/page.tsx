@@ -15,6 +15,14 @@ export default function ContenidoPage() {
   // pantalla vuelve al login sin explicación y parece que se deslogueó sola.
   const [aviso, setAviso] = useState("");
   useEffect(() => { setAuthed(hayPub()); setReady(true); }, []);
+  // Un 401 en CUALQUIER pedido (aunque sea uno que corre solo al abrir, como
+  // los videos) devuelve al ingreso: quedarse en un panel que ya no guarda
+  // nada es peor que pedir la contraseña de nuevo.
+  useEffect(() => {
+    const vencida = () => { clearPub(); setAviso("Se venció la sesión. Entrá de nuevo."); setAuthed(false); };
+    window.addEventListener("uk-sesion-vencida", vencida);
+    return () => window.removeEventListener("uk-sesion-vencida", vencida);
+  }, []);
   if (!ready) return null;
   if (!authed) return <Login aviso={aviso} onOk={() => { setAviso(""); setAuthed(true); }} />;
   return <Panel onLogout={(motivo) => { clearPub(); setAviso(motivo ?? ""); setAuthed(false); }} />;
@@ -229,26 +237,32 @@ function FronteraBox({ flash, fail }: { flash: (m: string) => void; fail: (e: un
       </div>
       <div style={{ display: "grid", gap: 8 }}>
         {opciones.map(([k, label, vals]) => (
-          <div key={k} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <b style={{ fontSize: 13, width: 150 }}>{label}</b>
+          // `minmax(0,1fr)` y no un ancho fijo: con el ancho fijo la fila no
+          // entraba en un celular y la pantalla se corría para el costado.
+          <div key={k} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 6 }}>
+            <b style={{ fontSize: 13 }}>{label}</b>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {vals.map((v) => (
               <button key={v} className={`btn btn-sm ${f?.[k] === v ? "btn-primary" : ""}`} style={f?.[k] === v ? {} : { border: "1px solid var(--stroke)" }}
                       onClick={() => guardar({ [k]: v })}>{v === "no_aplica" ? "no aplica" : v}</button>
             ))}
+            </div>
           </div>
         ))}
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <b style={{ fontSize: 13, width: 150 }}>Horario chalanas</b>
-          <input className="adm-input" style={{ flex: 1 }} value={horarioChalanas} onChange={(e) => setHorarioChalanas(e.target.value)} maxLength={160}
+        <div style={{ display: "grid", gap: 6 }}>
+          <b style={{ fontSize: 13 }}>Horario chalanas</b>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input className="adm-input" style={{ flex: "1 1 200px", minWidth: 0 }} value={horarioChalanas} onChange={(e) => setHorarioChalanas(e.target.value)} maxLength={160}
                  placeholder="ej. 6:00 a 18:00 todas · hasta las 20:00 queda una cooperativa (rota cada semana)" />
           <button className="btn btn-primary btn-sm" onClick={() => guardar({ chalanas_horario: horarioChalanas })}>Guardar horario</button>
+          </div>
         </div>
         <div style={{ fontSize: 11.5, color: "var(--txt-3)", marginTop: -4 }}>
           Escribilo como se lo dirías a alguien. Si hay turnos, ponelos: «6:00 a 18:00 todas · hasta las 20:00 queda
           una cooperativa». Sale en la guía, en el home y en la Ayuda. Vacío = no se muestra.
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input className="adm-input" style={{ flex: 1 }} value={nota} onChange={(e) => setNota(e.target.value)} maxLength={300}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input className="adm-input" style={{ flex: "1 1 200px", minWidth: 0 }} value={nota} onChange={(e) => setNota(e.target.value)} maxLength={300}
                  placeholder="Nota (opcional): filas de dos horas por el feriado, migraciones sin sistema…" />
           <button className="btn btn-primary btn-sm" onClick={() => guardar({ nota })}>Guardar nota</button>
         </div>
