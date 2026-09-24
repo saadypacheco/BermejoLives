@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
 import { UnirmeComunidad } from "@/components/unirme-comunidad";
-import { AbrirAyuda } from "@/components/abrir-ayuda";
 import { getClima, getCotizaciones, getFeed, getFronteraEstado, getVideosPromo } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { precioFmt } from "@/lib/types";
@@ -235,11 +234,6 @@ export default async function InicioPage() {
                 <b>{h.t}</b>
               </Link>
             ))}
-            <AbrirAyuda className="uk-home-card uk-home-card-c uk-home-card-ayuda">
-              <span className="uk-home-ic">💬</span>
-              <b>Preguntale a URUKU</b>
-              <small>Lo que no esté acá</small>
-            </AbrirAyuda>
           </div>
         </div>
       </section>

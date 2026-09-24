@@ -19,6 +19,10 @@ type Mensaje =
   | { de: "yo"; texto: string }
   | { de: "uruku"; texto: string; id?: string; fuentes?: RespuestaAsistente["fuentes"]; sugerencias?: string[]; util?: boolean | null; error?: boolean };
 
+/** La mascota de URUKU: la cara del chat. Es la misma del volante y de los
+ *  videos — que el que ya la vio en la calle la reconozca en el sitio. */
+const MASCOTA = { imagen: "/mascota-uruku-160.png", grande: "/mascota-uruku.png", nombre: "la mascota de URUKU" };
+
 const CLAVE_SESION = "uk-ayuda-sesion";
 const CLAVE_ABIERTO = "uk-ayuda-abierto";
 
@@ -51,7 +55,7 @@ export function Asistente({ comercio, ciudad }: { comercio?: { id: string; nombr
   const bienvenida: Mensaje = comercio
     ? { de: "uruku", texto: `Hola, soy el asistente de ${comercio.nombre}. Preguntame por horarios, precios, ofertas o cómo llegar.`,
         sugerencias: ["¿Están abiertos ahora?", "¿Qué ofertas tienen?", "¿Dónde quedan?"] }
-    : { de: "uruku", texto: `Hola, soy la ayuda de URUKU. Preguntame dónde conseguir algo en ${nombreCiudad}, si un local está abierto, ${conGuia ? "el dólar" : "cómo llegar"}, o cómo publicar tu negocio.`,
+    : { de: "uruku", texto: `¡Hola! Soy la mascota de URUKU y conozco ${nombreCiudad} de memoria. Preguntame dónde conseguir algo, si un local está abierto, ${conGuia ? "a cuánto está el dólar" : "cómo llegar"}, o cómo publicar tu negocio.`,
         sugerencias: conGuia ? SUGERENCIAS : SUGERENCIAS_SIN_GUIA };
 
   useEffect(() => {
@@ -77,7 +81,13 @@ export function Asistente({ comercio, ciudad }: { comercio?: { id: string; nombr
       const r = await preguntarAsistente(pregunta, sesionId(), comercio?.id, ciudad?.slug);
       setMensajes((m) => [...m, { de: "uruku", texto: r.texto, id: r.id, fuentes: r.fuentes, sugerencias: r.sugerencias, util: null }]);
     } catch (e) {
-      setMensajes((m) => [...m, { de: "uruku", texto: e instanceof Error ? e.message : "No pude contestar ahora.", error: true }]);
+      // "Failed to fetch" es lo que dice el navegador cuando no hay señal; no
+      // es algo que se le muestre a alguien. Los mensajes que escribimos
+      // nosotros (tope diario, asistente apagado) sí se muestran tal cual.
+      const crudo = e instanceof Error ? e.message : "";
+      const nuestro = crudo && !/failed to fetch|load failed|networkerror/i.test(crudo);
+      setMensajes((m) => [...m, { de: "uruku", error: true,
+        texto: nuestro ? crudo : "Me quedé sin señal. Probá de nuevo en un minuto." }]);
     } finally {
       setPensando(false);
     }
@@ -94,19 +104,30 @@ export function Asistente({ comercio, ciudad }: { comercio?: { id: string; nombr
   return (
     <>
       <button type="button" className={`uk-ayuda-btn${abierto ? " abierto" : ""}`} onClick={() => setAbierto((a) => !a)}
-              aria-label={abierto ? "Cerrar la ayuda" : "Abrir la ayuda"} aria-expanded={abierto}>
-        {abierto ? "×" : <><span aria-hidden>💬</span> Ayuda</>}
+              aria-label={abierto ? "Cerrar la ayuda" : `Preguntale a ${MASCOTA.nombre}`} aria-expanded={abierto}>
+        {abierto ? "×" : (
+          <>
+            <img className="uk-ayuda-mascota" src={MASCOTA.imagen} alt="" width={34} height={34} />
+            <span>Preguntame</span>
+          </>
+        )}
       </button>
 
       {abierto && (
         <div className="uk-ayuda" role="dialog" aria-label={comercio ? `Asistente de ${comercio.nombre}` : "Uruku Ayuda"}>
           <div className="uk-ayuda-cab">
-            <b>{comercio ? `Preguntale a ${comercio.nombre}` : "Uruku Ayuda"}</b>
-            <span>{comercio ? "Contesta con los datos del local" : "Contesta con lo que hay en URUKU"}</span>
+            {!comercio && <img className="uk-ayuda-mascota-cab" src={MASCOTA.grande} alt="" width={40} height={40} />}
+            <div>
+              <b>{comercio ? `Preguntale a ${comercio.nombre}` : `Preguntale a ${MASCOTA.nombre}`}</b>
+              <span>{comercio ? "Contesta con los datos del local" : `Todo ${nombreCiudad}, en un solo lugar`}</span>
+            </div>
           </div>
           <div className="uk-ayuda-msgs">
             {lista.map((m, i) => (
               <div key={i} className={`uk-ayuda-msg ${m.de}${m.de === "uruku" && m.error ? " error" : ""}`}>
+                {m.de === "uruku" && !comercio && (
+                  <img className="uk-ayuda-mascota-msg" src={MASCOTA.imagen} alt="" width={26} height={26} />
+                )}
                 <div className="uk-ayuda-burbuja">{linkear(m.texto)}</div>
                 {m.de === "uruku" && m.fuentes && m.fuentes.filter((f) => f.tipo === "comercio" && f.url).length > 0 && (
                   <div className="uk-ayuda-fuentes">
