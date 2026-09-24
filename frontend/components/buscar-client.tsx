@@ -14,6 +14,7 @@ import { pedirUbicacion, permisoUbicacion, ubicacionGuardada, type Ubicacion } f
 import { detectarServicio, SERVICIOS, servicioDeRubro } from "@/lib/servicios";
 import { PermisoUbicacion } from "@/components/permiso-ubicacion";
 import { VolverAtras } from "@/components/volver-atras";
+import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import { ReservaBarra } from "@/components/reserva-barra";
 import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
@@ -706,12 +707,32 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiu
               )
             : soloOfertas && !q.trim() && !rubro
               ? (
-                <div className="uk-empty">
-                  Todavía no hay ofertas publicadas hoy. Los comercios las mandan por WhatsApp y aparecen acá apenas se aprueban.
-                  <button type="button" className="uk-btn-ghost" style={{ marginTop: 10 }} onClick={() => setSoloOfertas(false)}>
-                    Ver todos los comercios
-                  </button>
-                </div>
+                // Hasta el lunes 28 la pantalla no dice «no hay nada»: dice
+                // cuándo empieza. Pasada la fecha vuelve sola al texto de
+                // siempre (lib/lanzamiento.ts).
+                faltaParaLanzamiento() ? (
+                  <div className="uk-lanzamiento">
+                    <span className="uk-lanzamiento-tag">Nuevo en URUKU</span>
+                    <h2>Las ofertas de Bermejo empiezan {FECHA_LANZAMIENTO}</h2>
+                    <p>
+                      Desde ese día vas a ver acá, todos los días, lo que los comercios publican: precios, lo que
+                      llegó, la liquidación de la semana. Directo del local a tu celular.
+                    </p>
+                    <div className="uk-lanzamiento-acciones">
+                      <button type="button" className="uk-btn uk-btn-primary" onClick={() => setSoloOfertas(false)}>
+                        Mientras tanto, ver los comercios
+                      </button>
+                      <Link href="/planes" className="uk-btn-ghost">¿Tenés un negocio? Publicá tus ofertas</Link>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="uk-empty">
+                    Todavía no hay ofertas publicadas hoy. Los comercios las mandan por WhatsApp y aparecen acá apenas se aprueban.
+                    <button type="button" className="uk-btn-ghost" style={{ marginTop: 10 }} onClick={() => setSoloOfertas(false)}>
+                      Ver todos los comercios
+                    </button>
+                  </div>
+                )
               )
             : rubroElegido && q.trim()
               ? (

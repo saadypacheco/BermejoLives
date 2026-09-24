@@ -1152,3 +1152,13 @@
 .uk-ayuda-msg.uruku .uk-ayuda-fuentes,
 .uk-ayuda-msg.uruku .uk-ayuda-util,
 .uk-ayuda-msg.uruku .uk-ayuda-sug { grid-column: 2; }
+
+/* ===== El anuncio del lanzamiento de las ofertas ===== */
+.uk-lanzamiento { margin: 6px 0 18px; padding: 22px 20px; border-radius: 18px; border: 1px solid #b7e4c7;
+                  background: linear-gradient(140deg, #eaf8ef, #f6fbf7 60%); display: grid; gap: 10px; }
+.uk-lanzamiento-tag { justify-self: start; font-size: 11.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+                      color: #fff; background: var(--uk-green); border-radius: 999px; padding: 5px 12px; }
+.uk-lanzamiento h2 { margin: 0; font-size: 22px; line-height: 1.2; }
+.uk-lanzamiento p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--uk-ink-soft); max-width: 60ch; }
+.uk-lanzamiento-acciones { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.uk-lanzamiento-acciones .uk-btn, .uk-lanzamiento-acciones .uk-btn-ghost { flex: 0 0 auto; width: auto; padding: 11px 16px; }

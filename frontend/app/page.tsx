@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
 import { UnirmeComunidad } from "@/components/unirme-comunidad";
+import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import { getClima, getCotizaciones, getFeed, getFronteraEstado, getVideosPromo } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { precioFmt } from "@/lib/types";
@@ -237,6 +238,24 @@ export default async function InicioPage() {
           </div>
         </div>
       </section>
+
+      {/* ===== El lanzamiento de las ofertas (hasta el lunes 28) ===== */}
+      {cards.length === 0 && faltaParaLanzamiento() && (
+        <section className="uk-container uk-home-sec">
+          <div className="uk-lanzamiento">
+            <span className="uk-lanzamiento-tag">Nuevo en URUKU</span>
+            <h2>Las ofertas de {nombre} empiezan {FECHA_LANZAMIENTO}</h2>
+            <p>
+              Desde ese día vas a ver todos los días lo que publican los comercios: precios, lo que llegó, la
+              liquidación de la semana. Directo del local a tu celular.
+            </p>
+            <div className="uk-lanzamiento-acciones">
+              <Link href="/buscar?vista=mapa" className="uk-btn uk-btn-primary">Mientras tanto, mirá los comercios</Link>
+              <Link href="/planes" className="uk-btn-ghost">¿Tenés un negocio? Publicá tus ofertas</Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ===== Ofertas destacadas ===== */}
       {cards.length > 0 && (
