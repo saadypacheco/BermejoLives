@@ -1168,3 +1168,28 @@
 .uk-lanzamiento p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--uk-ink-soft); max-width: 60ch; }
 .uk-lanzamiento-acciones { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
 .uk-lanzamiento-acciones .uk-btn, .uk-lanzamiento-acciones .uk-btn-ghost { flex: 0 0 auto; width: auto; padding: 11px 16px; }
+
+/* ===== /ofertas y /novedades: lo que publican los comercios, con su foto ===== */
+.uk-pub { padding: 18px 0 40px; }
+.uk-pub .uk-section-head { align-items: center; flex-wrap: wrap; gap: 12px; }
+.uk-pub h1 { margin: 0; font-size: 26px; }
+.uk-pub-sub { margin: 4px 0 18px; font-size: 14.5px; color: var(--uk-ink-soft); line-height: 1.5; max-width: 62ch; }
+.uk-pub-solapas a { padding: 8px 14px; font-size: 13.5px; font-weight: 700; color: var(--uk-ink-soft); text-decoration: none; border-radius: 10px; }
+.uk-pub-solapas a.active { background: var(--uk-green); color: #fff; }
+/* El comercio, arriba de todo en la tarjeta: acá se mira la ciudad entera y
+   lo primero que hay que poder leer es de quién es. */
+.uk-product-com { display: flex; align-items: center; gap: 6px; margin: 8px 0 4px; font-size: 12.5px; color: var(--uk-ink-soft); text-decoration: none; }
+.uk-product-com img { border-radius: 999px; object-fit: cover; }
+.uk-product-com b { color: var(--uk-ink); font-size: 13px; }
+.uk-product-com span { color: var(--uk-green); font-weight: 800; }
+.uk-product-com:hover b { color: var(--uk-green); }
+a.uk-product-img { display: block; }
+
+/* Dos por fila en el celular: una sola tarjeta por pantalla obliga a
+   scrollear una eternidad para ver diez ofertas. */
+@media (max-width: 560px) {
+  .uk-pub .uk-product-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .uk-pub .uk-product { padding: 10px; }
+  .uk-pub .uk-product h4 { font-size: 13px; }
+  .uk-pub .uk-product-desc { font-size: 12px; }
+}

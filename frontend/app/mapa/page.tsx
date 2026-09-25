@@ -13,5 +13,5 @@ import { redirect } from "next/navigation";
  * compartido por WhatsApp siguen funcionando.
  */
 export default function MapaPage({ searchParams }: { searchParams?: { of?: string } }) {
-  redirect(searchParams?.of === "1" ? "/buscar?vista=mapa&of=1" : "/buscar?vista=mapa");
+  redirect(searchParams?.of === "1" ? "/ofertas" : "/buscar?vista=mapa");
 }

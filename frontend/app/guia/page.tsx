@@ -243,7 +243,7 @@ export default async function GuiaPage() {
         <section className="uk-guia-sec" id="ofertas">
           <h2>🏷️ Ofertas y videos</h2>
           <div className="uk-guia-chips">
-            <Link href="/buscar?of=1" className="uk-btn uk-btn-primary">Ver las ofertas de hoy →</Link>
+            <Link href="/ofertas" className="uk-btn uk-btn-primary">Ver las ofertas de hoy →</Link>
           </div>
           {videos.length > 0 && (
             <div className="uk-guia-videos">

@@ -235,6 +235,18 @@ export async function nombreCiudadDe(ciudadId: string | null | undefined): Promi
   return c?.nombre ?? "Bermejo";
 }
 
+/** Las publicaciones de un tipo, de todos los comercios de la ciudad. Es lo
+ *  que muestran /ofertas y /novedades; la ficha del comercio usa el mismo
+ *  contenido filtrado por local. */
+export async function getPublicaciones(tipo: FeedItem["tipo"], limit = 60, ciudadSlug?: string | null): Promise<FeedItem[]> {
+  if (!hasSupabase) return [];
+  let q = supabase.from("feed_publico").select("*").eq("tipo", tipo).limit(limit);
+  if (ciudadSlug) q = q.eq("ciudad_slug", ciudadSlug);
+  const { data, error } = await q;
+  if (error) { logSupaError("getPublicaciones", error); return []; }
+  return (data ?? []) as FeedItem[];
+}
+
 export async function getFeed(limit = 8, ciudadSlug?: string | null): Promise<FeedItem[]> {
   if (hasSupabase) {
     let q = supabase.from("feed_publico").select("*").limit(limit);

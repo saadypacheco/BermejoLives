@@ -71,7 +71,8 @@ const HERRAMIENTAS = [
 const HERRAMIENTAS_SIN_GUIA = [
   { i: "📍", t: "Qué hay cerca tuyo", href: "/buscar?cerca=1" },
   { i: "🗺️", t: "Todo en el mapa", href: "/buscar?vista=mapa" },
-  { i: "🏷️", t: "Las ofertas de hoy", href: "/buscar?of=1" },
+  { i: "🏷️", t: "Las ofertas de hoy", href: "/ofertas" },
+  { i: "📣", t: "Novedades de los comercios", href: "/novedades" },
 ];
 
 const INFO = [
@@ -80,7 +81,7 @@ const INFO = [
   { i: "📞", t: "Teléfonos útiles", d: "110 · 119 · 168 y dónde queda la policía", href: "/guia#seguridad" },
   { i: "📱", t: "Comprar chip o eSIM", d: "Entel y Tigo", href: "/guia#conectividad" },
   { i: "▶️", t: "Videos guía", d: "Recorridos y tips", href: "/guia#ofertas" },
-  { i: "⭐", t: "Top de ofertas", d: "Lo más buscado", href: "/buscar?of=1" },
+  { i: "📣", t: "Novedades", d: "Lo que cuentan los comercios", href: "/novedades" },
 ];
 
 const ESTADO: Record<string, Record<string, [string, string]>> = {
@@ -148,7 +149,7 @@ export default async function InicioPage() {
             <h1>Todo <span>{nombre}</span><br />en un solo lugar</h1>
             <p>{conGuia ? "Comercios, ofertas, cambio, servicios y datos útiles para tu visita." : `Comercios, ofertas y servicios de ${nombre}, en el mapa y con el WhatsApp de cada local.`}</p>
             <div className="uk-hero-actions">
-              <Link href="/buscar?of=1" className="uk-btn uk-btn-primary">🏷️ Ver ofertas del día</Link>
+              <Link href="/ofertas" className="uk-btn uk-btn-primary">🏷️ Ver ofertas del día</Link>
               <Link href={conGuia ? "/guia" : "/buscar?vista=mapa"} className="uk-btn uk-btn-ghost uk-home-btn-claro">{conGuia ? "🧭 Explorar servicios" : "🗺️ Ver el mapa"}</Link>
             </div>
             <div className="uk-home-props">
@@ -262,7 +263,7 @@ export default async function InicioPage() {
         <section className="uk-container uk-home-sec">
           <div className="uk-section-head">
             <h2>Ofertas destacadas <small>De comercios de {nombre}.</small></h2>
-            <Link href="/buscar?of=1">Ver más ofertas →</Link>
+            <Link href="/ofertas">Ver más ofertas →</Link>
           </div>
           <div className="uk-offers">
             {cards.map((o) => (

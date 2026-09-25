@@ -101,8 +101,8 @@ export async function UrukuShell({
                 donde la barra de abajo ya los tiene. */}
             <nav className="uk-topnav" aria-label="Secciones">
               {(conGuia
-                ? [["Guía", "/guia"], ["Mapa", "/buscar?vista=mapa"], ["Ofertas", "/buscar?vista=mapa&of=1"], ["Cambio", "/cambio"]]
-                : [["Mapa", "/buscar?vista=mapa"], ["Ofertas", "/buscar?vista=mapa&of=1"], ["Guardados", "/guardados"]]
+                ? [["Guía", "/guia"], ["Mapa", "/buscar?vista=mapa"], ["Ofertas", "/ofertas"], ["Novedades", "/novedades"], ["Cambio", "/cambio"]]
+                : [["Mapa", "/buscar?vista=mapa"], ["Ofertas", "/ofertas"], ["Novedades", "/novedades"], ["Guardados", "/guardados"]]
               ).map(([k, href]) => (
                 <Link key={k} href={href} className={activeNav === k ? "active" : ""}>{k}</Link>
               ))}
@@ -140,7 +140,8 @@ export async function UrukuShell({
               <div className="uk-foot-col">
                 <h4>Descubrí</h4>
                 <Link href="/" className="uk-foot-link"><Ic d="M3 11l9-8 9 8M5 10v10h14V10" /><span>Inicio</span><i>›</i></Link>
-                <Link href="/buscar?of=1" className="uk-foot-link"><Ic d="M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" /><span>Ofertas</span><i>›</i></Link>
+                <Link href="/ofertas" className="uk-foot-link"><Ic d="M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" /><span>Ofertas</span><i>›</i></Link>
+                <Link href="/novedades" className="uk-foot-link"><Ic d="M3 11v2a1 1 0 0 0 1 1h3l4 4V6L7 10H4a1 1 0 0 0-1 1zM16 8a5 5 0 0 1 0 8" /><span>Novedades</span><i>›</i></Link>
                 <Link href="/buscar" className="uk-foot-link"><Ic d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3" /><span>Buscar</span><i>›</i></Link>
                 <Link href="/guardados" className="uk-foot-link"><Ic d="M6 3h12v18l-6-4-6 4V3z" /><span>Guardados</span><i>›</i></Link>
                 {conGuia && <Link href="/comunidad" className="uk-foot-link"><Ic d="M4 4h16v12H7l-3 3V4z" /><span>Comunidad</span><i>›</i></Link>}
