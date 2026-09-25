@@ -75,7 +75,7 @@ export default async function TarjetaMesaPage({ params }: { params: { slug: stri
         .mesa { box-sizing: border-box; padding: 10mm 9mm; display: flex; flex-direction: column;
           align-items: center; text-align: center; gap: 3mm; color: #14322b;
           font-family: system-ui, -apple-system, sans-serif; border: 1px dashed #b9c8c1; }
-        .mesa-logo { height: 12mm; width: auto; }
+        .mesa-logo { height: 7.5mm; width: auto; }
         .mesa-nombre { font-size: 19px; font-weight: 800; line-height: 1.15; margin-top: 2mm; }
         .mesa-qr { width: 58mm; height: 58mm; margin-top: 2mm; }
         .mesa-invita { font-size: 16px; font-weight: 700; margin-top: 2mm; }

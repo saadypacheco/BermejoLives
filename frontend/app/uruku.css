@@ -148,7 +148,7 @@
    como cortado) y de punta a punta (se leía como una barra de menú). En el
    celular no cambia: ahí va de lado a lado porque no hay otro lado. */
 @media (min-width: 900px) {
-  .uk-brand-full { height: 96px; }
+  .uk-brand-full { height: 60px; }
   .uk-search { width: 100%; max-width: 760px; margin-left: auto; margin-right: auto; border-radius: 999px; min-height: 56px; }
   .uk-search input { font-size: 17px; padding-left: 8px; }
   .uk-search button[type="submit"] { border-radius: 999px; margin: 4px; }
@@ -170,7 +170,7 @@
 .uk-brand small { display: block; margin-top: 6px; color: var(--uk-ink-soft); font-size: 12px; font-weight: 500; }
 /* Logo completo URUKU (imagen transparente, sirve claro y oscuro). max-width evita
    que desborde su columna en pantallas intermedias (se achica solo). */
-.uk-brand-full { height: 72px; width: auto; max-width: 100%; display: block; }
+.uk-brand-full { height: 46px; width: auto; max-width: 100%; display: block; }
 
 /* En el celular el logo baja a 46px, y NO es una decisión de estilo.
    A 72px el wordmark mide unos 200px de ancho; el selector de ciudad, Ingresar
@@ -181,13 +181,13 @@
    El `min-width: 0` es la otra mitad: sin él un hijo de flex no baja de su
    ancho de contenido y sigue empujando la fila aunque el logo achique. */
 @media (max-width: 560px) {
-  .uk-brand-full { height: 46px; }
+  .uk-brand-full { height: 40px; }
   .uk-head-top { flex-wrap: wrap; gap: 8px; }
   .uk-head-top .uk-brand { min-width: 0; }
   .uk-head-actions { gap: 6px; min-width: 0; }
   .uk-head-actions .uk-pill { padding: 5px 8px; font-size: 11.5px; }
 }
-.uk-footer-brand .uk-brand-full { height: 48px; }
+.uk-footer-brand .uk-brand-full { height: 30px; }
 .uk-red { color: var(--uk-red); font-weight: 700; }
 
 .uk-search { display: flex; align-items: center; background: var(--uk-surface); border: 1px solid var(--uk-line); box-shadow: var(--uk-shadow-soft); border-radius: 16px; overflow: hidden; min-height: 52px; }
@@ -708,7 +708,7 @@
 .uk-foot-cta-txt p { font-size: 13.5px; color: var(--uk-ink-soft); margin: 4px 0 0; line-height: 1.45; }
 .uk-foot-cta-btn { flex-shrink: 0; background: var(--uk-green-grad); color: #fff; padding: 14px 24px; border-radius: 13px; font-weight: 800; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
 .uk-foot-bottom { display: flex; align-items: center; gap: 14px 22px; margin-top: 8px; padding-top: 18px; border-top: 1px solid var(--uk-line); flex-wrap: wrap; }
-.uk-foot-logo img { height: 38px; width: auto; display: block; }
+.uk-foot-logo img { height: 24px; width: auto; display: block; }
 .uk-footer-socials { display: flex; gap: 8px; }
 .uk-footer-socials a { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; }
 .uk-footer-socials svg { width: 15px; height: 15px; }

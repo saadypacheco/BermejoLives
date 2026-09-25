@@ -117,7 +117,7 @@ export default async function VolantePage({ params }: { params: { slug: string }
         .vol { width: 148mm; min-height: 210mm; background: #fff; color: #14322b;
           padding: 14mm 13mm; box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif;
           display: flex; flex-direction: column; gap: 6mm; box-shadow: 0 10px 40px rgba(0,0,0,.18); }
-        .vol-logo { height: 22mm; width: auto; align-self: center; }
+        .vol-logo { height: 14mm; width: auto; align-self: center; }
         .vol h1 { font-size: 26px; line-height: 1.15; margin: 0; text-align: center; }
         .vol-sub { margin: 0; text-align: center; font-size: 13.5px; line-height: 1.5; color: #3d5b50; }
         .vol-qr { display: flex; gap: 5mm; align-items: center; border: 2px solid #14322b;
