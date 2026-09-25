@@ -457,6 +457,12 @@ class SupabaseRepo:
             self.vincular_wa_jid(por_numero["id"], wa_jid)
             return {**por_numero, "wa_jid": wa_jid}
 
+        # APAGADO hasta que una persona lo mire. Alguien que le escribe al
+        # número de URUKU puede ser un comerciante que quiere publicar… o
+        # cualquiera preguntando algo. Nace `activo = false`: no sale en el
+        # mapa, ni en el buscador, ni en el conteo. Lo enciende el moderador
+        # cuando aprueba lo que mandó (moderacion.moderar), que es el momento
+        # en que una persona confirmó que es un negocio de verdad.
         slug = f"comercio-{phone[-6:]}"
         row = {
             "slug": slug,
@@ -464,6 +470,7 @@ class SupabaseRepo:
             "whatsapp": phone,
             "wa_jid": wa_jid,
             "verificado": False,
+            "activo": False,
             "plan": "gratis",
             "codigo": self._codigo_libre(),
         }

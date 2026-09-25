@@ -174,6 +174,14 @@ def moderar(
     updated = repo.set_estado_publicacion(pub_id, body.estado, body.motivo, mod["email"])
     if not updated:
         raise HTTPException(status_code=404, detail="publicación no encontrada")
+    # El borrador que nació de un WhatsApp desconocido está apagado hasta que
+    # alguien lo mire. Aprobar lo que mandó ES mirarlo: si no se enciende acá,
+    # la oferta queda aprobada y sin salir en ningún lado.
+    if body.estado == "aprobado":
+        com = repo.get_comercio(updated.get("comercio_id"))
+        if com and not com.get("activo", True):
+            repo.update_comercio(com["id"], {"activo": True}, None)
+            logger.info("moderacion.comercio_encendido", comercio=com.get("slug"), by=mod["email"])
     # Aprobar es lo que dispara la difusión a las redes. `encolar` no manda
     # nada: sólo anota, y nunca lanza. Aprobar una oferta no puede fallar
     # porque a Meta se le venció un token.

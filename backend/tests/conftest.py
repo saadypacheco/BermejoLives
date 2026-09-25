@@ -162,7 +162,8 @@ class FakeRepo:
         cid = self._id("com")
         row = {
             "id": cid, "slug": f"comercio-{phone[-6:]}", "nombre": f"Comercio {phone[-4:]}",
-            "whatsapp": phone, "wa_jid": wa_jid, "confiable": False, "verificado": False, "plan": "gratis",
+            "whatsapp": phone, "wa_jid": wa_jid, "confiable": False, "verificado": False,
+            "activo": False, "plan": "gratis",
             "codigo": self._codigo_libre(),
         }
         self.comercios[cid] = row

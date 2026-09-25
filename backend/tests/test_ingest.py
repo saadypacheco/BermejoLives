@@ -450,3 +450,24 @@ def test_un_numero_suelto_no_se_toma_como_precio(repo):
 
     ingest.handle_message(_evento_grupo(wamid="wa-p3", body="Llegaron zapatillas talle 42"), repo)
     assert repo.publicaciones[0]["precio"] is None
+
+
+def test_el_borrador_de_un_desconocido_nace_apagado_y_lo_enciende_el_moderador(client, repo, admin_token):
+    """Alguien le escribe al número de URUKU con una foto: puede ser un
+    comerciante que quiere publicar, o cualquiera. El borrador nace APAGADO
+    —no sale en el mapa, ni en el buscador, ni en el conteo— y lo enciende el
+    moderador al aprobar lo que mandó, que es cuando una persona confirmó que
+    es un negocio de verdad."""
+    h = {"Authorization": f"Bearer {admin_token}"}
+    r = client.post("/ingest/webhook", json={"event": "message", "session": "default", "payload": {
+        "id": "wamid.solo1", "from": "59199988877@c.us", "fromMe": False,
+        "body": "Campera Bs 300", "type": "image", "hasMedia": True,
+        "mediaUrl": "https://x/f.jpg", "mimetype": "image/jpeg", "timestamp": 1758800000}})
+    assert r.status_code == 200
+    nuevo = next(c for c in repo.comercios.values() if c.get("whatsapp") == "59199988877")
+    assert nuevo["activo"] is False, "el borrador no puede nacer visible"
+
+    pub = next(p for p in repo.publicaciones if p["comercio_id"] == nuevo["id"])
+    assert pub["estado"] == "pendiente"
+    client.post(f"/moderacion/publicaciones/{pub['id']}", headers=h, json={"estado": "aprobado"})
+    assert repo.comercios[nuevo["id"]]["activo"] is True, "aprobar la oferta enciende el comercio"
