@@ -34,6 +34,7 @@ import {
   type ProductoDraft, type ProductoRef, type Mensaje, type Publicacion,
 } from "@/lib/comercio";
 import { GaleriaUploader } from "@/components/galeria-uploader";
+import { FotoPrincipal } from "@/components/foto-principal";
 import { comprimirImagen } from "@/lib/imagen";
 import { RUBROS } from "@/lib/types";
 import { geoErrorMsg } from "@/lib/geo";
@@ -485,10 +486,19 @@ function OfertaEditForm({ pub, onCancel, onSaved }: { pub: Publicacion; onCancel
 }
 
 function GaleriaTab() {
+  // El perfil, sólo por la foto principal: vive en PerfilTab y no en el
+  // padre, así que esta pestaña lo pide para sí.
+  const [portada, setPortada] = useState<string | null>(null);
+  useEffect(() => { getPerfil().then((p) => setPortada(p.portada_url ?? null)).catch(() => {}); }, []);
   return (
     <div className="glass" style={{ padding: 20, borderRadius: 16 }}>
-      <p style={{ color: "var(--txt-3)", fontSize: 14, marginTop: 0, marginBottom: 14 }}>
-        Cargá hasta 10 fotos y 5 videos (≤60s) de tu local. Se muestran en tu ficha.
+      {/* La portada, arriba de todo y con su botón: es lo que el dueño viene
+          a cambiar, y hasta hoy sólo se podía desde una miniatura de 58 px
+          que en el celular no se veía que fuera tocable. */}
+      <FotoPrincipal url={portada}
+                     onSubir={async (f) => { const p = await subirFotoPerfil(f); setPortada(p.portada_url ?? null); return p.portada_url; }} />
+      <p style={{ color: "var(--txt-3)", fontSize: 14, marginTop: 20, marginBottom: 14 }}>
+        Y hasta 10 fotos y 5 videos (≤60s) más de tu local. Se muestran en tu ficha, después de la principal.
       </p>
       <GaleriaUploader api={{
         cargarFotos: listarFotosComercio,
