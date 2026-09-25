@@ -75,6 +75,9 @@ export default function AdminPage() {
   const [solicitudesCambioNumero, setSolicitudesCambioNumero] = useState<SolicitudCambioNumero[]>([]);
   const [loading, setLoading] = useState(false);
   const [veredictos, setVeredictos] = useState<Record<string, VeredictoIA | "cargando">>({});
+  // El tipo corregido a mano, por publicación. El clasificador acierta el
+  // caso común; acá se arregla el que no, en el mismo clic que aprueba.
+  const [tipos, setTipos] = useState<Record<string, string>>({});
 
   // La sesión se venció en medio de la pantalla: se vuelve al ingreso con el
   // aviso, en vez de dejar el panel dibujado con todo fallando.
@@ -212,9 +215,10 @@ export default function AdminPage() {
 
   async function act(id: string, estado: string) {
     const motivo = estado === "rechazado" || estado === "cambios" ? prompt("Motivo (opcional):") ?? undefined : undefined;
+    const tipo = tipos[id];                       // lo que corrigió el moderador, si tocó algo
     setItems((prev) => prev.filter((p) => p.id !== id)); // optimista
     try {
-      await moderar(id, estado, motivo);
+      await moderar(id, estado, motivo, tipo);
     } catch {
       load(); // revertir si falla
     }
@@ -487,6 +491,17 @@ export default function AdminPage() {
               })()}
             </div>
             <div className="mod-actions">
+              {/* Lo que decide el clasificador es lo que el comprador ve: una
+                  novedad entre las ofertas ensucia la pantalla de Ofertas.
+                  Acá se corrige antes de aprobar. */}
+              <select className="adm-input" style={{ width: "auto", fontSize: 12, padding: "4px 6px" }}
+                      title="Qué es esto: oferta, novedad o video"
+                      value={tipos[p.id] ?? p.tipo ?? "oferta"}
+                      onChange={(e) => setTipos((t) => ({ ...t, [p.id]: e.target.value }))}>
+                <option value="oferta">🏷️ Oferta</option>
+                <option value="novedad">📣 Novedad</option>
+                <option value="video">▶️ Video</option>
+              </select>
               <button className="mbtn" title="Revisar con IA" onClick={() => revisarIA(p)} disabled={veredictos[p.id] === "cargando"} style={{ fontSize: 16 }}>✨</button>
               <button className="mbtn approve" title="Aprobar" onClick={() => act(p.id, "aprobado")}><Check style={{ width: 18, height: 18 }} /></button>
               <button className="mbtn edit" title="Solicitar cambios" onClick={() => act(p.id, "cambios")}><Edit style={{ width: 18, height: 18 }} /></button>

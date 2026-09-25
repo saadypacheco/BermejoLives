@@ -171,6 +171,8 @@ def moderar(
         raise HTTPException(status_code=400, detail=f"estado inválido: {body.estado}")
     if body.estado == "aprobado":
         _validar_codigo_al_aprobar(repo, pub_id)
+    if body.tipo in ("oferta", "novedad", "video"):
+        repo.update_publicacion(pub_id, {"tipo": body.tipo})
     updated = repo.set_estado_publicacion(pub_id, body.estado, body.motivo, mod["email"])
     if not updated:
         raise HTTPException(status_code=404, detail="publicación no encontrada")

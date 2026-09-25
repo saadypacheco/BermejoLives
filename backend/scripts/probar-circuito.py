@@ -69,6 +69,8 @@ print("3. EL COMERCIANTE MANDA, y cada mensaje se clasifica solo")
 print("=" * 78)
 casos = [
     ("Campera de jean Bs 250", "image", "https://x/campera.jpg"),
+    ("Llegó la colección nueva", "image", "https://x/coleccion.jpg"),   # foto, pero es novedad
+    ("", "image", "https://x/cartel.jpg"),                              # foto sola: el cartel
     ("Llegó mercadería nueva", "chat", None),
     ("Oferta: 2x1 en remeras", "chat", None),
     ("Pantalón 180 bolivianos", "chat", None),
@@ -81,7 +83,7 @@ for cuerpo, tipo, media in casos:
     tipo_detectado = "—"
     if len(repo.publicaciones) > antes:
         tipo_detectado = list(repo.publicaciones)[-1]["tipo"]
-    print(f"   {cuerpo[:44]:46} → {tipo_detectado}")
+    print(f"   {(cuerpo[:42] or '(foto sin texto)'):46}{'📷 ' if media else '   '}→ {tipo_detectado}")
 estado("lo que quedó")
 
 print("\n" + "=" * 78)

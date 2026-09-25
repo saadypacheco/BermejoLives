@@ -10,6 +10,13 @@ class LoginBody(BaseModel):
 class ModerarBody(BaseModel):
     estado: str               # 'aprobado' | 'rechazado' | 'cambios'
     motivo: str | None = None
+    # Corregir el tipo al aprobar: "oferta" | "novedad" | "video".
+    #
+    # El clasificador acierta el caso común (precio -> oferta, "llegó
+    # mercadería" -> novedad) pero no todos, y hasta hoy lo que decidía
+    # quedaba fijo: el moderador aprobaba una novedad sabiendo que iba a
+    # salir entre las ofertas, y no podía hacer nada.
+    tipo: str | None = None
 
 
 class RegistroBody(BaseModel):

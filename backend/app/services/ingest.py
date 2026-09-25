@@ -174,19 +174,34 @@ def _puede_publicar_por_whatsapp(comercio: dict) -> bool:
 
 
 def _classify_tipo(payload: WahaMessagePayload) -> str:
-    """Oferta, novedad o video.
+    """Oferta, novedad o video. **Decide el TEXTO; la foto sólo desempata.**
 
-    "Pizarra 220 bolivianos" entraba como NOVEDAD: el clasificador buscaba
-    "bs" o "$" en el texto y "bolivianos" no le matcheaba. Ahora la pregunta
-    es si el texto trae un precio —con cualquier forma de escribirlo— o habla
-    de una oferta. Se vio con la primera oferta real, el 11/9.
+    Antes cualquier imagen era oferta, y como el comerciante manda foto casi
+    siempre, "novedad" no le tocaba a nadie: "llegó la colección nueva" con
+    una foto terminaba en la pantalla de Ofertas, al lado de precios de
+    verdad. Y el moderador no puede cambiar el tipo, así que lo que se
+    decide acá es lo que el comprador ve.
+
+    La regla, en orden:
+      1. Video (o un link de TikTok en el texto)  → video
+      2. El texto habla de plata: precio en cualquier forma ("Bs 250",
+         "180 bolivianos", "$150") o las palabras oferta/promo/descuento
+                                                  → oferta
+      3. Hay texto y NO habla de plata            → novedad, tenga foto o no
+      4. Foto sin texto                           → oferta: es el cartel que
+         manda el comerciante con el precio escrito adentro de la imagen, y
+         mandarlo a novedades lo dejaría afuera de la pantalla de Ofertas.
     """
     from app.core.precio import parece_oferta
 
-    text = (payload.body or "").lower()
-    if payload.type in {"video"} or any(h in text for h in _VIDEO_HINTS):
+    text = (payload.body or "").strip()
+    bajo = text.lower()
+    if payload.type in {"video"} or any(h in bajo for h in _VIDEO_HINTS):
         return "video"
-    if payload.type in {"image"} or parece_oferta(text):
+    if parece_oferta(bajo):
+        return "oferta"
+    hay_foto = payload.type in {"image"} or payload.has_media
+    if hay_foto and not text:
         return "oferta"
     return "novedad"
 

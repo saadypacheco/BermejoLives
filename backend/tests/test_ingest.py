@@ -471,3 +471,48 @@ def test_el_borrador_de_un_desconocido_nace_apagado_y_lo_enciende_el_moderador(c
     assert pub["estado"] == "pendiente"
     client.post(f"/moderacion/publicaciones/{pub['id']}", headers=h, json={"estado": "aprobado"})
     assert repo.comercios[nuevo["id"]]["activo"] is True, "aprobar la oferta enciende el comercio"
+
+
+def test_una_foto_con_texto_de_novedad_es_novedad_no_oferta():
+    """El comerciante manda foto casi siempre. Si además escribe «llegó la
+    colección», eso es una novedad: mandarla a la pantalla de Ofertas, al lado
+    de precios de verdad, es lo que hace que esa pantalla deje de servir.
+
+    Manda el TEXTO. La foto sólo decide cuando no hay texto: ahí es el cartel
+    con el precio escrito adentro de la imagen."""
+    from app.models.whatsapp import WahaMessagePayload
+    from app.services.ingest import _classify_tipo
+
+    def tipo(body, t="chat", media=False):
+        return _classify_tipo(WahaMessagePayload(body=body, type=t, hasMedia=media))
+
+    # Con foto, el texto manda.
+    assert tipo("Llegó la colección nueva", "image", True) == "novedad"
+    assert tipo("Campera de jean Bs 250", "image", True) == "oferta"
+    assert tipo("Oferta 2x1 en remeras", "image", True) == "oferta"
+    # Sin foto, igual.
+    assert tipo("Hoy cerramos a las 16") == "novedad"
+    assert tipo("Pantalón 180 bolivianos") == "oferta"
+    # Foto sola, sin texto: el cartel con el precio adentro de la imagen.
+    assert tipo("", "image", True) == "oferta"
+    assert tipo(None, "image", True) == "oferta"
+    # El video gana siempre.
+    assert tipo("Mirá el video https://tiktok.com/@x/1", "chat") == "video"
+    assert tipo("Campera Bs 250", "video") == "video"
+
+
+def test_el_moderador_puede_corregir_el_tipo_al_aprobar(client, repo, admin_token):
+    """Cuando el clasificador se equivoca, el moderador lo arregla en el mismo
+    clic con el que aprueba. Antes lo que decidía la máquina quedaba fijo."""
+    h = {"Authorization": f"Bearer {admin_token}"}
+    c = repo.crear_comercio({"nombre": "Bazzi", "slug": "bazzi", "activo": True, "whatsapp": "59171111111"})
+    pub = repo.insert_publicacion({"comercio_id": c["id"], "tipo": "oferta", "estado": "pendiente",
+                                   "titulo": "Llegó la colección", "activo": True})
+    r = client.post(f"/moderacion/publicaciones/{pub['id']}", headers=h,
+                    json={"estado": "aprobado", "tipo": "novedad"})
+    assert r.status_code == 200
+    guardada = next(p for p in repo.publicaciones if p["id"] == pub["id"])
+    assert guardada["tipo"] == "novedad" and guardada["estado"] == "aprobado"
+    # Un tipo inventado no se guarda.
+    client.post(f"/moderacion/publicaciones/{pub['id']}", headers=h, json={"estado": "aprobado", "tipo": "cualquiera"})
+    assert next(p for p in repo.publicaciones if p["id"] == pub["id"])["tipo"] == "novedad"

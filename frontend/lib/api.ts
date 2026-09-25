@@ -99,11 +99,13 @@ export async function listPendientes(estado = "pendiente"): Promise<PendingPub[]
   return itemsDe<PendingPub>(res, "las publicaciones");
 }
 
-export async function moderar(id: string, estado: string, motivo?: string) {
+export async function moderar(id: string, estado: string, motivo?: string, tipo?: string) {
   const res = await authFetch(`/moderacion/publicaciones/${id}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ estado, motivo }),
+    // `tipo` corrige lo que decidió el clasificador ("oferta" | "novedad" |
+    // "video"). Sin él, queda como vino.
+    body: JSON.stringify({ estado, motivo, tipo }),
   });
   return res.json();
 }
