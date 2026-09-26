@@ -321,12 +321,7 @@
 .uk-section-head a { color: var(--uk-green); font-size: 13px; font-weight: 700; }
 
 /* ---- Ofertas ---- */
-/* Las columnas siguen a cuántas ofertas hay (`--cols`, que pone la página).
-   Con 4 fijas, la primera oferta quedaba sola en una cuarta parte del ancho y
-   con tres huecos al lado: parecía un error, no un estreno. Va como variable y
-   no en el `style` de la etiqueta para que las medidas de celular de más abajo
-   le sigan ganando. */
-.uk-offers { display: grid; grid-template-columns: repeat(var(--cols, 4), 1fr); gap: 16px; }
+.uk-offers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .uk-offer { min-height: 220px; position: relative; overflow: hidden; border-radius: 20px; background: var(--uk-green-2); background-size: cover; background-position: center; box-shadow: var(--uk-shadow-soft); color: #fff; }
 .uk-offer::after { content:""; position:absolute; inset:0; background: linear-gradient(0deg, rgba(1,14,18,.9), rgba(1,14,18,.12)); }
 .uk-offer-tag { position: absolute; top: 14px; left: 14px; z-index: 2; font-size: 9px; padding: 6px 9px; border-radius: 8px; font-weight: 800; background: var(--uk-green); text-transform: uppercase; letter-spacing: .04em; }
@@ -581,12 +576,24 @@
 
 /* La galería: una grande y tres al costado. La grande manda —es el frente del
    local, lo que permite reconocerlo— y las otras son la mercadería. */
-.uk-fgal { display: grid; grid-template-columns: 1fr 132px; gap: 10px; }
+/* Una grande arriba y TODAS abajo, en una fila. Antes eran dos columnas —la
+   grande y tres miniaturas— con el resto detrás de un «Ver todas» que abría
+   una ventana. La mercadería de un local es el contenido de su ficha, no un
+   anexo que haya que ir a buscar. */
+.uk-fgal { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .uk-fgal-main { position: relative; border-radius: 16px; overflow: hidden; background: var(--uk-chip); }
 .uk-fgal-main button { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
 .uk-fgal-main img { width: 100%; height: 100%; min-height: 260px; max-height: 380px; object-fit: cover; display: block; }
 .uk-fgal-count { position: absolute; left: 12px; bottom: 12px; background: rgba(0,0,0,.62);
   color: #fff; font-size: 12px; padding: 4px 9px; border-radius: 999px; }
+.uk-fgal-tira { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.uk-fgal-tira button { position: relative; flex: 0 0 96px; height: 76px; padding: 0; border: 2px solid transparent;
+                       background: var(--uk-chip); border-radius: 10px; overflow: hidden; cursor: pointer; }
+.uk-fgal-tira button.on { border-color: var(--uk-green); }
+.uk-fgal-tira img, .uk-fgal-tira video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.uk-fgal-tira .con-video span { position: absolute; inset: 0; display: grid; place-items: center;
+                                color: #fff; font-size: 20px; text-shadow: 0 2px 6px rgba(0,0,0,.7);
+                                background: rgba(0,0,0,.25); }
 .uk-fgal-side { display: flex; flex-direction: column; gap: 10px; }
 .uk-fgal-side button { padding: 0; border: 0; background: var(--uk-chip); border-radius: 12px;
   overflow: hidden; cursor: pointer; flex: 1; min-height: 0; }
@@ -677,6 +684,9 @@
   .uk-fgal-side button { flex: 1; }
   .uk-fgal-todas { flex: 1.4 !important; }
   .uk-fgal-main img { min-height: 220px; max-height: 300px; }
+  /* En el celular las miniaturas se hacen un poco más chicas: entran cuatro
+     en pantalla y se ve que la tira sigue. */
+  .uk-fgal-tira button { flex: 0 0 78px; height: 62px; }
 }
 
 .uk-profile { padding-bottom: 50px; }

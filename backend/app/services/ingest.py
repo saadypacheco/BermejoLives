@@ -173,6 +173,50 @@ def _puede_publicar_por_whatsapp(comercio: dict) -> bool:
     return (comercio.get("plan") or "gratis") in permitidos
 
 
+#: Cuánto tiempo puede pasar entre la foto y el precio para que sigan siendo
+#: la misma oferta. Diez minutos: el que saca la foto y escribe el precio lo
+#: hace seguido; más que eso ya es otra cosa que quiso publicar.
+_MINUTOS_MISMA_OFERTA = 10
+
+
+def _fusionar_con_la_anterior(repo: Repo, comercio: dict, row: dict, tipo: str) -> dict | None:
+    """Junta este mensaje con el anterior cuando son las dos mitades de una oferta.
+
+    Sólo si se COMPLEMENTAN: una tiene foto y le falta el texto, la otra tiene
+    texto y le falta la foto. Si las dos tienen lo mismo son dos publicaciones
+    distintas —dos ofertas seguidas, que también pasa— y no se tocan.
+
+    Devuelve la publicación ya completa, o None si no había con qué juntarla.
+    """
+    previa = repo.ultima_publicacion_de(comercio["id"], _MINUTOS_MISMA_OFERTA)
+    if not previa:
+        return None
+
+    texto_nuevo = (row.get("descripcion") or "").strip()
+    foto_nueva = row.get("imagen_url")
+    texto_previo = (previa.get("descripcion") or "").strip()
+    foto_previa = previa.get("imagen_url")
+
+    patch: dict = {}
+    if foto_nueva and not foto_previa and texto_previo and not texto_nuevo:
+        # Llegó la foto de lo que ya se había escrito.
+        patch["imagen_url"] = foto_nueva
+    elif texto_nuevo and not texto_previo and foto_previa and not foto_nueva:
+        # Llegó el texto de la foto que ya estaba. El texto manda para decidir
+        # si es oferta o novedad (ver _classify_tipo), así que también lo pisa.
+        patch["descripcion"] = texto_nuevo
+        patch["tipo"] = tipo
+        if row.get("precio") is not None:
+            patch["precio"] = row["precio"]
+            patch["moneda"] = row.get("moneda") or "BOB"
+        if not (previa.get("titulo") or "").strip():
+            patch["titulo"] = texto_nuevo.split(chr(10))[0][:120] or None
+    else:
+        return None
+
+    return repo.update_publicacion(previa["id"], patch)
+
+
 def _classify_tipo(payload: WahaMessagePayload) -> str:
     """Oferta, novedad o video. **Decide el TEXTO; la foto sólo desempata.**
 
@@ -551,6 +595,23 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         "wa_message_id": payload.id,
         "raw": event.payload,
     }
+    # LA FOTO Y EL PRECIO LLEGAN EN DOS MENSAJES.
+    #
+    # Nadie manda la foto con el precio en el epígrafe: manda la foto y
+    # después escribe «220 bolivianos». Eran dos publicaciones —una con foto y
+    # sin precio, otra con precio y sin foto— y en la cola de moderación
+    # parecían dos cosas distintas. Se aprobaba una y la oferta salía a medias:
+    # exactamente lo que pasó con la pizarra de Vidriería Pacheco.
+    #
+    # Si lo último que mandó este comercio hace un rato es la mitad que le
+    # falta a esto, se juntan en una sola.
+    fusionada = _fusionar_con_la_anterior(repo, comercio, row, tipo)
+    if fusionada:
+        logger.info("ingest.publicacion_fusionada", comercio=slug, pub=fusionada["id"], tipo=fusionada.get("tipo"))
+        repo.marcar_wa_inbox(payload.id, "publicada", "se juntó con el mensaje anterior", comercio["id"])
+        _avisar(payload.from_, "✅ Lo sumé a lo que mandaste recién: queda una sola publicación.")
+        return {"captured": True, "comercio": slug, "tipo": fusionada.get("tipo"), "estado": fusionada.get("estado"), "fusionada": True}
+
     creada = repo.insert_publicacion(row)
 
     estado = row["estado"]

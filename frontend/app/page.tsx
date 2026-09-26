@@ -274,9 +274,11 @@ export default async function InicioPage() {
               {hayOfertas ? "Ver más ofertas →" : "Ver todas las novedades →"}
             </Link>
           </div>
-          {/* Las columnas siguen a cuántas hay: una sola publicación en una
-              grilla de cuatro quedaba chiquita y con tres huecos al lado. */}
-          <div className="uk-offers" style={{ "--cols": Math.min(Math.max(cards.length, 2), 4) } as React.CSSProperties}>
+          {/* Grilla de cuatro, fija. Probé que las columnas siguieran a cuántas
+              publicaciones hay y con una sola quedaba una tarjeta enorme que se
+              leía como un banner, no como la primera de una lista. El tamaño no
+              era el problema: era que el texto no se veía. */}
+          <div className="uk-offers">
             {cards.map((o) => {
               // El emoji del rubro viene pegado al nombre ("🔧 Ferretería…").
               // Es lo que ocupa el lugar de la foto cuando no hay foto.

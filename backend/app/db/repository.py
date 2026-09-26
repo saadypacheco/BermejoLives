@@ -113,6 +113,7 @@ class Repo(Protocol):
     def previsualizar_patron(self, patron: str, rubro: str | None) -> list[dict]: ...
     def publicaciones_sin_analizar(self, limite: int) -> list[dict]: ...
     def update_publicacion(self, pub_id: str, patch: dict) -> dict: ...
+    def ultima_publicacion_de(self, comercio_id: str, minutos: int) -> dict | None: ...
     def borrar_propuestas(self, normalizado: str) -> None: ...
     def get_diccionario_sinonimos(self) -> dict[str, str]: ...
     def revisar_sinonimos(self) -> str | None: ...
@@ -632,6 +633,24 @@ class SupabaseRepo:
             return []
         cuenta = Counter(f.get("resultado") or "sin_registrar" for f in filas)
         return sorted(({"resultado": k, "n": v} for k, v in cuenta.items()), key=lambda x: -x["n"])
+
+    def ultima_publicacion_de(self, comercio_id: str, minutos: int) -> dict | None:
+        """La última publicación de ese comercio, si es de hace un rato.
+
+        Existe para juntar los dos mensajes de una misma oferta: casi nadie
+        manda la foto CON el precio en el epígrafe — manda la foto y después
+        escribe «220 bolivianos». Son dos mensajes y hasta ahora eran dos
+        publicaciones, una con foto y sin precio y otra con precio y sin foto.
+        """
+        from datetime import datetime, timedelta, timezone
+
+        desde = (datetime.now(timezone.utc) - timedelta(minutes=minutos)).isoformat()
+        res = (self._db.table("publicaciones")
+               .select("id, tipo, titulo, descripcion, precio, moneda, imagen_url, estado, created_at")
+               .eq("comercio_id", comercio_id)
+               .gte("created_at", desde)
+               .order("created_at", desc=True).limit(1).execute())
+        return res.data[0] if res.data else None
 
     def insert_publicacion(self, row: dict) -> dict:
         """Devuelve la fila insertada, o {} si ya existía ese wa_message_id.

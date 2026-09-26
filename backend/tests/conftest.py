@@ -97,6 +97,7 @@ class FakeRepo:
         }
         self.wa_inbox: dict[str, dict] = {}          # wa_message_id -> row
         self.leads: list[dict] = []
+        self.visitas: list[dict] = []
         self.busquedas: list[dict] = []
         self.busqueda_comercios: list[dict] = []
         self.producto_refs: dict[str, dict] = {}     # id -> row
@@ -447,6 +448,49 @@ class FakeRepo:
         from collections import Counter
         cuenta = Counter(f.get("resultado") or "sin_registrar" for f in self.wa_inbox.values())
         return sorted(({"resultado": k, "n": v} for k, v in cuenta.items()), key=lambda x: -x["n"])
+
+    def poner_horario_en_lote(self, ids, horario, estimado):
+        n = 0
+        for c in self.comercios.values():
+            if c["id"] in ids:
+                c["horario"] = horario
+                c["horario_estimado"] = bool(estimado)
+                n += 1
+        return n
+
+    def insert_visita(self, fila):
+        self.visitas.append({"id": self._id("vis"), **fila})
+
+    def resumen_visitas(self, dias: int = 30):
+        from collections import Counter
+        por_dia = {}
+        for v in self.visitas:
+            d = por_dia.setdefault(v.get("dia", "hoy"), {"dia": v.get("dia", "hoy"), "visitas": 0, "personas": 0})
+            d["visitas"] += 1
+            if v.get("primera"):
+                d["personas"] += 1
+        rutas = Counter(v["ruta"] for v in self.visitas)
+        por_tipo = Counter(l.get("tipo") for l in self.leads)
+        contactos = sum(n for t, n in por_tipo.items() if t in ("whatsapp", "telefono", "reserva"))
+        personas = len({v["sesion"] for v in self.visitas})
+        return {
+            "dias": dias, "visitas": len(self.visitas), "personas": personas,
+            "por_dia": sorted(por_dia.values(), key=lambda d: d["dia"]),
+            "top_rutas": [{"ruta": r, "n": n} for r, n in rutas.most_common(12)],
+            "top_referidos": [], "top_origenes": [],
+            "embudo": {"visitas": len(self.visitas), "personas": personas,
+                       "fichas_vistas": por_tipo.get("vista", 0), "contactos": contactos,
+                       "mapa": por_tipo.get("mapa", 0)},
+        }
+
+    def ultima_publicacion_de(self, comercio_id, minutos):
+        """La última de ese comercio. Sin reloj: en las pruebas todo pasa en el
+        mismo instante, así que la ventana de minutos no aporta nada y filtrar
+        por ella dejaría el caso de la fusión sin poder probarse."""
+        for p in reversed(self.publicaciones):
+            if p.get("comercio_id") == comercio_id:
+                return p
+        return None
 
     def insert_publicacion(self, row):
         wamid = row.get("wa_message_id")
@@ -1443,7 +1487,7 @@ class FakeRepo:
         )
         return [{"query": q, "n": n} for q, n in cont.most_common(limit)]
 
-    def kpis_admin(self):
+    def kpis_admin(self, dias: int = 30):
         from collections import Counter
         from datetime import date
         def norm(q): return (q or "").strip().lower()
@@ -1458,8 +1502,13 @@ class FakeRepo:
         activos = [c for c in self.comercios.values() if c.get("activo", True)]
         pagando = sum(1 for c in activos if not c.get("suspendido") and c.get("paga_hasta") and str(c["paga_hasta"]) >= hoy)
         return {
-            "top_busquedas": [{"query": q, "n": n} for q, n in top.most_common(15)],
-            "sin_resultado": [{"query": q, "n": n} for q, n in sin.most_common(15)],
+            "dias": dias,
+            "desde": date.today().isoformat(),
+            "busquedas_total": len(self.busquedas),
+            "eventos_total": len(self.leads),
+            "top_busquedas": [{"query": q, "n": n, "hoy": None} for q, n in top.most_common(15)],
+            "sin_resultado": [{"query": q, "n": n, "hoy": 0} for q, n in sin.most_common(15)],
+            "ya_resueltas": [],
             "top_comercios": top_comercios,
             "monetizacion": {"comercios_activos": len(activos), "pagando": pagando, "gratis": max(0, len(activos) - pagando)},
         }
