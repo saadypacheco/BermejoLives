@@ -42,3 +42,7 @@ memory/
 frontend/video-promo/
 capturas/
 video-1min/
+
+# Calles bajadas de OpenStreetMap (caché de backend/scripts/calles-desde-osm.py).
+# Se regenera solo; no es fuente, es una copia para no golpear Overpass.
+.osm-*.json
