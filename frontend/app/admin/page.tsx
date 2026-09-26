@@ -30,6 +30,7 @@ import {
 } from "@/lib/api";
 import { getRubros } from "@/lib/data";
 import { AdminMap } from "@/components/admin-map";
+import { AdminCalles } from "@/components/admin-calles";
 import { LugaresEditor } from "@/components/lugares-editor";
 import { AdornosEditor } from "@/components/adornos-editor";
 import { ImportadosPanel } from "@/components/importados-panel";
@@ -1112,7 +1113,7 @@ function TabSuscripciones({
 
 type FiltroComercio = "todos" | "pendientes" | "verificados" | "incompletos" | "sin-horario";
 type OrdenComercio = "recientes" | "alfabetico" | "estado";
-type VistaComercio = "lista" | "mapa";
+type VistaComercio = "lista" | "mapa" | "calles";
 
 function normTxt(s: string): string {
   return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -1322,12 +1323,12 @@ function TabComercios({
           <option value="estado">Pendientes primero</option>
         </select>
         <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
-          {(["lista", "mapa"] as VistaComercio[]).map((v) => (
+          {(["lista", "mapa", "calles"] as VistaComercio[]).map((v) => (
             <button key={v} onClick={() => setVista(v)}
               style={{ padding: "7px 14px", fontSize: 13, cursor: "pointer", border: "none",
                 background: vista === v ? "var(--neon)22" : "transparent",
                 color: vista === v ? "var(--neon)" : "var(--txt-2)", fontWeight: vista === v ? 600 : 400 }}>
-              {v === "lista" ? "☰ Lista" : "🗺 Mapa"}
+              {v === "lista" ? "☰ Lista" : v === "mapa" ? "🗺 Mapa" : "🛣 Calles"}
             </button>
           ))}
         </div>
@@ -1355,7 +1356,12 @@ function TabComercios({
       <AnalisisMasivo onTerminado={onEdited} />
 
       {/* Vista MAPA (D): tocar un pin abre el editor; ideal para los sin nombre */}
-      {vista === "mapa" ? (
+      {vista === "calles" ? (
+        // Por calle: para cargar horarios de a cientos en vez de de a uno.
+        // Recibe `deLaCiudad` y no `filtradas`: el buscador y los chips sirven
+        // para encontrar UN comercio, y acá lo que importa es la calle entera.
+        <AdminCalles comercios={deLaCiudad} onCambio={onEdited} />
+      ) : vista === "mapa" ? (
         <div style={{ padding: 12 }}>
           <AdminMap
             comercios={filtradas.map((c) => ({

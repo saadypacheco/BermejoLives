@@ -53,6 +53,13 @@ export type Comercio = {
   pedido_minimo: string | null;
   tiene_factura: boolean;
   horario: string | null;
+  /** El horario se puso por lote —el habitual de la calle— y no lo confirmó
+   *  nadie en el local (0127). La ficha tiene que decirlo: alguien que cruzó
+   *  el puente porque URUKU dijo «abierto» y encontró cerrado no vuelve. */
+  horario_estimado?: boolean;
+  /** La calle deducida del GPS. No reemplaza a `direccion` (que casi nadie
+   *  tiene): la completa cuando no hay. */
+  calle?: string | null;
   tiene_stock: boolean;
 };
 

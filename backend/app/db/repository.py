@@ -184,6 +184,7 @@ class Repo(Protocol):
     def marcar_mensaje_leido(self, mensaje_id: str, comercio_id: str) -> dict: ...
     def list_todos_comercios(self, verificado: bool | None, limit: int) -> list[dict]: ...
     def update_comercio(self, comercio_id: str, patch: dict, rubro_slugs: list[str] | None) -> dict: ...
+    def poner_horario_en_lote(self, ids: list[str], horario: str, estimado: bool) -> int: ...
     def crear_lugar(self, row: dict) -> dict: ...
     def list_lugares(self, ciudad_id: str | None) -> list[dict]: ...
     def get_lugar(self, lugar_id: str) -> dict | None: ...
@@ -253,7 +254,7 @@ class Repo(Protocol):
 # campo y nadie sabe por qué.
 _COLS_COMERCIO_ADMIN = (
     "id, slug, nombre, whatsapp, telefono, modalidad, descripcion, prod_obs_human, "
-    "prod_det_ia, subcategoria, sinonimos, codigo, direccion, lat, lng, horario, "
+    "prod_det_ia, subcategoria, sinonimos, codigo, direccion, calle, lat, lng, horario, horario_estimado, "
     "verificado, suspendido, paga_hasta, portada_url, portada_thumb_url, portada_pos, cargado_por, "
     "created_at, lugar_id, puesto, "
     "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), "
@@ -2112,6 +2113,29 @@ class SupabaseRepo:
         return self.get_comercio(comercio_id) or {}
 
     # ---- lugares (mercados / galerías / paseos: contenedores de puestos) ----
+    def poner_horario_en_lote(self, ids: list[str], horario: str, estimado: bool) -> int:
+        """El mismo horario a muchos comercios de una.
+
+        Es la única forma de que 1.246 comercios sin horario dejen de estarlo:
+        la 23 de Marzo son 139 y casi todos abren igual. `estimado` marca que
+        el horario es el habitual de la calle y no lo confirmó nadie en el
+        local — la ficha lo aclara, y quien lo confirme en una visita lo apaga.
+
+        Se manda en tandas porque el filtro `in` viaja en la URL y con
+        trescientos UUID se pasa del largo que aguanta el servidor. El
+        síntoma sería un 414 en la tanda grande y ninguno en las chicas, que
+        es de las cosas que aparecen recién en producción.
+        """
+        if not ids or not (horario or "").strip():
+            return 0
+        patch = {"horario": horario.strip(), "horario_estimado": bool(estimado)}
+        tocados = 0
+        for i in range(0, len(ids), 100):
+            tanda = ids[i:i + 100]
+            res = self._db.table("comercios").update(patch).in_("id", tanda).execute()
+            tocados += len(res.data or [])
+        return tocados
+
     def crear_lugar(self, row: dict) -> dict:
         res = self._db.table("lugares").insert(row).execute()
         return res.data[0]

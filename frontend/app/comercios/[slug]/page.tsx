@@ -163,7 +163,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
               {comercio.modalidad && (
                 <span className="uk-pill blue">{MODALIDAD_LABEL[comercio.modalidad] ?? comercio.modalidad}</span>
               )}
-              <HorarioBadge horario={comercio.horario} />
+              <HorarioBadge horario={comercio.horario} estimado={comercio.horario_estimado} />
             </div>
 
             {comercio.descripcion && <p className="uk-ficha-desc">{comercio.descripcion}</p>}
@@ -310,7 +310,26 @@ export default async function ComercioPage({ params }: { params: { slug: string 
               {comercio.horario && (
                 <div className="uk-info-row">
                   <span className="ic" aria-hidden>🕐</span>
-                  <div><b>Horarios</b>{comercio.horario} <HorarioBadge horario={comercio.horario} /></div>
+                  <div>
+                    <b>Horarios</b>{comercio.horario}{" "}
+                    <HorarioBadge horario={comercio.horario} estimado={comercio.horario_estimado} />
+                    {/* Decir de dónde salió el horario no es un detalle legal:
+                        es la diferencia entre un dato y una promesa. */}
+                    {comercio.horario_estimado && (
+                      <small className="uk-info-nota">
+                        Es el horario habitual de la zona. Confirmá antes de ir.
+                      </small>
+                    )}
+                  </div>
+                </div>
+              )}
+              {/* La calle sale del GPS (0127). Casi ningún comercio tiene
+                  dirección tipeada, así que sin esto la ficha no dice dónde
+                  queda en palabras — sólo un punto en el mapa. */}
+              {!comercio.direccion && comercio.calle && (
+                <div className="uk-info-row">
+                  <span className="ic" aria-hidden>📍</span>
+                  <div><b>Dónde queda</b>{comercio.calle}<small className="uk-info-nota">Sin altura: usá «Cómo llegar».</small></div>
                 </div>
               )}
               {comercio.whatsapp && (

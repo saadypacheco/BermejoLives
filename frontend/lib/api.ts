@@ -143,6 +143,14 @@ export type ComercioPorVerificar = {
   subcategoria: string | null;
   codigo: string | null;
   direccion: string | null;
+  /** La calle deducida del GPS (migración 0127). No es la dirección: no tiene
+   *  altura. Sirve para agrupar —«los 139 de la 23 de Marzo»— y para decir
+   *  dónde queda cuando nadie tipeó una dirección, que es en 1.247 de 1.248. */
+  calle: string | null;
+  horario?: string | null;
+  /** El horario se puso por lote (el habitual de la calle), no lo confirmó
+   *  nadie en el local. La ficha lo aclara. */
+  horario_estimado?: boolean;
   lat: number | null;
   lng: number | null;
   portada_url: string | null;
@@ -170,6 +178,19 @@ export async function listComerciosPorVerificar(): Promise<ComercioPorVerificar[
 export async function listTodosComercios(): Promise<ComercioPorVerificar[]> {
   const res = await authFetch(`/moderacion/comercios?todos=true`);
   return itemsDe<ComercioPorVerificar>(res, "los comercios");
+}
+
+/** El mismo horario a muchos comercios de una: la única forma de que 1.246
+ *  fichas sin horario dejen de estarlo. Van los IDs que la persona vio en la
+ *  lista, no un filtro que el servidor vuelva a calcular. */
+export async function ponerHorarioEnLote(ids: string[], horario: string, estimado: boolean): Promise<number> {
+  const res = await authFetch(`/admin/comercios/horario-lote`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids, horario, estimado }),
+  });
+  const j = (await okDe(res, "poner el horario")) as { actualizados?: number };
+  return j.actualizados ?? 0;
 }
 
 export async function editarComercio(id: string, patch: Record<string, unknown>) {

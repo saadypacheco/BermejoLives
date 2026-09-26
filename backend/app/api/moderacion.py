@@ -292,6 +292,11 @@ def editar_comercio(
     patch = {k: v for k, v in body.model_dump(exclude={"rubro_slugs"}).items() if v is not None}
     if not patch and not body.rubro_slugs:
         raise HTTPException(status_code=400, detail="Nada para actualizar")
+    # Si alguien escribe el horario a mano, deja de ser el estimado de la
+    # calle: lo confirmó una persona. Sin esto la ficha seguiría diciendo
+    # «confirmá antes de ir» justo en los que ya fueron confirmados.
+    if "horario" in patch:
+        patch["horario_estimado"] = False
     updated = repo.update_comercio(comercio_id, patch, body.rubro_slugs)
     # Si cambió de qué vende, se recalculan los rubros. Sólo suma: los que se
     # eligieron a mano en este mismo formulario no se pierden.
@@ -299,6 +304,37 @@ def editar_comercio(
         aplicar_rubros(repo, updated, body.rubro_slugs or repo.get_comercio_rubros(comercio_id))
     logger.info("moderacion.comercio_editado", comercio=comercio_id, campos=list(patch.keys()), by=admin["email"])
     return {"ok": True, "comercio": updated}
+
+
+class HorarioLoteBody(BaseModel):
+    """Los comercios van por ID y no por filtro (calle + rubros) a propósito.
+
+    El panel muestra la lista antes de aplicar; si el servidor volviera a
+    calcular el filtro, podría tocar comercios que la persona no vio —uno
+    cargado hace un minuto, uno reclasificado— y no habría forma de darse
+    cuenta. Los IDs son exactamente lo que se miró."""
+    ids: list[str] = Field(min_length=1, max_length=1000)
+    horario: str = Field(min_length=3, max_length=120)
+    #: false sólo si quien lo pone SABE que es el horario real de todos.
+    estimado: bool = True
+
+
+@router.post("/admin/comercios/horario-lote")
+def horario_en_lote(
+    body: HorarioLoteBody,
+    admin: dict = Depends(require_permiso("comercios.editar")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """El horario habitual de una calle, a todos sus comercios de una.
+
+    De 1.248 comercios activos, 1.246 no tienen horario. Cargarlos de a uno no
+    va a pasar nunca; por calle sí: la 23 de Marzo son 139 y los mayoristas de
+    ropa abren de 6 a 16. Queda marcado como estimado (ver el modelo) para no
+    prometer una hora que nadie confirmó."""
+    n = repo.poner_horario_en_lote(body.ids, body.horario, body.estimado)
+    logger.info("moderacion.horario_lote", n=n, pedidos=len(body.ids),
+                horario=body.horario, estimado=body.estimado, by=admin["email"])
+    return {"ok": True, "actualizados": n}
 
 
 # ── El equipo: usuarios, roles y permisos (0126) ──────────────────────────────

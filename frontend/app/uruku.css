@@ -206,6 +206,14 @@
 .uk-open.is-open { color: #0f7f4e; background: rgba(21,152,94,.13); }
 .uk-open.is-closed { color: #c2410c; background: rgba(245,138,35,.14); }
 .uk-open.is-open .uk-open-dot { box-shadow: 0 0 0 0 rgba(21,152,94,.5); animation: uk-open-pulse 2s infinite; }
+/* ESTIMADO: el horario se puso por lote —el habitual de la calle— y nadie lo
+   confirmó en el local. Borde punteado y sin el punto que late: el chip tiene
+   que verse menos seguro, porque lo es. El que cruzó el puente y manejó veinte
+   cuadras porque decía «abierto» no vuelve. */
+.uk-open.is-estimado { font-weight: 700; background: transparent; border: 1px dashed currentColor; opacity: .85; }
+.uk-open.is-estimado .uk-open-dot { animation: none; box-shadow: none; opacity: .7; }
+/* Aclaración chica debajo de un dato de la ficha ("confirmá antes de ir"). */
+.uk-info-nota { display: block; margin-top: 3px; font-size: 11.5px; font-weight: 400; color: var(--uk-ink-soft); line-height: 1.35; }
 @keyframes uk-open-pulse { 0% { box-shadow: 0 0 0 0 rgba(21,152,94,.5); } 70% { box-shadow: 0 0 0 5px rgba(21,152,94,0); } 100% { box-shadow: 0 0 0 0 rgba(21,152,94,0); } }
 @media (prefers-reduced-motion: reduce) { .uk-open.is-open .uk-open-dot { animation: none; } }
 /* Selector de ciudad */
