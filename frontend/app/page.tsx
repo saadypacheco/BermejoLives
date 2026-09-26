@@ -130,7 +130,11 @@ export default async function InicioPage() {
   // Bermejo. Otra ciudad sin foto va con el fondo liso, no con el río de otra.
   const heroImg = ciudad?.hero_url || (conGuia ? "/bermejo-ciudad4.png" : "");
   const ofertas = feed.filter((f) => f.tipo === "oferta");
-  const cards = (ofertas.length ? ofertas : feed.filter((f) => f.tipo !== "video")).slice(0, 4);
+  // Cuando no hay ofertas se muestran las novedades, y entonces el título NO
+  // puede seguir diciendo «Ofertas destacadas»: la primera publicación del
+  // sitio era una novedad y el home la anunciaba como oferta.
+  const hayOfertas = ofertas.length > 0;
+  const cards = (hayOfertas ? ofertas : feed.filter((f) => f.tipo !== "video")).slice(0, 4);
   const t = tasasDe(cotizaciones);
   const fechas = [frontera?.actualizado_en, t.actualizado_en].filter(Boolean) as string[];
   const ultima = fechas.length ? fechas.sort()[fechas.length - 1] : null;
@@ -262,14 +266,27 @@ export default async function InicioPage() {
       {cards.length > 0 && (
         <section className="uk-container uk-home-sec">
           <div className="uk-section-head">
-            <h2>Ofertas destacadas <small>De comercios de {nombre}.</small></h2>
-            <Link href="/ofertas">Ver más ofertas →</Link>
+            <h2>
+              {hayOfertas ? "Ofertas destacadas" : "Novedades de los comercios"}{" "}
+              <small>De comercios de {nombre}.</small>
+            </h2>
+            <Link href={hayOfertas ? "/ofertas" : "/novedades"}>
+              {hayOfertas ? "Ver más ofertas →" : "Ver todas las novedades →"}
+            </Link>
           </div>
-          <div className="uk-offers">
-            {cards.map((o) => (
-              <Link key={o.id} href={`/comercios/${o.comercio_slug}`} className="uk-offer"
+          {/* Las columnas siguen a cuántas hay: una sola publicación en una
+              grilla de cuatro quedaba chiquita y con tres huecos al lado. */}
+          <div className="uk-offers" style={{ "--cols": Math.min(Math.max(cards.length, 2), 4) } as React.CSSProperties}>
+            {cards.map((o) => {
+              // El emoji del rubro viene pegado al nombre ("🔧 Ferretería…").
+              // Es lo que ocupa el lugar de la foto cuando no hay foto.
+              const emoji = (o.rubro_nombre ?? "").trim().split(" ")[0];
+              return (
+              <Link key={o.id} href={`/comercios/${o.comercio_slug}`}
+                className={`uk-offer${o.imagen_url ? "" : " sin-foto"}`}
                 style={o.imagen_url ? { backgroundImage: `url('${o.imagen_url}')` } : undefined}>
                 <span className="uk-offer-tag">{o.zona_nombre || o.comercio_nombre}</span>
+                {!o.imagen_url && emoji && <span className="uk-offer-emoji" aria-hidden>{emoji}</span>}
                 {o.descuento_pct != null && <span className="uk-offer-disc">-{o.descuento_pct}%</span>}
                 <div className="uk-offer-body">
                   <h3>{o.titulo}</h3>
@@ -277,7 +294,8 @@ export default async function InicioPage() {
                   {o.precio != null && <strong>{precioFmt(o.precio, o.moneda)}</strong>}
                 </div>
               </Link>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}

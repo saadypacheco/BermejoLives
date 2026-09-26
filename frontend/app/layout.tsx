@@ -7,6 +7,8 @@ import { ErrorListener } from "@/components/error-listener";
 import { WebVitalsReporter } from "@/components/web-vitals-reporter";
 import { RefCapture } from "@/components/ref-capture";
 import { PreguntaContesto } from "@/components/pregunta-contesto";
+import { ContadorVisitas } from "@/components/contador-visitas";
+import { Suspense } from "react";
 
 export const metadata: Metadata = {
   title: "URUKU — Todo Bermejo en un solo lugar",
@@ -43,6 +45,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <WebVitalsReporter />
         <RefCapture />
         <PreguntaContesto />
+        {/* Cuenta las páginas vistas. Va en Suspense porque usa
+            useSearchParams: sin esto, TODA la página se renderiza del lado del
+            cliente y se pierde el HTML del servidor. */}
+        <Suspense fallback={null}><ContadorVisitas /></Suspense>
         <InstallPrompt />
         {children}
         <SwRegister />

@@ -228,6 +228,12 @@ export type FeedItem = {
   comercio_logo: string | null;
   comercio_whatsapp: string;
   comercio_verificado: boolean;
+  /** El rubro del comercio, con su emoji adelante ("🔧 Ferretería y
+   *  construcción"). La vista ya lo trae; el tipo no lo declaraba, así que el
+   *  dato llegaba y se tiraba. Se usa para poner algo en el lugar de la foto
+   *  cuando la publicación no tiene. */
+  rubro_nombre?: string | null;
+  rubro_slug?: string | null;
   zona_nombre: string | null;
   descuento_pct: number | null;
   vence_el: string | null;

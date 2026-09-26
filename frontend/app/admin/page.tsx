@@ -31,6 +31,7 @@ import {
 import { getRubros } from "@/lib/data";
 import { AdminMap } from "@/components/admin-map";
 import { AdminCalles } from "@/components/admin-calles";
+import { PanelVisitas } from "@/components/panel-visitas";
 import { LugaresEditor } from "@/components/lugares-editor";
 import { AdornosEditor } from "@/components/adornos-editor";
 import { ImportadosPanel } from "@/components/importados-panel";
@@ -840,6 +841,11 @@ function TabMonitoreo({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Lo primero: cuánta gente entra y cuántos escriben. Todo lo demás de
+          esta pantalla —altas, ofertas, alertas— es lo que hacemos nosotros;
+          esto es lo que hace la gente. */}
+      <PanelVisitas />
+
       {/* Altas por día. Las columnas se leen de a pares: `altas` contra `con
           WhatsApp` es la diferencia entre un punto en el mapa y un local al que
           se le puede escribir; contra `analizados`, lo que falta pasar por la

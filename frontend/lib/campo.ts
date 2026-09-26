@@ -200,6 +200,26 @@ export async function eliminarComercioAgente(id: string): Promise<void> {
 /** Registra un click de contacto (WhatsApp, teléfono, etc.) para un comercio. */
 export type TipoLead = "whatsapp" | "telefono" | "email" | "web" | "vista" | "mapa" | "reserva";
 
+/** Una página vista. Sin cookies y sin IP: ver components/contador-visitas.tsx.
+ *  Fuego y olvido, igual que el lead. */
+export function registrarVisita(v: {
+  ruta: string; sesion: string; primera: boolean;
+  origen?: string | null; referido?: string | null; ciudad?: string | null;
+}): void {
+  const body: Record<string, unknown> = { ruta: v.ruta, sesion: v.sesion, primera: v.primera };
+  if (v.origen) body.origen = v.origen;
+  if (v.referido) body.referido = v.referido;
+  if (v.ciudad) body.ciudad = v.ciudad;
+  // `keepalive` para que el pedido sobreviva a la navegación: sin esto, el que
+  // entra y toca un enlace enseguida —que es lo normal— no se contaría nunca.
+  fetch(`${API}/visita`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    keepalive: true,
+  }).catch(() => { /* perder un número no puede costar una visita */ });
+}
+
 export async function registrarLead(comercio_id: string, tipo: TipoLead = "whatsapp", busqueda_id?: string | null, origen?: string | null, nombre?: string | null): Promise<void> {
   // Fire-and-forget: no bloqueamos la navegación del usuario
   const body: Record<string, string> = { comercio_id, tipo };

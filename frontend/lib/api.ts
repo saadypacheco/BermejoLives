@@ -373,6 +373,23 @@ export type Kpis = {
   top_comercios: { comercio_id: string; nombre: string; slug: string | null; eventos: number }[];
   monetizacion: { comercios_activos: number; pagando: number; gratis: number };
 };
+/** Visitas al sitio (0130). El embudo es el dato: visitas → personas →
+ *  fichas → contactos. Un número de visitas suelto no dice nada. */
+export type ResumenVisitas = {
+  dias: number;
+  visitas: number;
+  personas: number;
+  por_dia: { dia: string; visitas: number; personas: number }[];
+  top_rutas: { ruta: string; n: number }[];
+  top_referidos: { referido: string; n: number }[];
+  top_origenes: { origen: string; n: number }[];
+  embudo: { visitas: number; personas: number; fichas_vistas: number; contactos: number; mapa: number };
+};
+export async function getVisitas(dias = 30): Promise<ResumenVisitas> {
+  const res = await authFetch(`/admin/visitas?dias=${dias}`);
+  return okDe(res, "cargar las visitas") as Promise<ResumenVisitas>;
+}
+
 export async function getKpis(): Promise<Kpis> {
   const res = await authFetch("/admin/kpis");
   return res.json();

@@ -150,6 +150,8 @@ class Repo(Protocol):
         self, comercio_id: str, dias: int = 30, limit: int = 8
     ) -> list[dict]: ...
     def kpis_admin(self) -> dict: ...
+    def insert_visita(self, fila: dict) -> None: ...
+    def resumen_visitas(self, dias: int = 30) -> dict: ...
     def list_suscripciones(self) -> list[dict]: ...
     def registrar_pago(self, comercio_id: str, row: dict) -> dict: ...
     def suspender_comercio(self, comercio_id: str) -> None: ...
@@ -2542,6 +2544,77 @@ class SupabaseRepo:
                 if q:
                     cont[q] += 1
         return [{"query": q, "n": n} for q, n in cont.most_common(limit)]
+
+    # ── visitas al sitio (0130) ──────────────────────────────────────────────
+    def insert_visita(self, fila: dict) -> None:
+        """Anota una página vista. Si falla, se pierde y no pasa nada: perder
+        un número no puede costar una visita."""
+        try:
+            self._db.table("visitas").insert(fila).execute()
+        except Exception as e:
+            logger.warning("visitas.insert_fallo", error=str(e)[:200])
+
+    def resumen_visitas(self, dias: int = 30) -> dict:
+        """Cuánta gente entró, a qué, de dónde, y cuántos terminaron
+        escribiéndole a un comercio.
+
+        El embudo es el punto. Un número de visitas suelto no dice nada; lo que
+        dice si el sitio sirve es cuántos de los que entran llegan a una ficha,
+        y cuántos de esos salen hacia el local. Si entran mil y ninguno escribe,
+        el problema no es la falta de tráfico.
+        """
+        from collections import Counter
+        from datetime import date, timedelta
+
+        desde = (date.today() - timedelta(days=dias)).isoformat()
+        filas: list[dict] = []
+        while True:
+            lote = (self._db.table("visitas")
+                    .select("dia, ruta, sesion, origen, referido, primera")
+                    .gte("dia", desde).order("dia", desc=True)
+                    .range(len(filas), len(filas) + 999).execute().data) or []
+            filas += lote
+            # PostgREST corta en 1000 sin avisar: sin paginar, el panel diría
+            # «1000 visitas» para siempre y nadie se enteraría.
+            if len(lote) < 1000 or len(filas) >= 50_000:
+                break
+
+        por_dia: dict[str, dict] = {}
+        for v in filas:
+            d = por_dia.setdefault(v["dia"], {"dia": v["dia"], "visitas": 0, "personas": 0})
+            d["visitas"] += 1
+            if v.get("primera"):
+                d["personas"] += 1
+        dias_orden = sorted(por_dia.values(), key=lambda d: d["dia"])
+
+        rutas = Counter(v["ruta"] for v in filas)
+        referidos = Counter(v["referido"] for v in filas if v.get("referido"))
+        origenes = Counter(v["origen"] for v in filas if v.get("origen"))
+        personas = len({v["sesion"] for v in filas})
+
+        # El embudo, contra los leads del mismo período.
+        desde_ts = f"{desde}T00:00:00Z"
+        leads = (self._db.table("leads").select("tipo")
+                 .gte("created_at", desde_ts).limit(20_000).execute().data) or []
+        por_tipo = Counter(l.get("tipo") for l in leads)
+        contactos = sum(n for t, n in por_tipo.items() if t in ("whatsapp", "telefono", "reserva"))
+
+        return {
+            "dias": dias,
+            "visitas": len(filas),
+            "personas": personas,
+            "por_dia": dias_orden,
+            "top_rutas": [{"ruta": r, "n": n} for r, n in rutas.most_common(12)],
+            "top_referidos": [{"referido": r, "n": n} for r, n in referidos.most_common(8)],
+            "top_origenes": [{"origen": o, "n": n} for o, n in origenes.most_common(8)],
+            "embudo": {
+                "visitas": len(filas),
+                "personas": personas,
+                "fichas_vistas": por_tipo.get("vista", 0),
+                "contactos": contactos,
+                "mapa": por_tipo.get("mapa", 0),
+            },
+        }
 
     def _cuantos_da_hoy(self, query: str) -> int | None:
         """Cuántos comercios devuelve HOY esa búsqueda. Pide uno solo: lo que

@@ -340,6 +340,19 @@ def horario_en_lote(
     return {"ok": True, "actualizados": n}
 
 
+@router.get("/admin/visitas")
+def visitas_del_sitio(
+    dias: int = Query(default=30, ge=1, le=180),
+    _: dict = Depends(require_permiso("datos")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Cuánta gente entra al sitio, a qué, de dónde, y cuántos escriben.
+
+    Hasta la 0130 lo único medido era la visita a la ficha de un comercio: la
+    home, el buscador y /ofertas no existían para nadie."""
+    return repo.resumen_visitas(dias)
+
+
 # ── El equipo: usuarios, roles y permisos (0126) ──────────────────────────────
 class UsuarioPanelBody(BaseModel):
     email: str

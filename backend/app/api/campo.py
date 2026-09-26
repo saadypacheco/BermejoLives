@@ -9,7 +9,7 @@ import httpx
 import structlog
 import re
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core import auth
 from app.core.codigo import formatear as formatear_codigo
@@ -472,6 +472,50 @@ def registrar_lead(body: _LeadIn, repo: Repo = Depends(get_repo)) -> dict:
     creado = repo.insert_lead(fila) or {}
     # El id vuelve para que el sitio pueda preguntar después «¿te contestó?».
     return {"ok": True, "id": creado.get("id")}
+
+
+# ── Visitas al sitio (0130) ──────────────────────────────────────────────────
+class _VisitaIn(BaseModel):
+    """Una página vista. SIN cookies, sin IP, sin user-agent.
+
+    `sesion` es un número al azar que vive en la pestaña y se pierde al
+    cerrarla: sirve para no contar diez veces a la misma persona en una
+    recorrida, no para seguir a nadie."""
+    ruta: str = Field(max_length=200)
+    sesion: str = Field(min_length=6, max_length=40)
+    origen: str | None = None
+    #: Sólo el host (google.com, facebook.com). La URL entera no hace falta y
+    #: puede llevar datos de la otra página.
+    referido: str | None = None
+    ciudad: str | None = None
+    #: Primera página de esta sesión: es lo que hace «personas» sin agrupar.
+    primera: bool = False
+
+
+#: Rutas que NO se cuentan: el panel, la carga de campo y el editor del
+#: comercio son trabajo, no visitas. Contarlas inflaría el número justo con
+#: quienes estamos construyendo el sitio, que es la peor forma de engañarse.
+_RUTAS_INTERNAS = ("/admin", "/contenido", "/publicar", "/campo", "/mi-comercio", "/api/")
+
+
+@router.post("/visita")
+def registrar_visita(body: _VisitaIn, repo: Repo = Depends(get_repo)) -> dict:
+    """Anota una página vista. Fuego y olvido: si falla, no rompe la visita."""
+    ruta = (body.ruta or "/").strip()[:200]
+    if not ruta.startswith("/") or ruta.startswith(_RUTAS_INTERNAS):
+        return {"ok": True, "contada": False}
+
+    limpio = lambda v, n: re.sub(r"[^a-z0-9_.:/-]", "", (v or "").strip().lower())[:n] or None
+    fila = {
+        "ruta": ruta,
+        "sesion": re.sub(r"[^a-zA-Z0-9-]", "", body.sesion)[:40],
+        "origen": limpio(body.origen, 64),
+        "referido": limpio(body.referido, 80),
+        "ciudad_slug": limpio(body.ciudad, 40),
+        "primera": bool(body.primera),
+    }
+    repo.insert_visita({k: v for k, v in fila.items() if v is not None})
+    return {"ok": True, "contada": True}
 
 
 class _RespondioIn(BaseModel):

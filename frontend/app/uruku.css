@@ -321,7 +321,12 @@
 .uk-section-head a { color: var(--uk-green); font-size: 13px; font-weight: 700; }
 
 /* ---- Ofertas ---- */
-.uk-offers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+/* Las columnas siguen a cuántas ofertas hay (`--cols`, que pone la página).
+   Con 4 fijas, la primera oferta quedaba sola en una cuarta parte del ancho y
+   con tres huecos al lado: parecía un error, no un estreno. Va como variable y
+   no en el `style` de la etiqueta para que las medidas de celular de más abajo
+   le sigan ganando. */
+.uk-offers { display: grid; grid-template-columns: repeat(var(--cols, 4), 1fr); gap: 16px; }
 .uk-offer { min-height: 220px; position: relative; overflow: hidden; border-radius: 20px; background: var(--uk-green-2); background-size: cover; background-position: center; box-shadow: var(--uk-shadow-soft); color: #fff; }
 .uk-offer::after { content:""; position:absolute; inset:0; background: linear-gradient(0deg, rgba(1,14,18,.9), rgba(1,14,18,.12)); }
 .uk-offer-tag { position: absolute; top: 14px; left: 14px; z-index: 2; font-size: 9px; padding: 6px 9px; border-radius: 8px; font-weight: 800; background: var(--uk-green); text-transform: uppercase; letter-spacing: .04em; }
@@ -330,6 +335,15 @@
 .uk-offer-body h3 { margin: 0 0 6px; font-size: 20px; line-height: 1.1; }
 .uk-offer-body small { display:block; opacity:.85; font-size: 12px; margin-bottom: 6px; }
 .uk-offer-body strong { color: #5df0a6; font-size: 14px; }
+/* SIN FOTO. Pasa y va a seguir pasando: una publicación puede entrar sin
+   imagen (un texto por WhatsApp, o la foto que no se pudo bajar). Con el mismo
+   velo negro de una foto, la tarjeta era un rectángulo oscuro y vacío. Acá el
+   fondo es el degradé de marca, el velo es suave —no hay foto que tapar— y el
+   emoji del rubro ocupa el lugar que ocuparía la foto. */
+.uk-offer.sin-foto { background: var(--uk-green-grad); }
+.uk-offer.sin-foto::after { background: linear-gradient(0deg, rgba(1,14,18,.55), rgba(1,14,18,0)); }
+.uk-offer-emoji { position: absolute; z-index: 1; right: 16px; top: 42%; transform: translateY(-50%);
+                  font-size: 64px; line-height: 1; opacity: .22; pointer-events: none; }
 
 /* ---- Cards de categoría ---- */
 .uk-catcards { display: grid; grid-template-columns: repeat(8, 1fr); gap: 12px; }
@@ -606,7 +620,11 @@
    (0,1,0), así que le ganaba y el texto salía oscuro sobre el verde. Se veía
    apenas en pantalla y saltó en una captura para el video, ampliada. Lo mismo
    vale para los otros dos botones verdes que son enlaces. */
-.uk a.uk-ficha-wa, .uk a.uk-resficha, .uk a.uk-btn-wa { color: #fff; }
+.uk a.uk-ficha-wa, .uk a.uk-resficha, .uk a.uk-btn-wa, .uk a.uk-offer { color: #fff; }
+/* `.uk-offer` estaba afuera de esta lista y en MODO CLARO el título salía
+   verde oscuro sobre la tarjeta verde oscura: la primera oferta publicada no
+   se podía leer. La tarjeta es siempre una superficie oscura (foto + velo),
+   así que su texto es blanco vaya el sitio en claro o en oscuro. */
 .uk-ficha-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .uk-ficha-acciones > * { justify-content: center; }
 /* El QR de la ficha: chico, con la dirección al lado. El fondo blanco es
