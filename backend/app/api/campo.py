@@ -184,15 +184,20 @@ async def alta_campo(
     # rubros: resuelve los slugs a ids; el 1º es el principal
     rubro_ids = [rid for rid in (repo.get_rubro_id(s) for s in rubro_slugs if s) if rid]
 
-    # Nombre por defecto: si no lo cargan, usa el rubro elegido (ej. "Ferretería");
-    # si tampoco hay rubro útil, queda "Comercio".
-    if nombre and nombre.strip():
-        nombre_final = nombre.strip()
-    else:
-        rubro_util = next((s for s in rubro_slugs if s and s != "otros"), None)
-        nombre_final = (repo.get_rubro_nombre(rubro_util) if rubro_util else None) or "Comercio"
+    # SIN NOMBRE NO ES UN ERROR. En Bermejo la mayoría de los puestos no tiene
+    # cartel, y llamarlos "Comercio 437" no le dice nada a nadie: 555 de 1.248
+    # terminaron así. Cuando no viene nombre se marca `sin_cartel` y la base lo
+    # arma sola con lo que vende y dónde está —"Ropa femenina · Calle 23 de
+    # Marzo"— y lo mantiene al día si cambia el rubro o la calle (0129).
+    sin_cartel = not (nombre and nombre.strip())
+    nombre_final = nombre.strip() if not sin_cartel else None
 
-    slug = slug_unico(repo, slugify(nombre_final))
+    # El slug igual necesita algo legible ANTES de insertar (la foto se sube con
+    # él). Sin nombre usa el rubro: el slug es la URL y no se vuelve a tocar,
+    # así que no puede depender de un campo que todavía no existe.
+    rubro_util = next((s for s in rubro_slugs if s and s != "otros"), None)
+    base_slug = nombre_final or (repo.get_rubro_nombre(rubro_util) if rubro_util else None) or "comercio"
+    slug = slug_unico(repo, slugify(base_slug))
 
     portada_url, portada_thumb = None, None
     if foto is not None:
@@ -206,7 +211,10 @@ async def alta_campo(
     comercio = repo.crear_comercio(
         {
             "slug": slug,
+            # None y `sin_cartel` juntos: el trigger de la 0129 lo completa
+            # antes de que la columna `not null` se entere.
             "nombre": nombre_final,
+            "sin_cartel": sin_cartel,
             "prod_obs_human": _none(prod_obs_human),
             "whatsapp": _none(whatsapp),
             "telefono": _none(telefono),

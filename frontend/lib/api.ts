@@ -162,6 +162,10 @@ export type ComercioPorVerificar = {
   created_at: string;
   lugar_id: string | null;
   puesto: string | null;
+  /** El local no tiene cartel ni nombre propio (0129). Entonces `nombre` lo
+   *  arma la base con lo que vende y dónde está, y se mantiene solo. No es un
+   *  defecto: en Bermejo la mayoría de los puestos son así. */
+  sin_cartel?: boolean;
   /** El rubro PRINCIPAL: el de la ficha, el color del pin y el filtro. */
   rubros?: { nombre: string; slug: string };
   /** Todos los rubros del comercio, como los anida PostgREST. */

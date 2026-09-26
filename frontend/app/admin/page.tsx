@@ -1131,7 +1131,13 @@ function incompletoDe(c: ComercioPorVerificar, noComerciales?: Set<string>): str
   const nombre = (c.nombre ?? "").trim();
   const rubroNombre = (c.rubros?.nombre ?? "").trim();
   // "sin nombre" = vacío, el default 'Comercio', o quedó con el nombre del rubro.
-  if (!nombre || nombre.toLowerCase() === "comercio" || (!!rubroNombre && nombre.toLowerCase() === rubroNombre.toLowerCase())) r.push("sin nombre");
+  //
+  // Salvo que esté marcado SIN CARTEL, que no es lo mismo: ahí el local no
+  // tiene nombre porque no lo tiene, la base le arma uno con lo que vende y
+  // dónde está, y no hay nada que corregir. Eran 555 defectos que nadie iba a
+  // poder arreglar nunca, y con ellos adentro el contador no bajaba.
+  if (!c.sin_cartel
+      && (!nombre || nombre.toLowerCase() === "comercio" || (!!rubroNombre && nombre.toLowerCase() === rubroNombre.toLowerCase()))) r.push("sin nombre");
   if (!c.portada_url) r.push("sin foto");
   // La foto sí se le pide a todo: un baño sin foto en el mapa no se distingue
   // de un pin cualquiera, y la foto es lo que hace que alguien lo reconozca al
@@ -1624,7 +1630,10 @@ function ModalEditar({
   hayAnterior?: boolean;
   onSaltar?: (delta: number) => void;
 }) {
-  const [nombre, setNombre] = useState(comercio.nombre);
+  // Si no tiene cartel, el campo arranca vacío: lo que hay en `nombre` lo armó
+  // la base y no es algo que se edite — se cambia poniéndole el nombre real.
+  const [sinCartel, setSinCartel] = useState(!!comercio.sin_cartel);
+  const [nombre, setNombre] = useState(comercio.sin_cartel ? "" : comercio.nombre);
   const [whatsapp, setWhatsapp] = useState(comercio.whatsapp ?? "");
   const [telefono, setTelefono] = useState((comercio as Record<string, unknown>).telefono as string ?? "");
   const [descripcion, setDescripcion] = useState(comercio.descripcion ?? "");
@@ -1662,7 +1671,10 @@ function ModalEditar({
     try {
       await editarComercio(comercio.id, {
         prod_obs_human: prodObsHuman || undefined,
-        nombre: nombre || undefined,
+        // Con "sin cartel" no se manda nombre: lo arma la base. Mandarlo
+        // apagaría el flag (el trigger entiende "escribieron un nombre").
+        sin_cartel: sinCartel,
+        nombre: sinCartel ? undefined : (nombre.trim() || undefined),
         whatsapp: whatsapp || undefined,
         telefono: telefono || undefined,
         descripcion: descripcion || undefined,
@@ -1776,16 +1788,40 @@ function ModalEditar({
                   </div>
                 </div>
               )}
-              <label style={{ fontSize: 12, color: "var(--txt-3)", flex: 1, minWidth: 0 }}>Nombre
-                <input className="adm-input" style={{ marginTop: 4, fontSize: 16, fontWeight: 600 }}
-                  value={nombre} onChange={(e) => setNombre(e.target.value)}
-                  autoFocus placeholder="Nombre del negocio" />
+              <div style={{ fontSize: 12, color: "var(--txt-3)", flex: 1, minWidth: 0 }}>
+                Nombre
+                {sinCartel ? (
+                  // Sin cartel: no hay nada que tipear. Se muestra cómo se
+                  // llama ahora —lo armó la base— para que quien edita vea
+                  // exactamente lo que ve el comprador.
+                  <div style={{ marginTop: 4, padding: "10px 12px", borderRadius: 11,
+                                border: "1px dashed var(--border)", background: "rgba(255,255,255,.02)" }}>
+                    <b style={{ fontSize: 16 }}>{comercio.nombre}</b>
+                    <div style={{ fontSize: 11.5, color: "var(--txt-3)", marginTop: 3 }}>
+                      Lo arma URUKU con lo que vende y dónde está. Se actualiza solo si cambia el rubro o la calle.
+                    </div>
+                  </div>
+                ) : (
+                  <input className="adm-input" style={{ marginTop: 4, fontSize: 16, fontWeight: 600 }}
+                    value={nombre} onChange={(e) => setNombre(e.target.value)}
+                    autoFocus placeholder="El nombre del cartel" />
+                )}
+                {/* En Bermejo la mayoría de los puestos no tiene cartel. Decirlo
+                    es un dato, no un campo sin llenar: 555 de 1.248 figuraban
+                    como "sin nombre", un defecto que nadie podía arreglar. */}
+                <label style={{ display: "flex", gap: 7, alignItems: "flex-start", marginTop: 8, cursor: "pointer" }}>
+                  <input type="checkbox" checked={sinCartel}
+                         onChange={(e) => { setSinCartel(e.target.checked); if (!e.target.checked) setNombre(""); }} />
+                  <span style={{ fontSize: 12.5, color: "var(--txt-2)" }}>
+                    No tiene cartel ni nombre propio
+                  </span>
+                </label>
                 {comercio.codigo && (
                   <div style={{ marginTop: 6, fontFamily: "monospace", color: "var(--neon)", fontSize: 12 }}>
                     URUKU-{comercio.codigo}
                   </div>
                 )}
-              </label>
+              </div>
             </div>
             <label style={{ fontSize: 12, color: "var(--txt-3)" }}>WhatsApp (opcional)
               <input className="adm-input" style={{ marginTop: 4 }} value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="591XXXXXXXX" />

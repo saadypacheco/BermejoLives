@@ -259,6 +259,9 @@ def rechazar_comercio(
 
 class EditarComercioBody(BaseModel):
     nombre: str | None = None
+    #: "No tiene cartel": la base le arma el nombre con lo que vende y dónde
+    #: está, y lo mantiene (0129). Escribirle un nombre lo apaga solo.
+    sin_cartel: bool | None = None
     whatsapp: str | None = None
     telefono: str | None = None
     descripcion: str | None = None

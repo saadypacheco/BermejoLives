@@ -952,7 +952,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
         })()}
 
         {/* ── Nombre ── */}
-        <input className="adm-input" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre del comercio (opcional — si no, queda 'Comercio')" />
+        <input className="adm-input" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre del cartel (si no tiene, dejalo vacío)" />
 
         {/* El WhatsApp está EN LOS DOS LADOS a propósito, y no es una
             duplicación por olvido: depende de cómo se dé la conversación. A
