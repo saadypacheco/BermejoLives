@@ -61,6 +61,28 @@ export const CATEGORY_STYLE: Record<string, { emoji: string; color: string }> = 
   tablets: { emoji: "📱", color: "#06b6d4" },
 };
 export const DEFAULT_STYLE = { emoji: "📍", color: "#FFB020" };
+
+/** Las familias del mapa, para la referencia de colores. El color es por
+ *  familia (no por rubro) justamente para poder leer el mapa por zonas: dónde
+ *  está la ropa, dónde la comida. Esta lista es la traducción de ese color a
+ *  palabras; si se agrega una familia nueva arriba, va también acá. */
+export const FAMILIAS: { nombre: string; color: string }[] = [
+  { nombre: "Consumo diario", color: "#22c55e" },
+  { nombre: "Gastronomía", color: "#f97316" },
+  { nombre: "Moda", color: "#3b82f6" },
+  { nombre: "Tecnología", color: "#06b6d4" },
+  { nombre: "Hogar", color: "#14b8a6" },
+  { nombre: "Servicios", color: "#6366f1" },
+  { nombre: "Vehículos y oficios", color: "#64748b" },
+  { nombre: "Ferretería y taxis", color: "#eab308" },
+  { nombre: "Familia y ocio", color: "#f43f5e" },
+  { nombre: "Belleza", color: "#ec4899" },
+  { nombre: "Usado", color: "#92766a" },
+  { nombre: "Servicios de la ciudad", color: "#0ea5e9" },
+  { nombre: "Alquileres", color: "#8b5cf6" },
+  { nombre: "Emergencias", color: "#ef4444" },
+  { nombre: "Otros / sin rubro", color: "#FFB020" },
+];
 export const rubroStyle = (slug: string | null) => (slug && CATEGORY_STYLE[slug]) || DEFAULT_STYLE;
 
 let leafletPromise: Promise<any> | null = null;

@@ -37,12 +37,20 @@
 :root { color-scheme: dark; }
 
 /* Y los `option` con color explícito, por si el color-scheme no alcanza (temas
-   de alto contraste de Windows, versiones viejas). Los valores van con
-   FALLBACK: si la variable no existe en ese contexto —que es justo lo que
-   rompía esto— la declaración entera se descartaría y volveríamos al blanco. */
+   de alto contraste de Windows, versiones viejas).
+ *
+ * EL FONDO TIENE QUE SER OPACO. Acá decía `var(--panel)`, y `--panel` no es un
+ * color de fondo: es `rgba(255,255,255,.035)`, un velo blanco pensado para
+ * apoyarse ENCIMA del fondo oscuro de la página. Dentro del desplegable no hay
+ * página debajo —esa ventanita la dibuja Windows, y la dibuja blanca— así que
+ * el velo quedaba blanco sobre blanco y el texto, casi blanco, desaparecía.
+ * Se veía sólo la opción resaltada, que la pinta el sistema.
+ *
+ * `--bg-2` sí es opaco (#0e1320). Va con fallback por si la variable no existe
+ * en ese contexto: sin él, la declaración entera se descarta. */
 select option,
 select optgroup {
-  background-color: var(--panel, #12161d);
+  background-color: var(--bg-2, #0e1320);
   color: var(--txt, #e8edf4);
 }
 select:not(.adm-input) { color-scheme: dark; }
@@ -372,14 +380,39 @@ select:not(.adm-input) { color-scheme: dark; }
 .ukpin-photo { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
 .ukpin-ring { position: absolute; inset: -5px; border-radius: 50%; border: 2px solid #FFC94D; box-shadow: 0 2px 8px rgba(0,0,0,.45); pointer-events: none; }
 .ukpin.cerrado { filter: grayscale(1) brightness(.72); }
-.ukpin.incompleto { background: #7a5a12; border: 2px dashed #FFC94D; }
+
+/* PIN DEL PANEL (mini). En el mapa del admin hay 1.248 pines sobre el casco de
+   Bermejo: el pin del sitio público, pensado para veinte resultados, acá se
+   pisa consigo mismo hasta tapar el mapa. Va más chico y con menos sombra. */
+.ukpin.mini { width: 100%; height: 100%; border-width: 1.5px; box-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.ukpin.mini .ukpin-emo { font-size: 10px; }   /* deja ver el aro de color, que es lo que agrupa por familia */
+
+/* INCOMPLETO: avisa, no repinta.
+ *
+ * Antes el pin se pintaba entero de ámbar y el emoji del rubro se reemplazaba
+ * por un ⚠️. Como 1.126 de 1.248 comercios están incompletos, el mapa entero
+ * quedaba del mismo color con el mismo símbolo: no se podía ver de qué era
+ * ninguno. Ahora el color y el emoji son SIEMPRE los del rubro —que es lo que
+ * se lee de un vistazo— y lo que falta se avisa con un punto ámbar arriba a la
+ * derecha, que se nota sin tapar nada. */
+.ukpin.incompleto::after {
+  content: ""; position: absolute; top: -2px; right: -2px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #FFC94D; border: 1.5px solid rgba(13,16,21,.9);
+}
 /* Los divIcon no deben traer el recuadro blanco por defecto de Leaflet */
 .leaflet-div-icon { background: transparent; border: 0; }
 /* Pin con etiqueta (zoom alto en el finder): pill con emoji + nombre, tap amplio */
-.ukpinlab { display: inline-flex; align-items: center; gap: 5px; background: var(--pc, #FFB020); color: #04130c; font-weight: 700; font-size: 12px; line-height: 1; padding: 4px 10px 4px 5px; border-radius: 999px; border: 2px solid rgba(13,16,21,.85); box-shadow: 0 3px 8px rgba(0,0,0,.5); white-space: nowrap; }
+/* Pastilla con nombre (zoom alto): fondo OSCURO y el color del rubro en el
+   borde. Antes el fondo era el color del rubro con texto casi negro encima, y
+   sobre las familias oscuras —gris pizarra, índigo, marrón— el nombre se leía
+   a duras penas. Así el texto siempre contrasta y el color se sigue viendo. */
+.ukpinlab { display: inline-flex; align-items: center; gap: 5px; background: rgba(10,13,19,.92); color: #eef2fb; font-weight: 700; font-size: 12px; line-height: 1; padding: 4px 10px 4px 6px; border-radius: 999px; border: 2px solid var(--pc, #FFB020); box-shadow: 0 3px 8px rgba(0,0,0,.5); white-space: nowrap; }
 .ukpinlab > span { font-size: 14px; }
 .ukpinlab > b { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
-.ukpinlab.incompleto { background: #7a5a12; color: #fff; border: 2px dashed #FFC94D; }
+/* Ídem con nombre (zoom alto): conserva el color del rubro y el faltante es un
+   anillo ámbar alrededor de la pastilla. */
+.ukpinlab.incompleto { box-shadow: 0 0 0 2px #FFC94D, 0 3px 8px rgba(0,0,0,.5); }
 /* Pin de LUGAR (mercado/galería): pill destacado con nombre + contador de puestos */
 /* Referencia sutil, NO un pin: el mercado sirve para ubicarse ("está en el
    Mercado Central"), pero lo que la persona vino a ver son los locales. Antes

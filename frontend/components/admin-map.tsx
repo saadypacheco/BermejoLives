@@ -9,10 +9,11 @@
 //  - Si quedan EXACTO en el mismo punto → HOJA con la lista para elegir.
 import { agregarTiles } from "@/lib/mapa-tiles";
 import { useEffect, useRef, useState } from "react";
-import { rubroStyle, loadLeaflet, escapeHtml } from "@/lib/mapa-visual";
+import { rubroStyle, loadLeaflet, escapeHtml, FAMILIAS } from "@/lib/mapa-visual";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 const ZOOM_LABEL = 17;   // desde acá los pines se agrandan y muestran el nombre
+const PIN = 20;          // chico a propósito: el casco de Bermejo entra mil veces en 460 px de alto
 
 export type AdminPin = {
   id: string; nombre: string; lat: number | null; lng: number | null;
@@ -38,16 +39,19 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
   onSelRef.current = onSelect;
   hojaRef.current = setHoja;
 
+  // El color y el emoji SIEMPRE son los del rubro, esté completo o no: con
+  // 1.126 de 1.248 incompletos, pintarlos a todos de ámbar con un ⚠️ dejaba el
+  // mapa de un solo color y sin decir de qué era cada negocio. Lo que falta se
+  // avisa con un punto ámbar en la esquina (ver `.ukpin.incompleto` en el CSS).
   function iconoComercio(L: any, c: AdminPin, label: boolean) {
     const style = rubroStyle(c.rubro_slug);
-    const emo = c.incompleto ? "⚠️" : style.emoji;
     const inc = c.incompleto ? " incompleto" : "";
     if (label) {
-      const html = `<div class="ukpinlab${inc}" style="--pc:${style.color}"><span>${emo}</span><b>${escapeHtml(c.nombre || "Sin nombre")}</b></div>`;
+      const html = `<div class="ukpinlab${inc}" style="--pc:${style.color}"><span>${style.emoji}</span><b>${escapeHtml(c.nombre || "Sin nombre")}</b></div>`;
       return L.divIcon({ className: "", html, iconSize: null as any, iconAnchor: [15, 16] });
     }
-    const html = `<div class="ukpin pago${inc}" style="--pc:${style.color}"><span class="ukpin-emo">${emo}</span></div>`;
-    return L.divIcon({ className: "", html, iconSize: [26, 26], iconAnchor: [13, 13] });
+    const html = `<div class="ukpin mini${inc}" style="--pc:${style.color}"><span class="ukpin-emo">${style.emoji}</span></div>`;
+    return L.divIcon({ className: "", html, iconSize: [PIN, PIN], iconAnchor: [PIN / 2, PIN / 2] });
   }
 
   function iconoLugar(L: any, nombre: string, n: number, portada?: string | null) {
@@ -130,6 +134,7 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
 
   const conCoords = comercios.filter((c) => (c.lat != null && c.lng != null) || c.lugar_id).length;
   const sinCoords = comercios.length - conCoords;
+  const familiasPresentes = new Set(comercios.map((c) => rubroStyle(c.rubro_slug).color));
 
   return (
     <div style={{ position: "relative" }}>
@@ -146,7 +151,7 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
               const st = rubroStyle(c.rubro_slug);
               return (
                 <button key={c.id} type="button" className="mapa-hoja-row" onClick={() => { onSelect(c.id); setHoja(null); }}>
-                  <span className="mh-dot" style={{ background: c.incompleto ? "#7a5a12" : st.color }}>{c.incompleto ? "⚠️" : st.emoji}</span>
+                  <span className="mh-dot" style={{ background: st.color }}>{st.emoji}</span>
                   <span className="mh-nom">{c.nombre || "Sin nombre"}</span>
                   {c.incompleto && <span className="mh-inc">incompleto</span>}
                 </button>
@@ -156,8 +161,24 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
         </div>
       )}
 
-      <p style={{ color: "var(--txt-3)", fontSize: 12.5, padding: "8px 4px 0" }}>
-        {conCoords} en el mapa · tocá un pin para editar, un <b>🏬 mercado</b> para ver adentro, o un grupo para acercar. Los <b style={{ color: "var(--amber)" }}>⚠️ ámbar</b> están incompletos.
+      {/* Referencia de colores: el pin dice el rubro por el emoji, y la FAMILIA
+          por el color. Sin esta lista el color es lindo y no significa nada.
+          Sólo se muestran las familias que están en el mapa ahora mismo. */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 10px", padding: "8px 4px 0", alignItems: "center" }}>
+        {FAMILIAS.filter((f) => familiasPresentes.has(f.color)).map((f) => (
+          <span key={f.color} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--txt-3)", whiteSpace: "nowrap" }}>
+            <i style={{ width: 9, height: 9, borderRadius: "50%", background: f.color, display: "inline-block" }} />
+            {f.nombre}
+          </span>
+        ))}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--txt-3)", whiteSpace: "nowrap" }}>
+          <i style={{ width: 9, height: 9, borderRadius: "50%", background: "transparent", border: "1.5px solid #FFC94D", display: "inline-block" }} />
+          punto ámbar = falta completarlo
+        </span>
+      </div>
+
+      <p style={{ color: "var(--txt-3)", fontSize: 12.5, padding: "6px 4px 0" }}>
+        {conCoords} en el mapa · tocá un pin para editar, un <b>🏬 mercado</b> para ver adentro, o un grupo para acercar.
         {sinCoords > 0 && ` · ${sinCoords} sin ubicación.`}
       </p>
     </div>
