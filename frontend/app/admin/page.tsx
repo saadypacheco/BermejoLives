@@ -1188,20 +1188,40 @@ function TabComercios({
   // donde ibas, que es lo que vuelve inusable una revisión larga.
   const [recalcId, setRecalcId] = useState<string | null>(null);
   const [rubroLocal, setRubroLocal] = useState<Record<string, string>>({});
+  // Filtro por ciudad. Con una sola ciudad cargada no se muestra: un
+  // desplegable de un solo valor es ruido. Aparece cuando hay dos o más.
+  const [ciudad, setCiudad] = useState("");
+
+  // Las ciudades que aparecen en la lista, con su cuenta. Se saca de lo
+  // cargado y no de la tabla de ciudades: lo que interesa acá es dónde hay
+  // comercios, no qué ciudades existen.
+  const porCiudad = new Map<string, { nombre: string; n: number }>();
+  for (const c of todos) {
+    const slug = c.ciudades?.slug ?? "";
+    const nombre = c.ciudades?.nombre ?? "Sin ciudad";
+    const y = porCiudad.get(slug) ?? { nombre, n: 0 };
+    porCiudad.set(slug, { nombre, n: y.n + 1 });
+  }
+  const ciudades = [...porCiudad.entries()].sort((a, b) => b[1].n - a[1].n);
 
   const noComerciales = new Set(rubros.filter((r) => r.comercial === false).map((r) => r.slug));
-  const nIncompletos = todos.filter((c) => incompletoDe(c, noComerciales).length > 0).length;
-  const nVerificados = todos.filter((c) => c.verificado).length;
+  // 0) filtro por ciudad. Va PRIMERO para que los números de los chips sean
+  //    los de esa ciudad: si dijeran el total, el chip diría 200 pendientes y
+  //    la lista mostraría 12.
+  const deLaCiudad = ciudad ? todos.filter((c) => (c.ciudades?.slug ?? "") === ciudad) : todos;
+
+  const nIncompletos = deLaCiudad.filter((c) => incompletoDe(c, noComerciales).length > 0).length;
+  const nVerificados = deLaCiudad.filter((c) => c.verificado).length;
   const sinHorario = (c: ComercioPorVerificar) =>
     !((c as Record<string, unknown>).horario as string ?? "").trim();
-  const nSinHorario = todos.filter(sinHorario).length;
+  const nSinHorario = deLaCiudad.filter(sinHorario).length;
 
   // 1) filtro por estado (B incluye "incompletos")
-  const porEstado = filtro === "todos" ? todos
-    : filtro === "pendientes" ? todos.filter((c) => !c.verificado)
-    : filtro === "verificados" ? todos.filter((c) => c.verificado)
-    : filtro === "sin-horario" ? todos.filter(sinHorario)
-    : todos.filter((c) => incompletoDe(c, noComerciales).length > 0);
+  const porEstado = filtro === "todos" ? deLaCiudad
+    : filtro === "pendientes" ? deLaCiudad.filter((c) => !c.verificado)
+    : filtro === "verificados" ? deLaCiudad.filter((c) => c.verificado)
+    : filtro === "sin-horario" ? deLaCiudad.filter(sinHorario)
+    : deLaCiudad.filter((c) => incompletoDe(c, noComerciales).length > 0);
 
   // 2) buscador multi-campo (A): nombre + qué vende + dirección + contacto + rubro + ciudad
   const nq = normTxt(q.trim());
@@ -1235,14 +1255,14 @@ function TabComercios({
   });
 
   // reset de la paginación cuando cambian filtros/búsqueda/orden
-  useEffect(() => { setLimitVis(50); }, [filtro, q, orden]);
+  useEffect(() => { setLimitVis(50); }, [filtro, q, orden, ciudad]);
 
   const visibles = filtradas.slice(0, limitVis);
   const editando = editandoId ? todos.find((c) => c.id === editandoId) ?? null : null;
 
   const chips: { key: FiltroComercio; label: string; n: number; amber?: boolean }[] = [
-    { key: "todos", label: "Todos", n: todos.length },
-    { key: "pendientes", label: "Pendientes", n: pendientes.length },
+    { key: "todos", label: "Todos", n: deLaCiudad.length },
+    { key: "pendientes", label: "Pendientes", n: deLaCiudad.filter((c) => !c.verificado).length },
     { key: "verificados", label: "Verificados", n: nVerificados },
     { key: "incompletos", label: "Incompletos", n: nIncompletos, amber: true },
     // Su propio filtro y no un motivo más de "incompleto": cargar horarios es
@@ -1276,10 +1296,25 @@ function TabComercios({
           placeholder="Buscar por nombre, código (URUKU-K7M2), productos, dirección, teléfono…" />
         {/* Sólo cuando el número dice algo: sin búsqueda ni filtro repite el
             "Todos (886)" del chip de abajo. */}
-        {(q.trim() || filtro !== "todos") && (
+        {(q.trim() || filtro !== "todos" || ciudad) && (
           <span style={{ color: "var(--txt-3)", fontSize: 13, whiteSpace: "nowrap" }}>
-            {filtradas.length} de {todos.length}
+            {filtradas.length} de {deLaCiudad.length}
           </span>
+        )}
+        {ciudades.length === 1 && (
+          <span style={{ color: "var(--txt-3)", fontSize: 13, whiteSpace: "nowrap" }}
+                title="Cuando haya comercios de otra ciudad, acá aparece el filtro">
+            📍 {ciudades[0][1].nombre} ({ciudades[0][1].n})
+          </span>
+        )}
+        {ciudades.length > 1 && (
+          <select className="adm-input" style={{ width: "auto" }} value={ciudad}
+                  onChange={(e) => setCiudad(e.target.value)} title="Filtrar por ciudad">
+            <option value="">Todas las ciudades ({todos.length})</option>
+            {ciudades.map(([slug, c]) => (
+              <option key={slug || "sin"} value={slug}>{c.nombre} ({c.n})</option>
+            ))}
+          </select>
         )}
         <select className="adm-input" style={{ width: "auto" }} value={orden} onChange={(e) => setOrden(e.target.value as OrdenComercio)}>
           <option value="recientes">Más recientes</option>
