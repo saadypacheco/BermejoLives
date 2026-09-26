@@ -29,7 +29,23 @@ export function CitySelector({ actual, ciudades }: { actual: Ciudad | null; ciud
   const elegir = (slug: string) => {
     setCookie(slug);
     setOpen(false);
-    if (slug !== actual?.slug) router.refresh();
+    if (slug === actual?.slug) return;
+    // La pantalla de resultados lleva la ciudad EN LA DIRECCIÓN (?ciudad=tarija),
+    // para que una búsqueda se pueda compartir. Ese parámetro le gana a la
+    // cookie, así que cambiar de ciudad acá y no tocarlo dejaba el combo
+    // diciendo "Bermejo" y la búsqueda corriendo en Tarija: cero resultados
+    // hasta recargar a mano. Si la URL trae ciudad, se cambia también.
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("ciudad")) {
+        url.searchParams.set("ciudad", slug);
+        // replaceState y no router.replace: cambia la dirección en el acto y
+        // useSearchParams lo ve (Next 14.1+), sin pedirle la página al
+        // servidor ni dejar una navegación en vuelo que pise lo que sigue.
+        window.history.replaceState(null, "", url.pathname + url.search);
+      }
+    } catch { /* si algo raro pasa con la URL, el refresh de abajo igual va */ }
+    router.refresh();
   };
 
   // Default por geolocalización (solo primera visita, sin cookie previa).

@@ -46,6 +46,16 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiu
   const [precioMax, setPrecioMax] = useState("");
   // Arranca en la ciudad del selector; el parámetro ?ciudad= de la URL la pisa.
   const [ciudad, setCiudad] = useState(ciudadInicial);
+  // Pero si DESPUÉS cambian la ciudad en el selector de arriba, esa gana: es
+  // una acción deliberada y el ?ciudad= de la URL es de la búsqueda anterior.
+  // (El selector además reescribe el parámetro; esto cubre el caso en que la
+  // URL no lo trae, y de paso no depende de que aquello funcione.)
+  const ciudadDelSelector = useRef(ciudadInicial);
+  useEffect(() => {
+    if (ciudadInicial === ciudadDelSelector.current) return;
+    ciudadDelSelector.current = ciudadInicial;
+    setCiudad(ciudadInicial);
+  }, [ciudadInicial]);
   const [soloOfertas, setSoloOfertas] = useState(false);
   const [vista, setVista] = useState<"lista" | "mapa">("lista");
   // El mapa necesita TODOS los que coinciden, no la página cargada. La lista
@@ -145,8 +155,24 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiu
   // que mostrarlo un poco más tarde.
   const [disp, setDisp] = useState<FiltrosDisponibles | null>(null);
   useEffect(() => { getFiltrosDisponibles().then(setDisp).catch(() => {}); }, []);
+
   const [zonas, setZonas] = useState<Zona[]>([]);
   const [loading, setLoading] = useState(true);
+  // «No encontramos comercios con esa búsqueda, probá con otra palabra» es
+  // mentira en una ciudad recién abierta: no hay palabra que sirva, todavía no
+  // hay nada cargado. Y eso es justo lo que va a ver el que entre a Santa Cruz
+  // o a Tarija esta semana. Cuando una búsqueda da cero, se pregunta una vez
+  // si la ciudad tiene ALGÚN comercio (sin filtros, pidiendo uno solo) y el
+  // mensaje dice la verdad. En el camino normal —con resultados— no cuesta nada.
+  const [ciudadVacia, setCiudadVacia] = useState(false);
+  useEffect(() => {
+    let cancelado = false;
+    if (loading || results.length > 0) { setCiudadVacia(false); return; }
+    buscarComercios({ ciudad }, 1, 0)
+      .then((r) => { if (!cancelado) setCiudadVacia(r.length === 0); })
+      .catch(() => { /* si falla, queda el mensaje de siempre */ });
+    return () => { cancelado = true; };
+  }, [loading, results.length, ciudad]);
   const [hayMas, setHayMas] = useState(false);
   const [cargandoMas, setCargandoMas] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout>>();
@@ -734,7 +760,17 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiu
                   </div>
                 )
               )
-            : rubroElegido && q.trim()
+            : ciudadVacia
+              ? (
+                <div className="uk-empty">
+                  URUKU todavía no tiene comercios cargados en {ciudad === ciudadInicial && nombreCiudad ? nombreCiudad : "esta ciudad"}.
+                  Estamos empezando: si tenés un negocio acá, sumalo y sos de los primeros.
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 10 }}>
+                    <Link href="/publicar" className="uk-btn uk-btn-primary">Sumar mi negocio</Link>
+                  </div>
+                </div>
+              )
+              : rubroElegido && q.trim()
               ? (
                 // Dice DÓNDE no encontró y ofrece la salida obvia: es la
                 // diferencia entre "no existe" y "no está en este rubro".
@@ -746,7 +782,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiu
                   </button>
                 </div>
               )
-              : <p className="uk-empty">No encontramos comercios con esa búsqueda. Probá con otra palabra.</p>
+                : <p className="uk-empty">No encontramos comercios con esa búsqueda. Probá con otra palabra.</p>
           )}
           {shown.map((r, i) => {
             // La miniatura, no la grande: la portada de la tarjeta mide 116px.
