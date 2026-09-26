@@ -2543,6 +2543,17 @@ class SupabaseRepo:
                     cont[q] += 1
         return [{"query": q, "n": n} for q, n in cont.most_common(limit)]
 
+    def _cuantos_da_hoy(self, query: str) -> int | None:
+        """Cuántos comercios devuelve HOY esa búsqueda. Pide uno solo: lo que
+        interesa es el `total`, que el RPC trae repetido en cada fila.
+        None = no se pudo averiguar, que NO es lo mismo que cero."""
+        try:
+            res = self._db.rpc("buscar_comercios", {"q": query, "p_limit": 1, "p_offset": 0}).execute()
+            filas = res.data or []
+            return int(filas[0].get("total") or 0) if filas else 0
+        except Exception:
+            return None
+
     def kpis_admin(self) -> dict:
         from collections import Counter
         from datetime import date
@@ -2553,6 +2564,24 @@ class SupabaseRepo:
         bus = (self._db.table("busquedas").select("query, resultados").order("created_at", desc=True).limit(1000).execute().data) or []
         top = Counter(norm(b["query"]) for b in bus if norm(b.get("query", "")))
         sin = Counter(norm(b["query"]) for b in bus if norm(b.get("query", "")) and (b.get("resultados") or 0) == 0)
+
+        # CUÁNTOS DA HOY CADA TÉRMINO.
+        #
+        # `resultados` es lo que dio ESA búsqueda el día que se hizo, y no se
+        # vuelve a mirar nunca. El panel mostraba esa lista bajo el cartel
+        # «oportunidades: lo que la gente busca y no está → a quién salir a
+        # sumar», y estaba mandando a buscar comercios que ya existen: de los
+        # 14 términos «sin resultado», 12 hoy devuelven algo —«celulares» da
+        # 65, «zapatillas» 94, «restaurante» 35—. Quedaban de cuando el
+        # catálogo estaba a medio cargar o a medio clasificar.
+        #
+        # Así que se vuelve a preguntar. Lo que sigue en cero es un hueco de
+        # verdad; lo demás ya se resolvió solo y no hay nada que salir a hacer.
+        #
+        # Y sirve para los dos lados: «rústico», el término MÁS buscado de
+        # Bermejo, devuelve 2. Eso no se veía en ninguna parte.
+        terminos = {q for q, _ in top.most_common(15)} | {q for q, _ in sin.most_common(15)}
+        hoy_por_termino = {q: self._cuantos_da_hoy(q) for q in terminos}
 
         leads = (self._db.table("leads").select("comercio_id, tipo").order("created_at", desc=True).limit(3000).execute().data) or []
         por_com = Counter(l["comercio_id"] for l in leads if l.get("comercio_id"))
@@ -2571,8 +2600,15 @@ class SupabaseRepo:
         pagando = (self._db.table("comercios").select("id", count="exact").eq("activo", True).eq("suspendido", False).gte("paga_hasta", hoy).limit(1).execute().count) or 0
 
         return {
-            "top_busquedas": [{"query": q, "n": n} for q, n in top.most_common(15)],
-            "sin_resultado": [{"query": q, "n": n} for q, n in sin.most_common(15)],
+            "top_busquedas": [{"query": q, "n": n, "hoy": hoy_por_termino.get(q)} for q, n in top.most_common(15)],
+            # Sólo lo que SIGUE sin resultado: eso es una oportunidad. Lo demás
+            # va aparte, para que se note que se resolvió y no confunda.
+            "sin_resultado": [{"query": q, "n": n, "hoy": hoy_por_termino.get(q)}
+                              for q, n in sin.most_common(15)
+                              if (hoy_por_termino.get(q) or 0) <= 0],
+            "ya_resueltas": [{"query": q, "n": n, "hoy": hoy_por_termino.get(q)}
+                             for q, n in sin.most_common(15)
+                             if (hoy_por_termino.get(q) or 0) > 0],
             "top_comercios": top_comercios,
             "monetizacion": {"comercios_activos": total, "pagando": pagando, "gratis": max(0, total - pagando)},
         }

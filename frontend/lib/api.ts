@@ -359,9 +359,17 @@ export async function getEstadisticas(): Promise<EstadisticasAdmin> {
   return res.json();
 }
 
+/** `hoy` = cuántos resultados da ESE término AHORA. `n` es cuántas veces se
+ *  buscó. Los dos juntos son el dato: «rústico, 59 búsquedas, 2 resultados».
+ *  null = no se pudo averiguar (y no es lo mismo que cero). */
+export type TerminoBuscado = { query: string; n: number; hoy?: number | null };
 export type Kpis = {
-  top_busquedas: { query: string; n: number }[];
-  sin_resultado: { query: string; n: number }[];
+  top_busquedas: TerminoBuscado[];
+  /** Los que SIGUEN sin resultado hoy: huecos de verdad. */
+  sin_resultado: TerminoBuscado[];
+  /** Los que no daban nada cuando se buscaron y hoy sí. No hay nada que hacer
+   *  con ellos; están para que no se los confunda con una oportunidad. */
+  ya_resueltas?: TerminoBuscado[];
   top_comercios: { comercio_id: string; nombre: string; slug: string | null; eventos: number }[];
   monetizacion: { comercios_activos: number; pagando: number; gratis: number };
 };

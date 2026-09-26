@@ -747,15 +747,31 @@ function TabKpis({ data }: { data: Kpis | null }) {
   if (!data) return <p style={{ color: "var(--txt-3)" }}>Cargando KPIs…</p>;
   const m = data.monetizacion;
   const card: React.CSSProperties = { padding: 18, borderRadius: 14, border: "1px solid var(--stroke)", background: "var(--panel)" };
-  const Lista = ({ titulo, items, empty }: { titulo: string; items: { query?: string; nombre?: string; slug?: string | null; n?: number; eventos?: number }[]; empty: string }) => (
+  const Lista = ({ titulo, items, empty, nota }: {
+    titulo: string;
+    items: { query?: string; nombre?: string; slug?: string | null; n?: number; eventos?: number; hoy?: number | null }[];
+    empty: string; nota?: string;
+  }) => (
     <div style={card}>
       <h3 style={{ marginTop: 0, fontSize: 15 }}>{titulo}</h3>
+      {nota && <p style={{ color: "var(--txt-3)", fontSize: 11.5, marginTop: -6, marginBottom: 10 }}>{nota}</p>}
       {items.length === 0 ? <p style={{ color: "var(--txt-3)", fontSize: 13 }}>{empty}</p> : (
         <ol style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
           {items.map((it, i) => (
             <li key={i} style={{ fontSize: 13.5, color: "var(--txt-2)" }}>
               {it.slug ? <Link href={`/comercios/${it.slug}`} style={{ color: "var(--txt)" }}>{it.nombre}</Link> : (it.query ?? it.nombre)}
               <b style={{ color: "var(--neon)", marginLeft: 6 }}>{it.n ?? it.eventos}</b>
+              {/* Cuántos da HOY. Sin esto, «rústico 59» parecía una buena
+                  noticia; con el 2 al lado se ve que es el hueco más grande
+                  que tiene URUKU. En ámbar cuando la demanda le gana a la
+                  oferta: mucha gente buscando y poco cargado. */}
+              {it.hoy != null && (
+                <span style={{ marginLeft: 8, fontSize: 11.5,
+                               color: it.hoy === 0 ? "var(--pink)"
+                                    : (it.n ?? 0) > it.hoy ? "var(--amber)" : "var(--txt-3)" }}>
+                  {it.hoy === 0 ? "sin resultados hoy" : `→ ${it.hoy} resultados hoy`}
+                </span>
+              )}
             </li>
           ))}
         </ol>
@@ -774,11 +790,35 @@ function TabKpis({ data }: { data: Kpis | null }) {
         ))}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 }}>
-        <Lista titulo="🔎 Más buscado" items={data.top_busquedas} empty="Sin búsquedas todavía." />
-        <Lista titulo="🚫 Buscado sin resultado" items={data.sin_resultado} empty="Nada sin resultado 🎉" />
+        <Lista titulo="🔎 Más buscado" items={data.top_busquedas}
+               nota="Veces buscado → cuántos encuentra hoy. En ámbar, donde hay más demanda que oferta."
+               empty="Sin búsquedas todavía." />
+        <Lista titulo="🚫 Sigue sin resultado" items={data.sin_resultado}
+               nota="Verificado contra el catálogo de hoy, no contra el día que se buscó."
+               empty="Nada sin resultado 🎉" />
         <Lista titulo="🏪 Locales más visitados" items={data.top_comercios} empty="Sin visitas todavía." />
       </div>
-      <p style={{ color: "var(--txt-3)", fontSize: 12 }}>💡 "Buscado sin resultado" = oportunidades: rubros/productos que la gente busca y no están → a quién salir a sumar.</p>
+      {/* Lo que ya no es un problema, aparte. Estaba mezclado con lo de
+          arriba bajo el cartel de «oportunidades», y mandaba a salir a buscar
+          comercios que ya existen: «celulares» figuraba sin resultado y hoy
+          da 65. Eran búsquedas de cuando el catálogo estaba a medio cargar. */}
+      {(data.ya_resueltas?.length ?? 0) > 0 && (
+        <div style={{ ...card, borderColor: "var(--stroke)" }}>
+          <h3 style={{ marginTop: 0, fontSize: 15 }}>✅ Ya no son un hueco</h3>
+          <p style={{ color: "var(--txt-3)", fontSize: 11.5, marginTop: -6 }}>
+            No daban nada el día que se buscaron y hoy sí. No hay nada que salir a hacer con estos.
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {data.ya_resueltas!.map((t) => (
+              <span key={t.query} style={{ fontSize: 12.5, color: "var(--txt-3)", border: "1px solid var(--stroke)",
+                                           borderRadius: 999, padding: "3px 9px" }}>
+                {t.query} <b style={{ color: "var(--neon)" }}>{t.hoy}</b>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      <p style={{ color: "var(--txt-3)", fontSize: 12 }}>💡 "Sigue sin resultado" = oportunidades de verdad: lo que la gente busca y hoy no está → a quién salir a sumar.</p>
     </div>
   );
 }
