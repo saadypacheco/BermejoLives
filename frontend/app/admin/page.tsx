@@ -135,8 +135,12 @@ export default function AdminPage() {
     try { setReservaloResumen(await getReservaloResumen()); } catch { setReservaloResumen(null); }
   }
 
-  async function loadKpis() {
-    try { setKpis(await getKpis()); } catch { setKpis(null); }
+  // El período de los KPIs. 30 días por defecto: es lo que se mira para
+  // decidir qué cargar la semana que viene.
+  const [diasKpis, setDiasKpis] = useState(30);
+
+  async function loadKpis(dias = diasKpis) {
+    try { setKpis(await getKpis(dias)); } catch { setKpis(null); }
   }
 
   async function loadReclamos() {
@@ -426,7 +430,10 @@ export default function AdminPage() {
       {tab === "pagos" && <TabPagos items={pagosPendientes} onConfirmar={doConfirmarPago} />}
 
       {tab === "monitoreo" && <TabMonitoreo data={estadisticas} reservalo={reservaloResumen} comercios={todosLosComercios} />}
-      {tab === "kpis" && <TabKpis data={kpis} />}
+      {tab === "kpis" && (
+        <TabKpis data={kpis} dias={diasKpis}
+                 onDias={(d) => { setDiasKpis(d); setKpis(null); loadKpis(d); }} />
+      )}
       {tab === "vencimientos" && <VencimientosPanel />}
 
       {tab === "reclamos" && (
@@ -744,8 +751,25 @@ function TabPagos({
   );
 }
 
-function TabKpis({ data }: { data: Kpis | null }) {
-  if (!data) return <p style={{ color: "var(--txt-3)" }}>Cargando KPIs…</p>;
+function TabKpis({ data, dias, onDias }: { data: Kpis | null; dias: number; onDias: (d: number) => void }) {
+  const selector = (
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <select className="adm-input" style={{ width: "auto" }} value={dias}
+              onChange={(e) => onDias(Number(e.target.value))}>
+        <option value={1}>Hoy</option>
+        <option value={7}>Últimos 7 días</option>
+        <option value={30}>Últimos 30 días</option>
+        <option value={90}>Últimos 90 días</option>
+        <option value={365}>Último año</option>
+      </select>
+      {data?.desde && (
+        <span style={{ fontSize: 12, color: "var(--txt-3)" }}>
+          Desde el {data.desde} · {data.busquedas_total ?? 0} búsquedas, {data.eventos_total ?? 0} eventos
+        </span>
+      )}
+    </div>
+  );
+  if (!data) return <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>{selector}<p style={{ color: "var(--txt-3)" }}>Cargando KPIs…</p></div>;
   const m = data.monetizacion;
   const card: React.CSSProperties = { padding: 18, borderRadius: 14, border: "1px solid var(--stroke)", background: "var(--panel)" };
   const Lista = ({ titulo, items, empty, nota }: {
@@ -781,6 +805,7 @@ function TabKpis({ data }: { data: Kpis | null }) {
   );
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {selector}
       {/* Monetización (para el creador del sitio) */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         {[["Comercios activos", m.comercios_activos, "var(--txt)"], ["Pagando", m.pagando, "var(--neon)"], ["Gratis", m.gratis, "var(--txt-3)"]].map(([lbl, val, col]) => (
@@ -792,12 +817,14 @@ function TabKpis({ data }: { data: Kpis | null }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 }}>
         <Lista titulo="🔎 Más buscado" items={data.top_busquedas}
-               nota="Veces buscado → cuántos encuentra hoy. En ámbar, donde hay más demanda que oferta."
-               empty="Sin búsquedas todavía." />
+               nota={`Veces buscado en el período → cuántos encuentra HOY. En ámbar, donde hay más demanda que oferta.`}
+               empty="Sin búsquedas en este período." />
         <Lista titulo="🚫 Sigue sin resultado" items={data.sin_resultado}
                nota="Verificado contra el catálogo de hoy, no contra el día que se buscó."
                empty="Nada sin resultado 🎉" />
-        <Lista titulo="🏪 Locales más visitados" items={data.top_comercios} empty="Sin visitas todavía." />
+        <Lista titulo="🏪 Locales más visitados" items={data.top_comercios}
+               nota="Fichas abiertas y contactos, en el período elegido."
+               empty="Sin visitas en este período." />
       </div>
       {/* Lo que ya no es un problema, aparte. Estaba mezclado con lo de
           arriba bajo el cartel de «oportunidades», y mandaba a salir a buscar

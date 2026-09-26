@@ -149,7 +149,7 @@ class Repo(Protocol):
     def terminos_de_comercio(
         self, comercio_id: str, dias: int = 30, limit: int = 8
     ) -> list[dict]: ...
-    def kpis_admin(self) -> dict: ...
+    def kpis_admin(self, dias: int = 30) -> dict: ...
     def insert_visita(self, fila: dict) -> None: ...
     def resumen_visitas(self, dias: int = 30) -> dict: ...
     def list_suscripciones(self) -> list[dict]: ...
@@ -2566,7 +2566,8 @@ class SupabaseRepo:
         from collections import Counter
         from datetime import date, timedelta
 
-        desde = (date.today() - timedelta(days=dias)).isoformat()
+        # Inclusiva y en hora de Bolivia: `dias=1` es hoy, no hoy y ayer.
+        desde = (self._hoy_en_bolivia() - timedelta(days=max(0, dias - 1))).isoformat()
         filas: list[dict] = []
         while True:
             lote = (self._db.table("visitas")
@@ -2593,7 +2594,7 @@ class SupabaseRepo:
         personas = len({v["sesion"] for v in filas})
 
         # El embudo, contra los leads del mismo período.
-        desde_ts = f"{desde}T00:00:00Z"
+        desde_ts = f"{desde}T00:00:00-04:00"
         leads = (self._db.table("leads").select("tipo")
                  .gte("created_at", desde_ts).limit(20_000).execute().data) or []
         por_tipo = Counter(l.get("tipo") for l in leads)
@@ -2627,14 +2628,55 @@ class SupabaseRepo:
         except Exception:
             return None
 
-    def kpis_admin(self) -> dict:
+    @staticmethod
+    def _hoy_en_bolivia():
+        """La fecha de HOY en Bermejo, no en el servidor.
+
+        El backend corre en UTC y Bolivia va cuatro horas atrás: desde las
+        20:00 de Bermejo, `date.today()` ya devuelve el día siguiente. Con eso,
+        «hoy» en el panel empezaba a las 20:00 de ayer y la tarde —que es
+        cuando cruzan a comprar— caía partida entre dos días."""
+        from datetime import datetime, timedelta, timezone
+
+        return datetime.now(timezone(timedelta(hours=-4))).date()
+
+    def _todas_las_filas(self, tabla: str, cols: str, desde_iso: str, tope: int = 60_000) -> list[dict]:
+        """Todas las filas de `tabla` desde una fecha. PAGINANDO.
+
+        PostgREST corta en 1000 y devuelve 200: un `.limit(5000)` trae mil
+        filas y nadie se entera. Sin esto, cualquier recuento se congela en
+        mil y el panel muestra números que parecen exactos y no lo son."""
+        filas: list[dict] = []
+        while len(filas) < tope:
+            lote = (self._db.table(tabla).select(cols)
+                    .gte("created_at", desde_iso)
+                    .order("created_at", desc=True)
+                    .range(len(filas), len(filas) + 999).execute().data) or []
+            filas += lote
+            if len(lote) < 1000:
+                break
+        return filas
+
+    def kpis_admin(self, dias: int = 30) -> dict:
         from collections import Counter
-        from datetime import date
+        from datetime import date, timedelta
 
         def norm(q: str) -> str:
             return (q or "").strip().lower()
 
-        bus = (self._db.table("busquedas").select("query, resultados").order("created_at", desc=True).limit(1000).execute().data) or []
+        # CON VENTANA DE TIEMPO Y PAGINANDO.
+        #
+        # Antes: las últimas 1000 búsquedas registradas, del período que
+        # fueran. «rústico 59» podía ser de los últimos tres días o de los
+        # últimos tres meses, y no había forma de saberlo — ni de comparar un
+        # término con otro, porque los dos venían de una muestra sin bordes.
+        # Un número que parece exacto y no lo es es peor que no tenerlo.
+        # `dias - 1` para que la ventana INCLUYA hoy: con `dias=1` el período
+        # es hoy y nada más, no «desde ayer a las 00:00», que son dos días.
+        desde_dt = self._hoy_en_bolivia() - timedelta(days=max(0, dias - 1))
+        # Medianoche de Bermejo, no de UTC (ver _hoy_en_bolivia).
+        desde = f"{desde_dt.isoformat()}T00:00:00-04:00"
+        bus = self._todas_las_filas("busquedas", "query, resultados, created_at", desde)
         top = Counter(norm(b["query"]) for b in bus if norm(b.get("query", "")))
         sin = Counter(norm(b["query"]) for b in bus if norm(b.get("query", "")) and (b.get("resultados") or 0) == 0)
 
@@ -2656,7 +2698,7 @@ class SupabaseRepo:
         terminos = {q for q, _ in top.most_common(15)} | {q for q, _ in sin.most_common(15)}
         hoy_por_termino = {q: self._cuantos_da_hoy(q) for q in terminos}
 
-        leads = (self._db.table("leads").select("comercio_id, tipo").order("created_at", desc=True).limit(3000).execute().data) or []
+        leads = self._todas_las_filas("leads", "comercio_id, tipo, created_at", desde)
         por_com = Counter(l["comercio_id"] for l in leads if l.get("comercio_id"))
         top_ids = [cid for cid, _ in por_com.most_common(10)]
         coms: dict = {}
@@ -2668,11 +2710,20 @@ class SupabaseRepo:
             for cid, n in por_com.most_common(10)
         ]
 
-        hoy = date.today().isoformat()
+        # También en hora de Bolivia: entre las 20:00 y la medianoche de
+        # Bermejo, `date.today()` en UTC ya es mañana y una suscripción que
+        # vence hoy figuraba vencida cuatro horas antes.
+        hoy = self._hoy_en_bolivia().isoformat()
         total = (self._db.table("comercios").select("id", count="exact").eq("activo", True).limit(1).execute().count) or 0
         pagando = (self._db.table("comercios").select("id", count="exact").eq("activo", True).eq("suspendido", False).gte("paga_hasta", hoy).limit(1).execute().count) or 0
 
         return {
+            # Qué período están mirando estos números. Sin esto, el panel dice
+            # «59» y cada uno le pone la fecha que quiere.
+            "dias": dias,
+            "desde": desde_dt.isoformat(),
+            "busquedas_total": len(bus),
+            "eventos_total": len(leads),
             "top_busquedas": [{"query": q, "n": n, "hoy": hoy_por_termino.get(q)} for q, n in top.most_common(15)],
             # Sólo lo que SIGUE sin resultado: eso es una oportunidad. Lo demás
             # va aparte, para que se note que se resolvió y no confunda.

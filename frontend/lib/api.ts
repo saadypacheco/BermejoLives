@@ -364,6 +364,13 @@ export async function getEstadisticas(): Promise<EstadisticasAdmin> {
  *  null = no se pudo averiguar (y no es lo mismo que cero). */
 export type TerminoBuscado = { query: string; n: number; hoy?: number | null };
 export type Kpis = {
+  /** El período que cubren TODOS los números de esta pantalla. Antes no
+   *  existía: la muestra eran «las últimas 1000 búsquedas», del período que
+   *  fueran, y un número sin fecha no se puede comparar con nada. */
+  dias?: number;
+  desde?: string;
+  busquedas_total?: number;
+  eventos_total?: number;
   top_busquedas: TerminoBuscado[];
   /** Los que SIGUEN sin resultado hoy: huecos de verdad. */
   sin_resultado: TerminoBuscado[];
@@ -390,8 +397,8 @@ export async function getVisitas(dias = 30): Promise<ResumenVisitas> {
   return okDe(res, "cargar las visitas") as Promise<ResumenVisitas>;
 }
 
-export async function getKpis(): Promise<Kpis> {
-  const res = await authFetch("/admin/kpis");
+export async function getKpis(dias = 30): Promise<Kpis> {
+  const res = await authFetch(`/admin/kpis?dias=${dias}`);
   return res.json();
 }
 
