@@ -375,12 +375,25 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     event = WahaEvent.model_validate(event_dict)
 
     if event.event not in _MESSAGE_EVENTS:
+        # DEJA RASTRO. Este descarte pasa ANTES de escribir en la bandeja, así
+        # que un mensaje que se cae acá no existe en ningún lado: buscando por
+        # qué no llegaba una foto, «WAHA no mandó nada» y «WAHA lo mandó con un
+        # nombre de evento que no miramos» se veían exactamente igual.
+        logger.info("ingest.evento_ignorado", evento=event.event,
+                    tipo=(event.payload or {}).get("type"),
+                    con_media=bool((event.payload or {}).get("hasMedia")))
         return {"captured": False, "ignored": event.event}
 
     payload = WahaMessagePayload.model_validate(event.payload)
     if not payload.id:
         raise IngestError("payload sin 'id' (no se puede deduplicar)")
     if payload.from_me:
+        # Ídem: también es anterior a la bandeja. `fromMe` es lo que manda EL
+        # NÚMERO AL QUE ESTÁ ATADO WAHA, así que si alguien prueba mandándose
+        # un mensaje desde ese mismo teléfono, no aparece por ningún lado y
+        # parece que el circuito está roto.
+        logger.info("ingest.saliente_ignorado", tipo=payload.type,
+                    con_media=bool(payload.has_media), a=payload.from_)
         return {"captured": False, "reason": "mensaje saliente"}
 
     match_confirmacion = _RE_CONFIRMAR.match(payload.body or "")
