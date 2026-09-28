@@ -238,10 +238,16 @@ export async function nombreCiudadDe(ciudadId: string | null | undefined): Promi
 /** Las publicaciones de un tipo, de todos los comercios de la ciudad. Es lo
  *  que muestran /ofertas y /novedades; la ficha del comercio usa el mismo
  *  contenido filtrado por local. */
-export async function getPublicaciones(tipo: FeedItem["tipo"], limit = 60, ciudadSlug?: string | null): Promise<FeedItem[]> {
+export async function getPublicaciones(
+  tipo: FeedItem["tipo"], limit = 60, ciudadSlug?: string | null, rubroSlug?: string | null,
+): Promise<FeedItem[]> {
   if (!hasSupabase) return [];
   let q = supabase.from("feed_publico").select("*").eq("tipo", tipo).limit(limit);
   if (ciudadSlug) q = q.eq("ciudad_slug", ciudadSlug);
+  // El rubro es lo que permite mandar UN link con lo que le interesa a alguien
+  // —«las ofertas de ropa de hoy»— en vez de mandarle todo. Un mensaje con
+  // treinta ofertas se silencia; uno con las cinco de su rubro se abre.
+  if (rubroSlug) q = q.eq("rubro_slug", rubroSlug);
   const { data, error } = await q;
   if (error) { logSupaError("getPublicaciones", error); return []; }
   return (data ?? []) as FeedItem[];

@@ -1210,6 +1210,16 @@
 .uk-pub .uk-section-head { align-items: center; flex-wrap: wrap; gap: 12px; }
 .uk-pub h1 { margin: 0; font-size: 26px; }
 .uk-pub-sub { margin: 4px 0 18px; font-size: 14.5px; color: var(--uk-ink-soft); line-height: 1.5; max-width: 62ch; }
+/* Los rubros que hoy tienen algo publicado, como filtros. Es lo que permite
+   mandar un link con lo que le interesa a alguien —/ofertas?rubro=ropa— en vez
+   de mandarle las treinta del día, que se silencian el primer día. */
+.uk-pub-rubros { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 14px; }
+.uk-pub-rubros a { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+                   border: 1px solid var(--uk-line); background: var(--uk-surface); color: var(--uk-ink);
+                   font-size: 13px; font-weight: 600; white-space: nowrap; }
+.uk-pub-rubros a b { font-size: 11.5px; font-weight: 800; opacity: .55; }
+.uk-pub-rubros a.on { background: var(--uk-green); border-color: var(--uk-green); color: #fff; }
+.uk-pub-rubros a.on b { opacity: .8; }
 .uk-pub-solapas a { padding: 8px 14px; font-size: 13.5px; font-weight: 700; color: var(--uk-ink-soft); text-decoration: none; border-radius: 10px; }
 .uk-pub-solapas a.active { background: var(--uk-green); color: #fff; }
 /* El comercio, arriba de todo en la tarjeta: acá se mira la ciudad entera y

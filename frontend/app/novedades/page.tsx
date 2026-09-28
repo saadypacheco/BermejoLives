@@ -5,13 +5,27 @@ import { PublicacionesGrid, SolapasPublicaciones } from "@/components/publicacio
 import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import { getPublicaciones } from "@/lib/data";
+import { RubrosDePublicaciones } from "@/components/rubros-publicaciones";
 import { ciudadActual } from "@/lib/ciudad-server";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata(): Promise<Metadata> {
+type Props = { searchParams?: Record<string, string | string[] | undefined> };
+
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const { ciudad } = await ciudadActual();
   const n = ciudad?.nombre ?? "Bermejo";
+  // El rubro va en el título porque este link se comparte: lo que se ve en la
+  // vista previa de WhatsApp es esto, y «Ofertas de Bermejo» no dice de qué.
+  const rubro = typeof searchParams?.rubro === "string" ? searchParams.rubro : null;
+  if (rubro) {
+    const items = await getPublicaciones("novedad", 1, ciudad?.slug, rubro);
+    const nom = (items[0]?.rubro_nombre ?? rubro).replace(/^\S+\s/, "");
+    return {
+      title: `Novedades de ${nom} en ${n} — URUKU`,
+      description: `Lo que publicaron hoy los comercios de ${nom} en ${n}, con foto, precio y el WhatsApp de cada local.`,
+    };
+  }
   return {
     title: "Novedades de " + n + " — URUKU",
     description: "Lo que cuentan los comercios: mercadería nueva, horarios, cambios de local y lo que está pasando hoy.",
@@ -24,18 +38,25 @@ export async function generateMetadata(): Promise<Metadata> {
  * La otra mitad está en la ficha de cada negocio (#novedades): el mismo
  * contenido visto desde un local. Acá se mira la ciudad; allá, un comercio.
  */
-export default async function NovedadesPage() {
+export default async function NovedadesPage({ searchParams }: Props) {
   const { ciudad } = await ciudadActual();
   const nombre = ciudad?.nombre ?? "Bermejo";
-  const items = await getPublicaciones("novedad", 60, ciudad?.slug);
+  const rubro = typeof searchParams?.rubro === "string" ? searchParams.rubro : null;
+  // Se piden TODAS igual: la fila de rubros sale de acá, y el filtro se aplica
+  // después. Con dos consultas la fila mostraría sólo el rubro ya elegido y no
+  // habría forma de volver ni de saltar a otro.
+  const todas = await getPublicaciones("novedad", 60, ciudad?.slug);
+  const items = rubro ? todas.filter((p) => p.rubro_slug === rubro) : todas;
+  const nomRubro = rubro ? (todas.find((p) => p.rubro_slug === rubro)?.rubro_nombre ?? rubro) : null;
 
   return (
     <UrukuShell showCatnav={false} activeNav="Novedades">
       <div className="uk-container uk-pub">
         <div className="uk-section-head">
-          <h1>📣 Novedades de {nombre}</h1>
+          <h1>📣 Novedades {nomRubro ? `de ${nomRubro.replace(/^\S+\s/, "")}` : `de ${nombre}`}</h1>
           <SolapasPublicaciones activa="novedades" />
         </div>
+        <RubrosDePublicaciones items={todas} ruta="/novedades" activo={rubro} />
         <p className="uk-pub-sub">Lo que cuentan los comercios: mercadería nueva, cambios de horario, lo que está pasando hoy.</p>
 
         <PublicacionesGrid
