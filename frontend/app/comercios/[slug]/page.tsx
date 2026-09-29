@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { UrukuShell } from "@/components/uruku-shell";
-import { MensajeComercioForm } from "@/components/mensaje-comercio-form";
 import { WaLeadLink } from "@/components/wa-lead-link";
 import { LeadLink } from "@/components/lead-link";
 import { ReservarBoton } from "@/components/reservar-boton";
@@ -187,7 +186,16 @@ export default async function ComercioPage({ params }: { params: { slug: string 
                 <Phone style={{ width: 20, height: 20 }} />
                 <span>Llamar<small>{comercio.telefono}</small></span>
               </a>
-            ) : null}
+            ) : (
+              /* SIN CONTACTO: decirlo. Son 1.115 de 1.253, y acá no había
+                 nada — ni un botón ni una línea. El comprador no sabía si el
+                 local no tiene WhatsApp o si URUKU no lo cargó, que son dos
+                 cosas muy distintas para quien está por cruzar el puente. */
+              <div className="uk-ficha-sincontacto">
+                <b>Este local no tiene WhatsApp cargado</b>
+                <span>Hay que ir hasta el local. Fijate cómo llegar acá abajo.</span>
+              </div>
+            )}
 
             <div className="uk-ficha-acciones">
               {!sinParada && (
@@ -389,7 +397,16 @@ export default async function ComercioPage({ params }: { params: { slug: string 
               </div>
             )}
 
-            <MensajeComercioForm comercioId={comercio.id} nombre={comercio.nombre} />
+            {/* Acá estaba «Dejá un mensaje».
+                Lo lee el comerciante desde /mi-comercio, y para eso tiene que
+                tener cuenta y entrar. De 1.253 comercios activos, 138 tienen
+                WhatsApp y muchísimos menos tienen cuenta: el formulario le
+                pedía a un comprador que escribiera una consulta a un buzón que
+                nadie iba a abrir. Un canal de contacto que no contesta es peor
+                que no ofrecer ninguno — el comprador espera y no vuelve.
+
+                Los mensajes que ya entraron siguen en la base y se leen desde
+                /mi-comercio; lo que se saca es la promesa nueva. */}
 
             <div className="uk-info-card uk-ficha-reclamo">
               <h3>¿Hay algún dato incorrecto?</h3>

@@ -628,6 +628,14 @@
    apenas en pantalla y saltó en una captura para el video, ampliada. Lo mismo
    vale para los otros dos botones verdes que son enlaces. */
 .uk a.uk-ficha-wa, .uk a.uk-resficha, .uk a.uk-btn-wa, .uk a.uk-offer { color: #fff; }
+/* Local sin ningún contacto cargado (1.115 de 1.253). Ocupa el lugar del
+   botón de WhatsApp y dice lo que pasa, en vez de dejar el hueco mudo: el
+   comprador no puede distinguir «no tiene» de «no lo cargamos». */
+.uk-ficha-sincontacto { display: block; padding: 14px 16px; border-radius: 14px;
+                        border: 1px dashed var(--uk-line); background: var(--uk-chip); }
+.uk-ficha-sincontacto b { display: block; font-size: 14px; }
+.uk-ficha-sincontacto span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--uk-ink-soft); line-height: 1.4; }
+
 /* `.uk-offer` estaba afuera de esta lista y en MODO CLARO el título salía
    verde oscuro sobre la tarjeta verde oscura: la primera oferta publicada no
    se podía leer. La tarjeta es siempre una superficie oscura (foto + velo),
