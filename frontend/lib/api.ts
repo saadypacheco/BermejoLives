@@ -203,7 +203,10 @@ export async function editarComercio(id: string, patch: Record<string, unknown>)
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
-  return res.json();
+  // Antes devolvía el cuerpo sin mirar el estado: un 500 pasaba por bueno o
+  // caía en un catch sin mensaje, y la pantalla decía «verificá el backend»
+  // mientras el backend estaba diciendo qué campo estaba mal.
+  return okDe(res, "guardar el negocio");
 }
 
 /** Igual que `itemsDe` pero para acciones: `authFetch` sólo lanza en 401, así que
@@ -212,9 +215,33 @@ export async function editarComercio(id: string, patch: Record<string, unknown>)
 async function okDe(res: Response, que: string) {
   if (!res.ok) {
     const d = await res.json().catch(() => ({}));
-    throw new Error(d.detail ?? `No se pudo ${que} (HTTP ${res.status})`);
+    throw new Error(detalleLegible(d.detail) ?? `No se pudo ${que} (HTTP ${res.status})`);
   }
   return res.json().catch(() => ({}));
+}
+
+/** El `detail` de FastAPI viene de dos formas y una no es texto.
+ *
+ *  Cuando la validación la hace Pydantic (un valor que no está en la lista, un
+ *  número fuera de rango) `detail` es un ARREGLO de objetos, y pasarlo tal cual
+ *  a `new Error()` mostraba «[object Object]» — el mensaje exacto que explicaba
+ *  el problema, convertido en ruido. */
+function detalleLegible(detail: unknown): string | null {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((e) => {
+        const o = e as { msg?: string; loc?: unknown[] };
+        if (!o?.msg) return null;
+        // `loc` es ["body", "modalidad"]: el último es el campo.
+        const campo = Array.isArray(o.loc) ? String(o.loc[o.loc.length - 1] ?? "") : "";
+        const limpio = o.msg.replace(/^Value error,\s*/, "");
+        return campo && campo !== "body" ? `${campo}: ${limpio}` : limpio;
+      })
+      .filter(Boolean);
+    if (msgs.length) return msgs.join(" · ");
+  }
+  return null;
 }
 
 export async function verificarComercio(id: string) {

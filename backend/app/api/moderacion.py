@@ -6,7 +6,7 @@ import re
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.auth import hash_password, require_moderador, require_permiso
 from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS
@@ -257,6 +257,14 @@ def rechazar_comercio(
 
 # ── Suscripciones ─────────────────────────────────────────────────────────────
 
+#: Lo único que acepta la base (`check (modalidad in (...))`, migración 0005).
+#: Está acá para que un valor de más se rechace con un mensaje y no con un 500:
+#: el panel ofrecía «Local», «Delivery», «Online» y «Mixto» —canales de venta,
+#: no modalidades— y guardar cualquiera de esos reventaba contra la restricción
+#: y volvía «Error interno», que no le dice a nadie qué campo arreglar.
+MODALIDADES = ("mayorista", "minorista", "ambos")
+
+
 class EditarComercioBody(BaseModel):
     nombre: str | None = None
     #: "No tiene cartel": la base le arma el nombre con lo que vende y dónde
@@ -282,6 +290,13 @@ class EditarComercioBody(BaseModel):
     # el `patch` descarta los None, así que un 0 legítimo sí viaja.
     portada_pos: int | None = Field(default=None, ge=0, le=100)
     rubro_slugs: list[str] | None = None
+
+    @field_validator("modalidad")
+    @classmethod
+    def _modalidad_valida(cls, v: str | None) -> str | None:
+        if v is not None and v not in MODALIDADES:
+            raise ValueError(f"«{v}» no es una modalidad. Tiene que ser una de: {', '.join(MODALIDADES)}.")
+        return v
 
 
 @router.put("/admin/comercio/{comercio_id}")

@@ -1710,7 +1710,10 @@ function ModalEditar({
   const [whatsapp, setWhatsapp] = useState(comercio.whatsapp ?? "");
   const [telefono, setTelefono] = useState((comercio as Record<string, unknown>).telefono as string ?? "");
   const [descripcion, setDescripcion] = useState(comercio.descripcion ?? "");
-  const [modalidad, setModalidad] = useState(comercio.modalidad ?? "local");
+  // "mayorista" de arranque y no "local": local no es un valor válido —la base
+  // acepta mayorista, minorista o ambos— y era el que el desplegable mandaba
+  // cuando el comercio tenía "ambos" y no encontraba su opción.
+  const [modalidad, setModalidad] = useState(comercio.modalidad ?? "mayorista");
   const [direccion, setDireccion] = useState(comercio.direccion ?? "");
   const [horario, setHorario] = useState((comercio as Record<string, unknown>).horario as string ?? "");
   // Encuadre de la portada: el % vertical que va al centro del recorte. NULL
@@ -1768,8 +1771,11 @@ function ModalEditar({
       // falta.
       if (horario.trim()) { try { localStorage.setItem(ULTIMO_HORARIO, horario.trim()); } catch { /* modo privado */ } }
       return true;
-    } catch {
-      setErr("No se pudo guardar. Verificá el backend.");
+    } catch (e) {
+      // El mensaje del servidor y no uno genérico: «Verificá el backend» mandó
+      // a mirar los logs cuando lo que decía el backend era exactamente qué
+      // campo estaba mal.
+      setErr(e instanceof Error && e.message ? e.message : "No se pudo guardar. Verificá el backend.");
       return false;
     } finally {
       setSaving(false);
@@ -1937,11 +1943,20 @@ function ModalEditar({
             </div>
             <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Modalidad
               <select className="adm-input" style={{ marginTop: 4 }} value={modalidad} onChange={(e) => setModalidad(e.target.value)}>
-                <option value="local">Local</option>
-                <option value="mayorista">Mayorista</option>
-                <option value="delivery">Delivery</option>
-                <option value="online">Online</option>
-                <option value="mixto">Mixto</option>
+                {/* Las tres que existen. Antes ofrecía Local, Delivery, Online
+                    y Mixto —que no son modalidades de venta sino canales, y
+                    ninguna existe en la base: `modalidad` sólo acepta
+                    mayorista, minorista o ambos. Cuatro de las cinco opciones
+                    reventaban el guardado con un 500, y las dos válidas que
+                    faltaban hacían que los 53 comercios con «ambos» no se
+                    pudieran editar: el desplegable no encontraba su valor,
+                    mostraba «Local», y guardar cualquier cosa fallaba.
+
+                    Sale de MODALIDAD_LABEL para que haya UNA lista: la misma
+                    que usan la ficha, el buscador y la app de campo. */}
+                {Object.entries(MODALIDAD_LABEL).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
               </select>
             </label>
             <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Dirección
