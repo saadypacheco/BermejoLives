@@ -316,10 +316,18 @@ def editar_comercio(
     if "horario" in patch:
         patch["horario_estimado"] = False
     updated = repo.update_comercio(comercio_id, patch, body.rubro_slugs)
-    # Si cambió de qué vende, se recalculan los rubros. Sólo suma: los que se
-    # eligieron a mano en este mismo formulario no se pierden.
-    if {"prod_obs_human", "descripcion", "nombre"} & patch.keys():
-        aplicar_rubros(repo, updated, body.rubro_slugs or repo.get_comercio_rubros(comercio_id))
+    # LO QUE UNA PERSONA DEJÓ MARCADO ES LA LISTA, Y NO SE DISCUTE.
+    #
+    # `aplicar_rubros` une lo elegido con lo DEDUCIDO del texto, y eso hacía
+    # que destildar un rubro no sirviera para nada: el deducido volvía a
+    # entrar en el mismo guardado. Asomarlux vende iluminación, su descripción
+    # aclara «no ofrece alquiler de equipos», el clasificador leyó «alquiler»
+    # y lo puso en Alquileres — y sacarlo desde el panel era imposible.
+    #
+    # Deducir está bien cuando nadie miró. Cuando alguien miró y decidió,
+    # deducir es pisarle la decisión.
+    if body.rubro_slugs is None and {"prod_obs_human", "descripcion", "nombre"} & patch.keys():
+        aplicar_rubros(repo, updated, repo.get_comercio_rubros(comercio_id))
     logger.info("moderacion.comercio_editado", comercio=comercio_id, campos=list(patch.keys()), by=admin["email"])
     return {"ok": True, "comercio": updated}
 

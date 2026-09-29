@@ -1728,7 +1728,19 @@ function ModalEditar({
   const [sitioWeb, setSitioWeb] = useState(_campo("sitio_web"));
   const [email, setEmail] = useState(_campo("email"));
   const _rubroActual = (comercio.rubros as { slug: string } | undefined)?.slug;
-  const [rubroSlugs, setRubroSlugs] = useState<string[]>(_rubroActual ? [_rubroActual] : []);
+  // TODOS los rubros del comercio, no sólo el principal. Antes se precargaba
+  // uno solo: al guardar, la lista que viajaba tenía ese uno y los demás se
+  // borraban sin que nadie los hubiera tocado ni visto.
+  const _todosSusRubros = [
+    ...(_rubroActual ? [_rubroActual] : []),
+    ...(comercio.comercio_rubros ?? []).map((x) => x.rubros?.slug).filter((s): s is string => !!s),
+  ];
+  const [rubroSlugs, setRubroSlugs] = useState<string[]>([...new Set(_todosSusRubros)]);
+  // Cuál se ve abajo del nombre en la ficha, de qué color es el pin y por cuál
+  // filtra el buscador. Es el PRIMERO de la lista que se manda, y como eso era
+  // invisible —dependía del orden en que se hubiera tocado cada chip— acá se
+  // elige a propósito.
+  const [principal, setPrincipal] = useState<string>(_rubroActual ?? _todosSusRubros[0] ?? "");
   const [prodObsHuman, setProdObsHuman] = useState(comercio.prod_obs_human ?? "");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -1762,7 +1774,11 @@ function ModalEditar({
         tiktok_url: normalizarRed(tiktok, "https://tiktok.com/@"),
         sitio_web: normalizarRed(sitioWeb, "https://"),
         email: email || undefined,
-        rubro_slugs: rubroSlugs.length ? rubroSlugs : undefined,
+        // El principal PRIMERO: el backend usa el primero de la lista para
+        // `comercios.rubro_id`, que es el que se ve en la ficha.
+        rubro_slugs: rubroSlugs.length
+          ? [...(rubroSlugs.includes(principal) ? [principal] : []), ...rubroSlugs.filter((x) => x !== principal)]
+          : undefined,
         portada_pos: portadaPos,
       });
       // Se recuerda para el "igual que el anterior" de la ficha siguiente.
@@ -1934,12 +1950,35 @@ function ModalEditar({
                   const on = rubroSlugs.includes(r.slug);
                   return (
                     <button type="button" key={r.slug} className={`mchip ${on ? "active" : ""}`} style={{ cursor: "pointer" }}
-                      onClick={() => setRubroSlugs((prev) => on ? prev.filter((s) => s !== r.slug) : [...prev, r.slug])}>
-                      {r.nombre}
+                      onClick={() => setRubroSlugs((prev) => {
+                        const ahora = on ? prev.filter((s) => s !== r.slug) : [...prev, r.slug];
+                        // Si se destildó el principal, el principal pasa a ser
+                        // otro de los que quedan: dejarlo apuntando a uno que
+                        // ya no está haría que la ficha siga mostrándolo.
+                        if (on && r.slug === principal) setPrincipal(ahora[0] ?? "");
+                        if (!on && !principal) setPrincipal(r.slug);
+                        return ahora;
+                      })}>
+                      {on && r.slug === principal ? "★ " : ""}{r.nombre}
                     </button>
                   );
                 })}
               </div>
+              {/* Cuál manda. Es el que se ve abajo del nombre en la ficha, el
+                  color del pin y por el que filtra el buscador — y hasta ahora
+                  no había forma de elegirlo: salía el primero que se hubiera
+                  tocado. */}
+              {rubroSlugs.length > 1 && (
+                <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12 }}>★ El principal (es el que se ve en la ficha):</span>
+                  <select className="adm-input" style={{ width: "auto" }} value={principal}
+                          onChange={(e) => setPrincipal(e.target.value)}>
+                    {rubroSlugs.map((sl) => (
+                      <option key={sl} value={sl}>{rubros.find((r) => r.slug === sl)?.nombre ?? sl}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Modalidad
               <select className="adm-input" style={{ marginTop: 4 }} value={modalidad} onChange={(e) => setModalidad(e.target.value)}>
