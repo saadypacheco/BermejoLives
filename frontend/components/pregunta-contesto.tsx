@@ -12,7 +12,7 @@ import { responderContesto } from "@/lib/campo";
  * Es la única señal que URUKU puede tener de si un comercio atiende: la
  * conversación pasa en el teléfono del comerciante, donde no se ve nada.
  *
- * Con las respuestas: «✓ Responde» en la tarjeta de los que contestan, los
+ * Con las respuestas: «Responde» en la tarjeta de los que contestan, los
  * que no contestan nunca bajan al final de su rubro, y el admin ve a quién
  * llamar. Sin este cartel, un número apagado sigue primero para siempre.
  */

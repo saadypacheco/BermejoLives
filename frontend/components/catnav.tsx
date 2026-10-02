@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { sinEmoji } from "@/lib/rubros";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { getRubros } from "@/lib/data";
 import type { Rubro } from "@/lib/types";
@@ -59,12 +60,6 @@ export function CatNav({ active }: { active?: string }) {
   };
   const prev = () => ref.current?.scrollBy({ left: -ref.current.clientWidth * 0.7, behavior: "smooth" });
 
-  // Los nombres de los rubros traen el emoji adelante ("👟 Calzado"). En esta
-  // barra ya hay poco espacio y el emoji no agrega nada: se muestra el texto.
-  function etiqueta(nombre: string): string {
-    return nombre.replace(/^[^\p{L}\p{N}]+/u, "").trim() || nombre;
-  }
-
   return (
     <nav className="uk-catnav">
       <div className="uk-container uk-catnav-wrap">
@@ -76,7 +71,7 @@ export function CatNav({ active }: { active?: string }) {
           {rubros.map((r) => (
             <Link key={r.slug} href={`/buscar?rubro=${r.slug}`}
                   className={active === r.slug ? "active" : ""}>
-              {etiqueta(r.nombre)}
+              {sinEmoji(r.nombre)}
             </Link>
           ))}
         </div>

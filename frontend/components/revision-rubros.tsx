@@ -7,6 +7,7 @@ import {
   type ModoRecalculo,
 } from "@/lib/api";
 import { RubroRecalcular } from "@/components/rubro-recalcular";
+import { Ic } from "@/components/ic";
 
 /**
  * Revisar la clasificación de a uno, con una persona decidiendo.
@@ -288,7 +289,7 @@ No se borra ningún rubro: ` +
 
       {!cargando && items.length === 0 && (
         <div className="panel-card glass" style={{ padding: 24, textAlign: "center", color: "var(--txt-3)" }}>
-          No queda nada por revisar acá. 🎉
+          No queda nada por revisar acá.
         </div>
       )}
 
@@ -337,7 +338,7 @@ No se borra ningún rubro: ` +
 
               <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                 <button className="btn btn-ghost btn-sm" disabled={guardando} onClick={() => marcarOk(f)}>
-                  ✓ Está bien
+                  <Ic n="si" s={14} /> Está bien
                 </button>
                 {/* Un toque y listo. En la mayoría de los casos el diccionario
                     ya acertó, y obligar a abrir un formulario para confirmarlo
@@ -351,11 +352,11 @@ No se borra ningún rubro: ` +
                 {/* Los atajos de arriba sólo SUMAN un rubro. Cuando hay que
                     sacar alguno —"quitá supermercado y café, dejá el resto"—
                     hace falta el editor completo, que es el mismo de la lista
-                    de Negocios: casillas, orden y la ★ del principal. Tener dos
+                    de Negocios: casillas, orden y la estrella del principal. Tener dos
                     editores distintos para lo mismo era la mitad del problema. */}
                 <button className="btn btn-ghost btn-sm" disabled={guardando}
                         onClick={() => setEditando(editando === f.comercio_id ? null : f.comercio_id)}>
-                  ✏️ Editar los rubros
+                  <Ic n="editar" s={14} /> Editar los rubros
                 </button>
               </div>
 

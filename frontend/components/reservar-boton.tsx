@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { alCambiar, alternarReserva, estaReservado, itemDeOferta } from "@/lib/reservas";
 import type { FeedItem } from "@/lib/types";
+import { Ic } from "@/components/ic";
 
 /** "Reservar" sobre una oferta.
  *
@@ -33,7 +34,7 @@ export function ReservarBoton({ oferta, className }: { oferta: FeedItem; classNa
         setPuesto(alternarReserva(itemDeOferta(oferta)));
       }}
     >
-      {puesto ? "✓ En tu reserva" : "Reservar"}
+      {puesto ? <><Ic n="si" s={14} /> En tu reserva</> : "Reservar"}
     </button>
   );
 }

@@ -9,6 +9,7 @@ import { ThemeToggle, ThemeNoFlash } from "@/components/uruku-theme";
 import { alCambiar, leerReservas, porComercio, quitarReserva, vaciarComercio, type GrupoReserva } from "@/lib/reservas";
 import { precioFmt, waLink } from "@/lib/types";
 import { registrarLead } from "@/lib/campo";
+import { Ic } from "@/components/ic";
 
 export default function ReservasPage() {
   const [grupos, setGrupos] = useState<GrupoReserva[]>([]);
@@ -92,7 +93,7 @@ export default function ReservasPage() {
                         {i.precio != null ? precioFmt(i.precio, i.moneda) : "Precio a consultar"}
                       </div>
                     </div>
-                    <button type="button" className="uk-linkbtn" onClick={() => quitarReserva(i.id)} aria-label="Quitar">✕</button>
+                    <button type="button" className="uk-linkbtn" onClick={() => quitarReserva(i.id)} aria-label="Quitar"><Ic n="cerrar" s={15} /></button>
                   </div>
                 ))}
               </div>

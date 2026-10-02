@@ -3,6 +3,7 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import { UrukuShell } from "@/components/uruku-shell";
 import { enlacesComunidad } from "@/components/unirme-comunidad";
+import { Ic } from "@/components/ic";
 
 export const dynamic = "force-dynamic";
 
@@ -38,11 +39,11 @@ export default async function ComunidadPage() {
           <div className="uk-comunidad-col">
             <h2>Qué recibís</h2>
             <ul className="uk-comunidad-lista">
-              <li>💱 <b>La cotización de la mañana</b> (dólar y peso), antes de salir.</li>
-              <li>🏷️ <b>Las ofertas del día</b> que los comercios mandan y se aprueban.</li>
-              <li>🌉 <b>Cómo está el paso</b>: puente, chalanas, río.</li>
-              <li>🏙️ <b>Un grupo por ciudad</b> (Salta, Jujuy, Orán, Tartagal…) para preguntar a los que ya vinieron: dónde comer, cuánto pagaron, qué tour les fue bien.</li>
-              <li>💬 Lo que no esté, se lo preguntás a la <b>Ayuda de URUKU</b> o a la gente del grupo.</li>
+              <li><Ic n="cambio" s={16} /> <b>La cotización de la mañana</b> (dólar y peso), antes de salir.</li>
+              <li><Ic n="ofertas" s={16} /> <b>Las ofertas del día</b> que los comercios mandan y se aprueban.</li>
+              <li><Ic n="frontera" s={16} /> <b>Cómo está el paso</b>: puente, chalanas, río.</li>
+              <li><Ic n="ciudad" s={16} /> <b>Un grupo por ciudad</b> (Salta, Jujuy, Orán, Tartagal…) para preguntar a los que ya vinieron: dónde comer, cuánto pagaron, qué tour les fue bien.</li>
+              <li><Ic n="dax" s={16} /> Lo que no esté, se lo preguntás a la <b>Ayuda de URUKU</b> o a la gente del grupo.</li>
             </ul>
 
             <h2>Las reglas, cortas</h2>
@@ -57,7 +58,7 @@ export default async function ComunidadPage() {
           <div className="uk-comunidad-col uk-comunidad-entrar">
             {comunidad ? (
               <>
-                <a className="uk-btn uk-btn-wa uk-comunidad-btn" href={comunidad} target="_blank" rel="noopener">💬 Unite a la comunidad</a>
+                <a className="uk-btn uk-btn-wa uk-comunidad-btn" href={comunidad} target="_blank" rel="noopener"><Ic n="comunidad" s={17} /> Unite a la comunidad</a>
                 {qr && (
                   <div className="uk-comunidad-qr">
                     <img src={qr} alt="QR para entrar a la comunidad" width={200} height={200} />

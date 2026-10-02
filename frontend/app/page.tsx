@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
+import { Ic, IcRubro, climaIcono, type NombreIcono } from "@/components/ic";
 import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import { getClima, getCotizaciones, getFeed, getFronteraEstado, getVideosPromo } from "@/lib/data";
@@ -27,15 +28,21 @@ export const dynamic = "force-dynamic";
 // y wifi son rubros no comerciales (0083, 0113)— así que cada acceso trae
 // exactamente lo cargado bajo ese rubro, no lo que el texto libre encuentre
 // ("estacionamiento" devolvía estaciones de servicio). El cambio va a /cambio.
-const SERVICIOS = [
-  { i: "🚻", t: "Baños cercanos", d: "Ubicaciones", href: "/buscar?rubro=banos&vista=mapa" },
-  { i: "💊", t: "Farmacias", d: "Turnos y direcciones", href: "/buscar?rubro=farmacia&vista=mapa" },
-  { i: "🏧", t: "Cajeros y bancos", d: "Dónde sacar plata", href: "/buscar?rubro=cajeros&vista=mapa" },
-  { i: "🅿️", t: "Estacionamiento", d: "Dónde dejar el auto", href: "/buscar?rubro=estacionamiento&vista=mapa" },
-  { i: "💱", t: "Casas de cambio", d: "Cotización, calculadora y mapa", href: "/cambio" },
-  { i: "📶", t: "WiFi y chips", d: "Internet y telefonía", href: "/buscar?rubro=wifi&vista=mapa" },
-  { i: "🚕", t: "Taxis y transporte", d: "Cómo moverte", href: "/buscar?rubro=taxis&vista=mapa" },
-  { i: "🚓", t: "Policía y emergencias", d: "Dónde están, y los teléfonos", href: "/buscar?rubro=emergencias&vista=mapa" },
+//
+// `i` es el nombre de un ícono del catálogo (components/ic.tsx), no un emoji:
+// el tipo obliga a que exista, así que un nombre mal escrito no llega a
+// producción como un cuadrado vacío.
+type Acceso = { i: NombreIcono; t: string; d?: string; href: string };
+
+const SERVICIOS: Acceso[] = [
+  { i: "banos", t: "Baños cercanos", d: "Ubicaciones", href: "/buscar?rubro=banos&vista=mapa" },
+  { i: "farmacia", t: "Farmacias", d: "Turnos y direcciones", href: "/buscar?rubro=farmacia&vista=mapa" },
+  { i: "cajeros", t: "Cajeros y bancos", d: "Dónde sacar plata", href: "/buscar?rubro=cajeros&vista=mapa" },
+  { i: "estacionamiento", t: "Estacionamiento", d: "Dónde dejar el auto", href: "/buscar?rubro=estacionamiento&vista=mapa" },
+  { i: "cambio", t: "Casas de cambio", d: "Cotización, calculadora y mapa", href: "/cambio" },
+  { i: "wifi", t: "WiFi y chips", d: "Internet y telefonía", href: "/buscar?rubro=wifi&vista=mapa" },
+  { i: "taxis", t: "Taxis y transporte", d: "Cómo moverte", href: "/buscar?rubro=taxis&vista=mapa" },
+  { i: "policia", t: "Policía y emergencias", d: "Dónde están, y los teléfonos", href: "/buscar?rubro=emergencias&vista=mapa" },
 ];
 
 // Sin frontera: el cambio es un rubro más (casas de cambio en el mapa), no
@@ -44,45 +51,45 @@ const SERVICIOS_SIN_GUIA = SERVICIOS.map((s) =>
   s.href === "/cambio" ? { ...s, d: "Dólares y otras monedas", href: "/buscar?rubro=cambio&vista=mapa" } : s);
 
 // La fila de accesos debajo del buscador: los mismos destinos, en una palabra.
-const CHIPS = [
-  { i: "🚻", t: "Baños", href: SERVICIOS[0].href }, { i: "💊", t: "Farmacias", href: SERVICIOS[1].href },
-  { i: "🏧", t: "Cajeros", href: SERVICIOS[2].href }, { i: "🅿️", t: "Estacionamiento", href: SERVICIOS[3].href },
-  { i: "💱", t: "Casas de cambio", href: "/cambio" }, { i: "🚕", t: "Taxis", href: SERVICIOS[6].href },
-  { i: "📶", t: "WiFi", href: SERVICIOS[5].href },
-  { i: "🚓", t: "Policía", href: SERVICIOS[7].href },
-  { i: "🚌", t: "Transporte", href: "/guia#transporte" }, { i: "🌉", t: "Frontera", href: "/guia#frontera" },
+const CHIPS: Acceso[] = [
+  { i: "banos", t: "Baños", href: SERVICIOS[0].href }, { i: "farmacia", t: "Farmacias", href: SERVICIOS[1].href },
+  { i: "cajeros", t: "Cajeros", href: SERVICIOS[2].href }, { i: "estacionamiento", t: "Estacionamiento", href: SERVICIOS[3].href },
+  { i: "cambio", t: "Casas de cambio", href: "/cambio" }, { i: "taxis", t: "Taxis", href: SERVICIOS[6].href },
+  { i: "wifi", t: "WiFi", href: SERVICIOS[5].href },
+  { i: "policia", t: "Policía", href: SERVICIOS[7].href },
+  { i: "transporte", t: "Transporte", href: "/guia#transporte" }, { i: "frontera", t: "Frontera", href: "/guia#frontera" },
 ];
 const CHIPS_SIN_GUIA = CHIPS
   .filter((c) => !c.href.startsWith("/guia"))
   .map((c) => (c.href === "/cambio" ? { ...c, t: "Cambio", href: "/buscar?rubro=cambio&vista=mapa" } : c));
 
-const GUIAS = [
-  { i: "🛃", t: "Aduana", d: "Franquicia, qué podés pasar y qué no.", href: "/guia#aduana" },
-  { i: "🪪", t: "Documentación", d: "DNI, pasaporte y viaje con menores.", href: "/guia#documentos" },
-  { i: "🌉", t: "Frontera", d: "Estado del paso, horarios, río y clima.", href: "/guia#frontera" },
-  { i: "🛍️", t: "Comprar", d: "Horarios, por docena, pagos y envíos.", href: "/guia#comercios" },
+const GUIAS: Acceso[] = [
+  { i: "aduana", t: "Aduana", d: "Franquicia, qué podés pasar y qué no.", href: "/guia#aduana" },
+  { i: "documentos", t: "Documentación", d: "DNI, pasaporte y viaje con menores.", href: "/guia#documentos" },
+  { i: "frontera", t: "Frontera", d: "Estado del paso, horarios, río y clima.", href: "/guia#frontera" },
+  { i: "comprar", t: "Comprar", d: "Horarios, por docena, pagos y envíos.", href: "/guia#comercios" },
 ];
 
-const HERRAMIENTAS = [
-  { i: "🚌", t: "Cómo llegar", href: "/guia#transporte" },
-  { i: "🏔️", t: "Cómo salir de la ciudad", href: "/guia#transporte" },
-  { i: "🕒", t: "Qué está abierto ahora", href: "/guia#comercios" },
-  { i: "📍", t: "Qué hay cerca tuyo", href: "/buscar?cerca=1" },
+const HERRAMIENTAS: Acceso[] = [
+  { i: "transporte", t: "Cómo llegar", href: "/guia#transporte" },
+  { i: "salir", t: "Cómo salir de la ciudad", href: "/guia#transporte" },
+  { i: "reloj", t: "Qué está abierto ahora", href: "/guia#comercios" },
+  { i: "ubicacion", t: "Qué hay cerca tuyo", href: "/buscar?cerca=1" },
 ];
-const HERRAMIENTAS_SIN_GUIA = [
-  { i: "📍", t: "Qué hay cerca tuyo", href: "/buscar?cerca=1" },
-  { i: "🗺️", t: "Todo en el mapa", href: "/buscar?vista=mapa" },
-  { i: "🏷️", t: "Las ofertas de hoy", href: "/ofertas" },
-  { i: "📣", t: "Novedades de los comercios", href: "/novedades" },
+const HERRAMIENTAS_SIN_GUIA: Acceso[] = [
+  { i: "ubicacion", t: "Qué hay cerca tuyo", href: "/buscar?cerca=1" },
+  { i: "mapa", t: "Todo en el mapa", href: "/buscar?vista=mapa" },
+  { i: "ofertas", t: "Las ofertas de hoy", href: "/ofertas" },
+  { i: "novedades", t: "Novedades de los comercios", href: "/novedades" },
 ];
 
-const INFO = [
-  { i: "💳", t: "Medios de pago", d: "Pesos, bolivianos, dólares, QR", href: "/guia#comercios" },
-  { i: "🛡️", t: "Seguridad y consejos", d: "Para la primera vez", href: "/guia#seguridad" },
-  { i: "📞", t: "Teléfonos útiles", d: "110 · 119 · 168 y dónde queda la policía", href: "/guia#seguridad" },
-  { i: "📱", t: "Comprar chip o eSIM", d: "Entel y Tigo", href: "/guia#conectividad" },
-  { i: "▶️", t: "Videos guía", d: "Recorridos y tips", href: "/guia#ofertas" },
-  { i: "📣", t: "Novedades", d: "Lo que cuentan los comercios", href: "/novedades" },
+const INFO: Acceso[] = [
+  { i: "pagos", t: "Medios de pago", d: "Pesos, bolivianos, dólares, QR", href: "/guia#comercios" },
+  { i: "seguridad", t: "Seguridad y consejos", d: "Para la primera vez", href: "/guia#seguridad" },
+  { i: "telefono", t: "Teléfonos útiles", d: "110 · 119 · 168 y dónde queda la policía", href: "/guia#seguridad" },
+  { i: "celulares", t: "Comprar chip o eSIM", d: "Entel y Tigo", href: "/guia#conectividad" },
+  { i: "video_play", t: "Videos guía", d: "Recorridos y tips", href: "/guia#ofertas" },
+  { i: "novedades", t: "Novedades", d: "Lo que cuentan los comercios", href: "/novedades" },
 ];
 
 const ESTADO: Record<string, Record<string, [string, string]>> = {
@@ -159,7 +166,7 @@ export default async function InicioPage() {
     <UrukuShell activeCat="Todos" activeNav="Inicio">
       {/* ===== Los accesos rápidos, debajo del buscador ===== */}
       <nav className="uk-container uk-home-chips" aria-label="Servicios">
-        {(conGuia ? CHIPS : CHIPS_SIN_GUIA).map((c) => <Link key={c.t} href={c.href}><span aria-hidden>{c.i}</span>{c.t}</Link>)}
+        {(conGuia ? CHIPS : CHIPS_SIN_GUIA).map((c) => <Link key={c.t} href={c.href}><Ic n={c.i} s={18} />{c.t}</Link>)}
       </nav>
 
       {/* ===== Hero: qué es esto, y cómo está Bermejo hoy ===== */}
@@ -169,8 +176,8 @@ export default async function InicioPage() {
             <h1>Todo <span>{nombre}</span><br />en un solo lugar</h1>
             <p>{conGuia ? "Comercios, ofertas, cambio, servicios y datos útiles para tu visita." : `Comercios, ofertas y servicios de ${nombre}, en el mapa y con el WhatsApp de cada local.`}</p>
             <div className="uk-hero-actions">
-              <Link href="/ofertas" className="uk-btn uk-btn-primary">🏷️ Ver ofertas del día</Link>
-              <Link href={conGuia ? "/guia" : "/buscar?vista=mapa"} className="uk-btn uk-btn-ghost uk-home-btn-claro">{conGuia ? "🧭 Explorar servicios" : "🗺️ Ver el mapa"}</Link>
+              <Link href="/ofertas" className="uk-btn uk-btn-primary"><Ic n="ofertas" s={18} /> Ver ofertas del día</Link>
+              <Link href={conGuia ? "/guia" : "/buscar?vista=mapa"} className="uk-btn uk-btn-ghost uk-home-btn-claro"><><Ic n={conGuia ? "explorar" : "mapa"} s={18} /> {conGuia ? "Explorar servicios" : "Ver el mapa"}</></Link>
             </div>
             <div className="uk-home-props">
               <div><b>Comercios locales</b><span>Locales con productos y ofertas</span></div>
@@ -189,19 +196,19 @@ export default async function InicioPage() {
               {frontera && (["puente", "chalanas"] as const).filter((k) => frontera[k] !== "no_aplica").map((k) => {
                 const [txt, nivel] = ESTADO[k][frontera[k]] ?? [frontera[k], "ojo"];
                 const horario = k === "chalanas" && frontera.chalanas !== "suspendidas" && frontera.chalanas_horario ? ` · ${frontera.chalanas_horario}` : "";
-                return <li key={k}><span>{k === "puente" ? "🌉" : "⛵"}</span>{k === "puente" ? "Frontera" : "Chalanas"}: <b className={nivel}>{txt}</b>{horario}</li>;
+                return <li key={k}><Ic n={k === "puente" ? "frontera" : "chalanas"} />{k === "puente" ? "Frontera" : "Chalanas"}: <b className={nivel}>{txt}</b>{horario}</li>;
               })}
-              {frontera?.rio === "crecido" && <li><span>🌊</span>Río: <b className="ojo">crecido</b></li>}
-              {clima?.temp_c != null && <li><span>{clima.icono || "☀"}</span>Clima: <b>{Math.round(clima.temp_c)}°</b>{clima.descripcion ? ` · ${clima.descripcion}` : ""}</li>}
-              {t.usd_bob != null && <li><span>🇺🇸</span>1 USD = <b>{formatoMonto(t.usd_bob, "BOB")} Bs</b></li>}
+              {frontera?.rio === "crecido" && <li><Ic n="rio" />Río: <b className="ojo">crecido</b></li>}
+              {clima?.temp_c != null && <li><Ic n={climaIcono(clima.descripcion)} />Clima: <b>{Math.round(clima.temp_c)}°</b>{clima.descripcion ? ` · ${clima.descripcion}` : ""}</li>}
+              {t.usd_bob != null && <li><Ic n="cambio" />1 USD = <b>{formatoMonto(t.usd_bob, "BOB")} Bs</b></li>}
               {esFrontera && t.ars_bob != null && (ciudad?.moneda_vecina ?? "ARS") === "ARS" && (
-                <li><span>🇦🇷</span>1.000 ARS = <b>{formatoMonto(t.ars_bob * 1000, "BOB")} Bs</b></li>
+                <li><Ic n="cambio" />1.000 ARS = <b>{formatoMonto(t.ars_bob * 1000, "BOB")} Bs</b></li>
               )}
               {frontera?.nota && <li className="uk-home-hoy-nota">{frontera.nota}</li>}
             </ul>
             {conGuia
-              ? <Link href="/cambio" className="uk-home-hoy-link">📍 Casas de cambio y calculadora <span>›</span></Link>
-              : <Link href="/buscar?rubro=cambio&vista=mapa" className="uk-home-hoy-link">📍 Casas de cambio en el mapa <span>›</span></Link>}
+              ? <Link href="/cambio" className="uk-home-hoy-link"><Ic n="ubicacion" s={16} /> Casas de cambio y calculadora <span>›</span></Link>
+              : <Link href="/buscar?rubro=cambio&vista=mapa" className="uk-home-hoy-link"><Ic n="ubicacion" s={16} /> Casas de cambio en el mapa <span>›</span></Link>}
           </aside>
           )}
         </div>
@@ -219,7 +226,7 @@ export default async function InicioPage() {
         <div className="uk-home-grid uk-home-grid-4">
           {(conGuia ? SERVICIOS : SERVICIOS_SIN_GUIA).map((s) => (
             <Link key={s.t} href={s.href} className="uk-home-card">
-              <span className="uk-home-ic">{s.i}</span>
+              <span className="uk-home-ic"><Ic n={s.i} s={26} /></span>
               <b>{s.t}</b><small>{s.d}</small>
             </Link>
           ))}
@@ -237,7 +244,7 @@ export default async function InicioPage() {
           <div className="uk-home-grid uk-home-grid-2">
             {GUIAS.map((g) => (
               <Link key={g.t} href={g.href} className="uk-home-card">
-                <span className="uk-home-ic">{g.i}</span>
+                <span className="uk-home-ic"><Ic n={g.i} s={26} /></span>
                 <b>{g.t}</b><small>{g.d}</small>
                 <em>Ver guía →</em>
               </Link>
@@ -252,7 +259,7 @@ export default async function InicioPage() {
           <div className={`uk-home-grid ${conGuia ? "uk-home-grid-2" : "uk-home-grid-4"}`}>
             {(conGuia ? HERRAMIENTAS : HERRAMIENTAS_SIN_GUIA).map((h) => (
               <Link key={h.t} href={h.href} className="uk-home-card uk-home-card-c">
-                <span className="uk-home-ic">{h.i}</span>
+                <span className="uk-home-ic"><Ic n={h.i} s={26} /></span>
                 <b>{h.t}</b>
               </Link>
             ))}
@@ -296,15 +303,13 @@ export default async function InicioPage() {
               era el problema: era que el texto no se veía. */}
           <div className="uk-offers">
             {cards.map((o) => {
-              // El emoji del rubro viene pegado al nombre ("🔧 Ferretería…").
-              // Es lo que ocupa el lugar de la foto cuando no hay foto.
-              const emoji = (o.rubro_nombre ?? "").trim().split(" ")[0];
               return (
               <Link key={o.id} href={`/comercios/${o.comercio_slug}`}
                 className={`uk-offer${o.imagen_url ? "" : " sin-foto"}`}
                 style={o.imagen_url ? { backgroundImage: `url('${o.imagen_url}')` } : undefined}>
                 <span className="uk-offer-tag">{o.zona_nombre || o.comercio_nombre}</span>
-                {!o.imagen_url && emoji && <span className="uk-offer-emoji" aria-hidden>{emoji}</span>}
+                {/* Sin foto, el ícono del rubro ocupa su lugar. */}
+                {!o.imagen_url && <span className="uk-offer-emoji"><IcRubro slug={o.rubro_slug} s={64} peso="fill" /></span>}
                 {o.descuento_pct != null && <span className="uk-offer-disc">-{o.descuento_pct}%</span>}
                 <div className="uk-offer-body">
                   <h3>{o.titulo}</h3>
@@ -327,7 +332,7 @@ export default async function InicioPage() {
         <div className="uk-home-grid uk-home-grid-3">
           {INFO.map((x) => (
             <Link key={x.t} href={x.href} className="uk-home-card uk-home-card-fila">
-              <span className="uk-home-ic">{x.i}</span>
+              <span className="uk-home-ic"><Ic n={x.i} s={26} /></span>
               <div><b>{x.t}</b><small>{x.d}</small></div>
             </Link>
           ))}
@@ -338,7 +343,7 @@ export default async function InicioPage() {
       {/* ===== Videos ===== */}
       {videos.length > 0 && (
         <section className="uk-container uk-home-sec">
-          <div className="uk-section-head"><h2>🎬 Recorrimos {nombre}</h2></div>
+          <div className="uk-section-head"><h2><Ic n="videos" s={22} tono="marca" /> Recorrimos {nombre}</h2></div>
           <div className="uk-rail">
             {videos.map((v) => (
               <div key={v.id} className="uk-vid">

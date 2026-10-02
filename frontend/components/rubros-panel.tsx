@@ -6,6 +6,7 @@ import {
   previsualizarPalabras, aplicarPatron,
   type PropuestaRubro, type RubroSimple, type InformeRubros, type PreviewPalabras,
 } from "@/lib/api";
+import { Ic } from "@/components/ic";
 
 /** "Carnicería y pollería" → "carniceria-y-polleria". */
 function aSlug(s: string): string {
@@ -192,7 +193,6 @@ function Resolver({ propuesta, rubros, onListo, onError }: {
   onError: (m: string) => void;
 }) {
   const [nombre, setNombre] = useState(propuesta.normalizado);
-  const [icono, setIcono] = useState("");
   const [comercial, setComercial] = useState(true);
   const [palabras, setPalabras] = useState(propuesta.normalizado);
   const [destino, setDestino] = useState("");
@@ -226,7 +226,7 @@ function Resolver({ propuesta, rubros, onListo, onError }: {
   async function nuevo() {
     setOcupado(true);
     try {
-      await crearRubro({ slug, nombre, icono: icono.trim() || "🏷", comercial,
+      await crearRubro({ slug, nombre, comercial,
                          palabras, resolver: propuesta.normalizado });
       if (prev && prev.nuevos > 0) {
         const r = await aplicarPatron(slug, palabras);
@@ -265,17 +265,16 @@ function Resolver({ propuesta, rubros, onListo, onError }: {
         <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>Es un rubro nuevo</div>
         <input className="adm-input" value={nombre} onChange={(e) => setNombre(e.target.value)}
                placeholder="Nombre visible" style={{ marginBottom: 6 }} />
-        {/* El ejemplo del emoji era 🥩 y se leía como si el rubro ya viniera
-            marcado "carne": un placeholder con contenido propio no se distingue
-            de un valor cargado. Va 🏷, que es lo que un rubro ES y no confunde
-            con ninguno en particular. */}
+        {/* Acá había un campo «Emoji». Era de la primera versión del
+            catálogo, cuando el nombre del rubro llevaba un emoji adelante.
+            Hoy el dibujo lo pone el catálogo de Phosphor por SLUG
+            (components/ic.tsx), así que el campo pedía un dato que nadie
+            mira: el rubro nuevo ya sale dibujado. Queda el slug a la vista,
+            que es lo que sí importa —es la clave con la que el catálogo
+            encuentra el dibujo y con la que se busca—. */}
         <div style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
-          <span style={{ fontSize: 11.5, color: "var(--txt-3)" }}>Emoji</span>
-          <input className="adm-input" style={{ width: 64 }} value={icono}
-                 aria-label="Emoji del rubro" title="Emoji del rubro (opcional)"
-                 onChange={(e) => setIcono(e.target.value)} placeholder="🏷" />
-          <span style={{ alignSelf: "center", fontSize: 11.5, color: "var(--txt-3)",
-                         fontFamily: "monospace" }}>{slug}</span>
+          <span style={{ fontSize: 11.5, color: "var(--txt-3)" }}>Slug</span>
+          <span style={{ fontSize: 11.5, color: "var(--txt-3)", fontFamily: "monospace" }}>{slug || "—"}</span>
         </div>
         <label style={{ display: "flex", gap: 7, alignItems: "flex-start", fontSize: 12,
                         color: "var(--txt-3)", marginBottom: 8 }}>
@@ -330,7 +329,7 @@ function Resolver({ propuesta, rubros, onListo, onError }: {
                 está arrastrando y no clasificando. Es la señal que buscamos. */}
             {prev.conviven_con.length > 0 && (
               <div style={{ marginTop: 6, color: "var(--amber)" }}>
-                ⚠️ De los nuevos, ya están en:{" "}
+                <Ic n="aviso" s={14} /> De los nuevos, ya están en:{" "}
                 {prev.conviven_con.map((c) => `${c.slug} (${c.comercios})`).join(" · ")}
                 <div style={{ color: "var(--txt-3)", marginTop: 3 }}>
                   Si son casi todos del mismo rubro ajeno, la palabra está arrastrando.

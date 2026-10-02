@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Ic, type NombreIcono } from "@/components/ic";
 
 /* Chip que abre un dropdown moderno (reusable: Home y /buscar) */
 export function FilterChip({ icon, label, value, active, children }: {
-  icon: string; label: string; value?: string; active?: boolean;
+  icon: NombreIcono; label: string; value?: string; active?: boolean;
   children: (close: () => void) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -17,7 +18,7 @@ export function FilterChip({ icon, label, value, active, children }: {
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button type="button" className={`fchip ${active ? "active" : ""}`} onClick={() => setOpen((o) => !o)}>
-        <span>{icon}</span>{value || label}<span className="fchip-caret">▾</span>
+        <Ic n={icon} s={15} />{value || label}<span className="fchip-caret"><Ic n="desplegar" s={13} /></span>
       </button>
       {open && <div className="fchip-pop">{children(() => setOpen(false))}</div>}
     </div>

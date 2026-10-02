@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { GaleriaFoto, GaleriaVideo } from "@/lib/data";
+import { Ic } from "@/components/ic";
 
 /** Galería pública en la ficha del comercio: fotos (thumb → lightbox) + videos. */
 export function GaleriaFicha({ fotos, videos }: { fotos: GaleriaFoto[]; videos: GaleriaVideo[] }) {
@@ -33,7 +34,7 @@ export function GaleriaFicha({ fotos, videos }: { fotos: GaleriaFoto[]; videos: 
       {zoom && (
         <div className="gf-lightbox" onClick={() => setZoom(null)} role="dialog" aria-modal>
           <img src={zoom} alt="" />
-          <button type="button" className="gf-close" aria-label="Cerrar">✕</button>
+          <button type="button" className="gf-close" aria-label="Cerrar"><Ic n="cerrar" s={18} /></button>
         </div>
       )}
     </div>

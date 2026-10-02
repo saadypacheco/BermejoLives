@@ -80,7 +80,7 @@ export function DifusionPanel() {
               border: "1px solid var(--line)",
               color: x.configurado ? "var(--txt-2)" : "var(--amber)",
             }}>
-              {x.manual ? "✋" : x.configurado ? "✓" : "○"} {x.nombre}
+              {x.manual ? "a mano" : x.configurado ? "ok" : "—"} {x.nombre}
               {x.manual && " · a mano desde la tablet"}
               {!x.manual && x.automatico && x.configurado && (
                 <b style={{ color: "var(--neon)" }}> · sale solo</b>

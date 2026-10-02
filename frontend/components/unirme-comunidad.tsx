@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getRedes } from "@/lib/data";
 import { redHref } from "@/components/uruku-ui";
+import { Ic } from "@/components/ic";
 
 /**
  * «Unite a la comunidad»: el botón hacia la Comunidad de WhatsApp de los
@@ -27,14 +28,14 @@ export async function UnirmeComunidad({ variante = "banner" }: { variante?: "ban
   if (variante === "boton") {
     return (
       <a className="uk-btn uk-btn-wa uk-comunidad-btn" href={comunidad} target="_blank" rel="noopener">
-        💬 Unite a la comunidad
+        <Ic n="comunidad" s={17} /> Unite a la comunidad
       </a>
     );
   }
   if (variante === "chico") {
     return (
       <p className="uk-comunidad-chico">
-        💬 <a href={comunidad} target="_blank" rel="noopener"><b>Unite a la comunidad de compradores</b></a>: la cotización de la mañana,
+        <Ic n="comunidad" s={17} /> <a href={comunidad} target="_blank" rel="noopener"><b>Unite a la comunidad de compradores</b></a>: la cotización de la mañana,
         las ofertas del día y gente que ya compró en Bermejo. <Link href="/comunidad">Qué es →</Link>
       </p>
     );
@@ -43,7 +44,7 @@ export async function UnirmeComunidad({ variante = "banner" }: { variante?: "ban
     <section className="uk-container">
       <div className="uk-comunidad-banner">
         <div className="uk-comunidad-texto">
-          <b>💬 La comunidad de los que compran en Bermejo</b>
+          <b><Ic n="comunidad" s={17} /> La comunidad de los que compran en Bermejo</b>
           <span>Cotización de la mañana, ofertas del día, cómo está el paso, y un grupo por ciudad para preguntar a los que ya vinieron. Entrás vos: nadie te agrega.</span>
         </div>
         <div className="uk-comunidad-acciones">

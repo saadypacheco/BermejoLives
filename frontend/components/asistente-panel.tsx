@@ -6,6 +6,7 @@ import {
   borrarSaberLocal, getAsistenteConversaciones, getSaberLocal, guardarSaberLocal, responderAsistente,
   type ConversacionAsistente, type SaberLocal,
 } from "@/lib/api";
+import { Ic } from "@/components/ic";
 
 // Las secciones de la guía (uruku.bo/guia). Lo que se guarda con sección
 // aparece ahí; "general" sólo lo contesta el asistente.
@@ -102,12 +103,12 @@ export function AsistentePanel() {
           <div style={{ marginTop: 10 }}>
             <p style={{ fontSize: 13, opacity: .75, margin: "0 0 8px" }}>
               Por nivel: sin modelo {niveles[0] ?? 0} · con modelo {niveles[1] ?? 0} · sin respuesta {niveles[3] ?? 0}
-              · 👍 {utiles} · 👎 {noUtiles}
+              · <Ic n="util" s={13} /> {utiles} · <Ic n="inutil" s={13} /> {noUtiles}
             </p>
             <div style={{ display: "grid", gap: 6, fontSize: 13 }}>
               {todas.map((c) => (
                 <div key={c.id} style={{ padding: "8px 10px", border: "1px solid var(--stroke)", borderRadius: 8 }}>
-                  <div><b>{c.pregunta}</b> <span style={{ opacity: .5 }}>· N{c.nivel} · {c.intent ?? "-"} · {c.canal}{c.util === true ? " · 👍" : c.util === false ? " · 👎" : ""}</span></div>
+                  <div><b>{c.pregunta}</b> <span style={{ opacity: .5 }}>· N{c.nivel} · {c.intent ?? "-"} · {c.canal}{c.util === true ? <> · <Ic n="util" s={12} /></> : c.util === false ? <> · <Ic n="inutil" s={12} /></> : ""}</span></div>
                   <div style={{ opacity: .8, whiteSpace: "pre-wrap" }}>{c.respuesta}</div>
                 </div>
               ))}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { aparato, pasosPermisoUbicacion } from "@/lib/geo";
+import { Ic } from "@/components/ic";
 
 /**
  * El cartel que sale cuando hace falta la ubicación y no está.
@@ -62,7 +63,7 @@ export function PermisoUbicacion({ mensaje, onPedir, motivo = "Para ordenar por 
     return (
       <div className="uk-permiso" role="status">
         <p>
-          <b>📍 {motivo}, URUKU necesita tu ubicación.</b>
+          <b><Ic n="ubicacion" s={16} /> {motivo}, URUKU necesita tu ubicación.</b>
           {mensaje && !/denegado/i.test(mensaje) ? <span> {mensaje}</span> : <span> El navegador te va a preguntar; elegí «Permitir».</span>}
         </p>
         <button type="button" className="uk-btn uk-btn-primary" onClick={pedir} disabled={pidiendo}>
@@ -74,7 +75,7 @@ export function PermisoUbicacion({ mensaje, onPedir, motivo = "Para ordenar por 
 
   return (
     <div className="uk-permiso bloqueado" role="alert">
-      <p><b>📍 El navegador tiene la ubicación bloqueada para uruku.bo.</b> Se destraba en tres pasos{donde === "iphone" ? " del iPhone" : donde === "android" ? " del celular" : ""}:</p>
+      <p><b><Ic n="ubicacion" s={16} /> El navegador tiene la ubicación bloqueada para uruku.bo.</b> Se destraba en tres pasos{donde === "iphone" ? " del iPhone" : donde === "android" ? " del celular" : ""}:</p>
       <ol>
         {pasos.map((p) => <li key={p}>{p}</li>)}
       </ol>

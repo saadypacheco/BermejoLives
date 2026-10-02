@@ -722,7 +722,7 @@ export async function getCotizacionHistorial(clave: string, limit = 8): Promise<
 /** Los rubros que son servicios de la ciudad, no negocios: lo que se lista en
  *  /guia › En el mapa. Son rubros (0083, 0113) y se cargan como comercios. */
 export const RUBROS_SERVICIO: [string, string][] = [
-  ["banos", "🚻 Baños públicos"], ["estacionamiento", "🅿️ Estacionamientos"],
-  ["cajeros", "🏧 Cajeros y bancos"], ["wifi", "📶 Wifi gratis"], ["cambio", "💱 Casas de cambio"],
-  ["emergencias", "🚓 Policía y emergencias"],
+  ["banos", "Baños públicos"], ["estacionamiento", "Estacionamientos"],
+  ["cajeros", "Cajeros y bancos"], ["wifi", "Wifi gratis"], ["cambio", "Casas de cambio"],
+  ["emergencias", "Policía y emergencias"],
 ];

@@ -24,7 +24,7 @@ import { agregarTiles } from "@/lib/mapa-tiles";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 const TIPOS: [Adorno["tipo"], string][] = [
-  ["chalana", "⛵ Chalana"], ["lapacho", "🌳 Lapacho"], ["bandera", "🏳 Bandera"],
+  ["chalana", "Chalana"], ["lapacho", "Lapacho"], ["bandera", "Bandera"],
 ];
 
 export function AdornosEditor() {
@@ -210,10 +210,10 @@ export function AdornosEditor() {
       {sel && (
         <div className="uk-adornos-sel">
           <b>
-            {sel.tipo === "chalana" ? "⛵ Chalana"
-             : sel.tipo === "bandera" ? `🏳 ${BANDERAS[sel.variante || "bo"]?.nombre ?? "Bandera"}`
-             : sel.tipo === "lapacho" ? `🌳 Lapacho${sel.variante ? ` ${LAPACHOS[sel.variante]?.nombre ?? ""}` : ""}`
-             : "🌳 Lapacho"}
+            {sel.tipo === "chalana" ? "Chalana"
+             : sel.tipo === "bandera" ? `${BANDERAS[sel.variante || "bo"]?.nombre ?? "Bandera"}`
+             : sel.tipo === "lapacho" ? `Lapacho${sel.variante ? ` ${LAPACHOS[sel.variante]?.nombre ?? ""}` : ""}`
+             : "Lapacho"}
           </b>
           <span className="uk-adornos-coords">
             {sel.lat.toFixed(5)}, {sel.lng.toFixed(5)}

@@ -31,6 +31,7 @@
 // sería cierto — el botón de WhatsApp de la ficha lleva a ese número.
 import { useState } from "react";
 import { editarComercioAgente } from "@/lib/campo";
+import { Ic } from "@/components/ic";
 
 const PREFIJOS: [string, string, string][] = [
   ["591", "🇧🇴", "Bolivia"],
@@ -97,7 +98,7 @@ export function CapturaWhatsapp({
   if (guardado) {
     return (
       <div className="wa-card wa-card--ok">
-        <div className="wa-ok-ic">✓</div>
+        <div className="wa-ok-ic"><Ic n="listo" s={26} /></div>
         <div>
           <b>Número guardado</b>
           <div className="wa-ok-num">{formatear(prefijo, digitos)}</div>
@@ -146,14 +147,14 @@ export function CapturaWhatsapp({
           que la persona no siempre hace en voz alta. */}
       <div className="wa-preview" aria-hidden={!completo}>
         <div className="wa-preview-top">
-          <span className="wa-preview-avatar">🛍️</span>
+          <span className="wa-preview-avatar"><Ic n="comercios" s={18} /></span>
           <div>
             <b>{nombre && !/^comercio/i.test(nombre) ? nombre : "Tu local"}</b>
             <span>{completo ? bonito : "—"}</span>
           </div>
         </div>
         <div className="wa-burbuja">
-          Hola! Vi tu local en URUKU y quería consultar por un producto 👋
+          Hola! Vi tu local en URUKU y quería consultar por un producto
           <i className="wa-hora">ahora</i>
         </div>
         <p className="wa-nota">

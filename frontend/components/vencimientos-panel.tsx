@@ -5,6 +5,7 @@ import {
   getVencimientos, guardarVencimiento, borrarVencimiento,
   type PanelVencimientos,
 } from "@/lib/api";
+import { Ic } from "@/components/ic";
 
 /** Colores por estado.
  *
@@ -125,7 +126,7 @@ export function VencimientosPanel() {
                   });
                 }}>Editar</button>
                 <button className="btn btn-ghost btn-sm" title="Dejar de vigilar"
-                  onClick={() => dejarDeVigilar(v.id, v.nombre)}>✕</button>
+                  onClick={() => dejarDeVigilar(v.id, v.nombre)}><Ic n="cerrar" s={13} /></button>
               </div>
             )}
           </div>

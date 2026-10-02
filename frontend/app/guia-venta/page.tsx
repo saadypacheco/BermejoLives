@@ -171,7 +171,7 @@ export default function GuiaVentaPage() {
 
       <Bloque titulo="El volante">
         <p>
-          Se imprime desde el panel: <b>Negocios → el botón 🖨</b> de cada comercio. Sale en
+          Se imprime desde el panel: <b>Negocios → el botón de imprimir</b> de cada comercio. Sale en
           media hoja, entran dos por página en cualquier impresora, y lleva el
           <b> QR de su propia ficha</b> — escanea y se ve a sí mismo.
         </p>

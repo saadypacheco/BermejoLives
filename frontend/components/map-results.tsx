@@ -6,6 +6,7 @@ import type { Ubicacion } from "@/lib/ubicacion";
 import { type ResultadoBusqueda, comoLlegarHref, waLink, MODALIDAD_LABEL } from "@/lib/types";
 import { registrarLead, type TipoLead } from "@/lib/campo";
 import { rubroStyle, loadLeaflet } from "@/lib/mapa-visual";
+import { rubroSvg, SVG_UBICACION } from "@/lib/iconos-mapa";
 import { adornoHTML, MEDIDAS, ZOOM_MIN_ADORNOS, type Adorno } from "@/lib/adornos";
 import { getAdornosMapa } from "@/lib/data";
 
@@ -24,7 +25,7 @@ function pinHtml(r: ResultadoBusqueda): string {
   const style = rubroStyle(r.rubro_slug);
   const cls = r.verificado ? "ukpin destacado" : "ukpin pago";
   const ring = r.verificado ? `<i class="ukpin-ring"></i>` : "";
-  return `<div class="${cls}" style="--pc:${style.color}">${ring}<span class="ukpin-emo">${style.emoji}</span></div>`;
+  return `<div class="${cls}" style="--pc:${style.color}">${ring}<span class="ukpin-emo">${rubroSvg(r.rubro_slug)}</span></div>`;
 }
 
 export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion = null, centrarEnMi = 0, onPedirUbicacion }: {
@@ -35,7 +36,7 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
    *  Es un contador y no un booleano para que dos toques seguidos centren dos
    *  veces. */
   centrarEnMi?: number;
-  /** El botón 📍 del mapa. Sin esto no se dibuja. */
+  /** El botón de ubicación del mapa. Sin esto no se dibuja. */
   onPedirUbicacion?: () => void;
   /** El mapa base de esta ciudad, si tiene uno propio (migración 0068). Es lo
    *  que permite cambiar de proveedor con un UPDATE y no con un deploy — que es
@@ -68,7 +69,7 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
         // El centro es el de la ciudad elegida. Sin esto, Santa Cruz abría el
         // mapa sobre Bermejo y sólo se corregía si la búsqueda traía pines.
         mapRef.current = L.map(elRef.current, { zoomControl: true, attributionControl: true }).setView(centro, 14);
-        // El botón 📍, debajo del zoom. Un control de Leaflet y no un botón
+        // El botón de ubicación, debajo del zoom. Un control de Leaflet y no un botón
         // de React encima: así respeta el mismo margen, el mismo estilo y el
         // mismo orden que el + y el −.
         if (onPedirUbicacion) {
@@ -76,7 +77,7 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
             onAdd() {
               const div = L.DomUtil.create("div", "leaflet-bar uk-map-yo");
               const a = L.DomUtil.create("a", "", div);
-              a.href = "#"; a.title = "Dónde estoy"; a.setAttribute("aria-label", "Dónde estoy"); a.textContent = "📍";
+              a.href = "#"; a.title = "Dónde estoy"; a.setAttribute("aria-label", "Dónde estoy"); a.innerHTML = SVG_UBICACION;
               L.DomEvent.on(a, "click", (e: Event) => { L.DomEvent.stop(e); onPedirUbicacion(); });
               return div;
             },

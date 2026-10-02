@@ -144,7 +144,7 @@ function FilaPersona({ u, data, ciudades, onCambio }: { u: UsuarioPanel; data: E
     setMsg("");
     try {
       await editarUsuarioPanel(u.id, { email: u.email, activo: patch.activo ?? u.activo, roles: patch.roles ?? roles, ...patch });
-      setClave(""); setMsg("✓"); onCambio();
+      setClave(""); setMsg("Listo"); onCambio();
     } catch (e) { setMsg(e instanceof Error ? e.message : "no se pudo"); }
   }
 
@@ -221,7 +221,7 @@ function FilaRol({ r, grupos, permisos, onCambio, setErr }: {
 
   async function guardar(next: string[]) {
     setSel(next); setMsg("");
-    try { await guardarRol(r.slug, { slug: r.slug, nombre: r.nombre, descripcion: r.descripcion ?? undefined, permisos: next }); setMsg("✓"); }
+    try { await guardarRol(r.slug, { slug: r.slug, nombre: r.nombre, descripcion: r.descripcion ?? undefined, permisos: next }); setMsg("Listo"); }
     catch (e) { setErr(e instanceof Error ? e.message : "No se pudo guardar"); }
   }
 

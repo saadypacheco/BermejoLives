@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { marcarUtilAsistente, preguntarAsistente, type RespuestaAsistente } from "@/lib/api";
+import { Ic } from "@/components/ic";
 
 /**
  * Uruku Ayuda: el botón de abajo a la derecha y el panel de chat.
@@ -149,8 +150,8 @@ export function Asistente({ comercio, ciudad }: { comercio?: { id: string; nombr
                     {m.util == null ? (
                       <>
                         <span>¿Te sirvió?</span>
-                        <button type="button" onClick={() => votar(i - 1, true)} aria-label="Sí, me sirvió">👍</button>
-                        <button type="button" onClick={() => votar(i - 1, false)} aria-label="No me sirvió">👎</button>
+                        <button type="button" onClick={() => votar(i - 1, true)} aria-label="Sí, me sirvió"><Ic n="util" s={16} /></button>
+                        <button type="button" onClick={() => votar(i - 1, false)} aria-label="No me sirvió"><Ic n="inutil" s={16} /></button>
                       </>
                     ) : <span>{m.util ? "¡Gracias!" : "Anotado, lo mejoramos."}</span>}
                   </div>

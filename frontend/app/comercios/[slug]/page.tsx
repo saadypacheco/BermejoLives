@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { UrukuShell } from "@/components/uruku-shell";
+import { sinEmoji } from "@/lib/rubros";
+import { Ic } from "@/components/ic";
 import { WaLeadLink } from "@/components/wa-lead-link";
 import { LeadLink } from "@/components/lead-link";
 import { ReservarBoton } from "@/components/reservar-boton";
@@ -29,7 +31,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   const c = await getComercioBySlug(params.slug);
   if (!c) return { title: "Comercio no encontrado — URUKU" };
   const ciudad = await nombreCiudadDe(c.ciudad_id);
-  const que = c.subcategoria || c.rubro_nombre?.replace(/^\S+\s/, "") || "";
+  const que = c.subcategoria || sinEmoji(c.rubro_nombre) || "";
   const titulo = `${c.nombre.trim()}${que ? ` — ${que}` : ""} en ${ciudad} | URUKU`;
   const vende = (c.prod_obs_human || c.prod_det_ia || "").split(/[,;·]/).map((t) => t.trim()).filter(Boolean).slice(0, 6).join(", ");
   const descripcion = (c.descripcion?.trim() || (vende ? `Vende ${vende}.` : `${c.nombre.trim()} en el mapa de ${ciudad}.`))
@@ -156,8 +158,8 @@ export default async function ComercioPage({ params }: { params: { slug: string 
             </h1>
 
             <div className="uk-ficha-pills">
-              {comercio.rubro_nombre && <span className="uk-pill green">{comercio.rubro_nombre}</span>}
-              {responde && <span className="uk-pill green" title="Los que le escribieron dicen que contesta">✓ Responde</span>}
+              {comercio.rubro_nombre && <span className="uk-pill green">{sinEmoji(comercio.rubro_nombre)}</span>}
+              {responde && <span className="uk-pill green" title="Los que le escribieron dicen que contesta"><Ic n="si" s={13} /> Responde</span>}
               {noResponde && <span className="uk-pill" style={{ color: "#b45309" }} title="Los que le escribieron dicen que no contestó">Últimamente no contesta</span>}
               {comercio.modalidad && (
                 <span className="uk-pill blue">{MODALIDAD_LABEL[comercio.modalidad] ?? comercio.modalidad}</span>
@@ -171,7 +173,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
                 están cargados sólo con esto. */}
             {vende.length > 0 && (
               <div className="uk-ficha-vende">
-                {vende.map((v) => <span key={v}>✓ {v}</span>)}
+                {vende.map((v) => <span key={v}><Ic n="si" s={13} /> {v}</span>)}
               </div>
             )}
 
@@ -235,7 +237,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
             {ofertas.length > 0 && (
               <section id="ofertas" className="uk-ficha-sec">
                 <div className="uk-section-head">
-                  <h2>🔥 Ofertas de {comercio.nombre}</h2>
+                  <h2><Ic n="ofertas" s={22} /> Ofertas de {comercio.nombre}</h2>
                   <span style={{ color: "var(--uk-ink-soft)", fontSize: 13 }}>
                     {ofertas.length} publicada{ofertas.length === 1 ? "" : "s"} por el negocio
                   </span>
@@ -284,7 +286,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
 
             {novedades.length > 0 && (
               <section id="novedades" className="uk-ficha-sec">
-                <div className="uk-section-head"><h2>✨ Novedades</h2></div>
+                <div className="uk-section-head"><h2><Ic n="novedades" s={22} /> Novedades</h2></div>
                 <div className="uk-novedades">
                   {novedades.map((n) => (
                     <article key={n.id} className="uk-novedad">
@@ -317,7 +319,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
               <h3>Información del negocio</h3>
               {comercio.horario && (
                 <div className="uk-info-row">
-                  <span className="ic" aria-hidden>🕐</span>
+                  <span className="ic"><Ic n="reloj" s={17} /></span>
                   <div>
                     <b>Horarios</b>{comercio.horario}{" "}
                     <HorarioBadge horario={comercio.horario} estimado={comercio.horario_estimado} />
@@ -336,7 +338,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
                   queda en palabras — sólo un punto en el mapa. */}
               {!comercio.direccion && comercio.calle && (
                 <div className="uk-info-row">
-                  <span className="ic" aria-hidden>📍</span>
+                  <span className="ic"><Ic n="ubicacion" s={17} /></span>
                   <div><b>Dónde queda</b>{comercio.calle}<small className="uk-info-nota">Sin altura: usá «Cómo llegar».</small></div>
                 </div>
               )}
@@ -362,7 +364,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
                   por defecto no es un dato, es un supuesto con cara de dato. */}
               {comercio.monedas_aceptadas && comercio.monedas_aceptadas.length > 0 && (
                 <div className="uk-info-row">
-                  <span className="ic" aria-hidden>💳</span>
+                  <span className="ic"><Ic n="pagos" s={17} /></span>
                   <div><b>Acepta</b>{comercio.monedas_aceptadas.join(" · ")}</div>
                 </div>
               )}

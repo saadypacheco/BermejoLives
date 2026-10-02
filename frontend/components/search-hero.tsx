@@ -40,13 +40,13 @@ export function SearchHero({ rubros, zonas }: { rubros: Opt[]; zonas: Opt[] }) {
 
       {(
         <div className="chipbar" style={{ justifyContent: "center", marginTop: 12 }}>
-          <FilterChip icon="🏷" label="Categoría" value={rubroNom} active={!!rubro}>
+          <FilterChip icon="ofertas" label="Categoría" value={rubroNom} active={!!rubro}>
             {(close) => <OptionList items={[{ slug: "", nombre: "Todas las categorías" }, ...rubros]} sel={rubro} onPick={(v) => { setRubro(v); close(); buscar({ rubro: v }); }} />}
           </FilterChip>
-          <FilterChip icon="📍" label="Zona" value={zonaNom} active={!!zona}>
+          <FilterChip icon="ubicacion" label="Zona" value={zonaNom} active={!!zona}>
             {(close) => <OptionList items={[{ slug: "", nombre: "Todas las zonas" }, ...zonas]} sel={zona} onPick={(v) => { setZona(v); close(); buscar({ zona: v }); }} />}
           </FilterChip>
-          <FilterChip icon="💰" label="Precio" value={precio ? `hasta ${precio}` : undefined} active={!!precio}>
+          <FilterChip icon="plata" label="Precio" value={precio ? `hasta ${precio}` : undefined} active={!!precio}>
             {(close) => (
               <div style={{ padding: 12, minWidth: 190 }}>
                 <input className="adm-input" type="number" inputMode="numeric" value={precio} onChange={(e) => setPrecio(e.target.value)} placeholder="Precio máximo" />

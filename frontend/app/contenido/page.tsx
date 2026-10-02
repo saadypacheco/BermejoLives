@@ -7,6 +7,7 @@ import {
   publicadorLogin, hayPub, clearPub, editarCotizacion, overrideClima, refrescarClima, editarFrontera,
   listarVideosPromo, subirVideoPromo, borrarVideoPromo, editarRed, type VideoPromoItem,
 } from "@/lib/publicador";
+import { Ic, climaIcono } from "@/components/ic";
 
 export default function ContenidoPage() {
   const [authed, setAuthed] = useState(false);
@@ -69,7 +70,7 @@ function Panel({ onLogout }: { onLogout: (motivo?: string) => void }) {
     getRedes().then((r) => { setRedes(r); setRedVals(Object.fromEntries(r.map((x) => [x.clave, x.url ?? ""]))); });
   }, []);
   async function guardarRed(clave: string) {
-    try { await editarRed(clave, redVals[clave] || ""); flash("Red guardada ✓"); } catch (e) { fail(e); }
+    try { await editarRed(clave, redVals[clave] || ""); flash("Red guardada"); } catch (e) { fail(e); }
   }
   const flash = (m: string) => { setMsg(m); setErr(""); setTimeout(() => setMsg(""), 2500); };
   const fail = (e: unknown) => {
@@ -81,22 +82,22 @@ function Panel({ onLogout }: { onLogout: (motivo?: string) => void }) {
   };
 
   async function guardarCotiz(clave: string) {
-    try { await editarCotizacion(clave, Number(vals[clave] || 0)); flash("Cotización guardada ✓"); } catch (e) { fail(e); }
+    try { await editarCotizacion(clave, Number(vals[clave] || 0)); flash("Cotización guardada"); } catch (e) { fail(e); }
   }
   async function actualizarClima() {
-    try { const r = await refrescarClima(); setClima(r.clima); flash("Clima actualizado desde open-meteo ✓"); } catch (e) { fail(e); }
+    try { const r = await refrescarClima(); setClima(r.clima); flash("Clima actualizado desde open-meteo"); } catch (e) { fail(e); }
   }
   async function guardarClimaManual() {
     try {
       const r = await overrideClima({ temp_c: ct ? Number(ct) : undefined, descripcion: cd || undefined, horas: Number(ch || 12) });
-      setClima(r.clima); flash("Clima corregido a mano ✓"); setCt(""); setCd("");
+      setClima(r.clima); flash("Clima corregido a mano"); setCt(""); setCd("");
     } catch (e) { fail(e); }
   }
   async function onVideo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
     setErr(""); setProg(0);
-    try { const v = await subirVideoPromo(file, titulo, setProg); setVideos((s) => [...s, v]); setTitulo(""); flash("Video subido ✓"); }
+    try { const v = await subirVideoPromo(file, titulo, setProg); setVideos((s) => [...s, v]); setTitulo(""); flash("Video subido"); }
     catch (ex) { fail(ex); } finally { setProg(null); }
   }
   async function eliminarVideo(id: string) {
@@ -116,7 +117,7 @@ function Panel({ onLogout }: { onLogout: (motivo?: string) => void }) {
 
       {/* Cotizaciones */}
       <div className="glass" style={box}>
-        <h3 style={{ marginTop: 0 }}>💵 Cotizaciones (carga diaria)</h3>
+        <h3 style={{ marginTop: 0 }}><Ic n="plata" s={17} /> Cotizaciones (carga diaria)</h3>
         {cotiz.map((c) => (
           <div key={c.clave} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
             <div style={{ flex: 1 }}>
@@ -143,9 +144,9 @@ function Panel({ onLogout }: { onLogout: (motivo?: string) => void }) {
 
       {/* Clima */}
       <div className="glass" style={box}>
-        <h3 style={{ marginTop: 0 }}>🌤️ Clima de Bermejo</h3>
+        <h3 style={{ marginTop: 0 }}><Ic n="clima" s={17} /> Clima de Bermejo</h3>
         <div style={{ fontSize: 14, color: "var(--txt-2)", marginBottom: 10 }}>
-          Ahora: {clima?.icono ?? "🌡️"} {clima?.temp_c != null ? `${Math.round(clima.temp_c)}°` : "—"} {clima?.descripcion ?? ""}
+          Ahora: <Ic n={climaIcono(clima?.descripcion)} s={15} /> {clima?.temp_c != null ? `${Math.round(clima.temp_c)}°` : "—"} {clima?.descripcion ?? ""}
         </div>
         <button className="btn btn-ghost btn-sm" onClick={actualizarClima} style={{ marginBottom: 12 }}>↻ Traer de open-meteo</button>
         <div style={{ fontSize: 12, color: "var(--txt-3)", marginBottom: 6 }}>O corregilo a mano (si la API no coincide):</div>
@@ -159,7 +160,7 @@ function Panel({ onLogout }: { onLogout: (motivo?: string) => void }) {
 
       {/* Videos promocionales */}
       <div className="glass" style={box}>
-        <h3 style={{ marginTop: 0 }}>🎬 Recorrimos Bermejo (videos)</h3>
+        <h3 style={{ marginTop: 0 }}><Ic n="videos" s={17} /> Recorrimos Bermejo (videos)</h3>
         <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
           <input className="adm-input" style={{ flex: 1 }} placeholder="Título (ej: Centro de Bermejo)" value={titulo} onChange={(e) => setTitulo(e.target.value)} />
           <button className="btn btn-primary btn-sm" onClick={() => fileRef.current?.click()} disabled={prog !== null}>+ Video</button>
@@ -170,7 +171,7 @@ function Panel({ onLogout }: { onLogout: (motivo?: string) => void }) {
           {videos.map((v) => (
             <div key={v.id} style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: "1px solid var(--stroke)" }}>
               <video src={v.url} preload="metadata" style={{ width: "100%", aspectRatio: "9/16", objectFit: "cover", background: "#000", display: "block" }} />
-              <button onClick={() => eliminarVideo(v.id)} style={{ position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: "50%", background: "rgba(0,0,0,.65)", color: "#fff", fontSize: 11 }}>✕</button>
+              <button onClick={() => eliminarVideo(v.id)} style={{ position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: "50%", background: "rgba(0,0,0,.65)", color: "#fff" }}><Ic n="cerrar" s={11} /></button>
             </div>
           ))}
         </div>
@@ -179,7 +180,7 @@ function Panel({ onLogout }: { onLogout: (motivo?: string) => void }) {
 
       {/* Redes sociales */}
       <div className="glass" style={box}>
-        <h3 style={{ marginTop: 0 }}>🔗 Redes sociales</h3>
+        <h3 style={{ marginTop: 0 }}><Ic n="web" s={17} /> Redes sociales</h3>
         {redes.map((r) => (
           <div key={r.clave} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
             <span style={{ width: 130, fontSize: 13, fontWeight: 600 }}>{r.etiqueta}</span>
@@ -209,7 +210,7 @@ function FronteraBox({ flash, fail }: { flash: (m: string) => void; fail: (e: un
     try {
       await editarFrontera({ ...patch, ciudad: ciudadSlug });
       const x = await getFronteraEstado(ciudadSel?.id);
-      setF(x); flash("Frontera actualizada ✓");
+      setF(x); flash("Frontera actualizada");
     } catch (e) { fail(e); }
   }
   const opciones: [keyof FronteraEstado, string, string[]][] = [
@@ -223,7 +224,7 @@ function FronteraBox({ flash, fail }: { flash: (m: string) => void; fail: (e: un
   return (
     <div className="glass" style={{ padding: 18, borderRadius: 16, marginBottom: 14 }}>
       <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        🌉 La frontera hoy
+        <Ic n="frontera" s={17} /> La frontera hoy
         {fronteras.length > 1 && (
           <select className="adm-input" style={{ width: "auto", fontSize: 13 }} value={ciudadSlug} onChange={(e) => setCiudadSlug(e.target.value)}>
             {fronteras.map((c) => <option key={c.slug} value={c.slug}>{c.nombre}{c.paso_nombre ? ` → ${c.paso_nombre}` : ""}</option>)}
@@ -259,7 +260,7 @@ function FronteraBox({ flash, fail }: { flash: (m: string) => void; fail: (e: un
         </div>
         {f?.chalanas === "no_aplica" && (horarioChalanas.trim() || f?.chalanas_horario) && (
           <div style={{ fontSize: 12.5, color: "var(--amber)", border: "1px solid var(--amber)", borderRadius: 10, padding: "8px 10px" }}>
-            ⚠️ Las chalanas están en <b>«no aplica»</b> y tienen horario cargado: el sitio no muestra ninguna de las dos
+            <Ic n="aviso" s={15} /> Las chalanas están en <b>«no aplica»</b> y tienen horario cargado: el sitio no muestra ninguna de las dos
             cosas. Si en esta frontera hay chalanas, poné <b>operando</b> (o «limitadas»); «no aplica» es para la
             frontera que cruza sólo por puente.
           </div>

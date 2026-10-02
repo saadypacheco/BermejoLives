@@ -15,6 +15,7 @@ import { useObjectUrl } from "@/lib/object-url";
 import { geoErrorMsg } from "@/lib/geo";
 import { waUruku } from "@/lib/contacto";
 import { PermisoUbicacion } from "@/components/permiso-ubicacion";
+import { Ic } from "@/components/ic";
 
 type Msg = { from: "bot" | "user"; text: string };
 type Step = "tipo" | "titulo" | "precio" | "descripcion" | "tiktok" | "imagen" | "confirm" | "done";
@@ -36,11 +37,11 @@ function QueOfrecemos() {
     <div className="glass" style={{ padding: 20, borderRadius: 16, marginBottom: 18 }}>
       <h2 style={{ fontSize: 18, marginBottom: 10 }}>¿Por qué unirte a URUKU?</h2>
       <ul style={{ display: "flex", flexDirection: "column", gap: 8, color: "var(--txt-2)", fontSize: 14, paddingLeft: 18, listStyle: "none" }}>
-        <li>📍 Tu negocio aparece en el mapa y en el buscador.</li>
-        <li>📢 Publicás ofertas mandando una foto por WhatsApp.</li>
-        <li>💬 El comprador te escribe directo a tu WhatsApp.</li>
-        <li>🚀 Con <a href="/autoregistro" rel="noopener">las funciones para comercios</a>: ficha completa, tus ofertas en las redes de URUKU y un chatbot que atiende por vos.</li>
-        <li>💰 Sin comisiones por venta.</li>
+        <li><Ic n="ubicacion" s={16} /> Tu negocio aparece en el mapa y en el buscador.</li>
+        <li><Ic n="novedades" s={16} /> Publicás ofertas mandando una foto por WhatsApp.</li>
+        <li><Ic n="whatsapp" s={16} /> El comprador te escribe directo a tu WhatsApp.</li>
+        <li><Ic n="destacado" s={16} /> Con <a href="/autoregistro" rel="noopener">las funciones para comercios</a>: ficha completa, tus ofertas en las redes de URUKU y un chatbot que atiende por vos.</li>
+        <li><Ic n="plata" s={16} /> Sin comisiones por venta.</li>
       </ul>
     </div>
   );
@@ -332,7 +333,7 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
         placeholder="Contanos con tus palabras: ej. 'ropa y calzado para toda la familia' o 'repuestos y gomería'"
       />
       <button type="button" className="btn btn-ghost btn-sm" onClick={generarConIA} disabled={generando} style={{ alignSelf: "flex-start" }}>
-        {generando ? "Generando…" : "✨ Generar descripción con IA"}
+        {generando ? "Generando…" : <><Ic n="destacado" s={15} /> Generar descripción con IA</>}
       </button>
       {descripcion && (
         <div style={{ background: "var(--panel)", border: "1px solid var(--stroke)", borderRadius: 10, padding: 10, fontSize: 13, color: "var(--txt-2)" }}>
@@ -351,7 +352,7 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
       <div>
         <label className="campo-lbl">Ubicación *</label>
         <button type="button" className={`btn ${coords ? "btn-ghost" : "btn-primary"}`} style={{ width: "100%" }} onClick={ubicar}>
-          {coords ? "Ubicación tomada ✓ — tomar de nuevo" : "📍 Usar mi ubicación actual"}
+          {coords ? <><Ic n="listo" s={15} /> Ubicación tomada — tomar de nuevo</> : <><Ic n="ubicacion" s={15} /> Usar mi ubicación actual</>}
         </button>
         {geoMsg && <PermisoUbicacion mensaje={geoMsg} onPedir={ubicar} motivo="Para poner tu negocio en el mapa" />}
       </div>
@@ -359,7 +360,7 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
       <div>
         <label className="campo-lbl">Foto del negocio *</label>
         <label className="foto-drop">
-          {preview ? <img src={preview} alt="" /> : <span>📷 Sacar foto / elegir</span>}
+          {preview ? <img src={preview} alt="" /> : <span><Ic n="foto" s={16} /> Sacar foto / elegir</span>}
           <input type="file" accept="image/*" capture="environment" onChange={onFoto} hidden />
         </label>
         {comprimiendo && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>Comprimiendo foto…</div>}
@@ -382,13 +383,13 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
 
 /* ----------------------------- CHATBOT ----------------------------- */
 const QUESTIONS: Record<Step, string> = {
-  tipo: "¡Hola! 👋 ¿Qué querés publicar hoy?",
+  tipo: "¡Hola! ¿Qué querés publicar hoy?",
   titulo: "Perfecto. ¿Qué nombre o título le ponemos?",
   precio: "¿Cuál es el precio? (escribí solo el número, o 'no' si no aplica)",
   descripcion: "Contame los detalles: descripción, talles, condiciones…",
-  tiktok: "Pegá el link del video de TikTok 🎬",
+  tiktok: "Pegá el link del video de TikTok",
   imagen: "¿Tenés una foto? Pegá el link de la imagen (o escribí 'no')",
-  confirm: "Revisá tu publicación 👇",
+  confirm: "Revisá tu publicación acá abajo",
   done: "",
 };
 
@@ -438,17 +439,17 @@ function ChatBot({ sess, onLogout }: { sess: ComercioSession; onLogout: () => vo
 
   async function confirmPublish() {
     setSending(true);
-    say("user", "Publicar ✅");
+    say("user", "Publicar");
     try {
       const res = await publicar(draft);
       if (res.publicado_directo) {
-        say("bot", "🎉 ¡Listo! Tu publicación ya está EN VIVO en URUKU. (Tu comercio es confiable, se publicó directo.)");
+        say("bot", "¡Listo! Tu publicación ya está EN VIVO en URUKU. (Tu comercio es confiable, se publicó directo.)");
       } else {
-        say("bot", "✅ ¡Recibido! Tu publicación quedó en revisión. Un moderador la aprueba y aparece en el feed en vivo. Te avisamos.");
+        say("bot", "¡Recibido! Tu publicación quedó en revisión. Un moderador la aprueba y aparece en el feed en vivo. Te avisamos.");
       }
       setStep("done");
     } catch {
-      say("bot", "⚠️ No pude publicar. Verificá que el backend esté corriendo e intentá de nuevo.");
+      say("bot", "No pude publicar. Verificá que el backend esté corriendo e intentá de nuevo.");
     } finally {
       setSending(false);
     }
@@ -471,7 +472,7 @@ function ChatBot({ sess, onLogout }: { sess: ComercioSession; onLogout: () => vo
             <span className="eyebrow"><span className="dot-live" /> Asistente de publicación</span>
             <h1 style={{ fontSize: 24, margin: "8px 0 0" }}>{sess.nombre}</h1>
             <small style={{ color: sess.confiable ? "var(--neon)" : "var(--txt-3)" }}>
-              {sess.confiable ? "✓ Comercio confiable — publicás directo, sin moderación" : "Tus publicaciones pasan por moderación"}
+              {sess.confiable ? "Comercio confiable — publicás directo, sin moderación" : "Tus publicaciones pasan por moderación"}
             </small>
           </div>
           <button className="link-more" onClick={onLogout}>Salir</button>
@@ -486,9 +487,9 @@ function ChatBot({ sess, onLogout }: { sess: ComercioSession; onLogout: () => vo
             {/* Quick replies por paso */}
             {step === "tipo" && (
               <div className="quick">
-                <button onClick={() => pickTipo("oferta", "Una oferta 🏷️")}>Una oferta 🏷️</button>
-                <button onClick={() => pickTipo("video", "Un video 🎬")}>Un video 🎬</button>
-                <button onClick={() => pickTipo("novedad", "Una novedad 📣")}>Una novedad 📣</button>
+                <button onClick={() => pickTipo("oferta", "Una oferta")}>Una oferta</button>
+                <button onClick={() => pickTipo("video", "Un video")}>Un video</button>
+                <button onClick={() => pickTipo("novedad", "Una novedad")}>Una novedad</button>
               </div>
             )}
 
@@ -528,7 +529,7 @@ function ChatBot({ sess, onLogout }: { sess: ComercioSession; onLogout: () => vo
 
             {step === "done" && (
               <div className="quick">
-                <button onClick={reset}>Publicar otra ✨</button>
+                <button onClick={reset}>Publicar otra</button>
                 <Link href="/" className="btn btn-ghost btn-sm">Ver el feed</Link>
               </div>
             )}

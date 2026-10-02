@@ -8,6 +8,7 @@ import { comprimirImagen } from "@/lib/imagen";
 import { useObjectUrl } from "@/lib/object-url";
 import { geoErrorMsg } from "@/lib/geo";
 import { PermisoUbicacion } from "@/components/permiso-ubicacion";
+import { Ic } from "@/components/ic";
 
 export default function RecuperarNegocioPage() {
   const [comercio, setComercio] = useState<ComercioBusqueda | null>(null);
@@ -25,7 +26,7 @@ export default function RecuperarNegocioPage() {
 
         {enviado ? (
           <div className="glass" style={{ padding: 22, borderRadius: 16, textAlign: "center" }}>
-            <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
+            <div style={{ marginBottom: 8, color: "var(--uk-green, #1D8D52)" }}><Ic n="listo" s={40} /></div>
             <h3 style={{ marginBottom: 6 }}>Solicitud enviada</h3>
             <p style={{ color: "var(--txt-3)", fontSize: 14 }}>
               La va a revisar el equipo de URUKU. Si se aprueba, tu WhatsApp nuevo queda activo y podés entrar con el código de siempre.
@@ -71,7 +72,7 @@ function BuscarNegocio({ onElegir }: { onElegir: (c: ComercioBusqueda) => void }
         >
           {c.portada_url
             ? <img src={c.portada_url} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
-            : <div style={{ width: 44, height: 44, borderRadius: 8, background: "var(--stroke)", flexShrink: 0, display: "grid", placeItems: "center" }}>🏪</div>}
+            : <div style={{ width: 44, height: 44, borderRadius: 8, background: "var(--stroke)", flexShrink: 0, display: "grid", placeItems: "center" }}><Ic n="comercios" s={22} /></div>}
           <div>
             <div style={{ fontWeight: 600 }}>{c.nombre}</div>
             {c.direccion && <div style={{ fontSize: 12, color: "var(--txt-3)" }}>{c.direccion}</div>}
@@ -142,7 +143,7 @@ function SolicitudForm({ comercio, onEnviado, onVolver }: { comercio: ComercioBu
       <div>
         <label className="campo-lbl">Ubicación *</label>
         <button type="button" className={`btn ${coords ? "btn-ghost" : "btn-primary"}`} style={{ width: "100%" }} onClick={ubicar}>
-          {coords ? "Ubicación tomada ✓ — tomar de nuevo" : "📍 Usar mi ubicación actual"}
+          {coords ? <><Ic n="listo" s={15} /> Ubicación tomada — tomar de nuevo</> : <><Ic n="ubicacion" s={15} /> Usar mi ubicación actual</>}
         </button>
         {geoMsg && <PermisoUbicacion mensaje={geoMsg} onPedir={ubicar} motivo="Para ubicar tu negocio en el mapa" />}
       </div>
@@ -150,7 +151,7 @@ function SolicitudForm({ comercio, onEnviado, onVolver }: { comercio: ComercioBu
       <div>
         <label className="campo-lbl">Foto actual del local *</label>
         <label className="foto-drop">
-          {preview ? <img src={preview} alt="" /> : <span>📷 Sacar foto / elegir</span>}
+          {preview ? <img src={preview} alt="" /> : <span><Ic n="foto" s={16} /> Sacar foto / elegir</span>}
           <input type="file" accept="image/*" capture="environment" onChange={onFoto} hidden />
         </label>
         {comprimiendo && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>Comprimiendo foto…</div>}

@@ -6,6 +6,8 @@ import Link from "next/link";
 import type { ComercioMapa } from "@/lib/data";
 import { abiertoAhora } from "@/lib/horario";
 import { rubroStyle, loadLeaflet, escapeHtml } from "@/lib/mapa-visual";
+import { rubroSvg } from "@/lib/iconos-mapa";
+import { Ic, IcRubro } from "@/components/ic";
 
 import { adornoHTML, MEDIDAS, ZOOM_MIN_ADORNOS, type Adorno } from "@/lib/adornos";
 import { getAdornosMapa } from "@/lib/data";
@@ -32,7 +34,7 @@ function pinHtml(c: ComercioMapa, tier: Tier, isSel: boolean, cerrado: boolean, 
   const conFoto = tier === "destacado" && !!c.portada_thumb_url;
   const inner = conFoto
     ? `<img class="ukpin-photo" src="${c.portada_thumb_url}" alt="" loading="lazy" />`
-    : `<span class="ukpin-emo">${style.emoji}</span>`;
+    : `<span class="ukpin-emo">${rubroSvg(c.rubro_slug)}</span>`;
   const ring = tier === "destacado" ? `<i class="ukpin-ring"></i>` : "";
   return `<div class="${cls}" style="--pc:${style.color}">${ring}${badge}${inner}</div>`;
 }
@@ -127,7 +129,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
 
       polyLayerRef.current = L.layerGroup().addTo(map);   // manzanas por debajo de los pines
       // Locales a la calle: pines INDIVIDUALES (sin agrupador, mapa lleno de puntos por
-      // rubro). Los mercados/galerías se muestran como un pin 🏬 que abre el directorio.
+      // rubro). Los mercados/galerías se muestran como un pin aparte que abre el directorio.
       const layer = L.layerGroup().addTo(map);
       clusterRef.current = layer;
       pintar();
@@ -284,7 +286,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
     layer.clearLayers();
     polyLayerRef.current?.clearLayers();
     markerByIdRef.current = new Map();
-    // Agrupar los que están dentro de un mercado/galería (pin 🏬 → directorio); el
+    // Agrupar los que están dentro de un mercado/galería (pin de galería → directorio); el
     // resto se dibujan como pines INDIVIDUALES (sin agrupador).
     const grupos = new Map<string, { nombre: string; lat: number | null; lng: number | null; sumLat: number; sumLng: number; n: number; portada: string | null; video: string | null; poligono: [number, number][] | null; items: ComercioMapa[] }>();
 
@@ -334,7 +336,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
         const puntos = items.filter((c) => c.lat != null && c.lng != null)
                             .map((c) => [c.lat as number, c.lng as number] as [number, number]);
         if (!map || puntos.length === 0) {
-          hojaRef.current({ titulo: `🏬 ${g.nombre}`, portada: g.portada, video: g.video, items });
+          hojaRef.current({ titulo: g.nombre, portada: g.portada, video: g.video, items });
           return;
         }
         if (puntos.length === 1) {
@@ -401,7 +403,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
           )}
           <div className="mapa-hoja-head">
             <b>{hoja.titulo} · {hoja.items.length}</b>
-            <button type="button" onClick={() => setHoja(null)} aria-label="Cerrar">✕</button>
+            <button type="button" onClick={() => setHoja(null)} aria-label="Cerrar"><Ic n="cerrar" s={16} /></button>
           </div>
           <div className="mapa-hoja-list">
             {hoja.items.map((c) => {
@@ -409,7 +411,7 @@ export function HomeMap({ comercios, onSelect, selectedId, descuentoPorId, cente
               const thumb = c.portada_thumb_url || c.portada_url;
               return (
                 <button key={c.id} type="button" className="mapa-hoja-row" onClick={() => { onSelect?.(c); setHoja(null); }}>
-                  {thumb ? <img className="mh-thumb" src={thumb} alt="" /> : <span className="mh-dot" style={{ background: st.color }}>{st.emoji}</span>}
+                  {thumb ? <img className="mh-thumb" src={thumb} alt="" /> : <span className="mh-dot" style={{ background: st.color }}><IcRubro slug={c.rubro_slug} s={15} peso="fill" /></span>}
                   <span className="mh-nom">{c.puesto ? `#${c.puesto} · ` : ""}{c.nombre}</span>
                 </button>
               );

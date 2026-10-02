@@ -46,7 +46,7 @@ export default function ReclamosPage() {
 
       {estado === "ok" ? (
         <div className="glass" style={{ padding: 24, borderRadius: 16 }}>
-          <h1 style={{ fontSize: 22, marginBottom: 8 }}>Comentario enviado ✓</h1>
+          <h1 style={{ fontSize: 22, marginBottom: 8 }}>Comentario enviado</h1>
           <p style={{ color: "var(--txt-2)" }}>Lo va a revisar el equipo de URUKU. Si dejaste tu contacto, te respondemos a la brevedad.</p>
         </div>
       ) : (

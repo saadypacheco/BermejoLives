@@ -6,6 +6,7 @@ import {
   type ComercioImportado,
 } from "@/lib/api";
 import type { Rubro } from "@/lib/types";
+import { Ic } from "@/components/ic";
 
 /** Revisión de los comercios traídos de fuentes externas.
  *
@@ -141,14 +142,14 @@ function Fila({ item, rubros, onCambio }: {
           {item.duplicado_de && (
             <span title="Hay un comercio cargado con nombre parecido a menos de 120 m"
                   style={{ marginLeft: 8, fontSize: 11, color: "var(--amber)" }}>
-              ⚠ ya cargado?
+              <Ic n="aviso" s={13} /> ya cargado?
             </span>
           )}
         </div>
         <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 2 }}>
           {item.categoria}
           {item.direccion && ` · ${item.direccion}`}
-          {item.telefono && ` · ☎ ${item.telefono}`}
+          {item.telefono && ` · ${item.telefono}`}
           {item.whatsapp && ` · WA ${item.whatsapp}`}
           {item.horario && ` · ${item.horario}`}
         </div>

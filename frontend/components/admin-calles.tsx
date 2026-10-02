@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ponerHorarioEnLote, type ComercioPorVerificar } from "@/lib/api";
+import { Ic } from "@/components/ic";
 
 /**
  * Los comercios agrupados por CALLE, para cargar horarios de a cientos.
@@ -122,7 +123,7 @@ function FilaCalle({ g, abierta, onAbrir, onCambio }: {
             con horario{g.estimados ? ` · ${g.estimados} estimados` : ""}
           </span>
         )}
-        <span style={{ color: "var(--txt-3)", fontSize: 12 }}>{abierta ? "▲" : "▼"}</span>
+        <span style={{ color: "var(--txt-3)", fontSize: 12 }}><Ic n="desplegar" s={12} style={{ transform: abierta ? "rotate(180deg)" : undefined }} /></span>
       </button>
 
       {abierta && <PanelCalle calle={g.calle} porRubro={porRubro} onCambio={onCambio} />}
@@ -190,7 +191,7 @@ function PanelCalle({ calle, porRubro, onCambio }: {
                                border: `1px solid ${on ? "var(--neon)" : "var(--border)"}`,
                                background: on ? "rgba(57,255,158,.12)" : "transparent",
                                color: on ? "var(--neon)" : "var(--txt-3)" }}>
-                {on ? "✓ " : ""}{v.nombre} ({v.items.length}{faltan !== v.items.length ? ` · ${faltan} sin` : ""})
+                {on ? <><Ic n="si" s={12} /> </> : ""}{v.nombre} ({v.items.length}{faltan !== v.items.length ? ` · ${faltan} sin` : ""})
               </button>
             );
           })}

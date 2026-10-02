@@ -86,7 +86,7 @@ function FilaPlan({ p, onGuardado }: { p: PlanAdmin; onGuardado: () => void }) {
         <button type="button" className="btn btn-primary btn-sm" onClick={guardar} disabled={estado === "guardando"} style={{ marginLeft: "auto" }}>
           {estado === "guardando" ? "Guardando…" : "Guardar"}
         </button>
-        {estado === "ok" && <span style={{ color: "var(--uk-green, #1f7a4d)" }}>Guardado ✓</span>}
+        {estado === "ok" && <span style={{ color: "var(--uk-green, #1f7a4d)" }}>Guardado</span>}
         {estado === "error" && <span style={{ color: "#c33" }}>{msg}</span>}
       </div>
     </div>

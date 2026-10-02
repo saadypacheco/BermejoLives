@@ -6,7 +6,8 @@ import { IngresarMenu } from "@/components/ingresar-menu";
 import { BottomNav } from "@/components/bottom-nav";
 import { Asistente } from "@/components/asistente";
 import { CatNav } from "@/components/catnav";
-import { Ic, SocialLinks, money } from "@/components/uruku-ui";
+import { SocialLinks, money } from "@/components/uruku-ui";
+import { Ic, climaIcono } from "@/components/ic";
 import { getClima, getCotizaciones, getRedes } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { versionLabel } from "@/lib/version";
@@ -88,7 +89,7 @@ export async function UrukuShell({
               <SocialLinks redes={redes} cls="uk-social-links" />
               <div className="uk-topinfo">
                 {conGuia && clima?.temp_c != null && (
-                  <span className="uk-top-item">{clima.icono || "☀"} {Math.round(clima.temp_c)}°</span>
+                  <span className="uk-top-item"><Ic n={climaIcono(clima.descripcion)} s={15} /> {Math.round(clima.temp_c)}°</span>
                 )}
                 {/* La tira lleva al conversor: el que mira el dólar arriba
                     quiere saber cuánto son SUS pesos, y eso está en /cambio. */}
@@ -119,7 +120,7 @@ export async function UrukuShell({
 
           {showSearch && (
           <form className="uk-search" action="/buscar" method="get">
-            <Ic d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3" />
+            <Ic n="buscar" />
             <input name="q" placeholder="¿Qué estás buscando?" aria-label="Buscar" />
             <button type="submit">Buscar</button>
           </form>
@@ -141,17 +142,17 @@ export async function UrukuShell({
             <div className="uk-foot-cols">
               <div className="uk-foot-col">
                 <h4>Descubrí</h4>
-                <Link href="/" className="uk-foot-link"><Ic d="M3 11l9-8 9 8M5 10v10h14V10" /><span>Inicio</span><i>›</i></Link>
-                <Link href="/ofertas" className="uk-foot-link"><Ic d="M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01" /><span>Ofertas</span><i>›</i></Link>
-                <Link href="/novedades" className="uk-foot-link"><Ic d="M3 11v2a1 1 0 0 0 1 1h3l4 4V6L7 10H4a1 1 0 0 0-1 1zM16 8a5 5 0 0 1 0 8" /><span>Novedades</span><i>›</i></Link>
-                <Link href="/buscar" className="uk-foot-link"><Ic d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3" /><span>Buscar</span><i>›</i></Link>
-                <Link href="/guardados" className="uk-foot-link"><Ic d="M6 3h12v18l-6-4-6 4V3z" /><span>Guardados</span><i>›</i></Link>
-                {conGuia && <Link href="/comunidad" className="uk-foot-link"><Ic d="M4 4h16v12H7l-3 3V4z" /><span>Comunidad</span><i>›</i></Link>}
+                <Link href="/" className="uk-foot-link"><Ic n="inicio" /><span>Inicio</span><i>›</i></Link>
+                <Link href="/ofertas" className="uk-foot-link"><Ic n="ofertas" /><span>Ofertas</span><i>›</i></Link>
+                <Link href="/novedades" className="uk-foot-link"><Ic n="novedades" /><span>Novedades</span><i>›</i></Link>
+                <Link href="/buscar" className="uk-foot-link"><Ic n="buscar" /><span>Buscar</span><i>›</i></Link>
+                <Link href="/guardados" className="uk-foot-link"><Ic n="guardado" /><span>Guardados</span><i>›</i></Link>
+                {conGuia && <Link href="/comunidad" className="uk-foot-link"><Ic n="comunidad" /><span>Comunidad</span><i>›</i></Link>}
               </div>
               <div className="uk-foot-col">
                 <h4>Para comercios</h4>
-                <Link href="/autoregistro" className="uk-foot-link"><Ic d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0" /><span>Publicar comercio</span><i>›</i></Link>
-                <Link href="/mi-comercio" className="uk-foot-link"><Ic d="M20 21a8 8 0 1 0-16 0M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" /><span>Mi negocio</span><i>›</i></Link>
+                <Link href="/autoregistro" className="uk-foot-link"><Ic n="comercios" /><span>Publicar comercio</span><i>›</i></Link>
+                <Link href="/mi-comercio" className="uk-foot-link"><Ic n="usuario" /><span>Mi negocio</span><i>›</i></Link>
                 {/* El enlace a /planes salió del sitio el 2/10: los precios se deciden
           por ciudad y mostrar los de Bermejo en Santa Cruz es prometer algo
           que todavía no está decidido. La pantalla sigue existiendo para uso
@@ -159,14 +160,14 @@ export async function UrukuShell({
               </div>
               <div className="uk-foot-col">
                 <h4>Información</h4>
-                <a href="#" className="uk-foot-link"><Ic d="M12 17h.01M9.1 9a3 3 0 1 1 4 2.8c-.7.4-1.1 1-1.1 1.7M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z" /><span>Preguntas frecuentes</span><i>›</i></a>
-                <a href="#" className="uk-foot-link"><Ic d="M14 3v4a1 1 0 0 0 1 1h4M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><span>Términos y condiciones</span><i>›</i></a>
-                <a href="#" className="uk-foot-link"><Ic d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" /><span>Política de privacidad</span><i>›</i></a>
+                <a href="#" className="uk-foot-link"><Ic n="ayuda" /><span>Preguntas frecuentes</span><i>›</i></a>
+                <a href="#" className="uk-foot-link"><Ic n="documento" /><span>Términos y condiciones</span><i>›</i></a>
+                <a href="#" className="uk-foot-link"><Ic n="seguridad" /><span>Política de privacidad</span><i>›</i></a>
               </div>
             </div>
 
             <div className="uk-foot-cta">
-              <span className="uk-foot-cta-ic"><Ic d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0" /></span>
+              <span className="uk-foot-cta-ic"><Ic n="comercios" /></span>
               <div className="uk-foot-cta-txt">
                 <b>¿Tenés un comercio?</b>
                 <p>Sumate a URUKU y hacé crecer tu negocio con más visibilidad y nuevos clientes.</p>

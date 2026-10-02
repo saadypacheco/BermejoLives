@@ -21,6 +21,7 @@ import { GaleriaUploader } from "@/components/galeria-uploader";
 import { AdminMap } from "@/components/admin-map";
 import { geoErrorMsg } from "@/lib/geo";
 import { PermisoUbicacion } from "@/components/permiso-ubicacion";
+import { Ic } from "@/components/ic";
 import { encolarAlta, sincronizarPendientes, listarPendientes,
          descartarPendiente, esIrrecuperable, type AltaPendiente } from "@/lib/offline-altas";
 
@@ -162,8 +163,8 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
   const distanciaDe = new Map(conDistancia.map((x) => [x.c.id, x.d]));
 
   const nCerca = aqui ? conDistancia.filter((x) => x.d <= RADIO_CERCA_M).length : 0;
-  const chips: { key: FiltroAg; label: string; n: number; amber?: boolean }[] = [
-    { key: "cerca", label: buscandoGeo ? "📍 Ubicando…" : "📍 Acá", n: nCerca },
+  const chips: { key: FiltroAg; label: React.ReactNode; n: number; amber?: boolean }[] = [
+    { key: "cerca", label: <><Ic n="ubicacion" s={13} /> {buscandoGeo ? "Ubicando…" : "Acá"}</>, n: nCerca },
     { key: "todos", label: "Todos", n: todos.length },
     { key: "pendientes", label: "Pendientes", n: nPend },
     { key: "verificados", label: "Verificados", n: nVerificados },
@@ -202,7 +203,7 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
               style={{ padding: "8px 12px", fontSize: 13, border: "none",
                 background: vista === v ? "rgba(57,255,158,.12)" : "transparent",
                 color: vista === v ? "var(--neon)" : "var(--txt-2)", fontWeight: vista === v ? 700 : 400 }}>
-              {v === "lista" ? "☰ Lista" : "🗺 Mapa"}
+              {v === "lista" ? "Lista" : "Mapa"}
             </button>
           ))}
         </div>
@@ -261,11 +262,11 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
             <div key={c.id} className="glass" style={{ padding: 14, borderRadius: 14, display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                 <div style={{ width: 48, height: 48, borderRadius: 10, overflow: "hidden", background: "var(--panel)", flexShrink: 0, display: "grid", placeItems: "center", fontSize: 20 }}>
-                  {(c.portada_thumb_url || c.portada_url) ? <img src={(c.portada_thumb_url || c.portada_url) as string} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "🏪"}
+                  {(c.portada_thumb_url || c.portada_url) ? <img src={(c.portada_thumb_url || c.portada_url) as string} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Ic n="comercios" s={22} />}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nombre || "Sin nombre"}</div>
-                  <div style={{ fontSize: 12.5, color: "var(--txt-3)" }}>{c.rubros?.nombre ?? "Sin rubro"}{c.lugares?.nombre ? ` · 🏬 ${c.lugares.nombre}${c.puesto ? ` #${c.puesto}` : ""}` : c.calle ? ` · ${c.calle}` : c.direccion ? ` · ${c.direccion}` : ""}</div>
+                  <div style={{ fontSize: 12.5, color: "var(--txt-3)" }}>{c.rubros?.nombre ?? "Sin rubro"}{c.lugares?.nombre ? ` · ${c.lugares.nombre}${c.puesto ? ` #${c.puesto}` : ""}` : c.calle ? ` · ${c.calle}` : c.direccion ? ` · ${c.direccion}` : ""}</div>
                   {/* A cuántos pasos está. Es lo que permite reconocer en la
                       vereda cuál de los tres locales de ropa es éste. */}
                   {aqui && Number.isFinite(distanciaDe.get(c.id) ?? Infinity) && (
@@ -280,7 +281,7 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
                       Santa Cruz parece un error del sistema. */}
                   {c.ciudades?.slug && ciudadDelAgente && c.ciudades.slug !== ciudadDelAgente && (
                     <div style={{ fontSize: 11, color: "var(--amber)", fontWeight: 700 }}>
-                      📍 {c.ciudades.nombre} — fuera de tu ciudad
+                      <Ic n="ubicacion" s={12} /> {c.ciudades.nombre} — fuera de tu ciudad
                     </div>
                   )}
                   {c.cargado_por && c.cargado_por !== emailAgente && (
@@ -294,7 +295,7 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
               {motivos.length > 0 && (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {motivos.map((m) => (
-                    <span key={m} style={{ fontSize: 11, color: "var(--amber)", border: "1px dashed var(--amber)", padding: "1px 7px", borderRadius: 10 }}>⚠️ {m}</span>
+                    <span key={m} style={{ fontSize: 11, color: "var(--amber)", border: "1px dashed var(--amber)", padding: "1px 7px", borderRadius: 10 }}><Ic n="aviso" s={11} /> {m}</span>
                   ))}
                 </div>
               )}
@@ -476,7 +477,7 @@ function MercadoEditor({ lugar, onClose, onSaved }: { lugar: Lugar; onClose: () 
   async function guardarNombre() {
     if (!nombre.trim()) { setErr("El nombre no puede quedar vacío"); return; }
     setBusy(true); setErr(""); setMsg("");
-    try { const l = await editarLugar(lugar.id, { nombre: nombre.trim(), tipo }); onSaved(l); setMsg("Guardado ✓"); }
+    try { const l = await editarLugar(lugar.id, { nombre: nombre.trim(), tipo }); onSaved(l); setMsg("Guardado"); }
     catch (e) { setErr(e instanceof Error ? e.message : "Error"); }
     finally { setBusy(false); }
   }
@@ -486,7 +487,7 @@ function MercadoEditor({ lugar, onClose, onSaved }: { lugar: Lugar; onClose: () 
     try {
       const comp = await comprimirImagen(file);
       const l = await subirPortadaLugar(lugar.id, comp);
-      setPortadaThumb(l.portada_thumb_url ?? l.portada_url ?? null); onSaved(l); setMsg("Foto subida ✓");
+      setPortadaThumb(l.portada_thumb_url ?? l.portada_url ?? null); onSaved(l); setMsg("Foto subida");
     } catch (e) { setErr(e instanceof Error ? e.message : "No se pudo subir la foto"); }
     finally { setBusy(false); }
   }
@@ -497,7 +498,7 @@ function MercadoEditor({ lugar, onClose, onSaved }: { lugar: Lugar; onClose: () 
     const dur = await duracionVideo(file);
     if (dur > 60) { setErr(`El video dura ${dur}s — máximo 60s`); return; }
     setBusy(true);
-    try { const l = await subirVideoLugar(lugar.id, file); setVideoUrl(l.video_url ?? null); onSaved(l); setMsg("Video subido ✓"); }
+    try { const l = await subirVideoLugar(lugar.id, file); setVideoUrl(l.video_url ?? null); onSaved(l); setMsg("Video subido"); }
     catch (e) { setErr(e instanceof Error ? e.message : "No se pudo subir el video"); }
     finally { setBusy(false); }
   }
@@ -519,11 +520,11 @@ function MercadoEditor({ lugar, onClose, onSaved }: { lugar: Lugar; onClose: () 
       <button type="button" className="btn btn-ghost" disabled={busy} onClick={guardarNombre}>Guardar nombre / tipo</button>
       <div style={{ display: "flex", gap: 10 }}>
         <label className="btn btn-ghost" style={{ flex: 1, textAlign: "center", cursor: "pointer" }}>
-          📷 {portadaThumb ? "Cambiar portada" : "Foto de portada"}
+          <Ic n="foto" s={15} /> {portadaThumb ? "Cambiar portada" : "Foto de portada"}
           <input type="file" accept="image/*" capture="environment" hidden onChange={onPortada} />
         </label>
         <label className="btn btn-ghost" style={{ flex: 1, textAlign: "center", cursor: "pointer" }}>
-          🎬 {videoUrl ? "Cambiar recorrido" : "Video recorrido"}
+          <Ic n="videos" s={15} /> {videoUrl ? "Cambiar recorrido" : "Video recorrido"}
           <input type="file" accept="video/*" capture="environment" hidden onChange={onVideo} />
         </label>
       </div>
@@ -646,7 +647,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       const r = await sincronizarPendientes(refrescarPend);
       if (!manual) return;
       if (r.sinSenal) setSyncMsg("El celular está sin conexión — se suben solas cuando vuelva.");
-      else if (r.fallas === 0 && r.subidas > 0) setSyncMsg(`✅ Subieron ${r.subidas}.`);
+      else if (r.fallas === 0 && r.subidas > 0) setSyncMsg(`Subieron ${r.subidas}.`);
       else if (r.fallas > 0) {
         setSyncMsg(`${r.subidas > 0 ? `Subieron ${r.subidas}. ` : ""}Fallaron ${r.fallas}: ${r.errores.join(" · ")}`);
       }
@@ -830,7 +831,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       // hacer. Se achicó el aire (padding 60→14, emoji 48→30, títulos), NO el
       // contenido: el código, el WhatsApp y la galería siguen todos acá.
       <div className="campo-wrap" style={{ textAlign: "center", paddingTop: 14 }}>
-        <div style={{ fontSize: 30, lineHeight: 1 }}>{doneOffline ? "📴" : "✅"}</div>
+        <div style={{ lineHeight: 1, color: doneOffline ? "var(--amber)" : "var(--neon)" }}><Ic n={doneOffline ? "reloj" : "listo"} s={30} /></div>
         <h1 style={{ fontSize: 19, margin: "6px 0 2px" }}>¡{done} {doneOffline ? "guardado sin conexión" : "cargado"}!</h1>
         {/* Las dos líneas de estado en una: decían poco cada una y ocupaban
             dos renglones enteros. */}
@@ -893,7 +894,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
 
         {altaId && (
           <div style={{ textAlign: "left", marginBottom: 12, padding: 10, borderRadius: 12, background: "var(--panel)", border: "1px solid var(--stroke)" }}>
-            <p style={{ color: "var(--txt-2)", fontSize: 12.5, marginBottom: 8 }}>📸 Fotos y videos del local</p>
+            <p style={{ color: "var(--txt-2)", fontSize: 12.5, marginBottom: 8 }}><Ic n="foto" s={14} /> Fotos y videos del local</p>
             <GaleriaUploader api={{
               cargarFotos: () => listarFotosCampo(altaId),
               subirFoto: (f, onP) => subirFotoCampo(altaId, f, onP),
@@ -907,7 +908,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
 
         {subioLugar && (
           <button className="btn btn-primary" style={{ width: "100%", marginBottom: 8, padding: "9px 12px", background: "#6d28d9", borderColor: "#6d28d9", color: "#fff" }} onClick={otroPuestoAca}>
-            ➕ Otro puesto en {subioLugar.nombre}
+            <Ic n="mas" s={15} /> Otro puesto en {subioLugar.nombre}
           </button>
         )}
         <button className={subioLugar ? "btn btn-ghost" : "btn btn-primary"} style={{ width: "100%", marginBottom: 8, padding: "9px 12px" }} onClick={otro}>Cargar otro comercio {subioLugar ? "(a la calle / otro)" : ""}</button>
@@ -938,7 +939,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
         <div style={{ background: "var(--panel)", border: "1px solid var(--stroke)", borderRadius: 12,
                       padding: "10px 12px", marginBottom: 12, fontSize: 13 }}>
           {detallePend.length === 0
-            ? "✅ No hay nada sin subir en este celular."
+            ? "No hay nada sin subir en este celular."
             : `Hay ${detallePend.length} sin subir.`}
           <button type="button" className="link-more" style={{ marginLeft: 8, padding: 0 }}
                   onClick={() => setDetallePend(null)}>Ocultar</button>
@@ -950,8 +951,8 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
             <span>
               {pendientes === -1
-                ? "⚠️ No se pudo leer lo que hay guardado en este celular"
-                : `📴 ${pendientes} guardado${pendientes > 1 ? "s" : ""} sin conexión — se sube${pendientes > 1 ? "n" : ""} con señal`}
+                ? "No se pudo leer lo que hay guardado en este celular"
+                : `${pendientes} guardado${pendientes > 1 ? "s" : ""} sin conexión — se sube${pendientes > 1 ? "n" : ""} con señal`}
             </span>
             <button type="button" className="btn btn-ghost" style={{ padding: "5px 12px", whiteSpace: "nowrap" }} disabled={sincronizando} onClick={() => sincronizar(true)}>
               {sincronizando ? "Subiendo…" : "Sincronizar"}
@@ -1015,9 +1016,9 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           return (
             <>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: "rgba(109,40,217,.14)", border: "1px solid rgba(139,92,246,.45)", color: "#c4b5fd", borderRadius: 12, padding: "9px 12px", fontSize: 13 }}>
-                <span>🏬 Cargando en <b>{l?.nombre ?? "mercado"}</b>{l?.n_comercios ? ` · ya llevás ${l.n_comercios}` : ""}</span>
+                <span><Ic n="galeria" s={14} /> Cargando en <b>{l?.nombre ?? "mercado"}</b>{l?.n_comercios ? ` · ya llevás ${l.n_comercios}` : ""}</span>
                 <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
-                  <button type="button" className="link-more" style={{ color: "#c4b5fd" }} onClick={() => setEditMercado((v) => !v)}>✏️ Editar</button>
+                  <button type="button" className="link-more" style={{ color: "#c4b5fd" }} onClick={() => setEditMercado((v) => !v)}><Ic n="editar" s={13} /> Editar</button>
                   <button type="button" className="link-more" style={{ color: "#c4b5fd" }} onClick={() => { setLugarId(""); setPuesto(""); setEditMercado(false); }}>Salir</button>
                 </div>
               </div>
@@ -1044,9 +1045,9 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
         <div>
           <label className="campo-lbl">Ubicación (parado en la puerta) *</label>
           <button type="button" className={`btn ${coords ? "btn-ghost" : "btn-primary"}`} style={{ width: "100%" }} onClick={ubicar}>
-            <Pin style={{ width: 17, height: 17 }} /> {coords ? "Ubicación tomada ✓ — tomar de nuevo" : "Usar mi ubicación actual"}
+            <Pin style={{ width: 17, height: 17 }} /> {coords ? "Ubicación tomada — tomar de nuevo" : "Usar mi ubicación actual"}
           </button>
-          {coords && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>📍 {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} (±{coords.acc} m)</div>}
+          {coords && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}><Ic n="ubicacion" s={12} /> {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} (±{coords.acc} m)</div>}
           {geoMsg && <PermisoUbicacion mensaje={geoMsg} onPedir={ubicar} motivo="Para ubicar el comercio en el mapa" />}
         </div>
 
@@ -1054,12 +1055,12 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
         <div>
           <label className="campo-lbl">Foto del local (portada, opcional)</label>
           <label className="foto-drop">
-            {preview ? <img src={preview} alt="" /> : <span>📷 Sacar foto / elegir</span>}
+            {preview ? <img src={preview} alt="" /> : <span><Ic n="foto" s={16} /> Sacar foto / elegir</span>}
             <input type="file" accept="image/*" capture="environment" onChange={onFoto} hidden />
           </label>
           {comprimiendo && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>Comprimiendo foto…</div>}
           {!comprimiendo && foto && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>{(foto.size / 1024).toFixed(0)} KB</div>}
-          <div style={{ fontSize: 12, color: "var(--neon)", marginTop: 8 }}>📸🎬 Después de guardar vas a poder sumar <b>más fotos y videos</b> del local.</div>
+          <div style={{ fontSize: 12, color: "var(--neon)", marginTop: 8 }}><Ic n="foto" s={13} /> Después de guardar vas a poder sumar <b>más fotos y videos</b> del local.</div>
         </div>
 
         <label style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13.5, color: "var(--txt-2)" }}>

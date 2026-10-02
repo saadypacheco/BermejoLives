@@ -104,7 +104,7 @@ export function DemandaPanel() {
           </div>
           <div style={{ fontSize: 16, lineHeight: 1.4 }}>«{d.frase}»</div>
           <button className="btn btn-sm btn-ghost" style={{ marginTop: 10 }} onClick={copiar}>
-            {copiado ? "✓ Copiada" : "Copiar"}
+            {copiado ? "Copiada" : "Copiar"}
           </button>
         </div>
       )}

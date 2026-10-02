@@ -18,6 +18,7 @@ import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import { ReservaBarra } from "@/components/reserva-barra";
 import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
 import { FilterChip, OptionList } from "@/components/filter-chips";
+import { Ic, IcRubro } from "@/components/ic";
 import { HorarioBadge } from "@/components/horario-badge";
 import { registrarLead, logBusqueda } from "@/lib/campo";
 
@@ -612,15 +613,15 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiu
             cosa. Queda el buscador, el total y la lista. */}
         {!APAGADAS.filtrosBuscador ? (
         <div className="uk-filters">
-        <FilterChip icon="🏷" label="Categoría" value={rubroElegido ?? undefined} active={!!rubro}>
+        <FilterChip icon="ofertas" label="Categoría" value={rubroElegido ?? undefined} active={!!rubro}>
           {(close) => <OptionList items={catChips} sel={rubro} onPick={(v) => { setRubro(v); setSubcategoria(""); close(); }} />}
         </FilterChip>
 
-        {disp?.zona && <FilterChip icon="📍" label="Zona" value={zonaNom} active={!!zona}>
+        {disp?.zona && <FilterChip icon="ubicacion" label="Zona" value={zonaNom} active={!!zona}>
           {(close) => <OptionList items={[{ slug: "", nombre: "Todas las zonas" }, ...zonas]} sel={zona} onPick={(v) => { setZona(v); close(); }} />}
         </FilterChip>}
 
-        {disp?.ofertas && <FilterChip icon="💰" label="Precio" value={precioMax ? `hasta ${precioMax}` : undefined} active={!!precioMax}>
+        {disp?.ofertas && <FilterChip icon="plata" label="Precio" value={precioMax ? `hasta ${precioMax}` : undefined} active={!!precioMax}>
           {(close) => (
             <div style={{ padding: 12, minWidth: 200 }}>
               <input className="adm-input" type="number" inputMode="numeric" value={precioMax} onChange={(e) => setPrecioMax(e.target.value)} placeholder="Precio máximo" />
@@ -630,7 +631,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiu
           )}
         </FilterChip>}
 
-        <FilterChip icon="🏪" label="Tipo" value={modalidad ? MODALIDAD_LABEL[modalidad] : undefined} active={!!modalidad}>
+        <FilterChip icon="comercios" label="Tipo" value={modalidad ? MODALIDAD_LABEL[modalidad] : undefined} active={!!modalidad}>
           {(close) => <OptionList items={[{ slug: "", nombre: "Todos" }, { slug: "mayorista", nombre: "Mayorista" }, { slug: "minorista", nombre: "Minorista" }, { slug: "ambos", nombre: "Ambos" }]} sel={modalidad} onPick={(v) => { setModalidad(v); close(); }} />}
         </FilterChip>
 
@@ -670,7 +671,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiu
                   const u = ubicacion ?? await ubicarme(false);
                   if (u) setCerca(true);
                 }}>
-          📍 Cerca de mí
+          <Ic n="ubicacion" s={16} /> Cerca de mí
         </button>
         <div className="uk-seg">
           <button className={vista === "lista" ? "active" : ""} onClick={() => setVista("lista")}>Lista</button>
@@ -712,13 +713,13 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiu
           no escondía nada. */}
       {servicio && vista === "lista" && (
         <div className="uk-servicios-cab">
-          <h2>{SERVICIOS[servicio].icono} {SERVICIOS[servicio].plural}{nombreCiudad ? ` en ${nombreCiudad}` : ""}</h2>
+          <h2><Ic n={SERVICIOS[servicio].icono} s={22} /> {SERVICIOS[servicio].plural}{nombreCiudad ? ` en ${nombreCiudad}` : ""}</h2>
           <button type="button" className="uk-btn-ghost" onClick={() => setVista("mapa")}>Ver en el mapa →</button>
         </div>
       )}
       {rubro === "taxis" && vista === "lista" && (
         <p className="uk-aviso-taxi">
-          🚕 Escribile al primero; si en unos minutos no te contesta, probá con el siguiente. Después te preguntamos si
+          <Ic n="taxis" s={16} /> Escribile al primero; si en unos minutos no te contesta, probá con el siguiente. Después te preguntamos si
           te contestó: así los que responden aparecen primero.
         </p>
       )}
@@ -814,7 +815,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiu
                            decoding="async"
                            style={r.portada_pos != null
                              ? { objectPosition: `center ${r.portada_pos}%` } : undefined} />
-                    : <span className="uk-rescover-sin" aria-hidden>🏪</span>}
+                    : <span className="uk-rescover-sin"><IcRubro slug={r.rubro_slug} s={34} /></span>}
                   {/* Una sola chapa arriba de la foto, y la oferta le gana al
                       horario: "¡Oferta!" mueve a alguien a entrar, "Abierto" lo
                       confirma cuando ya decidió. Dos chapas encimadas sobre una
@@ -881,13 +882,13 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiu
                   {/* Un taxi o un chofer no tiene dirección: se lo llama. Decirlo
                       evita el "sin ubicación" que suena a dato faltante. */}
                   {r.rubro_slug === "taxis" && !r.direccion && r.lat == null && (
-                    <div className="uk-resdir">🚕 Atiende en toda la ciudad · se pide por WhatsApp</div>
+                    <div className="uk-resdir"><Ic n="taxis" s={14} /> Atiende en toda la ciudad · se pide por WhatsApp</div>
                   )}
                   {/* Lo que dijeron los que ya le escribieron: «✓ Responde» con
                       tres síes y buena proporción; «últimamente no contesta»
                       con cinco noes y ningún sí. Entre medio, nada. */}
                   {(r.contacto_ok ?? 0) >= 3 && (r.contacto_ok ?? 0) >= 2 * (r.contacto_no ?? 0) && (
-                    <div className="uk-resdir uk-responde">✓ Responde por WhatsApp</div>
+                    <div className="uk-resdir uk-responde"><Ic n="si" s={14} /> Responde por WhatsApp</div>
                   )}
                   {(r.contacto_no ?? 0) >= 5 && (r.contacto_ok ?? 0) === 0 && (
                     <div className="uk-resdir uk-no-responde">Últimamente no contesta el WhatsApp</div>

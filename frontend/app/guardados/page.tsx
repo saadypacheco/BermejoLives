@@ -9,6 +9,7 @@ import { ThemeToggle, ThemeNoFlash } from "@/components/uruku-theme";
 import { CompradorAuthForm } from "@/components/comprador-auth";
 import { WhatsApp, X } from "@/components/icons";
 import { getUsuarioSession, listarFavoritos, quitarFavorito, type FavoritoComercio, type UsuarioSession } from "@/lib/usuario";
+import { Ic } from "@/components/ic";
 
 const wa = (s?: string | null) => (s || "").replace(/\D/g, "");
 
@@ -66,11 +67,11 @@ export default function GuardadosPage() {
                 <div key={c.id} className="glass" style={{ padding: 14, borderRadius: 14, display: "flex", gap: 12, alignItems: "center" }}>
                   <Link href={`/comercios/${c.slug}`} style={{ display: "flex", gap: 12, alignItems: "center", flex: 1, minWidth: 0, color: "inherit" }}>
                     <div style={{ width: 48, height: 48, borderRadius: 10, overflow: "hidden", background: "var(--panel)", flexShrink: 0, display: "grid", placeItems: "center", fontSize: 20 }}>
-                      {(c.portada_url || c.logo_url) ? <img src={(c.portada_url || c.logo_url) as string} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "🏪"}
+                      {(c.portada_url || c.logo_url) ? <img src={(c.portada_url || c.logo_url) as string} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Ic n="comercios" s={22} />}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nombre}</div>
-                      <div style={{ fontSize: 12.5, color: "var(--txt-3)" }}>{c.direccion ?? "—"} · ★ {c.rating}</div>
+                      <div style={{ fontSize: 12.5, color: "var(--txt-3)" }}>{c.direccion ?? "—"} · <Ic n="estrella" s={12} peso="fill" /> {c.rating}</div>
                     </div>
                   </Link>
                   {wa(c.whatsapp) && (

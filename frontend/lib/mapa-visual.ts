@@ -1,66 +1,69 @@
 // Compartido por los dos mapas (HomeMap y MapResults): carga de Leaflet + plugin
-// de clustering desde CDN (el SW cachea unpkg) y el estilo por rubro (color+emoji).
+// de clustering desde CDN (el SW cachea unpkg) y el color por rubro.
 
-// Ícono + color por rubro (taxonomía v2, 42 rubros). Color por FAMILIA (para leer
-// el mapa por zonas de color) y EMOJI distinto por rubro. + aliases de slugs viejos.
-export const CATEGORY_STYLE: Record<string, { emoji: string; color: string }> = {
+// Color por rubro (taxonomía v2). El color es por FAMILIA, para poder leer el
+// mapa por zonas; el DIBUJO de cada rubro ya no vive acá sino en
+// components/ic.tsx, y `lib/iconos-svg.ts` lo deja listo para el pin. Esta
+// tabla es además la lista de qué rubros necesitan dibujo: el generador la lee.
+// + aliases de slugs viejos.
+export const CATEGORY_STYLE: Record<string, { color: string }> = {
   // 👗 Moda y accesorios
-  ropa: { emoji: "👕", color: "#3b82f6" }, calzado: { emoji: "👟", color: "#3b82f6" },
-  bolsos: { emoji: "🎒", color: "#3b82f6" }, joyeria: { emoji: "💍", color: "#3b82f6" },
+  ropa: { color: "#3b82f6" }, calzado: { color: "#3b82f6" },
+  bolsos: { color: "#3b82f6" }, joyeria: { color: "#3b82f6" },
   // 💄 Belleza
-  belleza: { emoji: "💄", color: "#ec4899" }, optica: { emoji: "👓", color: "#ec4899" },
+  belleza: { color: "#ec4899" }, optica: { color: "#ec4899" },
   // 📱 Tecnología
-  celulares: { emoji: "📱", color: "#06b6d4" }, computacion: { emoji: "💻", color: "#06b6d4" },
-  electronica: { emoji: "📺", color: "#06b6d4" }, electrodomesticos: { emoji: "🔌", color: "#06b6d4" },
+  celulares: { color: "#06b6d4" }, computacion: { color: "#06b6d4" },
+  electronica: { color: "#06b6d4" }, electrodomesticos: { color: "#06b6d4" },
   // 🏠 Hogar
-  bazar: { emoji: "🍳", color: "#14b8a6" }, hogar: { emoji: "🛏️", color: "#14b8a6" },
-  muebles: { emoji: "🛋️", color: "#14b8a6" },
+  bazar: { color: "#14b8a6" }, hogar: { color: "#14b8a6" },
+  muebles: { color: "#14b8a6" },
   // 🔧 Ferretería
-  ferreteria: { emoji: "🔧", color: "#eab308" },
+  ferreteria: { color: "#eab308" },
   // 🚗 Vehículos
-  "repuestos-autos": { emoji: "🚗", color: "#64748b" }, neumaticos: { emoji: "🛞", color: "#64748b" },
-  motos: { emoji: "🏍️", color: "#64748b" }, bicicletas: { emoji: "🚲", color: "#64748b" },
+  "repuestos-autos": { color: "#64748b" }, neumaticos: { color: "#64748b" },
+  motos: { color: "#64748b" }, bicicletas: { color: "#64748b" },
   // 🛒 Consumo
-  alimentos: { emoji: "🛒", color: "#22c55e" }, bebidas: { emoji: "🥤", color: "#22c55e" },
-  farmacia: { emoji: "💊", color: "#22c55e" }, mascotas: { emoji: "🐾", color: "#22c55e" },
+  alimentos: { color: "#22c55e" }, bebidas: { color: "#22c55e" },
+  farmacia: { color: "#22c55e" }, mascotas: { color: "#22c55e" },
   // 🍽️ Gastronomía
-  restaurantes: { emoji: "🍽️", color: "#f97316" }, "comida-rapida": { emoji: "🍔", color: "#f97316" },
-  cafeteria: { emoji: "☕", color: "#f97316" }, panaderia: { emoji: "🥖", color: "#f97316" },
+  restaurantes: { color: "#f97316" }, "comida-rapida": { color: "#f97316" },
+  cafeteria: { color: "#f97316" }, panaderia: { color: "#f97316" },
   // 🧰 Servicios
-  cambio: { emoji: "💱", color: "#6366f1" }, envios: { emoji: "📦", color: "#6366f1" },
-  peluqueria: { emoji: "💈", color: "#6366f1" }, lavadero: { emoji: "🧼", color: "#6366f1" },
-  "gomeria-servicio": { emoji: "🔩", color: "#6366f1" }, cerrajeria: { emoji: "🗝️", color: "#6366f1" },
-  hospedaje: { emoji: "🏨", color: "#6366f1" },
+  cambio: { color: "#6366f1" }, envios: { color: "#6366f1" },
+  peluqueria: { color: "#6366f1" }, lavadero: { color: "#6366f1" },
+  "gomeria-servicio": { color: "#6366f1" }, cerrajeria: { color: "#6366f1" },
+  hospedaje: { color: "#6366f1" },
   // 🧸 Familia y ocio
-  jugueteria: { emoji: "🧸", color: "#f43f5e" }, bebes: { emoji: "👶", color: "#f43f5e" },
-  deportes: { emoji: "⚽", color: "#f43f5e" }, regaleria: { emoji: "🎉", color: "#f43f5e" },
+  jugueteria: { color: "#f43f5e" }, bebes: { color: "#f43f5e" },
+  deportes: { color: "#f43f5e" }, regaleria: { color: "#f43f5e" },
   // 👕 Feria americana / usado
-  "ropa-americana": { emoji: "👕", color: "#92766a" }, "calzado-usado": { emoji: "👟", color: "#92766a" },
-  usados: { emoji: "♻️", color: "#92766a" },
+  "ropa-americana": { color: "#92766a" }, "calzado-usado": { color: "#92766a" },
+  usados: { color: "#92766a" },
   // 🚻 Servicios de la ciudad (rubros no comerciales, 0083/0113) y movilidad
-  banos: { emoji: "🚻", color: "#0ea5e9" }, estacionamiento: { emoji: "🅿️", color: "#0ea5e9" },
-  cajeros: { emoji: "🏧", color: "#0ea5e9" }, wifi: { emoji: "📶", color: "#0ea5e9" },
-  emergencias: { emoji: "🚓", color: "#ef4444" }, alquiler: { emoji: "🏠", color: "#8b5cf6" },
-  "servicio-tecnico": { emoji: "🛠️", color: "#64748b" },
-  taxis: { emoji: "🚕", color: "#eab308" }, "estacion-servicio": { emoji: "⛽", color: "#64748b" },
-  "taller-mecanico": { emoji: "🔧", color: "#64748b" }, coca: { emoji: "🌿", color: "#22c55e" },
-  nocturna: { emoji: "🌙", color: "#6366f1" }, carpinteria: { emoji: "🪵", color: "#92766a" },
-  herreria: { emoji: "⚒️", color: "#64748b" }, limpieza: { emoji: "🧴", color: "#22c55e" },
-  telas: { emoji: "🧵", color: "#3b82f6" }, gimnasios: { emoji: "🏋️", color: "#f43f5e" },
-  funeraria: { emoji: "🕯️", color: "#64748b" }, carniceria: { emoji: "🥩", color: "#22c55e" },
-  salones: { emoji: "🎊", color: "#f43f5e" }, agro: { emoji: "🚜", color: "#22c55e" },
-  kiosco: { emoji: "🍬", color: "#22c55e" }, lenceria: { emoji: "🩲", color: "#3b82f6" },
-  blanqueria: { emoji: "🛏️", color: "#8b5cf6" }, marroquineria: { emoji: "🧳", color: "#3b82f6" },
+  banos: { color: "#0ea5e9" }, estacionamiento: { color: "#0ea5e9" },
+  cajeros: { color: "#0ea5e9" }, wifi: { color: "#0ea5e9" },
+  emergencias: { color: "#ef4444" }, alquiler: { color: "#8b5cf6" },
+  "servicio-tecnico": { color: "#64748b" },
+  taxis: { color: "#eab308" }, "estacion-servicio": { color: "#64748b" },
+  "taller-mecanico": { color: "#64748b" }, coca: { color: "#22c55e" },
+  nocturna: { color: "#6366f1" }, carpinteria: { color: "#92766a" },
+  herreria: { color: "#64748b" }, limpieza: { color: "#22c55e" },
+  telas: { color: "#3b82f6" }, gimnasios: { color: "#f43f5e" },
+  funeraria: { color: "#64748b" }, carniceria: { color: "#22c55e" },
+  salones: { color: "#f43f5e" }, agro: { color: "#22c55e" },
+  kiosco: { color: "#22c55e" }, lenceria: { color: "#3b82f6" },
+  blanqueria: { color: "#8b5cf6" }, marroquineria: { color: "#3b82f6" },
   // 📦 Otros
-  otros: { emoji: "📦", color: "#FFB020" }, floreria: { emoji: "🌷", color: "#FFB020" },
+  otros: { color: "#FFB020" }, floreria: { color: "#FFB020" },
   // aliases de slugs viejos (comercios cargados antes de la taxonomía v2)
-  zapatillas: { emoji: "👟", color: "#3b82f6" }, moda: { emoji: "👕", color: "#3b82f6" },
-  gastronomia: { emoji: "🍽️", color: "#f97316" }, mercado: { emoji: "🛒", color: "#22c55e" },
-  mercados: { emoji: "🛒", color: "#22c55e" }, tecnologia: { emoji: "💻", color: "#06b6d4" },
-  gomeria: { emoji: "🛞", color: "#64748b" }, servicios: { emoji: "🧰", color: "#6366f1" },
-  tablets: { emoji: "📱", color: "#06b6d4" },
+  zapatillas: { color: "#3b82f6" }, moda: { color: "#3b82f6" },
+  gastronomia: { color: "#f97316" }, mercado: { color: "#22c55e" },
+  mercados: { color: "#22c55e" }, tecnologia: { color: "#06b6d4" },
+  gomeria: { color: "#64748b" }, servicios: { color: "#6366f1" },
+  tablets: { color: "#06b6d4" },
 };
-export const DEFAULT_STYLE = { emoji: "📍", color: "#FFB020" };
+export const DEFAULT_STYLE = { color: "#FFB020" };
 
 /** Las familias del mapa, para la referencia de colores. El color es por
  *  familia (no por rubro) justamente para poder leer el mapa por zonas: dónde

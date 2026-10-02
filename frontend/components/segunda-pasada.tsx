@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { editarComercioAgente, type Lugar } from "@/lib/campo";
+import { Ic } from "@/components/ic";
 
 /**
  * La SEGUNDA PASADA: todo lo que no se carga parado en la vereda.
@@ -78,7 +79,7 @@ export function SegundaPasada({ comercioId, lugares, inicial }: {
         canal_wa_url: f.canal_wa_url.trim() || null,
         catalogo_url: f.catalogo_url.trim() || null,
       });
-      setMsg("Guardado ✓");
+      setMsg("Guardado");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "No se pudo guardar");
     } finally {
@@ -97,7 +98,7 @@ export function SegundaPasada({ comercioId, lugares, inicial }: {
     <div style={{ textAlign: "left", marginBottom: 12, padding: 12, borderRadius: 12,
                   background: "var(--panel)", border: "1px solid var(--stroke)" }}>
       <p style={{ color: "var(--txt-2)", fontSize: 12.5, margin: "0 0 4px" }}>
-        📝 Datos del comercio <span style={{ color: "var(--txt-3)" }}>— todo opcional</span>
+        <Ic n="documento" s={16} /> Datos del comercio <span style={{ color: "var(--txt-3)" }}>— todo opcional</span>
       </p>
       <p style={{ color: "var(--txt-3)", fontSize: 11.5, margin: "0 0 10px", lineHeight: 1.4 }}>
         Completá lo que el dueño te vaya diciendo. Podés guardar y seguir después.
@@ -132,7 +133,7 @@ export function SegundaPasada({ comercioId, lugares, inicial }: {
           <select className="adm-input" value={f.lugar_id} onChange={(e) => set("lugar_id", e.target.value)}>
             <option value="">No — local a la calle</option>
             {lugares.map((l) => (
-              <option key={l.id} value={l.id}>🏬 {l.nombre}{l.n_comercios ? ` (${l.n_comercios})` : ""}</option>
+              <option key={l.id} value={l.id}>{l.nombre}{l.n_comercios ? ` (${l.n_comercios})` : ""}</option>
             ))}
           </select>
           {f.lugar_id && (

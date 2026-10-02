@@ -90,13 +90,13 @@ export function PanelVisitas() {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 }}>
-            <Lista titulo="📄 Páginas más vistas" items={d.top_rutas.map((r) => ({ k: r.ruta, n: r.n }))}
+            <Lista titulo="Páginas más vistas" items={d.top_rutas.map((r) => ({ k: r.ruta, n: r.n }))}
                    vacio="Sin datos." />
             {/* De dónde vienen: si Google no aparece, URUKU no existe para el
                 buscador, que es una conclusión distinta a «no hay tráfico». */}
-            <Lista titulo="🌐 De dónde llegan" items={d.top_referidos.map((r) => ({ k: r.referido, n: r.n }))}
+            <Lista titulo="De dónde llegan" items={d.top_referidos.map((r) => ({ k: r.referido, n: r.n }))}
                    vacio="Nadie llegó desde otro sitio todavía: entran escribiendo la dirección o por un enlace compartido." />
-            <Lista titulo="🏷 Por QR o enlace marcado" items={d.top_origenes.map((r) => ({ k: r.origen, n: r.n }))}
+            <Lista titulo="Por QR o enlace marcado" items={d.top_origenes.map((r) => ({ k: r.origen, n: r.n }))}
                    vacio="Ningún volante ni tarjeta trajo a nadie todavía." />
           </div>
         </>

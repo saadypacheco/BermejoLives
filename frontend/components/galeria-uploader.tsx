@@ -5,6 +5,7 @@ import { comprimirImagen } from "@/lib/imagen";
 import { useObjectUrls } from "@/lib/object-url";
 import { duracionVideo } from "@/lib/upload";
 import { encolarMedia, listarMedia, sincronizarMedia, type MediaPendiente } from "@/lib/offline-media";
+import { Ic } from "@/components/ic";
 
 export type FotoG = { id: string; url: string; thumb_url: string | null };
 export type VideoG = { id: string; url: string; duracion_seg: number | null };
@@ -107,7 +108,7 @@ export function GaleriaUploader({ api, comercioId }: { api: GaleriaApi; comercio
     }
     setProg(null);
     await refrescarPend();
-    if (diferidas) setErr(`${diferidas} foto(s) guardadas sin señal 📴 — se suben solas cuando haya internet.`);
+    if (diferidas) setErr(`${diferidas} foto(s) guardadas sin señal — se suben solas cuando haya internet.`);
     else if (fallas) setErr(`${fallas} foto(s) no subieron. Probá de nuevo con esas.`);
   }
 
@@ -126,7 +127,7 @@ export function GaleriaUploader({ api, comercioId }: { api: GaleriaApi; comercio
       if (offlineOn && esErrorRed(ex)) {
         await encolarMedia(comercioId!, "video", file, dur || null);
         await refrescarPend();
-        setErr("Video guardado sin señal 📴 — se sube solo cuando haya internet.");
+        setErr("Video guardado sin señal — se sube solo cuando haya internet.");
       } else setErr(ex instanceof Error ? ex.message : "No se pudo subir");
     } finally { setProg(null); }
   }
@@ -149,7 +150,7 @@ export function GaleriaUploader({ api, comercioId }: { api: GaleriaApi; comercio
     <div className="galup">
       {offlineOn && pendientes.length > 0 && (
         <div className="galup-pend">
-          <span>📴 {pendientes.length} sin subir (sin señal)</span>
+          <span><Ic n="aviso" s={14} /> {pendientes.length} sin subir (sin señal)</span>
           <button type="button" onClick={sincronizar} disabled={sincronizando}>
             {sincronizando ? "Subiendo…" : "Sincronizar"}
           </button>
@@ -161,13 +162,13 @@ export function GaleriaUploader({ api, comercioId }: { api: GaleriaApi; comercio
         {fotos.map((f) => (
           <div key={f.id} className="galup-item">
             <img src={f.thumb_url || f.url} alt="" loading="lazy" />
-            <button type="button" className="galup-del" onClick={() => delFoto(f.id)} aria-label="Borrar">✕</button>
+            <button type="button" className="galup-del" onClick={() => delFoto(f.id)} aria-label="Borrar"><Ic n="cerrar" s={13} /></button>
           </div>
         ))}
         {pendFotos.map((p, i) => (
           <div key={p.id} className="galup-item galup-penditem" title="Se sube cuando haya señal">
             <img src={pendFotoUrls[i]} alt="" />
-            <span className="galup-clock">📴</span>
+            <span className="galup-clock" title="Sin subir"><Ic n="reloj" s={13} /></span>
           </div>
         ))}
         {totalFotos < MAX_FOTOS && (
@@ -180,14 +181,14 @@ export function GaleriaUploader({ api, comercioId }: { api: GaleriaApi; comercio
         {videos.map((v) => (
           <div key={v.id} className="galup-item galup-vid">
             <video src={v.url} muted playsInline preload="metadata" />
-            <span className="galup-dur">{v.duracion_seg ? `${v.duracion_seg}s` : "▶"}</span>
-            <button type="button" className="galup-del" onClick={() => delVideo(v.id)} aria-label="Borrar">✕</button>
+            <span className="galup-dur">{v.duracion_seg ? `${v.duracion_seg}s` : <Ic n="video_play" s={13} />}</span>
+            <button type="button" className="galup-del" onClick={() => delVideo(v.id)} aria-label="Borrar"><Ic n="cerrar" s={13} /></button>
           </div>
         ))}
         {pendVideos.map((p) => (
           <div key={p.id} className="galup-item galup-vid galup-penditem" title="Se sube cuando haya señal">
-            <span className="galup-clock">📴</span>
-            <span className="galup-dur">{p.dur ? `${p.dur}s` : "▶"}</span>
+            <span className="galup-clock" title="Sin subir"><Ic n="reloj" s={13} /></span>
+            <span className="galup-dur">{p.dur ? `${p.dur}s` : <Ic n="video_play" s={13} />}</span>
           </div>
         ))}
         {totalVideos < MAX_VIDEOS && (

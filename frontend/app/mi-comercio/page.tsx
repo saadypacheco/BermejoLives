@@ -39,6 +39,7 @@ import { comprimirImagen } from "@/lib/imagen";
 import { RUBROS } from "@/lib/types";
 import { geoErrorMsg } from "@/lib/geo";
 import { PermisoUbicacion } from "@/components/permiso-ubicacion";
+import { Ic } from "@/components/ic";
 
 export default function MiComercioPage() {
   const [sess, setSess] = useState<ComercioSession | null>(null);
@@ -302,7 +303,7 @@ function Overview({ onEditar, onProductos, onPlanes }: { onEditar: () => void; o
               <p style={{ color: "var(--txt-2)", fontSize: 14, margin: "0 0 12px" }}>Mostrá tus productos y ofertas para que más personas te encuentren.</p>
               <button className="btn btn-primary btn-sm" onClick={onProductos}><Store style={{ width: 15, height: 15 }} /> Ver mis productos</button>
             </div>
-            <div style={{ fontSize: 46 }}>🛍️</div>
+            <div style={{ color: "var(--txt-3)" }}><Ic n="comprar" s={46} /></div>
           </div>
         </div>
       </div>
@@ -331,7 +332,7 @@ function ContactosView() {
         <InfoRow label="Horario" value={p.horario} Icon={ic("M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z")} />
       </div>
       <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
-        <h3 style={{ marginTop: 0 }}>👀 Visitas a tu ficha · últimos 30 días</h3>
+        <h3 style={{ marginTop: 0 }}><Ic n="gente" s={18} /> Visitas a tu ficha · últimos 30 días</h3>
         <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
           <Stat color="var(--blue-soft)" value={m?.visitas_30d ?? "–"} label="personas abrieron tu ficha" />
           <Stat value={m?.visitas_7d ?? "–"} label="últimos 7 días" />
@@ -396,7 +397,7 @@ function OfertasTab() {
         return (
           <div key={it.id} className="glass" style={{ padding: 14, borderRadius: 14, display: "flex", gap: 14, alignItems: "center" }}>
             <div style={{ width: 64, height: 64, borderRadius: 12, overflow: "hidden", background: "var(--panel)", flexShrink: 0, display: "grid", placeItems: "center", position: "relative" }}>
-              {it.imagen_url ? <img src={it.imagen_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 24 }}>🏷️</span>}
+              {it.imagen_url ? <img src={it.imagen_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ color: "var(--txt-3)" }}><Ic n="ofertas" s={24} /></span>}
               {it.descuento_pct != null && <span style={{ position: "absolute", top: 4, left: 4, background: "var(--neon)", color: "#04240f", fontSize: 10, fontWeight: 800, padding: "1px 5px", borderRadius: 6 }}>-{it.descuento_pct}%</span>}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -523,7 +524,7 @@ function AvisoSuscripcion({ sub, onPagar }: { sub: Suscripcion; onPagar: () => v
   return (
     <div style={{ margin: "16px 26px 0", padding: 14, borderRadius: 12, display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap",
       background: rojo ? "rgba(255,77,141,.1)" : "rgba(255,176,32,.1)", border: `1px solid ${rojo ? "var(--pink)" : "var(--amber)"}` }}>
-      <span style={{ fontSize: 13.5, color: "var(--txt)" }}>{rojo ? "⚠️" : "⏳"} {texto}</span>
+      <span style={{ fontSize: 13.5, color: "var(--txt)" }}><Ic n={rojo ? "aviso" : "reloj"} s={15} /> {texto}</span>
       <button className="btn btn-primary btn-sm" onClick={onPagar}>Pagar ahora</button>
     </div>
   );
@@ -648,7 +649,7 @@ function PerfilTab() {
       patch.acepta_reservas = perfil.acepta_reservas !== false;   // siempre booleano
       patch.rubro_slugs = rubroSlugs;
       const upd = await updatePerfil(patch);
-      setPerfil(upd); setRubroSlugs(upd.rubro_slugs ?? rubroSlugs); setMsg("Guardado ✓");
+      setPerfil(upd); setRubroSlugs(upd.rubro_slugs ?? rubroSlugs); setMsg("Guardado");
       setTimeout(() => setMsg(""), 2500);
     } catch (e) { setErr(e instanceof Error ? e.message : "No se pudo guardar"); }
     finally { setSaving(false); }
@@ -716,7 +717,7 @@ function PerfilTab() {
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <input value={perfil.nombre ?? ""} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre de tu comercio"
                   style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--txt)", fontSize: 22, fontWeight: 800, minWidth: 0 }} />
-                {perfil.verificado && <span title="Verificado" style={{ color: "var(--neon)" }}>✔</span>}
+                {perfil.verificado && <span title="Verificado" style={{ color: "var(--neon)" }}><Ic n="verificado" s={15} /></span>}
               </div>
               <select value={perfil.modalidad ?? "mayorista"} onChange={(e) => set("modalidad", e.target.value)}
                 style={{ marginTop: 6, background: "rgba(91,157,255,.12)", color: "var(--blue-soft)", border: "1px solid var(--stroke)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
@@ -731,10 +732,10 @@ function PerfilTab() {
             style={{ width: "100%", marginTop: 12, background: "transparent", border: "none", outline: "none", resize: "none", color: "var(--txt-2)", fontSize: 15, lineHeight: 1.5 }} />
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
             <span style={{ background: "rgba(57,255,158,.14)", color: "var(--neon)", padding: "6px 12px", borderRadius: 10, fontSize: 13, fontWeight: 700 }}>WhatsApp</span>
-            <span style={{ background: "var(--panel)", color: "var(--txt-2)", padding: "6px 12px", borderRadius: 10, fontSize: 13, fontWeight: 700 }}>📍 Cómo llegar</span>
+            <span style={{ background: "var(--panel)", color: "var(--txt-2)", padding: "6px 12px", borderRadius: 10, fontSize: 13, fontWeight: 700 }}><Ic n="ubicacion" s={14} /> Cómo llegar</span>
           </div>
         </div>
-        <div style={{ fontSize: 12, color: "var(--txt-3)", textAlign: "center", marginTop: 8 }}>✎ Así te ven tus clientes — tocá la foto o el texto para editar</div>
+        <div style={{ fontSize: 12, color: "var(--txt-3)", textAlign: "center", marginTop: 8 }}>Así te ven tus clientes — tocá la foto o el texto para editar</div>
       </div>
 
       {/* CATEGORÍA */}
@@ -753,7 +754,7 @@ function PerfilTab() {
         <div style={{ fontSize: 12, color: "var(--txt-3)", fontWeight: 700, marginBottom: 10 }}>UBICACIÓN</div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <button type="button" className="btn btn-sm" style={{ border: "1px solid var(--stroke)" }} onClick={ubicar} disabled={ubicando}>
-            {ubicando ? "Obteniendo…" : perfil.lat && perfil.lng ? "📍 Ubicación cargada — actualizar" : "📍 Usar mi ubicación actual"}
+            {ubicando ? "Obteniendo…" : <><Ic n="ubicacion" s={15} /> {perfil.lat && perfil.lng ? "Ubicación cargada — actualizar" : "Usar mi ubicación actual"}</>}
           </button>
           {perfil.lat && perfil.lng && (
             <a href={`https://www.google.com/maps/search/?api=1&query=${perfil.lat},${perfil.lng}`} target="_blank" rel="noopener" style={{ fontSize: 13, color: "var(--blue-soft)" }}>
@@ -879,7 +880,7 @@ function SuscripcionTab() {
 
         {enviado ? (
           <div style={{ textAlign: "center", padding: "10px 0" }}>
-            <div style={{ fontSize: 36 }}>📨</div>
+            <div style={{ color: "var(--txt-3)" }}><Ic n="whatsapp" s={36} /></div>
             <h3 style={{ margin: "4px 0" }}>¡Comprobante enviado!</h3>
             <p style={{ color: "var(--txt-2)", fontSize: 14 }}>Lo revisamos y activamos tu suscripción en breve.</p>
             <button className="btn" onClick={() => { setEnviado(false); setComprobante(null); setReferencia(""); }} style={{ border: "1px solid var(--stroke)", marginTop: 10 }}>Cargar otro pago</button>
@@ -953,7 +954,7 @@ function EstadisticasView() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
-        <h3 style={{ marginTop: 0 }}>👀 Visitas a tu ficha</h3>
+        <h3 style={{ marginTop: 0 }}><Ic n="gente" s={18} /> Visitas a tu ficha</h3>
         <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
           <Stat color="var(--blue-soft)" value={m.visitas_30d ?? 0} label="últimos 30 días" />
           <Stat value={m.visitas_7d ?? 0} label="últimos 7 días" />
@@ -963,7 +964,7 @@ function EstadisticasView() {
         </p>
       </div>
       <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
-        <h3 style={{ marginTop: 0 }}>🔎 Con qué te buscan · últimos 30 días</h3>
+        <h3 style={{ marginTop: 0 }}><Ic n="buscar" s={18} /> Con qué te buscan · últimos 30 días</h3>
         {(m.terminos_busqueda?.length ?? 0) === 0
           ? <span style={{ color: "var(--txt-3)", fontSize: 14 }}>Todavía no registramos búsquedas que te hayan encontrado.</span>
           : (
@@ -1024,7 +1025,7 @@ function PreguntasAlAsistente() {
       <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13.5 }}>
         {(sinResp.length ? sinResp : data.items).slice(0, 15).map((i) => (
           <div key={i.id} style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-            <span>{i.sin_respuesta ? "❓ " : "✓ "}{i.pregunta}</span>
+            <span><Ic n={i.sin_respuesta ? "ayuda" : "si"} s={14} /> {i.pregunta}</span>
             <span style={{ color: "var(--txt-3)", whiteSpace: "nowrap", fontSize: 12 }}>{new Date(i.created_at).toLocaleDateString("es-BO")}</span>
           </div>
         ))}
@@ -1052,7 +1053,7 @@ function MensajesTab() {
         return (
           <div key={m.id} className="glass" style={{ padding: 16, borderRadius: 14, borderLeft: m.leido ? "1px solid var(--stroke)" : "3px solid var(--neon)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-              <b>{m.autor === "admin" ? "📣 URUKU" : (m.nombre || "Cliente")}{m.autor === "cliente" && m.contacto ? ` · ${m.contacto}` : ""}</b>
+              <b>{m.autor === "admin" ? "URUKU" : (m.nombre || "Cliente")}{m.autor === "cliente" && m.contacto ? ` · ${m.contacto}` : ""}</b>
               <span style={{ fontSize: 12, color: "var(--txt-3)" }}>{new Date(m.created_at).toLocaleString("es-AR")}</span>
             </div>
             <p style={{ color: "var(--txt-2)", margin: "8px 0" }}>{m.cuerpo}</p>
@@ -1109,7 +1110,7 @@ function ProductosTab() {
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               {p.destacado_pub_id
-                ? <span style={{ fontSize: 12, color: "var(--amber)", fontWeight: 700 }}>⭐ Destacado</span>
+                ? <span style={{ fontSize: 12, color: "var(--amber)", fontWeight: 700 }}><Ic n="destacado" s={13} /> Destacado</span>
                 : <button className="btn" onClick={() => destacar(p.id)} style={{ border: "1px solid var(--amber)", color: "var(--amber)" }}>Destacar $1.000</button>}
               {p.url && <a className="btn" href={p.url} target="_blank" rel="noopener" style={{ border: "1px solid var(--stroke)" }}>Ver</a>}
               <button className="btn" onClick={() => eliminar(p.id)} style={{ border: "1px solid var(--stroke)", color: "var(--pink)" }}>Borrar</button>

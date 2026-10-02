@@ -5,6 +5,7 @@ import {
   sugerenciasDeRubro, revisarRubro,
   type SugerenciasRubro, type RubroSimple,
 } from "@/lib/api";
+import { Ic, IcRubro, type NombreIcono } from "@/components/ic";
 
 /**
  * Recalcular los rubros de un comercio desde su fila, sin salir de la lista.
@@ -124,8 +125,11 @@ export function RubroRecalcular({ comercioId, nombre, rubroActual, rubros, onLis
     ...(d?.ia?.rubros ?? []).map((r) => r.slug),
   ]);
 
-  /** Un rubro proponible: tocarlo lo suma o lo saca de la selección. */
-  const Chip = ({ slug, icono, resaltado }: { slug: string; icono?: string; resaltado?: boolean }) => {
+  /** Un rubro proponible: tocarlo lo suma o lo saca de la selección.
+   *  El dibujo sale del catálogo por SLUG (components/ic.tsx). Antes venía
+   *  del campo `icono` de la tabla `rubros`, que guardaba un emoji: eso
+   *  dejaba el panel con el emoji del sistema al lado de los íconos nuevos. */
+  const Chip = ({ slug, marca, resaltado }: { slug: string; marca?: NombreIcono; resaltado?: boolean }) => {
     const puesto = sel.indexOf(slug);
     return (
       <button type="button" disabled={guardando} onClick={() => alternar(slug)}
@@ -133,9 +137,9 @@ export function RubroRecalcular({ comercioId, nombre, rubroActual, rubros, onLis
               style={resaltado && puesto < 0
                 ? { borderColor: "var(--neon)", color: "var(--neon)" } : undefined}
               className={`btn btn-sm ${puesto >= 0 ? "btn-primary" : "btn-ghost"}`}>
-        {puesto === 0 && "★ "}
+        {puesto === 0 && <><Ic n="estrella" s={12} peso="fill" /> </>}
         {puesto > 0 && `${puesto + 1}. `}
-        {icono}{icono ? " " : ""}{nombreDe(slug)}
+        {marca && <><Ic n={marca} s={12} /> </>}<IcRubro slug={slug} s={13} /> {nombreDe(slug)}
       </button>
     );
   };
@@ -159,7 +163,7 @@ export function RubroRecalcular({ comercioId, nombre, rubroActual, rubros, onLis
           <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 8,
                         border: "1px solid var(--border)" }}>
             <div style={{ fontSize: 11.5, color: "var(--txt-3)", marginBottom: 6 }}>
-              Va a quedar así {sel.length > 1 && <>· tocá <b>★</b> para cambiar cuál es el principal</>}
+              Va a quedar así {sel.length > 1 && <>· tocá la <b>estrella</b> para cambiar cuál es el principal</>}
             </div>
             {sel.length === 0 ? (
               <div style={{ fontSize: 12.5, color: "var(--amber)" }}>
@@ -172,12 +176,12 @@ export function RubroRecalcular({ comercioId, nombre, rubroActual, rubros, onLis
                                          fontSize: 12.5, padding: "3px 8px", borderRadius: 999,
                                          border: "1px solid var(--border)" }}>
                     {i === 0
-                      ? <b style={{ color: "var(--neon)" }}>★ {nombreDe(s)}</b>
+                      ? <b style={{ color: "var(--neon)" }}><Ic n="estrella" s={12} peso="fill" /> {nombreDe(s)}</b>
                       : (
                         <>
                           <button type="button" title="Hacerlo principal" onClick={() => hacerPrincipal(s)}
                                   style={{ background: "none", border: 0, cursor: "pointer",
-                                           color: "var(--txt-3)", padding: 0 }}>☆</button>
+                                           color: "var(--txt-3)", padding: 0 }}><Ic n="estrella" s={12} /></button>
                           {nombreDe(s)}
                         </>
                       )}
@@ -189,7 +193,7 @@ export function RubroRecalcular({ comercioId, nombre, rubroActual, rubros, onLis
               </div>
             )}
             <div style={{ fontSize: 11, color: "var(--txt-3)", marginTop: 6 }}>
-              El <b>★ principal</b> es el que se ve en la ficha, el color del pin y el filtro.
+              El <b>principal</b> es el que se ve en la ficha, el color del pin y el filtro.
               Los demás no se ven, pero el buscador lo encuentra por ellos.
             </div>
           </div>
@@ -229,7 +233,7 @@ export function RubroRecalcular({ comercioId, nombre, rubroActual, rubros, onLis
                 <b>La IA propone</b> — segunda opinión, no cambia cómo clasifica el sistema
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {d.ia.rubros.map((r) => <Chip key={r.slug} slug={r.slug} icono="✨" />)}
+                {d.ia.rubros.map((r) => <Chip key={r.slug} slug={r.slug} marca="destacado" />)}
               </div>
               {d.ia.motivo && (
                 <div style={{ fontSize: 11.5, color: "var(--txt-2)", marginTop: 5, fontStyle: "italic" }}>
@@ -270,7 +274,7 @@ export function RubroRecalcular({ comercioId, nombre, rubroActual, rubros, onLis
                 </span>
               )}
               {filtrados.map((r) => (
-                <Chip key={r.slug} slug={r.slug} icono={r.icono ?? undefined}
+                <Chip key={r.slug} slug={r.slug}
                       resaltado={propuestos.has(r.slug)} />
               ))}
             </div>
@@ -278,7 +282,7 @@ export function RubroRecalcular({ comercioId, nombre, rubroActual, rubros, onLis
 
           {/* 4) La palabra: lo único que sirve para el PRÓXIMO comercio. */}
           <label style={{ fontSize: 11.5, color: "var(--txt-3)", display: "block", marginTop: 12 }}>
-            Palabra para el diccionario <span style={{ opacity: .7 }}>(opcional — se guarda con el rubro ★)</span>
+            Palabra para el diccionario <span style={{ opacity: .7 }}>(opcional — se guarda con el rubro principal)</span>
             <input className="adm-input" style={{ marginTop: 4 }} value={palabras}
                    placeholder="ej.: taller de motos, mecánica de motos"
                    onChange={(e) => setPalabras(e.target.value)} />
@@ -295,7 +299,7 @@ export function RubroRecalcular({ comercioId, nombre, rubroActual, rubros, onLis
               Guardar {sel.length > 1 ? `los ${sel.length} rubros` : "el rubro"}
             </button>
             <button className="btn btn-ghost btn-sm" disabled={guardando} onClick={confirmar}>
-              ✓ Ya estaba bien, no tocar
+              <Ic n="si" s={14} /> Ya estaba bien, no tocar
             </button>
           </div>
           <div style={{ fontSize: 11, color: "var(--txt-3)", marginTop: 6 }}>

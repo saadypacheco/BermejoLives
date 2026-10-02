@@ -10,6 +10,7 @@ import {
 } from "@/lib/data";
 import { cambioFavorable, diasDesde, DIAS_VIEJA, formatoMonto, tasasDe } from "@/lib/cambio";
 import { abiertoAhora, ahoraEnBolivia, etiquetaHorario } from "@/lib/horario";
+import { Ic, IcRubro, climaIcono, type NombreIcono } from "@/components/ic";
 
 export const dynamic = "force-dynamic";
 
@@ -30,14 +31,14 @@ export async function generateMetadata(): Promise<Metadata> {
  * dicen cosas distintas. Lo que es DATO DE HOY —el paso, el clima, el
  * cambio, quién está abierto— sale de la base en el momento.
  */
-const SECCION: Record<string, { titulo: string; icono: string }> = {
-  frontera: { titulo: "Cruzar", icono: "🌉" },
-  documentos: { titulo: "Documentos", icono: "🪪" },
-  aduana: { titulo: "Aduana: qué podés pasar", icono: "🛃" },
-  comercios: { titulo: "Comprar: horarios, pagos, envíos", icono: "🛍️" },
-  transporte: { titulo: "Cómo llegar: Orán, Salta, Tarija", icono: "🚌" },
-  seguridad: { titulo: "Seguridad y emergencias", icono: "🆘" },
-  conectividad: { titulo: "Chip e internet", icono: "📶" },
+const SECCION: Record<string, { titulo: string; icono: NombreIcono }> = {
+  frontera: { titulo: "Cruzar", icono: "frontera" },
+  documentos: { titulo: "Documentos", icono: "documentos" },
+  aduana: { titulo: "Aduana: qué podés pasar", icono: "aduana" },
+  comercios: { titulo: "Comprar: horarios, pagos, envíos", icono: "comprar" },
+  transporte: { titulo: "Cómo llegar: Orán, Salta, Tarija", icono: "transporte" },
+  seguridad: { titulo: "Seguridad y emergencias", icono: "emergencia" },
+  conectividad: { titulo: "Chip e internet", icono: "wifi" },
 };
 
 const ESTADO: Record<string, Record<string, [string, "ok" | "ojo" | "mal"]>> = {
@@ -104,7 +105,7 @@ export default async function GuiaPage() {
         {/* ---------- HOY ---------- */}
         <section className="uk-guia-hoy">
           <div className="uk-guia-card">
-            <h2>🌉 La frontera hoy <small>con {paso}</small></h2>
+            <h2><Ic n="frontera" s={22} /> La frontera hoy <small>con {paso}</small></h2>
             {frontera ? (
               <>
                 <div className="uk-guia-estados">
@@ -115,7 +116,7 @@ export default async function GuiaPage() {
                   })}
                 </div>
                 {frontera.chalanas !== "suspendidas" && frontera.chalanas_horario && (
-                  <p className="uk-guia-nota">⛵ Chalanas hoy: {frontera.chalanas_horario}</p>
+                  <p className="uk-guia-nota"><Ic n="chalanas" s={16} /> Chalanas hoy: {frontera.chalanas_horario}</p>
                 )}
                 {frontera.nota && <p className="uk-guia-nota">{frontera.nota}</p>}
                 <small className={horasFrontera != null && horasFrontera >= 24 ? "vieja" : ""}>
@@ -123,14 +124,14 @@ export default async function GuiaPage() {
                     : horasFrontera < 1 ? "Dato de hace menos de una hora"
                     : horasFrontera < 24 ? `Dato de hace ${horasFrontera} h`
                     : `Dato de hace ${Math.floor(horasFrontera / 24)} días — confirmá antes de salir`}
-                  {clima?.temp_c != null && <> · {clima.icono || "☀"} {Math.round(clima.temp_c)}°{clima.descripcion ? `, ${clima.descripcion}` : ""}</>}
+                  {clima?.temp_c != null && <> · <Ic n={climaIcono(clima.descripcion)} s={15} /> {Math.round(clima.temp_c)}°{clima.descripcion ? `, ${clima.descripcion}` : ""}</>}
                 </small>
               </>
             ) : <p className="uk-guia-vacio">Sin dato del paso todavía.</p>}
           </div>
 
           <div className="uk-guia-card">
-            <h2>💱 El cambio hoy</h2>
+            <h2><Ic n="cambio" s={22} /> El cambio hoy</h2>
             {t.ars_bob != null ? (
               <>
                 <div className="uk-guia-tasas">
@@ -150,14 +151,14 @@ export default async function GuiaPage() {
         {/* ---------- SECCIONES DE TEXTO ---------- */}
         {(["frontera", "documentos", "aduana"] as const).map((k) => (
           <section key={k} className="uk-guia-sec" id={k}>
-            <h2>{SECCION[k].icono} {SECCION[k].titulo}</h2>
+            <h2><Ic n={SECCION[k].icono} s={22} /> {SECCION[k].titulo}</h2>
             <Preguntas items={saber[k] ?? []} />
           </section>
         ))}
 
         {/* ---------- COMPRAR ---------- */}
         <section className="uk-guia-sec" id="comercios">
-          <h2>{SECCION.comercios.icono} {SECCION.comercios.titulo}</h2>
+          <h2><Ic n={SECCION.comercios.icono} s={22} /> {SECCION.comercios.titulo}</h2>
           <div className="uk-guia-abiertos">
             <div className="uk-guia-abiertos-cab">
               <b>Abiertos ahora</b>
@@ -181,26 +182,26 @@ export default async function GuiaPage() {
 
         {/* ---------- MAPA DE SERVICIOS ---------- */}
         <section className="uk-guia-sec" id="mapa">
-          <h2>🗺️ En el mapa de {nombre}</h2>
+          <h2><Ic n="mapa" s={22} /> En el mapa de {nombre}</h2>
           <div className="uk-guia-chips">
-            <Link href="/buscar?rubro=farmacia&vista=mapa">💊 Farmacias</Link>
-            <Link href="/buscar?rubro=cambio&vista=mapa">💱 Casas de cambio</Link>
-            <Link href="/buscar?rubro=restaurantes&vista=mapa">🍽️ Dónde comer</Link>
-            <Link href="/buscar?rubro=hospedaje&vista=mapa">🛏️ Dónde dormir</Link>
-            <Link href="/buscar?rubro=celulares&vista=mapa">📱 Celulares y chips</Link>
-            <Link href="/buscar?rubro=taxis&vista=mapa">🚕 Taxis</Link>
-            <Link href="/buscar?rubro=banos&vista=mapa">🚻 Baños</Link>
-            <Link href="/buscar?rubro=estacionamiento&vista=mapa">🅿️ Estacionamientos</Link>
-            <Link href="/buscar?rubro=cajeros&vista=mapa">🏧 Cajeros</Link>
-            <Link href="/buscar?rubro=wifi&vista=mapa">📶 Wifi</Link>
-            <Link href="/buscar?rubro=emergencias&vista=mapa">🚓 Policía y emergencias</Link>
-            <Link href="/buscar?rubro=alquiler&vista=mapa">🏠 Alquileres</Link>
+            <Link href="/buscar?rubro=farmacia&vista=mapa"><Ic n="farmacia" s={16} /> Farmacias</Link>
+            <Link href="/buscar?rubro=cambio&vista=mapa"><Ic n="cambio" s={16} /> Casas de cambio</Link>
+            <Link href="/buscar?rubro=restaurantes&vista=mapa"><Ic n="restaurantes" s={16} /> Dónde comer</Link>
+            <Link href="/buscar?rubro=hospedaje&vista=mapa"><Ic n="hospedaje" s={16} /> Dónde dormir</Link>
+            <Link href="/buscar?rubro=celulares&vista=mapa"><Ic n="celulares" s={16} /> Celulares y chips</Link>
+            <Link href="/buscar?rubro=taxis&vista=mapa"><Ic n="taxis" s={16} /> Taxis</Link>
+            <Link href="/buscar?rubro=banos&vista=mapa"><Ic n="banos" s={16} /> Baños</Link>
+            <Link href="/buscar?rubro=estacionamiento&vista=mapa"><Ic n="estacionamiento" s={16} /> Estacionamientos</Link>
+            <Link href="/buscar?rubro=cajeros&vista=mapa"><Ic n="cajeros" s={16} /> Cajeros</Link>
+            <Link href="/buscar?rubro=wifi&vista=mapa"><Ic n="wifi" s={16} /> Wifi</Link>
+            <Link href="/buscar?rubro=emergencias&vista=mapa"><Ic n="policia" s={16} /> Policía y emergencias</Link>
+            <Link href="/buscar?rubro=alquiler&vista=mapa"><Ic n="alquiler" s={16} /> Alquileres</Link>
           </div>
           {porServicio.length > 0 ? (
             <div className="uk-guia-servicios">
               {porServicio.map(([titulo, slug, items]) => (
                 <div key={slug}>
-                  <b><Link href={`/buscar?rubro=${slug}&vista=mapa`}>{titulo}</Link></b>
+                  <b><Link href={`/buscar?rubro=${slug}&vista=mapa`}><IcRubro slug={slug} s={17} /> {titulo}</Link></b>
                   <ul>
                     {/* Nueve renglones iguales de "Baño público · cómo llegar" no
                         dicen nada: se muestra cada nombre+dirección una vez, y
@@ -234,21 +235,21 @@ export default async function GuiaPage() {
 
         {(["transporte", "seguridad", "conectividad"] as const).map((k) => (
           <section key={k} className="uk-guia-sec" id={k}>
-            <h2>{SECCION[k].icono} {SECCION[k].titulo}</h2>
+            <h2><Ic n={SECCION[k].icono} s={22} /> {SECCION[k].titulo}</h2>
             <Preguntas items={saber[k] ?? []} />
           </section>
         ))}
 
         {/* ---------- OFERTAS Y VIDEOS ---------- */}
         <section className="uk-guia-sec" id="ofertas">
-          <h2>🏷️ Ofertas y videos</h2>
+          <h2><Ic n="ofertas" s={22} /> Ofertas y videos</h2>
           <div className="uk-guia-chips">
             <Link href="/ofertas" className="uk-btn uk-btn-primary">Ver las ofertas de hoy →</Link>
           </div>
           {videos.length > 0 && (
             <div className="uk-guia-videos">
               {videos.map((v) => (
-                <a key={v.id} href={v.url} target="_blank" rel="noopener">▶ {v.titulo || "Video"}</a>
+                <a key={v.id} href={v.url} target="_blank" rel="noopener"><Ic n="video_play" s={16} /> {v.titulo || "Video"}</a>
               ))}
             </div>
           )}

@@ -51,7 +51,7 @@ export default function PerfilPage() {
           </>
         ) : (
           <>
-            <h1 style={{ fontSize: 26, margin: "10px 0 20px" }}>Hola 👋</h1>
+            <h1 style={{ fontSize: 26, margin: "10px 0 20px" }}>Hola</h1>
             <div className="glass" style={{ padding: 20, borderRadius: 16, marginBottom: 16 }}>
               <div style={{ fontSize: 12, color: "var(--txt-3)", marginBottom: 4 }}>WHATSAPP</div>
               <div style={{ fontSize: 18, fontWeight: 700 }}>+{sesion.whatsapp}</div>

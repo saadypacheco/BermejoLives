@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { GaleriaFoto, GaleriaVideo } from "@/lib/data";
+import { Ic } from "@/components/ic";
 
 /**
  * La galería de arriba de la ficha: UNA foto grande y abajo, a la vista, todas
@@ -49,7 +50,7 @@ export function FichaGaleria({ portada, fotos, videos, nombre, posicion }: {
           </button>
         )}
         {todas.length > 1 && (
-          <span className="uk-fgal-count">📷 {i + 1} / {todas.length}</span>
+          <span className="uk-fgal-count"><Ic n="foto" s={14} /> {i + 1} / {todas.length}</span>
         )}
       </div>
 
@@ -69,7 +70,7 @@ export function FichaGaleria({ portada, fotos, videos, nombre, posicion }: {
             <button type="button" key={v.id} className="con-video" onClick={() => setVideo(v.url)}
                     aria-label="Ver el video">
               <video src={v.url} preload="metadata" muted playsInline />
-              <span aria-hidden>▶</span>
+              <span><Ic n="video_play" s={30} /></span>
             </button>
           ))}
         </div>
@@ -78,14 +79,14 @@ export function FichaGaleria({ portada, fotos, videos, nombre, posicion }: {
       {video && (
         <div className="gf-lightbox" onClick={() => setVideo(null)} role="dialog" aria-modal>
           <video src={video} controls autoPlay playsInline onClick={(e) => e.stopPropagation()} />
-          <button type="button" className="gf-close" aria-label="Cerrar">✕</button>
+          <button type="button" className="gf-close" aria-label="Cerrar"><Ic n="cerrar" s={18} /></button>
         </div>
       )}
 
       {zoom && (
         <div className="gf-lightbox" onClick={() => setZoom(null)} role="dialog" aria-modal>
           <img src={zoom} alt="" />
-          <button type="button" className="gf-close" aria-label="Cerrar">✕</button>
+          <button type="button" className="gf-close" aria-label="Cerrar"><Ic n="cerrar" s={18} /></button>
         </div>
       )}
     </div>

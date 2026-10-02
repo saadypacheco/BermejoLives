@@ -6,7 +6,9 @@
 import { agregarTiles } from "@/lib/mapa-tiles";
 import { useEffect, useRef, useState } from "react";
 import { loadLeaflet, escapeHtml } from "@/lib/mapa-visual";
+import { SVG_COMERCIOS } from "@/lib/iconos-mapa";
 import { adminListLugares, adminCrearLugar, adminUpdateLugar, adminDeleteLugar, type LugarAdmin } from "@/lib/api";
+import { Ic } from "@/components/ic";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 const TIPOS: [string, string][] = [
@@ -69,7 +71,7 @@ export function LugaresEditor() {
     for (const l of lugares) {
       if (l.lat == null || l.lng == null) continue;
       const sel = l.id === selId;
-      const html = `<div class="ukpinlugar" style="${sel ? "outline:2px solid #39ff9e;outline-offset:2px;" : ""}"><span>🏬</span><b>${escapeHtml(l.nombre)}</b>${l.n_comercios ? `<i>${l.n_comercios}</i>` : ""}</div>`;
+      const html = `<div class="ukpinlugar" style="${sel ? "outline:2px solid #39ff9e;outline-offset:2px;" : ""}"><span class="ukpinlugar-ic">${SVG_COMERCIOS}</span><b>${escapeHtml(l.nombre)}</b>${l.n_comercios ? `<i>${l.n_comercios}</i>` : ""}</div>`;
       const m = L.marker([l.lat, l.lng], { icon: L.divIcon({ className: "", html, iconSize: null as any, iconAnchor: [15, 16] }) }).addTo(layer);
       m.on("click", () => seleccionar(l));
     }
@@ -161,8 +163,8 @@ export function LugaresEditor() {
         </div>
         <div style={{ fontSize: 12.5, color: dibujando ? "#c4b5fd" : pos ? "var(--neon)" : "var(--amber)" }}>
           {dibujando
-            ? `✏️ Tocá las esquinas de la manzana (${poly.length} marcadas)`
-            : pos ? `📍 Ubicación: ${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)} (tocá el mapa para mover)` : "Tocá el mapa para ubicar el lugar."}
+            ? `Tocá las esquinas de la manzana (${poly.length} marcadas)`
+            : pos ? `Ubicación: ${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)} (tocá el mapa para mover)` : "Tocá el mapa para ubicar el lugar."}
           {selId && !dibujando && " · Editando uno existente."}
         </div>
 
@@ -171,7 +173,7 @@ export function LugaresEditor() {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", fontSize: 13 }}>
             {!dibujando ? (
               <>
-                <button className="btn btn-ghost" onClick={dibujarManzana}>✏️ Dibujar manzana</button>
+                <button className="btn btn-ghost" onClick={dibujarManzana}><Ic n="editar" s={14} /> Dibujar manzana</button>
                 {poly.length >= 3 && <span style={{ color: "var(--txt-3)" }}>Manzana: {poly.length} esquinas</span>}
                 {poly.length >= 3 && <button className="btn btn-ghost" style={{ color: "var(--pink)" }} disabled={busy} onClick={borrarManzana}>Borrar manzana</button>}
               </>
@@ -191,7 +193,7 @@ export function LugaresEditor() {
       {lugares.map((l) => (
         <button key={l.id} onClick={() => seleccionar(l)}
           style={{ display: "flex", width: "100%", alignItems: "center", gap: 10, padding: "10px 16px", borderTop: "1px solid var(--border)", background: l.id === selId ? "rgba(57,255,158,.06)" : "transparent", border: "none", borderTopStyle: "solid", cursor: "pointer", textAlign: "left", color: "var(--txt)" }}>
-          <span style={{ fontSize: 16 }}>🏬</span>
+          <span style={{ display: "flex" }}><Ic n="comercios" s={15} /></span>
           <span style={{ flex: 1, minWidth: 0 }}>
             <b style={{ fontSize: 14 }}>{l.nombre}</b>
             <span style={{ color: "var(--txt-3)", fontSize: 12 }}> · {l.tipo}{l.n_comercios ? ` · ${l.n_comercios} puestos` : ""}{l.lat == null ? " · sin ubicación" : ""}</span>

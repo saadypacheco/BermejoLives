@@ -53,6 +53,7 @@ import type { Rubro } from "@/lib/types";
 import { precioFmt, MODALIDAD_LABEL, comoLlegarHref } from "@/lib/types";
 import { abiertoAhora } from "@/lib/horario";
 import { Check, X, Edit, Pin, WhatsApp, Verified } from "@/components/icons";
+import { Ic } from "@/components/ic";
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
@@ -457,7 +458,7 @@ export default function AdminPage() {
           <div><h3>Cola de aprobación</h3><span style={{ color: "var(--txt-3)", fontSize: 13 }}>Aprobá, rechazá o pedí cambios</span></div>
           {items.length > 0 && (
             <button className="btn btn-ghost btn-sm" onClick={revisarTodoIA} title="La IA revisa todas y aprueba automáticamente solo las de alta confianza; el resto queda para vos.">
-              ✨ Revisar todas con IA
+              <Ic n="destacado" s={15} /> Revisar todas con IA
             </button>
           )}
         </div>
@@ -475,12 +476,12 @@ export default function AdminPage() {
               <p>{p.descripcion ?? p.titulo}</p>
               <div className="mm">
                 {p.precio != null && <span style={{ color: "var(--neon)", fontWeight: 700 }}>{precioFmt(p.precio, p.moneda)}</span>}
-                {p.tiktok_url && <span>🎬 TikTok adjunto</span>}
-                <span>🕒 {new Date(p.created_at).toLocaleString("es-BO")}</span>
+                {p.tiktok_url && <span><Ic n="videos" s={13} /> TikTok adjunto</span>}
+                <span><Ic n="reloj" s={13} /> {new Date(p.created_at).toLocaleString("es-BO")}</span>
                 <IdentidadBadge pub={p} />
               </div>
               {(() => {
-                // El veredicto vivo (recién pedido con ✨) manda; si no hay,
+                // El veredicto vivo (recién pedido a mano) manda; si no hay,
                 // el guardado en la fila. Antes sólo existía el primero y se
                 // perdía al recargar: la IA opinaba después de que ya había
                 // mirado una persona.
@@ -489,9 +490,9 @@ export default function AdminPage() {
                         ? { veredicto: p.ia_veredicto, motivo: p.ia_motivo ?? "", confianza: p.ia_confianza ?? 0 }
                         : undefined);
                 if (!v) return null;
-                if (v === "cargando") return <div style={{ marginTop: 8, fontSize: 12, color: "var(--txt-3)" }}>✨ Consultando IA…</div>;
+                if (v === "cargando") return <div style={{ marginTop: 8, fontSize: 12, color: "var(--txt-3)" }}><Ic n="destacado" s={13} /> Consultando IA…</div>;
                 const color = v.veredicto === "aprobar" ? "var(--neon)" : v.veredicto === "rechazar" ? "var(--pink)" : "var(--amber)";
-                const label = v.veredicto === "aprobar" ? "✓ IA sugiere aprobar" : v.veredicto === "rechazar" ? "✕ IA sugiere rechazar" : "? IA: revisión humana";
+                const label = v.veredicto === "aprobar" ? "IA sugiere aprobar" : v.veredicto === "rechazar" ? "IA sugiere rechazar" : "IA: revisión humana";
                 return (
                   <div style={{ marginTop: 8, fontSize: 12, color, border: `1px solid ${color}`, borderRadius: 8, padding: "4px 8px", display: "inline-block" }}>
                     <b>{label}</b>{v.confianza > 0 && <span style={{ opacity: 0.7 }}> · {Math.round(v.confianza * 100)}%</span>}
@@ -508,11 +509,11 @@ export default function AdminPage() {
                       title="Qué es esto: oferta, novedad o video"
                       value={tipos[p.id] ?? p.tipo ?? "oferta"}
                       onChange={(e) => setTipos((t) => ({ ...t, [p.id]: e.target.value }))}>
-                <option value="oferta">🏷️ Oferta</option>
-                <option value="novedad">📣 Novedad</option>
-                <option value="video">▶️ Video</option>
+                <option value="oferta">Oferta</option>
+                <option value="novedad">Novedad</option>
+                <option value="video">Video</option>
               </select>
-              <button className="mbtn" title="Revisar con IA" onClick={() => revisarIA(p)} disabled={veredictos[p.id] === "cargando"} style={{ fontSize: 16 }}>✨</button>
+              <button className="mbtn" title="Revisar con IA" onClick={() => revisarIA(p)} disabled={veredictos[p.id] === "cargando"}><Ic n="destacado" s={16} /></button>
               <button className="mbtn approve" title="Aprobar" onClick={() => act(p.id, "aprobado")}><Check style={{ width: 18, height: 18 }} /></button>
               <button className="mbtn edit" title="Solicitar cambios" onClick={() => act(p.id, "cambios")}><Edit style={{ width: 18, height: 18 }} /></button>
               <button className="mbtn reject" title="Rechazar" onClick={() => act(p.id, "rechazado")}><X style={{ width: 18, height: 18 }} /></button>
@@ -536,12 +537,12 @@ function IdentidadBadge({ pub }: { pub: PendingPub }) {
   if (pub.identidad_origen === "codigo") {
     return (
       <span style={{ color: "var(--amber)" }} title="El número no estaba asociado: se identificó con el código del local">
-        🔑 por código {pub.codigo_recibido ? `URUKU-${pub.codigo_recibido}` : ""}
+        <Ic n="cerrajeria" s={13} /> por código {pub.codigo_recibido ? `URUKU-${pub.codigo_recibido}` : ""}
       </span>
     );
   }
   if (pub.identidad_origen === "desconocido") {
-    return <span style={{ color: "var(--pink)" }} title="Ni número conocido ni código: se creó un comercio borrador">⚠️ sin identificar</span>;
+    return <span style={{ color: "var(--pink)" }} title="Ni número conocido ni código: se creó un comercio borrador"><Ic n="aviso" s={13} /> sin identificar</span>;
   }
   return null;  // 'numero' es el caso normal, no merece ruido visual
 }
@@ -563,7 +564,7 @@ function ReclamoRow({ nombre, contacto, sub, mensaje, estado, respuesta, onRespo
           {contacto && <div style={{ fontSize: 12, color: "var(--txt-3)" }}>{contacto}</div>}
         </div>
         <span style={{ fontSize: 11, color: estado === "pendiente" ? "var(--amber)" : "var(--neon)" }}>
-          {estado === "respondido" || estado === "respondida" ? "✓ respondido" : "pendiente"}
+          {estado === "respondido" || estado === "respondida" ? "respondido" : "pendiente"}
         </span>
       </div>
       <p style={{ marginTop: 6, fontSize: 14 }}>{mensaje}</p>
@@ -661,7 +662,7 @@ function TabCambioNumero({
                 </div>
                 {s.lat != null && s.lng != null && (
                   <a href={`https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`} target="_blank" rel="noopener" style={{ fontSize: 12, color: "var(--blue-soft)" }}>
-                    📍 Ver ubicación enviada
+                    <Ic n="ubicacion" s={14} /> Ver ubicación enviada
                   </a>
                 )}
                 {s.mensaje && <p style={{ fontSize: 13, color: "var(--txt-2)", marginTop: 6 }}>{s.mensaje}</p>}
@@ -690,7 +691,7 @@ function TabCambioNumero({
               </div>
             ) : (
               <div style={{ marginTop: 10, fontSize: 12, color: s.estado === "aprobada" ? "var(--neon)" : "var(--pink)" }}>
-                {s.estado === "aprobada" ? "✓ Aprobada" : "✗ Rechazada"}
+                {s.estado === "aprobada" ? "Aprobada" : "Rechazada"}
               </div>
             )}
           </div>
@@ -740,7 +741,7 @@ function TabPagos({
               {" · "}{METODO_LABEL[p.metodo] ?? p.metodo}
               {p.referencia && <> · ref: {p.referencia}</>}
             </p>
-            <div className="mm"><span>🕒 {new Date(p.created_at).toLocaleString("es-AR")}</span></div>
+            <div className="mm"><span><Ic n="reloj" s={13} /> {new Date(p.created_at).toLocaleString("es-AR")}</span></div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginLeft: "auto" }}>
             <button className="btn btn-primary btn-sm" onClick={() => onConfirmar(p.id, 1)}>Confirmar 1 mes</button>
@@ -817,13 +818,13 @@ function TabKpis({ data, dias, onDias }: { data: Kpis | null; dias: number; onDi
         ))}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 }}>
-        <Lista titulo="🔎 Más buscado" items={data.top_busquedas}
+        <Lista titulo="Más buscado" items={data.top_busquedas}
                nota={`Veces buscado en el período → cuántos encuentra HOY. En ámbar, donde hay más demanda que oferta.`}
                empty="Sin búsquedas en este período." />
-        <Lista titulo="🚫 Sigue sin resultado" items={data.sin_resultado}
+        <Lista titulo="Sigue sin resultado" items={data.sin_resultado}
                nota="Verificado contra el catálogo de hoy, no contra el día que se buscó."
-               empty="Nada sin resultado 🎉" />
-        <Lista titulo="🏪 Locales más visitados" items={data.top_comercios}
+               empty="Nada sin resultado" />
+        <Lista titulo="Locales más visitados" items={data.top_comercios}
                nota="Fichas abiertas y contactos, en el período elegido."
                empty="Sin visitas en este período." />
       </div>
@@ -833,7 +834,7 @@ function TabKpis({ data, dias, onDias }: { data: Kpis | null; dias: number; onDi
           da 65. Eran búsquedas de cuando el catálogo estaba a medio cargar. */}
       {(data.ya_resueltas?.length ?? 0) > 0 && (
         <div style={{ ...card, borderColor: "var(--stroke)" }}>
-          <h3 style={{ marginTop: 0, fontSize: 15 }}>✅ Ya no son un hueco</h3>
+          <h3 style={{ marginTop: 0, fontSize: 15 }}><Ic n="listo" s={15} /> Ya no son un hueco</h3>
           <p style={{ color: "var(--txt-3)", fontSize: 11.5, marginTop: -6 }}>
             No daban nada el día que se buscaron y hoy sí. No hay nada que salir a hacer con estos.
           </p>
@@ -847,7 +848,7 @@ function TabKpis({ data, dias, onDias }: { data: Kpis | null; dias: number; onDi
           </div>
         </div>
       )}
-      <p style={{ color: "var(--txt-3)", fontSize: 12 }}>💡 "Sigue sin resultado" = oportunidades de verdad: lo que la gente busca y hoy no está → a quién salir a sumar.</p>
+      <p style={{ color: "var(--txt-3)", fontSize: 12 }}>"Sigue sin resultado" = oportunidades de verdad: lo que la gente busca y hoy no está → a quién salir a sumar.</p>
     </div>
   );
 }
@@ -941,14 +942,14 @@ function TabMonitoreo({
           <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Contactos (30d)</div>
           <div style={{ fontSize: 26, fontWeight: 700 }}>{data.contactos_30d}</div>
           <div style={{ fontSize: 11, color: "var(--txt-3)", marginTop: 4, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <span title="Abrieron el WhatsApp del comercio">💬 {data.contactos_por_tipo?.whatsapp ?? 0}</span>
-            <span title="Tocaron &quot;Cómo llegar&quot;">📍 {data.contactos_por_tipo?.mapa ?? 0}</span>
+            <span title="Abrieron el WhatsApp del comercio"><Ic n="whatsapp" s={13} /> {data.contactos_por_tipo?.whatsapp ?? 0}</span>
+            <span title="Tocaron &quot;Cómo llegar&quot;"><Ic n="ubicacion" s={13} /> {data.contactos_por_tipo?.mapa ?? 0}</span>
             {/* La reserva vale distinto que un WhatsApp suelto: no preguntó,
                 pidió algo concreto. Es el número que justifica un plan pago. */}
             <span title="Mandaron una reserva" style={{ color: (data.contactos_por_tipo?.reserva ?? 0) > 0 ? "var(--neon)" : undefined }}>
-              🛒 {data.contactos_por_tipo?.reserva ?? 0}
+              <Ic n="alimentos" s={13} /> {data.contactos_por_tipo?.reserva ?? 0}
             </span>
-            {(data.contactos_por_tipo?.telefono ?? 0) > 0 && <span title="Llamaron">📞 {data.contactos_por_tipo.telefono}</span>}
+            {(data.contactos_por_tipo?.telefono ?? 0) > 0 && <span title="Llamaron"><Ic n="telefono" s={13} /> {data.contactos_por_tipo.telefono}</span>}
           </div>
           <div style={{ fontSize: 11, color: "var(--txt-3)", marginTop: 2 }}>
             {data.vistas_30d ?? 0} fichas vistas
@@ -960,11 +961,11 @@ function TabMonitoreo({
           <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Llegadas por QR (30d)</div>
           <div style={{ fontSize: 26, fontWeight: 700 }}>{data.llegadas_30d ?? 0}</div>
           <div style={{ fontSize: 11, color: "var(--txt-3)", marginTop: 4, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <span title="Tarjetas de mesa">🍽 {data.llegadas_por_clase?.mesa ?? 0}</span>
-            <span title="Volantes">📄 {data.llegadas_por_clase?.volante ?? 0}</span>
-            <span title="El QR de la ficha en el sitio">🔗 {data.llegadas_por_clase?.ficha ?? 0}</span>
+            <span title="Tarjetas de mesa"><Ic n="restaurantes" s={13} /> {data.llegadas_por_clase?.mesa ?? 0}</span>
+            <span title="Volantes"><Ic n="documento" s={13} /> {data.llegadas_por_clase?.volante ?? 0}</span>
+            <span title="El QR de la ficha en el sitio"><Ic n="web" s={13} /> {data.llegadas_por_clase?.ficha ?? 0}</span>
             {(data.llegadas_por_clase?.fb ?? 0) + (data.llegadas_por_clase?.ig ?? 0) > 0 && (
-              <span title="Facebook e Instagram">📣 {(data.llegadas_por_clase?.fb ?? 0) + (data.llegadas_por_clase?.ig ?? 0)}</span>
+              <span title="Facebook e Instagram"><Ic n="novedades" s={13} /> {(data.llegadas_por_clase?.fb ?? 0) + (data.llegadas_por_clase?.ig ?? 0)}</span>
             )}
           </div>
           {(data.llegadas_top?.length ?? 0) > 0 && (
@@ -982,7 +983,7 @@ function TabMonitoreo({
 
       {(data.no_contestan?.length ?? 0) > 0 && (
         <div className="panel-card glass" style={{ padding: "12px 16px", border: "1px solid var(--amber)", fontSize: 13 }}>
-          <b style={{ color: "var(--amber)" }}>📵 No contestan el WhatsApp</b>
+          <b style={{ color: "var(--amber)" }}><Ic n="aviso" s={14} /> No contestan el WhatsApp</b>
           <span style={{ opacity: .7 }}> — lo dijeron los compradores («¿te contestó?»). Casi siempre es un número viejo o un teléfono apagado: llamarlos.</span>
           <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
             {data.no_contestan!.map((c) => (
@@ -997,7 +998,7 @@ function TabMonitoreo({
 
       {totalAlertas > 0 && (
         <div className="panel-card glass" style={{ padding: "12px 16px", border: "1px solid var(--pink)", color: "var(--pink)", fontSize: 13 }}>
-          ⚠️ {data.alertas.vencido} comercio(s) vencido(s) y {data.alertas.suspendido} suspendido(s). Revisá la pestaña "Suscripciones".
+          <Ic n="aviso" s={14} /> {data.alertas.vencido} comercio(s) vencido(s) y {data.alertas.suspendido} suspendido(s). Revisá la pestaña "Suscripciones".
         </div>
       )}
 
@@ -1127,7 +1128,7 @@ function TabSuscripciones({
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 15 }}>{c.nombre}</div>
               <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 2 }}>
-                +{c.whatsapp} · {c.verificado ? "✓ verificado" : "sin verificar"}
+                +{c.whatsapp} · {c.verificado ? "verificado" : "sin verificar"}
               </div>
               <div style={{ fontSize: 12, marginTop: 4 }}>
                 <span style={{ color: cfg.color, fontWeight: 600 }}>{cfg.label}</span>
@@ -1141,10 +1142,10 @@ function TabSuscripciones({
             <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
               <button className="btn btn-ghost btn-sm" title="Enviar mensaje al comercio" onClick={async () => {
                 const cuerpo = prompt(`Mensaje para ${c.nombre}:`);
-                if (cuerpo && cuerpo.trim()) { try { await enviarMensajeComercio(c.id, cuerpo.trim()); alert("Mensaje enviado ✓"); } catch { alert("No se pudo enviar"); } }
-              }}>✉️</button>
+                if (cuerpo && cuerpo.trim()) { try { await enviarMensajeComercio(c.id, cuerpo.trim()); alert("Mensaje enviado"); } catch { alert("No se pudo enviar"); } }
+              }}><Ic n="enviar" s={15} /></button>
               <button className="btn btn-ghost btn-sm" title="Confiable y números autorizados" onClick={() => setGestionandoId(c.id)}>
-                ⚙️
+                <Ic n="mas_opciones" s={15} />
               </button>
               <button className="btn btn-ghost btn-sm" onClick={() => setPagandoId(c.id)}>
                 + Pago
@@ -1385,7 +1386,7 @@ function TabComercios({
         {ciudades.length === 1 && (
           <span style={{ color: "var(--txt-3)", fontSize: 13, whiteSpace: "nowrap" }}
                 title="Cuando haya comercios de otra ciudad, acá aparece el filtro">
-            📍 {ciudades[0][1].nombre} ({ciudades[0][1].n})
+            <Ic n="ubicacion" s={13} /> {ciudades[0][1].nombre} ({ciudades[0][1].n})
           </span>
         )}
         {ciudades.length > 1 && (
@@ -1408,7 +1409,7 @@ function TabComercios({
               style={{ padding: "7px 14px", fontSize: 13, cursor: "pointer", border: "none",
                 background: vista === v ? "var(--neon)22" : "transparent",
                 color: vista === v ? "var(--neon)" : "var(--txt-2)", fontWeight: vista === v ? 600 : 400 }}>
-              {v === "lista" ? "☰ Lista" : v === "mapa" ? "🗺 Mapa" : "🛣 Calles"}
+              {v === "lista" ? "Lista" : v === "mapa" ? "Mapa" : "Calles"}
             </button>
           ))}
         </div>
@@ -1500,11 +1501,11 @@ function TabComercios({
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span style={{ fontWeight: 600, fontSize: 15 }}>{c.nombre || "Sin nombre"}</span>
               {c.verificado
-                ? <span style={{ fontSize: 11, color: "var(--neon)", background: "var(--neon)22", padding: "2px 8px", borderRadius: 10 }}>✓ verificado</span>
+                ? <span style={{ fontSize: 11, color: "var(--neon)", background: "var(--neon)22", padding: "2px 8px", borderRadius: 10 }}>verificado</span>
                 : <span style={{ fontSize: 11, color: "var(--amber)", background: "var(--amber)22", padding: "2px 8px", borderRadius: 10 }}>pendiente</span>}
               {c.suspendido && <span style={{ fontSize: 11, color: "#888", background: "#88888822", padding: "2px 8px", borderRadius: 10 }}>suspendido</span>}
               {motivos.map((m) => (
-                <span key={m} style={{ fontSize: 11, color: "var(--amber)", border: "1px dashed var(--amber)", padding: "1px 7px", borderRadius: 10 }}>⚠️ {m}</span>
+                <span key={m} style={{ fontSize: 11, color: "var(--amber)", border: "1px dashed var(--amber)", padding: "1px 7px", borderRadius: 10 }}><Ic n="aviso" s={11} /> {m}</span>
               ))}
             </div>
             <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 3 }}>
@@ -1514,7 +1515,7 @@ function TabComercios({
                   el correcto ya estaba puesto, sólo que segundo — que es la
                   mitad de los casos que parecían errores. */}
               {rubroLocal[c.id] ?? <RubrosDeFila c={c} />}
-              {c.lugares?.nombre ? ` · 🏬 ${c.lugares.nombre}${c.puesto ? ` #${c.puesto}` : ""}` : ""}
+              {c.lugares?.nombre ? ` · ${c.lugares.nombre}${c.puesto ? ` #${c.puesto}` : ""}` : ""}
               {c.ciudades?.nombre ? ` · ${c.ciudades.nombre}` : ""}
               {c.modalidad ? ` · ${MODALIDAD_LABEL[c.modalidad] ?? c.modalidad}` : ""}
             </div>
@@ -1522,12 +1523,12 @@ function TabComercios({
                 que es lo que hay que leer para decidir si el rubro está bien. */}
             {c.prod_obs_human && (
               <div style={{ fontSize: 12, color: "var(--txt)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                👤 {c.prod_obs_human}
+                {c.prod_obs_human}
               </div>
             )}
             {c.prod_det_ia && (
               <div style={{ fontSize: 12, color: "var(--blue-soft, #7aa2f7)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                🤖 {c.prod_det_ia}{c.subcategoria ? ` · ${c.subcategoria}` : ""}
+                {c.prod_det_ia}{c.subcategoria ? ` · ${c.subcategoria}` : ""}
               </div>
             )}
             {c.descripcion && (
@@ -1566,15 +1567,15 @@ function TabComercios({
                 y no quiere perder dónde iba. */}
             <a className="mbtn" title="Volante para imprimir" href={`/volante/${c.slug}`}
                target="_blank" rel="noopener" style={{ fontSize: 15, display: "flex",
-               alignItems: "center", justifyContent: "center" }}>🖨</a>
+               alignItems: "center", justifyContent: "center" }}><Ic n="imprimir" s={15} /></a>
             {/* La tarjeta de mesa: cuatro por hoja, para dejar en las mesas
                 o en el mostrador. "Escaneá y mirá la carta" en los de comida. */}
             <a className="mbtn" title="Tarjeta de mesa con el QR (4 por hoja)" href={`/volante/${c.slug}/mesa`}
                target="_blank" rel="noopener" style={{ fontSize: 15, display: "flex",
-               alignItems: "center", justifyContent: "center" }}>🍽</a>
+               alignItems: "center", justifyContent: "center" }}><Ic n="restaurantes" s={15} /></a>
             <button className="mbtn" title="Recalcular el rubro"
                     onClick={() => setRecalcId(recalcId === c.id ? null : c.id)}
-                    style={{ fontSize: 15 }}>🏷</button>
+                    ><Ic n="ofertas" s={15} /></button>
             <button className="mbtn edit" title="Editar" onClick={() => setEditandoId(c.id)}>
               <Edit style={{ width: 16, height: 16 }} />
             </button>
@@ -1747,7 +1748,7 @@ function ModalEditar({
   const [err, setErr] = useState("");
 
   // El formulario es largo (42 categorías) y el botón Cancelar queda muy abajo:
-  // sin Escape ni ✕ en el encabezado, se entra al editor y no se ve cómo salir.
+  // sin Escape ni cruz en el encabezado, se entra al editor y no se ve cómo salir.
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onEsc);
@@ -1845,7 +1846,7 @@ function ModalEditar({
               )}
             <button type="button" onClick={onClose} aria-label="Cerrar"
               style={{ background: "none", border: "none", color: "var(--txt-2)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>
-              ✕
+              <Ic n="cerrar" s={16} />
             </button>
             </div>
           </div>
@@ -1925,20 +1926,20 @@ function ModalEditar({
             <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Teléfono (opcional)
               <input className="adm-input" style={{ marginTop: 4 }} value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Fijo o celular para llamar" />
             </label>
-            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>👤 Productos observados (dato humano — la IA no lo toca)
+            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Productos observados (dato humano — la IA no lo toca)
               <textarea className="adm-input" style={{ marginTop: 4, minHeight: 56, resize: "vertical" }} value={prodObsHuman}
                 onChange={(e) => setProdObsHuman(e.target.value)}
                 placeholder="zapatillas, championes, chinelas, mochilas" />
             </label>
             {comercio.prod_det_ia && (
-              <div style={{ fontSize: 12, color: "var(--txt-3)" }}>🤖 Detectado por IA
+              <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Detectado por IA
                 <div style={{ marginTop: 4, padding: 8, border: "1px solid var(--border)", borderRadius: 8, color: "var(--txt-2)" }}>
                   {comercio.prod_det_ia}
                   {comercio.subcategoria && <div style={{ opacity: .8, marginTop: 4 }}>Subcategoría: {comercio.subcategoria}</div>}
                 </div>
               </div>
             )}
-            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>🤖 Descripción (la regenera la IA en cada análisis)
+            <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Descripción (la regenera la IA en cada análisis)
               <textarea className="adm-input" style={{ marginTop: 4, minHeight: 70, resize: "vertical" }} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Se completa al analizar las fotos" />
             </label>
             <FotosComercio comercioId={comercio.id} portada={comercio.portada_url ?? null} />
@@ -1960,7 +1961,7 @@ function ModalEditar({
                         if (!on && !principal) setPrincipal(r.slug);
                         return ahora;
                       })}>
-                      {on && r.slug === principal ? "★ " : ""}{r.nombre}
+                      {on && r.slug === principal ? <><Ic n="estrella" s={12} peso="fill" /> </> : ""}{r.nombre}
                     </button>
                   );
                 })}
@@ -1971,7 +1972,7 @@ function ModalEditar({
                   tocado. */}
               {rubroSlugs.length > 1 && (
                 <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 12 }}>★ El principal (es el que se ve en la ficha):</span>
+                  <span style={{ fontSize: 12 }}><Ic n="estrella" s={12} peso="fill" /> El principal (es el que se ve en la ficha):</span>
                   <select className="adm-input" style={{ width: "auto" }} value={principal}
                           onChange={(e) => setPrincipal(e.target.value)}>
                     {rubroSlugs.map((sl) => (
@@ -2017,7 +2018,7 @@ function ModalEditar({
                   <button type="button" className="mchip" style={{ cursor: "pointer", borderColor: "var(--neon)", color: "var(--neon)" }}
                     onClick={() => setHorario(ultimoHorario())}
                     title={ultimoHorario()}>
-                    ↩ Igual que el anterior
+                    Igual que el anterior
                   </button>
                 )}
                 {HORARIOS_FRECUENTES.map((h) => (
@@ -2040,7 +2041,7 @@ function ModalEditar({
                 <div style={{ marginTop: 6, fontSize: 11.5,
                               color: abiertoAhora(horario).estado === "desconocido" ? "var(--amber)" : "var(--txt-3)" }}>
                   {abiertoAhora(horario).estado === "desconocido"
-                    ? "⚠️ No se entiende: el sitio no va a poder decir si está abierto"
+                    ? "No se entiende: el sitio no va a poder decir si está abierto"
                     : `Ahora mismo: ${abiertoAhora(horario).estado}`}
                 </div>
               )}
@@ -2133,7 +2134,7 @@ function AnalisisMasivo({ onTerminado }: { onTerminado: () => void }) {
                   borderRadius: 12, padding: 14, margin: "0 16px 12px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>🤖 Clasificar por fotos</div>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>Clasificar por fotos</div>
           <div style={{ fontSize: 12.5, color: "var(--txt-3)", marginTop: 2 }}>
             {corriendo
               ? `Analizando… ${hechos} listos · ${pendientes} por delante`
@@ -2160,7 +2161,7 @@ function AnalisisMasivo({ onTerminado }: { onTerminado: () => void }) {
           {ultimos.map((r, i) => (
             <div key={`${r.slug}-${i}`} style={{ display: "flex", gap: 8, padding: "3px 0" }}>
               <span style={{ color: r.error ? "var(--pink)" : r.confianza >= 0.7 ? "var(--neon)" : "var(--amber)" }}>
-                {r.error ? "✕" : `${Math.round(r.confianza * 100)}%`}
+                {r.error ? "error" : `${Math.round(r.confianza * 100)}%`}
               </span>
               <b style={{ minWidth: 120 }}>{r.nombre}</b>
               <span style={{ color: "var(--txt-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -2226,7 +2227,7 @@ function AnalisisComercio({ comercioId, onAplicado }: { comercioId: string; onAp
     <div style={{ border: "1px solid var(--neon)", background: "rgba(57,255,158,.06)",
                   borderRadius: 12, padding: 14 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <span style={{ fontSize: 13.5, fontWeight: 600 }}>🤖 Clasificar desde las fotos</span>
+        <span style={{ fontSize: 13.5, fontWeight: 600 }}>Clasificar desde las fotos</span>
         <button type="button" className={res ? "btn btn-ghost btn-sm" : "btn btn-primary btn-sm"}
           disabled={cargando} onClick={analizar}>
           {cargando ? "Mirando las fotos…" : res ? "Analizar de nuevo" : "Analizar"}
@@ -2260,7 +2261,7 @@ function AnalisisComercio({ comercioId, onAplicado }: { comercioId: string; onAp
               dos cosas mostraban el mismo cartel y no había cómo distinguirlas. */}
           {p.error ? (
             <div style={{ color: "var(--pink)", marginBottom: 8 }}>
-              ⚠️ La llamada al modelo falló: {p.error}
+              <Ic n="aviso" s={14} /> La llamada al modelo falló: {p.error}
             </div>
           ) : conf < 0.4 && (
             <div style={{ color: "var(--amber)", marginBottom: 8 }}>
@@ -2389,7 +2390,7 @@ function FotosComercio({ comercioId, portada }: { comercioId: string; portada: s
             <img src={ampliada} alt="" style={{ maxWidth: "96vw", maxHeight: "92vh", objectFit: "contain" }} />
             <button type="button" onClick={() => setAmpliada(null)} aria-label="Cerrar"
               style={{ position: "fixed", top: 16, right: 20, background: "none", border: "none",
-                       color: "#fff", fontSize: 30, cursor: "pointer" }}>✕</button>
+                       color: "#fff", cursor: "pointer" }}><Ic n="cerrar" s={30} /></button>
           </div>
         )}
       </div>
@@ -2552,7 +2553,7 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
                                      background: puesto >= 0 ? "var(--neon)" : "var(--panel)",
                                      color: puesto >= 0 ? "#000" : "var(--txt-2)",
                                      fontWeight: puesto === 0 ? 700 : 400 }}>
-                      {puesto === 0 && "★ "}{r.nombre}
+                      {puesto === 0 && <><Ic n="estrella" s={12} peso="fill" /> </>}{r.nombre}
                     </button>
                   );
                 })}
@@ -2726,13 +2727,13 @@ function ModalPago({ comercio, onClose, onDone }: { comercio: ComercioSuscripcio
       <Portal>
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div className="glass" style={{ width: "100%", maxWidth: 420, borderRadius: 16, padding: 24 }}>
-            <h3 style={{ marginBottom: 4 }}>Pago registrado ✓</h3>
+            <h3 style={{ marginBottom: 4 }}>Pago registrado</h3>
             <p style={{ color: "var(--txt-3)", fontSize: 13, marginBottom: 18 }}>{comercio.nombre}</p>
 
             <div style={{ fontSize: 14, marginBottom: 12 }}>
               {resultado.login
-                ? <span style={{ color: "var(--neon)" }}>✓ El comercio ya puede entrar al panel</span>
-                : <span style={{ color: "var(--amber)" }}>⚠️ No se pudo crear la cuenta del panel</span>}
+                ? <span style={{ color: "var(--neon)" }}>El comercio ya puede entrar al panel</span>
+                : <span style={{ color: "var(--amber)" }}><Ic n="aviso" s={14} /> No se pudo crear la cuenta del panel</span>}
             </div>
 
             {resultado.advertencias.length > 0 && (
@@ -3028,7 +3029,7 @@ function AnalisisOfertas() {
           {ultimas.map((r) => (
             <div key={r.id} style={{ padding: "4px 0", borderTop: "1px solid var(--border)" }}>
               {r.aplicado
-                ? <span style={{ color: "var(--neon)" }}>✓</span>
+                ? <span style={{ color: "var(--neon)" }}><Ic n="si" s={14} /></span>
                 : <span style={{ color: "var(--amber)" }} title={r.es_oferta === false ? "La foto no muestra un producto" : "El modelo no reconoció nada"}>—</span>}
               {" "}<b>{r.titulo || "(sin título)"}</b>
               {r.precio != null && <span style={{ color: "var(--neon)" }}> · {r.precio}</span>}

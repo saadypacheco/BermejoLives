@@ -16,6 +16,7 @@ import { abiertoAhora } from "@/lib/horario";
 import { GuardarBoton } from "@/components/guardar-boton";
 import { HorarioBadge } from "@/components/horario-badge";
 import { ImageLightbox } from "@/components/image-lightbox";
+import { Ic, IcRubro } from "@/components/ic";
 
 // Los chips salen de los comercios que hay EN EL MAPA, no de una lista fija.
 //
@@ -126,7 +127,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
             {ciudades && ciudades.length > 0 && <CitySelector actual={ciudad ?? null} ciudades={ciudades} />}
             <ThemeToggle />
             <Link href="/mi-comercio" className="mavatar" aria-label="Ingresá tu negocio" title="¿Tenés un negocio? Ingresá acá"><User style={{ width: 20, height: 20 }} /></Link>
-            <Link href="/autoregistro?modo=registro" className="mpublica">Publicá tu negocio <span aria-hidden>↗</span></Link>
+            <Link href="/autoregistro?modo=registro" className="mpublica">Publicá tu negocio <Ic n="abrir" s={14} /></Link>
           </div>
         </div>
         <form onSubmit={buscar} className="msearch">
@@ -140,7 +141,7 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
       <div className="mchips">
         {hayHorarios && (
           <button type="button" className={`mchip mchip-open ${soloAbiertos ? "active" : ""}`} onClick={() => { setSoloAbiertos((v) => !v); setSel(null); }}>
-            🟢 Abierto ahora
+            <Ic n="reloj" s={15} /> Abierto ahora
           </button>
         )}
         {chips.map((c) => (
@@ -152,15 +153,15 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
 
       {soloAbiertos && (
         <div className="mfilter-note">
-          <span>🟢 Mostrando {filtered.length} {filtered.length === 1 ? "negocio abierto" : "negocios abiertos"} ahora</span>
-          <button type="button" onClick={() => setSoloAbiertos(false)} style={{ background: "none", border: 0, color: "inherit", cursor: "pointer", font: "inherit" }}>Ver todos ✕</button>
+          <span><Ic n="reloj" s={15} /> Mostrando {filtered.length} {filtered.length === 1 ? "negocio abierto" : "negocios abiertos"} ahora</span>
+          <button type="button" onClick={() => setSoloAbiertos(false)} style={{ background: "none", border: 0, color: "inherit", cursor: "pointer", font: "inherit" }}>Ver todos <Ic n="cerrar" s={13} /></button>
         </div>
       )}
 
       {soloOfertas && (
         <div className="mfilter-note">
-          <span>🔥 Mostrando solo negocios con ofertas</span>
-          <Link href="/mapa">Ver todos ✕</Link>
+          <span><Ic n="ofertas" s={15} /> Mostrando solo negocios con ofertas</span>
+          <Link href="/mapa">Ver todos <Ic n="cerrar" s={13} /></Link>
         </div>
       )}
 
@@ -186,20 +187,20 @@ export function MobileHome({ comercios, feed, soloOfertas = false, center, ciuda
                   onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.removeAttribute("hidden"); }}
                 />
               )}
-              <span hidden={!!(sel.portada_url || sel.logo_url)}>🏪</span>
+              <span hidden={!!(sel.portada_url || sel.logo_url)}><IcRubro slug={sel.rubro_slug} s={30} /></span>
             </div>
             <div className="mcard-info">
               <div className="mcard-head">
                 <b>{sel.nombre}</b>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <GuardarBoton comercioId={sel.id} className="mclose" />
-                  <button className="mclose" onClick={() => setSel(null)} aria-label="Cerrar">✕</button>
+                  <button className="mclose" onClick={() => setSel(null)} aria-label="Cerrar"><Ic n="cerrar" s={15} /></button>
                 </div>
               </div>
               {sel.descripcion && <p>{sel.descripcion}</p>}
-              {(sel.prod_obs_human || sel.prod_det_ia) && <p style={{ opacity: 0.85 }}>🛍️ {sel.prod_obs_human || sel.prod_det_ia}</p>}
-              {sel.horario && <div className="mcard-line">🕐 {sel.horario} <HorarioBadge horario={sel.horario} /></div>}
-              <div className="mcard-line star">★ {sel.rating}{distanciaSel != null && <span className="mcard-dist">· 📍 {formatDistancia(distanciaSel)}</span>}</div>
+              {(sel.prod_obs_human || sel.prod_det_ia) && <p style={{ opacity: 0.85 }}><Ic n="comprar" s={14} /> {sel.prod_obs_human || sel.prod_det_ia}</p>}
+              {sel.horario && <div className="mcard-line"><Ic n="reloj" s={14} /> {sel.horario} <HorarioBadge horario={sel.horario} /></div>}
+              <div className="mcard-line star"><Ic n="estrella" s={14} peso="fill" /> {sel.rating}{distanciaSel != null && <span className="mcard-dist">· <Ic n="ubicacion" s={13} /> {formatDistancia(distanciaSel)}</span>}</div>
             </div>
           </div>
           <div className="mcard-act">

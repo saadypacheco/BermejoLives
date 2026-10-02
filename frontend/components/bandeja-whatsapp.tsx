@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Ic } from "@/components/ic";
 import { agregarNumeroAGrupos, getBandejaWa, probarCloud, reprocesarEntrante,
          type AgregarAGrupos, type BandejaWa, type WaEntrante } from "@/lib/api";
 
@@ -150,7 +151,7 @@ function PlanB({ c }: { c: BandejaWa["cloud"] }) {
 
   const probar = async () => {
     setOcupado(true); setMsg("");
-    try { const r = await probarCloud(numero); setMsg(`✓ Enviado a ${r.a}. Miralo en ese teléfono.`); }
+    try { const r = await probarCloud(numero); setMsg(`Enviado a ${r.a}. Miralo en ese teléfono.`); }
     catch (e) { setMsg(e instanceof Error ? e.message : "No se pudo"); }
     finally { setOcupado(false); }
   };
@@ -171,7 +172,7 @@ function PlanB({ c }: { c: BandejaWa["cloud"] }) {
       </div>
       <div style={{ padding: "12px 16px", fontSize: 13, display: "flex", flexDirection: "column", gap: 6 }}>
         <div>
-          {c.ok ? "🟢" : c.configurado ? "🔴" : "○"}{" "}
+          <Ic n={c.ok ? "listo" : c.configurado ? "aviso" : "ayuda"} s={14} />{" "}
           {!c.configurado ? "Sin configurar — faltan WHATSAPP_CLOUD_PHONE_ID y WHATSAPP_CLOUD_TOKEN"
             : c.estado === "TOKEN_INVALIDO" ? "El token venció o se revocó: hay que rehacerlo en la consola de Meta"
             : c.estado === "META_NO_RESPONDE" ? "Meta no responde"
@@ -190,7 +191,7 @@ function PlanB({ c }: { c: BandejaWa["cloud"] }) {
                     onClick={probar}>
               Mandar un mensaje de prueba
             </button>
-            {msg && <span style={{ fontSize: 12.5, color: msg.startsWith("✓") ? "var(--neon)" : "var(--pink)" }}>{msg}</span>}
+            {msg && <span style={{ fontSize: 12.5, color: msg.startsWith("No") ? "var(--pink)" : "var(--neon)" }}>{msg}</span>}
           </div>
         )}
         <div style={{ color: "var(--txt-3)", fontSize: 11.5 }}>
@@ -408,7 +409,7 @@ export function BandejaWhatsApp() {
           padding: "12px 16px", display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap",
           borderLeft: `4px solid ${d.sesion.ok ? "var(--neon)" : "var(--pink)"}`,
         }}>
-          <span style={{ fontSize: 22 }}>{d.sesion.ok ? "🟢" : "🔴"}</span>
+          <Ic n={d.sesion.ok ? "listo" : "aviso"} s={22} />
           <div style={{ flex: 1, minWidth: 220 }}>
             <div style={{ fontSize: 15, fontWeight: 700 }}>
               {d.sesion.ok ? "WhatsApp conectado"
@@ -430,7 +431,7 @@ export function BandejaWhatsApp() {
 
       {d && d.config.propios === 0 && (
         <div className="panel-card glass" style={{ padding: 12, fontSize: 12.5, color: "var(--amber)" }}>
-          ⚠️ Sin números propios cargados, cualquier mensaje que escriba alguien de URUKU dentro de
+          <Ic n="aviso" s={15} /> Sin números propios cargados, cualquier mensaje que escriba alguien de URUKU dentro de
           un grupo se publica como oferta del comerciante. Va en <code>WA_NUMEROS_PROPIOS</code>.
         </div>
       )}
@@ -442,7 +443,7 @@ export function BandejaWhatsApp() {
                placeholder="Buscar un comercio: nombre, código URUKU-XXXX o teléfono"
                value={q} onChange={(e) => setQ(e.target.value)} />
         {buscando && (
-          <button className="btn btn-sm btn-ghost" onClick={() => setQ("")}>✕ Limpiar</button>
+          <button className="btn btn-sm btn-ghost" onClick={() => setQ("")}><Ic n="cerrar" s={13} /> Limpiar</button>
         )}
         <button className="btn btn-ghost btn-sm" onClick={cargar} disabled={cargando}>
           {cargando ? "…" : "↻"}
@@ -472,7 +473,7 @@ export function BandejaWhatsApp() {
       {!cargando && (d?.items.length ?? 0) === 0 && (
         <div className="panel-card glass" style={{ padding: 24, textAlign: "center", color: "var(--txt-3)" }}>
           {buscando ? `Nada de "${qAplicada}" con ese filtro.`
-            : estado === "problemas" ? "Nada pendiente de mirar. 🎉"
+            : estado === "problemas" ? "Nada pendiente de mirar."
             : "No hay mensajes con ese filtro."}
         </div>
       )}

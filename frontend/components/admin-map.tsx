@@ -3,13 +3,15 @@
 // Mapa del finder (admin + publicador). Cada comercio es un pin en su GPS; tocarlo
 // abre el editor. Estrategia para la densidad de Bermejo en el celular:
 //  - Los comercios DENTRO de un mercado/galería (lugar_id) se colapsan en UN pin
-//    "🏬 Nombre (N)"; al tocarlo se abre el DIRECTORIO (lista) de sus puestos.
+//    el nombre de la galería; al tocarlo se abre el DIRECTORIO (lista) de sus puestos.
 //  - Los de la calle: pin normal. Tocar un GRUPO por GPS → ZOOM FUERTE (sin patitas).
 //  - Al acercar (zoom alto) los pines se agrandan y muestran el nombre → fáciles de tocar.
 //  - Si quedan EXACTO en el mismo punto → HOJA con la lista para elegir.
 import { agregarTiles } from "@/lib/mapa-tiles";
 import { useEffect, useRef, useState } from "react";
 import { rubroStyle, loadLeaflet, escapeHtml, FAMILIAS } from "@/lib/mapa-visual";
+import { rubroSvg, SVG_COMERCIOS } from "@/lib/iconos-mapa";
+import { Ic, IcRubro } from "@/components/ic";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 const ZOOM_LABEL = 17;   // desde acá los pines se agrandan y muestran el nombre
@@ -40,22 +42,22 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
   hojaRef.current = setHoja;
 
   // El color y el emoji SIEMPRE son los del rubro, esté completo o no: con
-  // 1.126 de 1.248 incompletos, pintarlos a todos de ámbar con un ⚠️ dejaba el
+  // 1.126 de 1.248 incompletos, pintarlos a todos de ámbar con un aviso dejaba el
   // mapa de un solo color y sin decir de qué era cada negocio. Lo que falta se
   // avisa con un punto ámbar en la esquina (ver `.ukpin.incompleto` en el CSS).
   function iconoComercio(L: any, c: AdminPin, label: boolean) {
     const style = rubroStyle(c.rubro_slug);
     const inc = c.incompleto ? " incompleto" : "";
     if (label) {
-      const html = `<div class="ukpinlab${inc}" style="--pc:${style.color}"><span>${style.emoji}</span><b>${escapeHtml(c.nombre || "Sin nombre")}</b></div>`;
+      const html = `<div class="ukpinlab${inc}" style="--pc:${style.color}"><span>${rubroSvg(c.rubro_slug)}</span><b>${escapeHtml(c.nombre || "Sin nombre")}</b></div>`;
       return L.divIcon({ className: "", html, iconSize: null as any, iconAnchor: [15, 16] });
     }
-    const html = `<div class="ukpin mini${inc}" style="--pc:${style.color}"><span class="ukpin-emo">${style.emoji}</span></div>`;
+    const html = `<div class="ukpin mini${inc}" style="--pc:${style.color}"><span class="ukpin-emo">${rubroSvg(c.rubro_slug)}</span></div>`;
     return L.divIcon({ className: "", html, iconSize: [PIN, PIN], iconAnchor: [PIN / 2, PIN / 2] });
   }
 
   function iconoLugar(L: any, nombre: string, n: number, portada?: string | null) {
-    const head = portada ? `<img class="ukpinlugar-foto" src="${portada}" alt="" loading="lazy" />` : `<span>🏬</span>`;
+    const head = portada ? `<img class="ukpinlugar-foto" src="${portada}" alt="" loading="lazy" />` : `<span class="ukpinlugar-ic">${SVG_COMERCIOS}</span>`;
     const html = `<div class="ukpinlugar">${head}<b>${escapeHtml(nombre)}</b><i>${n}</i></div>`;
     return L.divIcon({ className: "", html, iconSize: null as any, iconAnchor: [15, 16] });
   }
@@ -99,7 +101,7 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
       const items = g.items;
       const m = L.marker([lat, lng], { icon: iconoLugar(L, g.nombre, items.length, g.portada), zIndexOffset: 500 });
       m.__data = items[0];
-      m.on("click", () => hojaRef.current({ titulo: `🏬 ${g.nombre}`, items }));
+      m.on("click", () => hojaRef.current({ titulo: g.nombre, items }));
       markers.push(m);
       bounds.push([lat, lng]);
     }
@@ -144,14 +146,14 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
         <div className="mapa-hoja">
           <div className="mapa-hoja-head">
             <b>{hoja.titulo} · {hoja.items.length}</b>
-            <button type="button" onClick={() => setHoja(null)} aria-label="Cerrar">✕</button>
+            <button type="button" onClick={() => setHoja(null)} aria-label="Cerrar"><Ic n="cerrar" s={15} /></button>
           </div>
           <div className="mapa-hoja-list">
             {hoja.items.map((c) => {
               const st = rubroStyle(c.rubro_slug);
               return (
                 <button key={c.id} type="button" className="mapa-hoja-row" onClick={() => { onSelect(c.id); setHoja(null); }}>
-                  <span className="mh-dot" style={{ background: st.color }}>{st.emoji}</span>
+                  <span className="mh-dot" style={{ background: st.color }}><IcRubro slug={c.rubro_slug} s={15} peso="fill" /></span>
                   <span className="mh-nom">{c.nombre || "Sin nombre"}</span>
                   {c.incompleto && <span className="mh-inc">incompleto</span>}
                 </button>
@@ -178,7 +180,7 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
       </div>
 
       <p style={{ color: "var(--txt-3)", fontSize: 12.5, padding: "6px 4px 0" }}>
-        {conCoords} en el mapa · tocá un pin para editar, un <b>🏬 mercado</b> para ver adentro, o un grupo para acercar.
+        {conCoords} en el mapa · tocá un pin para editar, un <b>mercado</b> para ver adentro, o un grupo para acercar.
         {sinCoords > 0 && ` · ${sinCoords} sin ubicación.`}
       </p>
     </div>

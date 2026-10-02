@@ -62,6 +62,13 @@ Moderador → /admin → aprobar → estado 'aprobado'
 
 - **Frontend:** componentes PascalCase, hooks `use*`, `'use client'` mínimo,
   Tailwind + clases del design system (`app/styles/`).
+- **Íconos: nunca un emoji.** Todos salen de `components/ic.tsx`
+  (`<Ic n="ofertas" />`, `<IcRubro slug={...} />`): Phosphor duotono, como fija
+  el manual de identidad. Un emoji lo dibuja el sistema operativo, así que la
+  marca se ve distinta en cada teléfono. Clave nueva → agregarla al catálogo y
+  correr `npm run iconos` (regenera `lib/iconos-dibujos.ts`). Los pines del
+  mapa usan `lib/iconos-mapa.ts`, que es lo mismo en texto porque Leaflet arma
+  el pin con HTML.
 - **Backend:** archivos/funciones snake_case, clases PascalCase, schemas
   `NombreCreate/Update/Response`, `HTTPException` en español, structlog con
   eventos snake_case.

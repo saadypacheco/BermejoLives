@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
+import { sinEmoji } from "@/lib/rubros";
+import { Ic } from "@/components/ic";
 import { PublicacionesGrid, SolapasPublicaciones } from "@/components/publicaciones-grid";
 import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
@@ -20,7 +22,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   const rubro = typeof searchParams?.rubro === "string" ? searchParams.rubro : null;
   if (rubro) {
     const items = await getPublicaciones("oferta", 1, ciudad?.slug, rubro);
-    const nom = (items[0]?.rubro_nombre ?? rubro).replace(/^\S+\s/, "");
+    const nom = sinEmoji(items[0]?.rubro_nombre ?? rubro);
     return {
       title: `Ofertas de ${nom} en ${n} — URUKU`,
       description: `Lo que publicaron hoy los comercios de ${nom} en ${n}, con foto, precio y el WhatsApp de cada local.`,
@@ -53,7 +55,7 @@ export default async function OfertasPage({ searchParams }: Props) {
     <UrukuShell showCatnav={false} activeNav="Ofertas">
       <div className="uk-container uk-pub">
         <div className="uk-section-head">
-          <h1>🏷️ Ofertas {nomRubro ? `de ${nomRubro.replace(/^\S+\s/, "")}` : `de ${nombre}`}</h1>
+          <h1><Ic n="ofertas" s={24} /> Ofertas {nomRubro ? `de ${sinEmoji(nomRubro)}` : `de ${nombre}`}</h1>
           <SolapasPublicaciones activa="ofertas" />
         </div>
         <RubrosDePublicaciones items={todas} ruta="/ofertas" activo={rubro} />
