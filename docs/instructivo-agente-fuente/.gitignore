@@ -1,0 +1,6 @@
+# Lo que arma `scripts/instructivo.mjs` en cada corrida: el HTML de cada
+# agente y su captura del login. Se regeneran con un comando, así que no
+# tiene sentido versionarlos — y versionarlos es cómo se llegó a tener cuatro
+# instructivos distintos y ninguna forma de saber cuál estaba bien.
+doc-*.html
+1-login-*.png

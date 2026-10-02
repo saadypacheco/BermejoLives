@@ -1,4 +1,20 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8">
+<!--
+  PLANTILLA del instructivo del agente de campo. No se edita una copia por
+  persona: lo que cambia entre un agente y otro son cuatro datos, y van como
+  marcas {{ASÍ}} que llena `scripts/instructivo.mjs`.
+
+      node scripts/instructivo.mjs --nombre Carlos --ciudad "La Paz" \
+           --mail carlos@uruku.bo --genero m
+
+  Antes había una copia por agente, y cada corrección dejaba un archivo nuevo
+  al lado del anterior: se llegó a tener cuatro instructivos distintos y
+  ninguna forma de saber cuál estaba bien. Con una sola fuente, una corrección
+  entra para todos.
+
+  Las capturas (1-login, 2-carga, 4-home, 5-resultados, 6-mapa) son de URUKU
+  y sirven para cualquier ciudad: muestran la pantalla, no la ciudad.
+-->
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{ --v:#1D8D52; --vd:#10623E; --vt:#1A764C; --bg:#F9F6ED; --tx:#214533; --tx2:#4E6053;
@@ -35,7 +51,11 @@
   .pie{ margin-top:6mm; padding-top:3mm; border-top:1px solid var(--line); color:var(--tx2); font-size:8.5pt; }
   .tres{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:4mm; margin-top:2mm; }
   .tar{ border:1px solid var(--line); border-radius:3mm; padding:4mm; font-size:9.5pt; }
-  .tar b{ display:block; color:var(--vd); margin-bottom:1mm; }
+  /* Sólo la PRIMERA negrita es el título de la tarjeta. Sin el :first-child,
+     una negrita dentro del texto también se volvía bloque y el punto final
+     quedaba solo en el renglón de abajo. */
+  .tar > b:first-child{ display:block; color:var(--vd); margin-bottom:1mm; }
+  .tar b{ color:var(--vd); }
   .vitrina{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:5mm; margin:4mm 0 2mm; }
   .vitrina figure{ margin:0; }
   .vitrina img{ width:100%; display:block; border:1px solid var(--line); border-radius:3mm; height:88mm;
@@ -59,56 +79,39 @@
            font-weight:800; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
 </style></head><body>
 
-<!-- ═══════════ HOJA 1 · QUÉ ES URUKU ═══════════ -->
-<div class="pag">
-  <p class="marca">URUKU &middot; AGENTE DE CAMPO &middot; SANTA CRUZ</p>
-  <h1>Qué estás construyendo</h1>
-  <p class="sub">URUKU es el directorio de los comercios de una ciudad: <b>qué vende cada local,
-    dónde queda, a qué hora abre y cómo se le escribe.</b><br>
-    Santa Cruz arranca de cero, y eso lo armás vos.</p>
+<!-- ═══════════ HOJA 1 · ENTRAR Y CARGAR ═══════════
+     Entrar va PRIMERO, antes de contarle qué es URUKU: lo primero que
+     necesita alguien que arranca hoy es poder abrir la aplicación. El resto
+     se entiende mejor después, cuando ya vio la pantalla por dentro.
 
-  <div class="vitrina">
-    <figure><img src="4-home.png"><figcaption><b>La portada</b>Lo primero que ve el comprador</figcaption></figure>
-    <figure><img src="5-resultados.png"><figcaption><b>La búsqueda</b>Busca «zapatillas» y le aparecen los locales</figcaption></figure>
-    <figure><img src="6-mapa.png"><figcaption><b>El mapa</b>Cada punto es un negocio cargado</figcaption></figure>
-  </div>
-
-  <p style="text-align:center; margin:5mm 0 6mm"><span class="url">uruku.bo</span></p>
-
-  <div class="caja">
-    <b>Cada comercio que cargás es un punto más en ese mapa.</b><br>
-    Sin foto no se reconoce, sin ubicación no se llega, y sin nombre no se busca. Por eso el
-    primer recorrido junta esas tres cosas y nada más: es lo único que no se puede conseguir
-    después por teléfono.
-  </div>
-
-  <p class="pie">URUKU &middot; Santa Cruz &middot; Hoja 1 de 4</p>
-</div>
-
-<!-- ═══════════ HOJA 2 · CÓMO SE CARGA ═══════════ -->
-<div class="pag">
-  <p class="marca">URUKU &middot; AGENTE DE CAMPO</p>
-  <h1>Cómo cargar un comercio</h1>
-  <p class="sub">Tres cosas: <b>foto, ubicación y nombre.</b> Nada más.</p>
-
-  <div class="caja alerta">
-    <b>La regla que más importa</b><br>
-    Tomá la ubicación <b>parada frente a cada local</b>. Cuando hay muchos comercios pegados
-    uno al lado del otro, es lo único que permite distinguir cuál es cuál después.
-  </div>
+     Va `apretada` porque las dos capturas de esta hoja tienen alto fijo
+     (58 y 92 mm) y entre las dos se comen la mitad de la página: sin apretar
+     los recuadros, la hoja se pasa de A4 por dos milímetros y el pie se va
+     solo a una página en blanco. -->
+<div class="pag apretada">
+  <p class="marca">URUKU &middot; AGENTE DE CAMPO &middot; {{CIUDAD_MAYUS}}</p>
+  <h1>Empezá acá</h1>
+  <p class="sub">Tres cosas por comercio: <b>foto, ubicación y nombre.</b> Nada más
+    &mdash; cada uno te lleva menos de un minuto.</p>
 
   <div class="paso">
-    <div class="shot corta"><img src="1-login.png"></div>
+    <div class="shot corta"><img src="{{LOGIN_PNG}}"></div>
     <div>
       <h2><span class="n">1</span> Entrar</h2>
       <p style="margin:2mm 0 0">Abrí <span class="dato">uruku.bo/publicar</span> en el celular.</p>
       <ul>
-        <li>Usuario: <span class="dato">claudia@uruku.bo</span></li>
+        <li>Usuario: <span class="dato">{{MAIL}}</span></li>
         <li>Contraseña: <b>la que te mandé por WhatsApp</b></li>
       </ul>
       <p style="margin:2.5mm 0 0" class="op">Entrás una sola vez. Si el navegador te ofrece
         <b>&laquo;Agregar a pantalla de inicio&raquo;</b>, aceptá &mdash; se abre como una app.</p>
     </div>
+  </div>
+
+  <div class="caja alerta">
+    <b>La regla que más importa</b><br>
+    Tomá la ubicación <b>{{PARADO}} frente a cada local</b>. Cuando hay muchos comercios pegados
+    uno al lado del otro, es lo único que permite distinguir cuál es cuál después.
   </div>
 
   <div class="paso">
@@ -137,7 +140,33 @@
     vereda. El que llegue después con el celular en la mano tiene que poder reconocerlo al pasar.
   </div>
 
-  <p class="pie">URUKU &middot; Santa Cruz &middot; Hoja 2 de 4</p>
+  <p class="pie">URUKU &middot; {{CIUDAD}} &middot; Hoja 1 de 4</p>
+</div>
+
+<!-- ═══════════ HOJA 2 · QUÉ ES URUKU ═══════════ -->
+<div class="pag">
+  <p class="marca">URUKU &middot; AGENTE DE CAMPO</p>
+  <h1>Qué estás construyendo</h1>
+  <p class="sub">URUKU es el directorio de los comercios de una ciudad: <b>qué vende cada local,
+    dónde queda, a qué hora abre y cómo se le escribe.</b><br>
+    {{CIUDAD}} arranca de cero, y eso lo armás vos.</p>
+
+  <div class="vitrina">
+    <figure><img src="4-home.png"><figcaption><b>La portada</b>Lo primero que ve el comprador</figcaption></figure>
+    <figure><img src="5-resultados.png"><figcaption><b>La búsqueda</b>Busca «zapatillas» y le aparecen los locales</figcaption></figure>
+    <figure><img src="6-mapa.png"><figcaption><b>El mapa</b>Cada punto es un negocio cargado</figcaption></figure>
+  </div>
+
+  <p style="text-align:center; margin:5mm 0 6mm"><span class="url">uruku.bo</span></p>
+
+  <div class="caja">
+    <b>Cada comercio que cargás es un punto más en ese mapa.</b><br>
+    Sin foto no se reconoce, sin ubicación no se llega, y sin nombre no se busca. Por eso el
+    primer recorrido junta esas tres cosas y nada más: es lo único que no se puede conseguir
+    después por teléfono.
+  </div>
+
+  <p class="pie">URUKU &middot; {{CIUDAD}} &middot; Hoja 2 de 4</p>
 </div>
 
 <!-- ═══════════ HOJA 3 · LOS PRIMEROS 10 DÍAS ═══════════ -->
@@ -189,11 +218,11 @@
   <div class="num"><span class="b">1</span><div><b>Cómo hacen para vender.</b> ¿Tienen cartel con
     Instagram o WhatsApp? ¿Reparten volantes? ¿Tienen catálogo? ¿Venden sólo en el local o también
     mandan? Eso define qué les vamos a ofrecer después.</div></div>
-  <div class="num"><span class="b">2</span><div><b>Quién les compra.</b> ¿Sólo gente de Santa Cruz?
+  <div class="num"><span class="b">2</span><div><b>Quién les compra.</b> ¿Sólo gente de {{CIUDAD}}?
     ¿Viene gente del interior, de otros departamentos, del exterior? Preguntale a dos o tres por
     cuadra y anotá lo que te digan.</div></div>
   <div class="num"><span class="b">3</span><div><b>Quiénes son los mejores.</b> Los mayoristas más
-    fuertes de Santa Cruz y los minoristas más conocidos. Preguntá: <i>&laquo;¿a quién le compra la
+    fuertes de {{CIUDAD}} y los minoristas más conocidos. Preguntá: <i>&laquo;¿a quién le compra la
     gente acá?&raquo;</i>. Esos son los que hay que tener sí o sí.</div></div>
 
   <div class="caja" style="margin-top:4mm">
@@ -203,7 +232,7 @@
     &laquo;calle tal, de 8 a 12 y de 15 a 19&raquo;. Yo lo cargo a todos de una vez.
   </div>
 
-  <p class="pie">URUKU &middot; Santa Cruz &middot; Hoja 3 de 4</p>
+  <p class="pie">URUKU &middot; {{CIUDAD}} &middot; Hoja 3 de 4</p>
 </div>
 
 <!-- ═══════════ HOJA 4 · LA SEGUNDA PASADA ═══════════ -->
@@ -264,6 +293,6 @@
     <li><b>Cualquier duda</b> &rarr; escribime por WhatsApp. Si es sobre un comercio, mandame la foto.</li>
   </ul>
 
-  <p class="pie">URUKU &middot; Santa Cruz &middot; Hoja 4 de 4 &middot; uruku.bo</p>
+  <p class="pie">URUKU &middot; {{CIUDAD}} &middot; Hoja 4 de 4 &middot; uruku.bo</p>
 </div>
 </body></html>
