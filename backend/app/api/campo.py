@@ -423,13 +423,33 @@ def _propio_o_404(repo: Repo, comercio_id: str, agente: dict) -> dict:
 
 
 class _EditarComercioBody(BaseModel):
+    """Lo que el agente puede corregir desde la calle.
+
+    Creció con la segunda pasada: el alta deja lo mínimo —foto, GPS, rubro— y
+    todo lo demás se carga en la segunda visita, con el dueño presente. Antes
+    estos campos sólo se podían tocar desde el panel, o sea nunca, porque quien
+    está frente al comerciante es el agente y no el administrador.
+    """
     nombre: str | None = None
     whatsapp: str | None = None
+    #: El segundo número: el fijo del local, o el celular de quien atiende.
+    telefono: str | None = None
     email: str | None = None
     modalidad: str | None = None
     direccion: str | None = None
     prod_obs_human: str | None = None
     rubro_slugs: list[str] | None = None
+    #: Dentro de qué mercado o galería, y en qué puesto. En Bermejo es lo que
+    #: de verdad permite encontrar un local: no tiene altura de calle.
+    lugar_id: str | None = None
+    puesto: str | None = None
+    instagram_url: str | None = None
+    facebook_url: str | None = None
+    tiktok_url: str | None = None
+    sitio_web: str | None = None
+    #: Su propio canal de WhatsApp (0133), no el de URUKU.
+    canal_wa_url: str | None = None
+    catalogo_url: str | None = None
 
 
 @router.patch("/campo/mis-comercios/{comercio_id}")
@@ -439,11 +459,15 @@ def editar_mi_comercio(
     agente: dict = Depends(auth.require_agente),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """El agente edita un comercio que él mismo cargó (no puede tocar otros)."""
+    """El agente corrige un comercio de SU CIUDAD, parado en la puerta."""
     _propio_o_404(repo, comercio_id, agente)
     if body.modalidad is not None and body.modalidad not in _MODALIDADES:
         raise HTTPException(status_code=400, detail=f"modalidad inválida: {body.modalidad}")
     patch = body.model_dump(exclude_unset=True, exclude={"rubro_slugs"})
+    # Un campo que llega VACÍO se borra, no se guarda como "". Es lo que
+    # permite deshacer: pegar mal un Instagram y después dejarlo en blanco
+    # tiene que sacarlo de la ficha, no dejar un enlace a ninguna parte.
+    patch = {k: (v if (v is None or str(v).strip()) else None) for k, v in patch.items()}
     if not patch and body.rubro_slugs is None:
         raise HTTPException(status_code=400, detail="No hay campos para actualizar")
     comercio = repo.update_comercio(comercio_id, patch, body.rubro_slugs)

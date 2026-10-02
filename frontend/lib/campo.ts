@@ -181,7 +181,16 @@ export async function misComercios(): Promise<ComercioAgente[]> {
 }
 
 export type EditarComercioBody = {
-  nombre?: string; whatsapp?: string; modalidad?: string; direccion?: string; rubro_slugs?: string[];
+  nombre?: string; whatsapp?: string; modalidad?: string; direccion?: string | null; rubro_slugs?: string[];
+  // La segunda pasada: lo que se carga en la segunda visita, con el dueño
+  // presente. `null` BORRA el dato — es lo que permite deshacer una red mal
+  // pegada dejando el campo en blanco.
+  telefono?: string | null; email?: string | null;
+  prod_obs_human?: string | null;
+  lugar_id?: string | null; puesto?: string | null;
+  instagram_url?: string | null; facebook_url?: string | null;
+  tiktok_url?: string | null; sitio_web?: string | null;
+  canal_wa_url?: string | null; catalogo_url?: string | null;
 };
 
 /** Edita un comercio que este agente cargó (no puede tocar los de otro agente). */

@@ -10,6 +10,7 @@ import {
 } from "@/lib/campo";
 import { duracionVideo } from "@/lib/upload";
 import { CapturaWhatsapp } from "@/components/captura-whatsapp";
+import { SegundaPasada } from "@/components/segunda-pasada";
 import { getCiudades, getRubros } from "@/lib/data";
 import type { Ciudad, Rubro } from "@/lib/types";
 import { Pin, User, Arrow, Edit } from "@/components/icons";
@@ -874,6 +875,14 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           />
         )}
 
+        {/* LA SEGUNDA PASADA. Todo lo que salió del formulario de la calle —
+            sus números, la modalidad, la galería, qué vende, el catálogo, las
+            redes— más lo que antes no se podía cargar desde el campo y había
+            que pedirle al administrador. Va después del WhatsApp porque es la
+            charla que sigue, y antes de las fotos porque son datos que se
+            dictan mientras el otro está enfrente. */}
+        {altaId && <SegundaPasada comercioId={altaId} lugares={lugares} />}
+
         {altaId && (
           <div style={{ textAlign: "left", marginBottom: 12, padding: 10, borderRadius: 12, background: "var(--panel)", border: "1px solid var(--stroke)" }}>
             <p style={{ color: "var(--txt-2)", fontSize: 12.5, marginBottom: 8 }}>📸 Fotos y videos del local</p>
@@ -1015,37 +1024,13 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
         {/* ── Nombre ── */}
         <input className="adm-input" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre del cartel (si no tiene, dejalo vacío)" />
 
-        {/* El WhatsApp está EN LOS DOS LADOS a propósito, y no es una
-            duplicación por olvido: depende de cómo se dé la conversación. A
-            veces el dueño está ahí y lo dicta enseguida, y entonces esto es el
-            camino corto; otras veces el agente releva el local primero y recién
-            después se pone a hablar, y el número aparece al final de esa charla
-            — para ese caso está <CapturaWhatsapp /> en la pantalla siguiente,
-            que además le muestra a la persona para qué se lo están pidiendo.
-            Si se carga acá, allá aparece ya guardado y se puede corregir. */}
-        <div>
-          <label className="campo-lbl">WhatsApp del comercio (opcional)</label>
-          <div className="cel-wrap">
-            <button type="button" className="cel-flag" title="Tocar para cambiar de país"
-              onClick={() => setPrefijo((p) => (p === "591" ? "549" : "591"))}
-              style={{ cursor: "pointer", border: "none" }}>
-              {prefijo === "549" ? "🇦🇷" : "🇧🇴"} +{prefijo} ⇄
-            </button>
-            <input className="adm-input" type="tel" inputMode="numeric" value={f.cel}
-              onChange={(e) => set("cel", e.target.value)} placeholder={prefijo === "549" ? "3514XXXXXX" : "7XXXXXXX"} />
-          </div>
-          <p className="campo-hint">Si todavía no se lo pediste, podés cargarlo en la pantalla siguiente.</p>
-        </div>
-
-        {/* ── Modalidad ── */}
-        <div>
-          <label className="campo-lbl">¿Vende por mayor o menor?</label>
-          <div className="seg">
-            {MODALIDADES.map((m) => (
-              <button type="button" key={m.key} className={f.modalidad === m.key ? "active" : ""} onClick={() => set("modalidad", m.key)}>{m.label}</button>
-            ))}
-          </div>
-        </div>
+        {/* El WhatsApp, la modalidad, la galería, los productos y la
+            referencia salieron de acá el 2/10 y están en la pantalla
+            siguiente. El motivo: el agente carga PARADO en la vereda, con el
+            dueño atendiendo, y una pantalla larga hace que se saltee la mitad
+            — incluida la foto, que es lo único que no se puede pedir después
+            por teléfono. La primera pasada deja lo que sólo se puede tomar
+            estando ahí: foto, GPS y rubro. El resto es la segunda visita. */}
 
         {/* ── GPS ── */}
         <div>
@@ -1055,27 +1040,6 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           </button>
           {coords && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>📍 {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} (±{coords.acc} m)</div>}
           {geoMsg && <PermisoUbicacion mensaje={geoMsg} onPedir={ubicar} motivo="Para ubicar el comercio en el mapa" />}
-        </div>
-
-        {/* ── ¿Dentro de un mercado / galería? ── */}
-        <div>
-          <label className="campo-lbl">¿Está dentro de un mercado o galería? (opcional)</label>
-          <select className="adm-input" value={lugarId} onChange={(e) => setLugarId(e.target.value)}>
-            <option value="">No — local a la calle</option>
-            {lugares.map((l) => <option key={l.id} value={l.id}>🏬 {l.nombre}{l.n_comercios ? ` (${l.n_comercios})` : ""}</option>)}
-            <option value="__nuevo__">➕ Crear nuevo mercado/galería…</option>
-          </select>
-          {lugarId === "__nuevo__" && (
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <input className="adm-input" style={{ flex: 1 }} value={nuevoLugar} onChange={(e) => setNuevoLugar(e.target.value)} placeholder="Nombre (ej: Mercado Central)" />
-              <button type="button" className="btn btn-ghost" style={{ whiteSpace: "nowrap" }} disabled={creandoLugar || !nuevoLugar.trim()} onClick={crearNuevoLugar}>
-                {creandoLugar ? "Creando…" : "Crear"}
-              </button>
-            </div>
-          )}
-          {lugarId && lugarId !== "__nuevo__" && (
-            <input className="adm-input" style={{ marginTop: 8 }} value={puesto} onChange={(e) => setPuesto(e.target.value)} placeholder="N° de puesto / local (opcional)" />
-          )}
         </div>
 
         {/* ── Foto ── */}
@@ -1089,23 +1053,6 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           {!comprimiendo && foto && <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>{(foto.size / 1024).toFixed(0)} KB</div>}
           <div style={{ fontSize: 12, color: "var(--neon)", marginTop: 8 }}>📸🎬 Después de guardar vas a poder sumar <b>más fotos y videos</b> del local.</div>
         </div>
-
-        {/* ── Productos observados: OPCIONAL. Lo importante son las fotos: de
-               ahí se detectan después los productos, el rubro y la descripción.
-               Por eso este bloque va DESPUÉS de la foto y no antes. ── */}
-        <div>
-          <label className="campo-lbl">¿Qué productos ves? (opcional)</label>
-          <textarea className="adm-input" rows={2} value={f.prodObs}
-            onChange={(e) => set("prodObs", e.target.value)}
-            placeholder="Ej: zapatillas, championes, chinelas" style={{ resize: "vertical" }} />
-          <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 4, lineHeight: 1.4 }}>
-            Sólo si lo tenés a mano. Lo que escribas acá queda como dato tuyo y no
-            se sobrescribe.
-          </div>
-        </div>
-
-        <input className="adm-input" value={f.direccion} onChange={(e) => set("direccion", e.target.value)}
-          placeholder="Punto de referencia (ej: frente a la plaza, al lado de la farmacia)" />
 
         <label style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13.5, color: "var(--txt-2)" }}>
           <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
