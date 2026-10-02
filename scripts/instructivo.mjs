@@ -6,6 +6,10 @@
  *
  * Sale en `docs/URUKU-Instructivo-<Nombre>.pdf`.
  *
+ * SE CORRE EN LA MÁQUINA DE DESARROLLO, no en el VPS. El servidor sirve el
+ * sitio y nada más: no tiene node, ni el navegador que imprime el PDF, ni
+ * falta que los tenga. El PDF se arma acá y se manda por WhatsApp.
+ *
  * POR QUÉ EXISTE
  * ==============
  * El instructivo es el mismo para todos: lo que cambia son la ciudad, el
