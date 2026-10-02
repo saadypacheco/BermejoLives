@@ -73,7 +73,7 @@ function LoginGate({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
       <Nav mapOnly />
       <div className="wrap" style={{ maxWidth: 420, paddingTop: 56 }}>
         <span className="eyebrow"><span className="dot-live" /> Mi negocio</span>
-        <h1 style={{ fontSize: 28, margin: "10px 0 6px" }}>Entrá a tu panel</h1>
+        <h1 style={{ fontSize: 28, margin: "10px 0 6px" }}>Entrá a tu negocio en URUKU</h1>
         <p style={{ color: "var(--txt-3)", marginBottom: 20 }}>Gestioná tu comercio, ofertas y suscripción.</p>
         <form onSubmit={submit} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
           <input className="adm-input" type="email" inputMode="email" autoCapitalize="none"

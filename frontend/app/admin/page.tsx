@@ -56,7 +56,9 @@ import { Check, X, Edit, Pin, WhatsApp, Verified } from "@/components/icons";
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
-  const [email, setEmail] = useState("admin@bermejolive.com");
+  // Vacío a propósito: un correo precargado que no es el tuyo se manda igual
+  // y da «credenciales incorrectas» sin que nadie mire el campo.
+  const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
   const [tab, setTab] = useState<"publicaciones" | "comercios" | "lugares" | "adornos" | "catalogo" | "importados" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero" | "vencimientos" | "rubros" | "revision-rubros" | "whatsapp" | "difusion" | "demanda" | "ayuda" | "planes" | "compradores" | "equipo">("comercios");
@@ -259,18 +261,17 @@ export default function AdminPage() {
     return (
       <div className="wrap" style={{ maxWidth: 420, paddingTop: 100 }}>
         <Link className="brand" href="/" style={{ marginBottom: 30, display: "inline-flex" }}>
-          <b style={{ fontSize: 22 }}>BER<i style={{ color: "var(--neon)", fontStyle: "normal" }}>MEJO</i></b>
+          <b style={{ fontSize: 22, letterSpacing: ".02em" }}>URU<i style={{ color: "var(--neon)", fontStyle: "normal" }}>KU</i></b>
         </Link>
-        <h1 style={{ fontSize: 26, marginBottom: 6 }}>Panel de moderación</h1>
-        <p style={{ color: "var(--txt-3)", marginBottom: 24 }}>Ingresá para revisar las publicaciones que llegan por WhatsApp.</p>
+        <h1 style={{ fontSize: 26, marginBottom: 6 }}>Panel de URUKU</h1>
+        <p style={{ color: "var(--txt-3)", marginBottom: 24 }}>Comercios, publicaciones y contenido del sitio.</p>
         <form onSubmit={doLogin} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
           <input className="adm-input" type="email" inputMode="email" autoCapitalize="none"
                  autoCorrect="off" spellCheck={false} autoComplete="username"
-                 value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
+                 value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tunombre@uruku.bo" />
           <input className="adm-input" type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Contraseña" />
           {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
           <button className="btn btn-primary" type="submit">Entrar</button>
-          <small style={{ color: "var(--txt-3)" }}>Demo: admin@bermejolive.com / bermejo1234</small>
         </form>
       </div>
     );
@@ -280,7 +281,7 @@ export default function AdminPage() {
     <div className="admin-main" style={{ maxWidth: 1000, margin: "0 auto" }}>
       <div className="admin-top">
         <div>
-          <h1>Panel de moderación</h1>
+          <h1>Panel de URUKU</h1>
           <p>Publicaciones por WhatsApp y comercios cargados en el recorrido</p>
         </div>
         <Link className="btn btn-ghost btn-sm" href="/">Ver sitio</Link>

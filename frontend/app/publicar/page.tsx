@@ -415,12 +415,12 @@ function Login({ onOk }: { onOk: () => void }) {
   return (
     <div className="campo-wrap">
       <span className="eyebrow"><User style={{ width: 14, height: 14 }} /> Agente de campo</span>
-      <h1 style={{ fontSize: 26, margin: "8px 0 4px" }}>Carga de comercios</h1>
+      <h1 style={{ fontSize: 26, margin: "8px 0 4px" }}>URUKU · Carga de comercios</h1>
       <p style={{ color: "var(--txt-3)", marginBottom: 20, fontSize: 14 }}>Ingresá para registrar comercios, hoteles, casas de cambio y más.</p>
       <form onSubmit={submit} className="glass" style={{ padding: 20, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
         <input className="adm-input" type="email" inputMode="email" autoCapitalize="none"
                  autoCorrect="off" spellCheck={false} autoComplete="username"
-                 value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
+                 value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tunombre@uruku.bo" />
         <input className="adm-input" type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Contraseña" />
         {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
         <button className="btn btn-primary" type="submit">Entrar</button>

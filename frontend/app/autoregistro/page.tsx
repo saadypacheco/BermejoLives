@@ -94,7 +94,7 @@ function LoginForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
 }
 
 function LoginConEmail({ onVolver, onLogged }: { onVolver: () => void; onLogged: (s: ComercioSession) => void }) {
-  const [email, setEmail] = useState("abc@bermejolive.com");
+  const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
 
@@ -116,9 +116,6 @@ function LoginConEmail({ onVolver, onLogged }: { onVolver: () => void; onLogged:
       <button type="button" onClick={onVolver} style={{ background: "none", border: "none", color: "var(--txt-3)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}>
         ← Entrar con WhatsApp en cambio
       </button>
-      <small style={{ color: "var(--txt-3)" }}>
-        Demo: abc@bermejolive.com (confiable) · moda@bermejolive.com (moderación) · clave: comercio1234
-      </small>
     </form>
   );
 }
