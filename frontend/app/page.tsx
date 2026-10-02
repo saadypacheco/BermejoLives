@@ -5,7 +5,7 @@ import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import { getClima, getCotizaciones, getFeed, getFronteraEstado, getVideosPromo } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
-import { titulo, descripcion } from "@/lib/marca";
+import { titulo, descripcion, MARCA } from "@/lib/marca";
 import { precioFmt } from "@/lib/types";
 import { formatoMonto, tasasDe } from "@/lib/cambio";
 
@@ -114,7 +114,17 @@ export async function generateMetadata(): Promise<Metadata> {
     // layout: acá el nombre ya está adentro del título.
     title: { absolute: titulo(nombre) },
     description: descripcion(nombre, frontera),
-    openGraph: { title: titulo(nombre), description: descripcion(nombre, frontera) },
+    // EL openGraph DE UNA PÁGINA REEMPLAZA AL DEL LAYOUT, no lo completa.
+    // Declarando sólo título y descripción, la home se quedaba SIN IMAGEN de
+    // vista previa —ni siteName ni locale— mientras /ofertas y /guia, que no
+    // lo declaran, la tenían. Y la home es justo la que se comparte: el
+    // enlace de uruku.bo por WhatsApp salía sin la tarjeta.
+    openGraph: {
+      title: titulo(nombre), description: descripcion(nombre, frontera),
+      siteName: MARCA, locale: "es_BO", type: "website",
+      url: "https://uruku.bo",
+      images: [{ url: "/og-image.png", width: 1200, height: 630 }],
+    },
   };
 }
 
