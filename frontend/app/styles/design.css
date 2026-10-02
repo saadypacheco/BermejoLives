@@ -45,7 +45,9 @@
 html { scroll-behavior: smooth; }
 body {
   margin: 0;
-  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  /* El panel también en Poppins: es la misma marca, la vean compradores o
+     el equipo. */
+  font-family: var(--uk-font), Poppins, "Segoe UI", system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--txt);
   -webkit-font-smoothing: antialiased;

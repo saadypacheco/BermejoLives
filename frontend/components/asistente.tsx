@@ -19,9 +19,15 @@ type Mensaje =
   | { de: "yo"; texto: string }
   | { de: "uruku"; texto: string; id?: string; fuentes?: RespuestaAsistente["fuentes"]; sugerencias?: string[]; util?: boolean | null; error?: boolean };
 
-/** La mascota de URUKU: la cara del chat. Es la misma del volante y de los
- *  videos — que el que ya la vio en la calle la reconozca en el sitio. */
-const MASCOTA = { imagen: "/mascota-uruku-160.png", grande: "/mascota-uruku.png", nombre: "la mascota de URUKU" };
+/** DAX: la cara del chat. Es la misma del volante y de los videos — que el
+ *  que ya la vio en la calle la reconozca en el sitio.
+ *
+ *  El manual de identidad le pone nombre y dos reglas: se escribe con
+ *  mayúscula y SIN artículo («Preguntale a Dax», no «a la Dax»), y habla en
+ *  primera persona. Y el glosario prohíbe «chatbot», «asistente virtual» e
+ *  «IA»: se dice Dax. Antes acá decía «la mascota de URUKU», que no es un
+ *  nombre — es una descripción, y una marca no se recuerda por su descripción. */
+const MASCOTA = { imagen: "/dax-avatar.png", grande: "/dax-avatar.png", nombre: "Dax" };
 
 const CLAVE_SESION = "uk-ayuda-sesion";
 const CLAVE_ABIERTO = "uk-ayuda-abierto";
@@ -55,7 +61,7 @@ export function Asistente({ comercio, ciudad }: { comercio?: { id: string; nombr
   const bienvenida: Mensaje = comercio
     ? { de: "uruku", texto: `Hola, soy el asistente de ${comercio.nombre}. Preguntame por horarios, precios, ofertas o cómo llegar.`,
         sugerencias: ["¿Están abiertos ahora?", "¿Qué ofertas tienen?", "¿Dónde quedan?"] }
-    : { de: "uruku", texto: `¡Hola! Soy la mascota de URUKU y conozco ${nombreCiudad} de memoria. Preguntame dónde conseguir algo, si un local está abierto, ${conGuia ? "a cuánto está el dólar" : "cómo llegar"}, o cómo publicar tu negocio.`,
+    : { de: "uruku", texto: `¡Hola! Soy Dax y conozco ${nombreCiudad} de memoria. Preguntame dónde conseguir algo, si un local está abierto, ${conGuia ? "a cuánto está el dólar" : "cómo llegar"}, o cómo publicar tu negocio.`,
         sugerencias: conGuia ? SUGERENCIAS : SUGERENCIAS_SIN_GUIA };
 
   useEffect(() => {

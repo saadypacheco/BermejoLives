@@ -33,17 +33,17 @@
   --uk-shadow-soft: 0 8px 24px rgba(0,0,0,.35);
   --uk-chip: rgba(255,255,255,.06);
   --uk-hero-fade: linear-gradient(90deg, rgba(6,20,24,.96) 0%, rgba(6,20,24,.82) 26%, rgba(6,20,24,.25) 58%, rgba(6,20,24,.05) 100%);
-  --uk-green: #177a49;
-  --uk-green-2: #0f5836;
-  --uk-green-grad: linear-gradient(135deg, #1f9256, #0f5b38);
+  --uk-green: #1D8D52;      /* manual de identidad · Color */
+  --uk-green-2: #10623E;    /* el extremo del degradé del botón */
+  --uk-green-grad: linear-gradient(180deg, #1D8D52, #10623E);
 }
 
 .uk {
   /* Acentos de marca URUKU (verde pino + rojo llama, del logo). Iguales en ambos temas. */
-  --uk-green: #177a49;
-  --uk-green-2: #0f5836;
-  --uk-green-grad: linear-gradient(135deg, #1f9256, #0f5b38);
-  --uk-red: #e0392b;              /* rojo del logo (la llama y los puntos) */
+  --uk-green: #1D8D52;      /* manual de identidad · Color */
+  --uk-green-2: #10623E;    /* el extremo del degradé del botón */
+  --uk-green-grad: linear-gradient(180deg, #1D8D52, #10623E);
+  --uk-red: #D92D2D;              /* manual · ofertas y alertas */
   --uk-orange: #e0392b;           /* alias: el sitio no usa naranja, es el rojo de marca */
   --uk-blue: #2e84d8;
   --uk-violet: #9b54d8;
@@ -56,8 +56,8 @@
              linear-gradient(180deg, #f7f2e7 0%, #f4eee1 60%, #f8f4ea 100%);
   --uk-surface: #ffffff;
   --uk-surface-2: #f6f0e4;
-  --uk-ink: #143a2b;
-  --uk-ink-soft: #5a6b60;
+  --uk-ink: #214533;        /* manual · texto principal */
+  --uk-ink-soft: #4E6053;   /* manual · texto secundario */
   --uk-line: #e8e2d4;
   --uk-header: rgba(250,246,238,.94);
   --uk-shadow: 0 16px 45px rgba(20,58,43,.10);
@@ -65,7 +65,11 @@
   --uk-chip: #eaf3ec;
   --uk-hero-fade: linear-gradient(90deg, rgba(247,242,231,.98) 0%, rgba(247,242,231,.86) 24%, rgba(247,242,231,.10) 55%, rgba(247,242,231,.02) 100%);
 
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Poppins, la fuente de la marca. La carga `next/font` en el layout y la
+     expone como --uk-font; el respaldo es por si falla la descarga. Antes acá
+     decía `system-ui`, así que URUKU se veía con Segoe UI en Windows, Roboto
+     en Android y SF en iPhone: tres marcas distintas. */
+  font-family: var(--uk-font), Poppins, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--uk-ink);
   background: var(--uk-page);
   min-height: 100vh;

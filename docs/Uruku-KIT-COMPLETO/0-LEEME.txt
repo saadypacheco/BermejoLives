@@ -1,0 +1,21 @@
+URUKU · KIT COMPLETO
+Usá las carpetas en orden. Todo lo que está acá es la versión final: verde, logo dorado, Dax, tipografía Poppins e íconos duotono verdes.
+
+1-Manual-de-marca       La identidad completa. Para consultar y para mostrar a clientes.
+2-Logos-y-Dax           Logos en SVG y las imágenes de Dax.
+3-Web                   Archivos para uruku.bo y las instrucciones para quien programa la web (PDF «0-LEER»).
+4-Perfiles-de-redes     Foto de perfil, portada de Facebook y portadas de historias destacadas.
+5-Lanzamiento           Las 9 publicaciones, las 5 historias, los textos y la guía del día del lanzamiento.
+6-Semana-1              Las piezas, los textos y la guía de la semana siguiente al lanzamiento.
+7-Plantillas-del-dia-a-dia
+    1-Cartel            Precio o dato en letras gigantes: ofertas destacadas, cambio del día, portada y cierre de videos.
+    2-Dentro-de-la-app  La pieza parece la web: buscador, resultados y chat con Dax.
+    3-Recorte           Polaroid, cinta y etiqueta roja: ofertas con onda, ticket de «Hoy en Bermejo», zócalo de video.
+    4-Ruta              Carteles de ruta y paradas: «Tu cruce de hoy», consejos y negocio de la semana.
+    En cada carpeta:   «-post» = 4:5 para el feed · «-historia» = 9:16 para historias, Reels y TikTok.
+                       «-foto-atras» = el recuadro de la foto es transparente: tu foto va abajo (Canva o CapCut).
+8-Impresos              Calcomanía de vidriera y tarjeta personal (PDF para imprenta).
+9-Calendario            Calendario de 4 semanas, banco de ideas (con la plantilla de cada idea), historias y métricas.
+
+Los valores de cambio, clima y precios de las piezas son de ejemplo: actualizalos el día que publiques.
+Para una pieza nueva con datos reales, pasame producto, precio, negocio y foto, y te la genero.

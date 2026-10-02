@@ -2,15 +2,20 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "URUKU — Comercios y ofertas en el mapa",
-    short_name: "URUKU",
-    description: "URUKU en el mapa. Reservalo en la tienda.",
+    // Sin ciudad: el manifest es uno solo para todo el dominio y la app
+    // instalada la abre gente de cualquier ciudad.
+    name: "Uruku · Comercios, ofertas y cambio del día",
+    short_name: "Uruku",
+    description: "Los comercios de tu ciudad en un solo lugar: qué se vende, cuánto cuesta y dónde queda.",
     start_url: "/",
     scope: "/", // cubre todo el dominio, incluida la futura tienda en /tienda
     display: "standalone",
     orientation: "portrait",
-    background_color: "#0d1117",
-    theme_color: "#0d1117",
+    // Los del manual de identidad. El `background_color` es lo que se ve
+    // mientras la app instalada arranca: el crema de la marca, no el casi
+    // negro que venía de la época «Bermejo dark».
+    background_color: "#F9F6ED",
+    theme_color: "#1D8D52",
     lang: "es",
     categories: ["shopping", "business", "maps"],
     // La app instalada corre en 'standalone': NO tiene barra de direcciones. Sin
@@ -41,10 +46,12 @@ export default function manifest(): MetadataRoute.Manifest {
         icons: [{ src: "/logouruku-192.png", sizes: "192x192", type: "image/png" }],
       },
     ],
+    // Los del kit de marca. `maskable` es el que Android recorta en círculo o
+    // en gota según el teléfono: tiene que ser el que trae margen de sobra, o
+    // el logo sale mordido.
     icons: [
-      { src: "/logouruku-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: "/logouruku.png", sizes: "512x512", type: "image/png", purpose: "any" },
-      // maskable queda en el ícono con margen seguro (el logo circular se recortaría en Android).
+      { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
       { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };

@@ -1,0 +1,20 @@
+:root{
+  /* Uruku · modo claro */
+  --uk-bg:#F9F6ED; --uk-card:#FFFFFF; --uk-line:#E6E2D6; --uk-chip:#ECECE1;
+  --uk-green:#1D8D52; --uk-green-deep:#10623E; --uk-green-text:#1A764C; --uk-green-soft:#E6F2EA;
+  --uk-text:#214533; --uk-text-2:#4E6053;
+  --uk-red:#D92D2D; --uk-red-soft:#FDE8E6; --uk-sky:#E3EDFA;
+  --uk-gold-a:#F6D38A; --uk-gold-b:#C98E38;            /* solo logo */
+  --uk-btn:linear-gradient(180deg,var(--uk-green),var(--uk-green-deep));
+  --uk-hero:linear-gradient(180deg,var(--uk-sky),var(--uk-bg));
+  --uk-radius-card:24px; --uk-radius-btn:16px; --uk-shadow:0 10px 30px rgba(33,69,51,.10);
+  --uk-font:Poppins,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+}
+[data-theme="dark"]{
+  /* Uruku · modo oscuro */
+  --uk-bg:#0F1713; --uk-card:#18241D; --uk-line:#2A3A31; --uk-chip:#1F2C25;
+  --uk-green:#23A060; --uk-green-deep:#178A50; --uk-green-text:#4CC985; --uk-green-soft:#1C3325;
+  --uk-text:#EEF3EF; --uk-text-2:#A7B8AD;
+  --uk-red:#F0504A; --uk-red-soft:#3A1A18; --uk-sky:#132330;
+  --uk-shadow:0 10px 30px rgba(0,0,0,.35);
+}

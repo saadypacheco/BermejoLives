@@ -80,7 +80,9 @@ export async function UrukuShell({
               abajo por nada. En el celular la tira baja sola a su renglón (ver
               el `flex-wrap` y el `order` en el CSS), que es donde entra. */}
           <div className="uk-head-top">
-            <Link href="/" className="uk-brand"><img className="uk-brand-full" src="/logouruku-wordmark.png" alt="URUKU" /></Link>
+            {/* En SVG: el PNG se veía borroso en pantallas de alta densidad y tenía
+                un velo blanco que en modo oscuro se notaba como un recuadro. */}
+            <Link href="/" className="uk-brand"><img className="uk-brand-full" src="/uruku-horizontal.svg" alt="Uruku" /></Link>
 
             <div className="uk-head-strip">
               <SocialLinks redes={redes} cls="uk-social-links" />
@@ -173,7 +175,7 @@ export async function UrukuShell({
             </div>
 
             <div className="uk-foot-bottom">
-              <Link href="/" className="uk-foot-logo"><img src="/logouruku-wordmark.png" alt="URUKU" /></Link>
+              <Link href="/" className="uk-foot-logo"><img src="/uruku-horizontal.svg" alt="Uruku" /></Link>
               <SocialLinks redes={redes} cls="uk-footer-socials" />
               <span className="uk-foot-copy">© 2026 URUKU. Todos los derechos reservados.</span>
               <span className="uk-version" title="Build en línea">{versionLabel()}</span>

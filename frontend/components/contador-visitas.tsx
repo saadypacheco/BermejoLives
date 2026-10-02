@@ -83,7 +83,14 @@ export function ContadorVisitas() {
       ruta,
       sesion: id,
       primera,
-      origen: sp?.get("ref") ?? null,
+      // `?ref=` son los QR impresos (volante, tarjeta de mesa, la ficha).
+      // `?utm_source=` es lo que van a llevar los enlaces de las redes, que
+      // es el formato que usa todo el mundo y el que el calendario de
+      // contenidos da por hecho. Se guardan en el mismo campo porque
+      // responden la misma pregunta —de dónde vino esta persona— y la
+      // pantalla de visitas ya las muestra juntas. El `ref` manda si están
+      // los dos: un QR es una pista más concreta que «instagram».
+      origen: sp?.get("ref") ?? sp?.get("utm_source") ?? null,
       referido: primera ? deDondeVino() : null,
       ciudad: ciudadDeLaCookie(),
     });

@@ -5,6 +5,7 @@ import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import { getClima, getCotizaciones, getFeed, getFronteraEstado, getVideosPromo } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
+import { titulo, descripcion } from "@/lib/marca";
 import { precioFmt } from "@/lib/types";
 import { formatoMonto, tasasDe } from "@/lib/cambio";
 
@@ -104,11 +105,16 @@ export async function generateMetadata(): Promise<Metadata> {
   const nombre = ciudad?.nombre ?? "Bermejo";
   // Cada frontera tiene su guía y su estado del paso (0124).
   const conGuia = ciudad ? (ciudad.guia_activa ?? ciudad.slug === "bermejo") : true;
+  // La descripción del manual, con la ciudad y el cierre que corresponde:
+  // «antes de cruzar» en una frontera, «antes de salir» en el resto. Una
+  // promesa de cruzar un río en Cochabamba no le habla a nadie.
+  const frontera = ciudad?.es_frontera ?? conGuia;
   return {
-    title: `URUKU — Todo ${nombre} en un solo lugar`,
-    description: conGuia
-      ? "Comercios, ofertas, cambio, servicios y la guía para tu visita a Bermejo: qué se vende, dónde, cómo llegar y el WhatsApp de cada local."
-      : `Comercios, ofertas y servicios de ${nombre}: qué se vende, dónde, cómo llegar y el WhatsApp de cada local.`,
+    // `absolute` para que no se le pegue el « · Uruku» de la plantilla del
+    // layout: acá el nombre ya está adentro del título.
+    title: { absolute: titulo(nombre) },
+    description: descripcion(nombre, frontera),
+    openGraph: { title: titulo(nombre), description: descripcion(nombre, frontera) },
   };
 }
 
