@@ -748,7 +748,7 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiu
                       <button type="button" className="uk-btn uk-btn-primary" onClick={() => setSoloOfertas(false)}>
                         Mientras tanto, ver los comercios
                       </button>
-                      <Link href="/planes" className="uk-btn-ghost">¿Tenés un negocio? Publicá tus ofertas</Link>
+                      <Link href="/autoregistro" className="uk-btn-ghost">¿Tenés un negocio? Sumalo a URUKU</Link>
                     </div>
                   </div>
                 ) : (

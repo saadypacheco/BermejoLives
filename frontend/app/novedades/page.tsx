@@ -71,7 +71,7 @@ export default async function NovedadesPage({ searchParams }: Props) {
               </p>
               <div className="uk-lanzamiento-acciones">
                 <Link href="/buscar?vista=mapa" className="uk-btn uk-btn-primary">Mientras tanto, ver los comercios</Link>
-                <Link href="/planes" className="uk-btn-ghost">¿Tenés un negocio? Publicá lo tuyo</Link>
+                <Link href="/autoregistro" className="uk-btn-ghost">¿Tenés un negocio? Sumalo a URUKU</Link>
               </div>
             </div>
           ) : (

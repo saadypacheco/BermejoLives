@@ -6,6 +6,11 @@ import { getPlanes } from "@/lib/data";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
+  // FUERA DEL SITIO (2/10). Los precios se deciden por ciudad: mostrar los de
+  // Bermejo en Santa Cruz es prometer algo que todavía no está decidido. La
+  // pantalla sigue existiendo —el trabajo no se tira— pero no se enlaza desde
+  // ningún lado, no está en el sitemap y no se indexa.
+  robots: { index: false, follow: false },
   title: "Planes para tu negocio — URUKU",
   description: "Aparecé en el mapa gratis. Después, tu negocio digitalizado, tus ofertas en las redes de URUKU y un chatbot que atiende a tus clientes.",
 };

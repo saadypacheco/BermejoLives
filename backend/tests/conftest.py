@@ -712,6 +712,10 @@ class FakeRepo:
             full["codigo"] = self._codigo_libre()
         return full
 
+    def list_comercios_de_ciudad(self, ciudad_id, limit=4000):
+        return [c for c in self.comercios.values()
+                if c.get("ciudad_id") == ciudad_id and c.get("activo", True)][:limit]
+
     def list_comercios_por_agente(self, email, limit=200):
         items = [
             c for c in self.comercios.values()

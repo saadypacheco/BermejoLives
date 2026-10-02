@@ -6,4 +6,4 @@ import { redirect } from "next/navigation";
  * promoción de lanzamiento que ya no corre. Contradecía a /planes, que es
  * donde están los planes de verdad. Queda la ruta por los volantes viejos.
  */
-export default function SoftwarePage() { redirect("/planes"); }
+export default function SoftwarePage() { redirect("/autoregistro"); }

@@ -371,18 +371,55 @@ async def lugar_video(
     return {"ok": True, "lugar": repo.update_lugar(lugar_id, {"video_url": url})}
 
 
+def _ciudad_del_agente(repo: Repo, agente: dict) -> str | None:
+    """La ciudad que tiene asignada, que el token ya trae (`make_agente_token`)."""
+    slug = (agente.get("ciudad") or "").strip()
+    return repo.get_ciudad_id(slug) if slug else None
+
+
 @router.get("/campo/mis-comercios")
 def mis_comercios(agente: dict = Depends(auth.require_agente), repo: Repo = Depends(get_repo)) -> dict:
-    """Comercios que este agente dio de alta, para que vea su propio recorrido."""
-    items = repo.list_comercios_por_agente(agente["email"])
-    return {"items": items}
+    """Los comercios de SU CIUDAD, no sólo los que cargó él.
+
+    Antes devolvía únicamente los propios, y eso rompía dos cosas en la calle:
+
+      · Parado en una cuadra, el agente no podía ver si el local de enfrente ya
+        estaba cargado. Entonces lo cargaba de nuevo, y quedaban dos fichas del
+        mismo negocio — cosa que recién se descubre mirando el panel.
+
+      · No podía mostrarle al comerciante lo que URUKU ya tiene de él, que es
+        justo con lo que arranca la conversación de venta.
+
+    Con dos agentes por ciudad el problema se duplica. La ciudad es la unidad
+    de trabajo, no el agente: por eso se ve todo lo de la ciudad y se puede
+    corregir todo lo de la ciudad.
+    """
+    ciudad_id = _ciudad_del_agente(repo, agente)
+    if not ciudad_id:
+        # Sin ciudad asignada no se puede acotar, y devolver TODO el país sería
+        # peor: mejor lo propio, que es lo que había antes.
+        logger.warning("campo.agente_sin_ciudad", agente=agente.get("email"))
+        return {"items": repo.list_comercios_por_agente(agente["email"]), "ciudad": None}
+    return {"items": repo.list_comercios_de_ciudad(ciudad_id), "ciudad": agente.get("ciudad")}
 
 
 def _propio_o_404(repo: Repo, comercio_id: str, agente: dict) -> dict:
+    """Puede tocar lo de SU CIUDAD, lo haya cargado él o el otro agente.
+
+    El dueño de la ficha es la ciudad, no quien la cargó primero: si el agente
+    está parado en el local y el horario está mal, tiene que poder arreglarlo
+    ahí, sea quien sea que lo haya dado de alta. Lo que sigue cerrado es la
+    ciudad ajena.
+    """
     comercio = repo.get_comercio(comercio_id)
-    if not comercio or comercio.get("cargado_por") != agente["email"]:
+    if not comercio:
         raise HTTPException(status_code=404, detail="Comercio no encontrado")
-    return comercio
+    if comercio.get("cargado_por") == agente["email"]:
+        return comercio
+    ciudad_id = _ciudad_del_agente(repo, agente)
+    if ciudad_id and comercio.get("ciudad_id") == ciudad_id:
+        return comercio
+    raise HTTPException(status_code=404, detail="Comercio no encontrado")
 
 
 class _EditarComercioBody(BaseModel):

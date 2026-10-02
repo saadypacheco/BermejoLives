@@ -39,7 +39,7 @@ function QueOfrecemos() {
         <li>📍 Tu negocio aparece en el mapa y en el buscador.</li>
         <li>📢 Publicás ofertas mandando una foto por WhatsApp.</li>
         <li>💬 El comprador te escribe directo a tu WhatsApp.</li>
-        <li>🚀 Con <a href="/planes" target="_blank" rel="noopener">los planes</a>: ficha completa, tus ofertas en las redes de URUKU y un chatbot que atiende por vos.</li>
+        <li>🚀 Con <a href="/autoregistro" rel="noopener">las funciones para comercios</a>: ficha completa, tus ofertas en las redes de URUKU y un chatbot que atiende por vos.</li>
         <li>💰 Sin comisiones por venta.</li>
       </ul>
     </div>

@@ -256,7 +256,7 @@ export default async function InicioPage() {
             </p>
             <div className="uk-lanzamiento-acciones">
               <Link href="/buscar?vista=mapa" className="uk-btn uk-btn-primary">Mientras tanto, mirá los comercios</Link>
-              <Link href="/planes" className="uk-btn-ghost">¿Tenés un negocio? Publicá tus ofertas</Link>
+              <Link href="/autoregistro" className="uk-btn-ghost">¿Tenés un negocio? Sumalo a URUKU</Link>
             </div>
           </div>
         </section>

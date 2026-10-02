@@ -6,6 +6,7 @@ import {
   misComercios, editarComercioAgente, eliminarComercioAgente, actualizarFotoComercioAgente, type ComercioAgente,
   listarFotosCampo, listarVideosCampo, subirFotoCampo, subirVideoCampo, borrarFotoCampo, borrarVideoCampo,
   listarLugares, crearLugar, editarLugar, subirPortadaLugar, subirVideoLugar, type Lugar,
+  getAgenteEmail,
 } from "@/lib/campo";
 import { duracionVideo } from "@/lib/upload";
 import { CapturaWhatsapp } from "@/components/captura-whatsapp";
@@ -69,7 +70,20 @@ function agenteIncompleto(c: ComercioAgente): string[] {
   return r;
 }
 
-type FiltroAg = "todos" | "pendientes" | "verificados" | "incompletos";
+type FiltroAg = "cerca" | "todos" | "pendientes" | "verificados" | "incompletos";
+
+/** Metros entre dos puntos. Plana: a 300 m la curvatura de la Tierra no cambia
+ *  nada y evita trigonometría por cada comercio en un celular viejo. */
+function metros(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const kx = 111320 * Math.cos((aLat * Math.PI) / 180);
+  const dx = (aLng - bLng) * kx;
+  const dy = (aLat - bLat) * 110540;
+  return Math.hypot(dx, dy);
+}
+
+/** Hasta dónde llega «cerca mío»: media cuadra para cada lado. Más que esto y
+ *  en una galería aparecen los sesenta puestos del pasillo de al lado. */
+const RADIO_CERCA_M = 120;
 type OrdenAg = "recientes" | "alfabetico" | "estado";
 
 function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: () => void }) {
@@ -80,6 +94,27 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
   const [borrando, setBorrando] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [filtro, setFiltro] = useState<FiltroAg>("todos");
+  // DÓNDE ESTOY PARADO. Es lo que convierte la lista en una herramienta de
+  // vereda: el agente ve los locales de esa cuadra —los haya cargado él o el
+  // otro agente de la ciudad—, se los muestra al comerciante y corrige ahí
+  // mismo lo que esté mal. Sin esto hay que acordarse del nombre para buscarlo.
+  const emailAgente = getAgenteEmail();
+  const [aqui, setAqui] = useState<{ lat: number; lng: number } | null>(null);
+  const [geoErr, setGeoErr] = useState("");
+  const [buscandoGeo, setBuscandoGeo] = useState(false);
+
+  function ubicarme(activar = true) {
+    if (!("geolocation" in navigator)) { setGeoErr("Este teléfono no da la ubicación."); return; }
+    setGeoErr(""); setBuscandoGeo(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => { setAqui({ lat: p.coords.latitude, lng: p.coords.longitude }); setBuscandoGeo(false); if (activar) setFiltro("cerca"); },
+      // El permiso denegado se DICE. Un botón que no hace nada parece roto.
+      (e) => { setBuscandoGeo(false); setGeoErr(e.code === 1
+        ? "Diste que no al permiso de ubicación. Activalo en el candado de la barra de direcciones y volvé a tocar."
+        : "No se pudo tomar la ubicación. Probá al aire libre."); },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 },
+    );
+  }
   const [orden, setOrden] = useState<OrdenAg>("recientes");
   const [vista, setVista] = useState<"lista" | "mapa">("lista");
   const [limitVis, setLimitVis] = useState(50);
@@ -114,9 +149,20 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
     if (orden === "estado") return Number(a.verificado) - Number(b.verificado);
     return (b.created_at ?? "").localeCompare(a.created_at ?? "");
   });
-  const visibles = filtradas.slice(0, limitVis);
+  // «Cerca» ordena por distancia, no por fecha: lo primero de la lista tiene
+  // que ser el local que el agente tiene delante.
+  const conDistancia = aqui
+    ? filtradas
+        .map((c) => ({ c, d: c.lat != null && c.lng != null ? metros(aqui.lat, aqui.lng, c.lat, c.lng) : Infinity }))
+        .sort((x, y) => x.d - y.d)
+    : filtradas.map((c) => ({ c, d: Infinity }));
+  const listaFinal = filtro === "cerca" ? conDistancia.filter((x) => x.d <= RADIO_CERCA_M) : conDistancia;
+  const visibles = (filtro === "cerca" ? listaFinal : conDistancia).slice(0, limitVis).map((x) => x.c);
+  const distanciaDe = new Map(conDistancia.map((x) => [x.c.id, x.d]));
 
+  const nCerca = aqui ? conDistancia.filter((x) => x.d <= RADIO_CERCA_M).length : 0;
   const chips: { key: FiltroAg; label: string; n: number; amber?: boolean }[] = [
+    { key: "cerca", label: buscandoGeo ? "📍 Ubicando…" : "📍 Acá", n: nCerca },
     { key: "todos", label: "Todos", n: todos.length },
     { key: "pendientes", label: "Pendientes", n: nPend },
     { key: "verificados", label: "Verificados", n: nVerificados },
@@ -127,7 +173,7 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
     <div className="campo-wrap">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <div>
-          <span className="eyebrow"><Pin style={{ width: 13, height: 13 }} /> Mis comercios cargados</span>
+          <span className="eyebrow"><Pin style={{ width: 13, height: 13 }} /> Comercios de mi ciudad</span>
           {items && <div style={{ fontSize: 12, color: "var(--neon)" }}>{items.length} en total</div>}
         </div>
         <button className="link-more" onClick={onLogout} style={{ padding: "6px 12px" }}>Salir</button>
@@ -163,11 +209,14 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
 
       {/* Filtros por estado (B: incluye Incompletos) */}
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+        {/* La ubicación se pide al tocar «Acá», no al abrir la pantalla: un
+            permiso que salta solo al entrar se rechaza, y después hay que
+            explicarle a alguien cómo desbloquearlo desde el candado. */}
         {chips.map(({ key, label, n, amber }) => {
           const activo = filtro === key;
           const col = amber ? "var(--amber)" : "var(--neon)";
           return (
-            <button key={key} onClick={() => setFiltro(key)}
+            <button key={key} onClick={() => { if (key === "cerca" && !aqui) ubicarme(); else setFiltro(key); }}
               style={{ padding: "5px 12px", borderRadius: 20, border: "1px solid", fontSize: 12.5,
                 borderColor: activo ? col : "var(--stroke)",
                 background: activo ? "rgba(57,255,158,.10)" : "transparent",
@@ -215,7 +264,19 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nombre || "Sin nombre"}</div>
-                  <div style={{ fontSize: 12.5, color: "var(--txt-3)" }}>{c.rubros?.nombre ?? "Sin rubro"}{c.lugares?.nombre ? ` · 🏬 ${c.lugares.nombre}${c.puesto ? ` #${c.puesto}` : ""}` : c.direccion ? ` · ${c.direccion}` : ""}</div>
+                  <div style={{ fontSize: 12.5, color: "var(--txt-3)" }}>{c.rubros?.nombre ?? "Sin rubro"}{c.lugares?.nombre ? ` · 🏬 ${c.lugares.nombre}${c.puesto ? ` #${c.puesto}` : ""}` : c.calle ? ` · ${c.calle}` : c.direccion ? ` · ${c.direccion}` : ""}</div>
+                  {/* A cuántos pasos está. Es lo que permite reconocer en la
+                      vereda cuál de los tres locales de ropa es éste. */}
+                  {aqui && Number.isFinite(distanciaDe.get(c.id) ?? Infinity) && (
+                    <div style={{ fontSize: 11.5, color: "var(--neon)", fontWeight: 700 }}>
+                      a {Math.round(distanciaDe.get(c.id) as number)} m
+                    </div>
+                  )}
+                  {/* De quién es la ficha: con dos agentes por ciudad, saber si
+                      la cargó el otro evita «esto no lo hice yo, ¿lo toco?». */}
+                  {c.cargado_por && c.cargado_por !== emailAgente && (
+                    <div style={{ fontSize: 11, color: "var(--txt-3)" }}>cargado por {c.cargado_por.split("@")[0]}</div>
+                  )}
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: c.verificado ? "var(--neon)" : "var(--amber)", background: c.verificado ? "rgba(57,255,158,.12)" : "rgba(255,176,32,.12)" }}>
                   {c.verificado ? "Verificado" : "Pendiente"}

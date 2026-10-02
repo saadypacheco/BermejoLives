@@ -3,6 +3,24 @@ import { postFormData, subirConProgreso } from "@/lib/upload";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_agente_token";
 
+/** El email del agente, sacado del token. Sirve para distinguir en la lista
+ *  las fichas propias de las del otro agente de la misma ciudad.
+ *
+ *  Es sólo para mostrar: lo que decide qué puede tocar lo valida el backend
+ *  contra el token firmado, no esto. */
+export function getAgenteEmail(): string | null {
+  const t = getAgenteToken();
+  if (!t) return null;
+  try {
+    const cuerpo = t.split(".")[1];
+    if (!cuerpo) return null;
+    const json = JSON.parse(atob(cuerpo.replace(/-/g, "+").replace(/_/g, "/")));
+    return (json.sub || json.email || null) as string | null;
+  } catch {
+    return null;   // token raro: no mostrar nada es mejor que romper la lista
+  }
+}
+
 export function getAgenteToken(): string | null {
   return typeof window === "undefined" ? null : localStorage.getItem(TOKEN_KEY);
 }
@@ -133,13 +151,23 @@ export async function altaComercioCampo(form: FormData): Promise<AltaCampoResult
 export type ComercioAgente = {
   id: string; slug: string; nombre: string; whatsapp: string | null; telefono: string | null; modalidad: string | null;
   direccion: string | null; lat: number | null; lng: number | null;
+  /** La calle deducida del GPS (0127). Casi ningún comercio tiene dirección
+   *  tipeada, así que en la lista es lo único que dice dónde queda. */
+  calle?: string | null;
+  horario?: string | null;
+  sin_cartel?: boolean;
+  /** Quién lo dio de alta. Con dos agentes por ciudad, saber que la ficha es
+   *  del otro evita la duda de «esto no lo cargué yo, ¿lo puedo tocar?». */
+  cargado_por?: string | null;
   portada_url: string | null; portada_thumb_url: string | null; verificado: boolean; created_at: string;
   lugar_id: string | null; puesto: string | null;
   rubros?: { nombre: string; slug: string } | null;
   lugares?: { nombre: string; tipo: string; lat: number | null; lng: number | null; portada_thumb_url?: string | null } | null;
 };
 
-/** Comercios que este agente dio de alta, para que vea su propio recorrido. */
+/** Los comercios de SU CIUDAD, no sólo los que cargó él: parado en una cuadra
+ *  tiene que poder ver qué está cargado, mostrárselo al comerciante y
+ *  corregirlo, lo haya dado de alta quien sea. */
 export async function misComercios(): Promise<ComercioAgente[]> {
   const res = await fetch(`${API}/campo/mis-comercios`, {
     headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` },

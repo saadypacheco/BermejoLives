@@ -202,6 +202,7 @@ class Repo(Protocol):
     def responder_reclamo(self, reclamo_id: str, respuesta: str, by: str) -> dict | None: ...
     def buscar_comercios_por_nombre(self, q: str) -> list[dict]: ...
     def list_comercios_por_agente(self, email: str, limit: int) -> list[dict]: ...
+    def list_comercios_de_ciudad(self, ciudad_id: str, limit: int = 4000) -> list[dict]: ...
     def crear_solicitud_cambio_numero(self, row: dict) -> dict: ...
     def list_solicitudes_cambio_numero(self, estado: str | None) -> list[dict]: ...
     def aprobar_solicitud_cambio_numero(self, solicitud_id: str, by: str) -> dict | None: ...
@@ -2094,6 +2095,35 @@ class SupabaseRepo:
                 filas.extend(lote)
                 if len(lote) < 1000:
                     break
+        return filas
+
+    def list_comercios_de_ciudad(self, ciudad_id: str, limit: int = 4000) -> list[dict]:
+        """TODOS los comercios de una ciudad, para la app de campo.
+
+        El agente necesita ver los que ya están cargados, no sólo los suyos:
+        parado en una cuadra tiene que poder decirle a un comerciante «su local
+        ya está, mire» y corregirle el horario ahí mismo. Si sólo ve lo propio,
+        el segundo agente de la ciudad vuelve a cargar lo que cargó el primero
+        y quedan dos fichas del mismo local.
+
+        Pagina porque PostgREST corta en 1000 sin avisar, y Santa Cruz va a
+        pasar ese número antes de que nadie se acuerde de esta función.
+        """
+        cols = ("id, slug, nombre, whatsapp, telefono, modalidad, direccion, calle, lat, lng, "
+                "horario, horario_estimado, sin_cartel, prod_obs_human, subcategoria, "
+                "portada_url, portada_thumb_url, verificado, created_at, cargado_por, "
+                "lugar_id, puesto, "
+                "rubros!comercios_rubro_id_fkey(nombre, slug), "
+                "lugares(nombre, tipo, lat, lng, portada_thumb_url)")
+        filas: list[dict] = []
+        while len(filas) < limit:
+            lote = (self._db.table("comercios").select(cols)
+                    .eq("ciudad_id", ciudad_id).eq("activo", True)
+                    .order("created_at", desc=True)
+                    .range(len(filas), len(filas) + 999).execute().data) or []
+            filas += lote
+            if len(lote) < 1000:
+                break
         return filas
 
     def list_comercios_por_agente(self, email: str, limit: int = 200) -> list[dict]:
