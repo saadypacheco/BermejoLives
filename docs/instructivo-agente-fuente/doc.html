@@ -2,45 +2,88 @@
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{ --v:#1D8D52; --vd:#10623E; --vt:#1A764C; --bg:#F9F6ED; --tx:#214533; --tx2:#4E6053;
-         --line:#E6E2D6; --soft:#E6F2EA; --red:#D92D2D; }
+         --line:#E6E2D6; --soft:#E6F2EA; --red:#D92D2D; --sky:#E3EDFA; }
   *{ box-sizing:border-box; }
-  body{ margin:0; font-family:Poppins,Arial,sans-serif; color:var(--tx); background:#fff; font-size:10.5pt; line-height:1.5; }
-  .pag{ padding:15mm 14mm; page-break-after:always; }
+  body{ margin:0; font-family:Poppins,Arial,sans-serif; color:var(--tx); background:#fff;
+        font-size:10pt; line-height:1.5; }
+  .pag{ padding:14mm 13mm; page-break-after:always; }
   .pag:last-child{ page-break-after:auto; }
-  h1{ font-size:21pt; font-weight:800; margin:0 0 2mm; letter-spacing:-.02em; }
+  h1{ font-size:20pt; font-weight:800; margin:0 0 2mm; letter-spacing:-.02em; }
   h1 em{ color:var(--v); font-style:normal; }
-  .sub{ color:var(--tx2); margin:0 0 6mm; font-size:10.5pt; }
-  .marca{ font-size:8.5pt; font-weight:800; letter-spacing:.14em; color:var(--vd); margin:0 0 3mm; }
-  h2{ font-size:12.5pt; font-weight:700; margin:0 0 1mm; display:flex; align-items:center; gap:3mm; }
-  .n{ width:8.5mm; height:8.5mm; border-radius:50%; background:var(--v); color:#fff; font-size:10.5pt;
+  .sub{ color:var(--tx2); margin:0 0 6mm; }
+  .marca{ font-size:8pt; font-weight:800; letter-spacing:.14em; color:var(--vd); margin:0 0 3mm; }
+  h2{ font-size:12.5pt; font-weight:700; margin:0 0 2mm; display:flex; align-items:center; gap:3mm; }
+  h3{ font-size:10.5pt; font-weight:700; margin:5mm 0 1mm; color:var(--vd); }
+  .n{ width:8mm; height:8mm; border-radius:50%; background:var(--v); color:#fff; font-size:10pt;
       display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; font-weight:800; }
-  .paso{ display:grid; grid-template-columns:58mm 1fr; gap:7mm; align-items:start; margin-bottom:8mm; }
-  .shot{ width:58mm; border:1px solid var(--line); border-radius:4mm; overflow:hidden; background:#0b1117; }
+  .paso{ display:grid; grid-template-columns:54mm 1fr; gap:6mm; align-items:start; margin-bottom:7mm; }
+  .shot{ width:54mm; border:1px solid var(--line); border-radius:3mm; overflow:hidden; background:#fff; }
   .shot img{ width:100%; display:block; }
-  .shot.corta img{ height:62mm; object-fit:cover; object-position:top; }
-  .shot.form img{ height:96mm; object-fit:cover; object-position:top; }
-  ul{ margin:2mm 0 0; padding-left:5mm; }
-  li{ margin-bottom:1.6mm; }
+  .shot.corta img{ height:58mm; object-fit:cover; object-position:top; }
+  .shot.form img{ height:92mm; object-fit:cover; object-position:top; }
+  ul{ margin:1.5mm 0 0; padding-left:5mm; }
+  li{ margin-bottom:1.5mm; }
   .ok{ color:var(--vt); font-weight:600; }
   .op{ color:var(--tx2); }
   .caja{ background:var(--soft); border-left:3px solid var(--v); border-radius:0 3mm 3mm 0;
-         padding:4mm 5mm; margin:0 0 6mm; }
+         padding:4mm 5mm; margin:0 0 5mm; }
   .caja b{ color:var(--vd); }
-  .alerta{ background:#FDE8E6; border-left:3px solid var(--red); }
+  .alerta{ background:#FDE8E6; border-left-color:var(--red); }
   .alerta b{ color:var(--red); }
   .dato{ font-family:ui-monospace,Consolas,monospace; background:#fff; border:1px solid var(--line);
-         border-radius:2mm; padding:0.8mm 2mm; font-size:9.5pt; }
-  .pie{ margin-top:7mm; padding-top:3mm; border-top:1px solid var(--line); color:var(--tx2); font-size:9pt; }
-  .tres{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:4mm; margin-top:3mm; }
-  .tar{ border:1px solid var(--line); border-radius:3mm; padding:4mm; font-size:10pt; }
+         border-radius:2mm; padding:.6mm 1.8mm; font-size:9pt; }
+  .pie{ margin-top:6mm; padding-top:3mm; border-top:1px solid var(--line); color:var(--tx2); font-size:8.5pt; }
+  .tres{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:4mm; margin-top:2mm; }
+  .tar{ border:1px solid var(--line); border-radius:3mm; padding:4mm; font-size:9.5pt; }
   .tar b{ display:block; color:var(--vd); margin-bottom:1mm; }
+  .vitrina{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:5mm; margin:4mm 0 2mm; }
+  .vitrina figure{ margin:0; }
+  .vitrina img{ width:100%; display:block; border:1px solid var(--line); border-radius:3mm; height:88mm;
+                object-fit:cover; object-position:top; }
+  .vitrina figcaption{ font-size:9pt; color:var(--tx2); margin-top:2mm; text-align:center; }
+  .vitrina figcaption b{ display:block; color:var(--vd); }
+  .rubros{ column-count:3; column-gap:6mm; font-size:8.5pt; margin:2mm 0 0; }
+  .rubros div{ break-inside:avoid; margin-bottom:.9mm; color:var(--tx2); }
+  .rubros div b{ color:var(--tx); font-weight:600; }
+  .url{ display:inline-block; background:var(--v); color:#fff; font-weight:700; font-size:12pt;
+        padding:2.5mm 7mm; border-radius:3mm; letter-spacing:.01em; }
+  .dos{ display:grid; grid-template-columns:1fr 1fr; gap:6mm; }
+  .num{ display:flex; gap:3mm; align-items:flex-start; margin-bottom:3mm; }
+  .num .b{ width:7mm; height:7mm; border-radius:2mm; background:var(--vd); color:#fff; font-size:9pt;
+           font-weight:800; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
 </style></head><body>
 
+<!-- ═══════════ HOJA 1 · QUÉ ES URUKU ═══════════ -->
+<div class="pag">
+  <p class="marca">URUKU &middot; AGENTE DE CAMPO &middot; SANTA CRUZ</p>
+  <h1>Qué estás construyendo</h1>
+  <p class="sub">URUKU es el directorio de los comercios de una ciudad: <b>qué vende cada local,
+    dónde queda, a qué hora abre y cómo se le escribe.</b><br>
+    En Bermejo ya hay <b>1.266 comercios cargados</b>. Santa Cruz arranca de cero, y eso lo armás vos.</p>
+
+  <div class="vitrina">
+    <figure><img src="4-home.png"><figcaption><b>La portada</b>Lo primero que ve el comprador</figcaption></figure>
+    <figure><img src="5-resultados.png"><figcaption><b>La búsqueda</b>Busca «zapatillas» y le aparecen los locales</figcaption></figure>
+    <figure><img src="6-mapa.png"><figcaption><b>El mapa</b>Cada punto es un negocio cargado</figcaption></figure>
+  </div>
+
+  <p style="text-align:center; margin:5mm 0 6mm"><span class="url">uruku.bo</span></p>
+
+  <div class="caja">
+    <b>Cada comercio que cargás es un punto más en ese mapa.</b><br>
+    Sin foto no se reconoce, sin ubicación no se llega, y sin nombre no se busca. Por eso el
+    primer recorrido junta esas tres cosas y nada más: es lo único que no se puede conseguir
+    después por teléfono.
+  </div>
+
+  <p class="pie">URUKU &middot; Santa Cruz &middot; Hoja 1 de 4</p>
+</div>
+
+<!-- ═══════════ HOJA 2 · CÓMO SE CARGA ═══════════ -->
 <div class="pag">
   <p class="marca">URUKU &middot; AGENTE DE CAMPO</p>
-  <h1>Cómo cargar comercios en <em>Santa Cruz</em></h1>
-  <p class="sub">Hoy sólo tres cosas: <b>foto, ubicación y nombre.</b> Nada más.<br>
-     Cada comercio te lleva menos de un minuto.</p>
+  <h1>Cómo cargar un comercio</h1>
+  <p class="sub">Tres cosas: <b>foto, ubicación y nombre.</b> Nada más.</p>
 
   <div class="caja alerta">
     <b>La regla que más importa</b><br>
@@ -57,66 +100,164 @@
         <li>Usuario: <span class="dato">claudia@uruku.bo</span></li>
         <li>Contraseña: <b>la que te mandé por WhatsApp</b></li>
       </ul>
-      <p style="margin:3mm 0 0" class="op">Entrás una sola vez: el celular deja la sesión abierta.
-        Si el navegador te ofrece <b>&laquo;Agregar a pantalla de inicio&raquo;</b>, aceptá &mdash; se abre como una app.</p>
+      <p style="margin:2.5mm 0 0" class="op">Entrás una sola vez. Si el navegador te ofrece
+        <b>&laquo;Agregar a pantalla de inicio&raquo;</b>, aceptá &mdash; se abre como una app.</p>
     </div>
   </div>
 
   <div class="paso">
     <div class="shot form"><img src="2-carga.png"></div>
     <div>
-      <h2><span class="n">2</span> Cargar el comercio</h2>
+      <h2><span class="n">2</span> Cargar</h2>
       <ul>
-        <li><span class="ok">Nombre del cartel</span> &mdash; poné lo que diga el cartel, tal cual.
+        <li><span class="ok">Nombre del cartel</span> &mdash; tal cual lo diga.
             <b>Si no tiene cartel, dejalo vacío</b>: URUKU le pone nombre solo. No inventes.</li>
         <li><span class="ok">Usar mi ubicación actual</span> &mdash; <b>es lo único obligatorio</b>.
-            Tocalo parado en la puerta. La primera vez el celular pide permiso: dale que sí.</li>
+            La primera vez el celular pide permiso: dale que sí.</li>
         <li><span class="ok">Foto del local</span> &mdash; dice &laquo;opcional&raquo;, pero
-            <b>hoy es lo más importante</b>. De día, de frente, que se vea el local y qué vende.</li>
-        <li><span class="op">El dueño aceptó aparecer</span> &mdash; tildalo si hablaste con él.
-            Si no hablaste con nadie, dejalo sin tildar.</li>
+            <b>hoy es lo más importante</b>.</li>
+        <li><span class="op">El dueño aceptó aparecer</span> &mdash; tildalo si hablaste con él.</li>
       </ul>
-      <p style="margin:3mm 0 0">Y tocás <b>Guardar comercio</b>.</p>
+      <h2 style="margin-top:4mm"><span class="n">3</span> Guardar y seguir</h2>
+      <p style="margin:1.5mm 0 0">Después de guardar, la pantalla te ofrece cargar el WhatsApp, más
+        fotos y los datos del negocio. <b>En estos primeros días no completes nada de eso:</b> tocá
+        <b>&laquo;Cargar otro comercio&raquo;</b> y seguí caminando.</p>
     </div>
   </div>
 
-  <p class="pie">URUKU &middot; Santa Cruz &middot; Hoja 1 de 2</p>
+  <div class="caja">
+    <b>La foto es lo que después ubica el negocio</b><br>
+    De frente y que se vea el local entero con lo que tenga alrededor: la puerta, el cartel, la
+    vereda. El que llegue después con el celular en la mano tiene que poder reconocerlo al pasar.
+  </div>
+
+  <p class="pie">URUKU &middot; Santa Cruz &middot; Hoja 2 de 4</p>
 </div>
 
+<!-- ═══════════ HOJA 3 · LOS PRIMEROS 10 DÍAS ═══════════ -->
 <div class="pag">
   <p class="marca">URUKU &middot; AGENTE DE CAMPO</p>
+  <h1>Los primeros 10 días: <em>llenar rápido</em></h1>
+  <p class="sub">El objetivo es <b>cubrir la ciudad</b>. Todavía no se vende nada ni se le pide nada
+    a nadie: se carga, se observa y se anota.</p>
 
-  <h2><span class="n">3</span> Después de guardar</h2>
-  <p style="margin:2mm 0 5mm">La pantalla te va a felicitar y te va a ofrecer varias cosas: el WhatsApp
-  del comercio, más fotos, los datos del negocio. <b>Hoy no completes nada de eso.</b></p>
+  <h3>Esto es lo que cargamos en Bermejo &mdash; para que tengas la referencia</h3>
+  <p class="op" style="margin:0 0 1mm">1.266 comercios en 59 rubros. No hace falta seguir este orden:
+    sirve para saber <b>qué cuenta como comercio</b> y que no se te pase nada.</p>
+  <div class="rubros">
+    <div><b>267</b> Moda y ropa</div><div><b>83</b> Calzado</div>
+    <div><b>80</b> Supermercado y alimentos</div><div><b>64</b> Bazar y cocina</div>
+    <div><b>54</b> Juguetería, librería y escolar</div><div><b>45</b> Ferretería y construcción</div>
+    <div><b>33</b> Neumáticos y lubricantes</div><div><b>32</b> Electrodomésticos</div>
+    <div><b>31</b> Farmacia y salud</div><div><b>30</b> Perfumería y belleza</div>
+    <div><b>27</b> Lencería y ropa interior</div><div><b>24</b> Celulares y accesorios</div>
+    <div><b>24</b> Restaurantes</div><div><b>23</b> Cambio de moneda</div>
+    <div><b>22</b> Kiosco y golosinas</div><div><b>22</b> TV, audio y electrónica</div>
+    <div><b>22</b> Bebidas</div><div><b>21</b> Bolsos y accesorios</div>
+    <div><b>20</b> Blanquería y textil</div><div><b>19</b> Taller mecánico</div>
+    <div><b>18</b> Motos y accesorios</div><div><b>17</b> Muebles y colchones</div>
+    <div><b>17</b> Bicicletas</div><div><b>16</b> Hospedaje</div>
+    <div><b>16</b> Regalería y cotillón</div><div><b>14</b> Joyería y relojes</div>
+    <div><b>14</b> Carnicería y pollería</div><div><b>14</b> Marroquinería y equipaje</div>
+    <div><b>13</b> Repuestos para autos</div><div><b>12</b> Gomería</div>
+    <div><b>11</b> Café, heladería y postres</div><div><b>11</b> Peluquería y barbería</div>
+    <div><b>9</b> Óptica</div><div><b>8</b> Carpintería a medida</div>
+    <div><b>8</b> Deportes y fitness</div><div><b>7</b> Bares y karaoke</div>
+    <div><b>6</b> Gimnasios y canchas</div><div><b>6</b> Lavadero</div>
+    <div><b>5</b> Mascotas</div><div><b>5</b> Herrería y metalúrgica</div>
+    <div><b>5</b> Tecnología y computación</div><div><b>5</b> Rotisería y comida rápida</div>
+    <div><b>5</b> Bebés y niños</div><div><b>4</b> Envíos y encomiendas</div>
+    <div><b>4</b> Estación de servicio</div><div><b>3</b> Panadería</div>
+    <div><b>3</b> Funeraria</div><div><b>2</b> Artículos de limpieza</div>
+    <div><b>2</b> Telas y mercería</div><div><b>2</b> Florería</div>
+  </div>
+
+  <div class="caja" style="margin-top:5mm">
+    <b>Y lo que no es un comercio pero la gente busca igual</b><br>
+    <b>Baños públicos</b>, <b>farmacias de turno</b>, <b>cajeros</b>, estacionamientos, wifi
+    gratis y la policía. En Bermejo los baños públicos son de lo más buscado del sitio.
+    <b>Cargalos igual que un comercio</b>: foto, ubicación y nombre.
+  </div>
+
+  <h3>Mientras caminás, mirá tres cosas</h3>
+  <div class="num"><span class="b">1</span><div><b>Cómo hacen para vender.</b> ¿Tienen cartel con
+    Instagram o WhatsApp? ¿Reparten volantes? ¿Tienen catálogo? ¿Venden sólo en el local o también
+    mandan? Eso define qué les vamos a ofrecer después.</div></div>
+  <div class="num"><span class="b">2</span><div><b>Quién les compra.</b> ¿Sólo gente de Santa Cruz?
+    ¿Viene gente del interior, de otros departamentos, del exterior? Preguntale a dos o tres por
+    cuadra y anotá lo que te digan.</div></div>
+  <div class="num"><span class="b">3</span><div><b>Quiénes son los mejores.</b> Los mayoristas más
+    fuertes de Santa Cruz y los minoristas más conocidos. Preguntá: <i>&laquo;¿a quién le compra la
+    gente acá?&raquo;</i>. Esos son los que hay que tener sí o sí.</div></div>
+
+  <div class="caja" style="margin-top:4mm">
+    <b>Los horarios: no los cargues de a uno</b><br>
+    Preguntale el horario a <b>dos o tres locales de la cuadra</b> &mdash; en una misma zona casi
+    todos abren parecido. Al terminar la zona, o al final del día, <b>mandámelo por WhatsApp</b>:
+    &laquo;calle tal, de 8 a 12 y de 15 a 19&raquo;. Yo lo cargo a todos de una vez.
+  </div>
+
+  <p class="pie">URUKU &middot; Santa Cruz &middot; Hoja 3 de 4</p>
+</div>
+
+<!-- ═══════════ HOJA 4 · LA SEGUNDA PASADA ═══════════ -->
+<div class="pag">
+  <p class="marca">URUKU &middot; AGENTE DE CAMPO</p>
+  <h1>Después del día 10: <em>la segunda pasada</em></h1>
+  <p class="sub">Es un recorrido <b>distinto</b>. Ya no se carga: ahora se habla, se muestra y se
+    ofrece. Y se vuelve a las mismas cuadras.</p>
 
   <div class="caja">
-    <b>Tocá &laquo;Cargar otro comercio&raquo; y seguí caminando.</b><br>
-    Todo lo demás &mdash;el WhatsApp, el horario, qué vende&mdash; se carga en una segunda visita,
-    con el dueño presente. Hoy lo que vale es <b>cubrir la mayor cantidad de cuadras</b>.
+    <b>Ahora tenés algo para mostrar.</b><br>
+    Entrás al local, abrís el celular y le mostrás <b>su propio negocio ya cargado</b> en URUKU.
+    Ésa es la conversación: no le estás vendiendo que cree algo, le estás mostrando algo suyo que
+    ya existe.
   </div>
 
-  <h2 style="margin-top:7mm">Por dónde empezar</h2>
+  <h3>Las tres tareas de este recorrido</h3>
   <div class="tres">
-    <div class="tar"><b>1 &middot; La calle principal</b>Vereda por vereda, sin saltear locales.</div>
-    <div class="tar"><b>2 &middot; Las galerías</b>Muchos locales en pocos metros.</div>
-    <div class="tar"><b>3 &middot; Las cuadras de al lado</b>Recién cuando terminaste la principal.</div>
-  </div>
-  <div class="caja" style="margin-top:7mm">
-    <b>La foto es lo que después ubica el negocio</b><br>
-    Sacala de frente y que se vea el local entero, con lo que tenga alrededor: la puerta, el cartel,
-    la vereda. El que llegue después con el celular en la mano tiene que poder reconocerlo al pasar.
+    <div class="tar"><b>1 &middot; Suscripciones</b>Que el comercio se sume. Es gratis para estar en
+      el mapa; después hay planes con más cosas.</div>
+    <div class="tar"><b>2 &middot; Compradores</b>Contarle a la gente que URUKU existe y que ahí
+      encuentran lo que buscan.</div>
+    <div class="tar"><b>3 &middot; Ofertas y novedades</b>Juntar lo que los comercios quieran
+      publicar &mdash; <b>siempre con su permiso</b>.</div>
   </div>
 
-  <h2 style="margin-top:7mm">Si algo no sale</h2>
+  <div class="caja" style="margin-top:5mm">
+    <b>La oferta es el gancho de la suscripción</b><br>
+    Cuando le publicás una oferta y se la mostrás andando, la suscripción se explica sola. Por eso
+    la tarea 3 no es un extra: es la que hace funcionar a la 1.
+  </div>
+
+  <h3>Qué preguntar y qué mostrar</h3>
+  <ul>
+    <li><b>¿Cómo vende hoy?</b> &mdash; retomá lo que viste en el primer recorrido.</li>
+    <li><b>¿Tiene redes?</b> Instagram, Facebook, TikTok, un catálogo por WhatsApp. Anotalo:
+      todo eso va en su ficha.</li>
+    <li><b>Mostrale su ficha</b> y lo que le falta: el horario, el WhatsApp, las fotos de lo que
+      vende. Completalo ahí mismo con él.</li>
+    <li><b>Explicale que estar es gratis</b>, y que después hay planes con más cosas. No arranques
+      por el precio: arrancá por lo que ya tiene cargado.</li>
+  </ul>
+
+  <div class="caja alerta" style="margin-top:4mm">
+    <b>Nunca prometas que le vas a traer clientes.</b><br>
+    No lo controlamos. Lo que sí podés decir: <i>&laquo;en un mes vuelvo y le muestro cuánta gente
+    miró su local y cuántos le apretaron el WhatsApp&raquo;</i>. Eso sí depende de nosotros, y
+    cumplirlo vale más que cualquier promesa.
+  </div>
+
+  <h3>Si algo no sale</h3>
   <ul>
     <li><b>El local está cerrado</b> &rarr; cargalo igual, con foto y ubicación.</li>
     <li><b>No tenés señal</b> &rarr; cargá igual. Queda guardado en el celular y se sube solo cuando
-        vuelva la señal. El botón <b>&laquo;Sin subir&raquo;</b> de arriba te dice cuántos quedan.</li>
+      vuelva la señal. El botón <b>&laquo;Sin subir&raquo;</b> de arriba te dice cuántos quedan.</li>
     <li><b>No toma la ubicación</b> &rarr; salí a la vereda, lejos de paredes, y probá de nuevo.</li>
+    <li><b>No quiere aparecer</b> &rarr; no insistas y no lo cargues. Anotá el nombre.</li>
     <li><b>Cualquier duda</b> &rarr; escribime por WhatsApp. Si es sobre un comercio, mandame la foto.</li>
   </ul>
 
-  <p class="pie">URUKU &middot; Santa Cruz &middot; Hoja 2 de 2 &middot; uruku.bo</p>
+  <p class="pie">URUKU &middot; Santa Cruz &middot; Hoja 4 de 4 &middot; uruku.bo</p>
 </div>
 </body></html>
