@@ -42,9 +42,10 @@
                 object-fit:cover; object-position:top; }
   .vitrina figcaption{ font-size:9pt; color:var(--tx2); margin-top:2mm; text-align:center; }
   .vitrina figcaption b{ display:block; color:var(--vd); }
-  .rubros{ column-count:3; column-gap:6mm; font-size:8.5pt; margin:2mm 0 0; }
-  .rubros div{ break-inside:avoid; margin-bottom:.9mm; color:var(--tx2); }
-  .rubros div b{ color:var(--tx); font-weight:600; }
+  .rubros{ column-count:4; column-gap:5mm; font-size:8.5pt; margin:2mm 0 0; }
+  .rubros div{ break-inside:avoid; margin-bottom:1mm; color:var(--tx); padding-left:3mm;
+               position:relative; }
+  .rubros div::before{ content:"·"; position:absolute; left:0; color:var(--v); font-weight:800; }
   .url{ display:inline-block; background:var(--v); color:#fff; font-weight:700; font-size:12pt;
         padding:2.5mm 7mm; border-radius:3mm; letter-spacing:.01em; }
   .dos{ display:grid; grid-template-columns:1fr 1fr; gap:6mm; }
@@ -59,7 +60,7 @@
   <h1>Qué estás construyendo</h1>
   <p class="sub">URUKU es el directorio de los comercios de una ciudad: <b>qué vende cada local,
     dónde queda, a qué hora abre y cómo se le escribe.</b><br>
-    En Bermejo ya hay <b>1.266 comercios cargados</b>. Santa Cruz arranca de cero, y eso lo armás vos.</p>
+    Santa Cruz arranca de cero, y eso lo armás vos.</p>
 
   <div class="vitrina">
     <figure><img src="4-home.png"><figcaption><b>La portada</b>Lo primero que ve el comprador</figcaption></figure>
@@ -141,41 +142,41 @@
   <p class="sub">El objetivo es <b>cubrir la ciudad</b>. Todavía no se vende nada ni se le pide nada
     a nadie: se carga, se observa y se anota.</p>
 
-  <h3>Esto es lo que cargamos en Bermejo &mdash; para que tengas la referencia</h3>
-  <p class="op" style="margin:0 0 1mm">1.266 comercios en 59 rubros. No hace falta seguir este orden:
-    sirve para saber <b>qué cuenta como comercio</b> y que no se te pase nada.</p>
+  <h3>Los rubros que cargamos</h3>
+  <p class="op" style="margin:0 0 1mm">No hace falta seguir ningún orden: la lista está para saber
+    <b>qué cuenta como comercio</b> y que no se te pase nada.</p>
   <div class="rubros">
-    <div><b>267</b> Moda y ropa</div><div><b>83</b> Calzado</div>
-    <div><b>80</b> Supermercado y alimentos</div><div><b>64</b> Bazar y cocina</div>
-    <div><b>54</b> Juguetería, librería y escolar</div><div><b>45</b> Ferretería y construcción</div>
-    <div><b>33</b> Neumáticos y lubricantes</div><div><b>32</b> Electrodomésticos</div>
-    <div><b>31</b> Farmacia y salud</div><div><b>30</b> Perfumería y belleza</div>
-    <div><b>27</b> Lencería y ropa interior</div><div><b>24</b> Celulares y accesorios</div>
-    <div><b>24</b> Restaurantes</div><div><b>23</b> Cambio de moneda</div>
-    <div><b>22</b> Kiosco y golosinas</div><div><b>22</b> TV, audio y electrónica</div>
-    <div><b>22</b> Bebidas</div><div><b>21</b> Bolsos y accesorios</div>
-    <div><b>20</b> Blanquería y textil</div><div><b>19</b> Taller mecánico</div>
-    <div><b>18</b> Motos y accesorios</div><div><b>17</b> Muebles y colchones</div>
-    <div><b>17</b> Bicicletas</div><div><b>16</b> Hospedaje</div>
-    <div><b>16</b> Regalería y cotillón</div><div><b>14</b> Joyería y relojes</div>
-    <div><b>14</b> Carnicería y pollería</div><div><b>14</b> Marroquinería y equipaje</div>
-    <div><b>13</b> Repuestos para autos</div><div><b>12</b> Gomería</div>
-    <div><b>11</b> Café, heladería y postres</div><div><b>11</b> Peluquería y barbería</div>
-    <div><b>9</b> Óptica</div><div><b>8</b> Carpintería a medida</div>
-    <div><b>8</b> Deportes y fitness</div><div><b>7</b> Bares y karaoke</div>
-    <div><b>6</b> Gimnasios y canchas</div><div><b>6</b> Lavadero</div>
-    <div><b>5</b> Mascotas</div><div><b>5</b> Herrería y metalúrgica</div>
-    <div><b>5</b> Tecnología y computación</div><div><b>5</b> Rotisería y comida rápida</div>
-    <div><b>5</b> Bebés y niños</div><div><b>4</b> Envíos y encomiendas</div>
-    <div><b>4</b> Estación de servicio</div><div><b>3</b> Panadería</div>
-    <div><b>3</b> Funeraria</div><div><b>2</b> Artículos de limpieza</div>
-    <div><b>2</b> Telas y mercería</div><div><b>2</b> Florería</div>
+    <div>Moda y ropa</div><div>Calzado</div>
+    <div>Supermercado y alimentos</div><div>Bazar y cocina</div>
+    <div>Juguetería, librería y escolar</div><div>Ferretería y construcción</div>
+    <div>Neumáticos y lubricantes</div><div>Electrodomésticos</div>
+    <div>Farmacia y salud</div><div>Perfumería y belleza</div>
+    <div>Lencería y ropa interior</div><div>Celulares y accesorios</div>
+    <div>Restaurantes</div><div>Cambio de moneda</div>
+    <div>Kiosco y golosinas</div><div>TV, audio y electrónica</div>
+    <div>Bebidas</div><div>Bolsos y accesorios</div>
+    <div>Blanquería y textil</div><div>Taller mecánico</div>
+    <div>Motos y accesorios</div><div>Muebles y colchones</div>
+    <div>Bicicletas</div><div>Hospedaje</div>
+    <div>Regalería y cotillón</div><div>Joyería y relojes</div>
+    <div>Carnicería y pollería</div><div>Marroquinería y equipaje</div>
+    <div>Repuestos para autos</div><div>Gomería</div>
+    <div>Café, heladería y postres</div><div>Peluquería y barbería</div>
+    <div>Óptica</div><div>Carpintería a medida</div>
+    <div>Deportes y fitness</div><div>Bares y karaoke</div>
+    <div>Gimnasios y canchas</div><div>Lavadero</div>
+    <div>Mascotas</div><div>Herrería y metalúrgica</div>
+    <div>Tecnología y computación</div><div>Rotisería y comida rápida</div>
+    <div>Bebés y niños</div><div>Envíos y encomiendas</div>
+    <div>Estación de servicio</div><div>Panadería</div>
+    <div>Funeraria</div><div>Artículos de limpieza</div>
+    <div>Telas y mercería</div><div>Florería</div>
   </div>
 
   <div class="caja" style="margin-top:5mm">
     <b>Y lo que no es un comercio pero la gente busca igual</b><br>
     <b>Baños públicos</b>, <b>farmacias de turno</b>, <b>cajeros</b>, estacionamientos, wifi
-    gratis y la policía. En Bermejo los baños públicos son de lo más buscado del sitio.
+    gratis y la policía. Los baños públicos están siempre entre lo más buscado del sitio.
     <b>Cargalos igual que un comercio</b>: foto, ubicación y nombre.
   </div>
 
