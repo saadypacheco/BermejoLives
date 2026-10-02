@@ -6,7 +6,7 @@ import {
   misComercios, editarComercioAgente, eliminarComercioAgente, actualizarFotoComercioAgente, type ComercioAgente,
   listarFotosCampo, listarVideosCampo, subirFotoCampo, subirVideoCampo, borrarFotoCampo, borrarVideoCampo,
   listarLugares, crearLugar, editarLugar, subirPortadaLugar, subirVideoLugar, type Lugar,
-  getAgenteEmail,
+  getAgenteEmail, ciudadDelAgente,
 } from "@/lib/campo";
 import { duracionVideo } from "@/lib/upload";
 import { CapturaWhatsapp } from "@/components/captura-whatsapp";
@@ -275,6 +275,14 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
                   )}
                   {/* De quién es la ficha: con dos agentes por ciudad, saber si
                       la cargó el otro evita «esto no lo hice yo, ¿lo toco?». */}
+                  {/* De otra ciudad: lo cargó él fuera de su zona. Sin esto,
+                      ver un comercio de Bermejo en la lista de un agente de
+                      Santa Cruz parece un error del sistema. */}
+                  {c.ciudades?.slug && ciudadDelAgente && c.ciudades.slug !== ciudadDelAgente && (
+                    <div style={{ fontSize: 11, color: "var(--amber)", fontWeight: 700 }}>
+                      📍 {c.ciudades.nombre} — fuera de tu ciudad
+                    </div>
+                  )}
                   {c.cargado_por && c.cargado_por !== emailAgente && (
                     <div style={{ fontSize: 11, color: "var(--txt-3)" }}>cargado por {c.cargado_por.split("@")[0]}</div>
                   )}

@@ -394,13 +394,25 @@ def mis_comercios(agente: dict = Depends(auth.require_agente), repo: Repo = Depe
     de trabajo, no el agente: por eso se ve todo lo de la ciudad y se puede
     corregir todo lo de la ciudad.
     """
+    # LO SUYO SIEMPRE, ESTÉ DONDE ESTÉ. Lo que él cargó va primero y sin
+    # importar la ciudad: un agente de Santa Cruz que carga parado en Bermejo
+    # —de visita, probando, o porque cruzó— archiva ese comercio en Bermejo,
+    # que es lo correcto… y acto seguido desaparecía de su lista. El que acaba
+    # de cargar algo tiene que verlo: si no, parece que no se guardó, y encima
+    # no puede completarle la segunda pasada.
+    propios = repo.list_comercios_por_agente(agente["email"])
     ciudad_id = _ciudad_del_agente(repo, agente)
     if not ciudad_id:
-        # Sin ciudad asignada no se puede acotar, y devolver TODO el país sería
-        # peor: mejor lo propio, que es lo que había antes.
         logger.warning("campo.agente_sin_ciudad", agente=agente.get("email"))
-        return {"items": repo.list_comercios_por_agente(agente["email"]), "ciudad": None}
-    return {"items": repo.list_comercios_de_ciudad(ciudad_id), "ciudad": agente.get("ciudad")}
+        return {"items": propios, "ciudad": None}
+
+    # Los de su ciudad, más los propios de afuera. Sin repetir: los suyos que
+    # SON de su ciudad ya vienen en la primera lista.
+    de_la_ciudad = repo.list_comercios_de_ciudad(ciudad_id)
+    vistos = {c["id"] for c in de_la_ciudad}
+    afuera = [c for c in propios if c["id"] not in vistos]
+    return {"items": afuera + de_la_ciudad, "ciudad": agente.get("ciudad"),
+            "propios_de_otra_ciudad": len(afuera)}
 
 
 def _propio_o_404(repo: Repo, comercio_id: str, agente: dict) -> dict:

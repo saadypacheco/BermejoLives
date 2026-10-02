@@ -2113,7 +2113,7 @@ class SupabaseRepo:
                 "horario, horario_estimado, sin_cartel, prod_obs_human, subcategoria, "
                 "portada_url, portada_thumb_url, verificado, created_at, cargado_por, "
                 "lugar_id, puesto, "
-                "rubros!comercios_rubro_id_fkey(nombre, slug), "
+                "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), "
                 "lugares(nombre, tipo, lat, lng, portada_thumb_url)")
         filas: list[dict] = []
         while len(filas) < limit:
@@ -2132,7 +2132,8 @@ class SupabaseRepo:
             self._db.table("comercios")
             .select("id, slug, nombre, whatsapp, telefono, modalidad, direccion, lat, lng, "
                     "portada_url, portada_thumb_url, verificado, created_at, lugar_id, puesto, "
-                    "rubros!comercios_rubro_id_fkey(nombre, slug), lugares(nombre, tipo, lat, lng, portada_thumb_url)")
+                    "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), "
+                    "lugares(nombre, tipo, lat, lng, portada_thumb_url)")
             .eq("cargado_por", email)
             .eq("activo", True)
             .order("created_at", desc=True)

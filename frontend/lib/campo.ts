@@ -159,11 +159,18 @@ export type ComercioAgente = {
   /** Quién lo dio de alta. Con dos agentes por ciudad, saber que la ficha es
    *  del otro evita la duda de «esto no lo cargué yo, ¿lo puedo tocar?». */
   cargado_por?: string | null;
+  /** La ciudad del comercio. Se usa para avisar cuando NO es la del agente:
+   *  un agente de Santa Cruz que carga parado en Bermejo tiene que ver ese
+   *  comercio en su lista —lo cargó él— pero sabiendo que es de otra ciudad. */
+  ciudades?: { nombre: string; slug: string } | null;
   portada_url: string | null; portada_thumb_url: string | null; verificado: boolean; created_at: string;
   lugar_id: string | null; puesto: string | null;
   rubros?: { nombre: string; slug: string } | null;
   lugares?: { nombre: string; tipo: string; lat: number | null; lng: number | null; portada_thumb_url?: string | null } | null;
 };
+
+/** La ciudad asignada al agente, según la última respuesta del servidor. */
+export let ciudadDelAgente: string | null = null;
 
 /** Los comercios de SU CIUDAD, no sólo los que cargó él: parado en una cuadra
  *  tiene que poder ver qué está cargado, mostrárselo al comerciante y
@@ -177,7 +184,10 @@ export async function misComercios(): Promise<ComercioAgente[]> {
     throw new Error("Sesión vencida, volvé a entrar");
   }
   if (!res.ok) throw new Error("No se pudo cargar el listado");
-  return (await res.json()).items as ComercioAgente[];
+  const d = await res.json();
+  // `ciudad` es la del agente; viene para poder marcar los de otra ciudad.
+  ciudadDelAgente = (d.ciudad as string | null) ?? null;
+  return d.items as ComercioAgente[];
 }
 
 export type EditarComercioBody = {
