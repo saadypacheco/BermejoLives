@@ -38,7 +38,17 @@ export const metadata: Metadata = {
   description:
     "Los comercios de tu ciudad en un solo lugar: qué se vende, cuánto cuesta, dónde queda y el WhatsApp de cada local.",
   metadataBase: new URL("https://uruku.bo"),
-  openGraph: { siteName: MARCA, locale: "es_BO", type: "website" },
+  // La imagen del kit, hecha por el diseñador: tiene el logo y es la misma
+  // pieza que las de redes. Probé generarla en el servidor para que dijera la
+  // ciudad, y no sirve: la ciudad vive en una COOKIE y la vista previa la pide
+  // el robot de WhatsApp, que no manda cookies. Nunca iba a saber a quién se
+  // la mostraba. El día que haga falta de verdad —cuando Santa Cruz tenga
+  // catálogo— la solución es que cada ciudad tenga su dirección
+  // (uruku.bo/santa-cruz), y ahí la imagen sale del parámetro de la URL.
+  openGraph: {
+    siteName: MARCA, locale: "es_BO", type: "website",
+    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
+  },
   appleWebApp: { capable: true, statusBarStyle: "default", title: MARCA },
   icons: {
     icon: [
