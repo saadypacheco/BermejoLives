@@ -15,8 +15,12 @@ export const dynamic = "force-dynamic";
 type Props = { searchParams?: Record<string, string | string[] | undefined> };
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
-  const { ciudad } = await ciudadActual();
-  const n = ciudad?.nombre ?? "Bermejo";
+  const { ciudad, elegida } = await ciudadActual();
+  // Sin ciudad elegida no se nombra ninguna: un robot no manda cookies, así
+  // que para Google la ciudad siempre era la de respaldo y el buscador
+  // publicaba «Ofertas de Bermejo» para todo el país.
+  const n = elegida ? ciudad?.nombre ?? null : null;
+  const en = n ? ` en ${n}` : "";
   // El rubro va en el título porque este link se comparte: lo que se ve en la
   // vista previa de WhatsApp es esto, y «Ofertas de Bermejo» no dice de qué.
   const rubro = typeof searchParams?.rubro === "string" ? searchParams.rubro : null;
@@ -24,12 +28,12 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     const items = await getPublicaciones("oferta", 1, ciudad?.slug, rubro);
     const nom = sinEmoji(items[0]?.rubro_nombre ?? rubro);
     return {
-      title: `Ofertas de ${nom} en ${n} — URUKU`,
-      description: `Lo que publicaron hoy los comercios de ${nom} en ${n}, con foto, precio y el WhatsApp de cada local.`,
+      title: `Ofertas de ${nom}${en} — URUKU`,
+      description: `Lo que publicaron hoy los comercios de ${nom}${en}, con foto, precio y el WhatsApp de cada local.`,
     };
   }
   return {
-    title: "Ofertas de " + n + " — URUKU",
+    title: n ? `Ofertas de ${n} — URUKU` : "Ofertas de los comercios — URUKU",
     description: "Las ofertas del día de los comercios: precios, liquidaciones y lo que llegó, con la foto y el WhatsApp de cada local.",
   };
 }

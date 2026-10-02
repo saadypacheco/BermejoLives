@@ -23,7 +23,10 @@ import { HorarioBadge } from "@/components/horario-badge";
 import { registrarLead, logBusqueda } from "@/lib/campo";
 
 
-export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiudad = "" }: {
+export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, nombreCiudad = "" }: {
+  /** La fila de accesos de la ciudad (baños, cajeros, ofertas…). La arma la
+   *  pantalla, que es de servidor, y se dibuja debajo del buscador. */
+  accesos?: React.ReactNode;
   ciudadInicial?: string;
   /** El nombre de la ciudad elegida, para los títulos ("Baños públicos en Yacuiba"). */
   nombreCiudad?: string;
@@ -562,6 +565,12 @@ export function BuscarClient({ ciudadInicial = "", tilesCiudad = null, nombreCiu
                aria-label="Buscar" />
         <button type="submit">Buscar</button>
       </form>
+
+      {/* La fila de servicios va DESPUÉS del buscador, igual que en el home.
+          La arma la pantalla (es de servidor) y entra por acá: puesta antes,
+          quedaba una fila de accesos arriba de la caja de búsqueda y la
+          pantalla no empezaba por lo que la persona vino a hacer. */}
+      {accesos}
 
       {/* Con una búsqueda escrita, los chips son las SUBCATEGORÍAS que hay entre
           esos resultados. Sin búsqueda, son los rubros — ahí el chip es un menú

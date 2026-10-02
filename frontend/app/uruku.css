@@ -1081,6 +1081,12 @@
 .uk-home-chips::-webkit-scrollbar { display: none; }
 .uk-home-chips a { flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border: 1px solid var(--uk-line); border-radius: 12px; background: var(--uk-surface); color: var(--uk-ink); text-decoration: none; font-size: 13.5px; font-weight: 700; }
 .uk-home-chips a svg { color: var(--uk-green-ic); }
+/* El acceso a las ofertas, en la pantalla de resultados. Va resaltado porque
+   es el único de la fila que no es un servicio de la ciudad: es lo que URUKU
+   quiere que la persona mire. */
+.uk-home-chips a.uk-chip-ofertas { background: var(--uk-green-grad); border-color: transparent; color: #fff; }
+.uk-home-chips a.uk-chip-ofertas svg { color: #fff; }
+.uk-home-chips a.uk-chip-ofertas:hover { color: #fff; filter: brightness(1.08); }
 .uk-home-chips a:hover { border-color: var(--uk-green); color: var(--uk-green); }
 .uk-home-chips a:hover svg { color: inherit; }
 .uk-home-hero { margin-top: 10px; background-color: #e9efe6; }

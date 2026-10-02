@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import "@/app/uruku.css";
 import { Nav } from "@/components/nav";
 import { BottomNav } from "@/components/bottom-nav";
-import { ThemeToggle, ThemeNoFlash } from "@/components/uruku-theme";
+import { ThemeToggle, ThemeNoFlash, POR_DEFECTO } from "@/components/uruku-theme";
 import { alCambiar, leerReservas, porComercio, quitarReserva, vaciarComercio, type GrupoReserva } from "@/lib/reservas";
 import { precioFmt, waLink } from "@/lib/types";
 import { registrarLead } from "@/lib/campo";
@@ -43,7 +43,7 @@ export default function ReservasPage() {
   }
 
   return (
-    <div id="ukroot" className="uk uk-app">
+    <div id="ukroot" data-theme={POR_DEFECTO} className="uk uk-app">
       <ThemeNoFlash />
       <div className="uk-app-toggle"><ThemeToggle /></div>
       <Nav mapOnly />

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import "@/app/uruku.css";
 import { Nav } from "@/components/nav";
-import { ThemeToggle, ThemeNoFlash } from "@/components/uruku-theme";
+import { ThemeToggle, ThemeNoFlash, POR_DEFECTO } from "@/components/uruku-theme";
 import {
   Send, Store, Phone, WhatsApp, Pin, Verified, Edit, Search, User,
   Instagram, Facebook, TikTok, Globe, Arrow,
@@ -48,7 +48,7 @@ export default function MiComercioPage() {
 
   if (!ready) return null;
   return (
-    <div id="ukroot" className="uk uk-app">
+    <div id="ukroot" data-theme={POR_DEFECTO} className="uk uk-app">
       <ThemeNoFlash />
       <div className="uk-app-toggle"><ThemeToggle /></div>
       {!sess

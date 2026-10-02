@@ -33,14 +33,22 @@ export function tagline(esFrontera: boolean | null | undefined): string {
   return esFrontera ? "Antes de cruzar, Uruku." : "Antes de salir, Uruku.";
 }
 
+/** El mismo titular cuando todavía NO hay ciudad.
+ *
+ *  Es lo que ve el que llega de Google y lo que sale en la vista previa de un
+ *  enlace: ahí no hay cookie, así que no hay ciudad que nombrar. Nombrar la
+ *  de respaldo convierte a URUKU en «el sitio de Bermejo» para todo el que
+ *  busque la marca desde cualquier otra parte de Bolivia. */
+export const MENSAJE_SIN_CIUDAD = "Toda tu ciudad en un solo lugar";
+
 /** El titular: «Todo Bermejo en un solo lugar». */
 export function mensajePrincipal(ciudad?: string | null): string {
   return `Todo ${ciudad || CIUDAD_POR_DEFECTO} en un solo lugar`;
 }
 
-/** El <title> de una página. */
+/** El <title> de una página. Sin ciudad, el titular no nombra ninguna. */
 export function titulo(ciudad?: string | null): string {
-  return `${MARCA} · ${mensajePrincipal(ciudad)}`;
+  return `${MARCA} · ${ciudad ? mensajePrincipal(ciudad) : MENSAJE_SIN_CIUDAD}`;
 }
 
 /** La descripción para buscadores y para la vista previa al compartir.
@@ -48,7 +56,12 @@ export function titulo(ciudad?: string | null): string {
  *  Cambia el final además del nombre: «antes de cruzar» prometido en una
  *  ciudad del interior es una frase que no le habla a nadie. */
 export function descripcion(ciudad?: string | null, esFrontera?: boolean | null): string {
-  const n = ciudad || CIUDAD_POR_DEFECTO;
+  if (!ciudad) {
+    // Sin ciudad: ni «tu visita a X» ni «antes de cruzar». Lo que sirve en
+    // cualquier punto del país es qué se encuentra y cómo se le escribe.
+    return "Los comercios de tu ciudad en un solo lugar: qué se vende, cuánto cuesta, dónde queda y el WhatsApp de cada local.";
+  }
+  const n = ciudad;
   return esFrontera
     ? `Comercios, ofertas, cambio del día y datos útiles para tu visita a ${n}. Antes de cruzar, Uruku.`
     : `Comercios, ofertas y lo que se vende hoy en ${n}: qué hay, cuánto cuesta y dónde queda. Antes de salir, Uruku.`;

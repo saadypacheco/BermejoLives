@@ -15,21 +15,25 @@ export const dynamic = "force-dynamic";
 type Props = { searchParams?: Record<string, string | string[] | undefined> };
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
-  const { ciudad } = await ciudadActual();
-  const n = ciudad?.nombre ?? "Bermejo";
+  const { ciudad, elegida } = await ciudadActual();
+  // Sin ciudad elegida no se nombra ninguna: un robot no manda cookies, así
+  // que para Google la ciudad siempre era la de respaldo y el buscador
+  // publicaba «Novedades de Bermejo» para todo el país.
+  const n = elegida ? ciudad?.nombre ?? null : null;
+  const en = n ? ` en ${n}` : "";
   // El rubro va en el título porque este link se comparte: lo que se ve en la
-  // vista previa de WhatsApp es esto, y «Ofertas de Bermejo» no dice de qué.
+  // vista previa de WhatsApp es esto, y «Novedades de Bermejo» no dice de qué.
   const rubro = typeof searchParams?.rubro === "string" ? searchParams.rubro : null;
   if (rubro) {
     const items = await getPublicaciones("novedad", 1, ciudad?.slug, rubro);
     const nom = sinEmoji(items[0]?.rubro_nombre ?? rubro);
     return {
-      title: `Novedades de ${nom} en ${n} — URUKU`,
-      description: `Lo que publicaron hoy los comercios de ${nom} en ${n}, con foto, precio y el WhatsApp de cada local.`,
+      title: `Novedades de ${nom}${en} — URUKU`,
+      description: `Lo que publicaron hoy los comercios de ${nom}${en}, con foto, precio y el WhatsApp de cada local.`,
     };
   }
   return {
-    title: "Novedades de " + n + " — URUKU",
+    title: n ? `Novedades de ${n} — URUKU` : "Novedades de los comercios — URUKU",
     description: "Lo que cuentan los comercios: mercadería nueva, horarios, cambios de local y lo que está pasando hoy.",
   };
 }

@@ -1,10 +1,11 @@
 import Link from "next/link";
 import "@/app/uruku.css";
-import { ThemeToggle, ThemeNoFlash } from "@/components/uruku-theme";
+import { ThemeToggle, ThemeNoFlash, POR_DEFECTO } from "@/components/uruku-theme";
 import { CitySelector } from "@/components/city-selector";
 import { IngresarMenu } from "@/components/ingresar-menu";
 import { BottomNav } from "@/components/bottom-nav";
 import { Asistente } from "@/components/asistente";
+import { Suspense } from "react";
 import { CatNav } from "@/components/catnav";
 import { SocialLinks, money } from "@/components/uruku-ui";
 import { Ic, climaIcono } from "@/components/ic";
@@ -68,7 +69,7 @@ export async function UrukuShell({
   const showFoot = showFooter && !fill;
 
   return (
-    <div id="ukroot" className={`uk${fill ? " uk-fill" : ""}${rootClass ? " " + rootClass : ""}`}>
+    <div id="ukroot" data-theme={POR_DEFECTO} className={`uk${fill ? " uk-fill" : ""}${rootClass ? " " + rootClass : ""}`}>
       <ThemeNoFlash />
 
       {/* Header: fila 1 = logo + ciudad + Ingresar + tema · fila 2 = redes + clima +
@@ -127,7 +128,10 @@ export async function UrukuShell({
           )}
         </div>
 
-        {showCatnav && <CatNav active={activeCat} />}
+        {/* En Suspense porque CatNav lee el rubro de la URL
+            (useSearchParams): sin el límite, TODA la página se renderiza del
+            lado del cliente y se pierde el HTML del servidor. */}
+        {showCatnav && <Suspense fallback={null}><CatNav active={activeCat} /></Suspense>}
       </header>
 
       <main className={`${fill ? "uk-fill-main" : ""}${mainClass ? " " + mainClass : ""}`.trim() || undefined}>{children}</main>

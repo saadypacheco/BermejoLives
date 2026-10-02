@@ -3,6 +3,7 @@ import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
 import { Ic, IcRubro, climaIcono, type NombreIcono } from "@/components/ic";
 import { UnirmeComunidad } from "@/components/unirme-comunidad";
+import { AccesosCiudad } from "@/components/accesos-ciudad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import { getClima, getCotizaciones, getFeed, getFronteraEstado, getVideosPromo } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
@@ -50,19 +51,6 @@ const SERVICIOS: Acceso[] = [
 const SERVICIOS_SIN_GUIA = SERVICIOS.map((s) =>
   s.href === "/cambio" ? { ...s, d: "Dólares y otras monedas", href: "/buscar?rubro=cambio&vista=mapa" } : s);
 
-// La fila de accesos debajo del buscador: los mismos destinos, en una palabra.
-const CHIPS: Acceso[] = [
-  { i: "banos", t: "Baños", href: SERVICIOS[0].href }, { i: "farmacia", t: "Farmacias", href: SERVICIOS[1].href },
-  { i: "cajeros", t: "Cajeros", href: SERVICIOS[2].href }, { i: "estacionamiento", t: "Estacionamiento", href: SERVICIOS[3].href },
-  { i: "cambio", t: "Casas de cambio", href: "/cambio" }, { i: "taxis", t: "Taxis", href: SERVICIOS[6].href },
-  { i: "wifi", t: "WiFi", href: SERVICIOS[5].href },
-  { i: "policia", t: "Policía", href: SERVICIOS[7].href },
-  { i: "transporte", t: "Transporte", href: "/guia#transporte" }, { i: "frontera", t: "Frontera", href: "/guia#frontera" },
-];
-const CHIPS_SIN_GUIA = CHIPS
-  .filter((c) => !c.href.startsWith("/guia"))
-  .map((c) => (c.href === "/cambio" ? { ...c, t: "Cambio", href: "/buscar?rubro=cambio&vista=mapa" } : c));
-
 const GUIAS: Acceso[] = [
   { i: "aduana", t: "Aduana", d: "Franquicia, qué podés pasar y qué no.", href: "/guia#aduana" },
   { i: "documentos", t: "Documentación", d: "DNI, pasaporte y viaje con menores.", href: "/guia#documentos" },
@@ -108,14 +96,19 @@ function hace(iso: string | null | undefined): string | null {
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { ciudad } = await ciudadActual();
-  const nombre = ciudad?.nombre ?? "Bermejo";
+  const { ciudad, elegida } = await ciudadActual();
+  // SIN CIUDAD ELEGIDA, EL TÍTULO NO NOMBRA NINGUNA. Un robot no manda
+  // cookies, así que para Google la ciudad siempre era la de respaldo: el
+  // resultado de buscar «uruku» decía «Todo Bermejo en un solo lugar», que es
+  // el lema de UNA ciudad puesto como el de la marca entera. Quien sí eligió
+  // su ciudad sigue viendo —y compartiendo— la suya.
+  const nombre = elegida ? ciudad?.nombre ?? null : null;
   // Cada frontera tiene su guía y su estado del paso (0124).
-  const conGuia = ciudad ? (ciudad.guia_activa ?? ciudad.slug === "bermejo") : true;
+  const conGuia = nombre && ciudad ? (ciudad.guia_activa ?? ciudad.slug === "bermejo") : false;
   // La descripción del manual, con la ciudad y el cierre que corresponde:
   // «antes de cruzar» en una frontera, «antes de salir» en el resto. Una
   // promesa de cruzar un río en Cochabamba no le habla a nadie.
-  const frontera = ciudad?.es_frontera ?? conGuia;
+  const frontera = nombre ? ciudad?.es_frontera ?? conGuia : false;
   return {
     // `absolute` para que no se le pegue el « · Uruku» de la plantilla del
     // layout: acá el nombre ya está adentro del título.
@@ -165,9 +158,7 @@ export default async function InicioPage() {
   return (
     <UrukuShell activeCat="Todos" activeNav="Inicio">
       {/* ===== Los accesos rápidos, debajo del buscador ===== */}
-      <nav className="uk-container uk-home-chips" aria-label="Servicios">
-        {(conGuia ? CHIPS : CHIPS_SIN_GUIA).map((c) => <Link key={c.t} href={c.href}><Ic n={c.i} s={18} />{c.t}</Link>)}
-      </nav>
+      <AccesosCiudad conGuia={conGuia} />
 
       {/* ===== Hero: qué es esto, y cómo está Bermejo hoy ===== */}
       <section className="uk-hero uk-home-hero" style={heroImg ? { backgroundImage: `url('${heroImg}')` } : undefined}>

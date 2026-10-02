@@ -56,7 +56,7 @@ export const ICONOS = {
   dato: "Info", reloj: "Clock", calendario: "CalendarBlank", usuario: "User", gente: "Users",
   foto: "Camera", video: "VideoCamera", descargar: "DownloadSimple", estrella: "Star",
   destacado: "Sparkle", mas_opciones: "DotsThree", dax: "ChatCircleDots", clima: "CloudSun",
-  sol: "Sun", seguridad: "ShieldCheck", ruta: "Path", llama: "Flame",
+  sol: "Sun", luna: "MoonStars", seguridad: "ShieldCheck", ruta: "Path", llama: "Flame",
   explorar: "Compass", telefono: "Phone", video_play: "PlayCircle", videos: "FilmSlate",
   cartel: "Signpost", comunidad: "ChatsCircle", util: "ThumbsUp", inutil: "ThumbsDown",
   imprimir: "Printer", ciudad: "City", emergencia: "Lifebuoy",

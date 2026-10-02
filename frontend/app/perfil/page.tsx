@@ -5,7 +5,7 @@ import Link from "next/link";
 import "@/app/uruku.css";
 import { Nav } from "@/components/nav";
 import { BottomNav } from "@/components/bottom-nav";
-import { ThemeToggle, ThemeNoFlash } from "@/components/uruku-theme";
+import { ThemeToggle, ThemeNoFlash, POR_DEFECTO } from "@/components/uruku-theme";
 import { CompradorAuthForm } from "@/components/comprador-auth";
 import { Bookmark, User } from "@/components/icons";
 import { getUsuarioSession, clearUsuario, type UsuarioSession } from "@/lib/usuario";
@@ -32,7 +32,7 @@ export default function PerfilPage() {
   if (!ready) return null;
 
   return (
-    <div id="ukroot" className="uk uk-app">
+    <div id="ukroot" data-theme={POR_DEFECTO} className="uk uk-app">
       <ThemeNoFlash />
       <div className="uk-app-toggle"><ThemeToggle /></div>
       <Nav mapOnly />

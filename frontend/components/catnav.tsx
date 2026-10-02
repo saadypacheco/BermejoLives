@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { sinEmoji } from "@/lib/rubros";
 import { useRef, useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { getRubros } from "@/lib/data";
 import type { Rubro } from "@/lib/types";
 
@@ -22,6 +23,12 @@ import type { Rubro } from "@/lib/types";
  * que los 36 rubros devuelven exactamente los comercios que tienen. Y al venir de
  * la base, una categoría nueva aparece sola, sin tocar código. */
 export function CatNav({ active }: { active?: string }) {
+  // El rubro de la URL MANDA sobre el que llega por prop. En /buscar la barra
+  // es además el filtro: si no se marcara cuál está puesto, la persona ve
+  // trescientos resultados de «Moda y ropa» con «Todos» resaltado arriba.
+  // En el home no hay `?rubro`, así que ahí sigue mandando la prop.
+  const sp = useSearchParams();
+  const activo = sp?.get("rubro") || active;
   const [rubros, setRubros] = useState<Rubro[]>([]);
   // Sólo los rubros comerciales: baños, cajeros, estacionamientos y wifi
   // son servicios y tienen su fila propia en el home. En una barra de
@@ -67,10 +74,10 @@ export function CatNav({ active }: { active?: string }) {
           <button type="button" className="uk-catnav-arrow" onClick={prev} aria-label="Categorías anteriores">‹</button>
         )}
         <div className="uk-catnav-scroll" ref={ref} onScroll={update}>
-          <Link href="/buscar" className={active === "Todos" ? "active" : ""}>Todos</Link>
+          <Link href="/buscar" className={!activo || activo === "Todos" ? "active" : ""}>Todos</Link>
           {rubros.map((r) => (
             <Link key={r.slug} href={`/buscar?rubro=${r.slug}`}
-                  className={active === r.slug ? "active" : ""}>
+                  className={activo === r.slug ? "active" : ""}>
               {sinEmoji(r.nombre)}
             </Link>
           ))}
