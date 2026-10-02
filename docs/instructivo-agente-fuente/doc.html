@@ -1,0 +1,133 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{ --v:#1D8D52; --vd:#10623E; --vt:#1A764C; --bg:#F9F6ED; --tx:#214533; --tx2:#4E6053;
+         --line:#E6E2D6; --soft:#E6F2EA; --red:#D92D2D; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:Poppins,Arial,sans-serif; color:var(--tx); background:#fff; font-size:10.5pt; line-height:1.5; }
+  .pag{ padding:15mm 14mm; page-break-after:always; }
+  .pag:last-child{ page-break-after:auto; }
+  h1{ font-size:21pt; font-weight:800; margin:0 0 2mm; letter-spacing:-.02em; }
+  h1 em{ color:var(--v); font-style:normal; }
+  .sub{ color:var(--tx2); margin:0 0 6mm; font-size:10.5pt; }
+  .marca{ font-size:8.5pt; font-weight:800; letter-spacing:.14em; color:var(--vd); margin:0 0 3mm; }
+  h2{ font-size:12.5pt; font-weight:700; margin:0 0 1mm; display:flex; align-items:center; gap:3mm; }
+  .n{ width:8.5mm; height:8.5mm; border-radius:50%; background:var(--v); color:#fff; font-size:10.5pt;
+      display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; font-weight:800; }
+  .paso{ display:grid; grid-template-columns:58mm 1fr; gap:7mm; align-items:start; margin-bottom:8mm; }
+  .shot{ width:58mm; border:1px solid var(--line); border-radius:4mm; overflow:hidden; background:#0b1117; }
+  .shot img{ width:100%; display:block; }
+  .shot.corta img{ height:62mm; object-fit:cover; object-position:top; }
+  .shot.form img{ height:96mm; object-fit:cover; object-position:top; }
+  ul{ margin:2mm 0 0; padding-left:5mm; }
+  li{ margin-bottom:1.6mm; }
+  .ok{ color:var(--vt); font-weight:600; }
+  .op{ color:var(--tx2); }
+  .caja{ background:var(--soft); border-left:3px solid var(--v); border-radius:0 3mm 3mm 0;
+         padding:4mm 5mm; margin:0 0 6mm; }
+  .caja b{ color:var(--vd); }
+  .alerta{ background:#FDE8E6; border-left:3px solid var(--red); }
+  .alerta b{ color:var(--red); }
+  .dato{ font-family:ui-monospace,Consolas,monospace; background:#fff; border:1px solid var(--line);
+         border-radius:2mm; padding:0.8mm 2mm; font-size:9.5pt; }
+  .pie{ margin-top:7mm; padding-top:3mm; border-top:1px solid var(--line); color:var(--tx2); font-size:9pt; }
+  .tres{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:4mm; margin-top:3mm; }
+  .tar{ border:1px solid var(--line); border-radius:3mm; padding:4mm; font-size:10pt; }
+  .tar b{ display:block; color:var(--vd); margin-bottom:1mm; }
+</style></head><body>
+
+<div class="pag">
+  <p class="marca">URUKU &middot; AGENTE DE CAMPO</p>
+  <h1>Cómo cargar comercios en <em>Santa Cruz</em></h1>
+  <p class="sub">Hoy sólo tres cosas: <b>foto, ubicación y nombre.</b> Nada más.<br>
+     Cada comercio te lleva menos de un minuto.</p>
+
+  <div class="caja alerta">
+    <b>La regla que más importa</b><br>
+    Cargá el comercio <b>parado en la puerta del local</b>. No desde el auto ni desde la esquina.
+    La ubicación es lo único que después no se puede corregir sin volver.
+  </div>
+
+  <div class="paso">
+    <div class="shot corta"><img src="1-login.png"></div>
+    <div>
+      <h2><span class="n">1</span> Entrar</h2>
+      <p style="margin:2mm 0 0">Abrí <span class="dato">uruku.bo/publicar</span> en el celular.</p>
+      <ul>
+        <li>Usuario: <span class="dato">claudia@uruku.bo</span></li>
+        <li>Contraseña: <b>la que te mandé por WhatsApp</b></li>
+      </ul>
+      <p style="margin:3mm 0 0" class="op">Entrás una sola vez: el celular deja la sesión abierta.
+        Si el navegador te ofrece <b>&laquo;Agregar a pantalla de inicio&raquo;</b>, aceptá &mdash; se abre como una app.</p>
+    </div>
+  </div>
+
+  <div class="paso">
+    <div class="shot form"><img src="2-carga.png"></div>
+    <div>
+      <h2><span class="n">2</span> Cargar el comercio</h2>
+      <ul>
+        <li><span class="ok">Nombre del cartel</span> &mdash; poné lo que diga el cartel, tal cual.
+            <b>Si no tiene cartel, dejalo vacío</b>: URUKU le pone nombre solo. No inventes.</li>
+        <li><span class="ok">Usar mi ubicación actual</span> &mdash; <b>es lo único obligatorio</b>.
+            Tocalo parado en la puerta. La primera vez el celular pide permiso: dale que sí.</li>
+        <li><span class="ok">Foto del local</span> &mdash; dice &laquo;opcional&raquo;, pero
+            <b>hoy es lo más importante</b>. De día, de frente, que se vea el local y qué vende.</li>
+        <li><span class="op">El dueño aceptó aparecer</span> &mdash; tildalo si hablaste con él.
+            Si no hablaste con nadie, dejalo sin tildar.</li>
+      </ul>
+      <p style="margin:3mm 0 0">Y tocás <b>Guardar comercio</b>.</p>
+    </div>
+  </div>
+
+  <p class="pie">URUKU &middot; Santa Cruz &middot; Hoja 1 de 2</p>
+</div>
+
+<div class="pag">
+  <p class="marca">URUKU &middot; AGENTE DE CAMPO</p>
+
+  <h2><span class="n">3</span> Después de guardar</h2>
+  <p style="margin:2mm 0 5mm">La pantalla te va a felicitar y te va a ofrecer varias cosas: el WhatsApp
+  del comercio, más fotos, los datos del negocio. <b>Hoy no completes nada de eso.</b></p>
+
+  <div class="caja">
+    <b>Tocá &laquo;Cargar otro comercio&raquo; y seguí caminando.</b><br>
+    Todo lo demás &mdash;el WhatsApp, el horario, qué vende&mdash; se carga en una segunda visita,
+    con el dueño presente. Hoy lo que vale es <b>cubrir la mayor cantidad de cuadras</b>.
+  </div>
+
+  <h2 style="margin-top:7mm">Por dónde empezar</h2>
+  <div class="tres">
+    <div class="tar"><b>1 &middot; La calle principal</b>Vereda por vereda, sin saltear locales.</div>
+    <div class="tar"><b>2 &middot; Las galerías</b>Muchos locales en pocos metros.</div>
+    <div class="tar"><b>3 &middot; Las cuadras de al lado</b>Recién cuando terminaste la principal.</div>
+  </div>
+  <p class="op" style="margin-top:3mm">Sin saltear no es un detalle: una cuadra con huecos hay que
+  volver a recorrerla entera.</p>
+
+  <h2 style="margin-top:7mm">Lo que conviene evitar</h2>
+  <ul>
+    <li><b>Cargar desde la esquina o el auto</b> &mdash; el punto queda mal y sólo se arregla volviendo.</li>
+    <li><b>Inventar un nombre</b> &mdash; queda peor que el que pone URUKU solo.</li>
+    <li><b>Foto de noche o a contraluz</b> &mdash; no se reconoce el local.</li>
+    <li><b>Dejar todo para cargarlo a la noche</b> &mdash; se pierde la ubicación y la mitad de los datos.</li>
+  </ul>
+
+  <div class="caja" style="margin-top:7mm">
+    <b>¿Cuántos por día?</b><br>
+    Un comercio bien cargado lleva <b>menos de un minuto</b>. En una mañana entran tranquilamente
+    entre 60 y 80. Pero <b>20 bien cargados valen más que 80 a medias</b>.
+  </div>
+
+  <h2 style="margin-top:7mm">Si algo no sale</h2>
+  <ul>
+    <li><b>El local está cerrado</b> &rarr; cargalo igual, con foto y ubicación.</li>
+    <li><b>No tenés señal</b> &rarr; cargá igual. Queda guardado en el celular y se sube solo cuando
+        vuelva la señal. El botón <b>&laquo;Sin subir&raquo;</b> de arriba te dice cuántos quedan.</li>
+    <li><b>No toma la ubicación</b> &rarr; salí a la vereda, lejos de paredes, y probá de nuevo.</li>
+    <li><b>Cualquier duda</b> &rarr; escribime por WhatsApp. Si es sobre un comercio, mandame la foto.</li>
+  </ul>
+
+  <p class="pie">URUKU &middot; Santa Cruz &middot; Hoja 2 de 2 &middot; uruku.bo</p>
+</div>
+</body></html>
