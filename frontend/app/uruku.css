@@ -54,6 +54,8 @@
   --uk-green: #23A060;
   --uk-green-2: #178A50;
   --uk-green-grad: linear-gradient(180deg, #23A060, #178A50);
+  --uk-green-ic: #4CC985;
+  --uk-neon: var(--uk-green-ic);
 }
 
 .uk {
@@ -76,6 +78,11 @@
      los botones justamente porque #1D8D52 sobre fondo oscuro queda en 2,9:1 y
      un ícono de 26 px se pierde. */
   --uk-green-ic: #1A764C;
+  /* Alias histórico. Media docena de reglas piden `var(--uk-neon)`
+     y ese respaldo —un verde fosforescente de la etapa «Bermejo dark»—
+     ganaba siempre, porque la variable no estaba definida en ninguna parte.
+     Definida acá, todas pasan al acento del manual sin tocarlas una por una. */
+  --uk-neon: var(--uk-green-ic);
   --uk-green-soft: #E6F2EA;
   --uk-red: #D92D2D;        /* manual · sólo ofertas y alertas */
   --uk-red-soft: #FDE8E6;
@@ -108,6 +115,7 @@
   --uk-green-2: #178A50;
   --uk-green-grad: linear-gradient(180deg, #23A060, #178A50);
   --uk-green-ic: #4CC985;
+  --uk-neon: var(--uk-green-ic);
   --uk-green-soft: #1C3325;
   --uk-red: #F0504A;
   --uk-red-soft: #3A1A18;
@@ -298,11 +306,20 @@
 .uk-catnav a { color: var(--uk-ink); padding: 14px 16px; white-space: nowrap; border-bottom: 2px solid transparent; font-size: 14px; }
 .uk-catnav a.active, .uk-catnav a:hover { color: var(--uk-green); border-bottom-color: var(--uk-green); font-weight: 700; }
 
-/* ---- Hero ---- */
-.uk-hero { position: relative; min-height: 420px; background-size: cover; background-position: center; }
-.uk-hero::before { content:""; position:absolute; inset:0; background: var(--uk-hero-fade); }
+/* ---- Portada ----
+   EL MANUAL LA DEFINE CELESTE, NO CON UNA FOTO. Lo dice dos veces: en
+   Componentes («degradé suave de celeste a fondo claro, como el cielo sobre el
+   río») y en La web («portada celeste con "Todo Bermejo en un solo lugar"»).
+   Acá había una foto aérea de la ciudad con un velo encima para que el texto
+   se leyera, y ese velo nunca alcanzaba del todo: la tercera propuesta del
+   hero quedaba sobre el cielo de la foto, texto verde oscuro sobre celeste a
+   pleno sol. El degradé resuelve el contraste de origen, en vez de taparlo.
+
+   La foto por ciudad (`ciudades.hero_url`) sigue en la base; lo que dejó de
+   usarse es ponerla DE FONDO de la portada. */
+.uk-hero { position: relative; min-height: 420px; background: linear-gradient(180deg, var(--uk-sky), var(--uk-page)); }
 .uk-hero-grid { position: relative; z-index: 2; min-height: 420px; display: grid; grid-template-columns: 1.15fr .85fr; align-items: center; gap: 44px; padding: 40px 0; }
-.uk-hero h1 { margin: 0 0 18px; font-size: clamp(38px, 5vw, 60px); line-height: 1.03; letter-spacing: -.03em; }
+.uk-hero h1 { margin: 0 0 18px; font-size: clamp(32px, 4.2vw, 40px); font-weight: 700; line-height: 1.1; letter-spacing: -.025em; }
 .uk-hero h1 span { color: var(--uk-green); }
 .uk-hero p { max-width: 540px; font-size: 17px; line-height: 1.55; margin: 0; color: var(--uk-ink); opacity: .92; }
 .uk-hero-actions { display: flex; gap: 12px; margin-top: 24px; flex-wrap: wrap; }
@@ -371,7 +388,12 @@
 .uk-offer-body { position: absolute; z-index: 2; left: 16px; right: 16px; bottom: 16px; }
 .uk-offer-body h3 { margin: 0 0 6px; font-size: 20px; line-height: 1.1; }
 .uk-offer-body small { display:block; opacity:.85; font-size: 12px; margin-bottom: 6px; }
-.uk-offer-body strong { color: #5df0a6; font-size: 14px; }
+/* Manual · Jerarquías: el PRECIO va ExtraBold 800 de 28 px. Estaba en 14,
+   del mismo tamaño que el nombre del comercio: en una tarjeta de oferta el
+   precio es el dato por el que la persona entró, y era el más chico.
+   El verde es el claro y no el de marca porque esto va SIEMPRE sobre el
+   velo oscuro de una foto, en los dos temas. */
+.uk-offer-body strong { display: block; margin-top: 2px; color: #4CC985; font-size: 28px; font-weight: 800; line-height: 1.1; }
 /* SIN FOTO. Pasa y va a seguir pasando: una publicación puede entrar sin
    imagen (un texto por WhatsApp, o la foto que no se pudo bajar). Con el mismo
    velo negro de una foto, la tarjeta era un rectángulo oscuro y vacío. Acá el
@@ -885,8 +907,10 @@
   object-fit: cover; border-radius: 7px; background: var(--uk-line); }
 .uk-resoferta b { display: block; margin-top: 5px; font-size: 11.5px; font-weight: 600; line-height: 1.3;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.uk-resoferta .precio { display: block; font-size: 13px; font-weight: 800; color: var(--uk-neon, #39ff9e); }
-.uk-resoferta:hover { border-color: var(--uk-neon, #39ff9e); }
+/* La miniatura de oferta en un resultado: el precio sigue siendo chico
+   porque la tarjeta mide 96 px, pero va en el peso y el color del manual. */
+.uk-resoferta .precio { display: block; font-size: 13px; font-weight: 800; color: var(--uk-green-ic); }
+.uk-resoferta:hover { border-color: var(--uk-neon); }
 .uk-resoferta.mas { display: grid; place-items: center; text-align: center; flex-basis: 62px;
   font-size: 12px; font-weight: 700; color: var(--uk-ink-soft); }
 
@@ -894,15 +918,15 @@
 .uk-reservar { display: block; width: 100%; margin-top: 5px; padding: 5px 6px; border-radius: 7px;
   border: 1px solid var(--uk-line); background: transparent; color: var(--uk-ink-soft);
   font-size: 11px; font-weight: 700; cursor: pointer; }
-.uk-reservar:hover { border-color: var(--uk-neon, #39ff9e); color: var(--uk-ink); }
-.uk-reservar.puesto { background: rgba(57,255,158,.14); border-color: var(--uk-neon, #39ff9e); color: var(--uk-neon, #39ff9e); }
+.uk-reservar:hover { border-color: var(--uk-neon); color: var(--uk-ink); }
+.uk-reservar.puesto { background: var(--uk-green-soft); border-color: var(--uk-neon); color: var(--uk-neon); }
 
 /* Barra flotante del carrito. Sólo existe si hay algo adentro: una barra
    permanente vacía le come alto a todas las pantallas para no decir nada.
    Va por encima de la nav de abajo, que en el celular ocupa los 62px del pie. */
 .uk-reserva-barra { position: fixed; left: 12px; right: 12px; bottom: 74px; z-index: 60;
   display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 13px;
-  background: var(--uk-neon, #39ff9e); color: #06130c; text-decoration: none;
+  background: var(--uk-green); color: #fff; text-decoration: none;
   box-shadow: 0 8px 26px rgba(0,0,0,.34); font-size: 13.5px; font-weight: 700; }
 .uk-reserva-barra .n { display: grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px;
   border-radius: 999px; background: rgba(0,0,0,.22); font-size: 12.5px; }
@@ -918,7 +942,7 @@
    Sólo lleva la marca: el comprador tiene que poder saber a quién le escribe,
    pero eso no necesita una explicación al pie. */
 .uk-marca-uruku { display: inline-block; margin-top: 4px; padding: 1px 7px; border-radius: 999px;
-  background: rgba(57,255,158,.14); color: var(--uk-neon, #39ff9e);
+  background: var(--uk-green-soft); color: var(--uk-neon);
   font-size: 9.5px; font-weight: 800; letter-spacing: .06em; vertical-align: middle; }
 
 /* Aviso de la vista de descubrimiento del mapa. Un mapa con seis pines sobre
@@ -1113,15 +1137,17 @@
 .uk-home-chips::-webkit-scrollbar { display: none; }
 .uk-home-chips a { flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border: 1px solid var(--uk-line); border-radius: 12px; background: var(--uk-surface); color: var(--uk-ink); text-decoration: none; font-size: 14px; font-weight: 600; }
 .uk-home-chips a svg { color: var(--uk-green-ic); }
-/* El acceso a las ofertas, en la pantalla de resultados. Va resaltado porque
-   es el único de la fila que no es un servicio de la ciudad: es lo que URUKU
-   quiere que la persona mire. */
-.uk-home-chips a.uk-chip-ofertas { background: var(--uk-green-grad); border-color: transparent; color: #fff; }
-.uk-home-chips a.uk-chip-ofertas svg { color: #fff; }
-.uk-home-chips a.uk-chip-ofertas:hover { color: #fff; filter: brightness(1.08); }
+/* El acceso a las ofertas, en la pantalla de resultados. Resaltado porque es el
+   único de la fila que no es un servicio de la ciudad, y ROJO porque el manual
+   reserva el rojo justamente para eso: «rojo sólo para ofertas y alertas». Lo
+   había puesto verde, que es el color de todo lo demás que se toca. */
+.uk-home-chips a.uk-chip-ofertas { background: var(--uk-red-soft); border-color: var(--uk-red); color: var(--uk-red); }
+.uk-home-chips a.uk-chip-ofertas svg { color: var(--uk-red); }
+.uk-home-chips a.uk-chip-ofertas:hover { border-color: var(--uk-red); color: var(--uk-red); }
+.uk-home-chips a.uk-chip-ofertas:hover svg { color: var(--uk-red); }
 .uk-home-chips a:hover { border-color: var(--uk-green); color: var(--uk-green); }
 .uk-home-chips a:hover svg { color: inherit; }
-.uk-home-hero { margin-top: 10px; background-color: #e9efe6; }
+.uk-home-hero { margin-top: 10px; }
 .uk-home-hero-grid { position: relative; z-index: 2; display: grid; grid-template-columns: 1.2fr .8fr; align-items: center; gap: 36px; padding: 36px 0; min-height: 380px; }
 /* Manual · Jerarquías: en APP/WEB el título va Bold 700 de 32 a 40 px. El
    nivel «cartel» —el de 200 a 330 px— existe sólo para redes, así que en

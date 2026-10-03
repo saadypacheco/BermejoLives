@@ -48,11 +48,11 @@ export default function GuardadosPage() {
         {!sesion ? (
           <>
             <p style={{ color: "var(--txt-3)", marginBottom: 20 }}>
-              Todavía no guardaste ningún local. Registrate con tu WhatsApp para guardar los que te interesen
+              Todavía no guardaste ningún local. Entrá con tu WhatsApp para guardar los que te interesen
               y no perderlos, aunque cambies de celular.
             </p>
             <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
-              <CompradorAuthForm onOk={() => setSesion(getUsuarioSession())} titulo="Registrate para guardar" />
+              <CompradorAuthForm onOk={() => setSesion(getUsuarioSession())} titulo="Entrá para guardar" />
             </div>
           </>
         ) : (

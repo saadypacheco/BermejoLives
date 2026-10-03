@@ -48,7 +48,7 @@ const ESTADO: Record<string, Record<string, [string, "ok" | "ojo" | "mal"]>> = {
 };
 
 function Preguntas({ items }: { items: SaberLocalPublico[] }) {
-  if (!items?.length) return <p className="uk-guia-vacio">Todavía no hay nada cargado acá. Preguntale al botón de Ayuda.</p>;
+  if (!items?.length) return <p className="uk-guia-vacio">Todavía no hay nada cargado acá. Preguntale a Dax.</p>;
   return (
     <div className="uk-guia-preguntas">
       {items.map((s) => (
@@ -165,7 +165,7 @@ export default async function GuiaPage() {
               <Link href="/buscar?vista=mapa">Ver el mapa →</Link>
             </div>
             {abiertos.length === 0
-              ? <p className="uk-guia-vacio">Ningún local tiene horario cargado para esta hora. Preguntale al botón de Ayuda «¿qué hay abierto?» o mirá el mapa.</p>
+              ? <p className="uk-guia-vacio">Ningún local tiene horario cargado para esta hora. Preguntale a Dax «¿qué hay abierto?» o mirá el mapa.</p>
               : (
                 <ul>
                   {abiertos.map((c) => (

@@ -1065,7 +1065,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
 
         <label style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13.5, color: "var(--txt-2)" }}>
           <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-          El dueño aceptó aparecer en la plataforma
+          El dueño aceptó aparecer en URUKU
         </label>
 
         {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}

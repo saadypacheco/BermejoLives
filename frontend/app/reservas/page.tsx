@@ -126,7 +126,7 @@ export default function ReservasPage() {
         {grupos.length > 0 && (
           <p style={{ fontSize: 12, color: "var(--uk-ink-soft)", marginTop: 18 }}>
             URUKU te conecta con el comercio: el precio, la entrega y el pago los acordás
-            directamente con el vendedor. La plataforma no participa de la operación.
+            directamente con el vendedor. URUKU no participa de la operación.
           </p>
         )}
       </div>

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   // ningún lado, no está en el sitemap y no se indexa.
   robots: { index: false, follow: false },
   title: "Planes para tu negocio — URUKU",
-  description: "Aparecé en el mapa gratis. Después, tu negocio digitalizado, tus ofertas en las redes de URUKU y un chatbot que atiende a tus clientes.",
+  description: "Aparecé en el mapa gratis. Después, tu negocio completo, tus ofertas en las redes de URUKU y un asistente que atiende a tus clientes.",
 };
 
 function precio(n: number): string {
@@ -36,7 +36,7 @@ export default async function PlanesPage() {
       <div className="uk-container uk-planes">
         <h1>Planes para tu negocio</h1>
         <p className="uk-planes-sub">
-          Aparecer en el mapa es gratis. Cuando quieras más —tu negocio digitalizado, tus ofertas en las
+          Aparecer en el mapa es gratis. Cuando quieras más —tu negocio completo, tus ofertas en las
           redes de URUKU, un chatbot que atienda por vos— elegís hasta dónde.
         </p>
 
@@ -73,7 +73,7 @@ export default async function PlanesPage() {
 
         <p className="uk-planes-nota">
           Se paga por mes, por QR de Bolivia o de Argentina, o por transferencia, desde <Link href="/mi-comercio">Mi negocio</Link>.
-          Sin comisión por venta: cobrás vos, como siempre. ¿Dudas? Preguntale al botón de Ayuda.
+          Sin comisión por venta: cobrás vos, como siempre. ¿Dudas? Preguntale a Dax.
         </p>
       </div>
     </UrukuShell>

@@ -55,7 +55,7 @@ export default function ReclamosPage() {
           <p style={{ color: "var(--txt-3)", marginBottom: 24 }}>
             {nombreComercio
               ? <>Sobre <b style={{ color: "var(--txt)" }}>{nombreComercio}</b>. Contanos qué pasó o qué te gustaría comentar — lo lee el equipo de URUKU.</>
-              : "Contanos qué pasó, ya sea con un negocio o con la plataforma. Lo lee el equipo de URUKU."}
+              : "Contanos qué pasó, ya sea con un negocio o con la web. Lo lee el equipo de URUKU."}
           </p>
           <form onSubmit={enviar} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
             <input className="adm-input" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Tu nombre (opcional)" />

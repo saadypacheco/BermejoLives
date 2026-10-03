@@ -144,7 +144,6 @@ export default async function InicioPage() {
   const nombre = ciudad?.nombre ?? "Bermejo";
   // La foto del hero es de la ciudad; sin foto propia, la de Bermejo sólo en
   // Bermejo. Otra ciudad sin foto va con el fondo liso, no con el río de otra.
-  const heroImg = ciudad?.hero_url || (conGuia ? "/bermejo-ciudad4.png" : "");
   const ofertas = feed.filter((f) => f.tipo === "oferta");
   // Cuando no hay ofertas se muestran las novedades, y entonces el título NO
   // puede seguir diciendo «Ofertas destacadas»: la primera publicación del
@@ -161,7 +160,7 @@ export default async function InicioPage() {
       <AccesosCiudad conGuia={conGuia} />
 
       {/* ===== Hero: qué es esto, y cómo está Bermejo hoy ===== */}
-      <section className="uk-hero uk-home-hero" style={heroImg ? { backgroundImage: `url('${heroImg}')` } : undefined}>
+      <section className="uk-hero uk-home-hero">
         <div className="uk-container uk-home-hero-grid">
           <div>
             <h1>Todo <span>{nombre}</span><br />en un solo lugar</h1>
