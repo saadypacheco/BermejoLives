@@ -86,7 +86,7 @@ def main() -> None:
         f"STORAGE_BUCKET=publicaciones\n"
         f"COMERCIOS_BUCKET=comercios\n"
         f"WEBHOOK_SECRET={webhook}\n"
-        f"WAHA_BASE_URL=http://waha:3000\n"
+        f"WAHA_BASE_URL=http://buscadonde-waha:3000\n"
         f"WAHA_API_KEY={waha_api}\n"
         f"OPENAI_API_KEY=\n"
     )

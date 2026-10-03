@@ -170,6 +170,17 @@ services:
       # de pegarle directo a postgrest:3000 (que no tiene ese prefijo).
       - SUPABASE_URL=https://db.${DOMAIN}
       - FOTOS_PUBLIC_BASE_URL=https://api.${DOMAIN}/fotos
+      # Al NOMBRE DEL CONTENEDOR, por lo mismo que el WHATSAPP_HOOK_URL de
+      # arriba pero en el sentido contrario: `waha` es un alias en la red de
+      # Traefik, y el día que otro proyecto del VPS tenga un servicio con ese
+      # nombre Docker reparte las peticiones entre los dos. De este lado el
+      # síntoma sería mudo: la foto se le pide al WAHA ajeno, falla, y la
+      # oferta entra sin imagen una vez de cada dos.
+      #
+      # Va acá y no en backend/.env porque `environment` le gana a `env_file`:
+      # el nombre del contenedor se define en este archivo, y así la URL no
+      # puede quedar vieja en el .env de un VPS.
+      - WAHA_BASE_URL=http://buscadonde-waha:3000
     volumes:
       - whisper_models:/models      # cache del modelo de transcripción (persiste entre rebuilds)
       - comercio_fotos:/data/fotos  # fotos de comercio (reemplaza a Supabase Storage)

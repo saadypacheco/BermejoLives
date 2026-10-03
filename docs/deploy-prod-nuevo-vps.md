@@ -197,7 +197,7 @@ FRONTEND_URL=https://uruku.bo
 STORAGE_BUCKET=publicaciones
 COMERCIOS_BUCKET=comercios
 WEBHOOK_SECRET=...                # el mismo que en el .env raíz
-WAHA_BASE_URL=http://waha:3000
+WAHA_BASE_URL=http://buscadonde-waha:3000
 WAHA_API_KEY=...                  # el mismo que en el .env raíz
 OPENAI_API_KEY=                   # opcional (transcripción)
 ```
