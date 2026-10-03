@@ -21,78 +21,108 @@
  * orden — este bloque va primero a propósito, porque contra `.uk` empatan en
  * especificidad y gana el que está después. */
 :root {
-  --uk-page: radial-gradient(circle at 20% -10%, rgba(20,152,94,.18), transparent 40%),
-             linear-gradient(180deg, #06171b 0%, #08222a 55%, #061418 100%);
-  --uk-surface: #0f2c33;
-  --uk-surface-2: #0b2027;
-  --uk-ink: #e9f3f0;
-  --uk-ink-soft: #9db4b3;
-  --uk-line: rgba(255,255,255,.09);
-  --uk-header: rgba(8,26,30,.92);
-  --uk-shadow: 0 16px 45px rgba(0,0,0,.42);
-  --uk-shadow-soft: 0 8px 24px rgba(0,0,0,.35);
-  --uk-chip: rgba(255,255,255,.06);
-  --uk-hero-fade: linear-gradient(90deg, rgba(6,20,24,.96) 0%, rgba(6,20,24,.82) 26%, rgba(6,20,24,.25) 58%, rgba(6,20,24,.05) 100%);
-  --uk-green: #1D8D52;      /* manual de identidad · Color */
-  --uk-green-2: #10623E;    /* el extremo del degradé del botón */
-  --uk-green-grad: linear-gradient(180deg, #1D8D52, #10623E);
+  /* LOS COLORES SALEN DEL MANUAL DE IDENTIDAD (páginas 24 y 25), no de acá.
+   * El kit los publica en `docs/Uruku-KIT-COMPLETO/3-Web/uruku-tokens.css` y
+   * este bloque es esa tabla, con los pocos tokens que el sitio necesita
+   * además (encabezado translúcido, segunda superficie, sombras) DERIVADOS de
+   * los del manual y no inventados al lado.
+   *
+   * Lo que había antes era de la época «Bermejo dark»: el modo oscuro tiraba a
+   * azul petróleo (#06171b, #0f2c33) y el manual lo fija en verde muy oscuro
+   * (#0F1713, #18241D). Son dos marcas distintas puestas una al lado de la
+   * otra, y se nota al abrir el sitio de noche.
+   *
+   * Este bloque va en su versión OSCURA porque es la del PANEL de admin, que
+   * no está adentro de `.uk` pero usa varios componentes pintados con estas
+   * variables. Si no existieran, una declaración con `var()` sin valor se
+   * descarta entera: el color pasaba a heredarse —blanco— y el fondo quedaba
+   * transparente, que el sistema dibuja BLANCO. Resultado: desplegables de
+   * texto blanco sobre fondo blanco. El sitio público las pisa con `.uk`
+   * (claro) y `.uk[data-theme="dark"]`, en ese orden: contra `.uk` empatan en
+   * especificidad y gana el que está después, así que este va primero. */
+  --uk-page: #0F1713;
+  --uk-surface: #18241D;
+  --uk-surface-2: #141F19;
+  --uk-ink: #EEF3EF;
+  --uk-ink-soft: #A7B8AD;
+  --uk-line: #2A3A31;
+  --uk-header: rgba(15,23,19,.94);
+  --uk-shadow: 0 10px 30px rgba(0,0,0,.35);
+  --uk-shadow-soft: 0 6px 18px rgba(0,0,0,.28);
+  --uk-chip: #1F2C25;
+  --uk-hero-fade: linear-gradient(90deg, rgba(15,23,19,.96) 0%, rgba(15,23,19,.90) 30%, rgba(15,23,19,.58) 52%, rgba(15,23,19,.14) 72%, rgba(15,23,19,0) 100%);
+  --uk-green: #23A060;
+  --uk-green-2: #178A50;
+  --uk-green-grad: linear-gradient(180deg, #23A060, #178A50);
 }
 
 .uk {
-  /* Acentos de marca URUKU (verde pino + rojo llama, del logo). Iguales en ambos temas. */
-  --uk-green: #1D8D52;      /* manual de identidad · Color */
-  --uk-green-2: #10623E;    /* el extremo del degradé del botón */
-  --uk-green-grad: linear-gradient(180deg, #1D8D52, #10623E);
-  --uk-red: #D92D2D;              /* manual · ofertas y alertas */
-  /* El verde de los ÍCONOS. No es el de marca por capricho: #1D8D52 sobre el
-     fondo oscuro del tema noche queda en 2,9:1 y un ícono de 26 px se pierde.
-     En claro es el verde del manual tal cual; en oscuro, el mismo verde
-     aclarado hasta que se lea. */
-  --uk-green-ic: #1D8D52;
-  --uk-orange: #e0392b;           /* alias: el sitio no usa naranja, es el rojo de marca */
+  /* Los que no cambian entre temas: son del LOGO. */
+  --uk-gold-a: #F6D38A;     /* manual · dorado del logo, nunca en textos */
+  --uk-gold-b: #C98E38;
+  --uk-radius: 24px;        /* manual · tarjetas */
+  --uk-radius-btn: 16px;    /* manual · botones */
   --uk-blue: #2e84d8;
   --uk-violet: #9b54d8;
   --uk-pos: #0eaa64;
   --uk-neg: #e0392b;
-  --uk-radius: 20px;
+  --uk-orange: #e0392b;     /* alias: el sitio no usa naranja, es el rojo de marca */
 
-  /* Tema CLARO (por defecto) — fondo CREMA como el logo */
-  --uk-page: radial-gradient(circle at 20% 0%, rgba(23,122,73,.06), transparent 32%),
-             linear-gradient(180deg, #f7f2e7 0%, #f4eee1 60%, #f8f4ea 100%);
-  --uk-surface: #ffffff;
-  --uk-surface-2: #f6f0e4;
-  --uk-ink: #214533;        /* manual · texto principal */
-  --uk-ink-soft: #4E6053;   /* manual · texto secundario */
-  --uk-line: #e8e2d4;
-  --uk-header: rgba(250,246,238,.94);
-  --uk-shadow: 0 16px 45px rgba(20,58,43,.10);
-  --uk-shadow-soft: 0 8px 24px rgba(20,58,43,.08);
-  --uk-chip: #eaf3ec;
-  --uk-hero-fade: linear-gradient(90deg, rgba(247,242,231,.98) 0%, rgba(247,242,231,.86) 24%, rgba(247,242,231,.10) 55%, rgba(247,242,231,.02) 100%);
+  /* ---- Tema CLARO (manual · página 25, columna «claro») ---- */
+  --uk-green: #1D8D52;
+  --uk-green-2: #10623E;
+  --uk-green-grad: linear-gradient(180deg, #1D8D52, #10623E);
+  /* El verde del TEXTO y de los íconos. El manual lo lista aparte del verde de
+     los botones justamente porque #1D8D52 sobre fondo oscuro queda en 2,9:1 y
+     un ícono de 26 px se pierde. */
+  --uk-green-ic: #1A764C;
+  --uk-green-soft: #E6F2EA;
+  --uk-red: #D92D2D;        /* manual · sólo ofertas y alertas */
+  --uk-red-soft: #FDE8E6;
+  --uk-sky: #E3EDFA;        /* manual · celeste de portada */
+  --uk-page: #F9F6ED;
+  --uk-surface: #FFFFFF;
+  --uk-surface-2: #F1EDE0;
+  --uk-ink: #214533;
+  --uk-ink-soft: #4E6053;
+  --uk-line: #E6E2D6;
+  --uk-header: rgba(249,246,237,.94);
+  --uk-shadow: 0 10px 30px rgba(33,69,51,.10);
+  --uk-shadow-soft: 0 6px 18px rgba(33,69,51,.08);
+  --uk-chip: #ECECE1;
+  --uk-hero-fade: linear-gradient(90deg, rgba(249,246,237,.98) 0%, rgba(249,246,237,.93) 30%, rgba(249,246,237,.62) 52%, rgba(249,246,237,.14) 72%, rgba(249,246,237,0) 100%);
 
   /* Poppins, la fuente de la marca. La carga `next/font` en el layout y la
      expone como --uk-font; el respaldo es por si falla la descarga. Antes acá
      decía `system-ui`, así que URUKU se veía con Segoe UI en Windows, Roboto
      en Android y SF en iPhone: tres marcas distintas. */
-  font-family: var(--uk-font), Poppins, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--uk-font), Poppins, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   color: var(--uk-ink);
   background: var(--uk-page);
   min-height: 100vh;
 }
+
+/* ---- Tema OSCURO (manual · página 25, columna «oscuro») ---- */
 .uk[data-theme="dark"] {
-  --uk-green-ic: #3FBE78;
-  --uk-page: radial-gradient(circle at 20% -10%, rgba(20,152,94,.18), transparent 40%),
-             linear-gradient(180deg, #06171b 0%, #08222a 55%, #061418 100%);
-  --uk-surface: #0f2c33;
-  --uk-surface-2: #0b2027;
-  --uk-ink: #e9f3f0;
-  --uk-ink-soft: #9db4b3;
-  --uk-line: rgba(255,255,255,.09);
-  --uk-header: rgba(8,26,30,.92);
-  --uk-shadow: 0 16px 45px rgba(0,0,0,.42);
-  --uk-shadow-soft: 0 8px 24px rgba(0,0,0,.35);
-  --uk-chip: rgba(255,255,255,.06);
-  --uk-hero-fade: linear-gradient(90deg, rgba(6,20,24,.96) 0%, rgba(6,20,24,.82) 26%, rgba(6,20,24,.25) 58%, rgba(6,20,24,.05) 100%);
+  --uk-green: #23A060;
+  --uk-green-2: #178A50;
+  --uk-green-grad: linear-gradient(180deg, #23A060, #178A50);
+  --uk-green-ic: #4CC985;
+  --uk-green-soft: #1C3325;
+  --uk-red: #F0504A;
+  --uk-red-soft: #3A1A18;
+  --uk-sky: #132330;
+  --uk-page: #0F1713;
+  --uk-surface: #18241D;
+  --uk-surface-2: #141F19;
+  --uk-ink: #EEF3EF;
+  --uk-ink-soft: #A7B8AD;
+  --uk-line: #2A3A31;
+  --uk-header: rgba(15,23,19,.94);
+  --uk-shadow: 0 10px 30px rgba(0,0,0,.35);
+  --uk-shadow-soft: 0 6px 18px rgba(0,0,0,.28);
+  --uk-chip: #1F2C25;
+  --uk-hero-fade: linear-gradient(90deg, rgba(15,23,19,.96) 0%, rgba(15,23,19,.90) 30%, rgba(15,23,19,.58) 52%, rgba(15,23,19,.14) 72%, rgba(15,23,19,0) 100%);
 }
 
 .uk * { box-sizing: border-box; }
@@ -276,7 +306,9 @@
 .uk-hero h1 span { color: var(--uk-green); }
 .uk-hero p { max-width: 540px; font-size: 17px; line-height: 1.55; margin: 0; color: var(--uk-ink); opacity: .92; }
 .uk-hero-actions { display: flex; gap: 12px; margin-top: 24px; flex-wrap: wrap; }
-.uk-btn { display: inline-flex; align-items: center; gap: 9px; padding: 14px 22px; border-radius: 15px; font-weight: 800; box-shadow: var(--uk-shadow-soft); cursor: pointer; }
+/* Manual · Jerarquías (página 28): botón y chip van SemiBold 600, 14-16 px.
+   Estaban en 800, que es el peso del PRECIO: todo gritaba lo mismo. */
+.uk-btn { display: inline-flex; align-items: center; gap: 9px; padding: 14px 22px; border-radius: var(--uk-radius-btn, 16px); font-size: 16px; font-weight: 600; box-shadow: var(--uk-shadow-soft); cursor: pointer; }
 .uk-btn svg { width: 18px; height: 18px; }
 .uk-btn-primary { color: #fff; background: var(--uk-green-grad); }
 .uk-btn-secondary { background: var(--uk-surface); border: 1px solid var(--uk-line); color: var(--uk-ink); }
@@ -1079,7 +1111,7 @@
 /* ===== Home: "Todo Bermejo en un solo lugar" ===== */
 .uk-home-chips { display: flex; gap: 8px; overflow-x: auto; padding: 12px 0 4px; scrollbar-width: none; }
 .uk-home-chips::-webkit-scrollbar { display: none; }
-.uk-home-chips a { flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border: 1px solid var(--uk-line); border-radius: 12px; background: var(--uk-surface); color: var(--uk-ink); text-decoration: none; font-size: 13.5px; font-weight: 700; }
+.uk-home-chips a { flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border: 1px solid var(--uk-line); border-radius: 12px; background: var(--uk-surface); color: var(--uk-ink); text-decoration: none; font-size: 14px; font-weight: 600; }
 .uk-home-chips a svg { color: var(--uk-green-ic); }
 /* El acceso a las ofertas, en la pantalla de resultados. Va resaltado porque
    es el único de la fila que no es un servicio de la ciudad: es lo que URUKU
@@ -1091,7 +1123,10 @@
 .uk-home-chips a:hover svg { color: inherit; }
 .uk-home-hero { margin-top: 10px; background-color: #e9efe6; }
 .uk-home-hero-grid { position: relative; z-index: 2; display: grid; grid-template-columns: 1.2fr .8fr; align-items: center; gap: 36px; padding: 36px 0; min-height: 380px; }
-.uk-home-hero h1 { margin: 0 0 12px; font-size: clamp(34px, 4.6vw, 54px); line-height: 1.04; letter-spacing: -.03em; }
+/* Manual · Jerarquías: en APP/WEB el título va Bold 700 de 32 a 40 px. El
+   nivel «cartel» —el de 200 a 330 px— existe sólo para redes, así que en
+   la web no hay nada más grande que esto. Estaba en 54. */
+.uk-home-hero h1 { margin: 0 0 12px; font-size: clamp(32px, 4.2vw, 40px); font-weight: 700; line-height: 1.1; letter-spacing: -.025em; }
 .uk-home-hero h1 span { color: var(--uk-green); }
 .uk-home-btn-claro { background: var(--uk-surface); }
 .uk-home-hero .uk-hero-actions .uk-btn, .uk-home-hero .uk-hero-actions .uk-btn-ghost { flex: 0 0 auto; width: auto; }
@@ -1194,10 +1229,10 @@
 @media (max-width: 760px) { .uk-comunidad-grid { grid-template-columns: 1fr; } }
 
 /* ===== «¿Te contestó?» ===== */
-.uk-contesto { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; max-width: min(92vw, 520px); padding: 12px 16px; border-radius: 16px; background: #0f2c33; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.28); font-size: 14px; }
+.uk-contesto { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; max-width: min(92vw, 520px); padding: 12px 16px; border-radius: 16px; background: #18241D; color: #EEF3EF; box-shadow: 0 10px 30px rgba(0,0,0,.35); font-size: 14px; }
 @media (min-width: 900px) { .uk-contesto { bottom: 24px; } }
 .uk-contesto-btns { display: flex; gap: 6px; }
-.uk-contesto-btns button { border: 0; border-radius: 10px; padding: 8px 14px; font-weight: 800; cursor: pointer; background: #fff; color: #0f2c33; }
+.uk-contesto-btns button { border: 0; border-radius: 10px; padding: 8px 14px; font-weight: 800; cursor: pointer; background: #fff; color: #18241D; }
 .uk-contesto-btns button.suave { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.35); font-weight: 600; }
 .uk-contesto-gracias { font-weight: 600; }
 .uk-responde { color: var(--uk-green); font-weight: 700; }
