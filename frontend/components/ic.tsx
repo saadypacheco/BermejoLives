@@ -150,7 +150,14 @@ export function Ic({ n, s = 20, tono = "texto", peso = "duotone", className, sty
   return (
     <svg width={s} height={s} viewBox="0 0 256 256" aria-hidden
          fill={tono === "marca" ? VERDE : "currentColor"}
-         className={className} style={{ flexShrink: 0, ...style }}
+         className={className}
+         // `inline-block` A PROPÓSITO. El preflight de Tailwind pone
+         // `svg { display: block }`, y estos íconos reemplazaron a emojis, que
+         // son TEXTO: adentro de una frase —«Lo que no esté, preguntale a
+         // Dax»— el ícono se iba solo a un renglón y partía la oración en dos.
+         // Adentro de un flex no cambia nada: ahí el ítem se bloquea igual.
+         // El medio em de descenso lo apoya en la base del texto.
+         style={{ display: "inline-block", verticalAlign: "-0.15em", flexShrink: 0, ...style }}
          dangerouslySetInnerHTML={{ __html: dibujo(n, peso) }} />
   );
 }

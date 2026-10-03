@@ -256,7 +256,7 @@ export default async function GuiaPage() {
         </section>
 
         <p className="uk-guia-pie">
-          ¿Falta algo de {nombre}? Preguntalo al botón de Ayuda: lo que no sepa queda anotado y lo agregamos acá.
+          ¿Falta algo de {nombre}? Preguntáselo a Dax: lo que no sepa queda anotado y lo agregamos acá.
         </p>
       </div>
     </UrukuShell>

@@ -18,7 +18,7 @@ export const metadata: Metadata = {
  * grupo de compras pega en su grupo, o lo que va en el volante.
  *
  * Si el enlace todavía no está cargado en /contenido, la página lo dice y
- * manda a la Ayuda: nunca un botón muerto.
+ * manda a Dax: nunca un botón muerto.
  */
 export default async function ComunidadPage() {
   const { comunidad, canal } = await enlacesComunidad();
@@ -43,7 +43,7 @@ export default async function ComunidadPage() {
               <li><Ic n="ofertas" s={16} /> <b>Las ofertas del día</b> que los comercios mandan y se aprueban.</li>
               <li><Ic n="frontera" s={16} /> <b>Cómo está el paso</b>: puente, chalanas, río.</li>
               <li><Ic n="ciudad" s={16} /> <b>Un grupo por ciudad</b> (Salta, Jujuy, Orán, Tartagal…) para preguntar a los que ya vinieron: dónde comer, cuánto pagaron, qué tour les fue bien.</li>
-              <li><Ic n="dax" s={16} /> Lo que no esté, se lo preguntás a la <b>Ayuda de URUKU</b> o a la gente del grupo.</li>
+              <li><Ic n="dax" s={16} /> Lo que no esté, se lo preguntás a <b>Dax</b> o a la gente del grupo.</li>
             </ul>
 
             <h2>Las reglas, cortas</h2>
@@ -75,7 +75,7 @@ export default async function ComunidadPage() {
               <div className="uk-comunidad-pronto">
                 <b>La comunidad se abre en estos días.</b>
                 <span>Mientras tanto, la cotización, las ofertas y el estado del paso están en la <Link href="/guia">guía</Link>, y lo que
-                  quieras preguntar, en el botón de <b>Ayuda</b>.</span>
+                  quieras preguntar, preguntáselo a <b>Dax</b>.</span>
               </div>
             )}
           </div>
