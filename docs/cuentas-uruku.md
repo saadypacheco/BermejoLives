@@ -19,19 +19,35 @@ existe para el visitante.
 
 ## Las cuentas
 
-**Estado leído de `redes_sociales` en producción el 1/10/2026:**
+**Estado verificado el 3/10/2026**, abriendo cada enlace del sitio con un
+navegador (no con `curl`: las redes le contestan cualquier cosa a un robot).
 
-| Red | Usuario / URL | Cargada en /contenido | Mail o teléfono de la cuenta |
-|---|---|---|---|
-| TikTok | `@uruku.bo` | ✅ | **NO ANOTADO** — ver «Cómo averiguarlo» |
-| Instagram | `@uruku.bo` | ✅ | **NO ANOTADO** |
-| YouTube | `@Uruku-Bermejo` | ✅ | **NO ANOTADO** (es una cuenta de Google) |
-| Facebook | `https://www.facebook.com/uruku.bo/` | ✅ | **NO ANOTADO** (cuelga de un perfil personal) |
-| Canal de WhatsApp | — | ❌ **enlace sin cargar** | Registrador `64610187`. Más abajo dice que se creó el 6/9: lo que falta es pegar el enlace |
-| Comunidad de WhatsApp | — | ❌ **enlace sin cargar** | — |
+| Red | Usuario / URL | En el sitio | ¿La cuenta existe? | Mail o teléfono |
+|---|---|---|---|---|
+| Facebook | `facebook.com/uruku.bo/` | ✅ | **Sí**, con descripción cargada | **NO ANOTADO** (cuelga de un perfil personal) |
+| TikTok | `@uruku.bo` | ✅ | **Sí, pero vacía**: 0 videos, 1 seguidor | **NO ANOTADO** |
+| YouTube | `@Uruku-Bermejo` | ✅ | **Sí** | **NO ANOTADO** (cuenta de Google) |
+| Instagram | `@uruku.bo` | ✅ | **NO.** Contesta «Profile no está disponible» | — |
+| Canal de WhatsApp | — | ❌ sin enlace | Creado el 6/9 en el operativo | Registrador `64610187` |
+| Comunidad de WhatsApp | — | ❌ sin enlace | — | — |
 
-> Las cuatro redes **ya existen y están publicadas en el sitio**. Lo que falta
-> no es crearlas: es saber **con qué cuenta se entra a cada una**, que es
+> **El sitio manda a un Instagram que no existe.** El ícono está en la barra
+> superior de TODAS las pantallas, y quien lo toca cae en «Profile no está
+> disponible». Es peor que no tener Instagram: una marca que se presenta con un
+> enlace roto se lee como una marca abandonada.
+>
+> Se apaga en diez segundos: **uruku.bo/contenido → Redes sociales → vaciar el
+> campo de Instagram**. Una red con la URL vacía no se dibuja. Volver a
+> cargarlo el día que la cuenta exista.
+
+> **El handle de YouTube nombra una ciudad** (`@Uruku-Bermejo`). Es lo mismo que
+> sacamos del título del sitio y de la imagen de compartir: con cuatro ciudades
+> arrancando, la marca no puede presentarse como la de un pueblo. YouTube deja
+> cambiarlo (una vez cada 14 días). El resto de las redes ya usan `uruku.bo`
+> parejo, que es como tiene que ser.
+
+> Tres de las cuatro redes existen y están publicadas. Lo que falta en esas
+> tres no es crearlas: es saber **con qué cuenta se entra a cada una**, que es
 > exactamente el dato que la base no guarda y que este archivo venía pidiendo
 > desde que se escribió.
 
@@ -95,8 +111,22 @@ contraseña en Google no cambia la del panel, y al revés tampoco.
 
 ## Qué falta
 
-- [ ] Cargar la **página de Facebook** en `/contenido`. La URL ya está
-      (arriba); falta pegarla, y sin eso el ícono no se dibuja en el sitio.
+- [ ] **Apagar el enlace de Instagram** en `/contenido` hasta que la cuenta
+      exista. Hoy el sitio manda a una pantalla de error desde todas sus
+      pantallas.
+- [ ] **Decidir qué pasa con Instagram.** Dos caminos, y conviene saber en cuál
+      se está antes de perder una tarde:
+      - Si el handle `uruku.bo` **está libre** al intentar registrarlo, la
+        cuenta nunca llegó a existir o se borró: se crea de cero, con el mail de
+        Workspace y doble factor desde el principio.
+      - Si está **tomado**, la cuenta existe y está desactivada o inhabilitada:
+        se recupera por instagram.com/accounts/login → «¿Olvidaste la
+        contraseña?», probando los mails de Workspace y los teléfonos de URUKU.
+        No se puede crear otra con ese nombre.
+- [ ] **Cambiar el handle de YouTube** a uno sin ciudad.
+- [ ] **Publicar algo en TikTok.** La cuenta existe y está en cero; un perfil
+      vacío enlazado desde el sitio tiene el mismo problema que el enlace roto,
+      más suave.
 - [ ] Configurar la **difusión automática** a las redes. Los pasos y los
       tokens, en [difusion-redes.md](difusion-redes.md).
 - [ ] Cargar el **canal de WhatsApp** en `/contenido`. Está creado en el
