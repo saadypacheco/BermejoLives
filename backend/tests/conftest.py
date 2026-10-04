@@ -979,7 +979,7 @@ class FakeRepo:
         "id", "slug", "nombre", "whatsapp", "telefono", "modalidad", "descripcion",
         "prod_obs_human", "prod_det_ia", "subcategoria", "codigo", "direccion", "lat", "lng", "verificado", "suspendido",
         "paga_hasta", "portada_url", "portada_thumb_url", "portada_pos", "cargado_por", "created_at",
-        "lugar_id", "puesto",
+        "lugar_id", "puesto", "ia_analizado_at",
     )
 
     # ---- reclamos ----
@@ -1112,14 +1112,16 @@ class FakeRepo:
             for c in items[:limit]
         ]
 
-    def comercios_sin_analizar(self, limite):
+    def comercios_sin_analizar(self, limite, ciudad_id=None):
         pend = [c for c in self.comercios.values()
-                if c.get("activo", True) and not c.get("ia_analizado_at") and c.get("portada_url")]
+                if c.get("activo", True) and not c.get("ia_analizado_at") and c.get("portada_url")
+                and (not ciudad_id or c.get("ciudad_id") == ciudad_id)]
         return sorted(pend, key=lambda c: c.get("created_at") or "")[:limite]
 
-    def contar_sin_analizar(self):
+    def contar_sin_analizar(self, ciudad_id=None):
         return len([c for c in self.comercios.values()
-                    if c.get("activo", True) and not c.get("ia_analizado_at") and c.get("portada_url")])
+                    if c.get("activo", True) and not c.get("ia_analizado_at") and c.get("portada_url")
+                    and (not ciudad_id or c.get("ciudad_id") == ciudad_id)])
 
     def registrar_rubros_propuestos(self, textos, comercio_id):
         from app.db.repository import _normalizar_rubro
@@ -1417,7 +1419,14 @@ class FakeRepo:
     def borrar_rol(self, slug):
         self.roles.pop(slug, None)
 
+    # Slugs que el repo real devolvería como None (la ciudad no existe). El resto
+    # se inventa permisivo (`ciu-<slug>`) porque muchos tests usan ciudades
+    # sueltas sin sembrarlas; para probar el 404 se usa uno de éstos.
+    SLUGS_INEXISTENTES = {"no-existe", "atlantida"}
+
     def get_ciudad_id(self, slug):
+        if slug in self.SLUGS_INEXISTENTES:
+            return None
         return {"bermejo": "ciu-1"}.get(slug) or f"ciu-{slug}"
 
     def update_comercio(self, comercio_id, patch, rubro_slugs=None):

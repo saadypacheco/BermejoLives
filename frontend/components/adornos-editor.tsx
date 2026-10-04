@@ -21,13 +21,25 @@ import {
 } from "@/lib/api";
 import { BANDERAS, LAPACHOS } from "@/lib/adornos";
 import { agregarTiles } from "@/lib/mapa-tiles";
+import { ElegirCiudad } from "@/components/admin-ciudad";
+import type { Ciudad } from "@/lib/types";
 
-const BERMEJO: [number, number] = [-22.7361, -64.3433];
+// Para una ciudad cargada sin coordenadas: el mapa abre en la región, no en el
+// océano, y se acerca tocando.
+const CENTRO_SIN_COORDS: [number, number] = [-21.5, -64.5];
 const TIPOS: [Adorno["tipo"], string][] = [
   ["chalana", "Chalana"], ["lapacho", "Lapacho"], ["bandera", "Bandera"],
 ];
 
-export function AdornosEditor() {
+/** Con «todas» las ciudades NO cae en Bermejo: pide elegir. Con una ciudad,
+ *  remonta por `key` para rearmar el mapa (centro, tiles, comercios de fondo) y
+ *  la lista sin arrastrar el adorno seleccionado de la otra. */
+export function AdornosEditor({ ciudad }: { ciudad: Ciudad | null }) {
+  if (!ciudad) return <ElegirCiudad que="adornos" />;
+  return <AdornosDeCiudad key={ciudad.slug} ciudad={ciudad} />;
+}
+
+function AdornosDeCiudad({ ciudad }: { ciudad: Ciudad }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const LRef = useRef<any>(null);
@@ -50,7 +62,7 @@ export function AdornosEditor() {
   const sel = items.find((a) => a.id === selId) || null;
 
   async function cargar() {
-    setItems(await adminListAdornos().catch((e) => { setErr(String(e)); return []; }));
+    setItems(await adminListAdornos(ciudad.slug).catch((e) => { setErr(String(e)); return []; }));
   }
   useEffect(() => { cargar(); }, []);
 
@@ -59,9 +71,10 @@ export function AdornosEditor() {
     loadLeaflet().then((L) => {
       if (cancelled || !elRef.current || mapRef.current) return;
       LRef.current = L;
-      const map = L.map(elRef.current, { attributionControl: true }).setView(BERMEJO, 15);
+      const centro: [number, number] | null = ciudad.lat != null && ciudad.lng != null ? [ciudad.lat, ciudad.lng] : null;
+      const map = L.map(elRef.current, { attributionControl: true }).setView(centro ?? CENTRO_SIN_COORDS, centro ? 15 : 6);
       mapRef.current = map;
-      agregarTiles(L, map, { oscuro: true });
+      agregarTiles(L, map, { oscuro: true, ciudad });
 
       fondoRef.current = L.layerGroup().addTo(map);
       capaRef.current = L.layerGroup().addTo(map);
@@ -70,8 +83,10 @@ export function AdornosEditor() {
       map.on("click", (e: any) => crear(e.latlng.lat, e.latlng.lng));
 
       // Los comercios de fondo, apagados: están para decidir dónde NO poner un
-      // adorno, no para trabajar con ellos.
-      getComerciosMapa().then((cs: any[]) => {
+      // adorno, no para trabajar con ellos. Son los de la ciudad elegida: sin
+      // pasarle la ciudad, getComerciosMapa usa el recuadro de Bermejo (y una
+      // ciudad sin coordenadas mostraría los de Bermejo: mejor ninguno).
+      (centro ? getComerciosMapa(ciudad) : Promise.resolve([])).then((cs: any[]) => {
         if (cancelled) return;
         cs.forEach((c) => {
           if (c.lat == null || c.lng == null) return;
@@ -123,7 +138,7 @@ export function AdornosEditor() {
     setErr(""); setBusy(true);
     try {
       const nuevo = await adminCrearAdorno({
-        tipo: tipoRef.current, lat, lng,
+        tipo: tipoRef.current, ciudad_slug: ciudad.slug, lat, lng,
         // Sólo las banderas la usan; en los demás va null y la base la ignora.
         // Las chalanas no tienen variedad. En lapacho, vacío significa "al
         // azar" y se guarda como null para que el color salga del id.
@@ -165,6 +180,7 @@ export function AdornosEditor() {
 
   return (
     <div className="uk-adornos-editor">
+      <h3 style={{ margin: "0 0 8px", fontSize: 16 }}>Adornos · {ciudad.nombre}</h3>
       <p className="uk-hint">
         Elegí qué querés poner y tocá el mapa. Arrastrá para mover, tocá un
         adorno para seleccionarlo. Los puntos grises son los comercios: sirven

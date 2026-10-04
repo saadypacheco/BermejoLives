@@ -49,8 +49,10 @@ async function authFetch(path: string, opts: RequestInit = {}) {
   // puesto, no saltaba nunca. Se resuelve una vez en la puerta, así ninguna
   // función nueva puede volver a olvidarse.
   if (!res.ok) {
-    const d = await res.json().catch(() => ({} as { detail?: string }));
-    throw new Error(d.detail ?? `Falló ${path} (HTTP ${res.status})`);
+    const d = await res.json().catch(() => ({} as { detail?: unknown }));
+    // `detalleLegible`: en un 422 `detail` es un arreglo, y pasarlo tal cual a
+    // `new Error()` deja el mensaje en «[object Object]».
+    throw new Error(detalleLegible(d.detail) ?? `Falló ${path} (HTTP ${res.status})`);
   }
   return res;
 }
@@ -166,6 +168,9 @@ export type ComercioPorVerificar = {
    *  arma la base con lo que vende y dónde está, y se mantiene solo. No es un
    *  defecto: en Bermejo la mayoría de los puestos son así. */
   sin_cartel?: boolean;
+  /** Cuándo la IA clasificó la foto (null = nunca). «Con foto sin clasificar»
+   *  es `portada_url != null && ia_analizado_at == null`. */
+  ia_analizado_at?: string | null;
   /** El rubro PRINCIPAL: el de la ficha, el color del pin y el filtro. */
   rubros?: { nombre: string; slug: string };
   /** Todos los rubros del comercio, como los anida PostgREST. */
@@ -174,14 +179,13 @@ export type ComercioPorVerificar = {
   lugares?: { nombre: string; tipo: string; lat: number | null; lng: number | null; portada_thumb_url?: string | null } | null;
 };
 
-export async function listComerciosPorVerificar(): Promise<ComercioPorVerificar[]> {
-  const res = await authFetch(`/moderacion/comercios?verificado=false`);
-  return itemsDe<ComercioPorVerificar>(res, "los comercios por verificar");
-}
-
-export async function listTodosComercios(): Promise<ComercioPorVerificar[]> {
+/** Todos los comercios activos. `truncado` avisa que el backend llegó a su tope
+ *  y hay más de los que trajo: de esta lista salen el contador de la pestaña y
+ *  el resumen por ciudad, y cortada daría totales plausibles y falsos. */
+export async function listTodosComercios(): Promise<{ items: ComercioPorVerificar[]; truncado: boolean }> {
   const res = await authFetch(`/moderacion/comercios?todos=true`);
-  return itemsDe<ComercioPorVerificar>(res, "los comercios");
+  const data = await res.json().catch(() => ({}));
+  return { items: (data.items ?? []) as ComercioPorVerificar[], truncado: data.truncado === true };
 }
 
 /** El mismo horario a muchos comercios de una: la única forma de que 1.246
@@ -261,13 +265,16 @@ export type LugarAdmin = {
   poligono?: [number, number][] | null;
 };
 
-export async function adminListLugares(ciudadSlug = "bermejo"): Promise<LugarAdmin[]> {
+// Sin ciudad por defecto a propósito: con «Bermejo» de default, un panel que
+// todavía no eligió ciudad listaba (y creaba) en Bermejo sin que nadie lo
+// dijera. Que TypeScript obligue a cada llamador a nombrarla.
+export async function adminListLugares(ciudadSlug: string): Promise<LugarAdmin[]> {
   const res = await authFetch(`/admin/lugares?ciudad_slug=${encodeURIComponent(ciudadSlug)}`);
   const items = await itemsDe<LugarAdmin & { comercios?: { count: number }[] }>(res, "los lugares");
   return items.map((l) => ({ ...l, n_comercios: l.comercios?.[0]?.count ?? 0 }));
 }
 
-export async function adminCrearLugar(body: { nombre: string; tipo?: string; ciudad_slug?: string; lat?: number | null; lng?: number | null }): Promise<LugarAdmin> {
+export async function adminCrearLugar(body: { nombre: string; tipo?: string; ciudad_slug: string; lat?: number | null; lng?: number | null }): Promise<LugarAdmin> {
   const res = await authFetch(`/admin/lugares`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   return (await res.json()).lugar as LugarAdmin;
 }
@@ -317,12 +324,12 @@ export type AdornoAdmin = {
   lat: number; lng: number; giro?: number | null; escala?: number | null;
 };
 
-export async function adminListAdornos(ciudadSlug = "bermejo"): Promise<AdornoAdmin[]> {
+export async function adminListAdornos(ciudadSlug: string): Promise<AdornoAdmin[]> {
   const res = await authFetch(`/admin/adornos?ciudad_slug=${encodeURIComponent(ciudadSlug)}`);
   return itemsDe<AdornoAdmin>(res, "los adornos");
 }
 
-export async function adminCrearAdorno(body: { tipo: string; lat: number; lng: number; giro?: number; escala?: number; variante?: string | null }): Promise<AdornoAdmin> {
+export async function adminCrearAdorno(body: { tipo: string; ciudad_slug: string; lat: number; lng: number; giro?: number; escala?: number; variante?: string | null }): Promise<AdornoAdmin> {
   const res = await authFetch(`/admin/adornos`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   return (await res.json()).adorno as AdornoAdmin;
 }
@@ -584,15 +591,21 @@ export type Tanda = {
   sin_mas: boolean;
 };
 
-export async function pendientesAnalisis(): Promise<number> {
-  const res = await authFetch("/admin/comercios/pendientes-analisis");
+// `ciudad` es el slug. Sin él cuenta/analiza todas las ciudades; con él, sólo
+// esa: así «Clasificar por fotos · Santa Cruz» no gasta cuota de la IA en
+// fotos de otra ciudad.
+export async function pendientesAnalisis(ciudad?: string): Promise<number> {
+  const p = new URLSearchParams();
+  if (ciudad) p.set("ciudad", ciudad);
+  const res = await authFetch(`/admin/comercios/pendientes-analisis${p.toString() ? `?${p}` : ""}`);
   if (!res.ok) throw new Error("No se pudo consultar los pendientes");
   return (await res.json()).pendientes ?? 0;
 }
 
-export async function analizarTanda(limite = 3, aplicar = true): Promise<Tanda> {
-  const res = await authFetch(
-    `/admin/comercios/analizar-tanda?limite=${limite}&aplicar=${aplicar}`, { method: "POST" });
+export async function analizarTanda(limite = 3, aplicar = true, ciudad?: string): Promise<Tanda> {
+  const p = new URLSearchParams({ limite: String(limite), aplicar: String(aplicar) });
+  if (ciudad) p.set("ciudad", ciudad);
+  const res = await authFetch(`/admin/comercios/analizar-tanda?${p}`, { method: "POST" });
   if (!res.ok) {
     const d = await res.json().catch(() => ({}));
     throw new Error(d.detail ?? "No se pudo analizar la tanda");
@@ -1315,6 +1328,17 @@ export function misPermisos(): string[] {
     const carga = JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
     return carga.permisos ?? (carga.rol === "admin" ? ["*"] : []);
   } catch { return []; }
+}
+/** La ciudad (slug) de quien está usando el panel, del claim `ciudad` del token.
+ *  Sirve de punto de partida del selector de ciudad: un usuario de Santa Cruz
+ *  abre el panel ya parado en Santa Cruz. Es un filtro, no un permiso. */
+export function miCiudad(): string | null {
+  const t = getToken();
+  if (!t) return null;
+  try {
+    const carga = JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof carga.ciudad === "string" && carga.ciudad ? carga.ciudad : null;
+  } catch { return null; }
 }
 export function puedo(permiso: string): boolean {
   const p = misPermisos();

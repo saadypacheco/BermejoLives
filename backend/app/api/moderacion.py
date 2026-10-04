@@ -213,6 +213,10 @@ def revisar_con_ia(
 
 
 # ---- Moderación de comercios (alta del agente de campo) ----
+#: Cuántos comercios trae como máximo el listado completo del panel.
+TOPE_LISTADO_COMERCIOS = 5000
+
+
 @router.get("/moderacion/comercios")
 def listar_comercios(
     verificado: bool | None = Query(default=False),
@@ -220,13 +224,21 @@ def listar_comercios(
     _mod: dict = Depends(require_moderador),
     repo: Repo = Depends(get_repo),
 ) -> dict:
+    truncado = False
     if todos:
-        # El panel filtra/busca/pagina del lado del cliente: traemos hasta 5000
-        # (suficiente para el admin; si algún día se superan, pasar a filtro server-side).
-        items = repo.list_todos_comercios(verificado=None, limit=5000)
+        # El panel filtra/busca/pagina del lado del cliente: traemos hasta el
+        # tope (suficiente para el admin; si algún día se supera, pasar a filtro
+        # server-side).
+        items = repo.list_todos_comercios(verificado=None, limit=TOPE_LISTADO_COMERCIOS)
+        # De esta lista salen el contador de la pestaña y el resumen por ciudad.
+        # Cortada en el tope, esos totales serían plausibles y falsos: se avisa
+        # para que el panel lo diga en vez de mostrarlos como completos.
+        truncado = len(items) >= TOPE_LISTADO_COMERCIOS
+        if truncado:
+            logger.error("moderacion.comercios_truncados", tope=TOPE_LISTADO_COMERCIOS)
     else:
         items = repo.list_comercios_admin(verificado)
-    return {"items": items, "total": len(items)}
+    return {"items": items, "total": len(items), "truncado": truncado}
 
 
 @router.post("/moderacion/comercios/{comercio_id}/verificar")
@@ -534,13 +546,28 @@ class LugarAdminBody(BaseModel):
     poligono: list | None = None
 
 
+def _ciudad_id_o_404(repo: Repo, slug: str) -> str:
+    """Resuelve el slug de una ciudad o corta con 404.
+
+    Antes un slug desconocido caía en Bermejo en silencio: con el selector de
+    ciudad del panel eso es peor que un error, porque el admin cree que está
+    viendo (o escribiendo en) Tarija y en realidad está en Bermejo. Falla fuerte.
+    """
+    ciudad_id = repo.get_ciudad_id(slug)
+    if not ciudad_id:
+        raise HTTPException(status_code=404, detail=f"Ciudad no encontrada: {slug}")
+    return ciudad_id
+
+
 @router.get("/admin/lugares")
 def admin_list_lugares(
+    # Sin parámetro sigue valiendo Bermejo: los bundles viejos del panel que
+    # quedan en el service worker no mandan la ciudad.
     ciudad_slug: str = Query(default="bermejo"),
     _mod: dict = Depends(require_permiso("lugares")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    ciudad_id = repo.get_ciudad_id(ciudad_slug) or repo.get_ciudad_id("bermejo")
+    ciudad_id = _ciudad_id_o_404(repo, ciudad_slug)
     return {"items": repo.list_lugares(ciudad_id)}
 
 
@@ -553,7 +580,9 @@ def admin_crear_lugar(
     nombre = (body.nombre or "").strip()
     if not nombre:
         raise HTTPException(status_code=400, detail="Falta el nombre")
-    ciudad_id = repo.get_ciudad_id(body.ciudad_slug or "bermejo") or repo.get_ciudad_id("bermejo")
+    # `is None` y no `or`: un slug vacío es un valor desconocido, no «sin
+    # parámetro». Con `or`, un panel que mandara "" creaba el lugar en Bermejo.
+    ciudad_id = _ciudad_id_o_404(repo, "bermejo" if body.ciudad_slug is None else body.ciudad_slug)
     lugar = repo.crear_lugar({"nombre": nombre, "tipo": body.tipo or "mercado", "ciudad_id": ciudad_id, "lat": body.lat, "lng": body.lng})
     logger.info("admin.lugar_creado", lugar=lugar["id"], by=admin["email"])
     return {"ok": True, "lugar": lugar}
@@ -1405,7 +1434,9 @@ async def analizar_comercio(
         raise HTTPException(status_code=400, detail="El comercio no tiene fotos para analizar")
 
     try:
-        propuesta = await run_in_threadpool(analizar_fotos, urls, repo.list_rubros())
+        ciudad_comercio = (repo.get_ciudad_por_id(comercio["ciudad_id"])
+                           if comercio.get("ciudad_id") else None)
+        propuesta = await run_in_threadpool(analizar_fotos, urls, repo.list_rubros(), ciudad_comercio)
     except VisionNoConfigurada as exc:
         raise HTTPException(status_code=503, detail=f"{exc}. Cargá GEMINI_API_KEY en backend/.env") from exc
 
@@ -1461,16 +1492,22 @@ async def analizar_comercio(
 # ---- Análisis por fotos en tanda ----
 @router.get("/admin/comercios/pendientes-analisis")
 def pendientes_analisis(
+    # Filtro del selector de ciudad del panel (no un permiso). Un slug que no
+    # existe da 404: devolver el total general haría creer que esa ciudad tiene
+    # pendientes que en realidad son de otra.
+    ciudad: str | None = Query(default=None),
     _admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    return {"pendientes": repo.contar_sin_analizar()}
+    ciudad_id = _ciudad_id_o_404(repo, ciudad) if ciudad else None
+    return {"pendientes": repo.contar_sin_analizar(ciudad_id)}
 
 
 @router.post("/admin/comercios/analizar-tanda")
 async def analizar_tanda(
     limite: int = Query(5, ge=1, le=20),
     aplicar: bool = Query(True),
+    ciudad: str | None = Query(default=None),
     admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
@@ -1481,20 +1518,28 @@ async def analizar_tanda(
     frecuencia de Gemini. El panel llama a esto en bucle, así el progreso se ve
     y el proceso se puede cortar en cualquier momento sin perder lo hecho.
     """
-    pendientes = repo.comercios_sin_analizar(limite)
+    ciudad_id_filtro = _ciudad_id_o_404(repo, ciudad) if ciudad else None
+    pendientes = repo.comercios_sin_analizar(limite, ciudad_id_filtro)
     if not pendientes:
         return {"procesados": 0, "restantes": 0, "resultados": [], "sin_mas": True}
 
     rubros = repo.list_rubros()
     resultados = []
+    # La ciudad de cada comercio decide el prompt (frontera o no). Con el filtro
+    # puesto es siempre la misma; sin él se repiten pocas: se cachea por tanda.
+    ciudades: dict[str | None, dict | None] = {}
 
     for comercio in pendientes:
         urls = [f["url"] for f in repo.list_fotos_comercio(comercio["id"]) if f.get("url")]
         if comercio.get("portada_url"):
             urls.insert(0, comercio["portada_url"])
 
+        cid = comercio.get("ciudad_id")
+        if cid not in ciudades:
+            ciudades[cid] = repo.get_ciudad_por_id(cid) if cid else None
+
         try:
-            propuesta = await run_in_threadpool(analizar_fotos, urls, rubros)
+            propuesta = await run_in_threadpool(analizar_fotos, urls, rubros, ciudades[cid])
         except VisionNoConfigurada as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -1543,7 +1588,7 @@ async def analizar_tanda(
     logger.info("vision.tanda", procesados=len(resultados), by=admin["email"])
     return {
         "procesados": len(resultados),
-        "restantes": repo.contar_sin_analizar(),
+        "restantes": repo.contar_sin_analizar(ciudad_id_filtro),
         "resultados": resultados,
         "sin_mas": False,
     }
@@ -1570,7 +1615,7 @@ def admin_list_adornos(
     _mod: dict = Depends(require_moderador),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    ciudad_id = repo.get_ciudad_id(ciudad_slug) or repo.get_ciudad_id("bermejo")
+    ciudad_id = _ciudad_id_o_404(repo, ciudad_slug)
     return {"items": repo.list_adornos(ciudad_id)}
 
 
@@ -1586,7 +1631,7 @@ def admin_crear_adorno(
     if body.lat is None or body.lng is None:
         raise HTTPException(status_code=400, detail="Falta la ubicación")
 
-    ciudad_id = repo.get_ciudad_id(body.ciudad_slug or "bermejo") or repo.get_ciudad_id("bermejo")
+    ciudad_id = _ciudad_id_o_404(repo, "bermejo" if body.ciudad_slug is None else body.ciudad_slug)
     adorno = repo.crear_adorno({
         "tipo": tipo, "lat": body.lat, "lng": body.lng, "ciudad_id": ciudad_id,
         "giro": body.giro if body.giro is not None else 0,

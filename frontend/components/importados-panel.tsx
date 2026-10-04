@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   listarImportados, promoverImportado, descartarImportado,
   type ComercioImportado,
 } from "@/lib/api";
-import type { Rubro } from "@/lib/types";
+import type { Ciudad, Rubro } from "@/lib/types";
 import { Ic } from "@/components/ic";
+import { useAdminCiudad } from "@/components/admin-ciudad";
+
+type FilaResumen = { ciudad_id: string | null; estado: string; n: number };
 
 /** Revisión de los comercios traídos de fuentes externas.
  *
@@ -29,33 +32,63 @@ const ESTADOS = [
   { key: "descartado", label: "Descartados" },
 ] as const;
 
-export function ImportadosPanel({ rubros }: { rubros: Rubro[] }) {
+export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: Ciudad | null }) {
+  const { ciudades, elegir } = useAdminCiudad();
   const [estado, setEstado] = useState<string>("nuevo");
   const [q, setQ] = useState("");
   const [items, setItems] = useState<ComercioImportado[]>([]);
-  const [resumen, setResumen] = useState<{ estado: string; n: number }[]>([]);
+  const [resumen, setResumen] = useState<FilaResumen[]>([]);
   const [cargando, setCargando] = useState(true);
   const [err, setErr] = useState("");
   const [ocultarDup, setOcultarDup] = useState(true);
+  // Al cambiar de ciudad o de búsqueda salen consultas seguidas; si la vieja
+  // llega después de la nueva, pisaría la lista con otra ciudad.
+  const pedido = useRef(0);
+  const ciudadId = ciudad?.id;
 
   const cargar = useCallback(async () => {
+    const mio = ++pedido.current;
     setCargando(true); setErr("");
     try {
-      const r = await listarImportados(estado, q || undefined);
+      const r = await listarImportados(estado, q || undefined, ciudadId);
+      if (mio !== pedido.current) return;
       setItems(r.items ?? []);
       setResumen(r.resumen ?? []);
-    } catch {
-      setErr("No se pudieron cargar los importados");
+    } catch (e) {
+      if (mio !== pedido.current) return;
+      // La lista anterior se va: si no, el cartel de error queda arriba de las
+      // fichas de la consulta previa —quizá de otra ciudad— con su botón de
+      // promover y todo.
+      setItems([]);
+      // El motivo real, no un texto genérico: «no se pudieron cargar» sin
+      // causa deja a quien mira adivinando si es la red, la sesión o la base.
+      setErr(`No se pudieron cargar los importados: ${e instanceof Error ? e.message : "error desconocido"}`);
     } finally {
-      setCargando(false);
+      if (mio === pedido.current) setCargando(false);
     }
-  }, [estado, q]);
+  }, [estado, q, ciudadId]);
 
+  // Al cambiar de ciudad la lista se vacía en el acto, sin esperar la
+  // respuesta: mientras dice «Cargando…» no pueden verse las fichas de la
+  // ciudad anterior bajo el nombre de la nueva.
+  useEffect(() => { setItems([]); }, [ciudadId]);
   useEffect(() => { cargar(); }, [cargar]);
 
+  // El resumen viene por ciudad y estado. Con una ciudad elegida los chips
+  // cuentan sólo esa: si dijeran el total del país, el chip diría 3.200 y la
+  // lista mostraría 180.
   function totalDe(e: string) {
-    return resumen.filter((r) => r.estado === e).reduce((a, b) => a + b.n, 0);
+    return resumen
+      .filter((r) => r.estado === e && (!ciudadId || r.ciudad_id === ciudadId))
+      .reduce((a, b) => a + b.n, 0);
   }
+
+  // Con «todas»: cuántos hay del estado activo en cada ciudad. Tocar una la
+  // elige en el selector del panel.
+  const porCiudad = ciudadId ? [] : resumen
+    .filter((r) => r.estado === estado && r.n > 0)
+    .map((r) => ({ id: r.ciudad_id, n: r.n, ciudad: ciudades.find((c) => c.id === r.ciudad_id) ?? null }))
+    .sort((a, b) => b.n - a.n);
 
   // Los que ya están cargados en URUKU (mismo nombre a menos de 120 m) se
   // esconden por defecto: si no, el que revisa mira doscientas fichas que ya
@@ -74,7 +107,10 @@ export function ImportadosPanel({ rubros }: { rubros: Rubro[] }) {
         </p>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
           {ESTADOS.map((e) => (
-            <button key={e.key} className={estado === e.key ? "chip chip-on" : "chip"}
+            // `btn-primary`/`btn-ghost`, como los filtros de Recepción y
+            // Difusión. Antes decía `chip chip-on`, clases que no existen en
+            // ningún CSS: los botones salían sin estilo y sin marcar el activo.
+            <button key={e.key} className={`btn btn-sm ${estado === e.key ? "btn-primary" : "btn-ghost"}`}
                     onClick={() => setEstado(e.key)}>
               {e.label} {totalDe(e.key) > 0 && <b>{totalDe(e.key)}</b>}
             </button>
@@ -83,6 +119,20 @@ export function ImportadosPanel({ rubros }: { rubros: Rubro[] }) {
                  style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border)",
                           background: "var(--panel)", color: "var(--txt-1)", fontSize: 13 }} />
         </div>
+        {porCiudad.length > 0 && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 10, fontSize: 12.5, color: "var(--txt-3)" }}>
+            <span>Por ciudad:</span>
+            {porCiudad.map((p) => p.ciudad ? (
+              <button key={p.id} type="button" className="btn btn-ghost btn-sm" title={`Ver sólo ${p.ciudad.nombre}`}
+                      onClick={() => elegir(p.ciudad ? p.ciudad.slug : null)}>
+                {p.ciudad.nombre}: <b>{p.n}</b>
+              </button>
+            ) : (
+              // Sin ciudad: no hay a quién elegir en el selector.
+              <span key="sin-ciudad">Sin ciudad: <b>{p.n}</b></span>
+            ))}
+          </div>
+        )}
         {nDup > 0 && estado === "nuevo" && (
           <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12.5, color: "var(--txt-3)" }}>
             <input type="checkbox" checked={ocultarDup} onChange={() => setOcultarDup((v) => !v)} />
@@ -93,7 +143,9 @@ export function ImportadosPanel({ rubros }: { rubros: Rubro[] }) {
 
       {err && <p style={{ color: "salmon", fontSize: 13 }}>{err}</p>}
       {cargando && <p style={{ color: "var(--txt-3)" }}>Cargando…</p>}
-      {!cargando && visibles.length === 0 && (
+      {/* Sólo sin error: con la carga fallida, «Nada acá» afirma un vacío que
+          nadie midió. */}
+      {!cargando && !err && visibles.length === 0 && (
         <p style={{ color: "var(--txt-3)", fontSize: 13.5 }}>
           Nada acá. Se llena corriendo <code>importar_osm.py</code> con la ciudad.
         </p>

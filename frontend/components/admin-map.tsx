@@ -13,6 +13,8 @@ import { rubroStyle, loadLeaflet, escapeHtml, FAMILIAS } from "@/lib/mapa-visual
 import { rubroSvg, SVG_COMERCIOS } from "@/lib/iconos-mapa";
 import { Ic, IcRubro } from "@/components/ic";
 
+// Centro por defecto (el del panel de una sola ciudad). Con una ciudad elegida,
+// el panel pasa `centro` y manda ése.
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 const ZOOM_LABEL = 17;   // desde acá los pines se agrandan y muestran el nombre
 const PIN = 20;          // chico a propósito: el casco de Bermejo entra mil veces en 460 px de alto
@@ -25,7 +27,15 @@ export type AdminPin = {
 
 type Hoja = { titulo: string; items: AdminPin[] };
 
-export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSelect: (id: string) => void }) {
+export function AdminMap({ comercios, onSelect, centro }: {
+  comercios: AdminPin[]; onSelect: (id: string) => void;
+  /** Dónde abre el mapa antes de ajustarse a los pines: el centro de la ciudad
+   *  elegida. Importa cuando no hay pines (ciudad sin comercios con GPS) y
+   *  mientras llegan: sin esto abría siempre en Bermejo. */
+  centro?: [number, number] | null;
+}) {
+  const centroRef = useRef(centro);
+  centroRef.current = centro;
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   // Sin clusters: en el panel el mapa se usa para IR a un comercio concreto, y
@@ -119,7 +129,7 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
     loadLeaflet().then((L) => {
       if (cancelled || !elRef.current) return;
       if (!mapRef.current) {
-        const map = L.map(elRef.current, { attributionControl: false }).setView(BERMEJO, 15);
+        const map = L.map(elRef.current, { attributionControl: false }).setView(centroRef.current ?? BERMEJO, 15);
         mapRef.current = map;
         agregarTiles(L, map, { oscuro: true });
         capaRef.current = L.layerGroup().addTo(map);
@@ -133,6 +143,14 @@ export function AdminMap({ comercios, onSelect }: { comercios: AdminPin[]; onSel
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comercios]);
+
+  // Cambió la ciudad con el mapa ya abierto: se mueve al centro nuevo. Si hay
+  // pines, el `fitBounds` del render los encuadra enseguida; esto es para el
+  // caso sin pines, donde el mapa se quedaba mirando la ciudad anterior.
+  const [cLat, cLng] = centro ?? [null, null];
+  useEffect(() => {
+    if (cLat != null && cLng != null) mapRef.current?.setView([cLat, cLng], 15);
+  }, [cLat, cLng]);
 
   const conCoords = comercios.filter((c) => (c.lat != null && c.lng != null) || c.lugar_id).length;
   const sinCoords = comercios.length - conCoords;

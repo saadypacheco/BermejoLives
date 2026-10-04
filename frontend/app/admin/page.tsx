@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
   listPendientes, moderar, revisarConIA, type VeredictoIA, login, getToken, type PendingPub,
-  listComerciosPorVerificar, listTodosComercios, verificarComercio, rechazarComercio,
+  listTodosComercios, verificarComercio, rechazarComercio,
   editarComercio, type ComercioPorVerificar,
   listSuscripciones, registrarPago, suspenderComercio, activarComercio,
   setConfiable as setConfiable_, listarNumeros, agregarNumero, type NumeroComercio,
@@ -35,6 +35,7 @@ import { PanelVisitas } from "@/components/panel-visitas";
 import { LugaresEditor } from "@/components/lugares-editor";
 import { AdornosEditor } from "@/components/adornos-editor";
 import { ImportadosPanel } from "@/components/importados-panel";
+import { AdminCiudadProvider, SelectorCiudad, useAdminCiudad, type ModoCiudad } from "@/components/admin-ciudad";
 import { VencimientosPanel } from "@/components/vencimientos-panel";
 import { RubrosPanel } from "@/components/rubros-panel";
 import { RevisionRubros } from "@/components/revision-rubros";
@@ -49,24 +50,61 @@ import { puedo } from "@/lib/api";
 import { RubroRecalcular } from "@/components/rubro-recalcular";
 import { CatalogoPanel } from "@/components/catalogo-panel";
 import { ImageLightbox } from "@/components/image-lightbox";
-import type { Rubro } from "@/lib/types";
+import type { Ciudad, Rubro } from "@/lib/types";
 import { precioFmt, MODALIDAD_LABEL, comoLlegarHref } from "@/lib/types";
 import { abiertoAhora } from "@/lib/horario";
 import { Check, X, Edit, Pin, WhatsApp, Verified } from "@/components/icons";
 import { Ic } from "@/components/ic";
 
+type TabAdmin = "publicaciones" | "comercios" | "lugares" | "adornos" | "catalogo" | "importados" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero" | "vencimientos" | "rubros" | "revision-rubros" | "whatsapp" | "difusion" | "demanda" | "ayuda" | "planes" | "compradores" | "equipo";
+
+/** Qué hace cada pestaña con la ciudad elegida en la cabecera. Es el ÚNICO
+ *  lugar donde se decide: el selector lee de acá y no de cada pestaña.
+ *    filtra:    la pestaña muestra sólo la ciudad elegida.
+ *    global:    no depende de la ciudad (es de toda la plataforma).
+ *    pendiente: todavía muestra todas las ciudades. Se avisa en la cabecera
+ *               porque un selector que dice «Santa Cruz» sobre una lista que
+ *               muestra todo estaría mintiendo.
+ *  `Record<TabAdmin, …>`: una pestaña nueva no compila hasta que se decide. */
+const MODO_CIUDAD: Record<TabAdmin, ModoCiudad> = {
+  comercios: "filtra", lugares: "filtra", adornos: "filtra", importados: "filtra",
+  vencimientos: "global", planes: "global", rubros: "global", compradores: "global",
+  publicaciones: "pendiente", catalogo: "pendiente", suscripciones: "pendiente", pagos: "pendiente",
+  monitoreo: "pendiente", kpis: "pendiente", reclamos: "pendiente", "cambio-numero": "pendiente",
+  "revision-rubros": "pendiente", whatsapp: "pendiente", difusion: "pendiente", demanda: "pendiente",
+  ayuda: "pendiente", equipo: "pendiente",
+};
+
+/** Los comercios de la ciudad elegida (slug), o todos si no hay ninguna. */
+function deCiudad(lista: ComercioPorVerificar[], slug: string | null): ComercioPorVerificar[] {
+  return slug ? lista.filter((c) => (c.ciudades?.slug ?? "") === slug) : lista;
+}
+
+// El proveedor de la ciudad envuelve al panel entero: la cabecera, la pestaña
+// activa y el contador de «Negocios» leen la misma elección.
 export default function AdminPage() {
+  return (
+    <AdminCiudadProvider>
+      <AdminPanel />
+    </AdminCiudadProvider>
+  );
+}
+
+function AdminPanel() {
+  const { slug: slugCiudad, ciudad, listo: ciudadLista, arrancar: arrancarCiudad } = useAdminCiudad();
   const [authed, setAuthed] = useState(false);
   // Vacío a propósito: un correo precargado que no es el tuyo se manda igual
   // y da «credenciales incorrectas» sin que nadie mire el campo.
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"publicaciones" | "comercios" | "lugares" | "adornos" | "catalogo" | "importados" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero" | "vencimientos" | "rubros" | "revision-rubros" | "whatsapp" | "difusion" | "demanda" | "ayuda" | "planes" | "compradores" | "equipo">("comercios");
+  const [tab, setTab] = useState<TabAdmin>("comercios");
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [items, setItems] = useState<PendingPub[]>([]);
-  const [comercios, setComercios] = useState<ComercioPorVerificar[]>([]);
   const [todosLosComercios, setTodosLosComercios] = useState<ComercioPorVerificar[]>([]);
+  // El backend avisó que la lista llegó a su tope: hay más comercios de los
+  // que trajo, y todo lo que se cuenta sobre ella queda corto.
+  const [comerciosTruncados, setComerciosTruncados] = useState(false);
   const [rubros, setRubros] = useState<Rubro[]>([]);
   // Se carga al ABRIR el panel, no al entrar a la pestaña. Un aviso que sólo
   // aparece cuando ya fuiste a mirar no avisa nada.
@@ -91,6 +129,10 @@ export default function AdminPage() {
     window.addEventListener("uk-sesion-vencida", vencida);
     return () => window.removeEventListener("uk-sesion-vencida", vencida);
   }, []);
+
+  // El valor inicial del selector de ciudad depende del token (la ciudad del
+  // usuario): se resuelve cuando hay sesión, ya sea al abrir o tras el login.
+  useEffect(() => { if (authed) arrancarCiudad(); }, [authed, arrancarCiudad]);
 
   useEffect(() => {
     if (getToken()) {
@@ -119,10 +161,14 @@ export default function AdminPage() {
   }
 
   async function loadComercios() {
+    // Una sola consulta. Antes se pedía además la lista de pendientes (con tope
+    // de 200) sólo para el contador de la pestaña, que mostraba «200» aunque
+    // hubiera 1308: el contador sale ahora de esta lista, que es la completa.
     try {
-      setComercios(await listComerciosPorVerificar());
-      setTodosLosComercios(await listTodosComercios());
-    } catch { setComercios([]); }
+      const r = await listTodosComercios();
+      setTodosLosComercios(r.items);
+      setComerciosTruncados(r.truncado);
+    } catch { /* se queda con lo que había: vaciarla borraría la lista por un fallo de red */ }
   }
 
   async function loadSuscripciones() {
@@ -177,11 +223,10 @@ export default function AdminPage() {
   }
 
   async function actComercio(id: string, accion: "verificar" | "rechazar") {
-    // La lista que se ve en pantalla se pinta desde `todosLosComercios`, NO desde
-    // `comercios` (que son sólo los pendientes, y hoy alimenta el contador del tab).
-    // Actualizar una sola era el bug: el backend guardaba el cambio pero la tarjeta
-    // seguía ahí, así que el botón parecía no hacer nada.
-    setComercios((prev) => prev.filter((c) => c.id !== id));
+    // La lista y el contador de la pestaña salen de `todosLosComercios`: es la
+    // única fuente. (Hubo una segunda lista, sólo de pendientes, y actualizar
+    // una sola era el bug: el backend guardaba el cambio pero la tarjeta seguía
+    // ahí, así que el botón parecía no hacer nada.)
     setTodosLosComercios((prev) => accion === "rechazar"
       // rechazar = activo:false en la BD, y el listado trae sólo activos → desaparece
       ? prev.filter((c) => c.id !== id)
@@ -285,13 +330,22 @@ export default function AdminPage() {
           <h1>Panel de URUKU</h1>
           <p>Publicaciones por WhatsApp y comercios cargados en el recorrido</p>
         </div>
-        <Link className="btn btn-ghost btn-sm" href="/">Ver sitio</Link>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+          <SelectorCiudad modo={MODO_CIUDAD[tab]} />
+          <Link className="btn btn-ghost btn-sm" href="/">Ver sitio</Link>
+        </div>
       </div>
 
       <div className="admin-tabs">
         <button className={tab === "comercios" ? "active" : ""} onClick={() => setTab("comercios")}>
-          Negocios <span className="badge">{todosLosComercios.length}</span>
-          {comercios.length > 0 && <span className="badge alerta">{comercios.length} pend.</span>}
+          {/* Los dos números son los de la ciudad elegida. «Sin verificar» se
+              cuenta sobre la lista completa: la consulta de pendientes tenía
+              tope de 200 y la pestaña decía «200 pend.» con 1308 en espera. */}
+          Negocios <span className="badge">{deCiudad(todosLosComercios, slugCiudad).length}</span>
+          {(() => {
+            const n = deCiudad(todosLosComercios, slugCiudad).filter((c) => !c.verificado).length;
+            return n > 0 && <span className="badge alerta">{n} pend.</span>;
+          })()}
         </button>
         {puedo("lugares") && (
         <button className={tab === "lugares" ? "active" : ""} onClick={() => setTab("lugares")}>
@@ -395,8 +449,10 @@ export default function AdminPage() {
         </button>
       </div>
 
-      {tab === "lugares" && <LugaresEditor />}
-      {tab === "adornos" && <AdornosEditor />}
+      {/* Con `ciudadLista`: antes de resolver la ciudad inicial, «todas» es sólo
+          un valor provisorio y no hay que consultar nada con él. */}
+      {tab === "lugares" && ciudadLista && <LugaresEditor ciudad={ciudad} />}
+      {tab === "adornos" && ciudadLista && <AdornosEditor ciudad={ciudad} />}
       {tab === "catalogo" && <CatalogoPanel />}
       {tab === "rubros" && <RubrosPanel />}
       {tab === "revision-rubros" && <RevisionRubros />}
@@ -407,12 +463,12 @@ export default function AdminPage() {
       {tab === "planes" && <PlanesPanel />}
       {tab === "compradores" && <ContactosPanel />}
       {tab === "equipo" && <EquipoPanel />}
-      {tab === "importados" && <ImportadosPanel rubros={rubros} />}
+      {tab === "importados" && ciudadLista && <ImportadosPanel rubros={rubros} ciudad={ciudad} />}
 
       {tab === "comercios" && (
         <TabComercios
           todos={todosLosComercios}
-          pendientes={comercios}
+          truncado={comerciosTruncados}
           rubros={rubros}
           onVerificar={(id) => actComercio(id, "verificar")}
           onRechazar={(id) => actComercio(id, "rechazar")}
@@ -1246,11 +1302,144 @@ function RubrosDeFila({ c }: { c: ComercioPorVerificar }) {
   );
 }
 
+/** «Sin horario»: el chip de Negocios y la columna del resumen por ciudad usan
+ *  ESTA función, así las dos cuentas no pueden separarse. */
+function sinHorarioDe(c: ComercioPorVerificar): boolean {
+  return !((c as Record<string, unknown>).horario as string ?? "").trim();
+}
+
+/** Con foto y sin clasificar por la IA: lo que «Clasificar por fotos» procesa. */
+function sinClasificarDe(c: ComercioPorVerificar): boolean {
+  return !!c.portada_url && !c.ia_analizado_at;
+}
+
+type FilaResumen = {
+  slug: string; nombre: string; elegible: boolean;
+  total: number; sinClasificar: number; incompletos: number; sinHorario: number; sinVerificar: number;
+};
+
+/** Una fila por ciudad con al menos un comercio, y una última «Todas» con la
+ *  suma. Se calcula de la MISMA lista `todos` y con las MISMAS reglas que los
+ *  chips (`incompletoDe`, `sinHorarioDe`): si no, la tabla diría una cosa y el
+ *  chip otra. Por eso la suma de las filas da el total de Negocios. */
+function ResumenPorCiudad({ todos, noComerciales, truncado }: {
+  todos: ComercioPorVerificar[]; noComerciales: Set<string>; truncado: boolean;
+}) {
+  const { ciudades, slug: elegida, elegir } = useAdminCiudad();
+
+  const filas = new Map<string, FilaResumen>();
+  for (const c of todos) {
+    const slug = c.ciudades?.slug ?? "";
+    let f = filas.get(slug);
+    if (!f) {
+      f = { slug, nombre: c.ciudades?.nombre ?? "Sin ciudad", elegible: !!slug && ciudades.some((x) => x.slug === slug),
+            total: 0, sinClasificar: 0, incompletos: 0, sinHorario: 0, sinVerificar: 0 };
+      filas.set(slug, f);
+    }
+    f.total++;
+    if (sinClasificarDe(c)) f.sinClasificar++;
+    if (incompletoDe(c, noComerciales).length > 0) f.incompletos++;
+    if (sinHorarioDe(c)) f.sinHorario++;
+    if (!c.verificado) f.sinVerificar++;
+  }
+  if (filas.size === 0) return null;
+
+  // Más comercios primero; «Sin ciudad» siempre al final.
+  const lista = [...filas.values()].sort((a, b) =>
+    (a.slug === "" ? 1 : 0) - (b.slug === "" ? 1 : 0) || b.total - a.total);
+  const suma = lista.reduce((s, f) => ({
+    total: s.total + f.total, sinClasificar: s.sinClasificar + f.sinClasificar,
+    incompletos: s.incompletos + f.incompletos, sinHorario: s.sinHorario + f.sinHorario,
+    sinVerificar: s.sinVerificar + f.sinVerificar,
+  }), { total: 0, sinClasificar: 0, incompletos: 0, sinHorario: 0, sinVerificar: 0 });
+
+  const th: React.CSSProperties = { textAlign: "right", padding: "6px 10px", fontWeight: 600, fontSize: 12, color: "var(--txt-3)", verticalAlign: "bottom" };
+  const td: React.CSSProperties = { textAlign: "right", padding: "7px 10px", fontVariantNumeric: "tabular-nums" };
+  // Botón sin aspecto de botón pero con foco visible (no `all: unset`, que lo borra).
+  const btnFila: React.CSSProperties = {
+    background: "none", border: "none", padding: 0, margin: 0, cursor: "pointer",
+    color: "inherit", font: "inherit", display: "inline-flex", alignItems: "center", gap: 6,
+  };
+  const celdas = (f: { total: number; sinClasificar: number; incompletos: number; sinHorario: number; sinVerificar: number }) => (
+    <>
+      <td style={td}>{f.total}</td>
+      <td style={td}>{f.sinClasificar}</td>
+      <td style={td}>{f.incompletos}</td>
+      <td style={td}>{f.sinHorario}</td>
+      <td style={td}>{f.sinVerificar}</td>
+    </>
+  );
+
+  return (
+    // La caja se desplaza sola: en el teléfono la tabla no entra y la página
+    // no puede tener scroll horizontal.
+    <div style={{ overflowX: "auto", padding: "12px 16px 0" }}>
+      {truncado && (
+        <p role="alert" style={{ color: "var(--pink)", fontSize: 13, marginBottom: 8 }}>
+          <Ic n="aviso" s={14} /> El panel trajo {todos.length} comercios y hay más: estos totales y el
+          contador de la pestaña están incompletos.
+        </p>
+      )}
+      <table style={{ width: "100%", minWidth: 480, borderCollapse: "collapse", fontSize: 13 }}>
+        <caption style={{ captionSide: "top", textAlign: "left", fontSize: 12, color: "var(--txt-3)", paddingBottom: 6 }}>
+          Resumen por ciudad · tocá una fila para elegirla
+        </caption>
+        <thead>
+          <tr style={{ borderBottom: "1px solid var(--border)" }}>
+            <th scope="col" style={{ ...th, textAlign: "left" }}>Ciudad</th>
+            <th scope="col" style={th}>Total</th>
+            <th scope="col" style={th}>Con foto sin clasificar</th>
+            <th scope="col" style={th}>Incompletos</th>
+            <th scope="col" style={th}>Sin horario</th>
+            <th scope="col" style={th}>Sin verificar</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lista.map((f) => {
+            const sel = f.elegible && elegida === f.slug;
+            return (
+              <tr key={f.slug || "sin-ciudad"}
+                  onClick={f.elegible ? () => elegir(f.slug) : undefined}
+                  style={{ borderBottom: "1px solid var(--border)", cursor: f.elegible ? "pointer" : "default",
+                           background: sel ? "rgba(57,255,158,.10)" : "transparent", fontWeight: sel ? 700 : 400 }}>
+                <th scope="row" style={{ textAlign: "left", padding: "7px 10px", fontWeight: "inherit" }}>
+                  {f.elegible ? (
+                    // El botón es para teclado y lector de pantalla; la fila entera también responde al clic.
+                    <button type="button" aria-pressed={sel} onClick={(e) => { e.stopPropagation(); elegir(f.slug); }}
+                            style={btnFila}>
+                      {sel ? <Ic n="si" s={14} tono="marca" /> : <Ic n="ubicacion" s={14} />} {f.nombre}
+                    </button>
+                  ) : (
+                    <span style={{ color: "var(--txt-3)" }} title="Estos comercios no tienen ciudad: no se pueden elegir en el selector">
+                      {f.nombre}
+                    </span>
+                  )}
+                </th>
+                {celdas(f)}
+              </tr>
+            );
+          })}
+          <tr onClick={() => elegir(null)}
+              style={{ cursor: "pointer", background: elegida === null ? "rgba(57,255,158,.10)" : "transparent", fontWeight: 700 }}>
+            <th scope="row" style={{ textAlign: "left", padding: "7px 10px", fontWeight: "inherit" }}>
+              <button type="button" aria-pressed={elegida === null} onClick={(e) => { e.stopPropagation(); elegir(null); }}
+                      style={btnFila}>
+                {elegida === null ? <Ic n="si" s={14} tono="marca" /> : <Ic n="ciudad" s={14} />} Todas
+              </button>
+            </th>
+            {celdas(suma)}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function TabComercios({
-  todos, pendientes, rubros, onVerificar, onRechazar, onEdited,
+  todos, truncado, rubros, onVerificar, onRechazar, onEdited,
 }: {
   todos: ComercioPorVerificar[];
-  pendientes: ComercioPorVerificar[];
+  truncado: boolean;
   rubros: Rubro[];
   onVerificar: (id: string) => void;
   onRechazar: (id: string) => void;
@@ -1270,39 +1459,25 @@ function TabComercios({
   // donde ibas, que es lo que vuelve inusable una revisión larga.
   const [recalcId, setRecalcId] = useState<string | null>(null);
   const [rubroLocal, setRubroLocal] = useState<Record<string, string>>({});
-  // Filtro por ciudad. Con una sola ciudad cargada no se muestra: un
-  // desplegable de un solo valor es ruido. Aparece cuando hay dos o más.
-  const [ciudad, setCiudad] = useState("");
-
-  // Las ciudades que aparecen en la lista, con su cuenta. Se saca de lo
-  // cargado y no de la tabla de ciudades: lo que interesa acá es dónde hay
-  // comercios, no qué ciudades existen.
-  const porCiudad = new Map<string, { nombre: string; n: number }>();
-  for (const c of todos) {
-    const slug = c.ciudades?.slug ?? "";
-    const nombre = c.ciudades?.nombre ?? "Sin ciudad";
-    const y = porCiudad.get(slug) ?? { nombre, n: 0 };
-    porCiudad.set(slug, { nombre, n: y.n + 1 });
-  }
-  const ciudades = [...porCiudad.entries()].sort((a, b) => b[1].n - a[1].n);
+  // La ciudad es la GLOBAL del panel (selector de la cabecera), no una propia de
+  // esta pestaña: así Negocios, Lugares, Adornos e Importados hablan de la misma.
+  const { slug: ciudad, ciudad: ciudadObj, listo: ciudadLista } = useAdminCiudad();
 
   const noComerciales = new Set(rubros.filter((r) => r.comercial === false).map((r) => r.slug));
   // 0) filtro por ciudad. Va PRIMERO para que los números de los chips sean
   //    los de esa ciudad: si dijeran el total, el chip diría 200 pendientes y
   //    la lista mostraría 12.
-  const deLaCiudad = ciudad ? todos.filter((c) => (c.ciudades?.slug ?? "") === ciudad) : todos;
+  const deLaCiudad = deCiudad(todos, ciudad);
 
   const nIncompletos = deLaCiudad.filter((c) => incompletoDe(c, noComerciales).length > 0).length;
   const nVerificados = deLaCiudad.filter((c) => c.verificado).length;
-  const sinHorario = (c: ComercioPorVerificar) =>
-    !((c as Record<string, unknown>).horario as string ?? "").trim();
-  const nSinHorario = deLaCiudad.filter(sinHorario).length;
+  const nSinHorario = deLaCiudad.filter(sinHorarioDe).length;
 
   // 1) filtro por estado (B incluye "incompletos")
   const porEstado = filtro === "todos" ? deLaCiudad
     : filtro === "pendientes" ? deLaCiudad.filter((c) => !c.verificado)
     : filtro === "verificados" ? deLaCiudad.filter((c) => c.verificado)
-    : filtro === "sin-horario" ? deLaCiudad.filter(sinHorario)
+    : filtro === "sin-horario" ? deLaCiudad.filter(sinHorarioDe)
     : deLaCiudad.filter((c) => incompletoDe(c, noComerciales).length > 0);
 
   // 2) buscador multi-campo (A): nombre + qué vende + dirección + contacto + rubro + ciudad
@@ -1371,6 +1546,9 @@ function TabComercios({
           comercios. El único dato que valía —cuántos coincidieron— se movió al
           lado del buscador, sin ocupar alto propio. */}
 
+      {/* Resumen por ciudad: arriba de todo, porque es lo que dice dónde mirar. */}
+      <ResumenPorCiudad todos={todos} noComerciales={noComerciales} truncado={truncado} />
+
       {/* Buscador (A) + orden (G) + vista lista/mapa (D) */}
       <div style={{ display: "flex", gap: 8, padding: "16px 16px 0", flexWrap: "wrap", alignItems: "center" }}>
         <input className="adm-input" style={{ flex: 1, minWidth: 200 }} value={q}
@@ -1382,21 +1560,6 @@ function TabComercios({
           <span style={{ color: "var(--txt-3)", fontSize: 13, whiteSpace: "nowrap" }}>
             {filtradas.length} de {deLaCiudad.length}
           </span>
-        )}
-        {ciudades.length === 1 && (
-          <span style={{ color: "var(--txt-3)", fontSize: 13, whiteSpace: "nowrap" }}
-                title="Cuando haya comercios de otra ciudad, acá aparece el filtro">
-            <Ic n="ubicacion" s={13} /> {ciudades[0][1].nombre} ({ciudades[0][1].n})
-          </span>
-        )}
-        {ciudades.length > 1 && (
-          <select className="adm-input" style={{ width: "auto" }} value={ciudad}
-                  onChange={(e) => setCiudad(e.target.value)} title="Filtrar por ciudad">
-            <option value="">Todas las ciudades ({todos.length})</option>
-            {ciudades.map(([slug, c]) => (
-              <option key={slug || "sin"} value={slug}>{c.nombre} ({c.n})</option>
-            ))}
-          </select>
         )}
         <select className="adm-input" style={{ width: "auto" }} value={orden} onChange={(e) => setOrden(e.target.value as OrdenComercio)}>
           <option value="recientes">Más recientes</option>
@@ -1434,7 +1597,7 @@ function TabComercios({
 
       {/* Clasificación masiva: arriba de la lista, porque con 161 comercios sin
           categoría es la acción más útil de esta pantalla. */}
-      <AnalisisMasivo onTerminado={onEdited} />
+      {ciudadLista && <AnalisisMasivo ciudad={ciudadObj} onTerminado={onEdited} />}
 
       {/* Vista MAPA (D): tocar un pin abre el editor; ideal para los sin nombre */}
       {vista === "calles" ? (
@@ -1451,6 +1614,7 @@ function TabComercios({
               lugar_id: c.lugar_id, lugar_nombre: c.lugares?.nombre ?? null, lugar_lat: c.lugares?.lat ?? null, lugar_lng: c.lugares?.lng ?? null, lugar_portada_thumb: c.lugares?.portada_thumb_url ?? null,
             }))}
             onSelect={setEditandoId}
+            centro={ciudadObj?.lat != null && ciudadObj?.lng != null ? [ciudadObj.lat, ciudadObj.lng] : null}
           />
         </div>
       ) : (
@@ -2089,23 +2253,53 @@ function ModalEditar({
  * chocan con el límite de frecuencia de Gemini. Así además el avance se ve y se
  * puede cortar en cualquier momento sin perder lo hecho.
  */
-function AnalisisMasivo({ onTerminado }: { onTerminado: () => void }) {
+function AnalisisMasivo({ ciudad, onTerminado }: { ciudad: Ciudad | null; onTerminado: () => void }) {
   const [pendientes, setPendientes] = useState<number | null>(null);
   const [corriendo, setCorriendo] = useState(false);
   const [hechos, setHechos] = useState(0);
   const [ultimos, setUltimos] = useState<ResultadoTanda[]>([]);
   const [err, setErr] = useState("");
   const cancelar = useRef(false);
+  const slug = ciudad?.slug;
+  // La ciudad que se está mirando AHORA. `correr` compara contra esto después
+  // de cada espera: una tanda que salió para otra ciudad no escribe nada acá.
+  const slugActual = useRef(slug);
+  slugActual.current = slug;
 
-  useEffect(() => { pendientesAnalisis().then(setPendientes).catch(() => setPendientes(null)); }, []);
+  // Vuelve a pedir el número al cambiar de ciudad. No mientras corre: el bucle
+  // sigue con la ciudad con la que arrancó, y pisarle el contador a mitad de
+  // camino mostraría otro número que no es el de lo que se está analizando.
+  // Al terminar (`corriendo` vuelve a false) se pide de nuevo.
+  useEffect(() => {
+    if (corriendo) return;
+    let vivo = true;
+    pendientesAnalisis(slug).then((n) => { if (vivo) setPendientes(n); }).catch(() => { if (vivo) setPendientes(null); });
+    return () => { vivo = false; };
+  }, [slug, corriendo]);
+
+  // Cambiar de ciudad corta un análisis en curso (termina la tanda que está
+  // haciendo) y limpia lo mostrado: si no, seguiría gastando la IA en la ciudad
+  // anterior bajo el título de la nueva. El número también se borra: mientras
+  // no llega el de la ciudad nueva, el recuadro no se dibuja en vez de mostrar
+  // los pendientes de la anterior.
+  useEffect(() => {
+    cancelar.current = true;
+    setHechos(0); setUltimos([]); setErr(""); setPendientes(null);
+  }, [slug]);
 
   async function correr() {
+    const slugCorrida = slug;
+    const otraCiudad = () => slugActual.current !== slugCorrida;
     setErr(""); setHechos(0); setUltimos([]); setCorriendo(true);
     cancelar.current = false;
     try {
       for (;;) {
         if (cancelar.current) break;
-        const t = await analizarTanda(3, true);
+        const t = await analizarTanda(3, true, slugCorrida);
+        // La respuesta tardó segundos. Si mientras tanto se eligió otra ciudad,
+        // estos resultados son de la anterior: no se escribe ninguno, porque
+        // aparecerían bajo el título de la nueva.
+        if (otraCiudad()) break;
         if (t.sin_mas || t.procesados === 0) { setPendientes(0); break; }
         setHechos((n) => n + t.procesados);
         setPendientes(t.restantes);
@@ -2119,7 +2313,8 @@ function AnalisisMasivo({ onTerminado }: { onTerminado: () => void }) {
         await new Promise((r) => setTimeout(r, 2500));
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Falló el análisis");
+      // El error de una tanda de otra ciudad tampoco se muestra acá.
+      if (!otraCiudad()) setErr(e instanceof Error ? e.message : "Falló el análisis");
     } finally {
       setCorriendo(false);
       onTerminado();
@@ -2134,7 +2329,7 @@ function AnalisisMasivo({ onTerminado }: { onTerminado: () => void }) {
                   borderRadius: 12, padding: 14, margin: "0 16px 12px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>Clasificar por fotos</div>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>Clasificar por fotos{ciudad ? ` · ${ciudad.nombre}` : ""}</div>
           <div style={{ fontSize: 12.5, color: "var(--txt-3)", marginTop: 2 }}>
             {corriendo
               ? `Analizando… ${hechos} listos · ${pendientes} por delante`

@@ -92,13 +92,19 @@ def _precio(pub: dict) -> str:
 _REF_POR_DESTINO = {"facebook": "fb", "instagram": "ig", "wa_canal": "canal"}
 
 
-def texto_de(pub: dict, comercio: dict | None, destino: str | None = None) -> str:
+def texto_de(pub: dict, comercio: dict | None, destino: str | None = None,
+             ciudad: dict | None = None) -> str:
     """El texto que se publica. Mismo cuerpo para las tres redes.
 
     Lleva SIEMPRE el nombre del comercio y el enlace a su ficha. Sin el nombre,
     la oferta parece de URUKU y el comerciante no recibe nada de lo que se le
     prometió; sin el enlace, quien la ve no tiene cómo llegar y el posteo es
     decoración.
+
+    La ciudad sale de `ciudad` (la fila de `ciudades`) o, si el comercio ya
+    viene con ella embebida (`ciudades`), de ahí. Si no se puede saber, el
+    renglón lleva sólo el nombre: antes decía «Bermejo» para todos, y una
+    oferta de Tarija salía en las redes como si fuera de otra ciudad.
     """
     nombre = (comercio or {}).get("nombre") or ""
     slug = (comercio or {}).get("slug") or ""
@@ -116,7 +122,10 @@ def texto_de(pub: dict, comercio: dict | None, destino: str | None = None) -> st
     if precio:
         partes.append(precio)
     if nombre:
-        partes.append(f"📍 {nombre}, Bermejo")
+        embebida = (comercio or {}).get("ciudades")
+        fila_ciudad = ciudad or (embebida if isinstance(embebida, dict) else None) or {}
+        nombre_ciudad = (fila_ciudad.get("nombre") or "").strip()
+        partes.append(f"📍 {nombre}, {nombre_ciudad}" if nombre_ciudad else f"📍 {nombre}")
     if slug:
         ref = _REF_POR_DESTINO.get(destino or "")
         partes.append(f"{settings.sitio_url.rstrip('/')}/comercios/{slug}" + (f"?ref={ref}" if ref else ""))
@@ -298,7 +307,13 @@ def procesar(repo, fila: dict) -> dict:
             # nunca va a ver publicada.
             repo.marcar_difusion(fila["id"], "pendiente", freno)
             return {"estado": "pendiente", "motivo": freno}
-    texto = texto_de(pub, comercio, destino)
+    ciudad = None
+    if comercio and comercio.get("ciudad_id"):
+        try:
+            ciudad = repo.get_ciudad_por_id(comercio["ciudad_id"])
+        except Exception:  # noqa: BLE001 — sin ciudad el texto sale igual, sólo sin ella
+            logger.warning("difusion.ciudad_fallo", comercio=comercio.get("id"), exc_info=True)
+    texto = texto_de(pub, comercio, destino, ciudad)
     try:
         url = enviar(destino, texto, pub.get("imagen_url"))
     except DifusionError as exc:

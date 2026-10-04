@@ -9,8 +9,12 @@ import { loadLeaflet, escapeHtml } from "@/lib/mapa-visual";
 import { SVG_COMERCIOS } from "@/lib/iconos-mapa";
 import { adminListLugares, adminCrearLugar, adminUpdateLugar, adminDeleteLugar, type LugarAdmin } from "@/lib/api";
 import { Ic } from "@/components/ic";
+import { ElegirCiudad } from "@/components/admin-ciudad";
+import type { Ciudad } from "@/lib/types";
 
-const BERMEJO: [number, number] = [-22.7361, -64.3433];
+// Para una ciudad cargada sin coordenadas: el mapa abre en la región, no en el
+// océano, y se acerca tocando.
+const CENTRO_SIN_COORDS: [number, number] = [-21.5, -64.5];
 const TIPOS: [string, string][] = [
   ["mercado", "Mercado"], ["galeria", "Galería"], ["paseo", "Paseo"], ["shopping", "Shopping"], ["referencia", "Referencia"],
   // Baños, cajeros, estacionamientos y wifi NO van acá: son rubros no
@@ -18,7 +22,16 @@ const TIPOS: [string, string][] = [
   // cualquier comercio, desde campo o desde Comercios. Una sola forma.
 ];
 
-export function LugaresEditor() {
+/** Con «todas» las ciudades NO cae en Bermejo (lo que hacía antes): pide elegir.
+ *  Con una ciudad, remonta el editor entero por `key`: el mapa de Leaflet no se
+ *  reutiliza entre ciudades, así que se rearma con su centro, sus tiles y su
+ *  lista, sin arrastrar un lugar seleccionado de la otra. */
+export function LugaresEditor({ ciudad }: { ciudad: Ciudad | null }) {
+  if (!ciudad) return <ElegirCiudad que="lugares" />;
+  return <LugaresDeCiudad key={ciudad.slug} ciudad={ciudad} />;
+}
+
+function LugaresDeCiudad({ ciudad }: { ciudad: Ciudad }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const layerRef = useRef<any>(null);
@@ -37,7 +50,16 @@ export function LugaresEditor() {
   const [poly, setPoly] = useState<[number, number][]>([]);
   dibujandoRef.current = dibujando;
 
-  async function cargar() { setLugares(await adminListLugares().catch(() => [])); }
+  async function cargar() {
+    try {
+      setLugares(await adminListLugares(ciudad.slug));
+    } catch (e) {
+      // El fallo se dice. Callado dejaba «0 cargados», y con eso alguien vuelve
+      // a cargar los mercados que ya existen.
+      setLugares([]);
+      setErr(`No se pudieron cargar los lugares: ${e instanceof Error ? e.message : "error desconocido"}`);
+    }
+  }
   useEffect(() => { cargar(); }, []);
 
   useEffect(() => {
@@ -45,9 +67,10 @@ export function LugaresEditor() {
     loadLeaflet().then((L) => {
       if (cancelled || !elRef.current || mapRef.current) return;
       LRef.current = L;
-      const map = L.map(elRef.current, { attributionControl: false }).setView(BERMEJO, 15);
+      const centro: [number, number] | null = ciudad.lat != null && ciudad.lng != null ? [ciudad.lat, ciudad.lng] : null;
+      const map = L.map(elRef.current, { attributionControl: false }).setView(centro ?? CENTRO_SIN_COORDS, centro ? 15 : 6);
       mapRef.current = map;
-      agregarTiles(L, map, { oscuro: true });
+      agregarTiles(L, map, { oscuro: true, ciudad });
       layerRef.current = L.layerGroup().addTo(map);
       map.on("click", (e: any) => {
         if (dibujandoRef.current) setPoly((p) => [...p, [e.latlng.lat, e.latlng.lng]]);
@@ -130,7 +153,7 @@ export function LugaresEditor() {
     setBusy(true); setErr("");
     try {
       if (selId) await adminUpdateLugar(selId, { nombre: nombre.trim(), tipo, lat: pos?.lat ?? null, lng: pos?.lng ?? null });
-      else await adminCrearLugar({ nombre: nombre.trim(), tipo, lat: pos?.lat ?? null, lng: pos?.lng ?? null });
+      else await adminCrearLugar({ nombre: nombre.trim(), tipo, ciudad_slug: ciudad.slug, lat: pos?.lat ?? null, lng: pos?.lng ?? null });
       await cargar(); nuevo();
     } catch (e) { setErr(e instanceof Error ? e.message : "Error"); }
     finally { setBusy(false); }
@@ -147,7 +170,7 @@ export function LugaresEditor() {
   return (
     <div className="panel-card glass">
       <div className="ph">
-        <h3>Lugares (mercados / galerías / referencias)</h3>
+        <h3>Lugares · {ciudad.nombre} (mercados / galerías / referencias)</h3>
         <span style={{ color: "var(--txt-3)", fontSize: 13 }}>{lugares.length} cargados · tocá el mapa para ubicar/mover</span>
       </div>
 

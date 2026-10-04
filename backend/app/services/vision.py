@@ -154,9 +154,44 @@ def _post_con_reintentos(url: str, payload: dict) -> "httpx.Response":
     raise httpx.TimeoutException(f"El modelo no respondió tras {REINTENTOS} intentos")
 
 
-def _prompt(rubros: list[dict]) -> str:
+def _prompt(rubros: list[dict], ciudad: dict | None = None) -> str:
+    """Arma el prompt del relevamiento por fotos.
+
+    `ciudad` es la fila de `ciudades` del comercio. El prompt nació para Bermejo
+    y daba por hecho que todo local era de frontera: en Tarija o Santa Cruz eso
+    hacía que el modelo inventara «términos argentinos» donde nadie los usa.
+    Sin ciudad (comercio sin `ciudad_id`) se dice sólo «Bolivia»: NUNCA se asume
+    Bermejo, porque un dato supuesto queda escrito como si fuera cierto.
+    """
     lista = "\n".join(f"- {r['slug']}: {r.get('nombre', r['slug'])}" for r in rubros if r.get("slug"))
-    return f"""Sos un relevador de comercios en Bermejo, Bolivia — una ciudad de frontera.
+    nombre = ((ciudad or {}).get("nombre") or "").strip()
+    es_frontera = bool(ciudad and ciudad.get("es_frontera"))
+    # El país sale de la fila: la tabla tiene ciudades argentinas (La Quiaca,
+    # Salta), y «en La Quiaca, Bolivia» sería el mismo dato supuesto de antes
+    # con otro nombre. Sin ciudad, o sin el dato, Bolivia.
+    pais = ((ciudad or {}).get("pais") or "").strip() or "Bolivia"
+    lugar = f"en {nombre}, {pais}" if nombre else f"en {pais}"
+    if es_frontera:
+        lugar += " — una ciudad de frontera"
+
+    if es_frontera:
+        vecino = ((ciudad or {}).get("pais_vecino") or "").strip() or "el país vecino"
+        regla_sinonimos = (
+            f"""- `sinonimos`: {nombre or "Esta ciudad"} es frontera con {vecino}, y cada producto se llama
+  distinto de un lado y del otro. Es un OBJETO: una clave por cada producto que
+  pusiste, y como valor las otras palabras con las que un comprador podría
+  buscarlo — cómo se le dice de este lado de la frontera, cómo del otro, el
+  genérico y el de marca si se usa como genérico."""
+        )
+    else:
+        regla_sinonimos = (
+            """- `sinonimos`: cada producto se puede decir de más de una forma. Es un OBJETO:
+  una clave por cada producto que pusiste, y como valor las otras palabras con
+  las que un comprador podría buscarlo — el término genérico, el regional y el
+  de marca si se usa como genérico."""
+        )
+
+    return f"""Sos un relevador de comercios {lugar}.
 Mirás fotos de la fachada o la vidriera de un local y decís qué vende.
 
 Devolvé SOLO un JSON, sin markdown, con esta forma exacta:
@@ -197,11 +232,7 @@ Reglas:
   nadie vuelve a revisarlo. Ante la duda, vacío.
 - `productos`: SOLO lo que se ve en las fotos. No completes con lo que "suele"
   vender un negocio así.
-- `sinonimos`: Bermejo es frontera con Argentina, y cada producto se llama
-  distinto de un lado y del otro. Es un OBJETO: una clave por cada producto que
-  pusiste, y como valor las otras palabras con las que un comprador podría
-  buscarlo — el término argentino, el boliviano, el genérico y el de marca si se
-  usa como genérico.
+{regla_sinonimos}
   Ejemplo: {{"remera": "polera, camiseta", "campera": "casaca, chamarra"}}
   Va producto por producto y no una lista suelta porque estos sinónimos se
   guardan en un diccionario compartido: lo que aprendas de ESTA vidriera va a
@@ -354,8 +385,11 @@ def analizar_oferta(url: str) -> dict:
     }
 
 
-def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
+def analizar_fotos(urls: list[str], rubros: list[dict], ciudad: dict | None = None) -> dict:
     """Analiza hasta MAX_FOTOS y devuelve la propuesta.
+
+    `ciudad` (fila de `ciudades` o None) decide si el prompt habla de frontera.
+    Es opcional para no romper a los llamadores que no la tienen a mano.
 
     Lanza VisionNoConfigurada si falta la key. Cualquier otro fallo devuelve una
     propuesta vacía con confianza 0: es preferible "no sé" a un dato inventado.
@@ -363,7 +397,7 @@ def analizar_fotos(urls: list[str], rubros: list[dict]) -> dict:
     if not settings.gemini_api_key:
         raise VisionNoConfigurada("Falta GEMINI_API_KEY")
 
-    partes: list[dict] = [{"text": _prompt(rubros)}]
+    partes: list[dict] = [{"text": _prompt(rubros, ciudad)}]
     usadas = 0
     for url in urls[:MAX_FOTOS]:
         data = _descargar(url)

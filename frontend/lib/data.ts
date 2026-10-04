@@ -195,12 +195,19 @@ export async function getRefinamientos(f: FiltrosBusqueda): Promise<{ subcategor
   return (data ?? []) as { subcategoria: string; n: number }[];
 }
 
+/** Las ciudades de la tabla, o `null` si no se pudieron leer.
+ *
+ *  Para el panel: ahí la lista de demostración es peor que un error. Sus ids
+ *  son "1".."8", y con ellos Importados le pide al backend una ciudad que no
+ *  existe mientras el selector muestra nombres que parecen los reales. */
+export async function getCiudadesReales(): Promise<Ciudad[] | null> {
+  if (!hasSupabase) return null;
+  const { data } = await supabase.from("ciudades").select("*").order("orden");
+  return data ? (data as Ciudad[]) : null;
+}
+
 export async function getCiudades(): Promise<Ciudad[]> {
-  if (hasSupabase) {
-    const { data } = await supabase.from("ciudades").select("*").order("orden");
-    if (data) return data as Ciudad[];
-  }
-  return DEMO_CIUDADES;
+  return (await getCiudadesReales()) ?? DEMO_CIUDADES;
 }
 
 const DEMO_CIUDADES: Ciudad[] = [

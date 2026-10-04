@@ -103,8 +103,8 @@ class Repo(Protocol):
     def crear_comercio_usuario(self, row: dict) -> dict: ...
     def set_comercio_rubros(self, comercio_id: str, rubro_ids: list[str]) -> None: ...
     def list_rubros(self) -> list[dict]: ...
-    def comercios_sin_analizar(self, limite: int) -> list[dict]: ...
-    def contar_sin_analizar(self) -> int: ...
+    def comercios_sin_analizar(self, limite: int, ciudad_id: str | None = None) -> list[dict]: ...
+    def contar_sin_analizar(self, ciudad_id: str | None = None) -> int: ...
     def registrar_rubros_propuestos(self, textos: list[str], comercio_id: str | None) -> None: ...
     def resumen_rubros_propuestos(self, limite: int = 100) -> list[dict]: ...
     def sugerir_rubros_por_texto(self, texto: str) -> list[str]: ...
@@ -262,6 +262,10 @@ _COLS_COMERCIO_ADMIN = (
     "sin_cartel, "
     "verificado, suspendido, paga_hasta, portada_url, portada_thumb_url, portada_pos, cargado_por, "
     "created_at, lugar_id, puesto, "
+    # Para que el panel cuente «con foto sin clasificar» (portada sin
+    # ia_analizado_at) sin pedir otro endpoint: misma definición que
+    # `contar_sin_analizar`.
+    "ia_analizado_at, "
     "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), "
     # TODOS los rubros, no sólo el principal. La fila mostraba uno solo y se
     # leía como "está mal clasificado" cuando en realidad el correcto ya estaba
@@ -1056,26 +1060,30 @@ class SupabaseRepo:
                .eq("activo", True).order("orden").execute())
         return res.data or []
 
-    def comercios_sin_analizar(self, limite: int) -> list[dict]:
+    def comercios_sin_analizar(self, limite: int, ciudad_id: str | None = None) -> list[dict]:
         """Comercios con foto que todavía no pasaron por el análisis.
 
         Se ordenan por antigüedad para que el recorrido más viejo —el que lleva
-        más tiempo sin clasificar— se procese primero.
+        más tiempo sin clasificar— se procese primero. Con `ciudad_id` sólo los
+        de esa ciudad: es el filtro del selector del panel, no un permiso.
         """
-        res = (self._db.table("comercios").select("*")
-               .eq("activo", True)
-               .is_("ia_analizado_at", "null")
-               .not_.is_("portada_url", "null")
-               .order("created_at")
-               .limit(limite).execute())
+        q = (self._db.table("comercios").select("*")
+             .eq("activo", True)
+             .is_("ia_analizado_at", "null")
+             .not_.is_("portada_url", "null"))
+        if ciudad_id:
+            q = q.eq("ciudad_id", ciudad_id)
+        res = q.order("created_at").limit(limite).execute()
         return res.data or []
 
-    def contar_sin_analizar(self) -> int:
-        res = (self._db.table("comercios").select("id", count="exact")
-               .eq("activo", True)
-               .is_("ia_analizado_at", "null")
-               .not_.is_("portada_url", "null")
-               .limit(1).execute())
+    def contar_sin_analizar(self, ciudad_id: str | None = None) -> int:
+        q = (self._db.table("comercios").select("id", count="exact")
+             .eq("activo", True)
+             .is_("ia_analizado_at", "null")
+             .not_.is_("portada_url", "null"))
+        if ciudad_id:
+            q = q.eq("ciudad_id", ciudad_id)
+        res = q.limit(1).execute()
         return res.count or 0
 
     def registrar_rubros_propuestos(self, textos: list[str], comercio_id: str | None) -> None:
