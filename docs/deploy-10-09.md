@@ -16,7 +16,7 @@
 | **Informe de demanda** | Nueva pestaña Admin › Demanda. |
 | **Tope del canal** | 4 publicaciones por día; lo que no entra espera. |
 | **Capa de Meta** | El webhook acepta la API oficial, sin migrar nada todavía. |
-| **Agregar respaldos a los grupos** | Botón en Admin › WhatsApp. |
+| **Agregar respaldos a los grupos** | Botón en Admin › Recepción. |
 
 ---
 

@@ -295,7 +295,7 @@ más se olvida: sin él la URL queda validada y **no llega nunca nada**.
 Escribile un WhatsApp al número de prueba desde tu teléfono. Dos cosas tienen
 que pasar:
 
-1. Aparece en **Admin › WhatsApp**, en la bandeja, igual que los de WAHA.
+1. Aparece en **Admin › Recepción**, en la bandeja, igual que los de WAHA.
 2. En el registro del backend:
 
 ```bash

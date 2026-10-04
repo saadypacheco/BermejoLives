@@ -422,7 +422,7 @@ Empezarlo ahora, aunque el cambio sea para dentro de meses.
 ```bash
 cd /docker/uruku
 
-# Estado de la sesión de WAHA (o mirar Admin › WhatsApp)
+# Estado de la sesión de WAHA (o mirar Admin › Recepción)
 docker compose -f docker-compose.prod.yml exec -T waha \
   sh -c 'wget -qO- --header="X-Api-Key: $WAHA_API_KEY" http://localhost:3000/api/sessions'
 

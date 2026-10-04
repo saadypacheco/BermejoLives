@@ -401,7 +401,7 @@ ofertas en la tarjeta— no tiene qué mostrar hasta que entre la primera oferta
       que baneen al operativo.
 - [ ] Los respaldos entran a los grupos **antes** de necesitarlos: una cuenta
       baneada no puede agregar a nadie. Si algún grupo queda sin ellos, se
-      arregla desde **Admin › WhatsApp → "Agregar un número a los grupos"**, de
+      arregla desde **Admin › Recepción → "Agregar un número a los grupos"**, de
       a tandas chicas.
 
 ### Las 8 fechas del panel de Vencimientos

@@ -234,7 +234,7 @@ y del lado de URUKU no hubo ni un error: el sitio andaba, el panel andaba, y
 no entraba una sola oferta. Se descubrió por casualidad, pidiendo el estado de
 la sesión por curiosidad.
 
-Ahora **Admin › WhatsApp muestra el estado de la sesión en grande y primero**,
+Ahora **Admin › Recepción muestra el estado de la sesión en grande y primero**,
 en vivo, y el backend deja un `ERROR` en los registros cada cinco minutos
 mientras no esté `WORKING`. No la arregla —eso pide una persona con la tablet
 en la mano— pero el problema existe desde el primer minuto.
@@ -284,10 +284,10 @@ saldo de datos dos semanas.
 
 Si pasa, el canal se corta solo: no avisa, no da error, y desde el panel se ve
 igual que "no llegó nada". Que quede enchufada, y abrirle WhatsApp cada tanto.
-En **Admin › WhatsApp** se nota porque los mensajes dejan de aparecer.
+En **Admin › Recepción** se nota porque los mensajes dejan de aparecer.
 
 Es la misma clase de falla que venimos persiguiendo: nada se rompe, todo parece
-bien, y no entra nada. En **Admin › WhatsApp** se nota porque los mensajes dejan
+bien, y no entra nada. En **Admin › Recepción** se nota porque los mensajes dejan
 de aparecer.
 
 ### El bloque para `backend/.env` — definitivo
@@ -582,7 +582,7 @@ vinculados › Vincular con número de teléfono.
 
 ### Antes de dar por hecho que anda
 
-En **Admin › WhatsApp** tiene que decir cuántos números propios están
+En **Admin › Recepción** tiene que decir cuántos números propios están
 configurados. Si dice 0, el `.env` no se leyó o quedaron placeholders — y con 0
 cada mensaje que escriba alguien de URUKU dentro de un grupo se publica como
 oferta del comerciante. Después, mandar una foto de prueba a un grupo atado y
@@ -624,7 +624,7 @@ número que no tiene cuenta es cómo se consigue un grupo a medio armar.
    significa agregarlo a mano a cada uno.
 2. **Emparejar el Tigo** con WAHA (comandos arriba).
 3. **Cargar el `.env` y reiniciar el backend.**
-4. **Admin › WhatsApp tiene que decir `números propios: 1`.** Si dice 0, el
+4. **Admin › Recepción tiene que decir `números propios: 1`.** Si dice 0, el
    `.env` no se leyó: no seguir, porque todo lo que venga después va a mentir.
 5. **Crear un comercio de prueba** en el panel, con el número personal como su
    WhatsApp. De prueba y no uno real: el alta del grupo usa ese número, y
@@ -633,7 +633,7 @@ número que no tiene cuenta es cómo se consigue un grupo a medio armar.
    El grupo tiene que quedar atado en el mismo acto; si el panel avisa que no
    pudo, atarlo a mano antes de seguir.
 7. **Mandar una foto con texto desde el personal, dentro del grupo.**
-8. **Mirar Admin › WhatsApp.** Tiene que aparecer como *Publicada · a la cola de
+8. **Mirar Admin › Recepción.** Tiene que aparecer como *Publicada · a la cola de
    moderación*, y la misma foto en Publicaciones.
 
 ### Las tres pruebas que confirman las guardas
@@ -659,7 +659,7 @@ número sin WhatsApp no se puede agregar a un grupo.
 
 El orden ideal sigue siendo: probar con dos → dar de alta los respaldos → recién
 ahí crear los grupos de verdad. Pero ya no es una puerta que se cierra: si los
-grupos se crearon antes, **Admin › WhatsApp → "Agregar un número a los grupos"**
+grupos se crearon antes, **Admin › Recepción → "Agregar un número a los grupos"**
 recorre los que ya existen y mete al respaldo. Va de a tandas chicas a propósito
 —agregar un número a cien grupos seguidos es el patrón que dispara el baneo, y
 el baneado sería el operativo— así que son varias corridas a lo largo de días.
