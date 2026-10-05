@@ -691,3 +691,89 @@ def test_ids_que_no_son_uuid_son_404_y_no_llegan_a_la_base(client, repo, monkeyp
         assert r.status_code == 404, rid
         assert client.post(f"/asistente/{rid}/util", json={"util": True}).status_code == 404
     assert llamadas == []
+
+
+# ------------------------------------------------------------------ ofertas por palabras, sin IA
+
+def _oferta(repo, c, titulo, precio=None, descripcion=None):
+    pub = {"id": f"pub-{len(repo.publicaciones) + 1}", "comercio_id": c["id"], "tipo": "oferta",
+           "titulo": titulo, "descripcion": descripcion, "precio": precio, "moneda": "BOB",
+           "estado": "aprobado", "activo": True}
+    repo.publicaciones.append(pub)
+    return pub
+
+
+def test_sin_ia_encuentra_una_oferta_por_el_producto_aunque_no_digan_oferta(repo, sin_modelo, gemini):
+    """La pregunta típica del comprador. Antes caía en «no sé» aunque la
+    oferta estuviera publicada."""
+    c = _rustico(repo, plan="destacado")
+    _oferta(repo, c, "Zapatilla Nike Air", precio=350)
+    _oferta(repo, c, "Remera de algodón", precio=60)
+    r = _resp(repo, c, "¿Tienen zapatillas Nike?")
+    assert r.intent == "ofertas_buscadas" and not r.sin_respuesta
+    assert "Zapatilla Nike Air" in r.texto and "350" in r.texto
+    assert "Remera" not in r.texto
+    assert gemini == []
+
+
+def test_tienen_que_estar_todas_las_palabras_no_alcanza_con_una(repo, sin_modelo):
+    """«¿hacen envío gratis?» no se contesta con una oferta que dice «gratis»:
+    sería contestar otra cosa con cara de respuesta."""
+    c = _rustico(repo, plan="destacado")
+    _oferta(repo, c, "Segunda pizza gratis")
+    r = _resp(repo, c, "¿Hacen envío gratis?")
+    assert r.intent != "ofertas_buscadas"
+    assert r.sin_respuesta and r.derivar
+
+
+def test_otra_marca_no_es_la_misma_oferta(repo, sin_modelo):
+    c = _rustico(repo, plan="destacado")
+    _oferta(repo, c, "Zapatilla Adidas")
+    r = _resp(repo, c, "¿tienen zapatillas nike?")
+    assert r.intent != "ofertas_buscadas"
+
+
+def test_preguntar_por_ofertas_en_general_sigue_mostrando_todas(repo, sin_modelo):
+    """«Hoy», «nuevas»: no son productos. Sin sacarlas, la búsqueda no
+    encontraría nada y la respuesta sería peor que antes."""
+    c = _rustico(repo, plan="destacado")
+    _oferta(repo, c, "Zapatilla Nike Air")
+    _oferta(repo, c, "Remera de algodón")
+    for pregunta in ("¿Qué ofertas tienen hoy?", "¿tienen promos nuevas?"):
+        r = _resp(repo, c, pregunta)
+        assert r.intent == "ofertas", pregunta
+        assert "Zapatilla" in r.texto and "Remera" in r.texto, pregunta
+
+
+def test_pedir_el_precio_de_un_producto_trae_solo_esa_oferta(repo, sin_modelo):
+    c = _rustico(repo, plan="destacado")
+    _oferta(repo, c, "Pizza muzzarella grande", precio=45)
+    _oferta(repo, c, "Empanadas por docena", precio=60)
+    r = _resp(repo, c, "¿Cuánto cuesta la pizza?")
+    assert r.intent == "ofertas_buscadas"
+    assert "Pizza" in r.texto and "Empanadas" not in r.texto
+
+
+def test_la_busqueda_mira_tambien_la_descripcion_y_respeta_el_plural(repo, sin_modelo):
+    c = _rustico(repo, plan="destacado")
+    _oferta(repo, c, "Liquidación de calzado", descripcion="Botas de cuero, todos los talles")
+    r = _resp(repo, c, "¿tienen bota de cuero?")
+    assert r.intent == "ofertas_buscadas" and "Liquidación" in r.texto
+
+
+def test_una_oferta_dada_de_baja_no_aparece(repo, sin_modelo):
+    c = _rustico(repo, plan="destacado")
+    o = _oferta(repo, c, "Zapatilla Nike Air")
+    o["activo"] = False
+    r = _resp(repo, c, "¿tienen zapatillas nike?")
+    assert r.intent != "ofertas_buscadas"
+
+
+def test_el_horario_y_la_respuesta_del_dueno_siguen_ganando_a_la_busqueda(repo, sin_modelo):
+    c = _rustico(repo, plan="destacado")
+    _oferta(repo, c, "Promo domingo: pizza y gaseosa")
+    assert _resp(repo, c, "¿abren el domingo?").intent == "horario"
+    _cargar(repo, c["id"], "¿Tienen pizza sin gluten?", "No, todavía no hacemos sin gluten.")
+    _oferta(repo, c, "Pizza sin gluten de prueba")
+    r = _resp(repo, c, "¿Tienen pizza sin gluten?")
+    assert r.intent == "respuesta_del_local"

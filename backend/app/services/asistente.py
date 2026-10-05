@@ -887,6 +887,54 @@ def _que_venden(c: dict) -> Respuesta | None:
     return Respuesta(texto=texto + f"\nVer todo: {_url(c)}", nivel=0, intent="que_vende")
 
 
+# Palabras de una pregunta sobre ofertas que no nombran un producto: «¿qué
+# ofertas tienen hoy?» no busca nada en particular. Sin sacarlas, «hoy» se
+# buscaría dentro de las ofertas y no aparecería ninguna.
+_GENERICAS_OFERTA = set("""oferta ofertas promo promos promocion promociones descuento descuentos
+precio precios cuanto cuesta cuestan sale salen vale valen esta estan carta menu hoy ahora semana
+nueva nuevas nuevo nuevos alguna alguno algun hay tenes ven ver mostrame mostrar publicado
+publicada publicadas""".split())
+
+
+def _raiz(palabra: str) -> str:
+    """Singular aproximado, para que «zapatillas» encuentre «zapatilla» y
+    «camisas» encuentre «camisa». No es un stemmer: sólo el plural del
+    castellano, que es lo que cambia entre cómo se pregunta y cómo se publica."""
+    if len(palabra) > 4 and palabra.endswith("es"):
+        return palabra[:-2]
+    if len(palabra) > 3 and palabra.endswith("s"):
+        return palabra[:-1]
+    return palabra
+
+
+def _ofertas_que_mencionan(ofertas: list[dict], pregunta: str) -> tuple[list[str], list[dict]]:
+    """Las ofertas que nombran lo que pregunta el comprador, SIN IA.
+
+    Devuelve (palabras buscadas, ofertas que las tienen a TODAS). Todas y no
+    alguna: «¿hacen envío gratis?» no puede contestarse con una oferta que dice
+    «gratis», y «¿tienen zapatillas Nike?» no con cualquier zapatilla. Si la
+    pregunta no nombra ningún producto, no busca nada.
+    """
+    buscadas = [t for t in _terminos(pregunta) if t not in _GENERICAS_OFERTA]
+    raices = [_raiz(t) for t in buscadas if len(_raiz(t)) >= 3]
+    if not raices:
+        return [], []
+    encontradas = []
+    for o in ofertas:
+        palabras = _norm(f"{o.get('titulo') or ''} {o.get('descripcion') or ''}").split()
+        if all(any(w.startswith(r) for w in palabras) for r in raices):
+            encontradas.append(o)
+    return buscadas, encontradas
+
+
+def _lista_de_ofertas(ofertas: list[dict], tope: int) -> str:
+    lineas = []
+    for o in ofertas[:tope]:
+        precio = f" — {o['precio']} {o.get('moneda') or 'Bs'}" if o.get("precio") else ""
+        lineas.append(f"• {o.get('titulo') or 'Oferta'}{precio}")
+    return "\n".join(lineas)
+
+
 def _nivel0_comercio(repo, c: dict, pregunta: str, ahora: datetime) -> Respuesta | None:
     p = _norm(pregunta)
     nombre = c.get("nombre", "el local")
@@ -900,7 +948,8 @@ def _nivel0_comercio(repo, c: dict, pregunta: str, ahora: datetime) -> Respuesta
     # 2) Horario, dirección y contacto, que salen de la ficha: «¿a qué hora
     # abren el domingo?» es el horario aunque el dueño haya cargado algo sobre
     # el delivery de los domingos. 3) Las respuestas del dueño que se
-    # PARECEN a la pregunta. 4) Ofertas y qué vende.
+    # PARECEN a la pregunta. 4) Ofertas: las que nombran lo que se pregunta, o
+    # todas si se pregunta por ofertas en general. 5) Qué vende.
     igual = _respuesta_igual(filas, pregunta)
     if igual:
         return _del_dueno(igual)
@@ -920,18 +969,27 @@ def _nivel0_comercio(repo, c: dict, pregunta: str, ahora: datetime) -> Respuesta
     propia = _respuesta_parecida(filas, pregunta)
     if propia:
         return _del_dueno(propia)
-    if re.search(r"oferta|promo|descuento|precio|cuanto (sale|cuesta|vale|esta)|carta|menu", p):
-        ofertas = _ofertas_de(repo, c["id"])
+    pide_ofertas = re.search(r"oferta|promo|descuento|precio|cuanto (sale|cuesta|vale|esta)|carta|menu", p)
+    # Se leen las ofertas una sola vez: sirven para las dos ramas de abajo.
+    ofertas = _ofertas_de(repo, c["id"])
+    # «¿Tienen zapatillas Nike?» sin decir «oferta»: es la pregunta típica del
+    # comprador, y antes caía en «no sé» aunque hubiera una oferta publicada
+    # de zapatillas Nike. Se busca SIN IA, con las palabras de la pregunta.
+    _, mencionan = _ofertas_que_mencionan(ofertas, pregunta)
+    if mencionan:
+        return Respuesta(texto=f"Esto tiene publicado {nombre}:\n" + _lista_de_ofertas(mencionan, 5)
+                               + f"\nVer todo: {_url(c)}#ofertas",
+                         nivel=0, intent="ofertas_buscadas")
+    if pide_ofertas:
         if not ofertas:
             derivar = _derivacion(c, pregunta)
             return Respuesta(texto=f"{nombre} no tiene ofertas publicadas ahora. "
                                    + ("Preguntale por WhatsApp con el botón de abajo." if derivar else "En su ficha está cómo llegar."),
                              nivel=0, intent="ofertas", sin_respuesta=True, derivar=derivar)
-        lineas = []
-        for o in ofertas[:8]:
-            precio = f" — {o['precio']} {o.get('moneda') or 'Bs'}" if o.get("precio") else ""
-            lineas.append(f"• {o.get('titulo') or 'Oferta'}{precio}")
-        return Respuesta(texto=f"Lo que {nombre} tiene publicado:\n" + "\n".join(lineas) + f"\nVer todo: {_url(c)}#ofertas",
+        # Pregunta por ofertas sin nombrar un producto que aparezca: se
+        # muestran todas, como antes. Nunca peor que no buscar.
+        return Respuesta(texto=f"Lo que {nombre} tiene publicado:\n" + _lista_de_ofertas(ofertas, 8)
+                               + f"\nVer todo: {_url(c)}#ofertas",
                          nivel=0, intent="ofertas")
     if _QUE_VENDEN.search(p):
         return _que_venden(c)
