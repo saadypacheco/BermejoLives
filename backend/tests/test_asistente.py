@@ -234,7 +234,9 @@ def test_el_asistente_del_comercio_contesta_con_lo_suyo(repo, sin_modelo):
 def test_lo_que_el_comercio_no_tiene_cargado_va_al_dueno(repo, sin_modelo):
     c = _rustico(repo)
     r = asistente.responder(repo, "¿hacen envíos a Aguas Blancas?", comercio=c, ahora=MARTES_11)
-    assert r.nivel == 3 and r.sin_respuesta and "wa.me/59170000001" in r.texto
+    # El número no va pegado en el texto: viaja en `derivar` y lo pone el botón.
+    assert r.nivel == 3 and r.sin_respuesta and "wa.me" not in r.texto
+    assert r.derivar and r.derivar["whatsapp"] == "59170000001"
 
 
 # ------------------------------------------------------------------ endpoints

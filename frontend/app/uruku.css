@@ -1301,7 +1301,22 @@
 .uk-ayuda-mascota-msg { border-radius: 999px; background: #fff; margin-top: 2px; }
 .uk-ayuda-msg.uruku .uk-ayuda-fuentes,
 .uk-ayuda-msg.uruku .uk-ayuda-util,
-.uk-ayuda-msg.uruku .uk-ayuda-sug { grid-column: 2; }
+.uk-ayuda-msg.uruku .uk-ayuda-sug,
+.uk-ayuda-msg.uruku .uk-ayuda-derivar { grid-column: 2; }
+/* En el chatbot de un local no hay carita: la columna de 26px sería un hueco
+   (o peor, la burbuja caería adentro). Una sola columna y todo a su ancho. */
+.uk-ayuda-msg.uruku.sin-cara { grid-template-columns: minmax(0, 1fr); }
+.uk-ayuda-msg.uruku.sin-cara .uk-ayuda-fuentes,
+.uk-ayuda-msg.uruku.sin-cara .uk-ayuda-util,
+.uk-ayuda-msg.uruku.sin-cara .uk-ayuda-sug,
+.uk-ayuda-msg.uruku.sin-cara .uk-ayuda-derivar { grid-column: 1; }
+/* «Preguntarle a {local} por WhatsApp»: botón entero, alto de dedo, con ícono
+   y texto (no sólo color). Verde de WhatsApp con texto oscuro para el contraste. */
+.uk-ayuda-derivar { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 14px;
+  border-radius: var(--uk-radius-btn); background: #25d366; color: #052e16; font-weight: 700; font-size: 14px; line-height: 1.25;
+  text-decoration: none; text-align: center; }
+.uk-ayuda-derivar:hover { filter: brightness(.95); }
+.uk-ayuda-derivar svg { flex: 0 0 auto; }
 
 /* ===== El anuncio del lanzamiento de las ofertas ===== */
 .uk-lanzamiento { margin: 6px 0 18px; padding: 22px 20px; border-radius: var(--uk-radius); display: grid; gap: 10px; color: var(--uk-ink);

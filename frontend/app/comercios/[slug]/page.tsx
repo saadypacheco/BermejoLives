@@ -12,7 +12,7 @@ import { GuardarBoton } from "@/components/guardar-boton";
 import { HorarioBadge } from "@/components/horario-badge";
 import { CompartirBoton } from "@/components/compartir-boton";
 import QRCode from "qrcode";
-import { getComercioBySlug, getOfertasComercio, getGaleriaComercio, nombreCiudadDe } from "@/lib/data";
+import { getComercioBySlug, getOfertasComercio, getGaleriaComercio, nombreCiudadDe, getFuncionesDePlan } from "@/lib/data";
 import { FichaGaleria } from "@/components/ficha-galeria";
 import { VistaLogger } from "@/components/vista-logger";
 import { VolverAResultados } from "@/components/volver-a-resultados";
@@ -74,8 +74,11 @@ export default async function ComercioPage({ params }: { params: { slug: string 
   // en el servidor, por lo mismo que en el volante: la librería no viaja al
   // navegador.
   const urlFicha = `https://uruku.bo/comercios/${comercio.slug}`;
-  const [feed, galeria, qr] = await Promise.all([
+  const [feed, galeria, funcionesPlan, qr] = await Promise.all([
     getOfertasComercio(comercio.id), getGaleriaComercio(comercio.id),
+    // Las funciones del plan (decide si la ficha lleva el chatbot del local):
+    // se leen junto con lo demás, no en serie.
+    getFuncionesDePlan((comercio as { plan?: string | null }).plan),
     // Con `?ref=`: la vista que llegue por este QR queda marcada como tal
     // (0114), distinta de la que llega por el volante o la tarjeta de mesa.
     QRCode.toDataURL(`${urlFicha}?ref=ficha-${comercio.slug}`, { width: 240, margin: 1, errorCorrectionLevel: "M",
@@ -120,14 +123,17 @@ export default async function ComercioPage({ params }: { params: { slug: string 
     (comercio.direccion || comercio.lat) && { id: "ubicacion", label: "Ubicación" },
   ].filter(Boolean) as { id: string; label: string }[];
 
-  // En la ficha de un local con el plan Empleado Digital, la ayuda es el
-  // asistente de ESE local. En las demás, la de URUKU. El servidor es el que
-  // decide de verdad (403 si el plan no lo incluye); acá sólo se elige qué
-  // cara mostrar.
+  // En la ficha de un local cuyo plan trae el chatbot, la ayuda es el
+  // asistente de ESE local. En las demás, la de URUKU. Se decide por la
+  // FUNCIÓN del plan (`asistente_24_7`), no por su nombre: antes estaba fijo
+  // «empleado_ia» y el chatbot no se veía en ningún otro plan. El servidor es
+  // el que decide de verdad (403 si el plan no lo incluye); acá sólo se elige
+  // qué cara mostrar. Si la lectura del plan falla, queda sin chatbot, como
+  // si el plan no lo tuviera: mejor no mostrarlo que mostrar uno que da 403.
+  const conChatbot = funcionesPlan?.asistente_24_7 === true;
   return (
     <UrukuShell showCatnav={false}
-                asistente={(comercio as { plan?: string | null }).plan === "empleado_ia"
-                  ? { id: comercio.id, nombre: comercio.nombre } : undefined}>
+                asistente={conChatbot ? { id: comercio.id, nombre: comercio.nombre } : undefined}>
       <VistaLogger comercioId={comercio.id} />
 
       <div className="uk-container uk-ficha">

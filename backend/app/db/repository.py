@@ -245,8 +245,15 @@ class Repo(Protocol):
     def list_saber_local(self, solo_activos: bool = True, ciudad_slug: str | None = None) -> list[dict]: ...
     def upsert_saber_local(self, row: dict) -> dict: ...
     def borrar_saber_local(self, saber_id: str) -> None: ...
+    # Las respuestas del local (0136): filas de saber_local con comercio_id.
+    def list_respuestas_comercio(self, comercio_id: str, limite: int = 200, desde: int = 0) -> list[dict]: ...
+    def get_respuesta_comercio(self, comercio_id: str, respuesta_id: str) -> dict | None: ...
+    def contar_respuestas_comercio(self, comercio_id: str) -> int: ...
+    def get_saber_local(self, saber_id: str) -> dict | None: ...
+    def list_respuestas_locales(self, q: str | None = None, limite: int = 200) -> list[dict]: ...
+    def get_conversacion(self, conversacion_id: str) -> dict | None: ...
     def insert_conversacion(self, row: dict) -> dict: ...
-    def list_conversaciones(self, filtro: str, limite: int = 100) -> list[dict]: ...
+    def list_conversaciones(self, filtro: str, limite: int = 100, solo_sitio: bool = False) -> list[dict]: ...
     def marcar_conversacion(self, conversacion_id: str, cambios: dict) -> dict | None: ...
     def contar_conversaciones_sesion_hoy(self, sesion: str) -> int: ...
     def update_clima(self, patch: dict) -> dict | None: ...
@@ -2549,7 +2556,10 @@ class SupabaseRepo:
         }
 
     def list_saber_local(self, solo_activos: bool = True, ciudad_slug: str | None = None) -> list[dict]:
-        q = self._db.table("saber_local").select("*").order("updated_at", desc=True).limit(500)
+        # Sólo el saber de URUKU: las filas con comercio_id son las respuestas
+        # de un local y no salen en el asistente del sitio ni en el admin (0136).
+        q = (self._db.table("saber_local").select("*").is_("comercio_id", "null")
+             .order("updated_at", desc=True).limit(500))
         if solo_activos:
             q = q.eq("activo", True)
         filas = q.execute().data or []
@@ -2572,13 +2582,74 @@ class SupabaseRepo:
     def borrar_saber_local(self, saber_id: str) -> None:
         self._db.table("saber_local").delete().eq("id", saber_id).execute()
 
+    def list_respuestas_comercio(self, comercio_id: str, limite: int = 200, desde: int = 0) -> list[dict]:
+        """Las respuestas ACTIVAS que cargó ese comercio, las últimas primero,
+        paginadas (`desde` es el desplazamiento)."""
+        limite = max(1, min(int(limite), 500))
+        desde = max(0, int(desde))
+        res = (self._db.table("saber_local").select("*")
+               .eq("comercio_id", comercio_id).eq("activo", True)
+               .order("updated_at", desc=True).order("id")
+               .range(desde, desde + limite - 1).execute())
+        return res.data or []
+
+    def get_respuesta_comercio(self, comercio_id: str, respuesta_id: str) -> dict | None:
+        """Una respuesta activa de ESE comercio; de otro, o borrada, es None."""
+        res = (self._db.table("saber_local").select("*")
+               .eq("id", respuesta_id).eq("comercio_id", comercio_id).eq("activo", True)
+               .limit(1).execute())
+        return res.data[0] if res.data else None
+
+    def contar_respuestas_comercio(self, comercio_id: str) -> int:
+        """Cuántas respuestas ACTIVAS tiene ese comercio (el tope es 200)."""
+        res = (self._db.table("saber_local").select("id", count="exact")
+               .eq("comercio_id", comercio_id).eq("activo", True).execute())
+        return res.count or 0
+
+    def get_saber_local(self, saber_id: str) -> dict | None:
+        """Una fila de saber_local, sea del sitio (comercio_id NULL) o de un
+        local, activa o no. Quien llama decide cuál le sirve."""
+        res = self._db.table("saber_local").select("*").eq("id", saber_id).limit(1).execute()
+        return res.data[0] if res.data else None
+
+    def list_respuestas_locales(self, q: str | None = None, limite: int = 200) -> list[dict]:
+        """Para la vista de admin: las respuestas de TODOS los locales, activas
+        e inactivas, las más nuevas primero, con el nombre y el slug del
+        comercio. `q` filtra por nombre del comercio o por el texto."""
+        import unicodedata
+
+        def _plano(t: str) -> str:
+            return "".join(ch for ch in unicodedata.normalize("NFD", (t or "").lower()) if unicodedata.category(ch) != "Mn")
+        limite = max(1, min(int(limite), 500))
+        res = (self._db.table("saber_local")
+               .select("id, comercio_id, pregunta, respuesta, activo, updated_at, comercios(nombre, slug)")
+               .not_.is_("comercio_id", "null")
+               .order("updated_at", desc=True).limit(2000).execute())
+        filas = []
+        for f in res.data or []:
+            com = f.pop("comercios", None) or {}
+            filas.append({**f, "comercio_nombre": com.get("nombre"), "comercio_slug": com.get("slug")})
+        buscado = _plano((q or "").strip())
+        if buscado:
+            filas = [f for f in filas if buscado in _plano(" ".join(
+                str(f.get(k) or "") for k in ("comercio_nombre", "pregunta", "respuesta")))]
+        return filas[:limite]
+
+    def get_conversacion(self, conversacion_id: str) -> dict | None:
+        res = self._db.table("asistente_conversaciones").select("*").eq("id", conversacion_id).limit(1).execute()
+        return res.data[0] if res.data else None
+
     def insert_conversacion(self, row: dict) -> dict:
         res = self._db.table("asistente_conversaciones").insert(row).execute()
         return res.data[0]
 
-    def list_conversaciones(self, filtro: str, limite: int = 100) -> list[dict]:
+    def list_conversaciones(self, filtro: str, limite: int = 100, solo_sitio: bool = False) -> list[dict]:
+        """`solo_sitio`: sin las conversaciones de las fichas (comercio_id NULL),
+        que las contesta el dueño de cada local y no el admin de URUKU."""
         q = (self._db.table("asistente_conversaciones").select("*")
              .order("created_at", desc=True).limit(max(1, min(int(limite), 500))))
+        if solo_sitio:
+            q = q.is_("comercio_id", "null")
         if filtro == "sin_respuesta":
             q = q.eq("sin_respuesta", True).is_("resuelta_en", "null")
         elif filtro.startswith("comercio:"):

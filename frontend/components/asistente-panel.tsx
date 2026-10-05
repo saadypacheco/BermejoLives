@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { getCiudades } from "@/lib/data";
 import { useCallback, useEffect, useState } from "react";
 import {
-  borrarSaberLocal, getAsistenteConversaciones, getSaberLocal, guardarSaberLocal, responderAsistente,
-  type ConversacionAsistente, type SaberLocal,
+  borrarSaberLocal, getAsistenteConversaciones, getRespuestasLocales, getSaberLocal, guardarSaberLocal,
+  responderAsistente, setRespuestaLocalActiva,
+  type ConversacionAsistente, type RespuestaLocalAdmin, type SaberLocal,
 } from "@/lib/api";
 import { Ic } from "@/components/ic";
 
@@ -49,6 +51,113 @@ function SelectSeccion({ value, onChange }: { value: string; onChange: (v: strin
  * Abajo, el saber local entero, para corregir o sacar lo que ya no vale.
  */
 export function AsistentePanel() {
+  const [sub, setSub] = useState<"general" | "locales">("general");
+  return (
+    <div style={{ display: "grid", gap: 18 }}>
+      <div role="group" aria-label="Qué ver" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button type="button" aria-pressed={sub === "general"} className={sub === "general" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
+                onClick={() => setSub("general")}>Preguntas y saber local</button>
+        <button type="button" aria-pressed={sub === "locales"} className={sub === "locales" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
+                onClick={() => setSub("locales")}>Respuestas de los locales</button>
+      </div>
+      {sub === "general" ? <AsistenteUruku /> : <RespuestasDeLosLocales />}
+    </div>
+  );
+}
+
+/** Mensaje legible de un error de red: «Failed to fetch» es el navegador
+ *  diciendo que no hay señal. */
+function textoDeError(e: unknown): string {
+  const crudo = e instanceof Error ? e.message : "";
+  const sinRed = (typeof navigator !== "undefined" && !navigator.onLine) || /failed to fetch|load failed|networkerror/i.test(crudo);
+  return sinRed ? "Sin conexión. Revisá tu internet y probá de nuevo." : (crudo || "No se pudo cargar.");
+}
+
+/**
+ * Admin › Ayuda › Respuestas de los locales. Lo que los comerciantes cargan
+ * para el chatbot de su ficha. Salen sin moderación: lo único que se puede
+ * hacer desde acá es desactivar una (y volver a activarla).
+ */
+function RespuestasDeLosLocales() {
+  const [q, setQ] = useState("");
+  const [items, setItems] = useState<RespuestaLocalAdmin[] | null>(null);
+  const [err, setErr] = useState("");
+  const [vuelta, setVuelta] = useState(0);
+  const [cambiando, setCambiando] = useState<string | null>(null);
+  const [errFila, setErrFila] = useState("");
+
+  useEffect(() => {
+    let vivo = true;
+    // Un poco de espera al tipear, para no pedir una vez por letra.
+    const t = setTimeout(() => {
+      getRespuestasLocales(q)
+        .then((r) => { if (vivo) { setItems(r); setErr(""); } })
+        .catch((e) => { if (vivo) setErr(textoDeError(e)); });
+    }, q ? 300 : 0);
+    return () => { vivo = false; clearTimeout(t); };
+  }, [q, vuelta]);
+
+  async function alternar(r: RespuestaLocalAdmin) {
+    setCambiando(r.id); setErrFila("");
+    try {
+      const nueva = await setRespuestaLocalActiva(r.id, !r.activo);
+      setItems((prev) => (prev ?? []).map((x) => (x.id === r.id ? { ...x, activo: nueva.activo ?? !r.activo } : x)));
+    } catch (e) { setErrFila(textoDeError(e)); }
+    finally { setCambiando(null); }
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 14, maxWidth: 900 }}>
+      <section>
+        <h3 style={{ margin: "0 0 4px" }}>Respuestas de los locales{items ? ` (${items.length})` : ""}</h3>
+        <p style={{ margin: "0 0 12px", fontSize: 13, opacity: .75 }}>
+          Las cargan los comerciantes para su chatbot y salen sin moderación; desde acá se puede desactivar una.
+        </p>
+        <input className="adm-input" type="search" value={q} onChange={(e) => setQ(e.target.value)}
+               placeholder="Buscar por comercio, pregunta o respuesta" aria-label="Buscar respuestas de los locales" />
+      </section>
+
+      {err && (
+        <div role="alert" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 13.5, color: "var(--pink)" }}>
+          <span><Ic n="aviso" s={15} /> {err}</span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setVuelta((n) => n + 1)}>Reintentar</button>
+        </div>
+      )}
+      {!err && items === null && <p style={{ opacity: .6 }}>Cargando…</p>}
+      {items !== null && items.length === 0 && !err && (
+        <p style={{ opacity: .6 }}>{q.trim() ? "Ninguna respuesta coincide con la búsqueda." : "Todavía ningún comercio cargó respuestas."}</p>
+      )}
+      {errFila && <p role="alert" style={{ color: "var(--pink)", fontSize: 13, margin: 0 }}><Ic n="aviso" s={14} /> {errFila}</p>}
+
+      <div style={{ display: "grid", gap: 8 }}>
+        {(items ?? []).map((r) => (
+          <div key={r.id} style={{ padding: "10px 12px", border: "1px solid var(--stroke)", borderRadius: 10, display: "grid", gap: 6 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 13 }}>
+                {r.comercio_slug
+                  ? <Link href={`/comercios/${r.comercio_slug}`} target="_blank" rel="noopener" style={{ fontWeight: 700, textDecoration: "underline" }}>{r.comercio_nombre ?? r.comercio_slug}</Link>
+                  : <b>{r.comercio_nombre ?? "Comercio sin nombre"}</b>}
+                <span style={{ opacity: .55 }}> · {new Date(r.updated_at).toLocaleDateString("es-BO")}</span>
+              </span>
+              <button type="button" role="switch" aria-checked={r.activo} disabled={cambiando === r.id}
+                      aria-label={`${r.activo ? "Desactivar" : "Activar"} la respuesta «${r.pregunta}»`}
+                      className="btn btn-sm" onClick={() => alternar(r)}
+                      style={{ border: `1px solid ${r.activo ? "var(--neon)" : "var(--stroke)"}`, color: r.activo ? "var(--neon)" : undefined }}>
+                <Ic n={r.activo ? "si" : "cerrar"} s={14} /> {cambiando === r.id ? "Guardando…" : r.activo ? "Activa" : "Desactivada"}
+              </button>
+            </div>
+            <div style={{ opacity: r.activo ? 1 : .55, display: "grid", gap: 4 }}>
+              <b>{r.pregunta}</b>
+              <div style={{ fontSize: 13.5, whiteSpace: "pre-wrap" }}>{r.respuesta}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AsistenteUruku() {
   const [pendientes, setPendientes] = useState<ConversacionAsistente[]>([]);
   const [todas, setTodas] = useState<ConversacionAsistente[]>([]);
   const [saber, setSaber] = useState<SaberLocal[]>([]);

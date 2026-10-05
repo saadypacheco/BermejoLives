@@ -426,5 +426,38 @@ export async function crearProducto(
 
 /** Lo que los clientes le preguntaron al asistente de este local. Las que
  *  quedaron sin respuesta son las que el dueño tiene que mirar. */
-export const getPreguntasDelAsistente = (): Promise<{ items: { id: string; pregunta: string; respuesta: string; nivel: number; sin_respuesta: boolean; created_at: string }[]; sin_respuesta: number }> =>
+export type PreguntaDelAsistente = {
+  id: string; pregunta: string; respuesta: string; nivel: number; sin_respuesta: boolean;
+  /** Cuándo el dueño la contestó. Con fecha, ya no está pendiente aunque
+   *  `sin_respuesta` siga en true (así quedó registrada la conversación). */
+  resuelta_en: string | null; created_at: string;
+};
+
+/** `sin_respuesta` es el total de pendientes, ya sin las resueltas. */
+export const getPreguntasDelAsistente = (): Promise<{ items: PreguntaDelAsistente[]; sin_respuesta: number }> =>
   cFetch("/comercio/asistente/preguntas");
+
+/** Una pregunta frecuente del local con su respuesta: lo que el chatbot
+ *  contesta solo, sin IA y sin costo, cuando alguien pregunta algo parecido. */
+export type RespuestaDelLocal = { id: string; pregunta: string; respuesta: string; updated_at: string };
+
+export const getRespuestasDelChatbot = (): Promise<{ items: RespuestaDelLocal[] }> =>
+  cFetch("/comercio/asistente/respuestas");
+
+/** Con `conversacion_id` el servidor marca esa pregunta como resuelta: así
+ *  sale de la lista de «sin respuesta» en el mismo paso. */
+export const crearRespuestaDelChatbot = (
+  b: { pregunta: string; respuesta: string; conversacion_id?: string | null },
+): Promise<{ item: RespuestaDelLocal }> =>
+  cFetch("/comercio/asistente/respuestas", {
+    method: "POST",
+    body: JSON.stringify({ pregunta: b.pregunta, respuesta: b.respuesta, conversacion_id: b.conversacion_id ?? null }),
+  });
+
+export const editarRespuestaDelChatbot = (
+  id: string, patch: { pregunta?: string; respuesta?: string },
+): Promise<{ item: RespuestaDelLocal }> =>
+  cFetch(`/comercio/asistente/respuestas/${id}`, { method: "PUT", body: JSON.stringify(patch) });
+
+export const borrarRespuestaDelChatbot = (id: string): Promise<{ ok: boolean }> =>
+  cFetch(`/comercio/asistente/respuestas/${id}`, { method: "DELETE" });

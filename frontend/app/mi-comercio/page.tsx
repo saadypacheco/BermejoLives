@@ -28,12 +28,13 @@ import {
   getPerfil, updatePerfil, subirFotoPerfil, getSuscripcion, getMetricas, pagarSuscripcion,
   draftProducto, listProductos, crearProducto, borrarProducto, destacarProducto,
   getMensajes, marcarLeido,
-  getMisPublicaciones, editarPublicacion, bajaPublicacion, getPreguntasDelAsistente,
+  getMisPublicaciones, editarPublicacion, bajaPublicacion,
   listarFotosComercio, listarVideosComercio, subirFotoGaleriaComercio, subirVideoGaleriaComercio, borrarFotoComercio, borrarVideoComercio,
   type ComercioSession, type Perfil, type Suscripcion, type Metricas,
   type ProductoDraft, type ProductoRef, type Mensaje, type Publicacion,
 } from "@/lib/comercio";
 import { GaleriaUploader } from "@/components/galeria-uploader";
+import { ChatbotDelLocal } from "@/components/chatbot-del-local";
 import { FotoPrincipal } from "@/components/foto-principal";
 import { comprimirImagen } from "@/lib/imagen";
 import { RUBROS } from "@/lib/types";
@@ -534,10 +535,17 @@ function Panel({ sess, onLogout }: { sess: ComercioSession; onLogout: () => void
   const [vista, setVista] = useState<Vista>("inicio");
   const [sub, setSub] = useState<Suscripcion | null>(null);
   const [noLeidos, setNoLeidos] = useState(0);
+  // Si la suscripción no se pudo leer, el chatbot lo dice (con reintento) en
+  // vez de callarse: sin plan no se sabe qué ofrecer, pero las preguntas de
+  // los clientes se muestran igual.
+  const [subFalla, setSubFalla] = useState("");
+  const [intentoSub, setIntentoSub] = useState(0);
   useEffect(() => {
-    getSuscripcion().then(setSub).catch(() => {});
+    getSuscripcion()
+      .then((s) => { setSub(s); setSubFalla(""); })
+      .catch((e) => setSubFalla(e instanceof Error && e.message ? e.message : "No se pudo leer tu suscripción."));
     getMensajes().then((r) => setNoLeidos(r.no_leidos)).catch(() => {});
-  }, [vista]);
+  }, [vista, intentoSub]);
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
@@ -553,7 +561,7 @@ function Panel({ sess, onLogout }: { sess: ComercioSession; onLogout: () => void
           {vista === "productos" && <div style={{ maxWidth: 780 }}><ProductosTab /></div>}
           {vista === "contactos" && <div style={{ maxWidth: 720 }}><ContactosView /></div>}
           {vista === "estadisticas" && <div style={{ maxWidth: 720 }}><EstadisticasView /></div>}
-          {vista === "mensajes" && <div style={{ maxWidth: 760 }}><PreguntasAlAsistente /><MensajesTab /></div>}
+          {vista === "mensajes" && <div style={{ maxWidth: 760 }}><ChatbotDelLocal plan={sub?.plan} errorPlan={sub ? "" : subFalla} onReintentarPlan={() => { setSubFalla(""); setIntentoSub((n) => n + 1); }} /><MensajesTab /></div>}
           {vista === "suscripcion" && <div style={{ maxWidth: 620 }}><SuscripcionTab /></div>}
           {vista === "config" && <div style={{ maxWidth: 620 }}><ConfiguracionView /></div>}
         </div>
@@ -1006,33 +1014,8 @@ function EstadisticasView() {
 }
 
 /* --------------------------------- Mensajes tab -------------------------------- */
-/** Lo que los clientes le preguntaron al asistente del local y el asistente
- *  no supo contestar. Son ventas que se quedaron sin cerrar: el dueño lee la
- *  pregunta, y la próxima vez carga ese dato en su ficha (horario, envíos,
- *  precios) para que el asistente lo tenga. Sólo aparece si hubo alguna. */
-function PreguntasAlAsistente() {
-  const [data, setData] = useState<Awaited<ReturnType<typeof getPreguntasDelAsistente>> | null>(null);
-  useEffect(() => { getPreguntasDelAsistente().then(setData).catch(() => {}); }, []);
-  if (!data || data.items.length === 0) return null;
-  const sinResp = data.items.filter((i) => i.sin_respuesta);
-  return (
-    <div style={{ marginBottom: 18, padding: 14, border: "1px solid var(--stroke)", borderRadius: 12 }}>
-      <b style={{ display: "block", marginBottom: 4 }}>Preguntas al asistente de tu local</b>
-      <p style={{ margin: "0 0 10px", fontSize: 13, color: "var(--txt-3)" }}>
-        {data.items.length} en total · {sinResp.length} que no supo contestar. Lo que el asistente no sabe es lo que
-        te falta cargar en la ficha: horario, envíos, precios.
-      </p>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13.5 }}>
-        {(sinResp.length ? sinResp : data.items).slice(0, 15).map((i) => (
-          <div key={i.id} style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-            <span><Ic n={i.sin_respuesta ? "ayuda" : "si"} s={14} /> {i.pregunta}</span>
-            <span style={{ color: "var(--txt-3)", whiteSpace: "nowrap", fontSize: 12 }}>{new Date(i.created_at).toLocaleDateString("es-BO")}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// Las preguntas al chatbot del local y sus respuestas viven en
+// components/chatbot-del-local.tsx (se muestran arriba de los mensajes).
 
 function MensajesTab() {
   const [items, setItems] = useState<Mensaje[] | null>(null);

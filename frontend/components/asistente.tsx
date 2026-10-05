@@ -3,14 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { marcarUtilAsistente, preguntarAsistente, type RespuestaAsistente } from "@/lib/api";
 import { Ic } from "@/components/ic";
+import { WaLeadLink } from "@/components/wa-lead-link";
 
 /**
  * Uruku Ayuda: el botón de abajo a la derecha y el panel de chat.
  *
  * Sin `comercio`, es el asistente de URUKU (dónde consigo, abierto ahora, el
  * dólar, cómo publico). Con `comercio`, es el asistente de ESE local en su
- * ficha —el "asistente 24/7" del plan Empleado Digital— y contesta con los
- * datos del local. Quién puede tenerlo lo decide el servidor: si el plan no
+ * ficha —el "asistente 24/7" de los planes que lo incluyen— y contesta con
+ * los datos del local. Quién puede tenerlo lo decide el servidor: si el plan no
  * lo incluye, el pedido vuelve con 403 y el panel lo dice.
  *
  * La sesión es un id guardado en el navegador. Sirve para el tope de
@@ -18,7 +19,8 @@ import { Ic } from "@/components/ic";
  */
 type Mensaje =
   | { de: "yo"; texto: string }
-  | { de: "uruku"; texto: string; id?: string; fuentes?: RespuestaAsistente["fuentes"]; sugerencias?: string[]; util?: boolean | null; error?: boolean };
+  | { de: "uruku"; texto: string; id?: string; fuentes?: RespuestaAsistente["fuentes"]; sugerencias?: string[]; util?: boolean | null; error?: boolean;
+      derivar?: RespuestaAsistente["derivar"] };
 
 /** DAX: la cara del chat. Es la misma del volante y de los videos — que el
  *  que ya la vio en la calle la reconozca en el sitio.
@@ -86,7 +88,7 @@ export function Asistente({ comercio, ciudad }: { comercio?: { id: string; nombr
     setPensando(true);
     try {
       const r = await preguntarAsistente(pregunta, sesionId(), comercio?.id, ciudad?.slug);
-      setMensajes((m) => [...m, { de: "uruku", texto: r.texto, id: r.id, fuentes: r.fuentes, sugerencias: r.sugerencias, util: null }]);
+      setMensajes((m) => [...m, { de: "uruku", texto: r.texto, id: r.id, fuentes: r.fuentes, sugerencias: r.sugerencias, util: null, derivar: r.derivar ?? null }]);
     } catch (e) {
       // "Failed to fetch" es lo que dice el navegador cuando no hay señal; no
       // es algo que se le muestre a alguien. Los mensajes que escribimos
@@ -131,7 +133,7 @@ export function Asistente({ comercio, ciudad }: { comercio?: { id: string; nombr
           </div>
           <div className="uk-ayuda-msgs">
             {lista.map((m, i) => (
-              <div key={i} className={`uk-ayuda-msg ${m.de}${m.de === "uruku" && m.error ? " error" : ""}`}>
+              <div key={i} className={`uk-ayuda-msg ${m.de}${m.de === "uruku" && m.error ? " error" : ""}${comercio ? " sin-cara" : ""}`}>
                 {m.de === "uruku" && !comercio && (
                   <img className="uk-ayuda-mascota-msg" src={MASCOTA.imagen} alt="" width={26} height={26} />
                 )}
@@ -144,6 +146,18 @@ export function Asistente({ comercio, ciudad }: { comercio?: { id: string; nombr
                       </a>
                     ))}
                   </div>
+                )}
+                {/* Cuando el chatbot del local no supo, el comprador no se queda
+                    en la nada: el botón le abre WhatsApp con la pregunta ya
+                    escrita. Es el mismo enlace y el mismo registro de contacto
+                    que el botón de la ficha. Sin comercio (el asistente de
+                    URUKU) nunca hay derivación. */}
+                {m.de === "uruku" && comercio && m.derivar?.whatsapp && (
+                  <WaLeadLink className="uk-ayuda-derivar" comercioId={comercio.id} nombre={comercio.nombre}
+                              whatsapp={m.derivar.whatsapp} mensaje={m.derivar.texto}>
+                    <Ic n="whatsapp" s={18} />
+                    <span>Preguntarle a {comercio.nombre} por WhatsApp</span>
+                  </WaLeadLink>
                 )}
                 {m.de === "uruku" && m.id && (
                   <div className="uk-ayuda-util">

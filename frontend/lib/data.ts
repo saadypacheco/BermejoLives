@@ -691,6 +691,26 @@ export async function getPlanes(): Promise<PlanPublico[]> {
   }));
 }
 
+/** Las funciones de UN plan, por su slug. Devuelve `null` si no se pudo leer
+ *  (sin base, sin red, plan inexistente): quien llama decide qué hacer con la
+ *  duda, y para la ficha la duda significa «sin chatbot», como antes.
+ *
+ *  Va aparte de `getPlanes()` a propósito: esa lista trae sólo los planes
+ *  VISIBLES, y un plan oculto (Empleado Digital) puede tener comercios
+ *  contratados con el chatbot incluido. Se pide sólo `funciones`: el precio
+ *  no es legible por `anon` y pedir `*` rompe la consulta entera. */
+export async function getFuncionesDePlan(slug: string | null | undefined): Promise<Record<string, boolean> | null> {
+  if (!hasSupabase || !slug) return null;
+  try {
+    const { data, error } = await supabase.from("planes").select("funciones")
+      .eq("slug", slug).eq("activo", true).maybeSingle();
+    if (error || !data) return null;
+    return ((data as { funciones?: Record<string, boolean> | null }).funciones) ?? {};
+  } catch {
+    return null;
+  }
+}
+
 
 // ============================================================ La guía del que llega (/guia)
 
@@ -701,8 +721,11 @@ export type SaberLocalPublico = { id: string; pregunta: string; respuesta: strin
 export async function getSaberLocalPorSeccion(ciudadId?: string | null): Promise<Record<string, SaberLocalPublico[]>> {
   if (!hasSupabase) return {};
   // De esta ciudad y lo que vale para todas las fronteras (ciudad_id NULL).
+  // Columnas por nombre (nunca `*` ni `creado_por`: anon no las lee) y sólo el
+  // saber de URUKU (`comercio_id` nulo): las respuestas que cargan los locales
+  // para su chatbot no van a la guía pública.
   let q = supabase.from("saber_local").select("id, pregunta, respuesta, seccion, ciudad_id")
-    .eq("activo", true).order("updated_at", { ascending: true });
+    .eq("activo", true).is("comercio_id", null).order("updated_at", { ascending: true });
   if (ciudadId) q = q.or(`ciudad_id.eq.${ciudadId},ciudad_id.is.null`);
   const { data } = await q;
   const out: Record<string, SaberLocalPublico[]> = {};

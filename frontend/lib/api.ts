@@ -1206,6 +1206,10 @@ export type RespuestaAsistente = {
   fuentes: { tipo: "comercio" | "saber"; nombre: string; url: string; detalle?: string }[];
   sugerencias: string[];
   sin_respuesta: boolean;
+  /** Sólo en el chatbot de un comercio, cuando no supo contestar y el local
+   *  tiene WhatsApp: el número y el mensaje ya escrito para que el comprador
+   *  le pregunte directo al dueño. Ausente o null = no hay a quién derivar. */
+  derivar?: { whatsapp: string; texto: string } | null;
 };
 
 /** Público. `sesion` identifica al navegador para el tope diario; `comercioId`
@@ -1270,6 +1274,29 @@ export async function guardarSaberLocal(item: { id?: string; pregunta: string; r
 
 export async function borrarSaberLocal(id: string): Promise<void> {
   await authFetch(`/admin/asistente/saber/${id}`, { method: "DELETE" });
+}
+
+/** Una respuesta que un comerciante cargó para el chatbot de su local. Sale sin
+ *  moderación: el admin sólo la puede desactivar (no editar ni borrar). */
+export type RespuestaLocalAdmin = {
+  id: string; comercio_id: string; comercio_nombre: string | null; comercio_slug: string | null;
+  pregunta: string; respuesta: string; activo: boolean; updated_at: string;
+};
+
+export async function getRespuestasLocales(q = "", limite = 200): Promise<RespuestaLocalAdmin[]> {
+  const params = new URLSearchParams({ limite: String(limite) });
+  if (q.trim()) params.set("q", q.trim());
+  const res = await authFetch(`/admin/asistente/respuestas-locales?${params.toString()}`);
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? "No se pudieron cargar las respuestas");
+  return (await res.json()).items;
+}
+
+export async function setRespuestaLocalActiva(id: string, activo: boolean): Promise<RespuestaLocalAdmin> {
+  const res = await authFetch(`/admin/asistente/respuestas-locales/${id}/activo`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activo }),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? "No se pudo cambiar");
+  return (await res.json()).item;
 }
 
 

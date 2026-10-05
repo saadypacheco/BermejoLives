@@ -72,19 +72,22 @@ class FakeRepo:
             "destacado": {"slug": "destacado", "nombre": "Destacado", "orden": 2,
                           "precio_mes": 140, "publicaciones_mes": 60, "publica_meses": None,
                           "precio_publicacion_extra": 5, "permite_extras": True,
-                          "moneda": "BOB", "funciones": {"negocio_digital": True, "redes": True},
+                          "moneda": "BOB",
+                          "funciones": {"negocio_digital": True, "redes": True, "asistente_24_7": True},  # 0136
                           "activo": True, "visible": True, "descripcion": "", "incluye": []},
-            "pro":       {"slug": "pro", "nombre": "Pro", "orden": 3,
+            "pro":      {"slug": "pro", "nombre": "Pro", "orden": 3,
                           "precio_mes": 400, "publicaciones_mes": 150, "publica_meses": None,
                           "precio_publicacion_extra": 5, "permite_extras": True,
                           "moneda": "BOB",
-                          "funciones": {"negocio_digital": True, "redes": True, "asistente_24_7": True},
+                          "funciones": {"negocio_digital": True, "redes": True, "asistente_24_7": True,
+                                        "asistente_ia": True},  # 0136
                           "activo": True, "visible": True, "descripcion": "", "incluye": []},
             "empleado_ia": {"slug": "empleado_ia", "nombre": "Empleado Digital",
                           "orden": 4, "precio_mes": 1250, "publicaciones_mes": None, "publica_meses": None,
                           "precio_publicacion_extra": 5, "permite_extras": True,
                           "moneda": "BOB",
                           "funciones": {"negocio_digital": True, "redes": True, "asistente_24_7": True,
+                                        "asistente_ia": True,  # 0136
                                         "agente_catalogo": True, "agente_analista": True,
                                         "agente_marketing": True, "multicanal": True,
                                         "leads": True},
@@ -925,20 +928,66 @@ class FakeRepo:
         return filas[:limite]
 
     def list_saber_local(self, solo_activos=True, ciudad_slug=None):
-        filas = [s for s in self.saber_local.values() if not solo_activos or s.get("activo", True)]
+        # Como la real: sólo el saber de URUKU, sin las respuestas de un local (0136).
+        filas = [s for s in self.saber_local.values()
+                 if not s.get("comercio_id") and (not solo_activos or s.get("activo", True))]
         if ciudad_slug is None:
             return filas
         return [f for f in filas if f.get("ciudad_id") in (None, self.get_ciudad_id(ciudad_slug))]
 
     def upsert_saber_local(self, row):
         import uuid
-        row = {"activo": True, **row}
+        from datetime import datetime, timezone
+        row = {"activo": True, **row, "updated_at": datetime.now(timezone.utc).isoformat()}
         row.setdefault("id", str(uuid.uuid4()))
         self.saber_local[row["id"]] = {**self.saber_local.get(row["id"], {}), **row}
         return self.saber_local[row["id"]]
 
     def borrar_saber_local(self, saber_id):
         self.saber_local.pop(saber_id, None)
+
+    def list_respuestas_comercio(self, comercio_id, limite=200, desde=0):
+        filas = [s for s in self.saber_local.values()
+                 if s.get("comercio_id") == comercio_id and s.get("activo", True)]
+        filas.sort(key=lambda s: s.get("updated_at") or "", reverse=True)
+        return filas[desde:desde + limite]
+
+    def get_respuesta_comercio(self, comercio_id, respuesta_id):
+        s = self.saber_local.get(respuesta_id)
+        if s and s.get("comercio_id") == comercio_id and s.get("activo", True):
+            return s
+        return None
+
+    def contar_respuestas_comercio(self, comercio_id):
+        return len([s for s in self.saber_local.values()
+                    if s.get("comercio_id") == comercio_id and s.get("activo", True)])
+
+    def get_saber_local(self, saber_id):
+        return self.saber_local.get(saber_id)
+
+    def list_respuestas_locales(self, q=None, limite=200):
+        import unicodedata
+
+        def _plano(t):
+            return "".join(ch for ch in unicodedata.normalize("NFD", (t or "").lower()) if unicodedata.category(ch) != "Mn")
+        filas = []
+        for s in self.saber_local.values():
+            if not s.get("comercio_id"):
+                continue
+            com = self.comercios.get(s["comercio_id"]) or {}
+            filas.append({"id": s["id"], "comercio_id": s["comercio_id"], "comercio_nombre": com.get("nombre"),
+                          "comercio_slug": com.get("slug"), "pregunta": s.get("pregunta"),
+                          "respuesta": s.get("respuesta"), "activo": s.get("activo", True),
+                          "updated_at": s.get("updated_at")})
+        filas.sort(key=lambda f: f.get("updated_at") or "", reverse=True)
+        buscado = _plano((q or "").strip())
+        if buscado:
+            filas = [f for f in filas if buscado in _plano(" ".join(
+                str(f.get(k) or "") for k in ("comercio_nombre", "pregunta", "respuesta")))]
+        return filas[:limite]
+
+    def get_conversacion(self, conversacion_id):
+        return next((r for r in self.conversaciones if r["id"] == conversacion_id), None)
 
     def insert_conversacion(self, row):
         import uuid
@@ -948,8 +997,10 @@ class FakeRepo:
         self.conversaciones.append(row)
         return row
 
-    def list_conversaciones(self, filtro, limite=100):
+    def list_conversaciones(self, filtro, limite=100, solo_sitio=False):
         rows = list(reversed(self.conversaciones))
+        if solo_sitio:
+            rows = [r for r in rows if not r.get("comercio_id")]
         if filtro == "sin_respuesta":
             rows = [r for r in rows if r.get("sin_respuesta") and not r.get("resuelta_en")]
         elif filtro.startswith("comercio:"):
