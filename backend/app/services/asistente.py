@@ -672,17 +672,26 @@ def _saber_local(repo, pregunta: str, minimo: int = 2) -> tuple[dict | None, int
 
 
 def _nivel0_planes(repo) -> Respuesta:
-    """Los planes, de la tabla: nombre, precio y la frase de cada uno. Lo
-    mismo que /planes, así el asistente nunca dice un precio viejo."""
+    """Los planes, de la tabla: nombre y la frase de cada uno. Lo mismo que
+    /planes, así el asistente nunca dice algo viejo.
+
+    SIN PRECIOS. Los precios de los planes no se muestran en ningún lado
+    (decisión del 4/10/2026): se hablan con el comerciante. Tampoco el "gratis":
+    es un precio, y el que pregunta cuánto cuesta tiene que terminar en la
+    forma de consultarlo, no en una cifra que mañana puede cambiar. Cuando
+    haya un contacto de URUKU configurado en el backend, va acá; hoy no hay
+    ninguno (sólo `wa_contacto_explorador`, que es el del explorador de
+    ofertas), así que se remite a la página de planes, que tiene el botón.
+    """
     planes = [p for p in (repo.list_planes(True) or []) if p.get("visible", True)]
     if not planes:
         return Respuesta(texto=f"Los planes están en {SITIO}/planes.", nivel=0, intent="faq_planes")
     lineas = []
     for p in sorted(planes, key=lambda x: x.get("orden", 0)):
-        precio = "gratis" if not p.get("precio_mes") else f"Bs {_num(p['precio_mes'])}/mes"
         desc = (p.get("descripcion") or "").strip().rstrip(".")
-        lineas.append(f"• {p.get('nombre')} — {precio}" + (f": {desc}" if desc else ""))
-    return Respuesta(texto="Los planes de URUKU:\n" + "\n".join(lineas) + f"\nTodo el detalle y cómo pagar: {SITIO}/planes",
+        lineas.append(f"• {p.get('nombre')}" + (f": {desc}" if desc else ""))
+    return Respuesta(texto="Los planes de URUKU:\n" + "\n".join(lineas)
+                          + f"\nPara saber cuánto cuesta cada uno y cómo sumarte, consultanos desde {SITIO}/planes",
                      nivel=0, intent="faq_planes", sugerencias=["¿Cómo publico mi negocio?", "¿Cobran comisión?"])
 
 

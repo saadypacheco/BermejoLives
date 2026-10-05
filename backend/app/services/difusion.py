@@ -284,6 +284,15 @@ def procesar(repo, fila: dict) -> dict:
         repo.marcar_difusion(fila["id"], "omitido", "la publicación ya no existe")
         return {"estado": "omitido"}
 
+    # Una publicación archivada (activo = false: la bajó el comerciante, o el
+    # tope de publicaciones guardadas del plan) no sale a las redes, aunque siga
+    # 'aprobado'. `archivar_excedentes` ya descarta lo pendiente; esto cubre el
+    # reintento a mano de una fila que quedó en error. `is False` y no `not`: una
+    # fila sin la columna (un fake, una vista) no se trata como archivada.
+    if pub.get("activo") is False:
+        repo.marcar_difusion(fila["id"], "omitido", "la publicación está archivada")
+        return {"estado": "omitido"}
+
     # Sólo sale lo aprobado. Es la guarda que impide que una foto que un
     # moderador todavía no miró aparezca en el muro de la marca — un error que
     # no se deshace con un "rechazar" en el panel.

@@ -2673,6 +2673,13 @@ class PlanBody(BaseModel):
     descripcion: str | None = None
     incluye: list[str] | None = None
     publica_meses: int | None = Field(default=None, ge=0)
+    # Cuántas publicaciones activas guarda un comercio de este plan (0134). Entero
+    # > 0, o null = sin tope. A diferencia del resto, acá el null SE ENVÍA: ver
+    # `admin_editar_plan`.
+    # Con techo: la columna es `int`, y un número enorme pasaba la validación
+    # para morir en Postgres con un 500 que no dice nada. Cien mil ya es «sin
+    # tope» en la práctica; para eso está el null.
+    publicaciones_guardadas: int | None = Field(default=None, gt=0, le=100_000)
     activo: bool | None = None
     visible: bool | None = None
 
@@ -2706,6 +2713,11 @@ async def admin_editar_plan(
     es sumarle una clave, no migrar la base.
     """
     patch = {k: v for k, v in body.model_dump().items() if v is not None}
+    # `null` en `publicaciones_guardadas` significa "sin tope", un valor válido y
+    # distinto de "no lo toqué". El filtro de arriba tira los null, así que éste
+    # se decide por separado: se manda si vino en el cuerpo, aunque sea null.
+    if "publicaciones_guardadas" in body.model_fields_set:
+        patch["publicaciones_guardadas"] = body.publicaciones_guardadas
     if not patch:
         raise HTTPException(400, "no hay nada que cambiar")
     if "nombre" not in patch and not await run_in_threadpool(repo.get_plan, slug):

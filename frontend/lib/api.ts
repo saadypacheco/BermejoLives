@@ -1277,6 +1277,9 @@ export async function borrarSaberLocal(id: string): Promise<void> {
 
 export type PlanAdmin = {
   slug: string; nombre: string; orden: number; precio_mes: number; publicaciones_mes: number | null;
+  /** Tope de publicaciones activas que el comercio guarda (null = sin tope). Al
+   *  pasarse, el backend archiva la más vieja y borra su foto del disco. */
+  publicaciones_guardadas: number | null;
   precio_publicacion_extra: number; permite_extras: boolean; publica_meses: number | null;
   descripcion: string | null; incluye: string[]; funciones: Record<string, boolean>; activo: boolean; visible: boolean;
 };
@@ -1374,6 +1377,9 @@ export async function guardarPlan(slug: string, patch: Partial<Omit<PlanAdmin, "
   const res = await authFetch(`/admin/planes/${slug}`, {
     method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
   });
-  if (!res.ok) throw new Error((await res.json()).detail ?? "No se pudo guardar");
-  return (await res.json()).plan ?? (await res.json());
+  // `authFetch` ya lanza ante un error, con el motivo legible (también el
+  // arreglo que manda Pydantic en un 422). El cuerpo se lee UNA vez: leerlo dos
+  // veces lanza «body already used» justo cuando la respuesta no trae `plan`.
+  const d = await res.json();
+  return d.plan ?? d;
 }

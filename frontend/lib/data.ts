@@ -656,21 +656,33 @@ export async function getAdornosMapa(ciudadId?: string | null): Promise<Adorno[]
 
 // Los planes, de la tabla `planes` (migraciones 0101/0102/0108). Sólo los
 // visibles y activos, en orden. Es lo que muestra /planes.
+//
+// SIN `precio_mes` A PROPÓSITO: el precio de un plan no se muestra al público, y
+// la base ya no deja que `anon` lo lea. Pedirlo, aunque sea con `select("*")`,
+// hace fallar la consulta entera con un error de permiso. El precio vive sólo
+// en Admin › Planes.
 export type PlanPublico = {
-  slug: string; nombre: string; precio_mes: number; publicaciones_mes: number | null;
+  slug: string; nombre: string; publicaciones_mes: number | null;
   precio_publicacion_extra: number; permite_extras: boolean; publica_meses: number | null;
   descripcion: string | null; incluye: string[]; funciones: Record<string, boolean>;
 };
 
+// Las columnas de la 0101 (siempre están) y las que llegaron después (0108:
+// viñetas y meses gratis). Se pide la lista larga y, si la base todavía no
+// tiene alguna, la corta: una página de venta que se queda en blanco porque
+// falta una columna es peor que una sin viñetas. Ya no se puede usar `*`.
+const PLANES_COLS_BASE = "slug,nombre,orden,publicaciones_mes,precio_publicacion_extra,permite_extras,funciones,descripcion";
+const PLANES_COLS_FULL = `${PLANES_COLS_BASE},incluye,publica_meses`;
+
 export async function getPlanes(): Promise<PlanPublico[]> {
   if (!hasSupabase) return [];
-  // `select("*")` y no la lista de columnas: las viñetas y los meses gratis
-  // llegaron en la 0108, y una página de venta que se queda en blanco porque
-  // la base todavía no tiene una columna es peor que una sin viñetas.
-  const { data } = await supabase.from("planes").select("*")
+  const pedir = (cols: string) => supabase.from("planes").select(cols)
     .eq("activo", true).eq("visible", true).order("orden");
-  return ((data ?? []) as Record<string, unknown>[]).map((p) => ({
-    slug: String(p.slug), nombre: String(p.nombre), precio_mes: Number(p.precio_mes ?? 0),
+  let res = await pedir(PLANES_COLS_FULL);
+  if (res.error) res = await pedir(PLANES_COLS_BASE);
+  const data = res.data;
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map((p) => ({
+    slug: String(p.slug), nombre: String(p.nombre),
     publicaciones_mes: p.publicaciones_mes == null ? null : Number(p.publicaciones_mes),
     precio_publicacion_extra: Number(p.precio_publicacion_extra ?? 0), permite_extras: Boolean(p.permite_extras),
     publica_meses: p.publica_meses == null ? null : Number(p.publica_meses),

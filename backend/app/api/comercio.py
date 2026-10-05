@@ -23,6 +23,7 @@ from app.services.imagenes import (
     guardar_foto_local, procesar_imagen, subir_foto_comercio,
     subir_foto_galeria, subir_video_comercio,
 )
+from app.services import planes
 from app.services.rubros import aplicar_rubros
 from app.services.tienda_client import get_tienda_client
 
@@ -568,6 +569,22 @@ def publicar(
     if not comercio:
         raise HTTPException(status_code=404, detail="comercio no encontrado")
 
+    # La cuota del plan, igual que en la ingesta por WhatsApp.
+    #
+    # EL SILENCIO ES EL PEOR RESULTADO. Si el comercio llegó al tope y esto lo
+    # dejara pasar sin decir nada, se enteraría de que debe plata en la factura.
+    # Si no puede publicar, el error ES el aviso (402, con el texto que explica
+    # las dos salidas); si puede pero se pasó, sale y el aviso viaja en la
+    # respuesta —con WAHA en sólo lectura no hay otro canal para avisarle—.
+    cuota = planes.revisar_antes_de_publicar(repo, comercio)
+    aviso = None
+    if cuota["consecuencia"]:
+        aviso = planes.texto_de_aviso(cuota, planes.plan_siguiente(repo, cuota["plan"]))
+    if not cuota["puede"]:
+        logger.info("comercio.publicar_sin_cuota", comercio=comercio.get("slug"),
+                    consecuencia=cuota["consecuencia"])
+        raise HTTPException(status_code=402, detail=aviso)
+
     confiable = bool(comercio.get("confiable"))
     now = datetime.now(timezone.utc).isoformat()
     # Descuento/vencimiento solo aplican a ofertas; el % se acota a 1..99.
@@ -593,12 +610,23 @@ def publicar(
         "moderado_at": now if confiable else None,
     }
     pub = repo.insert_publicacion_directa(row)
+    # El cargo se ata a la publicación (una fila por publicación). OJO: acá eso
+    # NO evita el doble cobro si el comerciante reintenta tras un timeout, porque
+    # cada POST crea una publicación nueva con su propio id. En la ingesta sí lo
+    # evita, porque deduplica por `wa_message_id`. Nunca rompe la publicación.
+    if cuota["consecuencia"] == "cobrar" and pub.get("id"):
+        planes.cobrar_extra(repo, comercio, pub["id"], cuota["plan"])
+    # Después de insertar: si se pasó del tope de guardadas, archiva la más vieja
+    # y borra su foto. Nunca lanza.
+    if pub.get("id"):
+        planes.archivar_excedentes(repo, comercio)
     logger.info("comercio.publicar", comercio=comercio["slug"], estado=row["estado"], confiable=confiable)
     return {
         "ok": True,
         "estado": row["estado"],
         "publicado_directo": confiable,
         "publicacion": pub,
+        "aviso": aviso,
     }
 
 
@@ -780,6 +808,9 @@ def destacar_producto(
         "moderado_at": now if confiable else None,
     })
     repo.update_producto_ref(ref_id, {"destacado_pub_id": pub["id"]})
+    # Sin cuota ni cobro de plan: el destacado tiene su propio costo (arriba).
+    # El tope de guardadas sí: es una publicación más en el disco.
+    planes.archivar_excedentes(repo, comercio)
     logger.info("comercio.destacar", comercio=comercio["slug"], ref=ref_id, estado=pub["estado"])
     return {"ok": True, "estado": pub["estado"], "costo": _DESTACADO_COSTO}
 

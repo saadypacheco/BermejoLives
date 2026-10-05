@@ -23,8 +23,11 @@ esto no funciona. Por eso el aviso es parte de la regla, no un extra.
 from __future__ import annotations
 
 from datetime import date, timedelta
+from pathlib import Path
 
 import structlog
+
+from app.core.config import settings
 
 logger = structlog.get_logger()
 
@@ -109,6 +112,13 @@ def texto_de_aviso(est: dict, siguiente: dict | None) -> str:
     El que no quiere gastar de más igual tiene que enterarse de que existe el
     plan de arriba, y el que tiene apuro tiene que poder pagar la extra y seguir.
     Ofrecer una sola es elegir por él.
+
+    SIN PRECIOS DE PLANES
+    =====================
+    El plan de arriba se nombra con su cuota, nunca con lo que cuesta: los
+    precios de los planes no se muestran en ningún texto (decisión del
+    4/10/2026) y se hablan con el comerciante. El Bs de la publicación extra sí
+    va: es lo que va a pagar si sigue, y no avisarle sería cobrarle de sorpresa.
     """
     plan = est["plan"]
     if est.get("consecuencia") == "vencido":
@@ -118,8 +128,8 @@ def texto_de_aviso(est: dict, siguiente: dict | None) -> str:
         if siguiente:
             cuota = siguiente.get("publicaciones_mes")
             cuanto = "sin límite" if cuota is None else f"hasta {cuota} publicaciones por mes"
-            partes.append(f"Para seguir publicando, pasás a {siguiente.get('nombre')} por Bs "
-                          f"{_monto(siguiente.get('precio_mes'))} al mes y tenés {cuanto}.")
+            partes.append(f"Para seguir publicando, pasás a {siguiente.get('nombre')} "
+                          f"y tenés {cuanto}.")
         partes.append("Avisanos y lo arreglamos.")
         return " ".join(partes)
 
@@ -134,9 +144,8 @@ def texto_de_aviso(est: dict, siguiente: dict | None) -> str:
 
     if siguiente:
         cuota = siguiente.get("publicaciones_mes")
-        cuanto = "sin límite" if cuota is None else f"{cuota} publicaciones"
-        partes.append(f"O pasás a {siguiente.get('nombre')} por Bs "
-                      f"{_monto(siguiente.get('precio_mes'))} al mes y tenés {cuanto}.")
+        cuanto = "publicaciones sin límite" if cuota is None else f"{cuota} publicaciones por mes"
+        partes.append(f"O pasás a {siguiente.get('nombre')} y tenés {cuanto}.")
 
     partes.append("Avisanos y lo arreglamos.")
     return " ".join(partes)
@@ -219,3 +228,191 @@ def cobrar_extra(repo, comercio: dict, publicacion_id: str | None, plan: dict) -
                                    plan.get("moneda") or "BOB")
     except Exception:  # noqa: BLE001
         logger.warning("planes.cargo_extra_fallo", comercio=comercio.get("id"), exc_info=True)
+
+
+# ══════════════════════════════════════════════ el tope de publicaciones guardadas
+#
+# POR QUÉ EXISTE
+# ==============
+# Cada oferta que entra por WhatsApp deja una foto en el disco. Sin tope, el
+# disco crece mientras haya comercios publicando. El plan fija cuántas
+# publicaciones activas guarda cada comercio (`publicaciones_guardadas`); al
+# entrar una más, la más vieja se archiva y su foto se borra.
+#
+# ARCHIVAR NO ES BORRAR LA FILA
+# =============================
+# La regla del proyecto es soft-delete: la fila queda con `activo = false`. Lo que
+# ocupa espacio es el archivo de la foto, y es lo único que se borra.
+
+# Dónde guarda la ingesta las fotos de ofertas: `{slug}/ofertas/{hex}.jpg`
+# (wa_media.guardar_imagen_publicacion). Es lo ÚNICO que se borra al archivar.
+#
+# POR QUÉ NO "TODO LO QUE ESTÉ BAJO LA BASE DE FOTOS"
+# ===================================================
+# El `imagen_url` de una publicación hecha desde el panel es un campo de texto
+# libre: el comerciante puede pegar ahí la URL de su portada o de una foto de
+# su galería, que viven en la misma base pública (`{slug}/{hex}.jpg`). Borrar
+# eso al archivar la publicación dejaría la ficha del local con una foto rota,
+# por algo que el comerciante ni sabe que pasó. Las únicas fotos que nacen de
+# una publicación, y que nadie más referencia, son las de `ofertas/`.
+_CARPETA_OFERTAS = "ofertas"
+
+#: Cuántas publicaciones se archivan como máximo por cada publicación nueva.
+_MAX_ARCHIVAR_POR_VEZ = 5
+
+
+def _archivo_de_oferta(imagen_url: str | None, slug: str | None) -> Path | None:
+    """La ruta en disco de una foto de oferta PROPIA de ese comercio, o None si
+    no hay que tocarla.
+
+    Devuelve None —y entonces no se borra nada— cuando la URL:
+    - está vacía o no cuelga de `fotos_public_base_url` (una foto externa, un
+      producto de la tienda, un link: no es nuestra);
+    - no es CANÓNICA: trae `?`, `#` o cualquier caracter codificado (`%2F`,
+      `%2e`…). La guarda de «otra publicación la usa» compara la URL tal cual
+      está en la base; si acá se limpiara la URL antes de armar la ruta, una
+      variante (`…/abc.jpg?x=1`) no coincidiría con la de la otra fila y se
+      borraría una foto que alguien sigue mostrando. La que arma URUKU nunca
+      trae nada de eso;
+    - no es exactamente `<slug-del-comercio>/ofertas/<archivo>`. Un comercio
+      sólo puede hacer borrar SUS fotos de ofertas: el `imagen_url` de una
+      publicación hecha desde el panel es texto libre, y sin esto bastaba con
+      pegar la URL de la oferta de otro local;
+    - trae `..`, `.`, `\\`, partes vacías o un byte nulo;
+    - resuelta (siguiendo enlaces simbólicos) cae fuera de `fotos_dir`.
+    """
+    if not imagen_url or not slug:
+        return None
+    # Con la barra final: sin ella, `.../fotos-viejas/x.jpg` pasaría por colgar
+    # de `.../fotos`.
+    base = settings.fotos_public_base_url.rstrip("/") + "/"
+    if not imagen_url.startswith(base):
+        return None
+    relativa = imagen_url[len(base):]
+    if any(c in relativa for c in "?#%\\\x00"):
+        return None
+    partes = relativa.split("/")
+    if len(partes) != 3 or partes[0] != slug or partes[1] != _CARPETA_OFERTAS:
+        return None
+    if any(p in ("", ".", "..") for p in partes):
+        return None
+    try:
+        raiz = Path(settings.fotos_dir).resolve()
+        ruta = (raiz / relativa).resolve()
+    except (OSError, ValueError):
+        return None
+    # La última palabra: aunque todo lo anterior fallara, una ruta que no cuelga
+    # de la carpeta de fotos no se toca.
+    if not ruta.is_relative_to(raiz) or ruta == raiz:
+        return None
+    return ruta
+
+
+def _borrar_foto_de_oferta(repo, comercio: dict, pub: dict) -> bool:
+    """Borra el archivo de la foto si es una oferta propia del comercio y nadie
+    más la usa.
+
+    Devuelve True si el archivo se borró. Un archivo que ya no existe no es un
+    error: el objetivo era que no esté, y no está.
+    """
+    ruta = _archivo_de_oferta(pub.get("imagen_url"), comercio.get("slug"))
+    if ruta is None:
+        # Dicho y no callado: si las fotos quedaran guardadas con otra base (un
+        # cambio de dominio), el tope archivaría sin bajar el disco y nadie lo
+        # sabría. Con este evento se ve.
+        if pub.get("imagen_url"):
+            logger.info("planes.foto_no_se_borra", pub=pub.get("id"),
+                        motivo="no es una foto de ofertas propia en forma canónica")
+        return False
+    # Otra publicación activa con la misma URL (un comercio que reutilizó la
+    # foto, una publicación fusionada) la sigue mostrando: borrarla la rompe.
+    if repo.imagen_en_uso(pub["imagen_url"], pub["id"]):
+        logger.info("planes.foto_en_uso_no_se_borra", pub=pub["id"])
+        return False
+    try:
+        ruta.unlink(missing_ok=True)
+    except OSError:
+        logger.warning("planes.foto_borrar_fallo", pub=pub["id"], exc_info=True)
+        return False
+    logger.info("planes.foto_borrada", pub=pub["id"])
+    return True
+
+
+def _archivar_una(repo, comercio: dict, pub: dict) -> bool:
+    """Archiva UNA publicación. True si quedó archivada.
+
+    Los tres pasos son independientes y van en este orden a propósito: primero
+    se archiva la fila, y SÓLO si eso salió bien se toca lo demás. Borrar la
+    foto de una publicación que sigue activa la dejaría rota en el feed.
+    """
+    try:
+        repo.archivar_publicacion(pub["id"])
+    except Exception:  # noqa: BLE001
+        logger.warning("planes.archivar_fallo", comercio=comercio.get("id"),
+                       pub=pub.get("id"), exc_info=True)
+        return False
+
+    # Una publicación archivada no sale a las redes. `procesar` además la frena
+    # si alguien reintenta a mano, pero lo que está pendiente se descarta acá
+    # para que la cola no muestre como "por salir" algo que no va a salir.
+    try:
+        repo.descartar_difusion_de(pub["id"], "archivada por el tope de publicaciones guardadas")
+    except Exception:  # noqa: BLE001
+        logger.warning("planes.descartar_difusion_fallo", pub=pub.get("id"), exc_info=True)
+
+    try:
+        _borrar_foto_de_oferta(repo, comercio, pub)
+    except Exception:  # noqa: BLE001
+        logger.warning("planes.foto_fallo", pub=pub.get("id"), exc_info=True)
+    return True
+
+
+def archivar_excedentes(repo, comercio: dict) -> int:
+    """Deja al comercio dentro de su tope de publicaciones guardadas.
+
+    Cuenta las publicaciones ACTIVAS del comercio, del estado que sean —todas
+    ocupan disco, también las pendientes y las rechazadas— y archiva las más
+    viejas por `created_at` hasta quedar en el tope. Con `publicaciones_guardadas`
+    en NULL no hace nada. Devuelve cuántas archivó.
+
+    NUNCA LANZA
+    ===========
+    Se llama DESPUÉS de insertar la publicación nueva. Si esto rompiera, el
+    comerciante vería un error por una oferta que sí quedó creada, y mandaría
+    otra: dos publicaciones por un problema de limpieza. Todo falla al log y el
+    flujo sigue; lo que no se archivó hoy se archiva en la próxima publicación.
+    """
+    try:
+        tope = plan_de(repo, comercio).get("publicaciones_guardadas")
+        if tope is None:
+            return 0
+        tope = int(tope)
+        # La base lo impide (CHECK > 0), pero un 0 acá vaciaría el comercio entero
+        # y una publicación recién creada saldría archivada: se ignora.
+        if tope < 1:
+            logger.warning("planes.tope_invalido", comercio=comercio.get("id"), tope=tope)
+            return 0
+        activas = repo.publicaciones_activas_de(comercio["id"])
+        sobran = len(activas) - tope
+        if sobran <= 0:
+            return 0
+    except Exception:  # noqa: BLE001
+        logger.warning("planes.archivar_excedentes_fallo", comercio=comercio.get("id"), exc_info=True)
+        return 0
+
+    # `activas` viene de la más vieja a la más nueva: se archivan las primeras.
+    #
+    # De a pocas por publicación nueva. Si alguien baja el tope de 70 a 7 en
+    # Admin (o se equivoca de tecla), sin este freno la próxima oferta de cada
+    # comercio archivaría 63 publicaciones y borraría 63 fotos de una, sin
+    # vuelta atrás. Así el comercio converge al tope de a poco y el error se
+    # alcanza a ver y corregir.
+    if sobran > _MAX_ARCHIVAR_POR_VEZ:
+        logger.warning("planes.tope_muy_excedido", comercio=comercio.get("id"),
+                       sobran=sobran, tope=tope, archiva_ahora=_MAX_ARCHIVAR_POR_VEZ)
+        sobran = _MAX_ARCHIVAR_POR_VEZ
+    archivadas = sum(1 for pub in activas[:sobran] if _archivar_una(repo, comercio, pub))
+    if archivadas:
+        logger.info("planes.archivadas", comercio=comercio.get("id"),
+                    archivadas=archivadas, tope=tope)
+    return archivadas

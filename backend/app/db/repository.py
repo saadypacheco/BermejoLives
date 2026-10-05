@@ -54,6 +54,11 @@ class Repo(Protocol):
     def get_plan(self, slug: str) -> dict | None: ...
     def upsert_plan(self, slug: str, patch: dict) -> dict: ...
     def contar_publicaciones_desde(self, comercio_id: str, desde_iso: str) -> int: ...
+    # Tope de publicaciones guardadas (0134)
+    def publicaciones_activas_de(self, comercio_id: str) -> list[dict]: ...
+    def archivar_publicacion(self, pub_id: str) -> None: ...
+    def imagen_en_uso(self, imagen_url: str, excepto_id: str) -> bool: ...
+    def descartar_difusion_de(self, publicacion_id: str, motivo: str) -> int: ...
     def registrar_cargo_extra(self, comercio_id: str, publicacion_id: str | None,
                               monto: float, moneda: str) -> dict: ...
     def list_cargos_extra(self, estado: str | None, limite: int) -> list[dict]: ...
@@ -1590,6 +1595,55 @@ class SupabaseRepo:
                .eq("comercio_id", comercio_id).eq("estado", "aprobado")
                .gte("created_at", desde_iso).limit(1).execute())
         return res.count or 0
+
+    # ---- tope de publicaciones guardadas (0134) ----
+    def publicaciones_activas_de(self, comercio_id: str) -> list[dict]:
+        """Las publicaciones activas del comercio, de CUALQUIER estado, las más
+        viejas primero. Sólo las columnas que hacen falta para archivar.
+
+        Con paginado: PostgREST corta en 1000 sin avisar, y si el comercio
+        tuviera más (un tope en NULL, o un plan recién bajado de tope) el
+        archivado miraría una lista incompleta y dejaría de archivar de más.
+        `id` desempata el orden para que el paginado sea total.
+        """
+        # Sin los destacados de producto (`producto_ref_id`): llevan un costo
+        # que se cobra con la suscripción y que deja de verse si la publicación
+        # se archiva, y el producto quedaría marcado «ya destacado» para
+        # siempre. No ocupan disco propio: su foto es la del producto.
+        return self._traer_todo(
+            "publicaciones", "id, imagen_url, created_at", ["created_at", "id"],
+            filtrar=lambda q: (q.eq("comercio_id", comercio_id).eq("activo", True)
+                               .is_("producto_ref_id", "null")))
+
+    def archivar_publicacion(self, pub_id: str) -> None:
+        """Soft-delete: `activo = false`. La fila queda."""
+        (self._db.table("publicaciones").update({"activo": False})
+         .eq("id", pub_id).execute())
+
+    def imagen_en_uso(self, imagen_url: str, excepto_id: str) -> bool:
+        """¿Otra publicación ACTIVA usa esta misma imagen?
+
+        Mira todos los comercios, no sólo el dueño: la URL es la identidad del
+        archivo, y borrarlo rompe la foto de cualquiera que la apunte.
+        """
+        res = (self._db.table("publicaciones").select("id")
+               .eq("imagen_url", imagen_url).eq("activo", True)
+               .neq("id", excepto_id).limit(1).execute())
+        return bool(res.data)
+
+    def descartar_difusion_de(self, publicacion_id: str, motivo: str) -> int:
+        """Marca como `omitido` lo que esa publicación tenía PENDIENTE en la
+        cola de difusión. Devuelve cuántas filas descartó.
+
+        Sólo las pendientes: una ya enviada es historia, y una con error se
+        ve en el panel con su motivo real. `procesar` además se niega a mandar
+        una publicación archivada, por si alguien reintenta a mano.
+        """
+        res = (self._db.table("difusion_cola")
+               .update({"estado": "omitido", "motivo": motivo})
+               .eq("publicacion_id", publicacion_id).eq("estado", "pendiente")
+               .execute())
+        return len(res.data or [])
 
     def registrar_cargo_extra(self, comercio_id: str, publicacion_id: str | None,
                               monto: float, moneda: str) -> dict:

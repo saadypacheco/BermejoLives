@@ -19,6 +19,7 @@ from app.db.repository import Repo, get_repo
 from app.models.schemas import LoginBody
 from app.services.clasificador import sugerir_rubros
 from app.services.imagenes import subir_foto_comercio, subir_foto_galeria, subir_video_comercio
+from app.services import planes
 from app.services.rubros import aplicar_rubros
 
 router = APIRouter()
@@ -256,10 +257,16 @@ async def alta_campo(
     # video (link TikTok) opcional → publicación pendiente tipo video
     vurl = _none(video_url)
     if vurl:
-        repo.insert_publicacion_directa({
+        pub_video = repo.insert_publicacion_directa({
             "comercio_id": comercio["id"], "tipo": "video", "titulo": nombre_final,
             "tiktok_url": vurl, "estado": "pendiente", "origen": "panel",
         })
+        # El comercio es nuevo y tiene una sola publicación, así que el tope
+        # nunca archiva nada acá; se llama igual para que el tope rija en TODOS
+        # los caminos y no dependa de que alguien recuerde cuáles faltan. Sin
+        # cuota ni cobro: lo sube URUKU, no el comerciante.
+        if pub_video.get("id"):
+            planes.archivar_excedentes(repo, comercio)
 
     logger.info("campo.alta", slug=slug, ciudad=ciudad_slug, rubros=len(rubro_ids),
                 con_foto=bool(portada_url), con_gps=lat is not None, con_video=bool(vurl),

@@ -361,7 +361,12 @@ def _publicar_del_explorador(payload, event, repo: Repo) -> dict:
         "wa_message_id": payload.id,
         "raw": event.payload,
     }
-    repo.insert_publicacion(row)
+    creada = repo.insert_publicacion(row)
+    # El tope de guardadas rige también para lo que sube URUKU: el disco es el
+    # mismo. La cuota y el cobro NO: eso es del comerciante, y acá el que
+    # publica es el explorador.
+    if creada.get("id"):
+        planes.archivar_excedentes(repo, comercio)
     logger.info("ingest.explorador_publicacion", comercio=slug, codigo=codigo, foto=bool(imagen_url))
     repo.marcar_wa_inbox(payload.id, "publicada",
                          f"del explorador, para {codigo} · a la cola de moderación",
@@ -638,6 +643,10 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     # webhook repite el mensaje — que pasa.
     if cuota["consecuencia"] == "cobrar" and creada.get("id"):
         planes.cobrar_extra(repo, comercio, creada["id"], cuota["plan"])
+    # Después de insertar y de encolar: si el tope se pasó, la más vieja se
+    # archiva y su foto se borra. Nunca lanza, así que no puede romper esto.
+    if creada.get("id"):
+        planes.archivar_excedentes(repo, comercio)
     logger.info("ingest.publicacion", comercio=slug, tipo=tipo, estado=estado)
     repo.marcar_wa_inbox(
         payload.id, "publicada",

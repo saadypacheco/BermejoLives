@@ -95,6 +95,9 @@ class FakeRepo:
                           "moneda": "BOB", "funciones": {"negocio_digital": True, "redes": True},
                           "activo": True, "visible": False, "descripcion": "", "incluye": []},
         }
+        # 0134: 70 publicaciones guardadas en todos los planes, como la migración.
+        for _plan in self.planes.values():
+            _plan.setdefault("publicaciones_guardadas", 70)
         self.wa_inbox: dict[str, dict] = {}          # wa_message_id -> row
         self.leads: list[dict] = []
         self.visitas: list[dict] = []
@@ -520,6 +523,37 @@ class FakeRepo:
                     if p.get("comercio_id") == comercio_id
                     and p.get("estado") == "aprobado"
                     and str(p.get("created_at") or "9999") >= desde_iso])
+
+    # ---- tope de publicaciones guardadas (0134) ----
+    def publicaciones_activas_de(self, comercio_id):
+        """Las activas del comercio, las más viejas primero. La base siempre
+        trae `created_at`; este fake no se lo pone a lo que se inserta, y una
+        fila sin fecha es la que acaba de entrar: va última (como en
+        `contar_publicaciones_desde`). Entre dos sin fecha, el orden de inserción."""
+        activas = [(str(p.get("created_at") or "9999"), i, p)
+                   for i, p in enumerate(self.publicaciones)
+                   if p.get("comercio_id") == comercio_id and p.get("activo", True)
+                   and not p.get("producto_ref_id")]
+        return [{"id": p["id"], "imagen_url": p.get("imagen_url"),
+                 "created_at": p.get("created_at")}
+                for _, _, p in sorted(activas, key=lambda t: (t[0], t[1]))]
+
+    def archivar_publicacion(self, pub_id):
+        for p in self.publicaciones:
+            if p["id"] == pub_id:
+                p["activo"] = False
+
+    def imagen_en_uso(self, imagen_url, excepto_id):
+        return any(p.get("imagen_url") == imagen_url and p.get("activo", True)
+                   and p["id"] != excepto_id for p in self.publicaciones)
+
+    def descartar_difusion_de(self, publicacion_id, motivo):
+        n = 0
+        for f in self.difusion:
+            if f["publicacion_id"] == publicacion_id and f["estado"] == "pendiente":
+                f.update({"estado": "omitido", "motivo": motivo})
+                n += 1
+        return n
 
     def registrar_cargo_extra(self, comercio_id, publicacion_id, monto, moneda):
         if publicacion_id and any(c["publicacion_id"] == publicacion_id

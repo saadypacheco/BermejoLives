@@ -148,7 +148,20 @@ export type PublicarPayload = {
   vence_el?: string | null;        // "YYYY-MM-DD"
 };
 
-export type PublicarResult = { ok: boolean; estado: string; publicado_directo: boolean };
+export type PublicarResult = {
+  ok: boolean; estado: string; publicado_directo: boolean;
+  /** Texto del backend cuando la publicación salió pero pasó algo que el
+   *  comerciante tiene que saber (típico: se cobró una extra por pasarse de la
+   *  cuota). null = nada que avisar. */
+  aviso: string | null;
+};
+
+/** El backend se negó a publicar (402: plan sin extras o período vencido).
+ *  Se distingue de un error de red porque su mensaje ya explica qué pasa y qué
+ *  hacer, y hay que mostrarlo tal cual. */
+export class PublicarBloqueado extends Error {
+  constructor(detalle: string) { super(detalle); this.name = "PublicarBloqueado"; }
+}
 
 export async function publicar(payload: PublicarPayload): Promise<PublicarResult> {
   const res = await fetch(`${API}/comercio/publicar`, {
@@ -156,8 +169,13 @@ export async function publicar(payload: PublicarPayload): Promise<PublicarResult
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${getCToken() ?? ""}` },
     body: JSON.stringify(payload),
   });
+  if (res.status === 402) {
+    const d = await res.json().catch(() => ({}));
+    throw new PublicarBloqueado(typeof d.detail === "string" && d.detail ? d.detail : "Tu plan no te deja publicar ahora. Escribinos por WhatsApp y lo resolvemos.");
+  }
   if (!res.ok) throw new Error("No se pudo publicar");
-  return res.json();
+  const data = await res.json();
+  return { ...data, aviso: typeof data.aviso === "string" && data.aviso ? data.aviso : null } as PublicarResult;
 }
 
 // ---- Panel "Mi comercio" ----

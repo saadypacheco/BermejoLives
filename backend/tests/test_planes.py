@@ -126,7 +126,8 @@ def test_el_aviso_lleva_las_dos_salidas(repo):
 
     assert "Bs 5" in texto              # la extra
     assert "Destacado" in texto         # el plan de arriba
-    assert "140" in texto               # cuánto sale
+    assert "60 publicaciones" in texto  # su cuota, que sí se dice
+    assert "140" not in texto           # lo que cuesta, no (4/10/2026)
 
 
 def test_el_precio_de_la_extra_se_cambia_sin_tocar_codigo(client, repo, admin_token):
@@ -280,4 +281,5 @@ def test_el_basico_publica_dos_meses_y_despues_sigue_en_el_mapa(repo):
     r = planes.revisar_antes_de_publicar(repo, viejo)
     assert not r["puede"] and r["consecuencia"] == "vencido"
     aviso = planes.texto_de_aviso(r, planes.plan_siguiente(repo, r["plan"]))
-    assert "2 meses" in aviso and "sigue en el mapa" in aviso and "Publica" in aviso and "Bs 70" in aviso
+    assert "2 meses" in aviso and "sigue en el mapa" in aviso and "Publica" in aviso
+    assert "70" not in aviso and "Bs" not in aviso    # el precio del plan no se dice
