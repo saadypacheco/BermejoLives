@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
-import { getPlanes } from "@/lib/data";
+import { getPlanes, type PlanPublico } from "@/lib/data";
+import { waUruku } from "@/lib/contacto";
 
 export const dynamic = "force-dynamic";
 
@@ -12,20 +13,23 @@ export const metadata: Metadata = {
   // ningún lado, no está en el sitemap y no se indexa.
   robots: { index: false, follow: false },
   title: "Planes para tu negocio — URUKU",
-  description: "Aparecé en el mapa gratis. Después, tu negocio completo, tus ofertas en las redes de URUKU y un asistente que atiende a tus clientes.",
+  description: "Aparecé en el mapa gratis. Después, tu negocio completo y un asistente que atiende a tus clientes.",
 };
 
-function precio(n: number): string {
-  return n === 0 ? "Gratis" : `Bs ${n.toLocaleString("es-BO")}`;
-}
+// El plan de entrada se reconoce por su clave: ya no hay precio para mirar.
+const esGratis = (p: PlanPublico) => p.slug === "gratis";
 
 /**
  * /planes — lo que se vende, leído de la base.
  *
- * Nombre, precio, cuota, la frase que dice qué es y las viñetas salen de la
- * tabla `planes`, que se edita en Admin › Planes. Acá no hay ningún número
- * escrito: si cambia un precio, cambia acá sin deploy. Es la única forma de
- * que la página de venta y lo que el sistema cobra digan lo mismo.
+ * Nombre, cuota, la frase que dice qué es y las viñetas salen de la tabla
+ * `planes`, que se edita en Admin › Planes. Acá no hay ningún número escrito:
+ * si cambia una cuota, cambia acá sin deploy.
+ *
+ * NO HAY PRECIOS DE PLANES. Se decide por ciudad y hablando con el comerciante,
+ * así que donde iría el precio hay una forma de consultarlo (el WhatsApp de
+ * URUKU). Lo único en plata que se muestra es la publicación extra: es lo que
+ * el comerciante necesita saber para que la cuota no lo sorprenda.
  */
 export default async function PlanesPage() {
   const planes = await getPlanes();
@@ -36,8 +40,8 @@ export default async function PlanesPage() {
       <div className="uk-container uk-planes">
         <h1>Planes para tu negocio</h1>
         <p className="uk-planes-sub">
-          Aparecer en el mapa es gratis. Cuando quieras más —tu negocio completo, tus ofertas en las
-          redes de URUKU, un chatbot que atienda por vos— elegís hasta dónde.
+          Aparecer en el mapa es gratis. Cuando quieras más —tu negocio completo, un chatbot que
+          atienda por vos— elegís hasta dónde.
         </p>
 
         <div className="uk-planes-grid">
@@ -46,7 +50,9 @@ export default async function PlanesPage() {
               <header>
                 <h2>{p.nombre}</h2>
                 <div className="uk-plan-precio">
-                  <b>{precio(p.precio_mes)}</b>{p.precio_mes > 0 && <span>/mes</span>}
+                  {esGratis(p)
+                    ? <b>Gratis</b>
+                    : <a href={waUruku(`Hola, quiero consultar el precio del plan ${p.nombre} de URUKU`)} target="_blank" rel="noopener"><b>Consultá el precio</b></a>}
                 </div>
                 {p.descripcion && <p className="uk-plan-desc">{p.descripcion}</p>}
               </header>
@@ -55,16 +61,16 @@ export default async function PlanesPage() {
                 <li className="uk-plan-cuota">
                   {p.publicaciones_mes == null
                     ? "Publicaciones sin límite"
-                    : p.precio_mes === 0
+                    : esGratis(p)
                       // El gratis no tiene cuota mensual que contar: cada foto se paga.
                       ? `Podés publicar fotos a Bs ${p.precio_publicacion_extra} cada una`
                       : `Hasta ${p.publicaciones_mes} publicaciones por mes`}
-                  {p.precio_mes > 0 && p.permite_extras && p.publicaciones_mes != null && p.precio_publicacion_extra > 0
+                  {!esGratis(p) && p.permite_extras && p.publicaciones_mes != null && p.precio_publicacion_extra > 0
                     ? ` · la extra, Bs ${p.precio_publicacion_extra}`
                     : ""}
                 </li>
               </ul>
-              {p.precio_mes === 0
+              {esGratis(p)
                 ? <Link href="/autoregistro?modo=registro" className="uk-btn uk-btn-primary">Registrar mi negocio gratis</Link>
                 : <Link href={`/mi-comercio?plan=${p.slug}`} className={p.slug === destacado?.slug ? "uk-btn uk-btn-primary" : "uk-btn-ghost"}>Quiero {p.nombre}</Link>}
             </article>

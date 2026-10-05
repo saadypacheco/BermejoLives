@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { Send, WhatsApp } from "@/components/icons";
 import {
-  comercioLogin, comercioRegistro, getComercioSession, clearComercio, publicar,
+  comercioLogin, comercioRegistro, getComercioSession, clearComercio, publicar, PublicarBloqueado,
   comercioRecuperar, comercioRecuperarEstado, comercioRecuperarConfirmar, generarDescripcion,
   type ComercioSession, type PublicarPayload, type RegistroPayload,
 } from "@/lib/comercio";
@@ -17,7 +17,9 @@ import { waUruku } from "@/lib/contacto";
 import { PermisoUbicacion } from "@/components/permiso-ubicacion";
 import { Ic } from "@/components/ic";
 
-type Msg = { from: "bot" | "user"; text: string };
+// `kind` marca los mensajes del plan (aviso de cobro, publicación bloqueada):
+// se dibujan aparte, con ícono y rótulo, para que no se pierdan entre la charla.
+type Msg = { from: "bot" | "user"; text: string; kind?: "aviso" | "bloqueado" };
 type Step = "tipo" | "titulo" | "precio" | "descripcion" | "tiktok" | "imagen" | "confirm" | "done";
 
 export default function PublicarPage() {
@@ -29,7 +31,7 @@ export default function PublicarPage() {
 }
 
 /* ----------------------------- AUTH (login / registro) ----------------------------- */
-// El plan (Básico/PRO/Premium, Bs 200/300/400) ya no se elige en el alta —
+// El plan ya no se elige en el alta —
 // arranca en "gratis" (= Básico) y se cambia después desde Mi Comercio → Suscripción.
 
 function QueOfrecemos() {
@@ -40,7 +42,7 @@ function QueOfrecemos() {
         <li><Ic n="ubicacion" s={16} /> Tu negocio aparece en el mapa y en el buscador.</li>
         <li><Ic n="novedades" s={16} /> Publicás ofertas mandando una foto por WhatsApp.</li>
         <li><Ic n="whatsapp" s={16} /> El comprador te escribe directo a tu WhatsApp.</li>
-        <li><Ic n="destacado" s={16} /> Con <a href="/autoregistro" rel="noopener">las funciones para comercios</a>: ficha completa, tus ofertas en las redes de URUKU y un chatbot que atiende por vos.</li>
+        <li><Ic n="destacado" s={16} /> Con <a href="/autoregistro" rel="noopener">las funciones para comercios</a>: ficha completa y un chatbot que atiende por vos.</li>
         <li><Ic n="plata" s={16} /> Sin comisiones por venta.</li>
       </ul>
     </div>
@@ -403,7 +405,7 @@ function ChatBot({ sess, onLogout }: { sess: ComercioSession; onLogout: () => vo
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
-  const say = (from: "bot" | "user", text: string) => setMsgs((m) => [...m, { from, text }]);
+  const say = (from: "bot" | "user", text: string, kind?: Msg["kind"]) => setMsgs((m) => [...m, { from, text, kind }]);
   const ask = (s: Step) => { setStep(s); say("bot", QUESTIONS[s]); };
 
   function pickTipo(tipo: PublicarPayload["tipo"], label: string) {
@@ -447,9 +449,15 @@ function ChatBot({ sess, onLogout }: { sess: ComercioSession; onLogout: () => vo
       } else {
         say("bot", "¡Recibido! Tu publicación quedó en revisión. Un moderador la aprueba y aparece en el feed en vivo. Te avisamos.");
       }
+      // El aviso queda como mensaje del chat (no un toast): es plata, y tiene
+      // que poder releerse después de publicar.
+      if (res.aviso) say("bot", res.aviso, "aviso");
       setStep("done");
-    } catch {
-      say("bot", "No pude publicar. Verificá que el backend esté corriendo e intentá de nuevo.");
+    } catch (e) {
+      // Un 402 trae el motivo y qué hacer; se muestra tal cual, sin reescribirlo.
+      // Cualquier otro fallo es de red o del servidor: ahí sí el mensaje genérico.
+      if (e instanceof PublicarBloqueado) say("bot", e.message, "bloqueado");
+      else say("bot", "No pude publicar. Verificá que el backend esté corriendo e intentá de nuevo.");
     } finally {
       setSending(false);
     }
@@ -481,7 +489,17 @@ function ChatBot({ sess, onLogout }: { sess: ComercioSession; onLogout: () => vo
         <div className="chat glass">
           <div className="chat-body">
             {msgs.map((m, i) => (
-              <div key={i} className={`bubble ${m.from}`}>{m.text}</div>
+              m.kind ? (
+                <div key={i} className={`bubble ${m.from}`} role="alert"
+                  style={{ border: "1px solid var(--amber)", display: "grid", gap: 4 }}>
+                  <b style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--amber)" }}>
+                    <Ic n="aviso" s={16} /> {m.kind === "aviso" ? "Aviso sobre tu plan" : "No se publicó"}
+                  </b>
+                  <span>{m.text}</span>
+                </div>
+              ) : (
+                <div key={i} className={`bubble ${m.from}`}>{m.text}</div>
+              )
             ))}
 
             {/* Quick replies por paso */}
