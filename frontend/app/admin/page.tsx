@@ -55,8 +55,9 @@ import { precioFmt, MODALIDAD_LABEL, comoLlegarHref } from "@/lib/types";
 import { EditorHorario, recordarUltimoHorario } from "@/components/editor-horario";
 import { Check, X, Edit, Pin, WhatsApp, Verified } from "@/components/icons";
 import { Ic } from "@/components/ic";
+import { CargasPanel } from "@/components/cargas-panel";
 
-type TabAdmin = "publicaciones" | "comercios" | "lugares" | "adornos" | "catalogo" | "importados" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero" | "vencimientos" | "rubros" | "revision-rubros" | "whatsapp" | "difusion" | "demanda" | "ayuda" | "planes" | "compradores" | "equipo";
+type TabAdmin = "publicaciones" | "comercios" | "lugares" | "adornos" | "catalogo" | "importados" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero" | "vencimientos" | "rubros" | "revision-rubros" | "whatsapp" | "difusion" | "demanda" | "ayuda" | "planes" | "compradores" | "equipo" | "cargas";
 
 /** Qué hace cada pestaña con la ciudad elegida en la cabecera. Es el ÚNICO
  *  lugar donde se decide: el selector lee de acá y no de cada pestaña.
@@ -73,6 +74,7 @@ const MODO_CIUDAD: Record<TabAdmin, ModoCiudad> = {
   monitoreo: "pendiente", kpis: "pendiente", reclamos: "pendiente", "cambio-numero": "pendiente",
   "revision-rubros": "pendiente", whatsapp: "pendiente", difusion: "pendiente", demanda: "pendiente",
   ayuda: "pendiente", equipo: "pendiente",
+  cargas: "filtra",
 };
 
 /** Los comercios de la ciudad elegida (slug), o todos si no hay ninguna. */
@@ -432,6 +434,13 @@ function AdminPanel() {
           )}
         </button>
         <button className={tab === "kpis" ? "active" : ""} onClick={() => { setTab("kpis"); loadKpis(); }}>KPIs</button>
+        {/* El mismo permiso que pide el backend (`require_admin` = «equipo»):
+            con «*» un rol a medida con «equipo» leía los datos sin ver la pestaña. */}
+        {puedo("equipo") && (
+        <button className={tab === "cargas" ? "active" : ""} onClick={() => setTab("cargas")}>
+          Cargas
+        </button>
+        )}
         <button className={tab === "reclamos" ? "active" : ""} onClick={() => { setTab("reclamos"); loadReclamos(); }}>
           Reclamos {(() => {
             const n = reclamos.filter((r) => r.estado === "pendiente").length + consultasReservalo.filter((c) => c.estado === "pendiente").length;
@@ -463,6 +472,7 @@ function AdminPanel() {
       {tab === "planes" && <PlanesPanel />}
       {tab === "compradores" && <ContactosPanel />}
       {tab === "equipo" && <EquipoPanel />}
+      {tab === "cargas" && ciudadLista && <CargasPanel />}
       {tab === "importados" && ciudadLista && <ImportadosPanel rubros={rubros} ciudad={ciudad} />}
 
       {tab === "comercios" && (

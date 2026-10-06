@@ -44,6 +44,9 @@ def entrar(repo: Repo, email: str, password: str, rol_env: str | None = None) ->
                     "publicador": (settings.publicador_email, settings.publicador_password),
                     "agente": (settings.agente_email, settings.agente_password)}[rol_env]
         if auth.mismo_email(email, esperado[0]) and password == esperado[1]:
+            # El correo del `.env`, no el tipeado: el teclado del celular pone
+            # mayúscula sola, y ese texto termina en `cargado_por` de cada alta.
+            email = esperado[0].strip().lower()
             token = auth.make_token(email, rol_env)
             return {"access_token": token,
                     "user": {"email": email, "rol": rol_env, "roles": [rol_env],

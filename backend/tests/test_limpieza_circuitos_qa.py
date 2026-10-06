@@ -778,4 +778,6 @@ def test_0137_y_selfhost_son_identicas_y_el_numero_de_migracion_es_el_siguiente(
            (raiz / "selfhost/postgres-init/0137_limpieza_de_circuitos.sql").read_bytes()
     numeros = sorted(p.name[:4] for p in (raiz / "supabase/migrations").glob("0*.sql"))
     assert numeros.count("0137") == 1
-    assert numeros[-1] == "0137"
+    # 0137 era la última cuando se escribió el test; ahora hay migraciones
+    # posteriores (0138: cargas del día). Alcanza con que no se haya saltado ni repetido.
+    assert numeros[-1] >= "0137"

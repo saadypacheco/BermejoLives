@@ -787,6 +787,51 @@ export async function altasPorDia(dias = 60): Promise<{ items: AltasDia[]; total
   return res.json();
 }
 
+// ---- Cargas del día (Admin › Cargas): qué cargó cada agente, cuándo y por dónde ----
+export type CargaPunto = {
+  orden: number; tramo: number; id: string; slug: string; nombre: string;
+  lat: number | null; lng: number | null;
+  /** «HH:MM» en hora de Bolivia. */
+  hora: string;
+  /** true si la hora es la del celular; false = hora de llegada al servidor. */
+  hora_del_celular: boolean;
+  /** Llegó al servidor más de 10 minutos después de cargarse (sin señal). */
+  subido_tarde: boolean;
+  min_desde_anterior: number | null; m_desde_anterior: number | null;
+  foto: string | null; rubro: string | null; ciudad: string | null;
+};
+export type CargaTramo = { n: number; desde: string; hasta: string; minutos: number; comercios: number };
+export type CargaAgente = {
+  agente: string; agente_nombre?: string | null;
+  comercios: number; desde: string; hasta: string;
+  minutos_trabajados: number; metros: number;
+  tramos: CargaTramo[];
+  por_hora: { hora: string; comercios: number }[];
+  puntos: CargaPunto[];
+};
+export type CargasDia = { fecha: string; agentes: CargaAgente[] };
+export type CargaHistorialItem = {
+  fecha: string; agente: string; agente_nombre?: string | null;
+  comercios: number; desde: string; hasta: string;
+  minutos_trabajados: number; tramos: number; metros: number;
+};
+
+export async function cargasDia(fecha?: string, ciudad?: string | null): Promise<CargasDia> {
+  const q = new URLSearchParams();
+  if (fecha) q.set("fecha", fecha);
+  if (ciudad) q.set("ciudad", ciudad);
+  const qs = q.toString();
+  const res = await authFetch(`/admin/cargas/dia${qs ? `?${qs}` : ""}`);
+  return res.json();
+}
+
+export async function cargasHistorial(dias = 60, ciudad?: string | null): Promise<{ items: CargaHistorialItem[] }> {
+  const q = new URLSearchParams({ dias: String(dias) });
+  if (ciudad) q.set("ciudad", ciudad);
+  const res = await authFetch(`/admin/cargas/historial?${q.toString()}`);
+  return res.json();
+}
+
 export async function suspenderComercio(id: string) {
   const res = await authFetch(`/admin/comercio/${id}/suspender`, { method: "POST" });
   return res.json();

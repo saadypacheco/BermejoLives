@@ -837,6 +837,10 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     const campos: Record<string, string> = {
       ciudad_slug: ciudadSlug, modalidad: f.modalidad,
       lat: String(coords.lat), lng: String(coords.lng), consentimiento: String(consent),
+      // La hora real del «Guardar», del reloj del celular. Sin esto, lo cargado
+      // sin señal llega todo junto y el admin lo ve como si fuera de un solo
+      // minuto. Si va a la cola, esta hora viaja con el registro.
+      capturado_en: new Date().toISOString(),
     };
     if (f.nombre.trim()) campos.nombre = f.nombre.trim();
     if (cel) campos.whatsapp = prefijo + cel;

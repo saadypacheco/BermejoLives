@@ -125,6 +125,13 @@ function armarFd(rec: AltaPendiente): FormData {
   if (lat !== null) fd.append("lat", String(lat));
   if (lng !== null) fd.append("lng", String(lng));
 
+  // La hora de la carga. Las altas que ya estaban en la cola antes de que el
+  // formulario la guardara no la traen en `campos`: se usa `creado`, que es el
+  // momento en que el agente tocó «Guardar» sin señal.
+  if (!fd.has("capturado_en") && Number.isFinite(rec.creado)) {
+    fd.append("capturado_en", new Date(rec.creado).toISOString());
+  }
+
   rec.rubro_slugs.forEach((r) => fd.append("rubro_slugs", r));
   if (rec.foto) fd.append("foto", rec.foto, rec.fotoName);
   return fd;

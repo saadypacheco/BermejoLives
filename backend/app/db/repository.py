@@ -8,6 +8,7 @@ from typing import Protocol
 import structlog
 
 from app.core.text import slugify, slug_unico
+from app.services import cargas
 from app.db.session import get_supabase
 
 logger = structlog.get_logger()
@@ -162,6 +163,7 @@ class Repo(Protocol):
     def stats_admin(self) -> dict: ...
     def estadisticas_admin(self) -> dict: ...
     def altas_por_dia(self, dias: int = 60) -> list[dict]: ...
+    def list_cargas_de_agentes(self, desde, hasta, ciudad_id: str | None = None) -> list[dict]: ...
     def insert_busqueda(
         self, query: str, resultados: int, comercios: list[str] | None = None
     ) -> str | None: ...
@@ -1949,9 +1951,12 @@ class SupabaseRepo:
 
         por_dia: dict[str, dict] = {}
         for c in filas:
-            dia = (c.get("created_at") or "")[:10]
-            if not dia:
+            # El día es el de Bolivia (UTC−4): lo cargado después de las 20:00
+            # no puede caer en el día siguiente.
+            llegada = cargas.parse_ts(c.get("created_at"))
+            if llegada is None:
                 continue
+            dia = cargas.dia_bolivia(llegada).isoformat()
             d = por_dia.setdefault(dia, {
                 "dia": dia, "altas": 0, "con_foto": 0, "con_whatsapp": 0,
                 "analizados": 0, "con_nombre": 0, "agentes": set(),
@@ -1974,6 +1979,42 @@ class SupabaseRepo:
         for d in sorted(por_dia.values(), key=lambda x: x["dia"], reverse=True):
             salida.append({**d, "agentes": len(d["agentes"])})
         return salida
+
+    def list_cargas_de_agentes(self, desde, hasta, ciudad_id: str | None = None) -> list[dict]:
+        """Comercios activos cargados por un agente cuya hora de carga cae en [desde, hasta).
+
+        La hora de carga es `capturado_en` (la del celular) y, si no hay,
+        `created_at`; por eso el filtro es un `or` de dos ramas. `desde`/`hasta`
+        son datetimes con zona. Va paginado de a 1000: PostgREST corta ahí sin
+        avisar y un reporte que cuenta de menos es peor que no tenerlo.
+        """
+        x, y = cargas.iso_z(desde), cargas.iso_z(hasta)  # UTC con «Z»: un «+» se rompe en la URL
+        filtro = (
+            f"and(capturado_en.gte.{x},capturado_en.lt.{y}),"
+            f"and(capturado_en.is.null,created_at.gte.{x},created_at.lt.{y})"
+        )
+        filas: list[dict] = []
+        pagina = 1000
+        for inicio in range(0, 100000, pagina):
+            q = (
+                self._db.table("comercios")
+                .select(
+                    "id, slug, nombre, lat, lng, created_at, capturado_en, cargado_por, "
+                    "ciudad_id, portada_thumb_url, "
+                    "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug)"
+                )
+                .eq("activo", True)
+                .not_.is_("cargado_por", "null")
+                .or_(filtro)
+            )
+            if ciudad_id:
+                q = q.eq("ciudad_id", ciudad_id)
+            lote = (q.order("created_at").order("id")
+                    .range(inicio, inicio + pagina - 1).execute()).data or []
+            filas.extend(lote)
+            if len(lote) < pagina:
+                break
+        return filas
 
     def estadisticas_admin(self) -> dict:
         """Monitoreo: usuarios/comercios nuevos, alertas de baja, ofertas y contactos."""

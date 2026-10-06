@@ -266,13 +266,15 @@ class FakeRepo:
             c["rubro_id"] = ids[0] if ids else None
 
     def altas_por_dia(self, dias=60):
+        from app.services import cargas
         por_dia = {}
         for c in self.comercios.values():
             if not c.get("activo", True):
                 continue
-            dia = (c.get("created_at") or "")[:10]
-            if not dia:
+            llegada = cargas.parse_ts(c.get("created_at"))
+            if llegada is None:
                 continue
+            dia = cargas.dia_bolivia(llegada).isoformat()   # el día de Bolivia, no el UTC
             d = por_dia.setdefault(dia, {"dia": dia, "altas": 0, "con_foto": 0,
                                          "con_whatsapp": 0, "analizados": 0,
                                          "con_nombre": 0, "agentes": set()})
@@ -284,6 +286,20 @@ class FakeRepo:
             if c.get("cargado_por"): d["agentes"].add(c["cargado_por"])
         return [{**d, "agentes": len(d["agentes"])}
                 for d in sorted(por_dia.values(), key=lambda x: x["dia"], reverse=True)]
+
+    def list_cargas_de_agentes(self, desde, hasta, ciudad_id=None):
+        """Mismo contrato que el real: activos, con agente, hora de carga en [desde, hasta)."""
+        from app.services import cargas
+        salida = []
+        for c in self.comercios.values():
+            if not c.get("activo", True) or not c.get("cargado_por"):
+                continue
+            if ciudad_id and c.get("ciudad_id") != ciudad_id:
+                continue
+            hora, _ = cargas.hora_de_carga(c)
+            if hora is not None and desde <= hora < hasta:
+                salida.append(c)
+        return salida
 
     def get_ciudad(self, slug):
         return {"id": f"ciudad-{slug}", "slug": slug, "nombre": slug.title(),

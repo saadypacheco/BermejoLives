@@ -20,7 +20,7 @@ from app.db.repository import Repo, get_repo
 from app.models.schemas import LoginBody
 from app.services.clasificador import sugerir_rubros
 from app.services.imagenes import subir_foto_comercio, subir_foto_galeria, subir_video_comercio
-from app.services import planes
+from app.services import cargas, planes
 from app.services.cuentas import nueva_clave_comercio
 from app.services.rubros import aplicar_rubros
 
@@ -150,6 +150,9 @@ async def alta_campo(
     tiene_factura: bool = Form(False),
     horario: str | None = Form(None),
     tiene_stock: bool = Form(True),
+    # Hora del celular al tocar «Guardar» (ISO 8601). Lo cargado sin señal llega
+    # horas después: sin esto, «cuándo cargó» sería «cuándo volvió la señal».
+    capturado_en: str | None = Form(None),
     foto: UploadFile | None = File(None),
     response: Response = None,
     agente: dict = Depends(auth.require_agente),
@@ -212,46 +215,68 @@ async def alta_campo(
     def _none(v: str | None) -> str | None:
         return v.strip() if v and v.strip() else None
 
-    comercio = repo.crear_comercio(
-        {
-            "slug": slug,
-            # None y `sin_cartel` juntos: el trigger de la 0129 lo completa
-            # antes de que la columna `not null` se entere.
-            "nombre": nombre_final,
-            "sin_cartel": sin_cartel,
-            "prod_obs_human": _none(prod_obs_human),
-            "whatsapp": whatsapp_para_guardar(whatsapp),
-            "telefono": _none(telefono),
-            "email": _none(email),
-            "tiktok_url": _none(tiktok_url),
-            "facebook_url": _none(facebook_url),
-            "instagram_url": _none(instagram_url),
-            "sitio_web": _none(sitio_web),
-            "rubro_id": rubro_ids[0] if rubro_ids else None,
-            "ciudad_id": ciudad_id,
-            "modalidad": modalidad,
-            "direccion": _none(direccion),
-            "lugar_id": _none(lugar_id),
-            "puesto": _none(puesto),
-            "lat": lat,
-            "lng": lng,
-            "portada_url": portada_url,
-            "portada_thumb_url": portada_thumb,
-            "plan": "gratis",
-            "confiable": False,
-            "verificado": False,
-            # Campos fronterizos
-            "monedas_aceptadas": [m for m in monedas_aceptadas if m] or [],
-            "envios_internacionales": envios_internacionales,
-            "origen_importacion": [o for o in origen_importacion if o] or [],
-            "pedido_minimo": _none(pedido_minimo),
-            "tiene_factura": tiene_factura,
-            "horario": _none(horario),
-            "tiene_stock": tiene_stock,
-            "fuente": "campo",
-            "cargado_por": agente["email"],
-        }
-    )
+    # La hora del celular sólo se guarda si es creíble: entre hace 7 días y
+    # dentro de 5 minutos. Un reloj mal puesto no puede mover la carga a otro mes.
+    capturado_dt = cargas.parse_ts(capturado_en)
+    if not cargas.capturado_valido(capturado_dt):
+        if capturado_en and capturado_en.strip():
+            logger.warning("campo.capturado_en_descartado", capturado_en=capturado_en.strip()[:40],
+                           entendida=capturado_dt is not None, agente=agente.get("email"))
+        capturado_dt = None
+
+    fila = {
+        "slug": slug,
+        # None y `sin_cartel` juntos: el trigger de la 0129 lo completa
+        # antes de que la columna `not null` se entere.
+        "nombre": nombre_final,
+        "sin_cartel": sin_cartel,
+        "prod_obs_human": _none(prod_obs_human),
+        "whatsapp": whatsapp_para_guardar(whatsapp),
+        "telefono": _none(telefono),
+        "email": _none(email),
+        "tiktok_url": _none(tiktok_url),
+        "facebook_url": _none(facebook_url),
+        "instagram_url": _none(instagram_url),
+        "sitio_web": _none(sitio_web),
+        "rubro_id": rubro_ids[0] if rubro_ids else None,
+        "ciudad_id": ciudad_id,
+        "modalidad": modalidad,
+        "direccion": _none(direccion),
+        "lugar_id": _none(lugar_id),
+        "puesto": _none(puesto),
+        "lat": lat,
+        "lng": lng,
+        "portada_url": portada_url,
+        "portada_thumb_url": portada_thumb,
+        "plan": "gratis",
+        "confiable": False,
+        "verificado": False,
+        # Campos fronterizos
+        "monedas_aceptadas": [m for m in monedas_aceptadas if m] or [],
+        "envios_internacionales": envios_internacionales,
+        "origen_importacion": [o for o in origen_importacion if o] or [],
+        "pedido_minimo": _none(pedido_minimo),
+        "tiene_factura": tiene_factura,
+        "horario": _none(horario),
+        "tiene_stock": tiene_stock,
+        "fuente": "campo",
+        "cargado_por": agente["email"],
+    }
+    if capturado_dt:
+        fila["capturado_en"] = capturado_dt.isoformat()
+    try:
+        comercio = repo.crear_comercio(fila)
+    except Exception as exc:  # noqa: BLE001
+        # El celular manda la hora SIEMPRE (también lo que ya estaba en cola).
+        # Si el backend sube antes que la 0138, o PostgREST no recargó el
+        # esquema, el insert falla por la columna que no conoce, y sin esto
+        # TODAS las altas de campo darían 500 y la cola no subiría nunca. Se
+        # pierde la hora del celular, no el comercio.
+        if "capturado_en" not in fila or "capturado_en" not in str(exc):
+            raise
+        logger.error("campo.capturado_en_sin_columna", error=str(exc)[:200], agente=agente.get("email"))
+        fila.pop("capturado_en")
+        comercio = repo.crear_comercio(fila)
     # La cuenta de Mi comercio, igual que al pagar (`asegurar_comercio_usuario`).
     # Sin esto el comercio cargado en la calle no podía entrar jamás: la
     # recuperación por WhatsApp busca justamente esa fila. Entra pidiendo el

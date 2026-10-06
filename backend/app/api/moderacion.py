@@ -3,17 +3,18 @@
 Escrituras con service_role (backend). Requiere JWT de admin.
 """
 import re
+from datetime import timedelta
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.auth import hash_password, require_moderador, require_permiso
+from app.core.auth import hash_password, require_admin, require_moderador, require_permiso
 from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp, whatsapp_para_guardar
-from app.services import clasificador, contactos, demanda, difusion, planes, revision_ia, wa_grupos, wa_sesion
+from app.services import cargas, clasificador, contactos, demanda, difusion, planes, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
@@ -1249,6 +1250,66 @@ def admin_altas_por_dia(
     """
     items = repo.altas_por_dia(dias)
     return {"items": items, "total": sum(d["altas"] for d in items)}
+
+
+def _nombres_del_equipo(repo: Repo) -> dict[str, str]:
+    """{correo en minúscula: nombre} de quienes tienen nombre cargado en el panel."""
+    return {
+        (u.get("email") or "").strip().lower(): u["nombre"]
+        for u in (repo.list_usuarios_panel() or []) if u.get("nombre")
+    }
+
+
+@router.get("/admin/cargas/dia")
+def admin_cargas_dia(
+    fecha: str | None = Query(default=None, description="AAAA-MM-DD, por defecto hoy (Bolivia)"),
+    ciudad: str | None = Query(default=None, description="slug de la ciudad"),
+    _admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Qué cargó cada agente un día (de Bolivia): a qué hora, cuánto paró y por dónde.
+
+    La hora de cada carga es la del celular (`capturado_en`) y, si no hay, la de
+    llegada al servidor. Un comercio cuenta en el día de SU hora de carga.
+    """
+    if fecha:
+        try:
+            dia = cargas.parse_fecha(fecha)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Fecha inválida, usá AAAA-MM-DD")
+    else:
+        dia = cargas.hoy_bolivia()
+
+    ciudad_id = None
+    if ciudad:
+        ciudad_id = repo.get_ciudad_id(ciudad)
+        if not ciudad_id:
+            return {"fecha": dia.isoformat(), "agentes": []}   # slug desconocido: nada que mostrar
+
+    desde, hasta = cargas.limites_dia_utc(dia)
+    filas = repo.list_cargas_de_agentes(desde, hasta, ciudad_id)
+    return cargas.detalle_dia(filas, dia, _nombres_del_equipo(repo))
+
+
+@router.get("/admin/cargas/historial")
+def admin_cargas_historial(
+    dias: int = Query(default=60, ge=1, le=365),
+    ciudad: str | None = Query(default=None, description="slug de la ciudad"),
+    _admin: dict = Depends(require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Una fila por día y agente de los últimos `dias` días (de Bolivia, hoy incluido)."""
+    ciudad_id = None
+    if ciudad:
+        ciudad_id = repo.get_ciudad_id(ciudad)
+        if not ciudad_id:
+            return {"items": []}
+
+    hoy = cargas.hoy_bolivia()
+    desde, _ = cargas.limites_dia_utc(hoy - timedelta(days=dias - 1))
+    _, hasta = cargas.limites_dia_utc(hoy)
+    filas = repo.list_cargas_de_agentes(desde, hasta, ciudad_id)
+    return {"items": cargas.historial(filas, _nombres_del_equipo(repo))}
 
 
 class RubrosBody(BaseModel):
