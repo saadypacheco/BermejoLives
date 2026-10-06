@@ -19,7 +19,7 @@ es por WhatsApp), **no** es directorio.
 |------|------|
 | Frontend | Next.js 14 App Router + TypeScript + Tailwind (`frontend/`) |
 | Backend | FastAPI + Python 3.12 + Pydantic v2 + structlog (`backend/`) |
-| BaaS | Supabase (Postgres + Auth + Storage + Realtime) (`supabase/`) |
+| Base | Postgres + PostgREST self-hosted en el VPS (`selfhost/`; migraciones en `supabase/migrations/`). Sin Auth, Storage ni Realtime de Supabase: las fotos van al disco del backend |
 | Bridge WhatsApp | WAHA (Docker, NOWEB) (`infra/`) |
 | Salida WhatsApp | links `wa.me` |
 | Videos | NO se hostean: link a TikTok |
@@ -27,29 +27,49 @@ es por WhatsApp), **no** es directorio.
 ## 3. Arquitectura (reparto de responsabilidades)
 
 - **FastAPI = ingesta + escrituras** (service_role). Webhook de WAHA →
-  `app/services/ingest.py` → crea `publicacion` `estado='pendiente'`. Moderación
-  (aprobar/rechazar/cambios) también vía FastAPI con JWT de admin.
-- **Next.js = lectura** vía Supabase **anon + RLS**, y **Realtime directo** para
-  el feed (`components/live-feed.tsx`). El front **nunca** usa service_role.
+  `app/services/ingest.py` → identifica comercio (por grupo atado, número conocido,
+  código en mensaje) → crea `publicacion` `estado='pendiente'` o `'aprobado'`
+  (según confiable). Moderación (aprobar/rechazar/cambios) también vía FastAPI
+  con JWT de admin. Si no se identifica el comercio, el mensaje queda en
+  `wa_inbox` como `sin_comercio` y no crea nada.
+- **Next.js = lectura** vía PostgREST (cliente `supabase-js`) con **anon + RLS**.
+  No hay Realtime: el feed se lee al cargar la página. El front **nunca** usa
+  service_role. Componentes borrados
+  en limpieza (6/10): `live-feed.tsx`, `mobile-home.tsx`, `home-map.tsx`,
+  `search-hero.tsx`.
 
 ## 4. Flujos de publicación
 
-Dos canales, misma regla de confianza:
+Cuatro canales de entrada, misma regla de confianza:
 
 ```
-A) WhatsApp:  Comerciante → WAHA → POST /ingest/webhook (HMAC)
-              → wa_inbox (idempotente) → upsert comercio por número
-B) Chatbot:   Comercio logueado → /publicar (chatbot) → POST /comercio/publicar
+A) Grupo WhatsApp:   Comerciante → grupo (atado a comercio) → WAHA → webhook
+                     → identifica por grupo atado → publicacion
 
-Regla:  comercio.confiable = true  → estado 'aprobado' (publica DIRECTO)
+B) Chat 1-a-1 código: Comerciante → CONFIRMAR-XXXXXX o URUKU-XXXX →
+                     WAHA → webhook → identifica por código → publicacion
+
+C) Chatbot/Cuenta:   Comercio logueado → /comercio/publicar → POST con foto/texto
+                     → publicacion
+
+D) Explorador:       Explorador (67677803) → URUKU-XXXX + foto →
+                     WAHA → webhook → identifica por código →
+                     publicacion A NOMBRE DEL COMERCIO (no ficticio)
+
+Regla:  comercio.confiable = true  → estado 'aprobado' (DIRECTO)
         comercio.confiable = false → estado 'pendiente' (cola de moderación)
+        EXCEPTO explorador → SIEMPRE a cola (identidad_origen = 'explorador')
 
-Moderador → /admin → aprobar → estado 'aprobado'
-  → Supabase Realtime (INSERT/UPDATE estado=aprobado) → feed en vivo
+Sin comercio identificado → entra en wa_inbox como 'sin_comercio' (NO se crea publicacion)
+
+Moderador → /admin › Publicaciones → aprobar/rechazar/cambios → estado 'aprobado'
+  → Supabase (INSERT/UPDATE estado=aprobado) → RLS → aparece en feed público
 ```
 
-- Cuentas de comercio: tabla `comercio_usuarios` + JWT propio (`rol='comercio'`,
-  lleva `comercio_id`). Login `/auth/comercio/login`. El admin marca `confiable`.
+- **Cuentas de comercio:** tabla `comercio_usuarios` + JWT propio (`rol='comercio'`,
+  lleva `comercio_id`). **Entrada:** celular + clave de 6 números (lo normal), o
+  WhatsApp + confirmación (primera vez / olvido de clave). El admin marca
+  `confiable`.
 
 ## 5. Modelo de datos (`supabase/migrations/`)
 
@@ -78,11 +98,11 @@ Moderador → /admin → aprobar → estado 'aprobado'
 ## 7. Reglas críticas (KB lessons)
 
 1. `SUPABASE_SERVICE_ROLE_KEY` **nunca** en el frontend. Solo `backend/.env`.
-2. **GRANTs explícitos** en cada migración (Supabase Cloud).
+2. **GRANTs explícitos** en cada migración (sin GRANT, PostgREST contesta 42501).
 3. **RLS activo** en toda tabla; el público solo ve `comercios.activo` y
    `publicaciones.estado='aprobado'`.
 4. **Idempotencia** de ingesta por `wa_message_id`.
-5. **Realtime directo** desde el front, no proxy por FastAPI.
+5. **Sin Realtime** (el self-host no lo corre): lo nuevo aparece al recargar. No sumar suscripciones `postgres_changes`.
 6. **Soft-delete** siempre; queries filtran `activo = true`.
 7. WAHA en **red privada** + webhook **firmado (HMAC)**; usar número de WhatsApp
    **dedicado/descartable** (WAHA es bridge no-oficial).
