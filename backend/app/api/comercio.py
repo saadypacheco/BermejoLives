@@ -8,12 +8,17 @@ import secrets
 from datetime import date, datetime, timedelta, timezone
 
 import structlog
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from app.core import auth
+from app.core import clave as claves
+from app.core.codigo import formatear as formatear_codigo
 from app.core.config import settings
+from app.core.ip import ip_cliente
+from app.core.telefono import normalizar_whatsapp, whatsapp_para_guardar
 from app.core.text import slug_unico, slugify
 from app.db.repository import Repo, get_repo
 from app.models.schemas import LoginBody, PublicarBody
@@ -24,6 +29,8 @@ from app.services.imagenes import (
     subir_foto_galeria, subir_video_comercio,
 )
 from app.services import planes
+from app.services import ingreso_clave
+from app.services.cuentas import cuentas_de_numero, nueva_clave_comercio
 from app.services.rubros import aplicar_rubros
 from app.services.tienda_client import get_tienda_client
 
@@ -36,8 +43,11 @@ _MODALIDADES = {"mayorista", "minorista", "ambos"}
 # Campos que el comercio PUEDE editar de su propio perfil. Todo lo demás
 # (verificado, confiable, plan, paga_hasta, suspendido, slug, rating) es
 # administrado solo por el admin y nunca se toca desde este endpoint.
+# El WhatsApp TAMPOCO: es la identidad del ingreso, y quien entrara indebidamente
+# lo cambiaría y la cuenta quedaría suya para siempre. Se cambia con la solicitud
+# de «Cambié de número» (la aprueba el admin) o lo edita el admin.
 _CAMPOS_EDITABLES = {
-    "nombre", "descripcion", "prod_obs_human", "whatsapp", "telefono", "email",
+    "nombre", "descripcion", "prod_obs_human", "telefono", "email",
     "facebook_url", "instagram_url", "tiktok_url", "sitio_web", "logo_url",
     "direccion", "como_llegar", "horario", "pedido_minimo", "modalidad",
     "lat", "lng", "acepta_reservas",
@@ -55,6 +65,7 @@ async def comercio_registro(
     lat: float = Form(...),
     lng: float = Form(...),
     foto: UploadFile = File(...),
+    response: Response = None,
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Alta self-service: el dueño se registra a sí mismo. Sin email/contraseña —
@@ -64,6 +75,16 @@ async def comercio_registro(
         raise HTTPException(status_code=400, detail=f"modalidad inválida: {modalidad}")
     if not nombre.strip() or not whatsapp.strip():
         raise HTTPException(status_code=400, detail="Faltan nombre y/o WhatsApp")
+    # El número es la identidad del ingreso, y acá NO se verifica: si ya es de un
+    # negocio activo no se cuelga otro de él (así nadie se pone «dentro» del número
+    # de otro para resetear su bloqueo ni para quedarse con su cuenta). El alta de
+    # campo no se bloquea: el agente puede cargar dos puestos de un mismo dueño.
+    if repo.list_comercios_por_whatsapp(whatsapp):
+        raise HTTPException(
+            status_code=409,
+            detail=("Ese número ya tiene un negocio en URUKU. Entrá con tu WhatsApp; "
+                    "si es otro local tuyo, escribinos."),
+        )
 
     rubro_ids = [rid for rid in (repo.get_rubro_id(s) for s in rubro_slugs if s) if rid]
     slug = slug_unico(repo, slugify(nombre))
@@ -91,7 +112,7 @@ async def comercio_registro(
             "slug": slug,
             "nombre": nombre.strip(),
             "descripcion": descripcion.strip() if descripcion and descripcion.strip() else None,
-            "whatsapp": whatsapp.strip(),
+            "whatsapp": whatsapp_para_guardar(whatsapp),
             "direccion": direccion.strip() if direccion and direccion.strip() else None,
             "lat": lat,
             "lng": lng,
@@ -109,18 +130,33 @@ async def comercio_registro(
     if rubro_ids:
         repo.set_comercio_rubros(comercio["id"], rubro_ids)
 
-    repo.crear_comercio_usuario({"comercio_id": comercio["id"], "nombre": nombre.strip()})
+    cuenta = repo.crear_comercio_usuario({"comercio_id": comercio["id"], "nombre": nombre.strip()})
+    # Su clave de 6 números: la ve UNA vez, acá. Es lo que le permite volver a
+    # entrar con celular + clave sin depender del WhatsApp.
+    clave_inicial = nueva_clave_comercio(repo, comercio["id"], cuenta)
 
     token = auth.make_comercio_token(comercio["id"], whatsapp.strip())
     logger.info("comercio.registro", slug=slug, con_gps=True, con_foto=bool(portada_url), lugar=lugar_id)
+    codigo = comercio.get("codigo")
+    # La respuesta lleva una clave: que ningún navegador ni proxy la guarde.
+    if response is not None:
+        response.headers["Cache-Control"] = "no-store"
+    # `clave_inicial` va SÓLO en la raíz: el front la muestra una vez y no la
+    # guarda; dentro de `comercio` era fácil que terminara en el localStorage.
     return {
         "access_token": token,
+        "clave_inicial": clave_inicial,
         "comercio": {
             "id": comercio["id"],
             "nombre": comercio["nombre"],
             "slug": comercio["slug"],
             "confiable": False,
             "lugar_nombre": lugar_nombre,   # mercado/galería detectado por GPS (o null)
+            # Su código URUKU-XXXX: es lo que le permite atar un grupo de
+            # WhatsApp o publicar 1 a 1 desde el celular. Sin esto el que se
+            # registraba solo no tenía forma de enterarse de cuál era.
+            "codigo": codigo,
+            "codigo_formateado": formatear_codigo(codigo) if codigo else None,
         },
     }
 
@@ -132,15 +168,7 @@ def comercio_login(body: LoginBody, repo: Repo = Depends(get_repo)) -> dict:
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     comercio = repo.get_comercio(user["comercio_id"])
     token = auth.make_comercio_token(user["comercio_id"], body.email)
-    return {
-        "access_token": token,
-        "comercio": {
-            "id": comercio["id"],
-            "nombre": comercio["nombre"],
-            "slug": comercio["slug"],
-            "confiable": comercio.get("confiable", False),
-        },
-    }
+    return {"access_token": token, "comercio": _comercio_publico(comercio)}
 
 
 class GenerarDescripcionBody(BaseModel):
@@ -207,66 +235,213 @@ async def solicitar_cambio_numero(
     return {"ok": True}
 
 
+def _comercio_publico(comercio: dict) -> dict:
+    return {
+        "id": comercio["id"],
+        "nombre": comercio["nombre"],
+        "slug": comercio["slug"],
+        "confiable": comercio.get("confiable", False),
+    }
+
+
+def _token_de(cuenta: dict, comercio: dict) -> str:
+    # Las cuentas sin email (autoregistro, alta de campo) entran por WhatsApp: el
+    # «sub» del token no puede ser None (PyJWT lo rechaza al decodificar y el
+    # comercio quedaría con un token que da 401 en cada pantalla).
+    identidad = cuenta.get("email") or comercio.get("whatsapp") or str(cuenta["id"])
+    return auth.make_comercio_token(cuenta["comercio_id"], identidad)
+
+
+class IngresarBody(BaseModel):
+    whatsapp: str
+    clave: str
+
+
+@router.post("/auth/comercio/ingresar")
+def comercio_ingresar(body: IngresarBody, request: Request, response: Response,
+                      repo: Repo = Depends(get_repo)) -> dict:
+    """Entra con celular + clave de 6 números (sin WhatsApp de por medio).
+
+    Si el número está en varios comercios se prueba la clave contra la cuenta de
+    cada uno y entra a la que coincide (al generar las claves se garantiza que no
+    se repitan dentro de un número). El intento se registra en la base ANTES de
+    verificar la clave (atómico): 5 fallos en 15 minutos bloquean el NÚMERO, 10
+    en 24 horas anulan la clave y 20 por hora bloquean la IP. Un ingreso correcto
+    nunca borra fallos. Un número que no existe contesta IGUAL que uno que existe
+    con otra clave —mismo 401, mismo bloqueo, mismo tiempo—: el ingreso no sirve
+    para averiguar quién tiene cuenta."""
+    response.headers["Cache-Control"] = "no-store"
+    numero = (body.whatsapp or "").strip()
+    if not numero:
+        raise HTTPException(status_code=400, detail="Falta el número de WhatsApp")
+    clave_num = normalizar_whatsapp(numero) or numero
+    ip = ip_cliente(request)
+    cuentas = cuentas_de_numero(repo, numero)
+    ids = [u["id"] for u in cuentas]
+
+    intento = ingreso_clave.abrir_intento(repo, "comercio_usuarios", clave_num, ids, ip)
+
+    con_clave = [u for u in cuentas if u.get("clave_hash")]
+    cuenta = next((u for u in con_clave if claves.clave_coincide(body.clave, u["clave_hash"])), None)
+    if not con_clave:
+        claves.gastar_tiempo(body.clave)
+
+    if cuenta:
+        ingreso_clave.cerrar_ok(repo, intento)
+        comercio = repo.get_comercio(cuenta["comercio_id"])
+        # Quién entró y cómo; nunca la clave ni el número.
+        logger.info("comercio.ingresar.ok", comercio_id=cuenta["comercio_id"], metodo="clave", ip=ip)
+        return {"access_token": _token_de(cuenta, comercio), "comercio": _comercio_publico(comercio)}
+
+    logger.info("comercio.ingresar.fallo", metodo="clave", ip=ip)
+    ingreso_clave.cerrar_fallo(repo, "comercio_usuarios", intento, ids, ip)
+
+
 class RecuperarBody(BaseModel):
     whatsapp: str
+    # Sólo cuando el número está en más de un comercio: cuál de ellos pide entrar.
+    comercio_id: str | None = None
 
 
 @router.post("/auth/comercio/recuperar")
-def comercio_recuperar(body: RecuperarBody, repo: Repo = Depends(get_repo)) -> dict:
+def comercio_recuperar(body: RecuperarBody, repo: Repo = Depends(get_repo)):
     """Genera un código para confirmar por WhatsApp entrante (no lo mandamos
-    nosotros — ver docs/pendientes.md sección 0). Respuesta siempre con la
-    misma forma exista o no el número (evita enumeración): si no existe, el
-    código nunca va a poder confirmarse, pero el link se ve igual."""
+    nosotros — ver docs/pendientes.md sección 0). Es el camino de la primera vez
+    y de «me olvidé la clave».
+
+    El número se normaliza (E.164) igual que en el webhook que lo confirma. Si
+    no corresponde a ningún negocio, el error lo dice (404): antes devolvía un
+    link igual para no delatar qué números existen, y la persona se quedaba
+    esperando una confirmación que nunca iba a llegar. Se prefirió que sepa que
+    se equivocó de número; el /auth/* tiene límite de pedidos contra el barrido.
+
+    Si el número es de VARIOS negocios no se elige uno en silencio: 409 con la
+    lista (id, nombre, dirección) para que la persona elija, y se vuelve a pedir
+    con `comercio_id`. El código queda atado a esa cuenta.
+
+    Un negocio activo con ese número en su ficha pero sin cuenta (cargado a
+    mano, por el admin o importado) recibe su cuenta acá mismo. Los números de
+    URUKU nunca abren una cuenta."""
+    numero = (body.whatsapp or "").strip()
+    if not numero:
+        raise HTTPException(status_code=400, detail="Falta el número de WhatsApp")
+    negocios = [] if settings.es_numero_propio(numero) else repo.list_comercios_por_whatsapp(numero)
+    if not negocios:
+        logger.info("comercio.recuperar.sin_negocio")
+        raise HTTPException(
+            status_code=404,
+            detail=("No encontramos ningún negocio con ese número. Probá con el WhatsApp "
+                    "que cargaste en tu ficha, o registrá tu negocio."),
+        )
+    if len(negocios) > 1 and not body.comercio_id:
+        logger.info("comercio.recuperar.varios_negocios", cantidad=len(negocios))
+        return JSONResponse(status_code=409, content={
+            "detail": "Ese número está en más de un negocio. Elegí cuál querés abrir.",
+            "negocios": [{"id": n["id"], "nombre": n.get("nombre"), "direccion": n.get("direccion")}
+                         for n in negocios],
+        })
+    if body.comercio_id:
+        negocio = next((n for n in negocios if n["id"] == body.comercio_id), None)
+        if not negocio:
+            raise HTTPException(status_code=400, detail="Ese negocio no corresponde a ese número")
+    else:
+        negocio = negocios[0]
+    user = repo.asegurar_comercio_usuario(negocio["id"])
+
+    # Que el código no coincida con uno pendiente de otra cuenta del mismo número:
+    # el webhook busca la cuenta POR el código, y dos iguales serían ambiguas.
+    ocupados = {u.get("reset_code") for u in cuentas_de_numero(repo, numero) if u["id"] != user["id"]}
     code = f"{secrets.randbelow(1_000_000):06d}"
-    user = repo.get_comercio_usuario_por_whatsapp(body.whatsapp)
-    if user:
-        expira = (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()
-        repo.set_reset_code(user["id"], code, expira)
-        logger.info("comercio.recuperar.solicitado", whatsapp=body.whatsapp)
-    return {"ok": True, "codigo": code, "wa_link": settings.wa_link_confirmar(code)}
+    while code in ocupados:
+        code = f"{secrets.randbelow(1_000_000):06d}"
+    expira = (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()
+    repo.set_reset_code(user["id"], code, expira)
+    logger.info("comercio.recuperar.solicitado")
+    return {"ok": True, "codigo": code, "wa_link": settings.wa_link_confirmar(code, para="comercio")}
+
+
+def _cuenta_con_codigo(repo: Repo, whatsapp: str, codigo: str) -> dict | None:
+    """La cuenta de ese número que tiene ESE código pendiente (el número puede
+    tener varias cuentas: el código dice cuál)."""
+    if not codigo:
+        return None
+    return next((u for u in cuentas_de_numero(repo, whatsapp)
+                 if u.get("reset_code") and u["reset_code"] == codigo), None)
 
 
 @router.get("/auth/comercio/recuperar/estado")
 def comercio_recuperar_estado(whatsapp: str, codigo: str, repo: Repo = Depends(get_repo)) -> dict:
     """Polling: el frontend consulta esto después de mostrar el botón
-    "Confirmar por WhatsApp", antes de pedir la contraseña nueva."""
-    user = repo.get_comercio_usuario_por_whatsapp(whatsapp)
-    confirmado = bool(user and user.get("reset_code") == codigo and user.get("reset_code_confirmado_at"))
-    return {"confirmado": confirmado}
+    "Confirmar por WhatsApp", antes de pedir la contraseña nueva. Sólo recibe
+    número + código: con un número de varios comercios, el código dice cuál."""
+    user = _cuenta_con_codigo(repo, whatsapp, codigo)
+    return {"confirmado": bool(user and user.get("reset_code_confirmado_at"))}
 
 
 class RecuperarConfirmarBody(BaseModel):
     whatsapp: str
     codigo: str
-    nueva_password: str
+    # Opcional: el comerciante entra con su WhatsApp, y obligarlo a inventar una
+    # contraseña que nunca va a usar era un paso de más en el único camino que
+    # tiene para entrar. Si la manda, se guarda; si no, entra igual.
+    nueva_password: str | None = None
 
 
 @router.post("/auth/comercio/recuperar/confirmar")
-def comercio_recuperar_confirmar(body: RecuperarConfirmarBody, repo: Repo = Depends(get_repo)) -> dict:
-    if len(body.nueva_password) < 6:
+def comercio_recuperar_confirmar(body: RecuperarConfirmarBody, request: Request, response: Response,
+                                 repo: Repo = Depends(get_repo)) -> dict:
+    """Cierra la confirmación por WhatsApp: entra y recibe una clave NUEVA.
+
+    Cada confirmación genera una clave nueva (es el camino de «me olvidé la
+    clave» y también el de quien nunca recibió la del agente) y la devuelve UNA
+    vez en `clave_nueva`."""
+    response.headers["Cache-Control"] = "no-store"
+    if body.nueva_password is not None and len(body.nueva_password) < 6:
         raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
-    user = repo.get_comercio_usuario_por_whatsapp(body.whatsapp)
-    if not user or not user.get("reset_code") or user["reset_code"] != body.codigo:
+    user = _cuenta_con_codigo(repo, body.whatsapp, body.codigo)
+    if not user:
         raise HTTPException(status_code=400, detail="Código incorrecto")
     expira = user.get("reset_code_expira")
     if not expira or datetime.fromisoformat(expira) < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="El código venció, pedí uno nuevo")
     if not user.get("reset_code_confirmado_at"):
         raise HTTPException(status_code=400, detail="Todavía no confirmaste por WhatsApp")
-    repo.set_password(user["id"], auth.hash_password(body.nueva_password))
-    logger.info("comercio.recuperar.confirmado", whatsapp=body.whatsapp)
+    # El código se gasta siempre, haya contraseña o no: sirve UNA vez.
+    if body.nueva_password:
+        repo.set_password(user["id"], auth.hash_password(body.nueva_password))
+    else:
+        repo.gastar_reset_code(user["id"])
+    # La clave nueva se genera DESPUÉS de gastar el código, para achicar la
+    # ventana en que dos confirmaciones simultáneas pasen las dos la verificación.
+    # Probó que el número es suyo (nos escribió desde él): los fallos de ese número
+    # dejan de contar, así que la clave nueva no nace bloqueada por un ataque.
+    clave_nueva = nueva_clave_comercio(repo, user["comercio_id"], user, reiniciar_fallos=True)
+    logger.info("comercio.recuperar.confirmado", con_password=bool(body.nueva_password),
+                comercio_id=user["comercio_id"], metodo="whatsapp", ip=ip_cliente(request))
 
     comercio = repo.get_comercio(user["comercio_id"])
-    token = auth.make_comercio_token(user["comercio_id"], user["email"])
     return {
-        "access_token": token,
-        "comercio": {
-            "id": comercio["id"],
-            "nombre": comercio["nombre"],
-            "slug": comercio["slug"],
-            "confiable": comercio.get("confiable", False),
-        },
+        "access_token": _token_de(user, comercio),
+        "comercio": _comercio_publico(comercio),
+        "clave_nueva": clave_nueva,
     }
+
+
+@router.post("/comercio/clave")
+def comercio_clave_nueva(
+    response: Response,
+    claims: dict = Depends(auth.require_comercio),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Genera una clave nueva (la anterior deja de servir) y la devuelve UNA vez.
+    Máximo 3 por hora por comercio. No toca los fallos del número."""
+    response.headers["Cache-Control"] = "no-store"
+    if not claves.pedidos_de_clave.permitir(claims["comercio_id"]):
+        logger.info("comercio.clave_nueva.limite", comercio_id=claims["comercio_id"])
+        raise HTTPException(status_code=429, detail="Pediste muchas claves seguidas. Probá de nuevo en una hora.")
+    clave = nueva_clave_comercio(repo, claims["comercio_id"])
+    logger.info("comercio.clave_nueva", comercio_id=claims["comercio_id"])
+    return {"clave": clave}
 
 
 @router.get("/comercio/mis-publicaciones")
@@ -355,6 +530,9 @@ _CAMPOS_PERFIL = (
 def _perfil_dict(repo: Repo, comercio: dict) -> dict:
     out = {k: comercio.get(k) for k in _CAMPOS_PERFIL}
     out["rubro_slugs"] = repo.get_comercio_rubros(comercio["id"])
+    # El código URUKU-XXXX, para mostrarlo en Mi comercio con su explicación.
+    codigo = comercio.get("codigo")
+    out["codigo_formateado"] = formatear_codigo(codigo) if codigo else None
     return out
 
 
@@ -422,6 +600,8 @@ def update_perfil(
     repo: Repo = Depends(get_repo),
 ) -> dict:
     campos = body.model_dump(exclude_unset=True, exclude={"rubro_slugs"})
+    if "whatsapp" in campos:
+        raise HTTPException(status_code=400, detail='El número se cambia desde "Cambié de número"')
     # Solo los campos efectivamente enviados, y solo los de la whitelist.
     patch = {k: v for k, v in campos.items() if k in _CAMPOS_EDITABLES}
     if "modalidad" in patch and patch["modalidad"] not in _MODALIDADES:
@@ -816,7 +996,10 @@ def destacar_producto(
 
 
 # ---- Pago QR self-service (el comercio sube su comprobante) ----
-_METODOS_PAGO = {"qr-bolivia", "qr-argentina", "transferencia", "efectivo"}
+# `transferencia`, `efectivo` y `otro` son los que ofrece la pantalla. Los `qr-*`
+# se siguen aceptando sólo por las instalaciones viejas que todavía los mandan:
+# ya no hay un QR de pago que ofrecer (spec de la limpieza, 6/10/2026).
+_METODOS_PAGO = {"transferencia", "efectivo", "otro", "qr-bolivia", "qr-argentina"}
 
 
 def _subir_comprobante(comercio_id: str, data: bytes) -> str | None:
@@ -833,7 +1016,7 @@ def _subir_comprobante(comercio_id: str, data: bytes) -> str | None:
 async def comercio_pago(
     monto: float = Form(...),
     moneda: str = Form("ARS"),
-    metodo: str = Form("qr-bolivia"),
+    metodo: str = Form("transferencia"),
     referencia: str | None = Form(None),
     comprobante: UploadFile | None = File(None),
     claims: dict = Depends(auth.require_comercio),
@@ -865,28 +1048,10 @@ async def comercio_pago(
 
 
 # ---- Mensajes (bandeja del comercio: cliente + admin) ----
-class MensajeClienteBody(BaseModel):
-    comercio_id: str
-    nombre: str
-    cuerpo: str
-    contacto: str | None = None
-
-
-@router.post("/mensaje")
-def dejar_mensaje(body: MensajeClienteBody, repo: Repo = Depends(get_repo)) -> dict:
-    """Público: un cliente le deja un mensaje al comercio desde su ficha
-    (por si no tiene su WhatsApp o el comercio cambió de número)."""
-    if not body.nombre.strip() or not body.cuerpo.strip():
-        raise HTTPException(status_code=400, detail="Faltan nombre y mensaje")
-    if not repo.get_comercio(body.comercio_id):
-        raise HTTPException(status_code=404, detail="comercio no encontrado")
-    repo.crear_mensaje({
-        "comercio_id": body.comercio_id, "autor": "cliente",
-        "nombre": body.nombre.strip(), "contacto": (body.contacto or "").strip() or None,
-        "cuerpo": body.cuerpo.strip(),
-    })
-    return {"ok": True}
-
+# El formulario público `POST /mensaje` (un cliente le dejaba un mensaje al
+# comercio desde la ficha) se retiró: no tenía pantalla y quedaba abierto al
+# público sin ningún filtro. La tabla `mensajes` y lo que ya entró se conservan.
+# Quedan los mensajes de URUKU al comercio (`POST /admin/comercio/{id}/mensaje`).
 
 @router.get("/comercio/mensajes")
 def mis_mensajes(

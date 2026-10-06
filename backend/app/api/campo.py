@@ -8,18 +8,20 @@ confirme. La foto va a Supabase Storage (bucket público 'comercios').
 import httpx
 import structlog
 import re
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, Request
 from pydantic import BaseModel, Field
 
 from app.core import auth
 from app.core.codigo import formatear as formatear_codigo
 from app.core.config import settings
-from app.core.text import slug_unico, slugify
+from app.core.telefono import whatsapp_para_guardar
+from app.core.text import limpiar_ref, slug_unico, slugify
 from app.db.repository import Repo, get_repo
 from app.models.schemas import LoginBody
 from app.services.clasificador import sugerir_rubros
 from app.services.imagenes import subir_foto_comercio, subir_foto_galeria, subir_video_comercio
 from app.services import planes
+from app.services.cuentas import nueva_clave_comercio
 from app.services.rubros import aplicar_rubros
 
 router = APIRouter()
@@ -149,6 +151,7 @@ async def alta_campo(
     horario: str | None = Form(None),
     tiene_stock: bool = Form(True),
     foto: UploadFile | None = File(None),
+    response: Response = None,
     agente: dict = Depends(auth.require_agente),
     repo: Repo = Depends(get_repo),
 ) -> dict:
@@ -217,7 +220,7 @@ async def alta_campo(
             "nombre": nombre_final,
             "sin_cartel": sin_cartel,
             "prod_obs_human": _none(prod_obs_human),
-            "whatsapp": _none(whatsapp),
+            "whatsapp": whatsapp_para_guardar(whatsapp),
             "telefono": _none(telefono),
             "email": _none(email),
             "tiktok_url": _none(tiktok_url),
@@ -249,6 +252,22 @@ async def alta_campo(
             "cargado_por": agente["email"],
         }
     )
+    # La cuenta de Mi comercio, igual que al pagar (`asegurar_comercio_usuario`).
+    # Sin esto el comercio cargado en la calle no podía entrar jamás: la
+    # recuperación por WhatsApp busca justamente esa fila. Entra pidiendo el
+    # código desde el número de su ficha. Si falla no se cae el alta (el agente
+    # está en la calle, sin señal): la recuperación la crea al vuelo si falta.
+    #
+    # Y su clave de 6 números: la app del agente la muestra UNA vez, para dársela
+    # en mano. Nunca va en el volante ni en un WhatsApp. Si no se pudo crear la
+    # cuenta, no hay clave que dar (`None`): entra por «me olvidé» con el WhatsApp.
+    clave_inicial = None
+    try:
+        cuenta = repo.asegurar_comercio_usuario(comercio["id"])
+        clave_inicial = nueva_clave_comercio(repo, comercio["id"], cuenta)
+    except Exception:  # noqa: BLE001
+        logger.warning("campo.alta_sin_cuenta", comercio=comercio["id"], exc_info=True)
+
     # Los rubros se deducen de nombre + productos + descripción y se suman a los
     # que el agente haya elegido. En la calle no se eligen rubros: se anota lo que
     # se ve, y de ahí sale la categoría.
@@ -271,6 +290,8 @@ async def alta_campo(
     logger.info("campo.alta", slug=slug, ciudad=ciudad_slug, rubros=len(rubro_ids),
                 con_foto=bool(portada_url), con_gps=lat is not None, con_video=bool(vurl),
                 consentimiento=consentimiento, cargado_por=agente["email"])
+    if response is not None:
+        response.headers["Cache-Control"] = "no-store"
     # El código va en la respuesta para poder dictárselo o anotárselo al dueño en
     # el momento: es lo que le permite mandar ofertas por WhatsApp sin tener
     # número cargado, sin login y sin haber pagado.
@@ -279,7 +300,10 @@ async def alta_campo(
                                      "foto": bool(portada_url), "gps": lat is not None,
                                      "video": bool(vurl),
                                      "codigo": comercio.get("codigo"),
-                                     "codigo_formateado": formatear_codigo(comercio["codigo"]) if comercio.get("codigo") else None}}
+                                     "codigo_formateado": formatear_codigo(comercio["codigo"]) if comercio.get("codigo") else None},
+            # La clave que se le da en mano al dueño, UNA vez. Sólo en la raíz (nunca
+            # dentro de `comercio`) y con `no-store`: que no quede en ningún caché.
+            "clave_inicial": clave_inicial}
 
 
 class LugarBody(BaseModel):
@@ -487,6 +511,23 @@ def editar_mi_comercio(
     # permite deshacer: pegar mal un Instagram y después dejarlo en blanco
     # tiene que sacarlo de la ficha, no dejar un enlace a ninguna parte.
     patch = {k: (v if (v is None or str(v).strip()) else None) for k, v in patch.items()}
+    if "whatsapp" in patch:
+        # EL AGENTE COMPLETA EL NÚMERO, NO LO CAMBIA. Con el número en la mano
+        # se entra a Mi comercio: si el agente pudiera reemplazarlo, pondría el
+        # suyo, entraría por WhatsApp, recibiría la clave, y después volvería a
+        # poner el original sin que nadie lo note. Un número ya cargado se
+        # cambia con «Cambié de número» (lo aprueba el admin) o desde el panel.
+        from app.services.cuentas import mismo_numero
+        from app.core.telefono import whatsapp_para_guardar
+
+        actual = (repo.get_comercio(comercio_id) or {}).get("whatsapp")
+        if actual and str(actual).strip() and not mismo_numero(actual, patch["whatsapp"]):
+            raise HTTPException(
+                status_code=400,
+                detail="Este comercio ya tiene WhatsApp. Si cambió, el dueño lo pide desde «Cambié de número».",
+            )
+        if patch["whatsapp"]:
+            patch["whatsapp"] = whatsapp_para_guardar(patch["whatsapp"]) or patch["whatsapp"].strip()
     if not patch and body.rubro_slugs is None:
         raise HTTPException(status_code=400, detail="No hay campos para actualizar")
     comercio = repo.update_comercio(comercio_id, patch, body.rubro_slugs)
@@ -546,7 +587,7 @@ def registrar_lead(body: _LeadIn, repo: Repo = Depends(get_repo)) -> dict:
     # Viene vacío cuando llegan por el mapa, la home o un link compartido.
     if body.busqueda_id:
         fila["busqueda_id"] = body.busqueda_id
-    origen = re.sub(r"[^a-z0-9_.-]", "", (body.origen or "").strip().lower())[:64]
+    origen = limpiar_ref(body.origen)
     if origen:
         fila["origen"] = origen
     creado = repo.insert_lead(fila) or {}
@@ -589,7 +630,7 @@ def registrar_visita(body: _VisitaIn, repo: Repo = Depends(get_repo)) -> dict:
     fila = {
         "ruta": ruta,
         "sesion": re.sub(r"[^a-zA-Z0-9-]", "", body.sesion)[:40],
-        "origen": limpio(body.origen, 64),
+        "origen": limpiar_ref(body.origen),   # la misma regla que /lead
         "referido": limpio(body.referido, 80),
         "ciudad_slug": limpio(body.ciudad, 40),
         "primera": bool(body.primera),

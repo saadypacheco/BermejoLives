@@ -19,6 +19,8 @@ def _reset_rate_limit():
     los tests de distintos archivos comparten el contador y algunos empiezan a
     devolver 429 según el orden en que corre la suite completa."""
     _BUCKETS.clear()
+    from app.core.clave import pedidos_de_clave
+    pedidos_de_clave.limpiar()       # los 3 pedidos de clave por hora también son de módulo
     yield
 
 
@@ -52,6 +54,7 @@ class FakeRepo:
         self.sinonimos_manuales: set[str] = set()
         self.usuarios: dict[str, dict] = {}          # email -> row
         self.compradores: dict[str, dict] = {}       # id -> row (usuarios/favoritos: comprador, no comercio)
+        self.clave_fallos: list[dict] = []           # tabla `clave_fallos` (0137): un intento de ingreso por fila
         self.favoritos: list[dict] = []               # {usuario_id, comercio_id}
         self.publicaciones: list[dict] = []
         self.difusion: list[dict] = []
@@ -156,26 +159,11 @@ class FakeRepo:
 
     # ---- comercios ----
     def get_comercio_by_jid(self, wa_jid):
-        return next((c for c in self.comercios.values() if c.get("wa_jid") == wa_jid), None)
+        # Sólo ACTIVOS (como el real): un fantasma viejo ya no junta publicaciones.
+        return next((c for c in self.comercios.values()
+                     if c.get("wa_jid") == wa_jid and c.get("activo", True)), None)
 
-    def upsert_comercio_by_jid(self, wa_jid, phone):
-        existing = self.get_comercio_by_jid(wa_jid)
-        if existing:
-            return existing
-        por_numero = self.get_comercio_por_numero(phone)
-        if por_numero:
-            self.vincular_wa_jid(por_numero["id"], wa_jid)
-            return por_numero
-        cid = self._id("com")
-        row = {
-            "id": cid, "slug": f"comercio-{phone[-6:]}", "nombre": f"Comercio {phone[-4:]}",
-            "whatsapp": phone, "wa_jid": wa_jid, "confiable": False, "verificado": False,
-            "activo": False, "plan": "gratis",
-            "codigo": self._codigo_libre(),
-        }
-        self.comercios[cid] = row
-        self.agregar_numero_comercio(cid, phone, "alta por WhatsApp", "ingest")
-        return row
+    # (`upsert_comercio_by_jid` se retiró: un número desconocido ya no crea comercio.)
 
     # ---- números autorizados ----
     def get_comercio_por_numero(self, numero):
@@ -185,7 +173,9 @@ class FakeRepo:
             return None
         for n in self.comercio_numeros:
             if n["numero"] == num and n.get("activo", True):
-                return self.comercios.get(n["comercio_id"])
+                propio = self.comercios.get(n["comercio_id"])
+                if propio and propio.get("activo", True):
+                    return propio
         candidatos = {num, num[3:] if num.startswith("591") else num}
         for c in self.comercios.values():
             if c.get("whatsapp") in candidatos and c.get("activo", True):
@@ -709,13 +699,82 @@ class FakeRepo:
                 return u
         return None
 
+    def list_comercios_por_whatsapp(self, whatsapp):
+        from app.core.telefono import variantes_whatsapp
+        variantes = variantes_whatsapp(whatsapp)
+        if not variantes:
+            return []
+        # El orden de inserción hace de «el más antiguo primero» del real.
+        return [c for c in self.comercios.values()
+                if c.get("whatsapp") in variantes and c.get("activo", True)]
+
+    def get_comercio_por_whatsapp(self, whatsapp):
+        filas = self.list_comercios_por_whatsapp(whatsapp)
+        return filas[0] if filas else None
+
+    def list_comercio_usuarios_por_whatsapp(self, whatsapp):
+        cuentas = []
+        for c in self.list_comercios_por_whatsapp(whatsapp):
+            u = next((u for u in self.usuarios.values()
+                      if u["comercio_id"] == c["id"] and u.get("activo", True)), None)
+            if u:
+                cuentas.append(u)
+        return cuentas
+
     def get_comercio_usuario_por_whatsapp(self, whatsapp):
-        digitos = "".join(c for c in whatsapp if c.isdigit())
+        cuentas = self.list_comercio_usuarios_por_whatsapp(whatsapp)
+        return cuentas[0] if cuentas else None
+
+    def set_clave_comercio(self, user_id, clave_hash):
         for u in self.usuarios.values():
-            c = self.comercios.get(u["comercio_id"])
-            if c and c.get("whatsapp") == digitos and u.get("activo", True):
-                return u
-        return None
+            if u["id"] == user_id:
+                u["clave_hash"] = clave_hash
+
+    def anular_clave_comercio(self, user_ids):
+        for u in self.usuarios.values():
+            if u["id"] in user_ids:
+                u["clave_hash"] = None
+
+    def anular_claves_de_comercio(self, comercio_id):
+        for u in self.usuarios.values():
+            if u.get("comercio_id") == comercio_id:
+                u["clave_hash"] = None
+
+    def get_solicitud_cambio_numero(self, solicitud_id):
+        return self.solicitudes_numero.get(solicitud_id)
+
+    # ---- intentos de ingreso con clave: el equivalente de la función SQL ----
+    def registrar_intento_clave(self, tabla, numero, cuenta_ids, ip):
+        """Como `registrar_intento_clave` de la 0137: inserta y cuenta (con éste)."""
+        from datetime import datetime, timedelta, timezone
+
+        ahora = datetime.now(timezone.utc)
+        fila = {"id": self._id("intento"), "tabla": tabla, "numero": numero, "cuenta_ids": list(cuenta_ids),
+                "ip": ip, "resultado": "fallo", "created_at": ahora}
+        self.clave_fallos.append(fila)
+
+        def cuenta(ventana, por_ip=False):
+            if por_ip:
+                return sum(1 for f in self.clave_fallos
+                           if f["ip"] == ip and f["resultado"] in ("fallo", "obsoleto")
+                           and f["created_at"] > ahora - ventana)
+            return sum(1 for f in self.clave_fallos
+                       if f["tabla"] == tabla and f["numero"] == numero and f["resultado"] == "fallo"
+                       and f["created_at"] > ahora - ventana)
+
+        return {"id": fila["id"], "fallos_15m": cuenta(timedelta(minutes=15)),
+                "fallos_24h": cuenta(timedelta(hours=24)),
+                "fallos_ip_1h": cuenta(timedelta(hours=1), por_ip=True)}
+
+    def resolver_intento_clave(self, intento_id, resultado):
+        for f in self.clave_fallos:
+            if f["id"] == intento_id:
+                f["resultado"] = resultado
+
+    def reiniciar_fallos_clave(self, tabla, numero):
+        for f in self.clave_fallos:
+            if f["tabla"] == tabla and f["numero"] == numero and f["resultado"] == "fallo":
+                f["resultado"] = "obsoleto"
 
     def set_reset_code(self, user_id, code, expira):
         for u in self.usuarios.values():
@@ -726,8 +785,9 @@ class FakeRepo:
     def confirmar_reset_code_comercio(self, whatsapp, codigo):
         from datetime import datetime, timezone
 
-        user = self.get_comercio_usuario_por_whatsapp(whatsapp)
-        if not user or not user.get("reset_code") or user["reset_code"] != codigo:
+        user = next((u for u in self.list_comercio_usuarios_por_whatsapp(whatsapp)
+                     if u.get("reset_code") and u["reset_code"] == codigo), None)
+        if not user:
             return False
         expira = user.get("reset_code_expira")
         if not expira or datetime.fromisoformat(expira) < datetime.now(timezone.utc):
@@ -739,6 +799,11 @@ class FakeRepo:
         for u in self.usuarios.values():
             if u["id"] == user_id:
                 u["password_hash"] = password_hash
+                u["reset_code"] = u["reset_code_expira"] = None
+
+    def gastar_reset_code(self, user_id):
+        for u in self.usuarios.values():
+            if u["id"] == user_id:
                 u["reset_code"] = u["reset_code_expira"] = None
 
     def crear_comercio(self, row):
@@ -762,10 +827,12 @@ class FakeRepo:
 
     # ---- comprador/visitante ----
     def get_usuario_por_whatsapp(self, whatsapp):
-        digitos = "".join(c for c in whatsapp if c.isdigit())
-        for u in self.compradores.values():
-            if u["whatsapp"] == digitos and u.get("activo", True):
-                return u
+        from app.core.telefono import variantes_whatsapp
+        variantes = variantes_whatsapp(whatsapp)
+        for v in variantes:          # la forma normalizada primero, como el real
+            for u in self.compradores.values():
+                if u["whatsapp"] == v and u.get("activo", True):
+                    return u
         return None
 
     def upsert_contactos_base(self, filas):
@@ -792,12 +859,21 @@ class FakeRepo:
                 "usuarios_total": len(en_uruku), "grupos": sorted(grupos.values(), key=lambda x: -x["contactos"]), "ciudades": []}
 
     def crear_usuario(self, whatsapp, ref=None):
-        digitos = "".join(c for c in whatsapp if c.isdigit())
-        full = {"id": self._id("comprador"), "whatsapp": digitos, "activo": True,
-                "reset_code": None, "reset_code_expira": None, "consentimiento_ofertas": True,
-                "ref": ref}
+        from app.core.telefono import normalizar_whatsapp
+        full = {"id": self._id("comprador"), "whatsapp": normalizar_whatsapp(whatsapp) or "",
+                "activo": True, "reset_code": None, "reset_code_expira": None,
+                # 0137: ya no nace en true, y la fecha del tilde empieza vacía.
+                "consentimiento_ofertas": False, "consentimiento_en": None,
+                "consentimiento_pendiente": False,
+                "verificado_en": None, "ref": ref,
+                "clave_hash": None}
         self.compradores[full["id"]] = full
         return full
+
+    def set_consentimiento_pendiente(self, usuario_id, pendiente):
+        u = self.compradores.get(usuario_id)
+        if u:
+            u["consentimiento_pendiente"] = bool(pendiente)
 
     def set_reset_code_usuario(self, usuario_id, code, expira):
         u = self.compradores.get(usuario_id)
@@ -815,22 +891,55 @@ class FakeRepo:
         if not expira or datetime.fromisoformat(expira) < datetime.now(timezone.utc):
             return False
         usuario["reset_code_confirmado_at"] = datetime.now(timezone.utc).isoformat()
+        # El tilde recién cuenta con el número verificado (como el repo real).
+        if usuario.get("consentimiento_pendiente"):
+            usuario["consentimiento_pendiente"] = False
+            if not usuario.get("consentimiento_en"):
+                usuario["consentimiento_en"] = usuario["reset_code_confirmado_at"]
+                usuario["consentimiento_ofertas"] = True
+        usuario.setdefault("verificado_en", None)
+        if not usuario["verificado_en"]:
+            usuario["verificado_en"] = usuario["reset_code_confirmado_at"]
+        return True
+
+    def set_clave_usuario(self, usuario_id, clave_hash):
+        u = self.compradores.get(usuario_id)
+        if u:
+            u["clave_hash"] = clave_hash
+
+    def anular_clave_usuario(self, usuario_id):
+        u = self.compradores.get(usuario_id)
+        if u:
+            u["clave_hash"] = None
+
+    def normalizar_whatsapp_usuario(self, usuario_id, numero):
+        u = self.compradores.get(usuario_id)
+        if not u or any(o["whatsapp"] == numero and o["id"] != usuario_id
+                        for o in self.compradores.values()):
+            return False
+        u["whatsapp"] = numero
         return True
 
     def get_usuario(self, usuario_id):
         return self.compradores.get(usuario_id)
 
     def agregar_favorito(self, usuario_id, comercio_id):
-        if not any(f["usuario_id"] == usuario_id and f["comercio_id"] == comercio_id for f in self.favoritos):
-            self.favoritos.append({"usuario_id": usuario_id, "comercio_id": comercio_id})
+        for f in self.favoritos:
+            if f["usuario_id"] == usuario_id and f["comercio_id"] == comercio_id:
+                f["activo"] = True          # reactiva el que se había quitado
+                return
+        self.favoritos.append({"usuario_id": usuario_id, "comercio_id": comercio_id, "activo": True})
 
     def quitar_favorito(self, usuario_id, comercio_id):
-        self.favoritos = [f for f in self.favoritos if not (f["usuario_id"] == usuario_id and f["comercio_id"] == comercio_id)]
+        # Soft-delete (0137): la fila queda, apagada.
+        for f in self.favoritos:
+            if f["usuario_id"] == usuario_id and f["comercio_id"] == comercio_id:
+                f["activo"] = False
 
     def list_favoritos(self, usuario_id):
         return [
             {"comercio_id": f["comercio_id"], "comercios": self.comercios.get(f["comercio_id"], {})}
-            for f in self.favoritos if f["usuario_id"] == usuario_id
+            for f in self.favoritos if f["usuario_id"] == usuario_id and f.get("activo", True)
         ]
 
     # galería
@@ -938,7 +1047,20 @@ class FakeRepo:
     def upsert_saber_local(self, row):
         import uuid
         from datetime import datetime, timezone
-        row = {"activo": True, **row, "updated_at": datetime.now(timezone.utc).isoformat()}
+        # `updated_at` ESTRICTAMENTE creciente. Postgres da un `now()` distinto por
+        # transacción (microsegundos); `datetime.now()` en Windows tiene una
+        # resolución mucho más gruesa y tres altas seguidas caían en el MISMO
+        # instante: el orden «las últimas primero» quedaba empatado, la estabilidad
+        # del sort devolvía el orden de inserción y el test fallaba 4 de cada 6
+        # corridas. El orden real (`updated_at desc, id`) es total; el fallo era del
+        # reloj del fake.
+        from datetime import timedelta
+        ahora = datetime.now(timezone.utc)
+        ultimo = getattr(self, "_ultimo_saber_ts", None)
+        if ultimo is not None and ahora <= ultimo:
+            ahora = ultimo + timedelta(microseconds=1)
+        self._ultimo_saber_ts = ahora
+        row = {"activo": True, **row, "updated_at": ahora.isoformat()}
         row.setdefault("id", str(uuid.uuid4()))
         self.saber_local[row["id"]] = {**self.saber_local.get(row["id"], {}), **row}
         return self.saber_local[row["id"]]
@@ -1042,7 +1164,8 @@ class FakeRepo:
         return None
 
     def crear_comercio_usuario(self, row):
-        full = {"id": self._id("usr"), "activo": True, "email": None, "password_hash": None, **row}
+        full = {"id": self._id("usr"), "activo": True, "email": None, "password_hash": None,
+                "clave_hash": None, **row}
         self.usuarios[full["id"]] = full
         return full
 
@@ -1175,11 +1298,40 @@ class FakeRepo:
             "ofertas_top_comercios": [],
             "contactos_30d": len(self.leads),
             "no_contestan": self.list_no_contestan(10),
-            "llegadas_30d": sum(1 for l in self.leads if l.get("origen")),
-            "llegadas_por_clase": {},
-            "llegadas_top": [],
+            # Como el real: llegadas = personas de `visitas.origen`; los
+            # contactos con origen salen de `leads.origen` (sin las vistas).
+            "llegadas_30d": sum(self.llegadas_por_origen().values()),
+            "llegadas_por_clase": self._por_clase(self.llegadas_por_origen()),
+            "llegadas_top": [{"origen": o, "count": n}
+                             for o, n in sorted(self.llegadas_por_origen().items(), key=lambda x: -x[1])],
+            "contactos_con_origen_30d": sum(1 for l in self.leads
+                                            if l.get("origen") and l.get("tipo") != "vista"),
+            "contactos_por_clase": self._por_clase(self._contactos_por_origen()),
+            "contactos_origen_top": [{"origen": o, "count": n}
+                                     for o, n in sorted(self._contactos_por_origen().items(), key=lambda x: -x[1])],
             "contactos_top_comercios": [],
         }
+
+    @staticmethod
+    def _por_clase(por_origen):
+        por_clase = {}
+        for o, n in por_origen.items():
+            por_clase[o.split("-", 1)[0]] = por_clase.get(o.split("-", 1)[0], 0) + n
+        return por_clase
+
+    def _contactos_por_origen(self):
+        out = {}
+        for l in self.leads:
+            if l.get("origen") and l.get("tipo") != "vista":
+                out[l["origen"]] = out.get(l["origen"], 0) + 1
+        return out
+
+    def llegadas_por_origen(self, dias=30):
+        sesiones = {}
+        for v in self.visitas:
+            if v.get("origen"):
+                sesiones.setdefault(v["origen"], set()).add(v.get("sesion"))
+        return {o: len(s) for o, s in sesiones.items()}
 
     def list_todos_comercios(self, verificado=None, limit=200):
         items = [c for c in self.comercios.values() if c.get("activo", True)]

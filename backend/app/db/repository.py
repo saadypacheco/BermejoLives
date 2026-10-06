@@ -34,7 +34,6 @@ def _normalizar_rubro(texto: str) -> str:
 
 class Repo(Protocol):
     def get_comercio_by_jid(self, wa_jid: str) -> dict | None: ...
-    def upsert_comercio_by_jid(self, wa_jid: str, phone: str) -> dict: ...
     def actualizar_ubicacion_comercio(self, comercio_id: str, lat: float, lng: float, direccion: str | None) -> None: ...
     def insert_wa_inbox(self, row: dict) -> bool: ...
     def marcar_wa_inbox(self, wa_message_id: str, resultado: str, motivo: str | None,
@@ -79,9 +78,23 @@ class Repo(Protocol):
     def desactivar_comercio(self, comercio_id: str) -> dict: ...
     def get_comercio_usuario(self, email: str) -> dict | None: ...
     def get_comercio_usuario_por_whatsapp(self, whatsapp: str) -> dict | None: ...
+    def get_comercio_por_whatsapp(self, whatsapp: str) -> dict | None: ...
+    # Número compartido por varios comercios: todos, en orden determinista.
+    def list_comercios_por_whatsapp(self, whatsapp: str) -> list[dict]: ...
+    def list_comercio_usuarios_por_whatsapp(self, whatsapp: str) -> list[dict]: ...
+    # La clave de 6 números (0137): sólo el hash, y el conteo de intentos.
+    def set_clave_comercio(self, user_id: str, clave_hash: str) -> None: ...
+    def anular_clave_comercio(self, user_ids: list[str]) -> None: ...
+    def anular_claves_de_comercio(self, comercio_id: str) -> None: ...
+    def get_solicitud_cambio_numero(self, solicitud_id: str) -> dict | None: ...
+    # Intentos de ingreso con clave (tabla `clave_fallos`, 0137): el conteo es atómico en la base.
+    def registrar_intento_clave(self, tabla: str, numero: str, cuenta_ids: list[str], ip: str) -> dict: ...
+    def resolver_intento_clave(self, intento_id: str, resultado: str) -> None: ...
+    def reiniciar_fallos_clave(self, tabla: str, numero: str) -> None: ...
     def set_reset_code(self, user_id: str, code: str | None, expira: str | None) -> None: ...
     def confirmar_reset_code_comercio(self, whatsapp: str, codigo: str) -> bool: ...
     def set_password(self, user_id: str, password_hash: str) -> None: ...
+    def gastar_reset_code(self, user_id: str) -> None: ...
     def get_comercio(self, comercio_id: str) -> dict | None: ...
     def list_publicaciones_de_comercio(self, comercio_id: str) -> list[dict]: ...
     def update_publicacion_de_comercio(self, pub_id: str, comercio_id: str, patch: dict) -> dict | None: ...
@@ -213,9 +226,13 @@ class Repo(Protocol):
     def aprobar_solicitud_cambio_numero(self, solicitud_id: str, by: str) -> dict | None: ...
     def rechazar_solicitud_cambio_numero(self, solicitud_id: str, by: str) -> dict | None: ...
     def get_usuario_por_whatsapp(self, whatsapp: str) -> dict | None: ...
-    def crear_usuario(self, whatsapp: str) -> dict: ...
+    def crear_usuario(self, whatsapp: str, ref: str | None = None) -> dict: ...
+    def set_consentimiento_pendiente(self, usuario_id: str, pendiente: bool) -> None: ...
     def set_reset_code_usuario(self, usuario_id: str, code: str | None, expira: str | None) -> None: ...
     def confirmar_reset_code_usuario(self, whatsapp: str, codigo: str) -> bool: ...
+    def set_clave_usuario(self, usuario_id: str, clave_hash: str) -> None: ...
+    def anular_clave_usuario(self, usuario_id: str) -> None: ...
+    def normalizar_whatsapp_usuario(self, usuario_id: str, numero: str) -> bool: ...
     def get_usuario(self, usuario_id: str) -> dict | None: ...
     def agregar_favorito(self, usuario_id: str, comercio_id: str) -> None: ...
     def quitar_favorito(self, usuario_id: str, comercio_id: str) -> None: ...
@@ -296,7 +313,10 @@ class SupabaseRepo:
 
     # ---- comercios ----
     def get_comercio_by_jid(self, wa_jid: str) -> dict | None:
-        res = self._db.table("comercios").select("*").eq("wa_jid", wa_jid).limit(1).execute()
+        # Sólo comercios ACTIVOS: los «fantasmas» viejos (apagados, creados por un
+        # 1 a 1 sin código) ya no pueden seguir juntando publicaciones por su jid.
+        res = (self._db.table("comercios").select("*").eq("wa_jid", wa_jid).eq("activo", True)
+               .order("created_at").order("id").limit(1).execute())
         return res.data[0] if res.data else None
 
     def get_comercio_por_numero(self, numero: str) -> dict | None:
@@ -318,14 +338,18 @@ class SupabaseRepo:
             .select("comercio_id").eq("numero", num).eq("activo", True).limit(1).execute()
         )
         if aut.data:
-            return self.get_comercio(aut.data[0]["comercio_id"])
+            # Un número autorizado de un comercio APAGADO no identifica a nadie.
+            propio = self.get_comercio(aut.data[0]["comercio_id"])
+            if propio and propio.get("activo", True):
+                return propio
 
         # El número público se guarda con formato libre (nadie lo validaba hasta
         # que el comercio empieza a pagar), así que se comparan los normalizados.
         for candidato in {num, num[3:] if num.startswith("591") else num}:
             res = (
                 self._db.table("comercios")
-                .select("*").eq("whatsapp", candidato).eq("activo", True).limit(1).execute()
+                .select("*").eq("whatsapp", candidato).eq("activo", True)
+                .order("created_at").order("id").limit(1).execute()
             )
             if res.data:
                 return res.data[0]
@@ -460,51 +484,6 @@ class SupabaseRepo:
             .select("*").eq("comercio_id", comercio_id).eq("activo", True).execute()
         )
         return res.data or []
-
-    def upsert_comercio_by_jid(self, wa_jid: str, phone: str) -> dict:
-        """Devuelve el comercio del remitente, creándolo sólo si es realmente nuevo.
-
-        Antes de crear reconcilia por número: un comercio cargado en la calle por
-        el agente tiene `whatsapp` pero no `wa_jid`, así que buscarlo sólo por
-        jid no lo encontraba y se creaba un DUPLICADO "Comercio 1989" cada vez
-        que el dueño escribía. Si el número ya pertenece a un comercio, se le ata
-        el jid a ese y listo.
-        """
-        existing = self.get_comercio_by_jid(wa_jid)
-        if existing:
-            return existing
-
-        por_numero = self.get_comercio_por_numero(phone)
-        if por_numero:
-            self.vincular_wa_jid(por_numero["id"], wa_jid)
-            return {**por_numero, "wa_jid": wa_jid}
-
-        # APAGADO hasta que una persona lo mire. Alguien que le escribe al
-        # número de URUKU puede ser un comerciante que quiere publicar… o
-        # cualquiera preguntando algo. Nace `activo = false`: no sale en el
-        # mapa, ni en el buscador, ni en el conteo. Lo enciende el moderador
-        # cuando aprueba lo que mandó (moderacion.moderar), que es el momento
-        # en que una persona confirmó que es un negocio de verdad.
-        slug = f"comercio-{phone[-6:]}"
-        row = {
-            "slug": slug,
-            "nombre": f"Comercio {phone[-4:]}",
-            "whatsapp": phone,
-            "wa_jid": wa_jid,
-            "verificado": False,
-            "activo": False,
-            "plan": "gratis",
-            "codigo": self._codigo_libre(),
-        }
-        res = self._db.table("comercios").upsert(row, on_conflict="wa_jid").execute()
-        creado = res.data[0]
-        # Queda autorizado el número con el que se dio de alta, para que la
-        # próxima reconciliación lo encuentre por comercio_numeros.
-        try:
-            self.agregar_numero_comercio(creado["id"], phone, "alta por WhatsApp", "ingest")
-        except Exception:  # noqa: BLE001 — el alta del comercio no depende de esto
-            pass
-        return creado
 
     def actualizar_ubicacion_comercio(self, comercio_id, lat, lng, direccion=None):
         patch: dict = {"lat": lat, "lng": lng}
@@ -695,6 +674,7 @@ class SupabaseRepo:
             .select("*")
             .eq("email", email)
             .eq("activo", True)
+            .order("created_at").order("id")
             .limit(1)
             .execute()
         )
@@ -706,17 +686,43 @@ class SupabaseRepo:
 
     # ---- comprador/visitante (celular + código, sin contraseña) ----
     def get_usuario_por_whatsapp(self, whatsapp: str) -> dict | None:
-        digitos = "".join(c for c in whatsapp if c.isdigit())
-        res = self._db.table("usuarios").select("*").eq("whatsapp", digitos).eq("activo", True).limit(1).execute()
-        return res.data[0] if res.data else None
+        """Busca al comprador por su número, en E.164 (`59170000001`).
+
+        El número que se pide, el que se verifica y el que llega del webhook al
+        confirmar se normalizan igual (`core/telefono.py`): antes cada uno
+        comparaba los dígitos tal cual, y quien escribía «70000001» sin el 591
+        nunca confirmaba. Si hay una fila vieja guardada sin el 591, también la
+        encuentra (se prefiere la normalizada)."""
+        from app.core.telefono import variantes_whatsapp
+
+        variantes = variantes_whatsapp(whatsapp)
+        if not variantes:
+            return None
+        res = (self._db.table("usuarios").select("*")
+               .in_("whatsapp", variantes).eq("activo", True)
+               .order("created_at").order("id").execute())
+        filas = res.data or []
+        filas.sort(key=lambda f: variantes.index(f["whatsapp"]) if f.get("whatsapp") in variantes else 99)
+        return filas[0] if filas else None
 
     def crear_usuario(self, whatsapp: str, ref: str | None = None) -> dict:
-        digitos = "".join(c for c in whatsapp if c.isdigit())
-        row: dict = {"whatsapp": digitos}
+        from app.core.telefono import normalizar_whatsapp
+
+        # Se guarda normalizado: es lo que después compara el webhook.
+        row: dict = {"whatsapp": normalizar_whatsapp(whatsapp) or ""}
         if ref:
             row["ref"] = ref[:64]   # código de origen (referido), acotado
         res = self._db.table("usuarios").insert(row).execute()
         return res.data[0]
+
+    def set_consentimiento_pendiente(self, usuario_id: str, pendiente: bool) -> None:
+        """Guarda si el comprador tildó «quiero recibir ofertas» al pedir el código.
+        Sólo queda PENDIENTE: `consentimiento_en` se llena recién cuando confirma
+        el número por WhatsApp (`confirmar_reset_code_usuario`). Se pisa en cada
+        pedido de código: el último pedido manda (atado al código vigente)."""
+        self._db.table("usuarios").update(
+            {"consentimiento_pendiente": bool(pendiente)}
+        ).eq("id", usuario_id).execute()
 
     def set_reset_code_usuario(self, usuario_id: str, code: str | None, expira: str | None) -> None:
         self._db.table("usuarios").update(
@@ -736,9 +742,40 @@ class SupabaseRepo:
         expira = usuario.get("reset_code_expira")
         if not expira or datetime.fromisoformat(expira) < datetime.now(timezone.utc):
             return False
-        self._db.table("usuarios").update(
-            {"reset_code_confirmado_at": datetime.now(timezone.utc).isoformat()}
-        ).eq("id", usuario["id"]).execute()
+        ahora = datetime.now(timezone.utc).isoformat()
+        patch = {"reset_code_confirmado_at": ahora}
+        # El tilde de «quiero recibir ofertas» recién cuenta ahora que el número
+        # quedó verificado. La fecha original no se pisa.
+        if usuario.get("consentimiento_pendiente"):
+            patch["consentimiento_pendiente"] = False
+            if not usuario.get("consentimiento_en"):
+                patch["consentimiento_en"] = ahora
+                patch["consentimiento_ofertas"] = True
+        # `verificado_en`: la prueba de que este número es de quien lo dio, porque
+        # nos escribió desde él. A diferencia de `reset_code_confirmado_at` (que
+        # se gasta al entrar), ésta queda. Se conserva la fecha de la primera vez.
+        if not usuario.get("verificado_en"):
+            patch["verificado_en"] = ahora
+        self._db.table("usuarios").update(patch).eq("id", usuario["id"]).execute()
+        return True
+
+    def set_clave_usuario(self, usuario_id: str, clave_hash: str) -> None:
+        """Guarda el hash de la clave de 6 números (reemplaza la anterior)."""
+        self._db.table("usuarios").update({"clave_hash": clave_hash}).eq("id", usuario_id).execute()
+
+    def anular_clave_usuario(self, usuario_id: str) -> None:
+        """10 fallos en 24 horas: la clave deja de servir (sólo se vuelve a entrar por WhatsApp)."""
+        self._db.table("usuarios").update({"clave_hash": None}).eq("id", usuario_id).execute()
+
+    def normalizar_whatsapp_usuario(self, usuario_id: str, numero: str) -> bool:
+        """Reescribe el número de una fila vieja (guardada sin el 591) a su forma
+        normalizada. NO lo hace si otra fila —activa o no— ya tiene ese número
+        (`unique`): ahí las dos quedan como están. Devuelve si lo cambió."""
+        otra = (self._db.table("usuarios").select("id").eq("whatsapp", numero)
+                .neq("id", usuario_id).limit(1).execute())
+        if otra.data:
+            return False
+        self._db.table("usuarios").update({"whatsapp": numero}).eq("id", usuario_id).execute()
         return True
 
     def get_usuario(self, usuario_id: str) -> dict | None:
@@ -746,35 +783,76 @@ class SupabaseRepo:
         return res.data[0] if res.data else None
 
     def agregar_favorito(self, usuario_id: str, comercio_id: str) -> None:
+        # `activo: True` también REACTIVA el que se había quitado (misma fila).
         self._db.table("favoritos").upsert(
-            {"usuario_id": usuario_id, "comercio_id": comercio_id}, on_conflict="usuario_id,comercio_id"
+            {"usuario_id": usuario_id, "comercio_id": comercio_id, "activo": True},
+            on_conflict="usuario_id,comercio_id"
         ).execute()
 
     def quitar_favorito(self, usuario_id: str, comercio_id: str) -> None:
-        self._db.table("favoritos").delete().eq("usuario_id", usuario_id).eq("comercio_id", comercio_id).execute()
+        # Soft-delete (0137): nunca se borra la fila, se apaga.
+        self._db.table("favoritos").update({"activo": False}) \
+            .eq("usuario_id", usuario_id).eq("comercio_id", comercio_id).execute()
 
     def list_favoritos(self, usuario_id: str) -> list[dict]:
         res = (
             self._db.table("favoritos")
             .select("comercio_id, created_at, comercios(id, slug, nombre, logo_url, portada_url, direccion, rating, whatsapp, verificado)")
             .eq("usuario_id", usuario_id)
+            .eq("activo", True)
             .order("created_at", desc=True)
             .execute()
         )
         return res.data or []
 
-    def get_comercio_usuario_por_whatsapp(self, whatsapp: str) -> dict | None:
-        digitos = "".join(c for c in whatsapp if c.isdigit())
-        com = (
-            self._db.table("comercios").select("id").eq("whatsapp", digitos).eq("activo", True).limit(1).execute()
-        )
-        if not com.data:
-            return None
+    def list_comercios_por_whatsapp(self, whatsapp: str) -> list[dict]:
+        """Los comercios ACTIVOS cuyo número de la FICHA es éste (no los números
+        autorizados a publicar: quien entra a Mi comercio es el dueño). El número
+        se normaliza y se miran las dos formas en que puede estar guardado.
+
+        Un mismo dueño puede tener varios puestos con el mismo número: se
+        devuelven TODOS, siempre en el mismo orden (el más antiguo primero). Nunca
+        se elige uno en silencio."""
+        from app.core.telefono import variantes_whatsapp
+
+        variantes = variantes_whatsapp(whatsapp)
+        if not variantes:
+            return []
+        res = (self._db.table("comercios").select("*")
+               .in_("whatsapp", variantes).eq("activo", True)
+               .order("created_at").order("id").execute())
+        return res.data or []
+
+    def get_comercio_por_whatsapp(self, whatsapp: str) -> dict | None:
+        """El primero (orden determinista) de `list_comercios_por_whatsapp`."""
+        filas = self.list_comercios_por_whatsapp(whatsapp)
+        return filas[0] if filas else None
+
+    def list_comercio_usuarios_por_whatsapp(self, whatsapp: str) -> list[dict]:
+        """Las cuentas de Mi comercio de quien tiene ese número en su ficha, una
+        por comercio (la primera de cada uno), en el orden de los comercios.
+
+        Normaliza como el resto (`core/telefono.py`): la ficha cargada en la
+        calle trae «70123456» y el webhook trae «59170123456»."""
+        comercios = self.list_comercios_por_whatsapp(whatsapp)
+        ids = [c["id"] for c in comercios]
+        if not ids:
+            return []
         res = (
             self._db.table("comercio_usuarios")
-            .select("*").eq("comercio_id", com.data[0]["id"]).eq("activo", True).limit(1).execute()
+            .select("*").in_("comercio_id", ids).eq("activo", True)
+            .order("created_at").order("id").execute()
         )
-        return res.data[0] if res.data else None
+        por_comercio: dict[str, dict] = {}
+        for u in res.data or []:
+            por_comercio.setdefault(u["comercio_id"], u)
+        return [por_comercio[i] for i in ids if i in por_comercio]
+
+    def get_comercio_usuario_por_whatsapp(self, whatsapp: str) -> dict | None:
+        """La primera cuenta (orden determinista) de ese número. Si hay varias
+        quien llama tiene que elegir con `list_comercio_usuarios_por_whatsapp`."""
+        cuentas = self.list_comercio_usuarios_por_whatsapp(whatsapp)
+        return cuentas[0] if cuentas else None
 
     def set_reset_code(self, user_id: str, code: str | None, expira: str | None) -> None:
         self._db.table("comercio_usuarios").update(
@@ -783,11 +861,15 @@ class SupabaseRepo:
 
     def confirmar_reset_code_comercio(self, whatsapp: str, codigo: str) -> bool:
         """Llamado desde el webhook: alguien mandó 'CONFIRMAR-XXXXXX' por
-        WhatsApp. Mismo criterio que confirmar_reset_code_usuario."""
+        WhatsApp. Mismo criterio que confirmar_reset_code_usuario.
+
+        Si el número tiene varios comercios, confirma la cuenta que tiene ESE
+        código: el código quedó atado a la cuenta que lo pidió."""
         from datetime import datetime, timezone
 
-        user = self.get_comercio_usuario_por_whatsapp(whatsapp)
-        if not user or not user.get("reset_code") or user["reset_code"] != codigo:
+        user = next((u for u in self.list_comercio_usuarios_por_whatsapp(whatsapp)
+                     if u.get("reset_code") and u["reset_code"] == codigo), None)
+        if not user:
             return False
         expira = user.get("reset_code_expira")
         if not expira or datetime.fromisoformat(expira) < datetime.now(timezone.utc):
@@ -800,6 +882,57 @@ class SupabaseRepo:
     def set_password(self, user_id: str, password_hash: str) -> None:
         self._db.table("comercio_usuarios").update(
             {"password_hash": password_hash, "reset_code": None, "reset_code_expira": None}
+        ).eq("id", user_id).execute()
+
+    def set_clave_comercio(self, user_id: str, clave_hash: str) -> None:
+        """Guarda el hash de la clave de 6 números (reemplaza la anterior). NO toca
+        los fallos: sólo `reiniciar_fallos_clave`, tras confirmar por WhatsApp."""
+        self._db.table("comercio_usuarios").update({"clave_hash": clave_hash}).eq("id", user_id).execute()
+
+    def anular_clave_comercio(self, user_ids: list[str]) -> None:
+        """10 fallos en 24 horas: la clave de esas cuentas deja de servir."""
+        if not user_ids:
+            return
+        self._db.table("comercio_usuarios").update({"clave_hash": None}).in_("id", user_ids).execute()
+
+    def anular_claves_de_comercio(self, comercio_id: str) -> None:
+        """Cambió el WhatsApp del comercio: la clave de sus cuentas deja de
+        servir. Quien tenía el celular viejo y la clave no puede seguir entrando
+        con el número nuevo, que es público en la ficha."""
+        self._db.table("comercio_usuarios").update({"clave_hash": None}).eq("comercio_id", comercio_id).execute()
+
+    def get_solicitud_cambio_numero(self, solicitud_id: str) -> dict | None:
+        res = (self._db.table("solicitudes_cambio_numero").select("*")
+               .eq("id", solicitud_id).limit(1).execute())
+        return res.data[0] if res.data else None
+
+    # ---- intentos de ingreso con clave (0137) ----
+    def registrar_intento_clave(self, tabla: str, numero: str, cuenta_ids: list[str], ip: str) -> dict:
+        """Inserta el intento y cuenta los fallos (con éste) en una sola llamada SQL, bajo lock."""
+        res = self._db.rpc("registrar_intento_clave", {
+            "p_tabla": tabla, "p_numero": numero, "p_cuenta_ids": cuenta_ids, "p_ip": ip,
+        }).execute()
+        fila = (res.data or [{}])[0] if isinstance(res.data, list) else (res.data or {})
+        return {"id": fila["intento_id"], "fallos_15m": fila["fallos_15m"],
+                "fallos_24h": fila["fallos_24h"], "fallos_ip_1h": fila["fallos_ip_1h"]}
+
+    def resolver_intento_clave(self, intento_id: str, resultado: str) -> None:
+        """Deja el intento como 'ok' o 'bloqueado' (arranca como 'fallo')."""
+        self._db.table("clave_fallos").update({"resultado": resultado}).eq("id", intento_id).execute()
+
+    def reiniciar_fallos_clave(self, tabla: str, numero: str) -> None:
+        """Una clave nueva obtenida por WhatsApp: los fallos de ese número quedan
+        'obsoleto' (siguen contando para la IP, no para el número)."""
+        (self._db.table("clave_fallos").update({"resultado": "obsoleto"})
+         .eq("tabla", tabla).eq("numero", numero).eq("resultado", "fallo").execute())
+
+    def gastar_reset_code(self, user_id: str) -> None:
+        """Invalida el código de recuperación sin tocar la contraseña. El
+        comerciante que entra con su WhatsApp no pone contraseña, y el código
+        igual tiene que servir UNA vez: si no, cualquiera que lo viera podría
+        volver a entrar durante los 15 minutos que dura."""
+        self._db.table("comercio_usuarios").update(
+            {"reset_code": None, "reset_code_expira": None}
         ).eq("id", user_id).execute()
 
     def list_publicaciones_de_comercio(self, comercio_id: str) -> list[dict]:
@@ -1007,7 +1140,8 @@ class SupabaseRepo:
         """
         existente = (
             self._db.table("comercio_usuarios")
-            .select("*").eq("comercio_id", comercio_id).eq("activo", True).limit(1).execute()
+            .select("*").eq("comercio_id", comercio_id).eq("activo", True)
+            .order("created_at").order("id").limit(1).execute()
         )
         if existente.data:
             return existente.data[0]
@@ -1477,7 +1611,7 @@ class SupabaseRepo:
         """Pendientes que la IA todavía no miró, las más viejas primero: son las
         que más tiempo llevan esperando a que alguien las ordene."""
         res = (self._db.table("publicaciones")
-               .select("id, titulo, descripcion, imagen_url, created_at")
+               .select("id, titulo, descripcion, imagen_url, created_at, origen, identidad_origen")
                .eq("estado", "pendiente").eq("activo", True).is_("ia_veredicto", "null")
                .order("created_at").limit(limite).execute())
         return res.data or []
@@ -1890,21 +2024,27 @@ class SupabaseRepo:
         # `contactos_30d` con cada visita a una ficha —que dispara VistaLogger
         # sola— y dejaba el número más importante del panel diciendo cualquier
         # cosa. El top por comercio arrastraba el mismo error.
-        # Llegadas por QR o enlace marcado (`?ref=`), en 30 días: por origen
-        # completo (mesa-rustico) y por clase (mesa, volante, ficha, fb, ig).
-        # Es lo que dice si las tarjetas de mesa trajeron a alguien.
-        por_origen: dict[str, int] = {}
-        por_clase: dict[str, int] = {}
-        for l in leads:
-            o = (l.get("origen") or "").strip()
-            if not o:
-                continue
-            por_origen[o] = por_origen.get(o, 0) + 1
-            clase = o.split("-", 1)[0]
-            por_clase[clase] = por_clase.get(clase, 0) + 1
+        # DOS COSAS DISTINTAS, cada una de su tabla (limpieza de circuitos):
+        #  - LLEGADAS: gente que entró al sitio por un QR o enlace marcado
+        #    (`?ref=`). Salen de `visitas.origen`, contando PERSONAS (sesiones
+        #    distintas), no páginas vistas. Antes salían de `leads.origen`, o sea
+        #    de los que además tocaron un botón: se mezclaban con los contactos.
+        #  - CONTACTOS CON ORIGEN: los que, llegados por ese enlace, escribieron
+        #    o pidieron cómo llegar. Salen de `leads.origen` (sin las vistas).
+        # Por origen completo (mesa-rustico) y por clase (mesa, volante, grupo...).
+        por_origen = self.llegadas_por_origen(30)
+        por_clase = self._por_clase(por_origen)
         llegadas_top = sorted(({"origen": o, "count": n} for o, n in por_origen.items()), key=lambda x: -x["count"])[:10]
 
         contactos = [l for l in leads if (l.get("tipo") or "") != "vista"]
+        contactos_origen: dict[str, int] = {}
+        for l in contactos:
+            o = (l.get("origen") or "").strip()
+            if o:
+                contactos_origen[o] = contactos_origen.get(o, 0) + 1
+        contactos_clase = self._por_clase(contactos_origen)
+        contactos_origen_top = sorted(({"origen": o, "count": n} for o, n in contactos_origen.items()),
+                                      key=lambda x: -x["count"])[:10]
         conteo_leads: dict[str, int] = {}
         for l in contactos:
             conteo_leads[l["comercio_id"]] = conteo_leads.get(l["comercio_id"], 0) + 1
@@ -1930,7 +2070,51 @@ class SupabaseRepo:
             "llegadas_30d": sum(por_clase.values()),
             "llegadas_por_clase": por_clase,
             "llegadas_top": llegadas_top,
+            # Los contactos (WhatsApp, mapa, reserva...) que traían un `?ref=`.
+            "contactos_con_origen_30d": sum(contactos_clase.values()),
+            "contactos_por_clase": contactos_clase,
+            "contactos_origen_top": contactos_origen_top,
         }
+
+    @staticmethod
+    def _por_clase(por_origen: dict[str, int]) -> dict[str, int]:
+        """Suma por la clase del origen: `mesa-rustico` y `mesa-sol` son «mesa»."""
+        por_clase: dict[str, int] = {}
+        for o, n in por_origen.items():
+            clase = o.split("-", 1)[0]
+            por_clase[clase] = por_clase.get(clase, 0) + n
+        return por_clase
+
+    def llegadas_por_origen(self, dias: int = 30) -> dict[str, int]:
+        """Personas (sesiones distintas) que entraron con un `?ref=`, por origen.
+
+        Lee `visitas.origen`. Nunca lanza: el panel de estadísticas no puede
+        caerse porque la tabla de visitas tenga un problema."""
+        from datetime import timedelta
+
+        try:
+            desde = (self._hoy_en_bolivia() - timedelta(days=max(0, dias - 1))).isoformat()
+            filas: list[dict] = []
+            while True:
+                # Orden TOTAL (día, id): paginar con `range` sin orden puede repetir
+                # o saltearse filas entre página y página, y el conteo de personas
+                # por origen sale mal sin que nada avise.
+                lote = (self._db.table("visitas").select("sesion, origen")
+                        .gte("dia", desde).not_.is_("origen", "null")
+                        .order("dia").order("id")
+                        .range(len(filas), len(filas) + 999).execute().data) or []
+                filas += lote
+                if len(lote) < 1000 or len(filas) >= 50_000:
+                    break
+        except Exception:  # noqa: BLE001
+            logger.warning("llegadas_por_origen.fallo", exc_info=True)
+            return {}
+        sesiones: dict[str, set] = {}
+        for v in filas:
+            o = (v.get("origen") or "").strip()
+            if o:
+                sesiones.setdefault(o, set()).add(v.get("sesion"))
+        return {o: len(s) for o, s in sesiones.items()}
 
 
     # ── suscripciones ────────────────────────────────────────────────────────
@@ -2382,7 +2566,11 @@ class SupabaseRepo:
         if not sol_res.data:
             return None
         sol = sol_res.data[0]
-        self._db.table("comercios").update({"whatsapp": sol["whatsapp_nuevo"]}).eq("id", sol["comercio_id"]).execute()
+        from app.core.telefono import whatsapp_para_guardar
+
+        self._db.table("comercios").update(
+            {"whatsapp": whatsapp_para_guardar(sol["whatsapp_nuevo"]) or sol["whatsapp_nuevo"]}
+        ).eq("id", sol["comercio_id"]).execute()
         res = (
             self._db.table("solicitudes_cambio_numero")
             .update({"estado": "aprobada", "revisada_por": by, "revisada_en": datetime.now(timezone.utc).isoformat()})

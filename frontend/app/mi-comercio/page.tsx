@@ -24,7 +24,7 @@ const Logout = ic("M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9
 const Tag = ic("M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01");
 const ImageIcon = ic("M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5zM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM21 15l-5-5L5 21");
 import {
-  comercioLogin, getComercioSession, clearComercio,
+  getComercioSession, clearComercio,
   getPerfil, updatePerfil, subirFotoPerfil, getSuscripcion, getMetricas, pagarSuscripcion,
   draftProducto, listProductos, crearProducto, borrarProducto, destacarProducto,
   getMensajes, marcarLeido,
@@ -41,6 +41,9 @@ import { RUBROS } from "@/lib/types";
 import { geoErrorMsg } from "@/lib/geo";
 import { PermisoUbicacion } from "@/components/permiso-ubicacion";
 import { Ic } from "@/components/ic";
+import { waUruku } from "@/lib/contacto";
+import { LoginComercio } from "@/components/ingresar-comercio";
+import { CodigoYClave } from "@/components/codigo-y-clave";
 
 export default function MiComercioPage() {
   const [sess, setSess] = useState<ComercioSession | null>(null);
@@ -61,33 +64,20 @@ export default function MiComercioPage() {
 
 /* --------------------------------- Login gate --------------------------------- */
 function LoginGate({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
-  const [email, setEmail] = useState("");
-  const [pass, setPass] = useState("");
-  const [err, setErr] = useState("");
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setErr("");
-    try { onLogged(await comercioLogin(email, pass)); }
-    catch { setErr("Credenciales incorrectas."); }
-  }
   return (
     <>
-      <Nav mapOnly />
+      <Nav />
       <div className="wrap" style={{ maxWidth: 420, paddingTop: 56 }}>
         <span className="eyebrow"><span className="dot-live" /> Mi negocio</span>
         <h1 style={{ fontSize: 28, margin: "10px 0 6px" }}>Entrá a tu negocio en URUKU</h1>
         <p style={{ color: "var(--txt-3)", marginBottom: 20 }}>Gestioná tu comercio, ofertas y suscripción.</p>
-        <form onSubmit={submit} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-          <input className="adm-input" type="email" inputMode="email" autoCapitalize="none"
-                 autoCorrect="off" spellCheck={false} autoComplete="username"
-                 value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-          <input className="adm-input" type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Contraseña" />
-          {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
-          <button className="btn btn-primary" type="submit">Entrar</button>
-          <small style={{ color: "var(--txt-3)" }}>
-            ¿No tenés cuenta? <Link href="/autoregistro?modo=registro" style={{ color: "var(--neon)" }}>Creala acá</Link>.
-          </small>
-        </form>
+        <LoginComercio onLogged={onLogged} />
+        <p style={{ color: "var(--txt-3)", fontSize: 13, marginTop: 16 }}>
+          Si tu negocio ya está en el mapa, no lo crees de nuevo: entrá con tu celular y tu clave,
+          o confirmá con tu WhatsApp si es la primera vez.
+          <br />
+          ¿No tenés cuenta? <Link href="/autoregistro?modo=registro" style={{ color: "var(--neon)" }}>Creala acá</Link>.
+        </p>
       </div>
     </>
   );
@@ -103,11 +93,17 @@ const TITULOS: Record<Vista, string> = {
   ofertas: "Mis ofertas", galeria: "Fotos y videos", contactos: "Contactos", estadisticas: "Estadísticas", mensajes: "Mensajes",
   suscripcion: "Suscripción", config: "Configuración",
 };
+// Productos de Reservalo y «Destacar» están escondidos hasta que Reservalo
+// vuelva a ser parte de la oferta (spec limpieza-circuitos). No se borró nada:
+// poner esto en true los devuelve. Mientras tanto hay una sola forma de
+// publicar: el chatbot de /autoregistro.
+const MOSTRAR_PRODUCTOS = false;
+
 const NAV_ITEMS: { v: Vista; label: string; Icon: any }[] = [
   { v: "inicio", label: "Mi negocio", Icon: Store },
   { v: "galeria", label: "Fotos y videos", Icon: ImageIcon },
   { v: "ofertas", label: "Mis ofertas", Icon: Tag },
-  { v: "productos", label: "Productos", Icon: Send },
+  ...(MOSTRAR_PRODUCTOS ? [{ v: "productos" as Vista, label: "Productos", Icon: Send }] : []),
   { v: "contactos", label: "Contactos", Icon: Phone },
   { v: "estadisticas", label: "Estadísticas", Icon: Chart },
   { v: "mensajes", label: "Mensajes", Icon: Chat },
@@ -153,7 +149,7 @@ function Sidebar({ vista, setVista, sub, onLogout, noLeidos }: {
   );
 }
 
-function Topbar({ titulo, noLeidos, onPublicar }: { titulo: string; noLeidos: number; onPublicar: () => void }) {
+function Topbar({ titulo, noLeidos }: { titulo: string; noLeidos: number }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 26px", borderBottom: "1px solid var(--stroke)", position: "sticky", top: 0, background: "var(--uk-header)", backdropFilter: "blur(10px)", zIndex: 4 }}>
       <h1 style={{ fontSize: 22, margin: 0, flex: 1 }}>{titulo}</h1>
@@ -165,7 +161,7 @@ function Topbar({ titulo, noLeidos, onPublicar }: { titulo: string; noLeidos: nu
         <Bell style={{ width: 20, height: 20 }} />
         {noLeidos > 0 && <span style={{ position: "absolute", top: 0, right: 0, background: "var(--neon)", color: "#04240f", borderRadius: 999, fontSize: 10, fontWeight: 800, padding: "0 5px" }}>{noLeidos}</span>}
       </div>
-      <button className="btn btn-primary" onClick={onPublicar}>Publicar oferta <Send /></button>
+      <Link href="/autoregistro" className="btn btn-primary">Publicar oferta <Send /></Link>
     </div>
   );
 }
@@ -195,7 +191,7 @@ function MiniStat({ Icon, value, label, sub, color }: { Icon: any; value: React.
   );
 }
 
-function Overview({ onEditar, onProductos, onPlanes }: { onEditar: () => void; onProductos: () => void; onPlanes: () => void }) {
+function Overview({ onEditar, onOfertas, onPlanes }: { onEditar: () => void; onOfertas: () => void; onPlanes: () => void }) {
   const [p, setP] = useState<Perfil | null>(null);
   const [m, setM] = useState<Metricas | null>(null);
   const [sub, setSub] = useState<Suscripcion | null>(null);
@@ -256,6 +252,7 @@ function Overview({ onEditar, onProductos, onPlanes }: { onEditar: () => void; o
             <InfoRow label="Dirección" value={p.direccion} Icon={Pin} />
             <InfoRow label="Horario" value={p.horario} Icon={ic("M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z")} />
           </div>
+          <CodigoYClave codigoFormateado={p.codigo_formateado ?? (p.codigo ? `URUKU-${p.codigo}` : null)} />
           <div className="glass" style={{ padding: 20, borderRadius: 16 }}>
             <h3 style={{ margin: "0 0 6px" }}>Redes y links</h3>
             {redes.length === 0 && <p style={{ color: "var(--txt-3)", fontSize: 13 }}>Todavía no cargaste redes. <button onClick={onEditar} style={{ color: "var(--neon)" }}>Agregar</button></p>}
@@ -300,9 +297,9 @@ function Overview({ onEditar, onProductos, onPlanes }: { onEditar: () => void; o
 
           <div className="glass" style={{ padding: 20, borderRadius: 16, display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ flex: 1 }}>
-              <h3 style={{ margin: "0 0 6px" }}>Tus productos / ofertas</h3>
-              <p style={{ color: "var(--txt-2)", fontSize: 14, margin: "0 0 12px" }}>Mostrá tus productos y ofertas para que más personas te encuentren.</p>
-              <button className="btn btn-primary btn-sm" onClick={onProductos}><Store style={{ width: 15, height: 15 }} /> Ver mis productos</button>
+              <h3 style={{ margin: "0 0 6px" }}>Tus ofertas</h3>
+              <p style={{ color: "var(--txt-2)", fontSize: 14, margin: "0 0 12px" }}>Mostrá tus ofertas para que más personas te encuentren.</p>
+              <button className="btn btn-primary btn-sm" onClick={onOfertas}><Store style={{ width: 15, height: 15 }} /> Ver mis ofertas</button>
             </div>
             <div style={{ color: "var(--txt-3)" }}><Ic n="comprar" s={46} /></div>
           </div>
@@ -551,14 +548,14 @@ function Panel({ sess, onLogout }: { sess: ComercioSession; onLogout: () => void
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <Sidebar vista={vista} setVista={setVista} sub={sub} onLogout={onLogout} noLeidos={noLeidos} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <Topbar titulo={TITULOS[vista]} noLeidos={noLeidos} onPublicar={() => setVista("productos")} />
+        <Topbar titulo={TITULOS[vista]} noLeidos={noLeidos} />
         {sub && <AvisoSuscripcion sub={sub} onPagar={() => setVista("suscripcion")} />}
         <div style={{ padding: "24px 26px", maxWidth: 1120 }}>
-          {vista === "inicio" && <Overview onEditar={() => setVista("editar")} onProductos={() => setVista("productos")} onPlanes={() => setVista("suscripcion")} />}
+          {vista === "inicio" && <Overview onEditar={() => setVista("editar")} onOfertas={() => setVista("ofertas")} onPlanes={() => setVista("suscripcion")} />}
           {vista === "editar" && <div style={{ maxWidth: 720 }}><button className="btn" onClick={() => setVista("inicio")} style={{ border: "1px solid var(--stroke)", marginBottom: 14 }}><Arrow style={{ width: 15, height: 15, transform: "rotate(180deg)" }} /> Volver</button><PerfilTab /></div>}
           {vista === "ofertas" && <div style={{ maxWidth: 780 }}><OfertasTab /></div>}
           {vista === "galeria" && <div style={{ maxWidth: 780 }}><GaleriaTab /></div>}
-          {vista === "productos" && <div style={{ maxWidth: 780 }}><ProductosTab /></div>}
+          {MOSTRAR_PRODUCTOS && vista === "productos" && <div style={{ maxWidth: 780 }}><ProductosTab /></div>}
           {vista === "contactos" && <div style={{ maxWidth: 720 }}><ContactosView /></div>}
           {vista === "estadisticas" && <div style={{ maxWidth: 720 }}><EstadisticasView /></div>}
           {vista === "mensajes" && <div style={{ maxWidth: 760 }}><ChatbotDelLocal plan={sub?.plan} errorPlan={sub ? "" : subFalla} onReintentarPlan={() => { setSubFalla(""); setIntentoSub((n) => n + 1); }} /><MensajesTab /></div>}
@@ -571,8 +568,10 @@ function Panel({ sess, onLogout }: { sess: ComercioSession; onLogout: () => void
 }
 
 /* --------------------------------- Perfil tab --------------------------------- */
+// El WhatsApp NO está acá: no se edita desde Mi comercio (el backend lo rechaza
+// con 400). Se cambia con la solicitud de cambio de número (/recuperar-negocio),
+// que aprueba un admin. Por eso tampoco entra en EDITABLES ni viaja en el PUT.
 const CONTACTO: { k: keyof Perfil; label: string; ph: string }[] = [
-  { k: "whatsapp", label: "WhatsApp", ph: "59170000000" },
   { k: "telefono", label: "Teléfono", ph: "Agregar" },
   { k: "email", label: "Email", ph: "Agregar" },
   { k: "direccion", label: "Dirección", ph: "Agregar" },
@@ -776,6 +775,13 @@ function PerfilTab() {
       {/* CONTACTO */}
       <div className="glass" style={{ padding: "14px 18px", borderRadius: 16 }}>
         <div style={{ fontSize: 12, color: "var(--txt-3)", fontWeight: 700, marginBottom: 2 }}>CÓMO TE CONTACTAN</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 2px", borderBottom: "1px solid var(--stroke)", flexWrap: "wrap" }}>
+          <span style={{ width: 92, flexShrink: 0, fontSize: 13, color: "var(--txt-3)" }}>WhatsApp</span>
+          <span aria-label="WhatsApp (no se edita acá)" style={{ flex: 1, minWidth: 0, color: "var(--txt)", fontSize: 15 }}>
+            <Ic n="seguridad" s={13} /> {perfil.whatsapp || "Sin número"}
+          </span>
+          <Link href="/recuperar-negocio" style={{ fontSize: 13, color: "var(--neon)" }}>Cambié de número</Link>
+        </div>
         {CONTACTO.map((c) => (
           <CampoRow key={c.k} label={c.label} ph={c.ph} value={(perfil[c.k] as string) ?? ""} onChange={(v) => set(c.k, v)} />
         ))}
@@ -814,18 +820,15 @@ const ESTADO: Record<Suscripcion["estado"], { label: string; color: string; bg: 
   sin_pago:   { label: "Sin pago aún", color: "var(--amber)", bg: "rgba(255,176,32,.08)" },
 };
 
-const QR_FIJOS = [
-  { key: "bo", label: "Bolivia 🇧🇴", qr: "/qr-bolivia.png" },
-  { key: "ar", label: "Argentina 🇦🇷", qr: "/qr-argentina.png" },
-];
-
 function SuscripcionTab() {
   const [sub, setSub] = useState<Suscripcion | null>(null);
   const [err, setErr] = useState("");
   // pago (inline, en la misma página)
-  const [metodo, setMetodo] = useState("qr-bolivia");
-  const [monto, setMonto] = useState("30000");
-  const [moneda, setMoneda] = useState("ARS");
+  const [metodo, setMetodo] = useState("transferencia");
+  // Sin monto por defecto: lo que corresponde pagar lo dice URUKU por WhatsApp
+  // y lo pone quien paga, no un número inventado acá.
+  const [monto, setMonto] = useState("");
+  const [moneda, setMoneda] = useState("BOB");
   const [referencia, setReferencia] = useState("");
   const [comprobante, setComprobante] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -895,28 +898,23 @@ function SuscripcionTab() {
           </div>
         ) : (
           <>
-            {/* Los DOS QR, siempre fijos */}
-            <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
-              {QR_FIJOS.map((q) => (
-                <div key={q.key} style={{ textAlign: "center" }}>
-                  <img src={q.qr} alt={q.label} style={{ width: 150, height: 150, objectFit: "contain", borderRadius: 12, background: "#fff", padding: 8 }}
-                    onError={(ev) => { (ev.target as HTMLImageElement).style.display = "none"; }} />
-                  <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 4 }}>{q.label}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ fontSize: 13, color: "var(--txt-3)", textAlign: "center" }}>Escaneá el QR de tu país (o transferí), pagá y subí el comprobante.</div>
+            {/* El monto y la forma de pagar los confirma URUKU por WhatsApp */}
+            <a className="btn" href={waUruku("Hola, quiero pagar mi suscripción de URUKU. ¿Cuál es el monto y cómo pago?")}
+              target="_blank" rel="noopener" style={{ border: "1px solid var(--stroke)", justifyContent: "center" }}>
+              <Ic n="whatsapp" s={16} /> Consultá el monto y cómo pagar
+            </a>
+            <div style={{ fontSize: 13, color: "var(--txt-3)", textAlign: "center" }}>Pagá como te indiquen y subí acá el comprobante.</div>
 
             <select className="adm-input" value={metodo} onChange={(ev) => setMetodo(ev.target.value)}>
-              <option value="qr-bolivia">Pagué con QR Bolivia</option>
-              <option value="qr-argentina">Pagué con QR Argentina</option>
               <option value="transferencia">Pagué por transferencia</option>
+              <option value="efectivo">Pagué en efectivo</option>
+              <option value="otro">Pagué de otra forma</option>
             </select>
 
             <div style={{ display: "flex", gap: 10 }}>
               <input className="adm-input" type="number" inputMode="numeric" value={monto} onChange={(ev) => setMonto(ev.target.value)} placeholder="Monto" style={{ flex: 2 }} />
               <select className="adm-input" value={moneda} onChange={(ev) => setMoneda(ev.target.value)} style={{ flex: 1 }}>
-                {["ARS", "BOB", "USD"].map((c) => <option key={c} value={c}>{c}</option>)}
+                {["BOB", "ARS", "USD"].map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             {sub.total_cargos > 0 && (

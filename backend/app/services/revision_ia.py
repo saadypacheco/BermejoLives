@@ -61,7 +61,7 @@ def revisar_pendientes(repo, limite: int = 10) -> dict:
                                   float(v.get("confianza") or 0))
         hechos["revisadas"] += 1
 
-        if _auto_aprueba(v):
+        if _auto_aprueba(v, pub):
             repo.set_estado_publicacion(pub["id"], "aprobado", v.get("motivo"), "ia-auto")
             difusion.encolar(repo, pub["id"])
             hechos["auto_aprobadas"] += 1
@@ -71,10 +71,25 @@ def revisar_pendientes(repo, limite: int = 10) -> dict:
     return hechos
 
 
-def _auto_aprueba(v: dict) -> bool:
+#: Orígenes que NUNCA se aprueban solos, diga lo que diga la IA ni la perilla.
+#: `explorador`: URUKU publica el precio de un local que no lo pidió; una
+#: persona tiene que mirar la foto y el precio antes de que salga (spec de la
+#: limpieza de circuitos, 6/10/2026).
+_ORIGENES_SIEMPRE_HUMANOS = {"explorador"}
+
+
+def _auto_aprueba(v: dict, pub: dict) -> bool:
     """¿Se aprueba sola? Sólo si la perilla está encendida Y la IA dijo
     "aprobar" con confianza por encima del umbral. Con la perilla en cero —el
-    valor por defecto— nunca."""
+    valor por defecto— nunca.
+
+    `pub` es OBLIGATORIO: la decisión mira de dónde vino la publicación, y un
+    llamador que lo olvidara se saltaría la guarda. Lo del explorador no se
+    aprueba solo con ninguna perilla, ya sea que la publicación lo diga en
+    `origen` o en `identidad_origen` (cómo se identificó el comercio)."""
+    if (pub.get("origen") in _ORIGENES_SIEMPRE_HUMANOS
+            or pub.get("identidad_origen") in _ORIGENES_SIEMPRE_HUMANOS):
+        return False
     umbral = settings.ia_auto_aprobar_desde
     if not umbral or umbral <= 0:
         return False

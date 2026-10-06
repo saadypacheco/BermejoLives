@@ -1029,6 +1029,16 @@ function TabMonitoreo({
               Más escaneado: {data.llegadas_top![0].origen} ({data.llegadas_top![0].count})
             </div>
           )}
+          <div style={{ fontSize: 11, color: "var(--txt-3)", marginTop: 6, borderTop: "1px solid var(--stroke)", paddingTop: 6 }}
+            title={(data.contactos_origen_top ?? []).map((l) => `${l.origen}: ${l.count}`).join(" · ")}>
+            <Ic n="whatsapp" s={13} /> {data.contactos_con_origen_30d ?? 0} contactaron a un negocio
+            {Object.entries(data.contactos_por_clase ?? {}).length > 0 && (
+              <> · {Object.entries(data.contactos_por_clase ?? {}).map(([k, n]) => `${k} ${n}`).join(" · ")}</>
+            )}
+            {(data.contactos_origen_top?.length ?? 0) > 0 && (
+              <div>Más contactos: {data.contactos_origen_top![0].origen} ({data.contactos_origen_top![0].count})</div>
+            )}
+          </div>
         </div>
         <div className="panel-card glass" style={{ padding: 16, borderLeft: `3px solid ${totalAlertas > 0 ? "var(--pink)" : "var(--neon)"}` }}>
           <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Bajas / vencidos</div>

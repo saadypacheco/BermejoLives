@@ -69,13 +69,14 @@ def test_recuperar_devuelve_codigo_y_link_si_existe(client):
     assert f"CONFIRMAR-{body['codigo']}" in body["wa_link"]
 
 
-def test_recuperar_numero_inexistente_misma_forma_de_respuesta(client):
-    """Anti-enumeración: la respuesta no debe delatar si el número existe."""
+def test_recuperar_numero_inexistente_dice_que_no_hay_negocio(client):
+    """Limpieza de circuitos: antes devolvía un link igual (anti-enumeración) y
+    la pantalla quedaba esperando una confirmación que nunca iba a llegar. Ahora
+    el error lo dice."""
     r = client.post("/auth/comercio/recuperar", json={"whatsapp": "59179999999"})
-    assert r.status_code == 200
-    body = r.json()
-    assert body["codigo"]
-    assert body["wa_link"]
+    assert r.status_code == 404
+    assert "ningún negocio" in r.json()["detail"]
+    assert "codigo" not in r.json()
 
 
 def test_recuperar_estado_false_sin_confirmar(client):
@@ -108,6 +109,42 @@ def test_recuperar_confirmar_ok_tras_confirmacion_whatsapp(client, repo):
     })
     assert r2.status_code == 200, r2.text
     assert r2.json()["access_token"]
+
+
+def test_entrar_con_whatsapp_sin_contrasena(client, repo):
+    """El comerciante entra con su WhatsApp: después de confirmar no se le
+    obliga a inventar una contraseña que nunca va a usar."""
+    client.post("/auth/comercio/registro", data=_registro(), files=_foto_test())
+    codigo = client.post("/auth/comercio/recuperar", json={"whatsapp": "59170001111"}).json()["codigo"]
+    assert repo.confirmar_reset_code_comercio("59170001111", codigo) is True
+    antes = repo.get_comercio_usuario_por_whatsapp("59170001111").get("password_hash")
+
+    r = client.post("/auth/comercio/recuperar/confirmar", json={"whatsapp": "59170001111", "codigo": codigo})
+    assert r.status_code == 200, r.text
+    token = r.json()["access_token"]
+    # El token sirve en las pantallas del comercio.
+    assert client.get("/comercio/perfil", headers={"Authorization": f"Bearer {token}"}).status_code == 200
+    # La contraseña no cambió.
+    assert repo.get_comercio_usuario_por_whatsapp("59170001111").get("password_hash") == antes
+
+
+def test_el_codigo_sirve_una_sola_vez_aunque_no_se_ponga_contrasena(client, repo):
+    client.post("/auth/comercio/registro", data=_registro(), files=_foto_test())
+    codigo = client.post("/auth/comercio/recuperar", json={"whatsapp": "59170001111"}).json()["codigo"]
+    repo.confirmar_reset_code_comercio("59170001111", codigo)
+    cuerpo = {"whatsapp": "59170001111", "codigo": codigo}
+    assert client.post("/auth/comercio/recuperar/confirmar", json=cuerpo).status_code == 200
+    segunda = client.post("/auth/comercio/recuperar/confirmar", json=cuerpo)
+    assert segunda.status_code == 400
+
+
+def test_una_contrasena_corta_sigue_rechazandose(client, repo):
+    client.post("/auth/comercio/registro", data=_registro(), files=_foto_test())
+    codigo = client.post("/auth/comercio/recuperar", json={"whatsapp": "59170001111"}).json()["codigo"]
+    repo.confirmar_reset_code_comercio("59170001111", codigo)
+    r = client.post("/auth/comercio/recuperar/confirmar",
+                    json={"whatsapp": "59170001111", "codigo": codigo, "nueva_password": "123"})
+    assert r.status_code == 400
 
 
 # ---------------- Login + publicar ----------------
@@ -402,26 +439,14 @@ def test_destacado_se_acumula_y_el_pago_lo_salda(client, repo, admin_token):
 
 
 # ---------------- Mensajería ----------------
-def test_cliente_deja_mensaje_y_comercio_lo_ve(client, repo):
+def test_post_mensaje_publico_ya_no_existe(client, repo):
+    """Limpieza de circuitos (6/10/2026): el formulario viejo, sin pantalla y
+    abierto al público, se retiró. No debe crear nada."""
     repo.seed_comercio(id="com-p", slug="perf", nombre="X", whatsapp="591700")
     r = client.post("/mensaje", json={"comercio_id": "com-p", "nombre": "Ana",
                                       "cuerpo": "¿Tenés stock?", "contacto": "5491133"})
-    assert r.status_code == 200
-    box = client.get("/comercio/mensajes", headers=_auth()).json()
-    assert box["no_leidos"] == 1
-    assert box["items"][0]["autor"] == "cliente"
-    assert box["items"][0]["contacto"] == "5491133"
-
-
-def test_mensaje_sin_cuerpo_400(client, repo):
-    repo.seed_comercio(id="com-p", slug="perf", nombre="X", whatsapp="591700")
-    r = client.post("/mensaje", json={"comercio_id": "com-p", "nombre": "Ana", "cuerpo": "  "})
-    assert r.status_code == 400
-
-
-def test_mensaje_comercio_inexistente_404(client):
-    r = client.post("/mensaje", json={"comercio_id": "nope", "nombre": "Ana", "cuerpo": "hola"})
-    assert r.status_code == 404
+    assert r.status_code in (404, 405)
+    assert client.get("/comercio/mensajes", headers=_auth()).json()["items"] == []
 
 
 def test_admin_envia_mensaje_al_comercio(client, repo, admin_token):
@@ -435,7 +460,7 @@ def test_admin_envia_mensaje_al_comercio(client, repo, admin_token):
 
 def test_comercio_marca_mensaje_leido(client, repo):
     repo.seed_comercio(id="com-p", slug="perf", nombre="X", whatsapp="591700")
-    client.post("/mensaje", json={"comercio_id": "com-p", "nombre": "Ana", "cuerpo": "hola"})
+    repo.crear_mensaje({"comercio_id": "com-p", "autor": "cliente", "nombre": "Ana", "cuerpo": "hola"})
     mid = client.get("/comercio/mensajes", headers=_auth()).json()["items"][0]["id"]
     assert client.post(f"/comercio/mensajes/{mid}/leido", headers=_auth()).status_code == 200
     assert client.get("/comercio/mensajes", headers=_auth()).json()["no_leidos"] == 0

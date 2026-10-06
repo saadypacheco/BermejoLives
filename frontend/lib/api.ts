@@ -384,6 +384,12 @@ export type EstadisticasAdmin = {
   llegadas_30d?: number;
   llegadas_por_clase?: Record<string, number>;
   llegadas_top?: { origen: string; count: number }[];
+  /** Contactos (WhatsApp, mapa, reserva) de gente que llegó con `?ref=`: los
+   *  que dicen si el QR trajo a alguien que después escribió. Misma forma que
+   *  las llegadas pero salen de `leads.origen`. */
+  contactos_con_origen_30d?: number;
+  contactos_por_clase?: Record<string, number>;
+  contactos_origen_top?: { origen: string; count: number }[];
   /** «¿Te contestó?»: los que más «no» juntaron (0120). */
   no_contestan?: { id: string; nombre: string; slug: string | null; whatsapp: string | null; contacto_ok: number; contacto_no: number }[];
 };

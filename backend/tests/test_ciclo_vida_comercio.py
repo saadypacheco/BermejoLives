@@ -80,32 +80,45 @@ def test_el_que_pago_y_vencio_cae_por_su_propio_reloj(repo):
 
 
 # ------------------------------------------------- identidad por número
+def _escribe(repo, phone, wamid="wa-cv-1"):
+    """El dueño le manda una oferta al Registrador desde `phone`."""
+    from app.services import ingest
+    return ingest.handle_message({
+        "event": "message", "session": "obs@c.us",
+        "payload": {"id": wamid, "from": f"{phone}@c.us", "fromMe": False,
+                    "body": "Oferta taladro 300 Bs", "type": "text", "timestamp": 1700000000},
+    }, repo)
+
+
 def test_el_dueno_que_escribe_no_crea_un_comercio_duplicado(repo):
     """El comercio de campo tiene whatsapp pero no wa_jid: buscarlo sólo por jid
-    creaba un 'Comercio 3456' nuevo cada vez."""
+    creaba un 'Comercio 3456' nuevo cada vez. (Ahora, por ingesta: se reconoce
+    por el número de la ficha y la publicación cae en SU comercio.)"""
     c = repo.seed_comercio(nombre="Ferretería", whatsapp="59170123456", activo=True)
     antes = len(repo.comercios)
 
-    encontrado = repo.upsert_comercio_by_jid("59170123456@c.us", "59170123456")
+    res = _escribe(repo, "59170123456")
 
-    assert encontrado["id"] == c["id"]
+    assert res["estado"] == "pendiente"
     assert len(repo.comercios) == antes
-    assert repo.comercios[c["id"]]["wa_jid"] == "59170123456@c.us"
+    assert [p["comercio_id"] for p in repo.publicaciones] == [c["id"]]
 
 
 def test_reconcilia_aunque_el_agente_haya_cargado_el_numero_sin_prefijo(repo):
     """En la calle se tipea '70123456'; WhatsApp llega como '59170123456'."""
     c = repo.seed_comercio(nombre="Ferretería", whatsapp="70123456", activo=True)
-    encontrado = repo.upsert_comercio_by_jid("59170123456@c.us", "59170123456")
-    assert encontrado["id"] == c["id"]
+    _escribe(repo, "59170123456")
+    assert [p["comercio_id"] for p in repo.publicaciones] == [c["id"]]
 
 
-def test_un_numero_desconocido_si_crea_comercio_nuevo(repo):
+def test_un_numero_desconocido_no_crea_comercio_nuevo(repo):
+    """Antes creaba un borrador; ahora el mensaje queda en la bandeja como
+    `sin_comercio` y no se crea ni comercio ni número autorizado."""
     antes = len(repo.comercios)
-    creado = repo.upsert_comercio_by_jid("59171111111@c.us", "59171111111")
-    assert len(repo.comercios) == antes + 1
-    # Y queda autorizado, así que la próxima vez lo encuentra por número.
-    assert repo.get_comercio_por_numero("59171111111")["id"] == creado["id"]
+    res = _escribe(repo, "59171111111")
+    assert len(repo.comercios) == antes
+    assert res["publicada"] is False
+    assert repo.get_comercio_por_numero("59171111111") is None
 
 
 def test_numero_del_empleado_apunta_al_comercio(repo, client, admin_token):

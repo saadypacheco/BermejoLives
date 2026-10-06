@@ -53,6 +53,39 @@ def normalizar_whatsapp(valor: str | None, prefijo_default: str = PREFIJO_BO) ->
     return digitos
 
 
+def variantes_whatsapp(valor: str | None) -> list[str]:
+    """Las formas en que puede estar guardado un mismo número, la normalizada primero.
+
+    El número público de un comercio se cargó a mano durante meses («70123456»)
+    y los más nuevos vienen normalizados («59170123456»): para encontrar a
+    alguien por su número hay que mirar las dos. Lista vacía si no hay número."""
+    num = normalizar_whatsapp(valor)
+    if not num:
+        return []
+    variantes = [num]
+    if num.startswith(PREFIJO_BO) and len(num) == len(PREFIJO_BO) + _LARGO_MOVIL_BO:
+        variantes.append(num[len(PREFIJO_BO):])
+    return variantes
+
+
+def whatsapp_para_guardar(valor: str | None) -> str | None:
+    """El WhatsApp tal como se guarda en la ficha del comercio.
+
+    Si el número valida, se guarda NORMALIZADO (E.164: `59170123456`): así la
+    ficha «+591 7012-3456» y quien entra escribiendo «70123456» son el mismo
+    número. Si no valida se guarda como vino (sin espacios de más): el alta es
+    deliberadamente mínima y no se inventa un número que nadie dio. Vacío → None.
+    """
+    if valor is None:
+        return None
+    crudo = str(valor).strip()
+    if not crudo:
+        return None
+    if validar_whatsapp(crudo) is None:
+        return normalizar_whatsapp(crudo)
+    return crudo
+
+
 def validar_whatsapp(valor: str | None) -> str | None:
     """Devuelve un mensaje de error si el número no sirve, o None si está bien.
 

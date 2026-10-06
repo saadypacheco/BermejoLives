@@ -16,7 +16,7 @@ export default function RecuperarNegocioPage() {
 
   return (
     <>
-      <Nav mapOnly />
+      <Nav />
       <div className="wrap" style={{ maxWidth: 480, paddingTop: 56, paddingBottom: 60 }}>
         <span className="eyebrow"><span className="dot-live" /> Recuperar negocio</span>
         <h1 style={{ fontSize: 28, margin: "10px 0 6px" }}>¿Cambiaste de número?</h1>

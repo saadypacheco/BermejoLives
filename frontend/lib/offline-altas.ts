@@ -153,21 +153,26 @@ export type ResultadoSync = {
   /** Motivos de las que fallaron, sin repetir. Sin esto el botón "Sincronizar"
    * falla en silencio: el contador no baja y no hay forma de saber por qué. */
   errores: string[];
+  /** Las claves de entrada de los comercios que acaban de subir. El servidor las
+   *  entrega SÓLO en esa respuesta: si no se muestran, no hay otra oportunidad. */
+  claves: { nombre: string; clave: string }[];
 };
 
 /** Sube todas las pendientes (una por una). Las que suben se borran de la cola; las
  * que fallan quedan para reintentar. */
 export async function sincronizarPendientes(onCambio?: () => void): Promise<ResultadoSync> {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
-    return { subidas: 0, fallas: 0, sinSenal: true, errores: [] };
+    return { subidas: 0, fallas: 0, sinSenal: true, errores: [], claves: [] };
   }
   const pend = await listarPendientes();
   let subidas = 0, fallas = 0;
   const errores: string[] = [];
+  const claves: { nombre: string; clave: string }[] = [];
   for (const rec of pend) {
     const fd = armarFd(rec);
     try {
-      await altaComercioCampo(fd);
+      const r = await altaComercioCampo(fd);
+      if (r.clave_inicial) claves.push({ nombre: r.comercio?.nombre || rec.campos.nombre || "(sin nombre)", clave: r.clave_inicial });
       await borrar(rec.id);
       subidas += 1;
       onCambio?.();
@@ -186,5 +191,5 @@ export async function sincronizarPendientes(onCambio?: () => void): Promise<Resu
       if (!errores.includes(motivo)) errores.push(motivo);
     }
   }
-  return { subidas, fallas, sinSenal: false, errores };
+  return { subidas, fallas, sinSenal: false, errores, claves };
 }

@@ -95,8 +95,8 @@ print(f"   mensaje del Registrador en el grupo      → {'NO publicó' if len(re
 antes = len(repo.publicaciones)
 wa("Campera Bs 300", de="59199999999", chat="59199999999@c.us")  # desconocido, sin código
 nuevo_borrador = next((c for c in repo.comercios.values() if c.get("whatsapp") == "59199999999"), None)
-print(f"   1-a-1 de un desconocido sin código        → queda en moderación, y el borrador nace "
-      f"{'APAGADO (no sale en el sitio)' if nuevo_borrador and not nuevo_borrador.get('activo', True) else 'ENCENDIDO (mal)'}")
+print(f"   1-a-1 de un desconocido sin código        → queda como «sin comercio» en la bandeja: "
+      f"{'NO creó comercio ni publicación' if not nuevo_borrador and len(repo.publicaciones)==antes else 'CREÓ UN FANTASMA (mal)'}")
 antes = len(repo.publicaciones)
 wa("URUKU-B7K2 zapatilla urbana Bs 180", de="59167677803", chat="59167677803@c.us",
    tipo="image", media="https://x/zapa.jpg")                      # el Explorador, con código

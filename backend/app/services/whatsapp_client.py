@@ -33,8 +33,8 @@ def _to_jid(telefono: str) -> str:
 
 
 _TEXTOS_POR_CONTEXTO = {
-    "login": "Tu código de Encontralo: {codigo}\nVence en 15 minutos.",
-    "recuperar_comercio": "Tu código para recuperar el acceso a Encontralo: {codigo}\nVence en 15 minutos.",
+    "login": "Tu código de URUKU: {codigo}\nVence en 15 minutos.",
+    "recuperar_comercio": "Tu código para recuperar el acceso a URUKU: {codigo}\nVence en 15 minutos.",
 }
 
 
@@ -100,12 +100,6 @@ _PROVIDERS: dict[str, type] = {"waha": WAHAProvider, "cloud_api": CloudAPIProvid
 def get_whatsapp_provider() -> WhatsAppProvider:
     cls = _PROVIDERS.get(settings.whatsapp_provider, WAHAProvider)
     return cls()
-
-
-def enviar_codigo_otp(telefono: str, codigo: str, contexto: str = "login") -> bool:
-    """Punto de entrada único — a los endpoints no les importa qué proveedor
-    está activo, solo si el envío salió bien."""
-    return get_whatsapp_provider().enviar_codigo_otp(telefono, codigo, contexto)
 
 
 def enviar_texto(chat_id: str, texto: str) -> bool:

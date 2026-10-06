@@ -55,3 +55,12 @@ export function geoErrorMsg(e: GeolocationPositionError): string {
   if (e.code === e.TIMEOUT) return "Se demoró demasiado en obtener la ubicación. Probá de nuevo.";
   return "No se pudo obtener la ubicación. Revisá que la localización esté activada.";
 }
+
+/** Metros entre dos puntos. Plana: a 300 m la curvatura de la Tierra no cambia
+ *  nada y evita trigonometría por cada comercio en un celular viejo. */
+export function metros(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const kx = 111320 * Math.cos((aLat * Math.PI) / 180);
+  const dx = (aLng - bLng) * kx;
+  const dy = (aLat - bLat) * 110540;
+  return Math.hypot(dx, dy);
+}

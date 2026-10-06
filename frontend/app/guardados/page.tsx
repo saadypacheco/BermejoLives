@@ -40,7 +40,7 @@ export default function GuardadosPage() {
     <div id="ukroot" data-theme={POR_DEFECTO} className="uk uk-app">
       <ThemeNoFlash />
       <div className="uk-app-toggle"><ThemeToggle /></div>
-      <Nav mapOnly />
+      <Nav />
       <div className="wrap" style={{ maxWidth: 480, paddingTop: 40, paddingBottom: 100 }}>
         <span className="eyebrow"><span className="dot-live" /> Guardados</span>
         <h1 style={{ fontSize: 26, margin: "10px 0 6px" }}>Tus locales guardados</h1>
@@ -48,7 +48,7 @@ export default function GuardadosPage() {
         {!sesion ? (
           <>
             <p style={{ color: "var(--txt-3)", marginBottom: 20 }}>
-              Todavía no guardaste ningún local. Entrá con tu WhatsApp para guardar los que te interesen
+              Todavía no guardaste ningún local. Entrá con tu celular para guardar los que te interesen
               y no perderlos, aunque cambies de celular.
             </p>
             <div className="glass" style={{ padding: 22, borderRadius: 16 }}>

@@ -1,5 +1,9 @@
 // Cliente del "modo agente de campo" (alta rápida de comercios).
 import { postFormData, subirConProgreso } from "@/lib/upload";
+// El `?ref=` con el que llegó esta persona (lo guarda RefCapture, primer toque,
+// y vence a los 30 días: ver lib/ref.ts).
+import { refGuardado } from "@/lib/ref";
+export { refGuardado };
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_agente_token";
 
@@ -68,6 +72,10 @@ export type AltaCampoResult = {
     codigo?: string | null;
     codigo_formateado?: string | null;
   };
+  /** La clave de 6 números con la que el dueño entra a su panel. Viene SÓLO en
+   *  esta respuesta (el servidor guarda el hash): se muestra una vez, para
+   *  dársela en mano. Nunca va al volante ni a un WhatsApp. */
+  clave_inicial?: string | null;
 };
 
 // ---- Galería (fotos/videos) del comercio, lado agente ----
@@ -267,6 +275,7 @@ export function registrarVisita(v: {
   }).catch(() => { /* perder un número no puede costar una visita */ });
 }
 
+
 export async function registrarLead(comercio_id: string, tipo: TipoLead = "whatsapp", busqueda_id?: string | null, origen?: string | null, nombre?: string | null): Promise<void> {
   // Fire-and-forget: no bloqueamos la navegación del usuario
   const body: Record<string, string> = { comercio_id, tipo };
@@ -275,7 +284,10 @@ export async function registrarLead(comercio_id: string, tipo: TipoLead = "whats
   // a la otra — que es justo lo que dice si el buscador acierta.
   if (busqueda_id) body.busqueda_id = busqueda_id;
   // `origen` es el `?ref=` con el que llegó (volante, mesa, el QR de la ficha).
-  if (origen) body.origen = origen;
+  // Si quien llama no lo pasa, se toma el guardado: así los botones de
+  // WhatsApp, mapa y reserva atribuyen el contacto sin repetir esto en cada uno.
+  const ref = origen || refGuardado();
+  if (ref) body.origen = ref;
   fetch(`${API}/lead`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

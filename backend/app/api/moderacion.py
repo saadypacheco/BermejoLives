@@ -12,7 +12,7 @@ from app.core.auth import hash_password, require_moderador, require_permiso
 from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
-from app.core.telefono import normalizar_whatsapp, validar_whatsapp
+from app.core.telefono import normalizar_whatsapp, validar_whatsapp, whatsapp_para_guardar
 from app.services import clasificador, contactos, demanda, difusion, planes, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
@@ -327,7 +327,23 @@ def editar_comercio(
     # «confirmá antes de ir» justo en los que ya fueron confirmados.
     if "horario" in patch:
         patch["horario_estimado"] = False
+    cambia_numero = False
+    if "whatsapp" in patch:
+        # Normalizado al guardar (si valida): es lo que compara el ingreso. Un
+        # texto vacío limpia el número, como siempre. Si el número CAMBIA, se
+        # rechaza uno que ya es de otro comercio y se anula la clave: quien
+        # tenía el celular viejo no puede seguir entrando con el nuevo.
+        from app.services.cuentas import mismo_numero, numero_para_cambiar
+
+        actual = (repo.get_comercio(comercio_id) or {}).get("whatsapp")
+        if mismo_numero(actual, patch["whatsapp"]):
+            patch["whatsapp"] = whatsapp_para_guardar(patch["whatsapp"]) or patch["whatsapp"]
+        else:
+            patch["whatsapp"] = numero_para_cambiar(repo, comercio_id, patch["whatsapp"]) or ""
+            cambia_numero = True
     updated = repo.update_comercio(comercio_id, patch, body.rubro_slugs)
+    if cambia_numero:
+        repo.anular_claves_de_comercio(comercio_id)
     # LO QUE UNA PERSONA DEJÓ MARCADO ES LA LISTA, Y NO SE DISCUTE.
     #
     # `aplicar_rubros` une lo elegido con lo DEDUCIDO del texto, y eso hacía
@@ -870,7 +886,7 @@ def enviar_mensaje_comercio(
         raise HTTPException(status_code=400, detail="Mensaje vacío")
     repo.crear_mensaje({
         "comercio_id": comercio_id, "autor": "admin",
-        "nombre": "Encontralo", "cuerpo": body.cuerpo.strip(),
+        "nombre": "URUKU", "cuerpo": body.cuerpo.strip(),
     })
     logger.info("admin.mensaje", comercio=comercio_id, by=admin["email"])
     return {"ok": True}
@@ -894,10 +910,21 @@ def aprobar_solicitud_cambio_numero(
     admin: dict = Depends(require_permiso("panel")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """Actualiza el WhatsApp del comercio al número nuevo. Siempre manual."""
+    """Actualiza el WhatsApp del comercio al número nuevo. Siempre manual.
+
+    El número nuevo no puede ser de otro comercio activo (409), y la clave del
+    comercio se anula: quien tenía el celular viejo y la clave no sigue entrando.
+    El dueño entra la primera vez por WhatsApp, desde el número nuevo."""
+    from app.services.cuentas import numero_para_cambiar
+
+    sol = repo.get_solicitud_cambio_numero(solicitud_id)
+    if not sol:
+        raise HTTPException(status_code=404, detail="solicitud no encontrada")
+    numero_para_cambiar(repo, sol["comercio_id"], sol.get("whatsapp_nuevo"))
     updated = repo.aprobar_solicitud_cambio_numero(solicitud_id, admin["email"])
     if not updated:
         raise HTTPException(status_code=404, detail="solicitud no encontrada")
+    repo.anular_claves_de_comercio(sol["comercio_id"])
     logger.info("solicitud_cambio_numero.aprobada", solicitud=solicitud_id, by=admin["email"])
     return {"ok": True, "solicitud": updated}
 
@@ -1106,7 +1133,7 @@ def promover_importado(
         "ciudad_id": imp.get("ciudad_id"),
         "lat": imp["lat"], "lng": imp["lng"],
         "direccion": imp.get("direccion"),
-        "whatsapp": body.whatsapp or imp.get("whatsapp") or imp.get("telefono"),
+        "whatsapp": whatsapp_para_guardar(body.whatsapp or imp.get("whatsapp") or imp.get("telefono")),
         "horario": imp.get("horario"),
         "sitio_web": imp.get("website"),
         "verificado": False,

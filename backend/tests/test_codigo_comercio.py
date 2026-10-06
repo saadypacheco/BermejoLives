@@ -117,10 +117,15 @@ def test_el_numero_queda_autorizado_y_no_hay_que_repetir_el_codigo(repo):
     assert pubs[1]["identidad_origen"] == "numero"
 
 
-def test_sin_codigo_y_numero_desconocido_sigue_creando_borrador(repo):
+def test_sin_codigo_y_numero_desconocido_no_crea_nada(repo):
+    """Antes creaba un borrador apagado («Comercio 7777»). Desde la limpieza de
+    circuitos el mensaje queda en la bandeja como `sin_comercio` y nada más."""
     antes = len(repo.comercios)
-    _ingestar(repo, "59177777777", "hola tengo ofertas")
-    assert len(repo.comercios) == antes + 1
+    res = _ingestar(repo, "59177777777", "hola tengo ofertas")
+    assert len(repo.comercios) == antes
+    assert repo.publicaciones == []
+    assert res["publicada"] is False
+    assert repo.wa_inbox["msg-1"]["resultado"] == "sin_comercio"
 
 
 def test_un_numero_ya_conocido_no_necesita_codigo(repo):

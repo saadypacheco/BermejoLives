@@ -104,7 +104,7 @@ def generar_texto_comercio(nombre: str, que_vende: str, rubros: list[dict]) -> d
 
     lista = "\n".join(f"- {r['slug']}: {r.get('nombre', r['slug'])}" for r in rubros if r.get("slug"))
     prompt = (
-        "Sos un asistente que arma el perfil de un comercio en Encontralo, un mapa de negocios.\n"
+        "Sos un asistente que arma el perfil de un comercio en URUKU, un mapa de negocios.\n"
         f"Nombre del negocio: {nombre}\n"
         f"Lo que vende, en palabras del dueño: {que_vende}\n\n"
         f"Rubros disponibles:\n{lista}\n\n"

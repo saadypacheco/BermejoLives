@@ -46,7 +46,7 @@ export default function ReservasPage() {
     <div id="ukroot" data-theme={POR_DEFECTO} className="uk uk-app">
       <ThemeNoFlash />
       <div className="uk-app-toggle"><ThemeToggle /></div>
-      <Nav mapOnly />
+      <Nav />
       <div className="wrap" style={{ maxWidth: 640, paddingTop: 32, paddingBottom: 110 }}>
         <h1 style={{ fontSize: 22, margin: "0 0 4px" }}>Tu reserva</h1>
         <p style={{ color: "var(--uk-ink-soft)", fontSize: 13, marginTop: 0 }}>

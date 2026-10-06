@@ -5,10 +5,11 @@ import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { Send, WhatsApp } from "@/components/icons";
 import {
-  comercioLogin, comercioRegistro, getComercioSession, clearComercio, publicar, PublicarBloqueado,
-  comercioRecuperar, comercioRecuperarEstado, comercioRecuperarConfirmar, generarDescripcion,
-  type ComercioSession, type PublicarPayload, type RegistroPayload,
+  comercioRegistro, getComercioSession, clearComercio, publicar, PublicarBloqueado, generarDescripcion, NumeroYaRegistrado,
+  type ComercioSession, type PublicarPayload, type RegistroPayload, type RegistroResult,
 } from "@/lib/comercio";
+import { mensajeDeError } from "@/lib/acceso";
+import { ClaveUnaVez } from "@/components/clave-una-vez";
 import { RUBROS } from "@/lib/types";
 import { comprimirImagen } from "@/lib/imagen";
 import { useObjectUrl } from "@/lib/object-url";
@@ -16,6 +17,7 @@ import { geoErrorMsg } from "@/lib/geo";
 import { waUruku } from "@/lib/contacto";
 import { PermisoUbicacion } from "@/components/permiso-ubicacion";
 import { Ic } from "@/components/ic";
+import { LoginComercio } from "@/components/ingresar-comercio";
 
 // `kind` marca los mensajes del plan (aviso de cobro, publicación bloqueada):
 // se dibujan aparte, con ícono y rótulo, para que no se pierdan entre la charla.
@@ -24,10 +26,70 @@ type Step = "tipo" | "titulo" | "precio" | "descripcion" | "tiktok" | "imagen" |
 
 export default function PublicarPage() {
   const [sess, setSess] = useState<ComercioSession | null>(null);
+  // El código del negocio recién creado: se muestra una vez, antes del chatbot.
+  const [codigoNuevo, setCodigoNuevo] = useState<string | null>(null);
+  // La clave de entrada del negocio recién creado: va ANTES que el código, se
+  // muestra una vez y vive sólo en memoria (nunca en localStorage).
+  const [claveNueva, setClaveNueva] = useState<string | null>(null);
   useEffect(() => setSess(getComercioSession()), []);
 
-  if (!sess) return <AuthView onLogged={setSess} />;
+  if (!sess) {
+    return <AuthView onLogged={setSess} onRegistrado={({ sesion, claveInicial }) => {
+      setCodigoNuevo(codigoVisible(sesion)); setClaveNueva(claveInicial); setSess(sesion);
+    }} />;
+  }
+  if (claveNueva) return <ClaveDelNegocio clave={claveNueva} nombre={sess.nombre} onListo={() => setClaveNueva(null)} />;
+  if (codigoNuevo) return <CodigoDelNegocio codigo={codigoNuevo} nombre={sess.nombre} onSeguir={() => setCodigoNuevo(null)} />;
   return <ChatBot sess={sess} onLogout={() => { clearComercio(); setSess(null); }} />;
+}
+
+/** `URUKU-XXXX` listo para mostrar (el backend manda `codigo_formateado`; si faltara, se arma desde `codigo`). */
+function codigoVisible(s: ComercioSession): string | null {
+  if (s.codigo_formateado) return s.codigo_formateado;
+  if (!s.codigo) return null;
+  return /^URUKU-/i.test(s.codigo) ? s.codigo.toUpperCase() : `URUKU-${s.codigo.toUpperCase()}`;
+}
+
+/** La clave con la que el dueño entra a su panel, una vez, antes del código. */
+function ClaveDelNegocio({ clave, nombre, onListo }: { clave: string; nombre: string; onListo: () => void }) {
+  return (
+    <>
+      <Nav />
+      <div className="wrap" style={{ maxWidth: 480, paddingTop: 56 }}>
+        <span className="eyebrow"><Ic n="listo" s={14} /> Negocio creado</span>
+        <h1 style={{ fontSize: 28, margin: "10px 0 14px" }}>{nombre} ya está en URUKU</h1>
+        <ClaveUnaVez clave={clave} titulo="Tu clave para entrar" onListo={onListo} textoListo="Ya la guardé" />
+      </div>
+    </>
+  );
+}
+
+function CodigoDelNegocio({ codigo, nombre, onSeguir }: { codigo: string; nombre: string; onSeguir: () => void }) {
+  const [copiado, setCopiado] = useState(false);
+  async function copiar() {
+    try { await navigator.clipboard.writeText(codigo); setCopiado(true); } catch { /* sin portapapeles: el código está a la vista */ }
+  }
+  return (
+    <>
+      <Nav />
+      <div className="wrap" style={{ maxWidth: 480, paddingTop: 56 }}>
+        <span className="eyebrow"><Ic n="listo" s={14} /> Negocio creado</span>
+        <h1 style={{ fontSize: 28, margin: "10px 0 6px" }}>{nombre} ya está en URUKU</h1>
+        <div className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12, textAlign: "center" }}>
+          <div style={{ fontSize: 12, color: "var(--txt-3)", fontWeight: 700 }}>EL CÓDIGO DE TU NEGOCIO</div>
+          <div style={{ fontSize: 34, fontWeight: 800, letterSpacing: ".04em", color: "var(--neon)" }} aria-label={`Código ${codigo}`}>{codigo}</div>
+          <p style={{ color: "var(--txt-2)", fontSize: 14, margin: 0 }}>
+            Mandalo en un mensaje de WhatsApp para publicar una oferta o para atar tu grupo a tu negocio.
+            Guardalo: lo vas a necesitar.
+          </p>
+          <button type="button" className="btn" onClick={copiar} style={{ border: "1px solid var(--stroke)" }}>
+            {copiado ? "Código copiado" : "Copiar código"}
+          </button>
+          <button type="button" className="btn btn-primary" onClick={onSeguir}>Seguir a publicar <Send style={{ width: 15, height: 15 }} /></button>
+        </div>
+      </div>
+    </>
+  );
 }
 
 /* ----------------------------- AUTH (login / registro) ----------------------------- */
@@ -49,8 +111,11 @@ function QueOfrecemos() {
   );
 }
 
-function AuthView({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
+function AuthView({ onLogged, onRegistrado }: { onLogged: (s: ComercioSession) => void; onRegistrado: (r: RegistroResult) => void }) {
   const [mode, setMode] = useState<"login" | "registro">("registro");
+  // Tras el 409 («ese número ya tiene un negocio») se abre el ingreso directo por
+  // WhatsApp, con el número ya escrito. `n` cambia la `key` para remontar el login.
+  const [directo, setDirecto] = useState<{ whatsapp: string; n: number } | null>(null);
   // Abre la pestaña según ?modo=login|registro (sin useSearchParams para no exigir Suspense)
   useEffect(() => {
     const modo = new URLSearchParams(window.location.search).get("modo");
@@ -58,7 +123,7 @@ function AuthView({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
   }, []);
   return (
     <>
-      <Nav mapOnly />
+      <Nav />
       <div className="wrap" style={{ maxWidth: 480, paddingTop: 56 }}>
         <span className="eyebrow"><span className="dot-live" /> Panel del comercio</span>
         <h1 style={{ fontSize: 30, margin: "10px 0 6px" }}>Publicá tus ofertas</h1>
@@ -66,9 +131,27 @@ function AuthView({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
           {mode === "registro" ? "Creá tu cuenta; nuestro asistente te ayuda a publicar en segundos." : "Ingresá a tu cuenta."}
         </p>
 
+        {mode === "registro" && (
+          <div className="glass" style={{ padding: "12px 16px", borderRadius: 12, marginBottom: 14, fontSize: 13.5, color: "var(--txt-2)" }}>
+            <Ic n="aviso" s={15} /> Si tu negocio ya está en el mapa, no lo crees de nuevo: {" "}
+            <button type="button" onClick={() => setMode("login")} style={{ background: "none", border: "none", color: "var(--neon)", padding: 0, cursor: "pointer", font: "inherit", textDecoration: "underline" }}>
+              entrá con tu celular y tu clave
+            </button>.
+          </div>
+        )}
         {mode === "registro" && <QueOfrecemos />}
-        {mode === "login" ? <LoginForm onLogged={onLogged} /> : <RegistroForm onLogged={onLogged} />}
+        {mode === "login"
+          ? <LoginComercio key={directo?.n ?? 0} onLogged={onLogged}
+              modoInicial={directo ? "whatsapp" : "clave"} whatsappInicial={directo?.whatsapp ?? ""} />
+          : <RegistroForm onLogged={onRegistrado}
+              onYaTieneNegocio={(whatsapp) => { setDirecto((d) => ({ whatsapp, n: (d?.n ?? 0) + 1 })); setMode("login"); }} />}
 
+        {mode === "login" && (
+          <p style={{ color: "var(--txt-3)", fontSize: 13, margin: "14px 0 0" }}>
+            Si tu negocio ya está en el mapa, no lo crees de nuevo: entrá con tu celular y tu clave,
+            o confirmá con tu WhatsApp si es la primera vez.
+          </p>
+        )}
         <button
           type="button"
           onClick={() => setMode(mode === "registro" ? "login" : "registro")}
@@ -83,140 +166,6 @@ function AuthView({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
         </p>
       </div>
     </>
-  );
-}
-
-// Login: WhatsApp + código es el camino principal (el alta ya no pide
-// email/contraseña). Email+contraseña queda como alternativa para cuentas
-// viejas que sí lo tienen cargado.
-function LoginForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
-  const [modoEmail, setModoEmail] = useState(false);
-
-  if (modoEmail) return <LoginConEmail onVolver={() => setModoEmail(false)} onLogged={onLogged} />;
-  return <IngresarConWhatsapp onUsarEmail={() => setModoEmail(true)} onLogged={onLogged} />;
-}
-
-function LoginConEmail({ onVolver, onLogged }: { onVolver: () => void; onLogged: (s: ComercioSession) => void }) {
-  const [email, setEmail] = useState("");
-  const [pass, setPass] = useState("");
-  const [err, setErr] = useState("");
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setErr("");
-    try { onLogged(await comercioLogin(email, pass)); }
-    catch { setErr("Credenciales incorrectas. ¿Está corriendo el backend?"); }
-  }
-
-  return (
-    <form onSubmit={submit} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-      <input className="adm-input" type="email" inputMode="email" autoCapitalize="none"
-                 autoCorrect="off" spellCheck={false} autoComplete="username"
-                 value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-      <input className="adm-input" type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Contraseña" />
-      {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
-      <button className="btn btn-primary" type="submit">Entrar</button>
-      <button type="button" onClick={onVolver} style={{ background: "none", border: "none", color: "var(--txt-3)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}>
-        ← Entrar con WhatsApp en cambio
-      </button>
-    </form>
-  );
-}
-
-const POLL_RECUPERAR_MS = 2500;
-
-function IngresarConWhatsapp({ onUsarEmail, onLogged }: { onUsarEmail: () => void; onLogged: (s: ComercioSession) => void }) {
-  const [whatsapp, setWhatsapp] = useState("");
-  const [codigo, setCodigo] = useState("");
-  const [waLink, setWaLink] = useState("");
-  const [nueva, setNueva] = useState("");
-  const [paso, setPaso] = useState<"pedir" | "esperando" | "password">("pedir");
-  const [err, setErr] = useState("");
-  const [loading, setLoading] = useState(false);
-  const intervaloRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => () => { if (intervaloRef.current) clearInterval(intervaloRef.current); }, []);
-
-  async function pedirCodigo(e: React.FormEvent) {
-    e.preventDefault();
-    if (!whatsapp.trim()) { setErr("Ingresá tu WhatsApp registrado"); return; }
-    setLoading(true); setErr("");
-    try {
-      const { codigo: c, wa_link } = await comercioRecuperar(whatsapp.trim());
-      setCodigo(c); setWaLink(wa_link); setPaso("esperando");
-      intervaloRef.current = setInterval(async () => {
-        const confirmado = await comercioRecuperarEstado(whatsapp.trim(), c);
-        if (confirmado) {
-          if (intervaloRef.current) clearInterval(intervaloRef.current);
-          setPaso("password");
-        }
-      }, POLL_RECUPERAR_MS);
-    } finally { setLoading(false); }
-  }
-
-  async function confirmarPassword(e: React.FormEvent) {
-    e.preventDefault();
-    if (nueva.length < 6) { setErr("La contraseña necesita al menos 6 caracteres"); return; }
-    setLoading(true); setErr("");
-    try {
-      onLogged(await comercioRecuperarConfirmar(whatsapp.trim(), codigo, nueva));
-    } catch (ex) { setErr(ex instanceof Error ? ex.message : "No se pudo confirmar"); }
-    finally { setLoading(false); }
-  }
-
-  function volver() {
-    if (intervaloRef.current) clearInterval(intervaloRef.current);
-    setPaso("pedir"); setErr("");
-  }
-
-  if (paso === "pedir") {
-    return (
-      <form onSubmit={pedirCodigo} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-        <p style={{ color: "var(--txt-3)", fontSize: 13, marginTop: -4 }}>
-          Confirmás con tu propio WhatsApp, al número con el que registraste tu negocio.
-        </p>
-        <input className="adm-input" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="WhatsApp registrado (ej: 59170000000)" />
-        {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
-        <button className="btn btn-primary" type="submit" disabled={loading}>{loading ? "Generando…" : "Continuar"}</button>
-        <button type="button" onClick={onUsarEmail} style={{ background: "none", border: "none", color: "var(--txt-3)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}>
-          ¿Tenés email y contraseña? Entrá así
-        </button>
-        <Link href="/recuperar-negocio" style={{ color: "var(--txt-3)", fontSize: 13 }}>
-          ¿Cambiaste de número de WhatsApp?
-        </Link>
-      </form>
-    );
-  }
-
-  if (paso === "esperando") {
-    return (
-      <div className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-        <a
-          className="btn btn-primary"
-          href={waLink}
-          target="_blank"
-          rel="noopener"
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-        >
-          <WhatsApp style={{ width: 18, height: 18 }} /> Confirmar por WhatsApp
-        </a>
-        <p style={{ color: "var(--txt-3)", fontSize: 12.5, margin: 0, textAlign: "center" }}>
-          Se abre WhatsApp con un mensaje ya escrito — solo tocá enviar y volvé acá.
-        </p>
-        <button type="button" onClick={volver} style={{ background: "none", border: "none", color: "var(--txt-3)", fontSize: 13, textAlign: "left", padding: 0, cursor: "pointer" }}>← Volver</button>
-      </div>
-    );
-  }
-
-  return (
-    <form onSubmit={confirmarPassword} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-      <p style={{ color: "var(--txt-3)", fontSize: 13, marginTop: -4 }}>
-        Listo, confirmamos tu WhatsApp. Poné una contraseña nueva (te va a servir para la próxima vez).
-      </p>
-      <input className="adm-input" type="password" value={nueva} onChange={(e) => setNueva(e.target.value)} placeholder="Contraseña (mín. 6)" autoFocus />
-      {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
-      <button className="btn btn-primary" type="submit" disabled={loading}>{loading ? "Guardando…" : "Ingresar"}</button>
-    </form>
   );
 }
 
@@ -241,7 +190,7 @@ function ChipToggleReg({ label, active, onClick }: { label: string; active: bool
   );
 }
 
-function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
+function RegistroForm({ onLogged, onYaTieneNegocio }: { onLogged: (r: RegistroResult) => void; onYaTieneNegocio: (whatsapp: string) => void }) {
   const [f, setF] = useState<RegistroFormState>({ nombre: "", whatsapp: "", modalidad: "mayorista", direccion: "" });
   const set = (k: keyof RegistroFormState, v: string) => setF((s) => ({ ...s, [k]: v }));
 
@@ -259,6 +208,8 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
   const [comprimiendo, setComprimiendo] = useState(false);
 
   const [err, setErr] = useState("");
+  // 409: ese número ya tiene un negocio. Se muestra su `detail` y la salida.
+  const [yaTiene, setYaTiene] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function generarConIA() {
@@ -295,7 +246,7 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setErr("");
+    setErr(""); setYaTiene("");
     if (!f.nombre.trim() || !f.whatsapp.trim()) { setErr("Completá nombre y WhatsApp."); return; }
     const desc = descripcion || queVende.trim();
     if (!desc) { setErr("Contanos qué vendés."); return; }
@@ -311,7 +262,10 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
         descripcion: desc, direccion: f.direccion.trim() || undefined,
         lat: coords.lat, lng: coords.lng, foto,
       }));
-    } catch (ex) { setErr(ex instanceof Error ? ex.message : "No se pudo crear la cuenta"); }
+    } catch (ex) {
+      if (ex instanceof NumeroYaRegistrado) setYaTiene(ex.message);
+      else setErr(mensajeDeError(ex, "No se pudo crear la cuenta"));
+    }
     finally { setLoading(false); }
   }
 
@@ -372,7 +326,15 @@ function RegistroForm({ onLogged }: { onLogged: (s: ComercioSession) => void }) 
       <input className="adm-input" value={f.direccion} onChange={(e) => set("direccion", e.target.value)}
         placeholder="Punto de referencia (ej: frente a la plaza, al lado de la farmacia)" />
 
-      {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
+      {err && <span role="alert" style={{ color: "var(--pink)", fontSize: 13 }}><Ic n="aviso" s={14} /> {err}</span>}
+      {yaTiene && (
+        <div role="alert" style={{ display: "flex", flexDirection: "column", gap: 10, padding: 12, borderRadius: 12, border: "1px solid var(--amber)", background: "rgba(255,176,32,.08)" }}>
+          <span style={{ fontSize: 13.5, color: "var(--txt)" }}><Ic n="aviso" s={15} /> {yaTiene}</span>
+          <button type="button" className="btn btn-primary" onClick={() => onYaTieneNegocio(f.whatsapp.trim())}>
+            <WhatsApp style={{ width: 16, height: 16 }} /> Entrar con mi WhatsApp
+          </button>
+        </div>
+      )}
       <button className="btn btn-primary" type="submit" disabled={loading}>
         {loading ? "Creando…" : "Crear cuenta y publicar"}
       </button>
@@ -447,7 +409,7 @@ function ChatBot({ sess, onLogout }: { sess: ComercioSession; onLogout: () => vo
       if (res.publicado_directo) {
         say("bot", "¡Listo! Tu publicación ya está EN VIVO en URUKU. (Tu comercio es confiable, se publicó directo.)");
       } else {
-        say("bot", "¡Recibido! Tu publicación quedó en revisión. Un moderador la aprueba y aparece en el feed en vivo. Te avisamos.");
+        say("bot", "¡Recibido! Tu publicación quedó en revisión. Un moderador la aprueba y aparece en el feed en vivo.");
       }
       // El aviso queda como mensaje del chat (no un toast): es plata, y tiene
       // que poder releerse después de publicar.
@@ -473,7 +435,7 @@ function ChatBot({ sess, onLogout }: { sess: ComercioSession; onLogout: () => vo
 
   return (
     <>
-      <Nav mapOnly />
+      <Nav />
       <div className="wrap" style={{ maxWidth: 680, paddingTop: 28 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div>

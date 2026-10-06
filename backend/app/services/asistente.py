@@ -201,7 +201,8 @@ FAQ: list[tuple[str, str, str]] = [
     (r"(publicar|subir|mandar|cargar).*(oferta|promo|novedad|foto)|como (publico|subo) (una )?oferta",
      "Las ofertas se publican mandando una foto al grupo de WhatsApp que URUKU le crea a cada local "
      "(«URUKU · nombre del local»), con el precio si lo tiene. Sale en la ficha del negocio y entre las "
-     "ofertas de Bermejo. Si tu local todavía no tiene el grupo, registralo y te lo creamos.",
+     f"ofertas de Bermejo. Si tu local todavía no está en URUKU, registralo gratis en {SITIO}/autoregistro?modo=registro "
+     "y al terminar te damos tu código URUKU-XXXX, que sirve para publicar.",
      "publicar_oferta"),
     # Los planes se contestan aparte, leyendo la base: ver _nivel0_planes.
     (r"\bcomision|se paga por venta|cobran por vender",

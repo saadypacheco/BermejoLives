@@ -5,7 +5,8 @@ Flujo (el corazón del producto):
   vendedor manda por WhatsApp (oferta/video/novedad)
     -> WAHA dispara webhook
     -> guardamos el crudo en wa_inbox (fuente de verdad)
-    -> asociamos/creamos el comercio por su número
+    -> asociamos el comercio por su número, grupo o código (si no se sabe de
+       quién es, queda en wa_inbox como 'sin_comercio' y no se crea nada)
     -> creamos publicacion estado='pendiente'
     -> el moderador aprueba -> aparece en el feed en vivo
 
@@ -26,7 +27,12 @@ from app.models.whatsapp import WahaEvent, WahaMessagePayload
 logger = structlog.get_logger()
 
 _MESSAGE_EVENTS = {"message", "message.any"}
-_RE_CONFIRMAR = re.compile(r"^\s*CONFIRMAR-(\d{6})\s*$", re.IGNORECASE)
+# «CONFIRMAR-123456», solo o con el texto que precarga el enlace de la página
+# («… para entrar a Mi comercio de URUKU»). El código son exactamente 6 dígitos
+# (un 7º dígito pegado no vale) y el texto de al lado se acota: un mensaje largo
+# que apenas empieza con CONFIRMAR- no es una confirmación.
+_RE_CONFIRMAR = re.compile(r"^\s*CONFIRMAR-(\d{6})(?!\d)(?:[\s,.;:!-].{0,200})?$",
+                           re.IGNORECASE | re.DOTALL)
 
 # Heurística simple para clasificar el tipo de publicación a partir del texto.
 _VIDEO_HINTS = ("tiktok.com", "video", "reel")
@@ -69,10 +75,9 @@ def _identificar_por_grupo(repo: Repo, payload) -> tuple[dict | None, str, str |
     es lo estable: el comerciante puede cambiar de teléfono, o publicar desde el
     celular del hijo, y el contenido sigue llegando al local correcto.
 
-    A diferencia del chat 1-a-1, acá **no se crea un comercio si no se sabe de
-    quién es el grupo**. En 1-a-1 un número desconocido es un comerciante nuevo
-    que escribió, y crear el borrador tiene sentido. Un grupo desconocido no es
-    nadie: crear un comercio por cada grupo llenaría la base de fichas fantasma
+    **No se crea un comercio si no se sabe de quién es el grupo** (ni en un
+    grupo ni en un chat 1-a-1: ver `_identificar_comercio`). Crear un comercio
+    por cada grupo o número desconocido llenaría la base de fichas fantasma
     llamadas "Comercio 1234" que nadie cargó ni visitó.
     """
     from app.core.codigo import extraer_codigo
@@ -103,16 +108,17 @@ def _identificar_por_grupo(repo: Repo, payload) -> tuple[dict | None, str, str |
     return None, "grupo_desconocido", codigo
 
 
-def _identificar_comercio(repo: Repo, payload) -> tuple[dict, str, str | None]:
+def _identificar_comercio(repo: Repo, payload) -> tuple[dict | None, str, str | None]:
     """Resuelve de qué comercio es este mensaje.
 
-    Devuelve (comercio, identidad_origen, codigo_recibido).
+    Devuelve (comercio, identidad_origen, codigo_recibido). El comercio es None
+    cuando no se sabe de quién es: el caller lo deja como `sin_comercio`.
 
     `identidad_origen` queda guardado en la publicación para que el panel sepa en
     qué se apoyó la atribución al momento de aprobar:
       - 'numero': el número del remitente ya estaba asociado al comercio.
       - 'codigo': el número era desconocido y el mensaje traía el código del local.
-      - 'desconocido': ni número conocido ni código; se creó un borrador nuevo.
+      - 'desconocido': ni número conocido ni código; no hay comercio (None).
     """
     from app.core.codigo import extraer_codigo
 
@@ -139,8 +145,12 @@ def _identificar_comercio(repo: Repo, payload) -> tuple[dict, str, str | None]:
             return por_codigo, "codigo", codigo
         logger.info("ingest.codigo_desconocido", codigo=codigo)
 
-    # Ni número conocido ni código válido: borrador nuevo, como siempre.
-    return repo.upsert_comercio_by_jid(wa_jid, payload.phone), "desconocido", codigo
+    # Ni número conocido ni código válido: NO se crea nada. Antes esto armaba un
+    # comercio apagado ("Comercio 1234") y una publicación pendiente por cada
+    # persona que le escribía al Registrador sin código —un comprador, un
+    # curioso, un número equivocado—: fantasmas que el moderador tenía que
+    # descartar a mano. El mensaje queda en wa_inbox como `sin_comercio`.
+    return None, "desconocido", codigo
 
 
 def _avisar(chat_id: str | None, texto: str) -> bool:
@@ -277,6 +287,11 @@ def _handle_confirmacion(payload: WahaMessagePayload, codigo: str, repo: Repo) -
     """Alguien mandó 'CONFIRMAR-XXXXXX' — probar contra usuarios (comprador)
     y comercio_usuarios (dueño de comercio). Solo uno de los dos va a
     matchear, si alguno; no hay ambigüedad real entre ambos flujos."""
+    if settings.es_numero_propio(payload.phone):
+        # Los números de URUKU (operativo, respaldos, explorador) nunca abren una
+        # cuenta: ni de comprador ni de comercio.
+        logger.info("ingest.confirmacion_numero_propio")
+        return {"captured": True, "confirmacion": True, "confirmado": False}
     ok_usuario = repo.confirmar_reset_code_usuario(payload.phone, codigo)
     ok_comercio = False if ok_usuario else repo.confirmar_reset_code_comercio(payload.phone, codigo)
     confirmado = ok_usuario or ok_comercio
@@ -484,6 +499,18 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
                     "grupo": payload.grupo_jid}
     else:
         comercio, identidad_origen, codigo_recibido = _identificar_comercio(repo, payload)
+        if comercio is None:
+            # Un número desconocido sin código (o con uno que no existe) no es un
+            # comerciante nuevo: no se crea comercio ni publicación. El crudo
+            # queda en la bandeja para que alguien lo mire.
+            if codigo_recibido:
+                motivo = (f"número desconocido; el código {codigo_recibido} no corresponde "
+                          "a ningún comercio")
+            else:
+                motivo = "número desconocido y sin el código del local: no se creó ningún comercio"
+            logger.info("ingest.sin_comercio_1a1", phone=payload.phone, con_codigo=bool(codigo_recibido))
+            repo.marcar_wa_inbox(payload.id, "sin_comercio", motivo)
+            return {"captured": True, "publicada": False, "motivo": motivo}
     # Sólo para logs y respuesta: un comercio identificado por código puede venir
     # de una fila parcial, y una línea de log no puede tumbar la ingesta.
     slug = comercio.get("slug") or comercio.get("id") or "?"

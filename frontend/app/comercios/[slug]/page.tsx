@@ -426,6 +426,15 @@ export default async function ComercioPage({ params }: { params: { slug: string 
           </aside>
         </div>
 
+        {/* Referencia discreta, a propósito SIN explicar para qué sirve: sólo el
+            comerciante entiende qué es (decisión del usuario, spec limpieza de
+            circuitos). `codigo` viaja en la fila pero el tipo público no lo
+            declara; se lee con un cast acotado, como en el volante. */}
+        {(() => {
+          const codigo = (comercio as { codigo?: string | null }).codigo;
+          return codigo ? <p className="uk-ficha-ref">Ref. {codigo}</p> : null;
+        })()}
+
         <ReservaBarra />
       </div>
     </UrukuShell>

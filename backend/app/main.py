@@ -21,6 +21,7 @@ from starlette.responses import JSONResponse
 
 from app.api import asistente, auth, campo, comercio, contenido, health, moderacion, observabilidad, usuario, webhook
 from app.core.config import settings
+from app.core.ip import ip_cliente
 from app.services.clima import fetch_clima_bermejo
 from app.services.observabilidad import registrar_error, registrar_perf
 from app.db.repository import get_repo
@@ -204,11 +205,21 @@ _RL_RULES: dict[str, int] = {
 }
 
 
-def _client_ip(request: Request) -> str:
-    fwd = request.headers.get("x-forwarded-for", "")
-    if fwd:
-        return fwd.split(",")[0].strip()
-    return request.client.host if request.client else "?"
+# La IP real es el ÚLTIMO valor de X-Forwarded-For (lo agrega el proxy); el primero
+# lo inventa el cliente. Una sola función para el límite de pedidos y para el de
+# intentos fallidos de clave (app/core/ip.py).
+_client_ip = ip_cliente
+_RL_MAX_BUCKETS = 10_000
+_ultimo_barrido = 0.0
+
+
+def _barrer_buckets(now: float) -> None:
+    """Saca las ventanas vacías o vencidas: sin esto cada IP distinta dejaba una
+    clave para siempre y el dict crecía sin tope ante un barrido de IPs."""
+    global _ultimo_barrido
+    _ultimo_barrido = now
+    for k in [k for k, dq in _BUCKETS.items() if not dq or now - dq[-1] > _RL_WINDOW]:
+        del _BUCKETS[k]
 
 
 @app.middleware("http")
@@ -219,7 +230,12 @@ async def rate_limit(request: Request, call_next):
                 continue
             ip = _client_ip(request)
             now = time.time()
-            dq = _BUCKETS[f"{prefix}:{ip}"]
+            if len(_BUCKETS) > _RL_MAX_BUCKETS or now - _ultimo_barrido > _RL_WINDOW:
+                _barrer_buckets(now)
+            clave = f"{prefix}:{ip}"
+            dq = _BUCKETS.get(clave)
+            if dq is None:
+                dq = _BUCKETS[clave] = deque()
             while dq and now - dq[0] > _RL_WINDOW:
                 dq.popleft()
             if len(dq) >= limite:

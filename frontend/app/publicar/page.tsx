@@ -19,11 +19,33 @@ import { useObjectUrl } from "@/lib/object-url";
 import { medirMemoria } from "@/lib/memoria";
 import { GaleriaUploader } from "@/components/galeria-uploader";
 import { AdminMap } from "@/components/admin-map";
-import { geoErrorMsg } from "@/lib/geo";
+import { geoErrorMsg, metros } from "@/lib/geo";
+import { YaCargadosAca, RADIO_YA_CARGADO_M, type EstadoLista } from "@/components/ya-cargados-aca";
+import { aCercanos, cercanosGuardados, listaEnMemoria, olvidarLista, recordarLista, type ComercioCercano } from "@/lib/campo-cache";
 import { PermisoUbicacion } from "@/components/permiso-ubicacion";
 import { Ic } from "@/components/ic";
+import { ClaveUnaVez } from "@/components/clave-una-vez";
 import { encolarAlta, sincronizarPendientes, listarPendientes,
          descartarPendiente, esIrrecuperable, type AltaPendiente } from "@/lib/offline-altas";
+
+const AVISO_CLAVE_AGENTE = "Dásela en mano al dueño: es para entrar a su panel. No la anotes en el volante.";
+
+type ClavePorEntregar = { nombre: string; clave: string };
+
+/** Las claves de altas que subieron DESPUÉS (estaban guardadas sin señal). El
+ *  servidor las entrega sólo en la respuesta de la subida: si no se ven acá, no
+ *  hay otra oportunidad. Quedan en pantalla hasta que se marcan como entregadas. */
+function ClavesPorEntregar({ claves, onEntregada }: { claves: ClavePorEntregar[]; onEntregada: (clave: string) => void }) {
+  if (claves.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
+      {claves.map((c) => (
+        <ClaveUnaVez key={c.clave + c.nombre} compacta clave={c.clave} titulo={`Clave de ${c.nombre}`}
+          aviso={`Se subió recién. ${AVISO_CLAVE_AGENTE}`} onListo={() => onEntregada(c.clave)} textoListo="Ya se la di al dueño" />
+      ))}
+    </div>
+  );
+}
 
 // Prefijo telefónico según país
 // Prefijo telefónico para wa.me. Argentina lleva el 9 de móvil (549…): sin él
@@ -42,6 +64,9 @@ const MODALIDADES = [
 export default function CampoPage() {
   const [authed, setAuthed] = useState(false);
   const [vista, setVista] = useState<"form" | "lista">("form");
+  // A qué entrar en «Comercios de mi ciudad»: abrir un comercio para editarlo
+  // (desde el aviso «ya cargado» del alta) o con un filtro puesto.
+  const [destino, setDestino] = useState<DestinoLista | null>(null);
   useEffect(() => {
     setAuthed(Boolean(getAgenteToken()));
     // Entrada directa desde el shortcut de la PWA (mantener apretado el ícono).
@@ -51,9 +76,10 @@ export default function CampoPage() {
     }
   }, []);
   if (!authed) return <Login onOk={() => setAuthed(true)} />;
-  const onLogout = () => { clearAgente(); setAuthed(false); };
-  if (vista === "lista") return <MisComercios onVolver={() => setVista("form")} onLogout={onLogout} />;
-  return <FormCampo onLogout={onLogout} onVerMisComercios={() => setVista("lista")} />;
+  const onLogout = () => { clearAgente(); olvidarLista(); setAuthed(false); };
+  const irALista = (d: DestinoLista | null = null) => { setDestino(d); setVista("lista"); };
+  if (vista === "lista") return <MisComercios destino={destino} onVolver={() => { setDestino(null); setVista("form"); }} onLogout={onLogout} />;
+  return <FormCampo onLogout={onLogout} onVerMisComercios={irALista} />;
 }
 
 // ─────────────────────────────────────────────
@@ -72,15 +98,14 @@ function agenteIncompleto(c: ComercioAgente): string[] {
   return r;
 }
 
-type FiltroAg = "cerca" | "todos" | "pendientes" | "verificados" | "incompletos";
+type FiltroAg = "cerca" | "todos" | "pendientes" | "verificados" | "incompletos" | "sinhorario";
 
-/** Metros entre dos puntos. Plana: a 300 m la curvatura de la Tierra no cambia
- *  nada y evita trigonometría por cada comercio en un celular viejo. */
-function metros(aLat: number, aLng: number, bLat: number, bLng: number): number {
-  const kx = 111320 * Math.cos((aLat * Math.PI) / 180);
-  const dx = (aLng - bLng) * kx;
-  const dy = (aLat - bLat) * 110540;
-  return Math.hypot(dx, dy);
+/** Adónde llevar al agente al abrir «Comercios de mi ciudad». */
+type DestinoLista = { editarId?: string; filtro?: FiltroAg };
+
+/** «Sin horario» = el campo vacío, el mismo criterio que usa el admin. */
+function sinHorario(c: ComercioAgente): boolean {
+  return !(c.horario ?? "").trim();
 }
 
 /** Hasta dónde llega «cerca mío»: media cuadra para cada lado. Más que esto y
@@ -88,14 +113,19 @@ function metros(aLat: number, aLng: number, bLat: number, bLng: number): number 
 const RADIO_CERCA_M = 120;
 type OrdenAg = "recientes" | "alfabetico" | "estado";
 
-function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: () => void }) {
-  const [items, setItems] = useState<ComercioAgente[] | null>(null);
+function MisComercios({ destino, onVolver, onLogout }: { destino: DestinoLista | null; onVolver: () => void; onLogout: () => void }) {
+  // Arranca con lo último que se vio (si hay) y se actualiza al llegar la lista.
+  const [items, setItems] = useState<ComercioAgente[] | null>(() => listaEnMemoria());
   const [rubros, setRubros] = useState<Rubro[]>([]);
   const [err, setErr] = useState("");
   const [editando, setEditando] = useState<ComercioAgente | null>(null);
   const [borrando, setBorrando] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [filtro, setFiltro] = useState<FiltroAg>("todos");
+  const [filtro, setFiltro] = useState<FiltroAg>(destino?.filtro && destino.filtro !== "cerca" ? destino.filtro : "todos");
+  // Un solo comercio a la vista: el que se eligió con «Es este» en el alta. La
+  // lista de la ciudad tiene cientos y el elegido podría quedar fuera de las
+  // primeras 50; así se llega a él con un toque, sin buscarlo.
+  const [enfocado, setEnfocado] = useState<string | null>(destino?.editarId ?? null);
   // DÓNDE ESTOY PARADO. Es lo que convierte la lista en una herramienta de
   // vereda: el agente ve los locales de esa cuadra —los haya cargado él o el
   // otro agente de la ciudad—, se los muestra al comerciante y corrige ahí
@@ -121,8 +151,28 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
   const [vista, setVista] = useState<"lista" | "mapa">("lista");
   const [limitVis, setLimitVis] = useState(50);
 
-  const cargar = () => misComercios().then(setItems).catch((e) => setErr(e instanceof Error ? e.message : "Error"));
-  useEffect(() => { cargar(); getRubros().then(setRubros); }, []);
+  const [fresca, setFresca] = useState(false);   // ya llegó la lista del servidor (no sólo la de memoria)
+  const abiertoRef = useRef(false);
+  const cargar = () => misComercios()
+    .then((xs) => { recordarLista(xs); setItems(xs); setErr(""); setFresca(true); })
+    .catch((e) => setErr(e instanceof Error ? e.message : "Error"));
+  useEffect(() => {
+    cargar(); getRubros().then(setRubros);
+    // «Ver los N» del alta: entra con «Acá» puesto, que es lo que pide el GPS.
+    if (destino?.filtro === "cerca") ubicarme();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Mantiene la lista guardada al día cuando se edita o se da de baja uno.
+  useEffect(() => { if (items) recordarLista(items); }, [items]);
+  // «Es este»: apenas llega la lista se abre el editor de ese comercio.
+  useEffect(() => {
+    if (!destino?.editarId || !items || abiertoRef.current) return;
+    const c = items.find((x) => x.id === destino.editarId);
+    if (c) { abiertoRef.current = true; setEditando(c); }
+    // Recién cuando llegó la lista del servidor se puede decir que ya no está
+    // (baja o de otra ciudad): se muestra la lista normal.
+    else if (fresca) { abiertoRef.current = true; setEnfocado(null); }
+  }, [items, fresca, destino]);
   useEffect(() => { setLimitVis(50); }, [filtro, q, orden]);
 
   async function eliminar(c: ComercioAgente) {
@@ -137,14 +187,17 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
   const nVerificados = todos.filter((c) => c.verificado).length;
   const nPend = todos.length - nVerificados;
   const nIncompletos = todos.filter((c) => agenteIncompleto(c).length > 0).length;
+  const nSinHorario = todos.filter(sinHorario).length;
 
   // A: filtro por estado → B: incompletos → búsqueda multi-campo → G: orden
   const porEstado = filtro === "todos" ? todos
     : filtro === "pendientes" ? todos.filter((c) => !c.verificado)
     : filtro === "verificados" ? todos.filter((c) => c.verificado)
+    : filtro === "sinhorario" ? todos.filter(sinHorario)
     : todos.filter((c) => agenteIncompleto(c).length > 0);
   const nq = normTxtA(q.trim());
-  const buscadas = !nq ? porEstado : porEstado.filter((c) =>
+  const buscadas = enfocado ? todos.filter((c) => c.id === enfocado)
+    : !nq ? porEstado : porEstado.filter((c) =>
     [c.nombre, c.direccion, c.whatsapp, c.telefono, c.rubros?.nombre].map((x) => normTxtA(x ?? "")).join(" ").includes(nq));
   const filtradas = [...buscadas].sort((a, b) => {
     if (orden === "alfabetico") return (a.nombre ?? "").localeCompare(b.nombre ?? "");
@@ -169,6 +222,7 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
     { key: "pendientes", label: "Pendientes", n: nPend },
     { key: "verificados", label: "Verificados", n: nVerificados },
     { key: "incompletos", label: "Incompletos", n: nIncompletos, amber: true },
+    { key: "sinhorario", label: <><Ic n="reloj" s={13} /> Sin horario</>, n: nSinHorario, amber: true },
   ];
 
   return (
@@ -190,7 +244,7 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
 
       {/* Buscador (A) + orden (G) + vista lista/mapa (D) */}
       <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <input className="adm-input" style={{ flex: 1, minWidth: 160 }} value={q} onChange={(e) => setQ(e.target.value)}
+        <input className="adm-input" style={{ flex: 1, minWidth: 160 }} value={q} onChange={(e) => { setQ(e.target.value); setEnfocado(null); }}
           placeholder="Buscar por nombre, dirección, teléfono…" />
         <select className="adm-input" style={{ width: "auto" }} value={orden} onChange={(e) => setOrden(e.target.value as OrdenAg)}>
           <option value="recientes">Recientes</option>
@@ -218,7 +272,7 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
           const activo = filtro === key;
           const col = amber ? "var(--amber)" : "var(--neon)";
           return (
-            <button key={key} onClick={() => { if (key === "cerca" && !aqui) ubicarme(); else setFiltro(key); }}
+            <button key={key} onClick={() => { setEnfocado(null); if (key === "cerca" && !aqui) ubicarme(); else setFiltro(key); }}
               style={{ padding: "5px 12px", borderRadius: 20, border: "1px solid", fontSize: 12.5,
                 borderColor: activo ? col : "var(--stroke)",
                 background: activo ? "rgba(57,255,158,.10)" : "transparent",
@@ -228,6 +282,26 @@ function MisComercios({ onVolver, onLogout }: { onVolver: () => void; onLogout: 
           );
         })}
       </div>
+
+      {enfocado && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12, padding: "9px 12px", borderRadius: 12, border: "1px solid var(--neon)", background: "rgba(57,255,158,.08)", fontSize: 13 }}>
+          <span><Ic n="comercios" s={14} /> Completando el comercio que ya estaba cargado.</span>
+          <button type="button" className="link-more" style={{ flexShrink: 0, minHeight: 36 }} onClick={() => setEnfocado(null)}>Ver todos</button>
+        </div>
+      )}
+      {filtro === "sinhorario" && !enfocado && (
+        <p style={{ color: "var(--txt-3)", fontSize: 12.5, margin: "0 0 12px" }}>
+          {aqui
+            ? <><Ic n="reloj" s={12} /> Ordenados por distancia: completá el horario caminando la cuadra.</>
+            : <>
+                Para completarlos caminando la cuadra, ordenalos por distancia.{" "}
+                <button type="button" className="link-more" style={{ minHeight: 36, padding: "0 4px" }} disabled={buscandoGeo} onClick={() => ubicarme(false)}>
+                  <Ic n="ubicacion" s={12} /> {buscandoGeo ? "Ubicando…" : "Usar mi ubicación"}
+                </button>
+              </>}
+        </p>
+      )}
+      {geoErr && <p style={{ color: "var(--pink)", fontSize: 12.5, margin: "0 0 12px" }}><Ic n="aviso" s={12} /> {geoErr}</p>}
 
       {err && <p style={{ color: "var(--pink)", fontSize: 13 }}>{err}</p>}
       {!items && !err && <p style={{ color: "var(--txt-3)" }}>Cargando…</p>}
@@ -554,7 +628,7 @@ function ciudadMasCercana(ciudades: Ciudad[], lat: number, lng: number): Ciudad 
   return mejor;
 }
 
-function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVerMisComercios: () => void }) {
+function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVerMisComercios: (d?: DestinoLista) => void }) {
   const [ciudades, setCiudades] = useState<Ciudad[]>([]);
   const [rubros,   setRubros]   = useState<Rubro[]>([]);
 
@@ -594,6 +668,12 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   // dueño en el momento — es lo que le permite mandar ofertas por WhatsApp sin
   // tener número cargado, sin login y sin haber pagado.
   const [doneCodigo,  setDoneCodigo]  = useState<string | null>(null);
+  // La clave de entrada del dueño (`clave_inicial`): viene SÓLO en la respuesta
+  // del alta. Se muestra una vez, para dársela en mano; nunca va al volante.
+  const [doneClave,   setDoneClave]   = useState<string | null>(null);
+  // Claves de altas guardadas sin señal que subieron después (en memoria: no se
+  // guarda un secreto en el celular).
+  const [clavesSync,  setClavesSync]  = useState<ClavePorEntregar[]>([]);
   const [altaId,      setAltaId]      = useState<string | null>(null);
   // El número que quedó cargado, venga del formulario o de la pantalla
   // siguiente. Null = todavía no hay ninguno.
@@ -645,6 +725,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     if (manual) setSyncMsg("");
     try {
       const r = await sincronizarPendientes(refrescarPend);
+      if (r.claves.length > 0) setClavesSync((prev) => [...prev, ...r.claves]);
       if (!manual) return;
       if (r.sinSenal) setSyncMsg("El celular está sin conexión — se suben solas cuando vuelva.");
       else if (r.fallas === 0 && r.subidas > 0) setSyncMsg(`Subieron ${r.subidas}.`);
@@ -672,6 +753,38 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     getCiudades().then(setCiudades);
     getRubros().then(setRubros);
   }, []);
+
+  // Los comercios ya cargados, para avisar «ya está» al tomar el GPS. Arranca con
+  // lo que haya en memoria o guardado en el celular y se actualiza con la lista
+  // del servidor; sin señal queda lo guardado. Nunca bloquea el alta.
+  const [cercanos, setCercanos] = useState<ComercioCercano[] | null>(null);
+  const [estadoLista, setEstadoLista] = useState<EstadoLista>("cargando");
+  const refrescarCercanos = () => {
+    misComercios()
+      .then((xs) => { recordarLista(xs); setCercanos(aCercanos(xs)); setEstadoLista("fresca"); })
+      // Sin señal (o sesión vencida): se queda con lo que había.
+      .catch(() => setEstadoLista((e) => (e === "fresca" ? e : cercanosGuardados() ? "guardada" : "sin-datos")));
+  };
+  useEffect(() => {
+    setCercanos(cercanosGuardados());
+    refrescarCercanos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const avisoRef = useRef<HTMLDivElement>(null);
+  const hayYaCargados = !!coords && !!cercanos && cercanos.some((c) => metros(coords.lat, coords.lng, c.lat, c.lng) <= RADIO_YA_CARGADO_M);
+  // El bloque aparece arriba del formulario: si el agente ya había bajado hasta
+  // el GPS, se lo trae a la vista para que no se pierda el aviso.
+  useEffect(() => {
+    if (hayYaCargados) avisoRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [hayYaCargados]);
+
+  // «Es este»: se abandona el alta y se abre ese comercio para completarlo. Si
+  // ya había escrito o sacado la foto, se pregunta antes de tirarlo.
+  function esEste(id: string) {
+    const hayAlgo = !!f.nombre.trim() || !!foto || !!f.direccion.trim() || !!f.prodObs.trim() || !!puesto.trim();
+    if (hayAlgo && !window.confirm("Vas a dejar esta carga sin guardar para completar el comercio que ya estaba. ¿Seguir?")) return;
+    onVerMisComercios({ editarId: id });
+  }
 
   // Mercados/galerías de la ciudad (para el selector "¿está dentro de un mercado?")
   useEffect(() => { listarLugares(ciudadSlug).then(setLugares).catch(() => {}); }, [ciudadSlug]);
@@ -764,6 +877,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       const r = await altaComercioCampo(fd);
       setDone(r.comercio.nombre);
       setDoneCodigo(r.comercio.codigo_formateado ?? null);
+      setDoneClave(r.clave_inicial ?? null);
       setAltaId(r.comercio.id);
       setWhatsappCargado(campos.whatsapp ?? null);
       setCount((c) => c + 1);
@@ -774,6 +888,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       setSubioLugar(lugarActual ? { id: lugarActual.id, nombre: lugarActual.nombre } : null);
       setUltimoPuesto(puesto);
       listarLugares(ciudadSlug).then(setLugares).catch(() => {});   // refresca el conteo del mercado
+      refrescarCercanos();   // el que acaba de entrar tiene que contar para el próximo aviso
     } catch (ex) {
       // Falló la subida → guardar OFFLINE igual, así el alta NUNCA se pierde.
       //
@@ -809,7 +924,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   function limpiar() {
     setF({ ...EMPTY });
     setCoords(null); setGeoMsg(""); setFoto(null); setPreviewFile(null); setConsent(true);
-    setNuevoLugar(""); setEditMercado(false); setDone(null); setDoneOffline(false); setDoneMotivo(""); setDoneCodigo(null); setAltaId(null); setWhatsappCargado(null); setErr("");
+    setNuevoLugar(""); setEditMercado(false); setDone(null); setDoneOffline(false); setDoneMotivo(""); setDoneCodigo(null); setDoneClave(null); setAltaId(null); setWhatsappCargado(null); setErr("");
   }
   function otro() {
     limpiar();
@@ -843,6 +958,21 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
             : `${ciudadActual ? `${ciudadActual.nombre} · ` : ""}Pendiente de verificar.`}
           {` · Llevás ${count}`}{pendientes > 0 ? ` · ${pendientes} sin subir` : ""}
         </p>
+
+        <ClavesPorEntregar claves={clavesSync} onEntregada={(c) => setClavesSync((prev) => prev.filter((x) => x.clave !== c))} />
+
+        {/* LA CLAVE, grande y primero: es lo único que no se puede recuperar
+            después. El servidor sólo guarda el hash. */}
+        {doneClave && (
+          <div style={{ marginBottom: 12 }}>
+            <ClaveUnaVez compacta clave={doneClave} titulo="Clave de entrada del dueño" aviso={AVISO_CLAVE_AGENTE} />
+          </div>
+        )}
+        {doneOffline && (
+          <p style={{ color: "var(--amber)", fontSize: 12, margin: "0 0 12px" }}>
+            <Ic n="reloj" s={13} /> La clave del dueño aparece acá cuando este comercio se suba.
+          </p>
+        )}
 
         {doneCodigo && (
           <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 12, background: "var(--panel)", border: "2px solid var(--neon)" }}>
@@ -912,7 +1042,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           </button>
         )}
         <button className={subioLugar ? "btn btn-ghost" : "btn btn-primary"} style={{ width: "100%", marginBottom: 8, padding: "9px 12px" }} onClick={otro}>Cargar otro comercio {subioLugar ? "(a la calle / otro)" : ""}</button>
-        <button className="link-more" onClick={onVerMisComercios}>Ver mis comercios cargados</button>
+        <button className="link-more" onClick={() => onVerMisComercios()}>Ver mis comercios cargados</button>
       </div>
     );
   }
@@ -930,10 +1060,12 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
               de distinguir "no hay nada guardado" de "no pude leerlo". */}
           <button className="link-more" onClick={verPendientes} style={{ padding: "6px 12px" }}
                   title="Lo que quedó guardado en este celular sin subir">Sin subir</button>
-          <button className="link-more" onClick={onVerMisComercios} style={{ padding: "6px 12px" }}>Mis comercios</button>
+          <button className="link-more" onClick={() => onVerMisComercios()} style={{ padding: "6px 12px" }}>Mis comercios</button>
           <button className="link-more" onClick={onLogout} style={{ padding: "6px 12px" }}>Salir</button>
         </div>
       </div>
+
+      <ClavesPorEntregar claves={clavesSync} onEntregada={(c) => setClavesSync((prev) => prev.filter((x) => x.clave !== c))} />
 
       {detallePend !== null && pendientes === 0 && !errCola && (
         <div style={{ background: "var(--panel)", border: "1px solid var(--stroke)", borderRadius: 12,
@@ -1029,6 +1161,20 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
             </>
           );
         })()}
+
+        {/* ── Aviso «ya cargado»: arriba de todo, antes de que se llene nada.
+            Sólo aparece con el GPS tomado; si no hay ninguno cerca es una
+            línea discreta, y nunca frena el guardado. ── */}
+        {coords && (
+          <div ref={avisoRef}>
+            <YaCargadosAca
+              lat={coords.lat} lng={coords.lng} acc={coords.acc}
+              lista={cercanos} estado={estadoLista}
+              onEsEste={esEste}
+              onVerTodos={() => onVerMisComercios({ filtro: "cerca" })}
+            />
+          </div>
+        )}
 
         {/* ── Nombre ── */}
         <input className="adm-input" value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre del cartel (si no tiene, dejalo vacío)" />

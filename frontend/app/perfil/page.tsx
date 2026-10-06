@@ -35,15 +35,15 @@ export default function PerfilPage() {
     <div id="ukroot" data-theme={POR_DEFECTO} className="uk uk-app">
       <ThemeNoFlash />
       <div className="uk-app-toggle"><ThemeToggle /></div>
-      <Nav mapOnly />
+      <Nav />
       <div className="wrap" style={{ maxWidth: 480, paddingTop: 40, paddingBottom: 100 }}>
         <span className="eyebrow"><User style={{ width: 14, height: 14 }} /> Perfil</span>
 
         {!sesion ? (
           <>
-            <h1 style={{ fontSize: 26, margin: "10px 0 6px" }}>Entrá con tu WhatsApp</h1>
+            <h1 style={{ fontSize: 26, margin: "10px 0 6px" }}>Entrá con tu celular</h1>
             <p style={{ color: "var(--txt-3)", marginBottom: 20 }}>
-              Sin contraseña — solo tu celular, para guardar locales y recibir avisos de ofertas.
+              Tu celular y tu clave de 6 números, para guardar tus locales. La primera vez la conseguís confirmando con tu WhatsApp.
             </p>
             <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
               <CompradorAuthForm onOk={() => { setSesion(getUsuarioSession()); volverSiNext(); }} />

@@ -776,7 +776,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
                   URUKU todavía no tiene comercios cargados en {ciudad === ciudadInicial && nombreCiudad ? nombreCiudad : "esta ciudad"}.
                   Estamos empezando: si tenés un negocio acá, sumalo y sos de los primeros.
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 10 }}>
-                    <Link href="/publicar" className="uk-btn uk-btn-primary">Sumar mi negocio</Link>
+                    <Link href="/autoregistro?modo=registro" className="uk-btn uk-btn-primary">Sumar mi negocio</Link>
                   </div>
                 </div>
               )

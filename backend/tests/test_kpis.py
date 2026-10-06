@@ -45,6 +45,38 @@ def test_la_vista_guarda_de_donde_llego(client, repo):
     assert "origen" not in repo.leads[-1]
 
 
+def test_el_contacto_guarda_de_donde_llego_en_whatsapp_mapa_y_reserva(client, repo):
+    """Criterio de la limpieza de circuitos: quien llegó con `?ref=volante-x` y
+    escribe por WhatsApp (o pide el mapa, o reserva) deja el origen en el lead."""
+    for tipo in ("whatsapp", "mapa", "reserva"):
+        r = client.post("/lead", json={"comercio_id": "c1", "tipo": tipo, "origen": "volante-x"})
+        assert r.status_code == 200
+        assert repo.leads[-1]["tipo"] == tipo
+        assert repo.leads[-1]["origen"] == "volante-x"
+
+
+def test_llegadas_salen_de_visitas_y_contactos_de_leads(client, repo, admin_token):
+    """El panel «Llegadas» cuenta PERSONAS de `visitas.origen`; los contactos
+    con origen salen aparte, de `leads.origen`, y la vista de una ficha no es
+    un contacto."""
+    # Dos personas entraron por el volante (una mirando dos páginas); una por la mesa.
+    for sesion, ref in (("sesion-aaa1", "volante-x"), ("sesion-aaa1", "volante-x"),
+                        ("sesion-bbb2", "volante-x"), ("sesion-ccc3", "mesa-sol"),
+                        ("sesion-ddd4", None)):
+        client.post("/visita", json={"ruta": "/buscar", "sesion": sesion, "origen": ref})
+    # Un solo contacto de los llegados por el volante, más una vista que no cuenta.
+    client.post("/lead", json={"comercio_id": "c1", "tipo": "whatsapp", "origen": "volante-x"})
+    client.post("/lead", json={"comercio_id": "c1", "tipo": "vista", "origen": "volante-x"})
+
+    d = client.get("/admin/estadisticas", headers={"Authorization": f"Bearer {admin_token}"}).json()
+    assert d["llegadas_30d"] == 3
+    assert d["llegadas_por_clase"] == {"volante": 2, "mesa": 1}
+    assert d["llegadas_top"][0] == {"origen": "volante-x", "count": 2}
+    assert d["contactos_con_origen_30d"] == 1
+    assert d["contactos_por_clase"] == {"volante": 1}
+    assert d["contactos_origen_top"] == [{"origen": "volante-x", "count": 1}]
+
+
 def test_te_contesto_cuenta_por_comercio_y_una_sola_vez(client, repo):
     """El clic devuelve un id; con ese id el comprador dice si le contestaron.
     Una sola vez por contacto, y el comercio suma sí/no."""

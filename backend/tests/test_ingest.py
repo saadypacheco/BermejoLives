@@ -10,7 +10,16 @@ def _evento(wamid="wa-1", body="Oferta zapatillas 120 Bs", jid="59170000009@c.us
     }
 
 
+def _comercio_del_remitente(repo, numero="59170000009"):
+    """El comercio dueño del número de `_evento`: un 1 a 1 de un número
+    DESCONOCIDO ya no crea comercio (limpieza de circuitos), así que los tests
+    que quieren una publicación parten de un comercio ya cargado."""
+    return repo.seed_comercio(id="com-rem", slug="rem", nombre="Remitente",
+                              whatsapp=numero, activo=True)
+
+
 def test_mensaje_crea_publicacion_pendiente(repo):
+    _comercio_del_remitente(repo)
     res = ingest.handle_message(_evento(), repo)
     assert res["captured"] is True
     assert res["estado"] == "pendiente"
@@ -18,7 +27,82 @@ def test_mensaje_crea_publicacion_pendiente(repo):
     assert repo.publicaciones[0]["estado"] == "pendiente"
 
 
+# ---------------- Sin comercios fantasma (limpieza de circuitos) ----------------
+def test_un_1a1_de_un_desconocido_sin_codigo_no_crea_comercio_ni_publicacion(repo):
+    """Criterio 1: quien le escribe al Registrador sin código —un comprador, un
+    curioso, un número equivocado— no deja un «Comercio 1234» apagado ni una
+    publicación pendiente. Queda en Recepción como «sin comercio», con motivo."""
+    res = ingest.handle_message(_evento(wamid="wa-f1"), repo)
+    assert res["captured"] is True
+    assert res["publicada"] is False
+    assert "sin el código" in res["motivo"]
+    assert len(repo.comercios) == 0
+    assert repo.publicaciones == []
+    assert repo.comercio_numeros == []
+    fila = repo.wa_inbox["wa-f1"]
+    assert fila["resultado"] == "sin_comercio"
+    assert "no se creó ningún comercio" in fila["motivo"]
+    assert fila["procesado"] is True
+    # Y aparece en la cola de «problemas» de la bandeja.
+    assert [f["wa_message_id"] for f in repo.list_wa_inbox("problemas")] == ["wa-f1"]
+
+
+def test_un_1a1_de_un_desconocido_con_un_codigo_que_no_existe_tampoco_crea_nada(repo):
+    repo.seed_comercio(id="com-x", slug="x", nombre="X", codigo="K7M2", activo=True)
+    res = ingest.handle_message(_evento(wamid="wa-f2", body="URUKU-ZZZZ oferta taladro 300"), repo)
+    assert res["publicada"] is False
+    assert "ZZZZ" in res["motivo"]
+    assert list(repo.comercios) == ["com-x"]
+    assert repo.publicaciones == []
+    assert repo.wa_inbox["wa-f2"]["resultado"] == "sin_comercio"
+
+
+def test_el_dueno_cargado_por_el_agente_publica_aunque_su_numero_este_sin_prefijo(repo):
+    """Lo que SÍ sigue andando: el número de la ficha cargado a mano («70000009»)
+    es el mismo que llega de WhatsApp («59170000009»). No se crea un duplicado."""
+    c = repo.seed_comercio(id="com-c", slug="c", nombre="Cargado en la calle",
+                           whatsapp="70000009", activo=True)
+    res = ingest.handle_message(_evento(wamid="wa-f3"), repo)
+    assert res["estado"] == "pendiente"
+    assert list(repo.comercios) == [c["id"]]
+    assert repo.publicaciones[0]["comercio_id"] == c["id"]
+    assert repo.publicaciones[0]["identidad_origen"] == "numero"
+
+
+def test_el_webhook_de_un_desconocido_no_deja_un_comercio_apagado(client, repo, admin_token):
+    """Alguien le escribe al número de URUKU con una foto. Antes quedaba un
+    borrador apagado («Comercio 8877») y una publicación pendiente que el
+    moderador tenía que descartar a mano. Ahora el crudo queda en la bandeja y
+    nada más."""
+    r = client.post("/ingest/webhook", json={"event": "message", "session": "default", "payload": {
+        "id": "wamid.solo1", "from": "59199988877@c.us", "fromMe": False,
+        "body": "Campera Bs 300", "type": "image", "hasMedia": True,
+        "mediaUrl": "https://x/f.jpg", "mimetype": "image/jpeg", "timestamp": 1758800000}})
+    assert r.status_code == 200
+    assert repo.comercios == {}
+    assert repo.publicaciones == []
+    assert repo.wa_inbox["wamid.solo1"]["resultado"] == "sin_comercio"
+    # Y se ve en Recepción, en la cola de «problemas» (lo que pide mirar).
+    r = client.get("/admin/whatsapp/entrantes?estado=problemas",
+                   headers={"Authorization": f"Bearer {admin_token}"})
+    assert r.status_code == 200
+    items = r.json()["items"]
+    assert [i["resultado"] for i in items] == ["sin_comercio"]
+    assert items[0]["motivo"]
+
+
+def test_un_mensaje_de_un_grupo_sin_atar_sigue_igual_que_antes(repo):
+    """No cambió: un grupo sin comercio atado y sin código queda como
+    `sin_comercio` y no crea nada (esto ya era así)."""
+    res = ingest.handle_message(_evento_grupo(wamid="wa-g-igual"), repo)
+    assert res["publicada"] is False
+    assert res["motivo"] == "el grupo no está asociado a ningún comercio"
+    assert repo.wa_inbox["wa-g-igual"]["resultado"] == "sin_comercio"
+    assert repo.comercios == {} and repo.publicaciones == []
+
+
 def test_idempotencia_por_wa_message_id(repo):
+    _comercio_del_remitente(repo)
     ingest.handle_message(_evento(wamid="dup-1"), repo)
     res = ingest.handle_message(_evento(wamid="dup-1"), repo)
     assert res.get("duplicate") is True
@@ -38,6 +122,7 @@ def test_comercio_confiable_publica_directo(repo):
 
 
 def test_clasificacion_video_por_link_tiktok(repo):
+    _comercio_del_remitente(repo)
     res = ingest.handle_message(_evento(wamid="wa-v", body="Miren https://tiktok.com/@x/video/9"), repo)
     assert res["tipo"] == "video"
     assert repo.publicaciones[0]["tiktok_url"] == "https://tiktok.com/@x/video/9"
@@ -134,9 +219,9 @@ def _evento_grupo(wamid="wa-g1", body="Oferta 120 Bs", participante="59170000007
 
 
 def test_grupo_desconocido_no_crea_comercio_fantasma(repo):
-    """Un número desconocido en un chat 1-a-1 es un comerciante nuevo y crear
-    el borrador tiene sentido. Un grupo desconocido no es nadie: si se creara
-    un comercio por grupo, la base se llenaría de fichas que nadie cargó."""
+    """Un grupo desconocido no es nadie: si se creara un comercio por grupo, la
+    base se llenaría de fichas que nadie cargó. (Desde la limpieza de circuitos
+    vale lo mismo para un número desconocido en un 1 a 1.)"""
     res = ingest.handle_message(_evento_grupo(), repo)
     assert res["captured"] is True
     assert res["publicada"] is False
@@ -452,25 +537,18 @@ def test_un_numero_suelto_no_se_toma_como_precio(repo):
     assert repo.publicaciones[0]["precio"] is None
 
 
-def test_el_borrador_de_un_desconocido_nace_apagado_y_lo_enciende_el_moderador(client, repo, admin_token):
-    """Alguien le escribe al número de URUKU con una foto: puede ser un
-    comerciante que quiere publicar, o cualquiera. El borrador nace APAGADO
-    —no sale en el mapa, ni en el buscador, ni en el conteo— y lo enciende el
-    moderador al aprobar lo que mandó, que es cuando una persona confirmó que
-    es un negocio de verdad."""
+def test_aprobar_lo_de_un_comercio_apagado_lo_enciende(client, repo, admin_token):
+    """Los borradores que nacieron de un WhatsApp desconocido antes de la
+    limpieza de circuitos siguen ahí, apagados. Aprobar lo que mandaron es
+    mirarlos: se enciende el comercio (si no, la oferta queda aprobada y sin
+    salir en ningún lado). Los borradores nuevos ya no se crean."""
     h = {"Authorization": f"Bearer {admin_token}"}
-    r = client.post("/ingest/webhook", json={"event": "message", "session": "default", "payload": {
-        "id": "wamid.solo1", "from": "59199988877@c.us", "fromMe": False,
-        "body": "Campera Bs 300", "type": "image", "hasMedia": True,
-        "mediaUrl": "https://x/f.jpg", "mimetype": "image/jpeg", "timestamp": 1758800000}})
-    assert r.status_code == 200
-    nuevo = next(c for c in repo.comercios.values() if c.get("whatsapp") == "59199988877")
-    assert nuevo["activo"] is False, "el borrador no puede nacer visible"
-
-    pub = next(p for p in repo.publicaciones if p["comercio_id"] == nuevo["id"])
-    assert pub["estado"] == "pendiente"
+    viejo = repo.seed_comercio(id="com-borrador", slug="comercio-988877", nombre="Comercio 8877",
+                               whatsapp="59199988877", activo=False)
+    pub = repo.insert_publicacion_directa({"comercio_id": viejo["id"], "tipo": "oferta",
+                                           "estado": "pendiente", "titulo": "Campera"})
     client.post(f"/moderacion/publicaciones/{pub['id']}", headers=h, json={"estado": "aprobado"})
-    assert repo.comercios[nuevo["id"]]["activo"] is True, "aprobar la oferta enciende el comercio"
+    assert repo.comercios[viejo["id"]]["activo"] is True, "aprobar la oferta enciende el comercio"
 
 
 def test_una_foto_con_texto_de_novedad_es_novedad_no_oferta():

@@ -1,5 +1,6 @@
 """Configuración central (pydantic-settings, lee de .env)."""
 from functools import lru_cache
+from urllib.parse import quote
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -39,8 +40,16 @@ class Settings(BaseSettings):
     # sesión de WAHA.
     bot_whatsapp_numero: str = ""
 
-    def wa_link_confirmar(self, codigo: str) -> str:
-        return f"https://wa.me/{self.bot_whatsapp_numero}?text=CONFIRMAR-{codigo}"
+    def wa_link_confirmar(self, codigo: str, para: str = "usuario") -> str:
+        """El enlace que abre WhatsApp con el «CONFIRMAR-XXXXXX» ya escrito.
+
+        El mensaje aclara PARA QUÉ es («para entrar a Mi comercio de URUKU»):
+        sin eso alguien podía pasarle el enlace a un dueño y hacerle mandar el
+        código de otro sin saber qué confirmaba. El webhook reconoce el código
+        con ese texto alrededor (`ingest._RE_CONFIRMAR`)."""
+        destino = "Mi comercio de URUKU" if para == "comercio" else "URUKU"
+        texto = quote(f"CONFIRMAR-{codigo} para entrar a {destino}")
+        return f"https://wa.me/{self.bot_whatsapp_numero}?text={texto}"
 
     # Los números de URUKU que están dentro de los grupos de comerciantes,
     # separados por coma. En cada grupo está el comercio, el OPERATIVO —que es

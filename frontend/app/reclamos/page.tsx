@@ -47,7 +47,7 @@ export default function ReclamosPage() {
       {estado === "ok" ? (
         <div className="glass" style={{ padding: 24, borderRadius: 16 }}>
           <h1 style={{ fontSize: 22, marginBottom: 8 }}>Comentario enviado</h1>
-          <p style={{ color: "var(--txt-2)" }}>Lo va a revisar el equipo de URUKU. Si dejaste tu contacto, te respondemos a la brevedad.</p>
+          <p style={{ color: "var(--txt-2)" }}>Lo va a leer el equipo de URUKU. Gracias por contarnos.</p>
         </div>
       ) : (
         <>
@@ -59,7 +59,7 @@ export default function ReclamosPage() {
           </p>
           <form onSubmit={enviar} className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
             <input className="adm-input" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Tu nombre (opcional)" />
-            <input className="adm-input" value={contacto} onChange={(e) => setContacto(e.target.value)} placeholder="Tu WhatsApp o email (para responderte)" />
+            <input className="adm-input" value={contacto} onChange={(e) => setContacto(e.target.value)} placeholder="Tu WhatsApp o email (opcional)" />
             <textarea className="adm-input" rows={5} value={mensaje} onChange={(e) => setMensaje(e.target.value)} placeholder="Contanos qué pasó o dejá tu comentario…" />
             {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
             <button className="btn btn-primary" type="submit" disabled={estado === "sending"}>

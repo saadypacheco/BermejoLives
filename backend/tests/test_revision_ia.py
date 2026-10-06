@@ -140,6 +140,23 @@ def test_la_confianza_justa_por_debajo_no_alcanza(repo, monkeypatch):
     assert repo.get_publicacion(p["id"])["estado"] == "pendiente"
 
 
+def test_lo_del_explorador_nunca_se_aprueba_solo(repo, ia, monkeypatch):
+    """Limpieza de circuitos: aunque la perilla esté encendida y la IA diga
+    «aprobar» con 0.9, una foto del explorador va siempre a una persona. Se
+    revisa (queda el veredicto para ordenar la cola) pero no se aprueba."""
+    monkeypatch.setattr(settings, "ia_auto_aprobar_desde", 0.8)
+    c = repo.seed_comercio(slug="x", nombre="X", plan="destacado")
+    p_exp = _pub(repo, c, "zapatillas del explorador", origen="explorador")
+    p_wa = _pub(repo, c, "zapatillas por whatsapp", origen="whatsapp")
+    r = revision_ia.revisar_pendientes(repo)
+    assert r["revisadas"] == 2 and r["auto_aprobadas"] == 1
+    exp = repo.get_publicacion(p_exp["id"])
+    assert exp["estado"] == "pendiente"
+    assert exp["ia_veredicto"] == "aprobar"      # se opinó, no se aprobó
+    assert repo.get_publicacion(p_wa["id"])["estado"] == "aprobado"
+    assert all(f["publicacion_id"] != p_exp["id"] for f in repo.difusion)
+
+
 # ══════════════════════════════════════════════════════ el orden
 
 def test_la_cola_llega_ordenada_al_moderador(client, repo, admin_token, ia):

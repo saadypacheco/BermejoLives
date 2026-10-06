@@ -78,7 +78,7 @@ export default async function PlanesPage() {
         </div>
 
         <p className="uk-planes-nota">
-          Se paga por mes, por QR de Bolivia o de Argentina, o por transferencia, desde <Link href="/mi-comercio">Mi negocio</Link>.
+          Se paga por mes, por transferencia o en efectivo, y se registra desde <Link href="/mi-comercio">Mi negocio</Link>.
           Sin comisión por venta: cobrás vos, como siempre. ¿Dudas? Preguntale a Dax.
         </p>
       </div>
