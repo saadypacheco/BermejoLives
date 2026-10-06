@@ -465,6 +465,25 @@ def _propio_o_404(repo: Repo, comercio_id: str, agente: dict) -> dict:
     raise HTTPException(status_code=404, detail="Comercio no encontrado")
 
 
+@router.get("/campo/mis-comercios/{comercio_id}")
+def ver_mi_comercio(
+    comercio_id: str,
+    agente: dict = Depends(auth.require_agente),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Un comercio de su ciudad (o cargado por él), con lo mismo que trae la lista.
+
+    Lo pide «Completar comercio» al final del alta: el recién creado no está en
+    la lista que ya tiene el celular, y bajar la ciudad entera con la señal de
+    la calle fallaba justo cuando hay que sacarle las fotos al local.
+    """
+    _propio_o_404(repo, comercio_id, agente)
+    comercio = repo.get_comercio_campo(comercio_id)
+    if not comercio:
+        raise HTTPException(status_code=404, detail="Comercio no encontrado")
+    return {"comercio": comercio}
+
+
 class _EditarComercioBody(BaseModel):
     """Lo que el agente puede corregir desde la calle.
 
@@ -493,6 +512,10 @@ class _EditarComercioBody(BaseModel):
     #: Su propio canal de WhatsApp (0133), no el de URUKU.
     canal_wa_url: str | None = None
     catalogo_url: str | None = None
+    #: El horario, como lo dicta el dueño («Lun-Sáb 8:00-12:00 y 14:30-20:00»).
+    #: Faltaba: el filtro «Sin horario» de la app llevaba a un editor que no lo
+    #: podía cargar. Es el dato que decide si alguien camina hasta el local.
+    horario: str | None = None
 
 
 @router.patch("/campo/mis-comercios/{comercio_id}")
@@ -528,6 +551,11 @@ def editar_mi_comercio(
             )
         if patch["whatsapp"]:
             patch["whatsapp"] = whatsapp_para_guardar(patch["whatsapp"]) or patch["whatsapp"].strip()
+    if patch.get("horario"):
+        # Lo dictó el dueño, parado en el local: deja de ser el estimado de la
+        # calle (el que se carga por lote), igual que cuando lo escribe el admin.
+        patch["horario"] = patch["horario"].strip()[:200]
+        patch["horario_estimado"] = False
     if not patch and body.rubro_slugs is None:
         raise HTTPException(status_code=400, detail="No hay campos para actualizar")
     comercio = repo.update_comercio(comercio_id, patch, body.rubro_slugs)

@@ -52,7 +52,7 @@ import { CatalogoPanel } from "@/components/catalogo-panel";
 import { ImageLightbox } from "@/components/image-lightbox";
 import type { Ciudad, Rubro } from "@/lib/types";
 import { precioFmt, MODALIDAD_LABEL, comoLlegarHref } from "@/lib/types";
-import { abiertoAhora } from "@/lib/horario";
+import { EditorHorario, recordarUltimoHorario } from "@/components/editor-horario";
 import { Check, X, Edit, Pin, WhatsApp, Verified } from "@/components/icons";
 import { Ic } from "@/components/ic";
 
@@ -1840,32 +1840,6 @@ function normalizarRed(valor: string, base: string): string | undefined {
   return base + v.replace(/^@+/, "");
 }
 
-const ULTIMO_HORARIO = "uruku_ultimo_horario";
-
-function ultimoHorario(): string {
-  if (typeof window === "undefined") return "";
-  try { return localStorage.getItem(ULTIMO_HORARIO) ?? ""; } catch { return ""; }
-}
-
-/** Los horarios que de verdad se repiten en Bermejo.
- *
- *  El texto va en el formato que `abiertoAhora` entiende: los días de un lado y
- *  los dos turnos en el mismo segmento, para que la tarde no se aplique también
- *  al domingo. Un horario que el parser no entiende es peor que ninguno —el
- *  comprador no ve "Abierto ahora" y nadie se entera de por qué. */
-const HORARIOS_FRECUENTES: { label: string; texto: string }[] = [
-  { label: "8-12 · 14:30-20 (L-S)", texto: "Lun-Sáb 8:00-12:00 y 14:30-20:00" },
-  { label: "8-12 · 14:30-20 + Dom AM", texto: "Lun-Sáb 8:00-12:00 y 14:30-20:00 · Dom 8:00-12:00" },
-  { label: "Corrido 8-20 (L-S)", texto: "Lun-Sáb 8:00-20:00" },
-  { label: "Corrido 9-21 (todos)", texto: "Todos los días 9:00-21:00" },
-  { label: "9-13 · 15-19 (L-V)", texto: "Lun-Vie 9:00-13:00 y 15:00-19:00" },
-  { label: "24 horas", texto: "Todos los días 0:00-24:00" },
-  // Los de la noche. Cruzan la medianoche, que el parser recién entiende desde
-  // que existen bares y boliches en la taxonomía.
-  { label: "Noche 21-4 (V y S)", texto: "Vie-Sáb 21:00-4:00" },
-  { label: "Noche 20-2 (Mié-Dom)", texto: "Mié-Dom 20:00-2:00" },
-];
-
 function ModalEditar({
   comercio, rubros, onClose, onDone,
   posicion = null, haySiguiente = false, hayAnterior = false, onSaltar,
@@ -1961,7 +1935,7 @@ function ModalEditar({
       // En localStorage y no en estado: el modal se remonta con `key` en cada
       // comercio, así que cualquier estado propio se pierde justo cuando hace
       // falta.
-      if (horario.trim()) { try { localStorage.setItem(ULTIMO_HORARIO, horario.trim()); } catch { /* modo privado */ } }
+      recordarUltimoHorario(horario);
       return true;
     } catch (e) {
       // El mensaje del servidor y no uno genérico: «Verificá el backend» mandó
@@ -2185,40 +2159,7 @@ function ModalEditar({
                 locales abren casi todos a la misma hora, y viniendo de a uno
                 con las flechas, el anterior suele ser el vecino. */}
             <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Horario
-              <input className="adm-input" style={{ marginTop: 4 }} value={horario}
-                onChange={(e) => setHorario(e.target.value)} placeholder="Lun-Sáb 9-20 · Dom 10-14" />
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-                {ultimoHorario() && ultimoHorario() !== horario && (
-                  <button type="button" className="mchip" style={{ cursor: "pointer", borderColor: "var(--neon)", color: "var(--neon)" }}
-                    onClick={() => setHorario(ultimoHorario())}
-                    title={ultimoHorario()}>
-                    Igual que el anterior
-                  </button>
-                )}
-                {HORARIOS_FRECUENTES.map((h) => (
-                  <button type="button" key={h.texto} className={`mchip ${horario === h.texto ? "active" : ""}`}
-                    style={{ cursor: "pointer" }} title={h.texto}
-                    onClick={() => setHorario(horario === h.texto ? "" : h.texto)}>
-                    {h.label}
-                  </button>
-                ))}
-                {horario && (
-                  <button type="button" className="mchip" style={{ cursor: "pointer" }} onClick={() => setHorario("")}>
-                    Limpiar
-                  </button>
-                )}
-              </div>
-              {/* Lo que el sitio va a entender de lo que quedó escrito. Si dice
-                  "no se entiende", el comprador no va a ver "Abierto ahora" —
-                  y eso hay que saberlo ACÁ, no descubrirlo en la ficha. */}
-              {horario.trim() && (
-                <div style={{ marginTop: 6, fontSize: 11.5,
-                              color: abiertoAhora(horario).estado === "desconocido" ? "var(--amber)" : "var(--txt-3)" }}>
-                  {abiertoAhora(horario).estado === "desconocido"
-                    ? "No se entiende: el sitio no va a poder decir si está abierto"
-                    : `Ahora mismo: ${abiertoAhora(horario).estado}`}
-                </div>
-              )}
+              <EditorHorario value={horario} onChange={setHorario} />
             </div>
 
             {/* Las columnas y el endpoint existían desde el init; lo que no

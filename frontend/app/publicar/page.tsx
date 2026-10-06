@@ -3,21 +3,20 @@
 import { useEffect, useRef, useState } from "react";
 import {
   agenteLogin, getAgenteToken, clearAgente, altaComercioCampo,
-  misComercios, editarComercioAgente, eliminarComercioAgente, actualizarFotoComercioAgente, type ComercioAgente,
-  listarFotosCampo, listarVideosCampo, subirFotoCampo, subirVideoCampo, borrarFotoCampo, borrarVideoCampo,
+  misComercios, miComercio, eliminarComercioAgente, type ComercioAgente,
   listarLugares, crearLugar, editarLugar, subirPortadaLugar, subirVideoLugar, type Lugar,
   getAgenteEmail, ciudadDelAgente,
 } from "@/lib/campo";
 import { duracionVideo } from "@/lib/upload";
 import { CapturaWhatsapp } from "@/components/captura-whatsapp";
-import { SegundaPasada } from "@/components/segunda-pasada";
+import { CompletarComercio, apiGaleriaCampo } from "@/components/completar-comercio";
+import { GaleriaUploader } from "@/components/galeria-uploader";
 import { getCiudades, getRubros } from "@/lib/data";
 import type { Ciudad, Rubro } from "@/lib/types";
 import { Pin, User, Arrow, Edit } from "@/components/icons";
 import { comprimirImagen } from "@/lib/imagen";
 import { useObjectUrl } from "@/lib/object-url";
 import { medirMemoria } from "@/lib/memoria";
-import { GaleriaUploader } from "@/components/galeria-uploader";
 import { AdminMap } from "@/components/admin-map";
 import { geoErrorMsg, metros } from "@/lib/geo";
 import { YaCargadosAca, RADIO_YA_CARGADO_M, type EstadoLista } from "@/components/ya-cargados-aca";
@@ -52,13 +51,6 @@ function ClavesPorEntregar({ claves, onEntregada }: { claves: ClavePorEntregar[]
 // el link no abre ningún chat. Bermejo es frontera, así que hay comercios
 // con número de los dos países y el prefijo tiene que poder cambiarse a mano.
 const PREFIJO: Record<string, string> = { Bolivia: "591", Argentina: "549" };
-
-const MODALIDADES = [
-  { key: "mayorista", label: "Mayorista" },
-  { key: "minorista", label: "Minorista" },
-  { key: "ambos",     label: "Ambos" },
-];
-
 
 // ─────────────────────────────────────────────
 export default function CampoPage() {
@@ -118,7 +110,15 @@ function MisComercios({ destino, onVolver, onLogout }: { destino: DestinoLista |
   const [items, setItems] = useState<ComercioAgente[] | null>(() => listaEnMemoria());
   const [rubros, setRubros] = useState<Rubro[]>([]);
   const [err, setErr] = useState("");
-  const [editando, setEditando] = useState<ComercioAgente | null>(null);
+  // El comercio que se está completando. Sólo el id: el comercio en sí se busca
+  // en `items` cada vez, así lo que se guarda se ve al instante en «Le falta» y
+  // en la lista (y el comercio sale del filtro «Sin horario» sin recargar nada).
+  const [editando, setEditando] = useState<{ id: string; abrirEn: "horario" | "arriba" } | null>(null);
+  const [lugares, setLugares] = useState<Lugar[]>([]);
+  // Dónde estaba la lista al abrir un comercio: se vuelve exactamente ahí. Al
+  // recorrer una cuadra comercio por comercio, perder el lugar es perder el hilo.
+  const scrollLista = useRef(0);
+  const restaurarScroll = useRef(false);
   const [borrando, setBorrando] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [filtro, setFiltro] = useState<FiltroAg>(destino?.filtro && destino.filtro !== "cerca" ? destino.filtro : "todos");
@@ -168,7 +168,7 @@ function MisComercios({ destino, onVolver, onLogout }: { destino: DestinoLista |
   useEffect(() => {
     if (!destino?.editarId || !items || abiertoRef.current) return;
     const c = items.find((x) => x.id === destino.editarId);
-    if (c) { abiertoRef.current = true; setEditando(c); }
+    if (c) { abiertoRef.current = true; setEditando({ id: c.id, abrirEn: "arriba" }); }
     // Recién cuando llegó la lista del servidor se puede decir que ya no está
     // (baja o de otra ciudad): se muestra la lista normal.
     else if (fresca) { abiertoRef.current = true; setEnfocado(null); }
@@ -184,6 +184,29 @@ function MisComercios({ destino, onVolver, onLogout }: { destino: DestinoLista |
   }
 
   const todos = items ?? [];
+  // El comercio que se está completando, siempre en su última versión.
+  const comercioEdit = editando ? todos.find((x) => x.id === editando.id) ?? null : null;
+
+  function abrir(c: ComercioAgente) {
+    scrollLista.current = window.scrollY;
+    // Desde «Sin horario» la pantalla abre con el horario a la vista.
+    setEditando({ id: c.id, abrirEn: filtro === "sinhorario" ? "horario" : "arriba" });
+  }
+  function cerrar() { restaurarScroll.current = true; setEditando(null); }
+  // Al volver, la lista reaparece donde estaba. En un efecto y no justo después
+  // del setState: recién acá el DOM de la lista ya volvió a tener altura.
+  useEffect(() => {
+    if (!editando && restaurarScroll.current) { restaurarScroll.current = false; window.scrollTo(0, scrollLista.current); }
+  }, [editando]);
+  // Los mercados/galerías para el selector, de la ciudad del comercio abierto.
+  const ciudadEdit = comercioEdit?.ciudades?.slug ?? ciudadDelAgente ?? "bermejo";
+  useEffect(() => {
+    if (!editando) return;
+    let vivo = true;
+    listarLugares(ciudadEdit).then((l) => { if (vivo) setLugares(l); }).catch(() => {});
+    return () => { vivo = false; };
+  }, [editando?.id, ciudadEdit]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const nVerificados = todos.filter((c) => c.verificado).length;
   const nPend = todos.length - nVerificados;
   const nIncompletos = todos.filter((c) => agenteIncompleto(c).length > 0).length;
@@ -235,6 +258,20 @@ function MisComercios({ destino, onVolver, onLogout }: { destino: DestinoLista |
         <button className="link-more" onClick={onLogout} style={{ padding: "6px 12px" }}>Salir</button>
       </div>
 
+      {/* LA PANTALLA «Completar comercio» ocupa el lugar de la lista. La lista no
+          se desmonta, se esconde: así sus filtros, la búsqueda y dónde estaba
+          parado siguen ahí al volver. */}
+      {comercioEdit && editando && (
+        <CompletarComercio
+          key={comercioEdit.id}
+          comercio={comercioEdit} rubros={rubros} lugares={lugares}
+          abrirEn={editando.abrirEn}
+          onVolver={cerrar}
+          onGuardado={(patch) => setItems((prev) => prev?.map((x) => (x.id === comercioEdit.id ? { ...x, ...patch } : x)) ?? prev)}
+        />
+      )}
+
+      <div style={{ display: comercioEdit ? "none" : undefined }}>
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <button className="link-more" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={onVolver}>
           <Arrow style={{ width: 15, height: 15, transform: "rotate(180deg)" }} /> Volver
@@ -308,24 +345,14 @@ function MisComercios({ destino, onVolver, onLogout }: { destino: DestinoLista |
       {items && items.length === 0 && <p style={{ color: "var(--txt-3)" }}>Todavía no cargaste ningún comercio.</p>}
       {items && items.length > 0 && filtradas.length === 0 && <p style={{ color: "var(--txt-3)" }}>Sin resultados para ese filtro/búsqueda.</p>}
 
-      {/* Vista MAPA (D): tocá un pin y se abre el editor de ese comercio (ideal para los sin nombre) */}
+      {/* Vista MAPA (D): tocá un pin y se abre «Completar comercio» (ideal para los sin nombre).
+          Mientras hay un comercio abierto el mapa se desmonta: Leaflet no se
+          lleva bien con un contenedor escondido. */}
       {vista === "mapa" ? (
-        editando ? (
-          <div className="glass" style={{ padding: 14, borderRadius: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, gap: 8 }}>
-              <b style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{editando.nombre || "Sin nombre"}</b>
-              <button className="link-more" style={{ flexShrink: 0 }} onClick={() => setEditando(null)}>← Volver al mapa</button>
-            </div>
-            <EditarComercioForm
-              comercio={editando} rubros={rubros}
-              onCancel={() => setEditando(null)}
-              onGuardado={(actualizado) => { setItems((prev) => prev?.map((x) => (x.id === editando.id ? { ...x, ...actualizado } : x)) ?? prev); setEditando(null); }}
-            />
-          </div>
-        ) : (
+        comercioEdit ? null : (
           <AdminMap
             comercios={filtradas.map((c) => ({ id: c.id, nombre: c.nombre, lat: c.lat, lng: c.lng, rubro_slug: c.rubros?.slug ?? null, incompleto: agenteIncompleto(c).length > 0, lugar_id: c.lugar_id, lugar_nombre: c.lugares?.nombre ?? null, lugar_lat: c.lugares?.lat ?? null, lugar_lng: c.lugares?.lng ?? null, lugar_portada_thumb: c.lugares?.portada_thumb_url ?? null }))}
-            onSelect={(id) => setEditando(todos.find((x) => x.id === id) ?? null)}
+            onSelect={(id) => { const c = todos.find((x) => x.id === id); if (c) abrir(c); }}
           />
         )
       ) : (
@@ -374,20 +401,17 @@ function MisComercios({ destino, onVolver, onLogout }: { destino: DestinoLista |
                 </div>
               )}
               <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn btn-sm" style={{ flex: 1, border: "1px solid var(--stroke)" }} onClick={() => setEditando(editando?.id === c.id ? null : c)}>
-                  <Edit style={{ width: 14, height: 14 }} /> Editar
+                {/* Un toque y se abre «Completar comercio». En «Sin horario» el
+                    botón dice lo que va a pasar: abre con el horario a la vista. */}
+                <button className="btn btn-sm" style={{ flex: 1, minHeight: 44, border: "1px solid var(--stroke)" }} onClick={() => abrir(c)}>
+                  {filtro === "sinhorario"
+                    ? <><Ic n="reloj" s={14} /> Cargar horario</>
+                    : <><Edit style={{ width: 14, height: 14 }} /> Editar</>}
                 </button>
                 <button className="btn btn-sm" style={{ flex: 1, border: "1px solid var(--stroke)", color: "var(--pink)" }} disabled={borrando === c.id} onClick={() => eliminar(c)}>
                   {borrando === c.id ? "Eliminando…" : "Eliminar"}
                 </button>
               </div>
-              {editando?.id === c.id && (
-                <EditarComercioForm
-                  comercio={c} rubros={rubros}
-                  onCancel={() => setEditando(null)}
-                  onGuardado={(actualizado) => { setItems((prev) => prev?.map((x) => (x.id === c.id ? { ...x, ...actualizado } : x)) ?? prev); setEditando(null); }}
-                />
-              )}
             </div>
             );
           })}
@@ -398,81 +422,6 @@ function MisComercios({ destino, onVolver, onLogout }: { destino: DestinoLista |
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
-function EditarComercioForm({ comercio, rubros, onCancel, onGuardado }: {
-  comercio: ComercioAgente; rubros: Rubro[]; onCancel: () => void; onGuardado: (patch: Partial<ComercioAgente>) => void;
-}) {
-  const [nombre, setNombre] = useState(comercio.nombre);
-  const [whatsapp, setWhatsapp] = useState(comercio.whatsapp ?? "");
-  const [direccion, setDireccion] = useState(comercio.direccion ?? "");
-  const [modalidad, setModalidad] = useState(comercio.modalidad ?? "mayorista");
-  const [rubroSlugs, setRubroSlugs] = useState<string[]>(comercio.rubros ? [comercio.rubros.slug] : []);
-  const [foto, setFoto] = useState<File | null>(null);
-  const [guardando, setGuardando] = useState(false);
-  const [subiendoFoto, setSubiendoFoto] = useState(false);
-  const [err, setErr] = useState("");
-
-  async function guardar() {
-    if (!nombre.trim()) { setErr("El nombre es obligatorio"); return; }
-    setGuardando(true); setErr("");
-    try {
-      let portada_url: string | null | undefined;
-      if (foto) {
-        setSubiendoFoto(true);
-        portada_url = await actualizarFotoComercioAgente(comercio.id, foto);
-        setSubiendoFoto(false);
-      }
-      await editarComercioAgente(comercio.id, {
-        nombre: nombre.trim(), whatsapp: whatsapp.trim(), modalidad,
-        direccion: direccion.trim() || undefined, rubro_slugs: rubroSlugs,
-      });
-      onGuardado({
-        nombre: nombre.trim(), whatsapp: whatsapp.trim(), modalidad, direccion: direccion.trim() || null,
-        rubros: rubros.find((r) => r.slug === rubroSlugs[0]) ?? comercio.rubros,
-        ...(portada_url !== undefined ? { portada_url } : {}),
-      });
-    } catch (e) { setErr(e instanceof Error ? e.message : "No se pudo guardar"); }
-    finally { setGuardando(false); setSubiendoFoto(false); }
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, borderTop: "1px solid var(--stroke)", paddingTop: 10 }}>
-      <input className="adm-input" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Nombre" />
-      <input className="adm-input" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="WhatsApp" />
-      <input className="adm-input" value={direccion} onChange={(e) => setDireccion(e.target.value)} placeholder="Punto de referencia" />
-      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, color: "var(--txt-3)" }}>
-        Cambiar foto {subiendoFoto && "(subiendo…)"}
-        <input type="file" accept="image/*" onChange={(e) => setFoto(e.target.files?.[0] ?? null)} />
-      </label>
-      <div className="seg">
-        {MODALIDADES.map((m) => (
-          <button type="button" key={m.key} className={modalidad === m.key ? "active" : ""} onClick={() => setModalidad(m.key)}>{m.label}</button>
-        ))}
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        {rubros.map((r) => (
-          <ChipToggle key={r.slug} label={r.nombre} active={rubroSlugs.includes(r.slug)} onClick={() => setRubroSlugs((s) => toggle(s, r.slug))} />
-        ))}
-      </div>
-      {/* Galería del comercio ya cargado: agregar/quitar varias fotos y videos */}
-      <div style={{ marginTop: 2 }}>
-        <GaleriaUploader api={{
-          cargarFotos: () => listarFotosCampo(comercio.id),
-          subirFoto: (f, onP) => subirFotoCampo(comercio.id, f, onP),
-          borrarFoto: (id) => borrarFotoCampo(comercio.id, id),
-          cargarVideos: () => listarVideosCampo(comercio.id),
-          subirVideo: (f, dur, onP) => subirVideoCampo(comercio.id, f, dur, onP),
-          borrarVideo: (id) => borrarVideoCampo(comercio.id, id),
-        }} comercioId={comercio.id} />
-      </div>
-      {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
-      <div style={{ display: "flex", gap: 8 }}>
-        <button className="btn btn-primary" style={{ flex: 1 }} disabled={guardando} onClick={guardar}>{guardando ? "Guardando…" : "Guardar cambios"}</button>
-        <button className="btn btn-ghost" onClick={onCancel}>Cancelar</button>
       </div>
     </div>
   );
@@ -512,30 +461,63 @@ function Login({ onOk }: { onOk: () => void }) {
   );
 }
 
-// ─────────────────────────────────────────────
-const EMPTY = { nombre: "", cel: "", modalidad: "mayorista", direccion: "", prodObs: "" };
+/** «Completar comercio» al final del alta. El comercio recién creado no está en
+ *  la lista que ya tiene la pantalla, así que se pide ESE comercio solo (no la
+ *  ciudad entera: con la señal de la calle eso fallaba) y de ahí en adelante es
+ *  la misma pantalla de siempre. Si igual no se puede abrir, la galería se
+ *  muestra suelta: las fotos del local se sacan ahora o no se sacan. */
+function CompletarTrasAlta({ comercioId, whatsapp, rubros, lugares }: {
+  comercioId: string; whatsapp: string | null; rubros: Rubro[]; lugares: Lugar[];
+}) {
+  const [c, setC] = useState<ComercioAgente | null>(null);
+  const [err, setErr] = useState("");
+  const [cargando, setCargando] = useState(true);
 
-function toggle<T>(arr: T[], val: T): T[] {
-  return arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val];
-}
+  const cargar = () => {
+    setCargando(true); setErr("");
+    miComercio(comercioId)
+      .then(setC)
+      .catch((e) => setErr(e instanceof TypeError || !navigator.onLine
+        ? "Sin conexión: no se pudo abrir la pantalla para completar. El comercio ya está guardado."
+        : e instanceof Error ? e.message : "No se pudo cargar"))
+      .finally(() => setCargando(false));
+  };
+  useEffect(() => { cargar(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [comercioId]);
 
-function ChipToggle({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  const caja: React.CSSProperties = { textAlign: "left", marginBottom: 12, padding: 12, borderRadius: 12, background: "var(--panel)", border: "1px solid var(--stroke)", fontSize: 13 };
+  if (!c) {
+    return (
+      <div style={caja}>
+        {cargando && <span style={{ color: "var(--txt-3)" }}><Ic n="reloj" s={13} /> Preparando «Completar comercio»…</span>}
+        {err && (
+          <div role="alert" style={{ color: "var(--pink)" }}>
+            <Ic n="aviso" s={13} /> {err}{" "}
+            <button type="button" className="link-more" style={{ minHeight: 44 }} disabled={cargando} onClick={cargar}>Reintentar</button>
+          </div>
+        )}
+        {err && (
+          <div style={{ marginTop: 12 }}>
+            <div className="campo-lbl">Fotos y videos del local</div>
+            <GaleriaUploader comercioId={comercioId} api={apiGaleriaCampo(comercioId)} />
+          </div>
+        )}
+      </div>
+    );
+  }
+  // El número puede haberse cargado en la tarjeta de arriba después de bajar el comercio.
+  const visto: ComercioAgente = { ...c, whatsapp: c.whatsapp || whatsapp };
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        padding: "6px 12px", borderRadius: 20, fontSize: 13, border: "1px solid",
-        borderColor: active ? "var(--neon)" : "var(--border)",
-        background: active ? "rgba(0,255,130,0.12)" : "transparent",
-        color: active ? "var(--neon)" : "var(--txt-2)",
-        cursor: "pointer",
-      }}
-    >
-      {label}
-    </button>
+    <div style={{ marginBottom: 12 }}>
+      <CompletarComercio
+        comercio={visto} rubros={rubros} lugares={lugares} sinWhatsapp
+        onGuardado={(patch) => setC((prev) => (prev ? { ...prev, ...patch } : prev))}
+      />
+    </div>
   );
 }
+
+// ─────────────────────────────────────────────
+const EMPTY = { nombre: "", cel: "", modalidad: "mayorista", direccion: "", prodObs: "" };
 
 // Editor del mercado/galería (nombre + tipo + foto de portada + video de recorrido).
 // El agente está parado ahí: es el mejor momento para la portada y el recorrido.
@@ -1014,27 +996,12 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
           />
         )}
 
-        {/* LA SEGUNDA PASADA. Todo lo que salió del formulario de la calle —
-            sus números, la modalidad, la galería, qué vende, el catálogo, las
-            redes— más lo que antes no se podía cargar desde el campo y había
-            que pedirle al administrador. Va después del WhatsApp porque es la
-            charla que sigue, y antes de las fotos porque son datos que se
-            dictan mientras el otro está enfrente. */}
-        {altaId && <SegundaPasada comercioId={altaId} lugares={lugares} />}
-
-        {altaId && (
-          <div style={{ textAlign: "left", marginBottom: 12, padding: 10, borderRadius: 12, background: "var(--panel)", border: "1px solid var(--stroke)" }}>
-            <p style={{ color: "var(--txt-2)", fontSize: 12.5, marginBottom: 8 }}><Ic n="foto" s={14} /> Fotos y videos del local</p>
-            <GaleriaUploader api={{
-              cargarFotos: () => listarFotosCampo(altaId),
-              subirFoto: (f, onP) => subirFotoCampo(altaId, f, onP),
-              borrarFoto: (id) => borrarFotoCampo(altaId, id),
-              cargarVideos: () => listarVideosCampo(altaId),
-              subirVideo: (f, dur, onP) => subirVideoCampo(altaId, f, dur, onP),
-              borrarVideo: (id) => borrarVideoCampo(altaId, id),
-            }} comercioId={altaId} />
-          </div>
-        )}
+        {/* «COMPLETAR COMERCIO»: la misma pantalla que se abre desde la lista y
+            desde «Es este». Reemplaza a la segunda pasada suelta y a la galería
+            que iban acá: horario, qué vende, fotos, redes, catálogo… Va después
+            del WhatsApp porque es la charla que sigue, y se queda en la pantalla
+            del alta —sin «Volver»— porque el agente todavía está con el dueño. */}
+        {altaId && <CompletarTrasAlta comercioId={altaId} whatsapp={whatsappCargado} rubros={rubros} lugares={lugares} />}
 
         {subioLugar && (
           <button className="btn btn-primary" style={{ width: "100%", marginBottom: 8, padding: "9px 12px", background: "#6d28d9", borderColor: "#6d28d9", color: "#fff" }} onClick={otroPuestoAca}>

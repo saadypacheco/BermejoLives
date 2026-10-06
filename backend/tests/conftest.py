@@ -818,6 +818,10 @@ class FakeRepo:
         return [c for c in self.comercios.values()
                 if c.get("ciudad_id") == ciudad_id and c.get("activo", True)][:limit]
 
+    def get_comercio_campo(self, comercio_id):
+        c = self.comercios.get(comercio_id)
+        return c if c and c.get("activo", True) else None
+
     def list_comercios_por_agente(self, email, limit=200):
         items = [
             c for c in self.comercios.values()

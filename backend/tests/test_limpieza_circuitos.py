@@ -1299,3 +1299,59 @@ def test_aprobar_un_numero_que_ya_es_de_otro_comercio_da_409(client, repo, admin
     r = client.post(f"/admin/solicitudes-cambio-numero/{sol['id']}/aprobar", headers=_h_cambio(admin_token))
     assert r.status_code == 409
     assert repo.comercios["victima"]["whatsapp"] == "59170123456"
+
+
+# ══════════════════════════════════════ el agente carga el horario
+
+def test_el_agente_carga_el_horario_y_deja_de_ser_estimado(client, repo):
+    """El filtro «Sin horario» de la app del agente llevaba a un editor que no
+    podía cargarlo: el PATCH de campo ni siquiera aceptaba el campo."""
+    from app.core import auth
+    _ficha_con_cuenta(repo)
+    repo.comercios["victima"]["horario_estimado"] = True
+    t = auth.make_agente_token("agente@x.com", ciudad_slug="bermejo")
+    r = client.patch("/campo/mis-comercios/victima", headers=_h_cambio(t),
+                     json={"horario": "  Lun-Sáb 8:00-12:00 y 14:30-20:00 "})
+    assert r.status_code == 200, r.text
+    assert repo.comercios["victima"]["horario"] == "Lun-Sáb 8:00-12:00 y 14:30-20:00"
+    assert repo.comercios["victima"]["horario_estimado"] is False
+
+
+def test_el_agente_puede_borrar_un_horario_mal_cargado(client, repo):
+    from app.core import auth
+    _ficha_con_cuenta(repo)
+    repo.comercios["victima"]["horario"] = "Lun 9-10"
+    t = auth.make_agente_token("agente@x.com", ciudad_slug="bermejo")
+    r = client.patch("/campo/mis-comercios/victima", headers=_h_cambio(t), json={"horario": ""})
+    assert r.status_code == 200, r.text
+    assert not repo.comercios["victima"]["horario"]
+
+
+# ══════════════════════════════════════ un solo comercio, para el final del alta
+
+def test_el_agente_pide_un_comercio_de_su_ciudad(client, repo):
+    """«Completar comercio» tras el alta pedía la ciudad entera y, con la señal
+    de la calle, fallaba: ahora pide ese comercio solo."""
+    from app.core import auth
+    _ficha_con_cuenta(repo)
+    t = auth.make_agente_token("agente@x.com", ciudad_slug="bermejo")
+    r = client.get("/campo/mis-comercios/victima", headers=_h_cambio(t))
+    assert r.status_code == 200, r.text
+    assert r.json()["comercio"]["id"] == "victima"
+
+
+def test_el_agente_no_ve_un_comercio_de_otra_ciudad(client, repo):
+    from app.core import auth
+    _ficha_con_cuenta(repo)
+    t = auth.make_agente_token("otro@x.com", ciudad_slug="ciudad-que-no-es")
+    r = client.get("/campo/mis-comercios/victima", headers=_h_cambio(t))
+    assert r.status_code == 404
+
+
+def test_un_comercio_dado_de_baja_no_se_abre(client, repo):
+    from app.core import auth
+    _ficha_con_cuenta(repo)
+    repo.comercios["victima"]["activo"] = False
+    t = auth.make_agente_token("agente@x.com", ciudad_slug="bermejo")
+    r = client.get("/campo/mis-comercios/victima", headers=_h_cambio(t))
+    assert r.status_code == 404

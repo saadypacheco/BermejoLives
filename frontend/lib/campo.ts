@@ -163,6 +163,13 @@ export type ComercioAgente = {
    *  tipeada, así que en la lista es lo único que dice dónde queda. */
   calle?: string | null;
   horario?: string | null;
+  /** Lo que el servidor trae para decidir «Le falta» sin pedir nada más. */
+  prod_obs_human?: string | null;
+  /** Redes, catálogo, canal y correo: los trae `/campo/mis-comercios`, para
+   *  que «Completar comercio» muestre lo que ya está cargado. */
+  email?: string | null;
+  instagram_url?: string | null; facebook_url?: string | null; tiktok_url?: string | null;
+  sitio_web?: string | null; canal_wa_url?: string | null; catalogo_url?: string | null;
   sin_cartel?: boolean;
   /** Quién lo dio de alta. Con dos agentes por ciudad, saber que la ficha es
    *  del otro evita la duda de «esto no lo cargué yo, ¿lo puedo tocar?». */
@@ -174,6 +181,8 @@ export type ComercioAgente = {
   portada_url: string | null; portada_thumb_url: string | null; verificado: boolean; created_at: string;
   lugar_id: string | null; puesto: string | null;
   rubros?: { nombre: string; slug: string } | null;
+  /** TODOS los rubros del comercio, no sólo el principal. */
+  comercio_rubros?: { rubros: { nombre: string; slug: string } | null }[] | null;
   lugares?: { nombre: string; tipo: string; lat: number | null; lng: number | null; portada_thumb_url?: string | null } | null;
 };
 
@@ -198,6 +207,20 @@ export async function misComercios(): Promise<ComercioAgente[]> {
   return d.items as ComercioAgente[];
 }
 
+/** Un solo comercio, con lo mismo que trae la lista. Es lo que abre «Completar
+ *  comercio» al final del alta, sin bajar la ciudad entera con la señal de la calle. */
+export async function miComercio(id: string): Promise<ComercioAgente> {
+  const res = await fetch(`${API}/campo/mis-comercios/${encodeURIComponent(id)}`, {
+    headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` },
+  });
+  if (res.status === 401) {
+    clearAgente();
+    throw new Error("Sesión vencida, volvé a entrar");
+  }
+  if (!res.ok) throw new Error("No se pudo abrir el comercio");
+  return (await res.json()).comercio as ComercioAgente;
+}
+
 export type EditarComercioBody = {
   nombre?: string; whatsapp?: string; modalidad?: string; direccion?: string | null; rubro_slugs?: string[];
   // La segunda pasada: lo que se carga en la segunda visita, con el dueño
@@ -209,6 +232,8 @@ export type EditarComercioBody = {
   instagram_url?: string | null; facebook_url?: string | null;
   tiktok_url?: string | null; sitio_web?: string | null;
   canal_wa_url?: string | null; catalogo_url?: string | null;
+  /** El horario como lo dicta el dueño. Vacío (o null) lo borra. */
+  horario?: string | null;
 };
 
 /** Edita un comercio que este agente cargó (no puede tocar los de otro agente). */

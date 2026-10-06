@@ -31,8 +31,17 @@ function esErrorRed(ex: unknown): boolean {
 /** `comercioId` opcional: si viene, las subidas que fallen por señal se guardan
  * en el celu (cola offline) y se suben solas cuando vuelve la señal. Es la 2ª
  * pasada del agente (video + fotos extra sobre un local ya cargado). */
-export function GaleriaUploader({ api, comercioId }: { api: GaleriaApi; comercioId?: string }) {
+export function GaleriaUploader({ api, comercioId, onFotos, onFotosError }: {
+  api: GaleriaApi; comercioId?: string;
+  /** Avisa cuántas fotos YA SUBIDAS tiene la galería: al cargarla y cada vez que
+   *  cambia. «Completar comercio» lo usa para el «Le falta: fotos del local». */
+  onFotos?: (n: number) => void;
+  /** Avisa que la lista de fotos no se pudo bajar: sin esto, quien espera el
+   *  número se quedaría diciendo «mirando…» para siempre. */
+  onFotosError?: () => void;
+}) {
   const [fotos, setFotos] = useState<FotoG[]>([]);
+  const [fotosListas, setFotosListas] = useState(false);
   const [videos, setVideos] = useState<VideoG[]>([]);
   const [pendientes, setPendientes] = useState<MediaPendiente[]>([]);
   const [prog, setProg] = useState<number | null>(null);
@@ -72,8 +81,11 @@ export function GaleriaUploader({ api, comercioId }: { api: GaleriaApi; comercio
     }
   }
 
+  // Sólo después de que llegó la lista: antes, «0» sería mentira.
+  useEffect(() => { if (fotosListas) onFotos?.(fotos.length); }, [fotos.length, fotosListas]);  // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
-    api.cargarFotos().then(setFotos).catch(() => {});
+    api.cargarFotos().then((fs) => { setFotos(fs); setFotosListas(true); }).catch(() => onFotosError?.());
     api.cargarVideos().then(setVideos).catch(() => {});
     if (offlineOn) {
       refrescarPend();

@@ -221,6 +221,7 @@ class Repo(Protocol):
     def buscar_comercios_por_nombre(self, q: str) -> list[dict]: ...
     def list_comercios_por_agente(self, email: str, limit: int) -> list[dict]: ...
     def list_comercios_de_ciudad(self, ciudad_id: str, limit: int = 4000) -> list[dict]: ...
+    def get_comercio_campo(self, comercio_id: str) -> dict | None: ...
     def crear_solicitud_cambio_numero(self, row: dict) -> dict: ...
     def list_solicitudes_cambio_numero(self, estado: str | None) -> list[dict]: ...
     def aprobar_solicitud_cambio_numero(self, solicitud_id: str, by: str) -> dict | None: ...
@@ -280,6 +281,24 @@ class Repo(Protocol):
     def list_redes(self) -> list[dict]: ...
     def update_red(self, clave: str, url: str | None) -> dict | None: ...
 
+
+# Las columnas de la app del agente, en UNA constante para las dos listas (los
+# comercios de su ciudad y los suyos de otra ciudad). Escritas dos veces habían
+# divergido: los de otra ciudad venían sin horario ni «qué vende», y «Completar
+# comercio» los marcaba como faltantes estando cargados. Lleva TODOS los rubros
+# (no sólo el principal), las redes, el catálogo, el canal y el correo: lo que
+# la pantalla no recibe, no lo puede mostrar, y un rubro secundario que no llega
+# se pierde al guardar los rubros.
+_COLS_COMERCIO_CAMPO = (
+    "id, slug, nombre, whatsapp, telefono, email, modalidad, direccion, calle, lat, lng, "
+    "horario, horario_estimado, sin_cartel, prod_obs_human, subcategoria, "
+    "portada_url, portada_thumb_url, verificado, created_at, cargado_por, "
+    "lugar_id, puesto, instagram_url, facebook_url, tiktok_url, sitio_web, "
+    "canal_wa_url, catalogo_url, "
+    "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), "
+    "comercio_rubros(rubros(nombre, slug)), "
+    "lugares(nombre, tipo, lat, lng, portada_thumb_url)"
+)
 
 # Las columnas del listado del panel. En una constante porque la paginación
 # tiene que pedir EXACTAMENTE las mismas: escritas dos veces terminan
@@ -2362,12 +2381,7 @@ class SupabaseRepo:
         Pagina porque PostgREST corta en 1000 sin avisar, y Santa Cruz va a
         pasar ese número antes de que nadie se acuerde de esta función.
         """
-        cols = ("id, slug, nombre, whatsapp, telefono, modalidad, direccion, calle, lat, lng, "
-                "horario, horario_estimado, sin_cartel, prod_obs_human, subcategoria, "
-                "portada_url, portada_thumb_url, verificado, created_at, cargado_por, "
-                "lugar_id, puesto, "
-                "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), "
-                "lugares(nombre, tipo, lat, lng, portada_thumb_url)")
+        cols = _COLS_COMERCIO_CAMPO
         filas: list[dict] = []
         while len(filas) < limit:
             lote = (self._db.table("comercios").select(cols)
@@ -2379,14 +2393,23 @@ class SupabaseRepo:
                 break
         return filas
 
+    def get_comercio_campo(self, comercio_id: str) -> dict | None:
+        """UN comercio, con las mismas columnas que la lista de la app de campo.
+
+        Para abrir «Completar comercio» justo después del alta sin bajar la
+        ciudad entera (Santa Cruz son miles de filas): con mala señal, eso
+        fallaba y el agente se quedaba sin la galería del local que acababa de
+        cargar.
+        """
+        res = (self._db.table("comercios").select(_COLS_COMERCIO_CAMPO)
+               .eq("id", comercio_id).eq("activo", True).limit(1).execute())
+        return (res.data or [None])[0]
+
     def list_comercios_por_agente(self, email: str, limit: int = 200) -> list[dict]:
         """Comercios que este agente de campo dio de alta (para que vea su propio recorrido)."""
         res = (
             self._db.table("comercios")
-            .select("id, slug, nombre, whatsapp, telefono, modalidad, direccion, lat, lng, "
-                    "portada_url, portada_thumb_url, verificado, created_at, lugar_id, puesto, "
-                    "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), "
-                    "lugares(nombre, tipo, lat, lng, portada_thumb_url)")
+            .select(_COLS_COMERCIO_CAMPO)
             .eq("cargado_por", email)
             .eq("activo", True)
             .order("created_at", desc=True)
