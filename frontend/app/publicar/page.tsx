@@ -5,8 +5,9 @@ import {
   agenteLogin, getAgenteToken, clearAgente, altaComercioCampo,
   misComercios, miComercio, eliminarComercioAgente, type ComercioAgente,
   listarLugares, crearLugar, editarLugar, subirPortadaLugar, subirVideoLugar, type Lugar,
-  getAgenteEmail, ciudadDelAgente,
+  getAgenteEmail, getAgentePerfil, ciudadDelAgente,
 } from "@/lib/campo";
+import { rutaManualAgente } from "@/lib/manuales";
 import { duracionVideo } from "@/lib/upload";
 import { CapturaWhatsapp } from "@/components/captura-whatsapp";
 import { CompletarComercio, apiGaleriaCampo } from "@/components/completar-comercio";
@@ -26,6 +27,30 @@ import { Ic } from "@/components/ic";
 import { ClaveUnaVez } from "@/components/clave-una-vez";
 import { encolarAlta, sincronizarPendientes, listarPendientes,
          descartarPendiente, esIrrecuperable, type AltaPendiente } from "@/lib/offline-altas";
+
+/** «Manual»: el manual del agente con SUS datos (nombre, ciudad, correo) sacados
+ *  del token. Abre en otra pestaña a propósito: salir de esta pantalla en la
+ *  misma pestaña perdería lo que esté a medio cargar. */
+function EnlaceManual() {
+  const [href, setHref] = useState(() => rutaManualAgente({ nombre: null, ciudad: null, mail: null }));
+  useEffect(() => {
+    const p = getAgentePerfil();
+    const base = { nombre: p.nombre, mail: p.email };
+    setHref(rutaManualAgente(base));
+    const slug = ciudadDelAgente ?? p.ciudad;
+    if (!slug) return;
+    // El token trae el slug («la-paz»); el manual quiere el nombre («La Paz»).
+    let vivo = true;
+    getCiudades()
+      .then((cs) => { const c = cs.find((x) => x.slug === slug); if (vivo && c) setHref(rutaManualAgente({ ...base, ciudad: c.nombre })); })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, []);
+  return (
+    <a className="link-more" href={href} target="_blank" rel="noopener noreferrer" style={{ padding: "6px 12px" }}
+       title="Cómo se usa esta app, paso a paso">Manual</a>
+  );
+}
 
 const AVISO_CLAVE_AGENTE = "Dásela en mano al dueño: es para entrar a su panel. No la anotes en el volante.";
 
@@ -250,12 +275,15 @@ function MisComercios({ destino, onVolver, onLogout }: { destino: DestinoLista |
 
   return (
     <div className="campo-wrap">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
         <div>
           <span className="eyebrow"><Pin style={{ width: 13, height: 13 }} /> Comercios de mi ciudad</span>
           {items && <div style={{ fontSize: 12, color: "var(--neon)" }}>{items.length} en total</div>}
         </div>
-        <button className="link-more" onClick={onLogout} style={{ padding: "6px 12px" }}>Salir</button>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <EnlaceManual />
+          <button className="link-more" onClick={onLogout} style={{ padding: "6px 12px" }}>Salir</button>
+        </div>
       </div>
 
       {/* LA PANTALLA «Completar comercio» ocupa el lugar de la lista. La lista no
@@ -1021,17 +1049,18 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
 
   return (
     <div className="campo-wrap">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
         <div>
           <span className="eyebrow"><Pin style={{ width: 13, height: 13 }} /> Carga de comercios</span>
           {count > 0 && <div style={{ fontSize: 12, color: "var(--neon)" }}>{count} cargados hoy</div>}
         </div>
-        <div style={{ display: "flex", gap: 4 }}>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
           {/* Siempre disponible, aunque el contador diga cero: es la única forma
               de distinguir "no hay nada guardado" de "no pude leerlo". */}
           <button className="link-more" onClick={verPendientes} style={{ padding: "6px 12px" }}
                   title="Lo que quedó guardado en este celular sin subir">Sin subir</button>
           <button className="link-more" onClick={() => onVerMisComercios()} style={{ padding: "6px 12px" }}>Mis comercios</button>
+          <EnlaceManual />
           <button className="link-more" onClick={onLogout} style={{ padding: "6px 12px" }}>Salir</button>
         </div>
       </div>

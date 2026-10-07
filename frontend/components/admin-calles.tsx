@@ -24,7 +24,11 @@ import { Ic } from "@/components/ic";
  *  una vez por calle y con el dedo. */
 const PRESETS: { etiqueta: string; valor: string }[] = [
   { etiqueta: "Mayorista · 6 a 16", valor: "Lun a Sáb 6-16" },
-  { etiqueta: "Comercio · 8-12 y 14:30-20", valor: "Lun a Sáb 8-12 · 14:30-20" },
+  // Los dos turnos con «y», en el MISMO tramo que los días. Con «·» el sitio
+  // parte el texto en dos tramos, el de la tarde queda sin días, y un tramo sin
+  // días vale para todos: las fichas decían «Abierto» el domingo a la tarde.
+  // La 0140 arregla las que ya se cargaron con el texto viejo.
+  { etiqueta: "Comercio · 8-12 y 14:30-20", valor: "Lun-Sáb 8:00-12:00 y 14:30-20:00" },
   { etiqueta: "Corrido · 8 a 20", valor: "Lun a Sáb 8-20" },
   { etiqueta: "Alimentos · 7 a 21", valor: "Lun a Dom 7-21" },
 ];
@@ -214,7 +218,7 @@ function PanelCalle({ calle, porRubro, onCambio }: {
         <input className="adm-input" value={horario} onChange={(e) => setHorario(e.target.value)}
                placeholder="Lun a Sáb 6-16 · Dom 8-12" />
         <div style={{ fontSize: 11.5, color: "var(--txt-3)", marginTop: 4 }}>
-          Hora de Bolivia. Se puede escribir a mano: «Lun a Vie 8-12 · 15-19 · Sáb 8-13».
+          Hora de Bolivia. Se puede escribir a mano: «Lun-Vie 8:00-12:00 y 15:00-19:00 · Sáb 8:00-13:00». Los dos turnos de un mismo día van con «y»: con «·» el segundo turno queda para todos los días.
         </div>
       </div>
 

@@ -1,0 +1,233 @@
+/* ============================================================
+   Manuales de uso (/manual/agente · /manual/admin · /manual/comercio)
+   Los usa components/manual/*. Todo cuelga de `.mn-root`.
+
+   En PANTALLA es una hoja clara sobre fondo verdoso (los colores del manual de
+   identidad, tema claro): lo que se ve es lo que sale en el PDF. Legible desde
+   360 px.
+   Al IMPRIMIR es una hoja A4 blanca: sin barra ni botones, portada en su propia
+   hoja, `---` = salto de página, tablas y notas que no se cortan al medio, y
+   un pie «URUKU · Manual de …» en cada hoja.
+   ============================================================ */
+
+.mn-root {
+  --mn-verde: #1D8D52;
+  --mn-verde-os: #10623E;
+  --mn-verde-txt: #1A764C;
+  --mn-oro: #C98E38;
+  --mn-tinta: #14231B;
+  --mn-suave: #4A5D52;
+  --mn-linea: #D5E1D9;
+  --mn-fondo: #F1F6F2;
+  --mn-tinte: #EAF5EE;
+
+  min-height: 100vh;
+  padding: 16px 16px 56px;
+  background: var(--mn-fondo);
+  color: var(--mn-tinta);
+  font-size: 16px;
+  line-height: 1.65;
+  /* El layout raíz pone la fuente en el <body>; se repite acá por si se abre
+     suelto, y para que el PDF salga siempre en Poppins. */
+  font-family: var(--uk-font), Poppins, "Segoe UI", system-ui, sans-serif;
+  overflow-wrap: anywhere;
+}
+
+/* El aviso «Instalá URUKU» y la pregunta «¿Te contestó…?» son para quien
+   compra; en un manual (en pantalla o en el PDF) sobran y tapan la barra. */
+body:has(.mn-root) .install-banner,
+body:has(.mn-root) .uk-contesto { display: none !important; }
+/* El fondo ambiente oscuro del sitio queda detrás de la hoja: se apaga. */
+body:has(.mn-root)::before, body:has(.mn-root)::after { display: none; }
+body:has(.mn-root) { background: #F1F6F2; color: #14231B; }
+
+/* ---------- Barra de arriba (sólo pantalla) ---------- */
+.mn-barra { max-width: 780px; margin: 0 auto 16px; }
+.mn-pdf {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; min-height: 56px; padding: 0 22px;
+  border: 0; border-radius: 16px; cursor: pointer;
+  background: linear-gradient(180deg, #1D8D52, #10623E); color: #fff;
+  font: inherit; font-size: 17px; font-weight: 700;
+  box-shadow: 0 8px 20px -10px rgba(16, 98, 62, .8);
+}
+.mn-pdf:hover { filter: brightness(1.06); }
+.mn-pdf:focus-visible { outline: 3px solid #C98E38; outline-offset: 3px; }
+.mn-ayuda { margin: 10px 4px 0; font-size: 14.5px; line-height: 1.5; color: var(--mn-suave); }
+.mn-ayuda span { display: block; margin-top: 4px; font-size: 13px; opacity: .85; }
+
+/* ---------- La hoja ---------- */
+.mn-hoja {
+  max-width: 780px; margin: 0 auto;
+  background: #fff; border: 1px solid var(--mn-linea); border-radius: 20px;
+  box-shadow: 0 14px 40px -24px rgba(16, 98, 62, .45);
+  overflow: hidden;
+}
+.mn-portada { padding: 28px 22px 26px; border-bottom: 4px solid var(--mn-verde); background: linear-gradient(180deg, #F6FBF8, #fff); }
+.mn-logo { display: block; height: 38px; width: auto; max-width: 100%; margin-bottom: 26px; }
+.mn-etiqueta {
+  margin: 0 0 6px; font-size: 12.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--mn-verde-txt);
+}
+.mn-h1 { margin: 0 0 12px; font-size: clamp(27px, 7.4vw, 40px); line-height: 1.12; font-weight: 800; letter-spacing: -.02em; color: var(--mn-verde-os); }
+.mn-bajada { margin: 0 0 8px; font-size: 17px; line-height: 1.55; color: var(--mn-suave); }
+.mn-bajada code { font-size: .9em; }
+
+.mn-cuerpo { padding: 8px 22px 36px; }
+
+/* ---------- Texto ---------- */
+.mn-h2 {
+  margin: 34px 0 12px; font-size: clamp(21px, 5.4vw, 25px); line-height: 1.22; font-weight: 700; letter-spacing: -.01em;
+  color: var(--mn-verde-os);
+}
+.mn-h2::after { content: ""; display: block; width: 46px; height: 3px; margin-top: 8px; border-radius: 3px; background: linear-gradient(90deg, #C98E38, #F6D38A); }
+.mn-h3 { margin: 24px 0 8px; font-size: 18px; line-height: 1.3; font-weight: 700; color: var(--mn-tinta); }
+.mn-p { margin: 0 0 14px; }
+.mn-root strong { font-weight: 700; color: var(--mn-tinta); }
+.mn-root code {
+  padding: 1px 6px; border-radius: 6px; background: var(--mn-tinte); border: 1px solid var(--mn-linea);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em; color: var(--mn-verde-os);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Listas ---------- */
+.mn-lista { margin: 0 0 16px; padding-left: 26px; }
+.mn-lista li { margin: 0 0 7px; padding-left: 4px; }
+.mn-lista li::marker { color: var(--mn-verde); font-weight: 700; }
+.mn-lista .mn-lista { margin: 7px 0 4px; }
+.mn-lista li > .mn-p { margin: 6px 0 4px; }
+.mn-ul { list-style: disc; }
+/* El reinicio de Tailwind le saca los números a las listas: se los devuelve. */
+.mn-ol { list-style: decimal; }
+.mn-ol .mn-ol { list-style: lower-alpha; }
+.mn-ul .mn-ul { list-style: circle; }
+
+/* ---------- Tablas ---------- */
+.mn-tabla-caja { margin: 4px 0 20px; overflow-x: auto; border: 1px solid var(--mn-linea); border-radius: 14px; -webkit-overflow-scrolling: touch; }
+.mn-tabla { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.45; }
+.mn-tabla th {
+  padding: 10px 12px; text-align: left; font-weight: 700; color: var(--mn-verde-os);
+  background: var(--mn-tinte); border-bottom: 2px solid var(--mn-verde);
+}
+.mn-tabla td { padding: 10px 12px; vertical-align: top; border-bottom: 1px solid var(--mn-linea); }
+.mn-tabla tbody tr:last-child td { border-bottom: 0; }
+.mn-tabla .mn-centro { text-align: center; }
+.mn-tabla .mn-der { text-align: right; }
+.mn-tabla td:first-child { font-weight: 600; }
+.mn-tabla th, .mn-tabla td { overflow-wrap: normal; word-break: normal; }
+
+/* En el celular cada fila es una tarjeta: «Estado: …», «Qué hacés: …». Una
+   tabla de tres columnas en 360 px o se corta o parte las palabras. */
+@media screen and (max-width: 599px) {
+  .mn-tabla-caja { border: 0; overflow: visible; }
+  .mn-tabla, .mn-tabla tbody, .mn-tabla tr, .mn-tabla td { display: block; width: 100%; }
+  .mn-tabla thead { display: none; }
+  .mn-tabla tr { margin-bottom: 10px; border: 1px solid var(--mn-linea); border-left: 4px solid var(--mn-verde); border-radius: 12px; overflow: hidden; }
+  .mn-tabla td { padding: 8px 12px; border-bottom: 1px solid var(--mn-linea); text-align: left; }
+  .mn-tabla tr td:last-child { border-bottom: 0; }
+  .mn-tabla td[data-label]::before {
+    content: attr(data-label); display: block; font-size: 11.5px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--mn-verde-txt);
+  }
+}
+
+/* ---------- Nota ---------- */
+.mn-nota {
+  display: flex; gap: 12px; margin: 6px 0 20px; padding: 14px 16px;
+  border-radius: 14px; border: 1px solid #BFDCCB; border-left: 5px solid var(--mn-verde); background: var(--mn-tinte);
+}
+.mn-nota-ic { flex: 0 0 auto; padding-top: 2px; color: var(--mn-verde); }
+.mn-nota-txt { min-width: 0; flex: 1; }
+.mn-nota-txt .mn-p { margin: 0 0 8px; }
+.mn-nota-txt > :last-child { margin-bottom: 0; }
+
+/* ---------- Salto de página ---------- */
+/* En pantalla es una raya fina con la leyenda de dónde corta la hoja. */
+.mn-salto {
+  position: relative; height: 0; margin: 34px 0 26px; border: 0; border-top: 2px dashed var(--mn-linea); overflow: visible;
+}
+.mn-salto::after {
+  content: "nueva hoja al imprimir"; position: absolute; right: 0; top: -11px; padding: 0 8px; background: #fff;
+  font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #8aa092;
+}
+
+@media (min-width: 720px) {
+  .mn-root { padding: 28px 24px 72px; }
+  .mn-portada { padding: 44px 48px 38px; }
+  .mn-logo { height: 44px; margin-bottom: 40px; }
+  .mn-cuerpo { padding: 14px 48px 52px; }
+}
+
+/* Los vínculos y botones tienen foco visible. */
+.mn-root a:focus-visible, .mn-tabla-caja:focus-visible { outline: 3px solid var(--mn-oro); outline-offset: 2px; }
+
+/* ============================================================
+   IMPRESIÓN · A4
+   ============================================================ */
+@page {
+  size: A4;
+  margin: 17mm 16mm 22mm;
+}
+
+/* EL PIE DE CADA HOJA: «URUKU · Manual del agente» a la izquierda y el número a
+   la derecha, en los márgenes de la hoja (cajas de margen de @page: Chrome y
+   Edge, también en el celular). Un `position: fixed` repetido por hoja salía
+   arriba, encima de los títulos, así que no se usa. Cada manual tiene su hoja
+   con nombre (`page:`), que es lo único que deja poner un texto distinto por
+   manual. En un navegador sin cajas de margen (Firefox, Safari) el PDF sale sin
+   pie, y nada se rompe. La portada no lleva pie. */
+@page agente   { size: A4; margin: 17mm 16mm 22mm; background: #fff; @bottom-left { content: "URUKU · Manual del agente"; font: 9pt Poppins, "Segoe UI", sans-serif; color: #5b6b61; } @bottom-right { content: counter(page); font: 9pt Poppins, "Segoe UI", sans-serif; color: #5b6b61; } }
+@page admin    { size: A4; margin: 17mm 16mm 22mm; background: #fff; @bottom-left { content: "URUKU · Manual del admin"; font: 9pt Poppins, "Segoe UI", sans-serif; color: #5b6b61; } @bottom-right { content: counter(page); font: 9pt Poppins, "Segoe UI", sans-serif; color: #5b6b61; } }
+@page comercio { size: A4; margin: 17mm 16mm 22mm; background: #fff; @bottom-left { content: "URUKU · Manual del comerciante"; font: 9pt Poppins, "Segoe UI", sans-serif; color: #5b6b61; } @bottom-right { content: counter(page); font: 9pt Poppins, "Segoe UI", sans-serif; color: #5b6b61; } }
+@page agente:first   { @bottom-left { content: none; } @bottom-right { content: none; } }
+@page admin:first    { @bottom-left { content: none; } @bottom-right { content: none; } }
+@page comercio:first { @bottom-left { content: none; } @bottom-right { content: none; } }
+html:has(.mn-root[data-tipo="agente"]) { page: agente; }
+html:has(.mn-root[data-tipo="admin"]) { page: admin; }
+html:has(.mn-root[data-tipo="comercio"]) { page: comercio; }
+
+@media print {
+  body:has(.mn-root), body:has(.mn-root) * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html:has(.mn-root), body:has(.mn-root) { background: #fff !important; color: #111 !important; color-scheme: light; }
+  body:has(.mn-root) { overflow: visible; }
+
+  .mn-root {
+    min-height: 0; padding: 0; background: #fff; color: #111;
+    font-size: 11pt; line-height: 1.5;
+  }
+  .mn-barra { display: none !important; }
+
+  .mn-hoja { max-width: none; margin: 0; border: 0; border-radius: 0; box-shadow: none; overflow: visible; background: #fff; }
+
+  /* La portada es su propia hoja. */
+  .mn-portada {
+    min-height: 200mm; padding: 0 0 8mm; border-bottom: 0; background: #fff;
+    break-after: page; page-break-after: always;
+    display: flex; flex-direction: column; justify-content: flex-start;
+  }
+  .mn-logo { height: 16mm; width: auto; align-self: flex-start; margin: 14mm 0 62mm; }
+  .mn-etiqueta { font-size: 11pt; color: var(--mn-verde-txt); }
+  .mn-h1 { font-size: 30pt; margin-bottom: 8mm; padding-bottom: 8mm; border-bottom: 3pt solid var(--mn-verde); color: var(--mn-verde-os); }
+  .mn-bajada { font-size: 13pt; color: #333; }
+  .mn-cuerpo { padding: 0; }
+
+  .mn-h2 { margin: 7mm 0 3mm; font-size: 16pt; break-after: avoid; page-break-after: avoid; }
+  .mn-h3 { margin: 5mm 0 2mm; font-size: 12.5pt; break-after: avoid; page-break-after: avoid; }
+  .mn-p { margin: 0 0 3mm; orphans: 3; widows: 3; }
+  .mn-root, .mn-root strong, .mn-h3 { color: #111; }
+  .mn-h1, .mn-h2 { color: var(--mn-verde-os); }
+
+  .mn-lista { margin-bottom: 4mm; }
+  .mn-lista li { break-inside: avoid; page-break-inside: avoid; }
+
+  .mn-tabla-caja { overflow: visible; margin-bottom: 5mm; border-radius: 3mm; break-inside: avoid; page-break-inside: avoid; }
+  .mn-tabla { min-width: 0; font-size: 9.5pt; }
+  .mn-tabla thead { display: table-header-group; }
+  .mn-tabla tr { break-inside: avoid; page-break-inside: avoid; }
+
+  .mn-nota { break-inside: avoid; page-break-inside: avoid; margin-bottom: 5mm; }
+
+  /* `---` = hoja nueva. Invisible; la raya y la leyenda eran sólo de pantalla. */
+  .mn-salto { margin: 0; height: 0; border: 0; break-after: page; page-break-after: always; }
+  .mn-salto::after { display: none; }
+}

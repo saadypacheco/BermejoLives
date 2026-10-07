@@ -47,6 +47,7 @@ import { AsistentePanel } from "@/components/asistente-panel";
 import { PlanesPanel } from "@/components/planes-panel";
 import { ContactosPanel } from "@/components/contactos-panel";
 import { EquipoPanel } from "@/components/equipo-panel";
+import { ManualesPanel } from "@/components/admin/manuales-panel";
 import { puedo } from "@/lib/api";
 import { RubroRecalcular } from "@/components/rubro-recalcular";
 import { CatalogoPanel } from "@/components/catalogo-panel";
@@ -498,6 +499,7 @@ function AdminPanel() {
       {permitida && seccion === "planes" && <PlanesPanel />}
       {permitida && seccion === "compradores" && <ContactosPanel />}
       {permitida && seccion === "equipo" && <EquipoPanel />}
+      {permitida && seccion === "manuales" && <ManualesPanel />}
       {permitida && seccion === "cargas" && ciudadLista && <CargasPanel />}
       {permitida && seccion === "importados" && ciudadLista && <ImportadosPanel rubros={rubros} ciudad={ciudad} />}
       {permitida && seccion === "vencimientos" && <VencimientosPanel />}
@@ -677,7 +679,7 @@ function IdentidadBadge({ pub }: { pub: PendingPub }) {
     );
   }
   if (pub.identidad_origen === "desconocido") {
-    return <span style={{ color: "var(--pink)" }} title="Ni número conocido ni código: se creó un comercio borrador"><Ic n="aviso" s={13} /> sin identificar</span>;
+    return <span style={{ color: "var(--pink)" }} title="Ni número conocido ni código: no se sabe de qué comercio es"><Ic n="aviso" s={13} /> sin identificar</span>;
   }
   return null;  // 'numero' es el caso normal, no merece ruido visual
 }

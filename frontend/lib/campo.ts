@@ -25,6 +25,27 @@ export function getAgenteEmail(): string | null {
   }
 }
 
+/** Lo que el token del agente dice de él: nombre, correo y ciudad (su slug).
+ *  Sólo para mostrar —el manual personalizado—; lo que puede tocar lo decide el
+ *  backend contra el token firmado, no esto. Si el token no está o es raro,
+ *  todo en null. */
+export function getAgentePerfil(): { nombre: string | null; email: string | null; ciudad: string | null } {
+  const vacio = { nombre: null, email: null, ciudad: null };
+  const t = getAgenteToken();
+  if (!t) return vacio;
+  try {
+    const cuerpo = t.split(".")[1];
+    if (!cuerpo) return vacio;
+    // El nombre puede llevar tildes: atob da bytes, hay que decodificarlos como UTF-8.
+    const bytes = Uint8Array.from(atob(cuerpo.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+    const j = JSON.parse(new TextDecoder().decode(bytes)) as { nombre?: unknown; email?: unknown; sub?: unknown; ciudad?: unknown };
+    const txt = (x: unknown) => (typeof x === "string" && x.trim() ? x.trim() : null);
+    return { nombre: txt(j.nombre), email: txt(j.email) ?? txt(j.sub), ciudad: txt(j.ciudad) };
+  } catch {
+    return vacio;
+  }
+}
+
 export function getAgenteToken(): string | null {
   return typeof window === "undefined" ? null : localStorage.getItem(TOKEN_KEY);
 }

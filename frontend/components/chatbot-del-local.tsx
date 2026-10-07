@@ -299,7 +299,7 @@ function SeccionSegunPlan({ plan, errorPlan, onReintentarPlan, version }: {
         <b style={{ display: "block", marginBottom: 4 }}><Ic n="dax" s={16} /> Chatbot para tu ficha</b>
         <p style={{ ...AYUDA, margin: 0 }}>
           El chatbot viene con el plan Destacado. Contesta las preguntas de tus clientes en tu ficha a cualquier hora y,
-          cuando no sabe algo, los manda a tu WhatsApp. Podés cambiar de plan desde Suscripción.
+          cuando no sabe algo, los manda a tu WhatsApp. Para cambiar de plan, escribile a URUKU por WhatsApp.
         </p>
       </div>
     );

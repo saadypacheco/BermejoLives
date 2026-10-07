@@ -78,6 +78,9 @@ function LoginGate({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
           <br />
           ¿No tenés cuenta? <Link href="/autoregistro?modo=registro" style={{ color: "var(--neon)" }}>Creala acá</Link>.
         </p>
+        <Link href="/manual/comercio" className="btn btn-ghost btn-sm" style={{ marginTop: 6, minHeight: 44 }}>
+          <Ic n="ayuda" s={16} /> ¿Cómo se usa?
+        </Link>
       </div>
     </>
   );
@@ -161,6 +164,10 @@ function Topbar({ titulo, noLeidos }: { titulo: string; noLeidos: number }) {
         <Bell style={{ width: 20, height: 20 }} />
         {noLeidos > 0 && <span style={{ position: "absolute", top: 0, right: 0, background: "var(--neon)", color: "#04240f", borderRadius: 999, fontSize: 10, fontWeight: 800, padding: "0 5px" }}>{noLeidos}</span>}
       </div>
+      {/* El manual del comerciante (docs/manuales.md): entrar, publicar, el chatbot. */}
+      <Link href="/manual/comercio" target="_blank" rel="noopener" className="btn btn-ghost" style={{ whiteSpace: "nowrap" }}>
+        <Ic n="ayuda" s={18} /> ¿Cómo se usa?
+      </Link>
       <Link href="/autoregistro" className="btn btn-primary">Publicar oferta <Send /></Link>
     </div>
   );
@@ -694,9 +701,18 @@ function PerfilTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Lo que decide si una oferta pasa por moderación es `confiable` (lo marca
+          URUKU), no `verificado`: decía «mientras no estés verificado tus
+          ofertas pasan por moderación», y un comercio verificado pero no
+          confiable seguía yendo a moderación sin entender por qué. */}
       {!perfil.verificado && (
         <div style={{ fontSize: 13, color: "var(--amber)", background: "rgba(255,176,32,.08)", padding: "8px 12px", borderRadius: 10 }}>
-          Tu comercio está <b>pendiente de verificación</b>. Mientras tanto tus ofertas pasan por moderación.
+          Tu comercio está <b>pendiente de verificación</b>: el equipo de URUKU todavía no revisó tu ficha.
+        </div>
+      )}
+      {perfil.confiable === false && (
+        <div style={{ fontSize: 13, color: "var(--txt-3)", background: "rgba(255,255,255,.04)", padding: "8px 12px", borderRadius: 10 }}>
+          Tus ofertas pasan por moderación antes de publicarse. Cuando URUKU marca tu comercio como confiable, salen directo.
         </div>
       )}
       {faltantes.length > 0 && (

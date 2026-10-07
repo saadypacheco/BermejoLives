@@ -29,7 +29,7 @@ export default function RecuperarNegocioPage() {
             <div style={{ marginBottom: 8, color: "var(--uk-green, #1D8D52)" }}><Ic n="listo" s={40} /></div>
             <h3 style={{ marginBottom: 6 }}>Solicitud enviada</h3>
             <p style={{ color: "var(--txt-3)", fontSize: 14 }}>
-              La va a revisar el equipo de URUKU. Si se aprueba, tu WhatsApp nuevo queda activo y podés entrar con el código de siempre.
+              La va a revisar el equipo de URUKU. Si se aprueba, tu WhatsApp nuevo queda activo y la clave anterior deja de servir: entrá a Mi comercio con «¿Primera vez o te olvidaste la clave?» desde el número nuevo y vas a recibir una clave nueva.
             </p>
             <Link className="btn btn-ghost btn-sm" href="/" style={{ marginTop: 14, display: "inline-flex" }}>Volver al inicio</Link>
           </div>

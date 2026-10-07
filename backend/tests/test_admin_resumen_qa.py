@@ -454,13 +454,16 @@ def test_cada_badge_y_cada_fila_del_tablero_apunta_a_un_pendiente_que_existe(api
 
 # ─────────────── 7. criterio 1: el inventario (las 23 pestañas de antes + Inicio + Calles)
 PESTANAS_DE_ANTES = {
-    # id nuevo: (permiso que pedía la pestaña vieja, hoy)
-    "negocios": None,            # era `comercios`
+    # id nuevo: el permiso que pide el menú. Es el MISMO que exige el backend
+    # para lo que muestra la sección (7/10): antes nueve pestañas no pedían
+    # ninguno y un moderador las veía en el menú para recibir un 403 adentro.
+    "negocios": "moderar",       # era `comercios`; /moderacion/comercios
     "lugares": "lugares", "adornos": "lugares", "catalogo": "datos", "rubros": "rubros",
     "revision-rubros": "rubros", "whatsapp": "whatsapp", "difusion": "difusion", "demanda": "datos",
     "ayuda": "ayuda", "equipo": "equipo", "compradores": "datos", "planes": "planes", "importados": "datos",
-    "cargas": "equipo", "publicaciones": None, "suscripciones": None, "pagos": None, "monitoreo": None,
-    "kpis": None, "reclamos": None, "cambio-numero": None, "vencimientos": None,
+    "cargas": "equipo", "publicaciones": "moderar", "suscripciones": "pagos", "pagos": "pagos",
+    "monitoreo": "datos", "kpis": "datos", "reclamos": "panel", "cambio-numero": "panel",
+    "vencimientos": "moderar",
 }
 
 
@@ -479,8 +482,9 @@ def test_el_menu_tiene_las_23_pestanas_de_antes_con_el_mismo_permiso_mas_inicio_
     for sid, permiso in PESTANAS_DE_ANTES.items():
         assert sid in menu, f"falta la sección {sid}"
         assert menu[sid] == permiso, f"{sid}: permiso {menu[sid]!r} en vez de {permiso!r}"
-    assert menu.get("inicio") is None and menu.get("calles") is None
-    assert set(menu) == set(PESTANAS_DE_ANTES) | {"inicio", "calles"}
+    assert menu.get("inicio") is None and menu.get("calles") == "moderar"
+    assert menu.get("manuales") is None
+    assert set(menu) == set(PESTANAS_DE_ANTES) | {"inicio", "calles", "manuales"}
 
 
 def test_el_tipo_SeccionAdmin_y_el_menu_coinciden():
