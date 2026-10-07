@@ -816,6 +816,55 @@ export type CargaHistorialItem = {
   minutos_trabajados: number; tramos: number; metros: number;
 };
 
+/** El tablero del panel (docs/admin-rediseno.md): TODO lo que muestra el Inicio
+ *  y los números del menú, en un solo pedido. Si una parte no se pudo calcular
+ *  (p.ej. Reservalo no contesta) viene en `null` y el resto igual. Los días
+ *  son de Bolivia (UTC−4), en formato AAAA-MM-DD. */
+export type ResumenAdmin = {
+  /** La ciudad que se pidió (slug) o null = todas. */
+  ciudad: string | null;
+  comercios: {
+    total: number;
+    verificados: number;
+    sin_verificar: number;
+    /** `horario` vacío. Los estimados (puestos por calle) cuentan como con horario. */
+    sin_horario: number;
+    horario_estimado: number;
+    sin_whatsapp: number;
+    /** Sin `portada_url`. */
+    sin_foto: number;
+    /** Sin rubro principal, o con el rubro comodín «otros». */
+    sin_rubro: number;
+  };
+  /** Todas las ciudades activas, SIEMPRE (no depende de `ciudad`). */
+  por_ciudad: { slug: string; nombre: string; total: number; sin_verificar: number; sin_horario: number }[];
+  /** Lo que alguien tiene que resolver. Cada número es el badge de su sección. */
+  pendientes: {
+    publicaciones: number | null;          // estado = 'pendiente'
+    comercios_sin_verificar: number | null;
+    pagos: number | null;                  // pagos por confirmar
+    reclamos: number | null;               // reclamos + consultas de Reservalo pendientes
+    cambio_numero: number | null;          // solicitudes de cambio de número pendientes
+    suscripciones: number | null;          // por vencer + vencidas + suspendidas
+    vencimientos: number | null;           // alertas de /admin/vencimientos
+    recepcion_sin_comercio: number | null; // mensajes de Recepción sin comercio (últimos 7 días)
+  };
+  actividad: {
+    visitas_7d: number | null;
+    /** Lo mismo que `contactos_30d` de /admin/estadisticas: todo lead que no sea
+     *  una vista (WhatsApp, teléfono, «Cómo llegar», reserva). */
+    contactos_7d: number | null;
+    /** Últimos 30 días, uno por día (los días sin nada vienen en 0), del más viejo al de hoy. */
+    serie_30d: { dia: string; altas: number; visitas: number; contactos: number }[] | null;
+  };
+};
+
+export async function getResumenAdmin(ciudad?: string | null): Promise<ResumenAdmin> {
+  const q = ciudad ? `?ciudad=${encodeURIComponent(ciudad)}` : "";
+  const res = await authFetch(`/admin/resumen${q}`);
+  return res.json();
+}
+
 export async function cargasDia(fecha?: string, ciudad?: string | null): Promise<CargasDia> {
   const q = new URLSearchParams();
   if (fecha) q.set("fecha", fecha);

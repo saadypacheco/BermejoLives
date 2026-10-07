@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
-  listPendientes, moderar, revisarConIA, type VeredictoIA, login, getToken, type PendingPub,
+  listPendientes, moderar, revisarConIA, type VeredictoIA, login, getToken, clearToken, type PendingPub,
   listTodosComercios, verificarComercio, rechazarComercio,
   editarComercio, type ComercioPorVerificar,
   listSuscripciones, registrarPago, suspenderComercio, activarComercio,
@@ -21,12 +22,12 @@ import {
   getEstadisticas, type EstadisticasAdmin,
   getKpis, type Kpis,
   getPesoFotos, optimizarFotos, type PesoFotos, type ResultadoOptimizar,
-  getVencimientos,
   ofertasPendientesAnalisis, analizarTandaOfertas, type ResultadoOferta,
   listReclamos, responderReclamo, type Reclamo,
   getReservaloResumen, type ReservaloResumen,
   getReservaloConsultas, responderReservaloConsulta, type ConsultaReservalo,
   listSolicitudesCambioNumero, aprobarSolicitudCambioNumero, rechazarSolicitudCambioNumero, type SolicitudCambioNumero,
+  getResumenAdmin, type ResumenAdmin,
 } from "@/lib/api";
 import { getRubros } from "@/lib/data";
 import { AdminMap } from "@/components/admin-map";
@@ -35,7 +36,7 @@ import { PanelVisitas } from "@/components/panel-visitas";
 import { LugaresEditor } from "@/components/lugares-editor";
 import { AdornosEditor } from "@/components/adornos-editor";
 import { ImportadosPanel } from "@/components/importados-panel";
-import { AdminCiudadProvider, SelectorCiudad, useAdminCiudad, type ModoCiudad } from "@/components/admin-ciudad";
+import { AdminCiudadProvider, useAdminCiudad } from "@/components/admin-ciudad";
 import { VencimientosPanel } from "@/components/vencimientos-panel";
 import { RubrosPanel } from "@/components/rubros-panel";
 import { RevisionRubros } from "@/components/revision-rubros";
@@ -56,61 +57,75 @@ import { EditorHorario, recordarUltimoHorario } from "@/components/editor-horari
 import { Check, X, Edit, Pin, WhatsApp, Verified } from "@/components/icons";
 import { Ic } from "@/components/ic";
 import { CargasPanel } from "@/components/cargas-panel";
-
-type TabAdmin = "publicaciones" | "comercios" | "lugares" | "adornos" | "catalogo" | "importados" | "suscripciones" | "pagos" | "monitoreo" | "kpis" | "reclamos" | "cambio-numero" | "vencimientos" | "rubros" | "revision-rubros" | "whatsapp" | "difusion" | "demanda" | "ayuda" | "planes" | "compradores" | "equipo" | "cargas";
-
-/** Qué hace cada pestaña con la ciudad elegida en la cabecera. Es el ÚNICO
- *  lugar donde se decide: el selector lee de acá y no de cada pestaña.
- *    filtra:    la pestaña muestra sólo la ciudad elegida.
- *    global:    no depende de la ciudad (es de toda la plataforma).
- *    pendiente: todavía muestra todas las ciudades. Se avisa en la cabecera
- *               porque un selector que dice «Santa Cruz» sobre una lista que
- *               muestra todo estaría mintiendo.
- *  `Record<TabAdmin, …>`: una pestaña nueva no compila hasta que se decide. */
-const MODO_CIUDAD: Record<TabAdmin, ModoCiudad> = {
-  comercios: "filtra", lugares: "filtra", adornos: "filtra", importados: "filtra",
-  vencimientos: "global", planes: "global", rubros: "global", compradores: "global",
-  publicaciones: "pendiente", catalogo: "pendiente", suscripciones: "pendiente", pagos: "pendiente",
-  monitoreo: "pendiente", kpis: "pendiente", reclamos: "pendiente", "cambio-numero": "pendiente",
-  "revision-rubros": "pendiente", whatsapp: "pendiente", difusion: "pendiente", demanda: "pendiente",
-  ayuda: "pendiente", equipo: "pendiente",
-  cargas: "filtra",
-};
+import { AdminShell } from "@/components/admin/admin-shell";
+import { Dashboard } from "@/components/admin/dashboard";
+import { defSeccion, seccionDeUrl, type SeccionAdmin } from "@/components/admin/secciones";
+import { BarraDatos, Carga, CargandoSeccion, mensajeDeError, useCarga } from "@/components/admin/estado-seccion";
 
 /** Los comercios de la ciudad elegida (slug), o todos si no hay ninguna. */
 function deCiudad(lista: ComercioPorVerificar[], slug: string | null): ComercioPorVerificar[] {
   return slug ? lista.filter((c) => (c.ciudades?.slug ?? "") === slug) : lista;
 }
 
-// El proveedor de la ciudad envuelve al panel entero: la cabecera, la pestaña
-// activa y el contador de «Negocios» leen la misma elección.
+// El proveedor de la ciudad envuelve al panel entero: la barra de arriba, la
+// sección activa y los números del menú leen la misma elección. `useSearchParams`
+// (la sección va en la URL: `/admin?s=negocios`) obliga a un límite de Suspense.
 export default function AdminPage() {
   return (
     <AdminCiudadProvider>
-      <AdminPanel />
+      <Suspense fallback={<PanelCargando />}>
+        <AdminPanel />
+      </Suspense>
     </AdminCiudadProvider>
+  );
+}
+
+function PanelCargando() {
+  return (
+    <div className="wrap" style={{ maxWidth: 420, paddingTop: 100 }}>
+      <CargandoSeccion texto="Abriendo el panel…" />
+    </div>
   );
 }
 
 function AdminPanel() {
   const { slug: slugCiudad, ciudad, listo: ciudadLista, arrancar: arrancarCiudad } = useAdminCiudad();
+  // La sección activa vive en la URL. Cambiarla es `irA`: empuja una entrada al
+  // historial (para que Atrás funcione) y `useSearchParams` se entera solo.
+  const seccion = seccionDeUrl(useSearchParams().get("s"));
+  // Se sabe si hay sesión recién después de leer el token (en el navegador). Sin
+  // este paso la pantalla de ingreso aparecía un instante aunque hubiera sesión.
+  const [sesionVerificada, setSesionVerificada] = useState(false);
   const [authed, setAuthed] = useState(false);
   // Vacío a propósito: un correo precargado que no es el tuyo se manda igual
   // y da «credenciales incorrectas» sin que nadie mire el campo.
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<TabAdmin>("comercios");
+
+  // ── El resumen: lo ÚNICO que se baja al entrar ────────────────────────────
+  // Alimenta el Inicio y los números del menú (docs/admin-rediseno.md §4).
+  const [resumen, setResumen] = useState<ResumenAdmin | null>(null);
+  const [cargandoResumen, setCargandoResumen] = useState(false);
+  const [errResumen, setErrResumen] = useState<string | null>(null);
+  const pedidoResumen = useRef(0);
+  const hayResumen = useRef(false);
+  // Si ya se pidió (en camino o bien bajada) la lista de comercios y los rubros:
+  // volver a abrir la sección no los vuelve a bajar.
+  const comerciosPedidos = useRef(false);
+  const rubrosPedidos = useRef(false);
+  const vezComercios = useRef(0);
+
+  // ── Los datos de cada sección: se piden cuando se abre, no al entrar ──────
+  // Un `useCarga` por recurso (cargando / error / ya llegó) para que cada
+  // sección pueda decir «Cargando…» y «No se pudo, Reintentar».
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [items, setItems] = useState<PendingPub[]>([]);
-  const [todosLosComercios, setTodosLosComercios] = useState<ComercioPorVerificar[]>([]);
-  // El backend avisó que la lista llegó a su tope: hay más comercios de los
-  // que trajo, y todo lo que se cuenta sobre ella queda corto.
-  const [comerciosTruncados, setComerciosTruncados] = useState(false);
+  // La lista COMPLETA de comercios (1.300+ filas): sólo Negocios, Calles y
+  // Monitoreo la usan. Se baja la primera vez que se abre una de ellas y queda;
+  // volver a bajarla es un pedido explícito («Actualizar»).
+  const [comercios, setComercios] = useState<{ items: ComercioPorVerificar[]; truncado: boolean } | null>(null);
   const [rubros, setRubros] = useState<Rubro[]>([]);
-  // Se carga al ABRIR el panel, no al entrar a la pestaña. Un aviso que sólo
-  // aparece cuando ya fuiste a mirar no avisa nada.
-  const [alertasVenc, setAlertasVenc] = useState(0);
   const [suscripciones, setSuscripciones] = useState<ComercioSuscripcion[]>([]);
   const [pagosPendientes, setPagosPendientes] = useState<PagoPendiente[]>([]);
   const [estadisticas, setEstadisticas] = useState<EstadisticasAdmin | null>(null);
@@ -118,16 +133,67 @@ function AdminPanel() {
   const [reclamos, setReclamos] = useState<Reclamo[]>([]);
   const [consultasReservalo, setConsultasReservalo] = useState<ConsultaReservalo[]>([]);
   const [solicitudesCambioNumero, setSolicitudesCambioNumero] = useState<SolicitudCambioNumero[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [cPub, correrPub] = useCarga("No se pudieron cargar las publicaciones");
+  const [cComercios, correrComercios] = useCarga("No se pudieron cargar los negocios");
+  const [cSusc, correrSusc] = useCarga("No se pudieron cargar las suscripciones");
+  const [cPagos, correrPagos] = useCarga("No se pudieron cargar los pagos");
+  const [cEstad, correrEstad] = useCarga("No se pudo cargar el monitoreo");
+  const [cKpis, correrKpis] = useCarga("No se pudieron cargar los KPIs");
+  const [cReclamos, correrReclamos] = useCarga("No se pudieron cargar los reclamos");
+  const [cCambio, correrCambio] = useCarga("No se pudieron cargar los cambios de número");
   const [veredictos, setVeredictos] = useState<Record<string, VeredictoIA | "cargando">>({});
   // El tipo corregido a mano, por publicación. El clasificador acierta el
   // caso común; acá se arregla el que no, en el mismo clic que aprueba.
   const [tipos, setTipos] = useState<Record<string, string>>({});
+  // El período de los KPIs. 30 días por defecto: es lo que se mira para
+  // decidir qué cargar la semana que viene.
+  const [diasKpis, setDiasKpis] = useState(30);
+  const diasKpisRef = useRef(30);
+  diasKpisRef.current = diasKpis;
+
+  const todosLosComercios = comercios?.items ?? [];
+
+  const pedirResumen = useCallback(async (silencioso: boolean) => {
+    const n = ++pedidoResumen.current;
+    if (!silencioso) { setCargandoResumen(true); setErrResumen(null); }
+    try {
+      const r = await getResumenAdmin(slugCiudad);
+      if (n !== pedidoResumen.current) return;   // llegó uno más nuevo: éste ya no vale
+      hayResumen.current = true;
+      setResumen(r);
+      setErrResumen(null);
+    } catch (e) {
+      if (n !== pedidoResumen.current) return;
+      setErrResumen(mensajeDeError(e, "No se pudo cargar el tablero"));
+    } finally {
+      if (n === pedidoResumen.current) setCargandoResumen(false);
+    }
+  }, [slugCiudad]);
+
+  /** Después de una acción que cambia un número del menú (moderar, verificar,
+   *  confirmar un pago…): se vuelve a pedir el resumen sin tapar nada. */
+  //  Con una pausa: moderar treinta publicaciones seguidas eran treinta
+  //  resúmenes completos (la consulta entera más Reservalo); así es uno, cuando
+  //  el moderador para.
+  const timerNumeros = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refrescarNumeros = useCallback(() => {
+    if (timerNumeros.current) clearTimeout(timerNumeros.current);
+    timerNumeros.current = setTimeout(() => { timerNumeros.current = null; void pedirResumen(true); }, 1500);
+  }, [pedirResumen]);
+  useEffect(() => () => { if (timerNumeros.current) clearTimeout(timerNumeros.current); }, []);
 
   // La sesión se venció en medio de la pantalla: se vuelve al ingreso con el
   // aviso, en vez de dejar el panel dibujado con todo fallando.
   useEffect(() => {
-    const vencida = () => { setAuthed(false); setErr("Se venció la sesión. Entrá de nuevo."); };
+    const vencida = () => {
+      // Recarga completa, igual que «Salir»: pagos, reclamos, suscripciones…
+      // quedaban en memoria, y en una computadora compartida el que entraba
+      // después en la misma pestaña los veía debajo de su propio error.
+      clearToken();
+      // Con la sección en la que estaba: al volver a entrar sigue ahí.
+      const s = new URLSearchParams(window.location.search).get("s");
+      window.location.assign(`/admin?sesion=vencida${s ? `&s=${encodeURIComponent(s)}` : ""}`);
+    };
     window.addEventListener("uk-sesion-vencida", vencida);
     return () => window.removeEventListener("uk-sesion-vencida", vencida);
   }, []);
@@ -137,118 +203,188 @@ function AdminPanel() {
   useEffect(() => { if (authed) arrancarCiudad(); }, [authed, arrancarCiudad]);
 
   useEffect(() => {
-    if (getToken()) {
-      setAuthed(true);
-      load();
-      loadComercios();
-      loadSuscripciones();
-      loadPagos();
-      loadEstadisticas();
-      loadReclamos();
-      loadSolicitudesCambioNumero();
-      getRubros().then(setRubros);
-      getVencimientos().then((v) => setAlertasVenc(v.alertas)).catch(() => {});
+    if (getToken()) setAuthed(true);
+    else if (new URLSearchParams(window.location.search).get("sesion") === "vencida") {
+      setErr("Se venció la sesión. Entrá de nuevo.");
     }
+    setSesionVerificada(true);
   }, []);
 
-  async function load() {
-    setLoading(true);
-    try {
-      setItems(await listPendientes("pendiente"));
-    } catch {
-      setItems([]);
-    } finally {
-      setLoading(false);
+  // Al entrar se pide el resumen y NADA MÁS. Se repite cuando cambia la ciudad
+  // (`pedirResumen` cambia con ella) y, con `ciudadLista`, no se pide con «todas»
+  // provisorio antes de saber la ciudad real.
+  useEffect(() => {
+    if (!authed || !ciudadLista) return;
+    void pedirResumen(false);
+  }, [authed, ciudadLista, pedirResumen]);
+
+  // Al cambiar de sección se actualizan los números: pudo haber cambiado todo
+  // mientras se trabajaba en la anterior. Varios paneles cambian un contador
+  // por dentro sin avisar (Vencimientos al guardar una fecha, Recepción al
+  // asignar un comercio, el análisis de ofertas, el editor de Negocios), y
+  // salir de ellos es el momento natural de ponerlos al día. En el Inicio se
+  // pide ya; en las demás, con la pausa de `refrescarNumeros`. Si ya había un
+  // resumen se deja a la vista y se cambia por el nuevo cuando llega.
+  const seccionPrevia = useRef(seccion);
+  useEffect(() => {
+    if (seccionPrevia.current === seccion) return;
+    seccionPrevia.current = seccion;
+    if (!authed || !ciudadLista) return;
+    if (seccion === "inicio") void pedirResumen(hayResumen.current);
+    else refrescarNumeros();
+  }, [seccion, authed, ciudadLista, pedirResumen, refrescarNumeros]);
+
+  // ── Loaders: uno por recurso. Cada uno corre al abrir su sección ──────────
+
+  /** La lista completa de comercios. Sin `forzar`, si ya se bajó no vuelve a
+   *  bajarse: es la lista más pesada del panel. */
+  const cargarComercios = useCallback((forzar = false) => {
+    if (comerciosPedidos.current && !forzar) return;
+    comerciosPedidos.current = true;
+    const vez = ++vezComercios.current;
+    return correrComercios(async () => {
+      try {
+        const r = await listTodosComercios();
+        // Si mientras tanto se pidió otra, vale la última (no una vieja que llegó tarde).
+        if (vez === vezComercios.current) setComercios({ items: r.items, truncado: r.truncado });
+      } catch (e) {
+        // No se bajó: la próxima vez que se abra la sección se vuelve a intentar.
+        // Lo que había se queda: vaciarlo borraría la lista por un fallo de red.
+        if (vez === vezComercios.current) comerciosPedidos.current = false;
+        throw e;
+      }
+    });
+  }, [correrComercios]);
+
+  const cargarRubros = useCallback(() => {
+    if (rubrosPedidos.current) return;
+    rubrosPedidos.current = true;
+    getRubros().then(setRubros).catch(() => { rubrosPedidos.current = false; });
+  }, []);
+
+  const cargarPendientes = useCallback(() => correrPub(async () => {
+    setItems(await listPendientes("pendiente"));
+  }), [correrPub]);
+
+  const cargarSuscripciones = useCallback(() => correrSusc(async () => {
+    setSuscripciones(await listSuscripciones());
+  }), [correrSusc]);
+
+  const cargarPagos = useCallback(() => correrPagos(async () => {
+    setPagosPendientes(await listPagosPendientes());
+  }), [correrPagos]);
+
+  const cargarEstadisticas = useCallback(() => correrEstad(async () => {
+    // El resumen de Reservalo es un extra: si no contesta, el resto se muestra igual.
+    getReservaloResumen().then(setReservaloResumen).catch(() => setReservaloResumen(null));
+    setEstadisticas(await getEstadisticas());
+  }), [correrEstad]);
+
+  const cargarKpis = useCallback((dias: number) => correrKpis(async () => {
+    setKpis(await getKpis(dias));
+  }), [correrKpis]);
+
+  const cargarReclamos = useCallback(() => correrReclamos(async () => {
+    // Las consultas de Reservalo son de otro servicio: si no contesta, quedan vacías.
+    getReservaloConsultas().then(setConsultasReservalo).catch(() => setConsultasReservalo([]));
+    setReclamos(await listReclamos());
+  }), [correrReclamos]);
+
+  const cargarSolicitudes = useCallback(() => correrCambio(async () => {
+    setSolicitudesCambioNumero(await listSolicitudesCambioNumero());
+  }), [correrCambio]);
+
+  // Cada sección pide lo SUYO cuando se abre. Las colas de trabajo (publicaciones,
+  // pagos, reclamos…) se piden de nuevo cada vez que se abren —tienen que estar
+  // al día—; la lista de comercios, no (ver `cargarComercios`).
+  useEffect(() => {
+    if (!authed) return;
+    switch (seccion) {
+      case "negocios": cargarComercios(); cargarRubros(); break;
+      case "calles": cargarComercios(); break;
+      // Los nombres de «Reservas por negocio» salen de la lista de comercios: se
+      // baja en segundo plano y los nombres aparecen cuando llega.
+      case "monitoreo": cargarEstadisticas(); cargarComercios(); break;
+      case "importados": cargarRubros(); break;
+      case "publicaciones": cargarPendientes(); break;
+      case "suscripciones": cargarSuscripciones(); break;
+      case "pagos": cargarPagos(); break;
+      case "kpis": cargarKpis(diasKpisRef.current); break;
+      case "reclamos": cargarReclamos(); break;
+      case "cambio-numero": cargarSolicitudes(); break;
+      default: break;   // el resto de las secciones se arma y pide lo suyo adentro
     }
-  }
+  }, [authed, seccion, cargarComercios, cargarRubros, cargarPendientes, cargarSuscripciones,
+      cargarPagos, cargarEstadisticas, cargarKpis, cargarReclamos, cargarSolicitudes]);
 
-  async function loadComercios() {
-    // Una sola consulta. Antes se pedía además la lista de pendientes (con tope
-    // de 200) sólo para el contador de la pestaña, que mostraba «200» aunque
-    // hubiera 1308: el contador sale ahora de esta lista, que es la completa.
-    try {
-      const r = await listTodosComercios();
-      setTodosLosComercios(r.items);
-      setComerciosTruncados(r.truncado);
-    } catch { /* se queda con lo que había: vaciarla borraría la lista por un fallo de red */ }
-  }
+  /** Va a otra sección: empuja la URL (`/admin?s=<id>`) al historial. Next 14.1+
+   *  integra `history.pushState` con `useSearchParams`, así que no recarga ni
+   *  pide nada al servidor. Si ya estás en el Inicio, vuelve a pedir el resumen. */
+  const irA = useCallback((s: SeccionAdmin) => {
+    if (s === seccion) {
+      if (s === "inicio") void pedirResumen(hayResumen.current);
+      return;
+    }
+    window.history.pushState(null, "", s === "inicio" ? "/admin" : `/admin?s=${s}`);
+    window.scrollTo({ top: 0 });
+  }, [seccion, pedirResumen]);
 
-  async function loadSuscripciones() {
-    try { setSuscripciones(await listSuscripciones()); } catch { setSuscripciones([]); }
-  }
-
-  async function loadPagos() {
-    try { setPagosPendientes(await listPagosPendientes()); } catch { setPagosPendientes([]); }
-  }
-
-  async function loadEstadisticas() {
-    try { setEstadisticas(await getEstadisticas()); } catch { setEstadisticas(null); }
-    try { setReservaloResumen(await getReservaloResumen()); } catch { setReservaloResumen(null); }
-  }
-
-  // El período de los KPIs. 30 días por defecto: es lo que se mira para
-  // decidir qué cargar la semana que viene.
-  const [diasKpis, setDiasKpis] = useState(30);
-
-  async function loadKpis(dias = diasKpis) {
-    try { setKpis(await getKpis(dias)); } catch { setKpis(null); }
-  }
-
-  async function loadReclamos() {
-    try { setReclamos(await listReclamos()); } catch { setReclamos([]); }
-    try { setConsultasReservalo(await getReservaloConsultas()); } catch { setConsultasReservalo([]); }
+  function salir() {
+    clearToken();
+    // Recarga completa: así no queda en memoria nada de la sesión que se cierra.
+    window.location.assign("/admin");
   }
 
   async function doConfirmarPago(pagoId: string, meses: number) {
     setPagosPendientes((prev) => prev.filter((p) => p.id !== pagoId)); // optimista
-    try { await confirmarPago(pagoId, meses); loadSuscripciones(); } catch { loadPagos(); }
+    try { await confirmarPago(pagoId, meses); void cargarSuscripciones(); } catch { void cargarPagos(); }
+    refrescarNumeros();
   }
 
   async function doResponderReclamo(id: string, respuesta: string) {
-    try { await responderReclamo(id, respuesta); loadReclamos(); } catch { alert("No se pudo responder"); }
-  }
-
-  async function loadSolicitudesCambioNumero() {
-    try { setSolicitudesCambioNumero(await listSolicitudesCambioNumero()); } catch { setSolicitudesCambioNumero([]); }
+    try { await responderReclamo(id, respuesta); void cargarReclamos(); refrescarNumeros(); } catch { alert("No se pudo responder"); }
   }
 
   async function doAprobarSolicitud(id: string) {
-    try { await aprobarSolicitudCambioNumero(id); loadSolicitudesCambioNumero(); } catch { alert("No se pudo aprobar"); }
+    try { await aprobarSolicitudCambioNumero(id); void cargarSolicitudes(); refrescarNumeros(); } catch { alert("No se pudo aprobar"); }
   }
 
   async function doRechazarSolicitud(id: string) {
-    try { await rechazarSolicitudCambioNumero(id); loadSolicitudesCambioNumero(); } catch { alert("No se pudo rechazar"); }
+    try { await rechazarSolicitudCambioNumero(id); void cargarSolicitudes(); refrescarNumeros(); } catch { alert("No se pudo rechazar"); }
   }
 
   async function doResponderConsultaReservalo(id: number, respuesta: string) {
-    try { await responderReservaloConsulta(id, respuesta); loadReclamos(); } catch { alert("No se pudo responder"); }
+    try { await responderReservaloConsulta(id, respuesta); void cargarReclamos(); refrescarNumeros(); } catch { alert("No se pudo responder"); }
   }
 
   async function actComercio(id: string, accion: "verificar" | "rechazar") {
-    // La lista y el contador de la pestaña salen de `todosLosComercios`: es la
-    // única fuente. (Hubo una segunda lista, sólo de pendientes, y actualizar
-    // una sola era el bug: el backend guardaba el cambio pero la tarjeta seguía
-    // ahí, así que el botón parecía no hacer nada.)
-    setTodosLosComercios((prev) => accion === "rechazar"
+    // La lista y el contador salen de `comercios`: es la única fuente. (Hubo una
+    // segunda lista, sólo de pendientes, y actualizar una sola era el bug: el
+    // backend guardaba el cambio pero la tarjeta seguía ahí, así que el botón
+    // parecía no hacer nada.)
+    setComercios((prev) => prev && { ...prev, items: accion === "rechazar"
       // rechazar = activo:false en la BD, y el listado trae sólo activos → desaparece
-      ? prev.filter((c) => c.id !== id)
+      ? prev.items.filter((c) => c.id !== id)
       // verificar = el negocio sigue en la lista, cambia de estado (mueve los chips)
-      : prev.map((c) => (c.id === id ? { ...c, verificado: true } : c)));
+      : prev.items.map((c) => (c.id === id ? { ...c, verificado: true } : c)) });
     try {
       accion === "verificar" ? await verificarComercio(id) : await rechazarComercio(id);
     } catch {
-      loadComercios();   // falló el server: volvemos a la verdad de la BD
+      void cargarComercios(true);   // falló el server: volvemos a la verdad de la BD
     }
+    refrescarNumeros();
   }
 
   async function doSuspender(id: string) {
     setSuscripciones((prev) => prev.map((c) => c.id === id ? { ...c, suspendido: true, suscripcion_estado: "suspendido" } : c));
-    try { await suspenderComercio(id); } catch { loadSuscripciones(); }
+    try { await suspenderComercio(id); } catch { void cargarSuscripciones(); }
+    refrescarNumeros();
   }
 
   async function doActivar(id: string) {
     setSuscripciones((prev) => prev.map((c) => c.id === id ? { ...c, suspendido: false, suscripcion_estado: "activo" } : c));
-    try { await activarComercio(id); } catch { loadSuscripciones(); }
+    try { await activarComercio(id); } catch { void cargarSuscripciones(); }
+    refrescarNumeros();
   }
 
   async function doLogin(e: React.FormEvent) {
@@ -256,14 +392,11 @@ function AdminPanel() {
     setErr("");
     try {
       await login(email, pass);
+      // El aviso de «sesión vencida» ya cumplió: fuera de la URL, sin perder la sección.
+      const q = new URLSearchParams(window.location.search);
+      if (q.has("sesion")) { q.delete("sesion"); window.history.replaceState(null, "", `/admin${q.toString() ? `?${q}` : ""}`); }
+      // Sin cargar nada acá: al haber sesión, el efecto de arriba pide el resumen.
       setAuthed(true);
-      load();
-      loadComercios();
-      loadSuscripciones();
-      loadPagos();
-      loadEstadisticas();
-      loadReclamos();
-      loadSolicitudesCambioNumero();
     } catch {
       setErr("Credenciales incorrectas. ¿Está corriendo el backend?");
     }
@@ -275,8 +408,9 @@ function AdminPanel() {
     setItems((prev) => prev.filter((p) => p.id !== id)); // optimista
     try {
       await moderar(id, estado, motivo, tipo);
+      refrescarNumeros();
     } catch {
-      load(); // revertir si falla
+      void cargarPendientes(); // revertir si falla
     }
   }
 
@@ -303,7 +437,10 @@ function AdminPanel() {
         await moderar(p.id, "aprobado").catch(() => {});
       }
     }
+    refrescarNumeros();
   }
+
+  if (!sesionVerificada) return <PanelCargando />;
 
   if (!authed) {
     return (
@@ -325,200 +462,132 @@ function AdminPanel() {
     );
   }
 
-  return (
-    <div className="admin-main" style={{ maxWidth: 1000, margin: "0 auto" }}>
-      <div className="admin-top">
-        <div>
-          <h1>Panel de URUKU</h1>
-          <p>Publicaciones por WhatsApp y comercios cargados en el recorrido</p>
-        </div>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
-          <SelectorCiudad modo={MODO_CIUDAD[tab]} />
-          <Link className="btn btn-ghost btn-sm" href="/">Ver sitio</Link>
-        </div>
-      </div>
+  // El permiso de la sección que dice la URL. El menú ya no la muestra sin
+  // permiso, pero alguien puede llegar con el enlace: sin esto vería un panel
+  // que sólo da 403.
+  const defActual = defSeccion(seccion);
+  const permitida = !defActual.permiso || puedo(defActual.permiso);
+  const datosComercios = deCiudad(todosLosComercios, slugCiudad);
 
-      <div className="admin-tabs">
-        <button className={tab === "comercios" ? "active" : ""} onClick={() => setTab("comercios")}>
-          {/* Los dos números son los de la ciudad elegida. «Sin verificar» se
-              cuenta sobre la lista completa: la consulta de pendientes tenía
-              tope de 200 y la pestaña decía «200 pend.» con 1308 en espera. */}
-          Negocios <span className="badge">{deCiudad(todosLosComercios, slugCiudad).length}</span>
-          {(() => {
-            const n = deCiudad(todosLosComercios, slugCiudad).filter((c) => !c.verificado).length;
-            return n > 0 && <span className="badge alerta">{n} pend.</span>;
-          })()}
-        </button>
-        {puedo("lugares") && (
-        <button className={tab === "lugares" ? "active" : ""} onClick={() => setTab("lugares")}>
-          Lugares
-        </button>
-        )}
-        {puedo("datos") && (
-        <button className={tab === "catalogo" ? "active" : ""} onClick={() => setTab("catalogo")}>
-          Catálogo
-        </button>
-        )}
-        {/* Al lado de Catálogo: Catálogo dice QUÉ hay, Rubros dice qué falta y
-            deja arreglarlo. Antes esto se hacía por SSH. */}
-        {puedo("rubros") && (
-        <button className={tab === "rubros" ? "active" : ""} onClick={() => setTab("rubros")}>
-          Rubros
-        </button>
-        )}
-        {puedo("rubros") && (
-        <button className={tab === "revision-rubros" ? "active" : ""} onClick={() => setTab("revision-rubros")}>
-          Revisar rubros
-        </button>
-        )}
-        {puedo("whatsapp") && (
-        <button className={tab === "whatsapp" ? "active" : ""} onClick={() => setTab("whatsapp")}>
-          Recepción
-        </button>
-        )}
-        {puedo("difusion") && (
-        <button className={tab === "difusion" ? "active" : ""} onClick={() => setTab("difusion")}>
-          Difusión
-        </button>
-        )}
-        {puedo("datos") && (
-        <button className={tab === "demanda" ? "active" : ""} onClick={() => setTab("demanda")}>
-          Demanda
-        </button>
-        )}
-        {puedo("ayuda") && (
-        <button className={tab === "ayuda" ? "active" : ""} onClick={() => setTab("ayuda")}>
-          Ayuda
-        </button>
-        )}
-        {puedo("equipo") && (
-          <button className={tab === "equipo" ? "active" : ""} onClick={() => setTab("equipo")}>
-            Equipo
-          </button>
-        )}
-        {puedo("datos") && (
-        <button className={tab === "compradores" ? "active" : ""} onClick={() => setTab("compradores")}>
-          Compradores
-        </button>
-        )}
-        {puedo("planes") && (
-        <button className={tab === "planes" ? "active" : ""} onClick={() => setTab("planes")}>
-          Planes
-        </button>
-        )}
-        {puedo("datos") && (
-        <button className={tab === "importados" ? "active" : ""} onClick={() => setTab("importados")}>
-          Importados
-        </button>
-        )}
-        {puedo("lugares") && (
-        <button className={tab === "adornos" ? "active" : ""} onClick={() => setTab("adornos")}>
-          Adornos
-        </button>
-        )}
-        <button className={tab === "publicaciones" ? "active" : ""} onClick={() => setTab("publicaciones")}>
-          Publicaciones {items.length > 0 && <span className="badge">{items.length}</span>}
-        </button>
-        <button className={tab === "suscripciones" ? "active" : ""} onClick={() => { setTab("suscripciones"); loadSuscripciones(); }}>
-          Suscripciones {(() => {
-            const n = suscripciones.filter((c) => ["por_vencer", "vencido", "suspendido"].includes(c.suscripcion_estado)).length;
-            return n > 0 && <span className="badge alerta">{n}</span>;
-          })()}
-        </button>
-        <button className={tab === "pagos" ? "active" : ""} onClick={() => { setTab("pagos"); loadPagos(); }}>
-          Pagos {pagosPendientes.length > 0 && <span className="badge alerta">{pagosPendientes.length}</span>}
-        </button>
-        <button className={tab === "monitoreo" ? "active" : ""} onClick={() => { setTab("monitoreo"); loadEstadisticas(); }}>
-          Monitoreo {estadisticas && (estadisticas.alertas.vencido + estadisticas.alertas.suspendido) > 0 && (
-            <span className="badge grave">{estadisticas.alertas.vencido + estadisticas.alertas.suspendido}</span>
-          )}
-        </button>
-        <button className={tab === "kpis" ? "active" : ""} onClick={() => { setTab("kpis"); loadKpis(); }}>KPIs</button>
-        {/* El mismo permiso que pide el backend (`require_admin` = «equipo»):
-            con «*» un rol a medida con «equipo» leía los datos sin ver la pestaña. */}
-        {puedo("equipo") && (
-        <button className={tab === "cargas" ? "active" : ""} onClick={() => setTab("cargas")}>
-          Cargas
-        </button>
-        )}
-        <button className={tab === "reclamos" ? "active" : ""} onClick={() => { setTab("reclamos"); loadReclamos(); }}>
-          Reclamos {(() => {
-            const n = reclamos.filter((r) => r.estado === "pendiente").length + consultasReservalo.filter((c) => c.estado === "pendiente").length;
-            return n > 0 && <span className="badge alerta">{n}</span>;
-          })()}
-        </button>
-        {/* Vencimientos va ÚLTIMA en la fila pero su número se calcula al abrir
-            el panel: si el dominio vence en tres días, tiene que verse sin que
-            nadie entre acá a buscarlo. */}
-        <button className={tab === "vencimientos" ? "active" : ""} onClick={() => setTab("vencimientos")}>
-          Vencimientos {alertasVenc > 0 && <span className="badge grave">{alertasVenc}</span>}
-        </button>
-        <button className={tab === "cambio-numero" ? "active" : ""} onClick={() => { setTab("cambio-numero"); loadSolicitudesCambioNumero(); }}>
-          Cambios de número {solicitudesCambioNumero.length > 0 && <span className="badge alerta">{solicitudesCambioNumero.length}</span>}
-        </button>
-      </div>
+  return (
+    <AdminShell seccion={seccion} onIr={irA} pendientes={resumen?.pendientes ?? null} onSalir={salir}>
+      {!permitida && (
+        <div className="panel-card glass ash-estado" role="alert">
+          <span className="ash-estado-txt"><Ic n="seguridad" s={20} /> No tenés permiso para entrar a esta sección.</span>
+          <button type="button" className="btn btn-primary btn-sm ash-btn-grande" onClick={() => irA("inicio")}>Ir al Inicio</button>
+        </div>
+      )}
+
+      {permitida && seccion === "inicio" && (
+        <Dashboard resumen={resumen} cargando={cargandoResumen || !ciudadLista} error={errResumen}
+                   onIr={irA} onRecargar={() => { void pedirResumen(false); }}
+                   ciudadNombre={ciudad?.nombre ?? null} />
+      )}
 
       {/* Con `ciudadLista`: antes de resolver la ciudad inicial, «todas» es sólo
           un valor provisorio y no hay que consultar nada con él. */}
-      {tab === "lugares" && ciudadLista && <LugaresEditor ciudad={ciudad} />}
-      {tab === "adornos" && ciudadLista && <AdornosEditor ciudad={ciudad} />}
-      {tab === "catalogo" && <CatalogoPanel />}
-      {tab === "rubros" && <RubrosPanel />}
-      {tab === "revision-rubros" && <RevisionRubros />}
-      {tab === "whatsapp" && <BandejaWhatsApp />}
-      {tab === "difusion" && <DifusionPanel />}
-      {tab === "demanda" && <DemandaPanel />}
-      {tab === "ayuda" && <AsistentePanel />}
-      {tab === "planes" && <PlanesPanel />}
-      {tab === "compradores" && <ContactosPanel />}
-      {tab === "equipo" && <EquipoPanel />}
-      {tab === "cargas" && ciudadLista && <CargasPanel />}
-      {tab === "importados" && ciudadLista && <ImportadosPanel rubros={rubros} ciudad={ciudad} />}
+      {permitida && seccion === "lugares" && ciudadLista && <LugaresEditor ciudad={ciudad} />}
+      {permitida && seccion === "adornos" && ciudadLista && <AdornosEditor ciudad={ciudad} />}
+      {permitida && seccion === "catalogo" && <CatalogoPanel />}
+      {permitida && seccion === "rubros" && <RubrosPanel />}
+      {permitida && seccion === "revision-rubros" && <RevisionRubros />}
+      {permitida && seccion === "whatsapp" && <BandejaWhatsApp />}
+      {permitida && seccion === "difusion" && <DifusionPanel />}
+      {permitida && seccion === "demanda" && <DemandaPanel />}
+      {permitida && seccion === "ayuda" && <AsistentePanel />}
+      {permitida && seccion === "planes" && <PlanesPanel />}
+      {permitida && seccion === "compradores" && <ContactosPanel />}
+      {permitida && seccion === "equipo" && <EquipoPanel />}
+      {permitida && seccion === "cargas" && ciudadLista && <CargasPanel />}
+      {permitida && seccion === "importados" && ciudadLista && <ImportadosPanel rubros={rubros} ciudad={ciudad} />}
+      {permitida && seccion === "vencimientos" && <VencimientosPanel />}
 
-      {tab === "comercios" && (
-        <TabComercios
-          todos={todosLosComercios}
-          truncado={comerciosTruncados}
-          rubros={rubros}
-          onVerificar={(id) => actComercio(id, "verificar")}
-          onRechazar={(id) => actComercio(id, "rechazar")}
-          onEdited={loadComercios}
-        />
+      {permitida && seccion === "negocios" && (
+        ciudadLista ? (
+          <Carga estado={cComercios} onReintentar={() => { void cargarComercios(true); }} que="los negocios">
+            <BarraDatos texto={`${todosLosComercios.length.toLocaleString("es-BO")} negocios bajados`}
+                        cargando={cComercios.cargando} onActualizar={() => { void cargarComercios(true); }} />
+            <TabComercios
+              todos={todosLosComercios}
+              truncado={comercios?.truncado ?? false}
+              rubros={rubros}
+              onVerificar={(id) => actComercio(id, "verificar")}
+              onRechazar={(id) => actComercio(id, "rechazar")}
+              onEdited={() => { void cargarComercios(true); }}
+              onIrCalles={() => irA("calles")}
+            />
+          </Carga>
+        ) : <CargandoSeccion texto="Cargando la ciudad…" />
       )}
 
-      {tab === "suscripciones" && (
-        <TabSuscripciones
-          items={suscripciones}
-          onSuspender={doSuspender}
-          onActivar={doActivar}
-          onPago={() => loadSuscripciones()}
-        />
+      {/* «Calles y horarios»: antes un botón escondido dentro de Negocios. Recibe
+          los comercios de la ciudad y no los filtrados: el buscador y los chips
+          de Negocios sirven para encontrar UN comercio, y acá importa la calle
+          entera. */}
+      {permitida && seccion === "calles" && (
+        ciudadLista ? (
+          <Carga estado={cComercios} onReintentar={() => { void cargarComercios(true); }} que="los negocios">
+            <BarraDatos texto={`${datosComercios.length.toLocaleString("es-BO")} negocios${slugCiudad ? " de la ciudad" : ""}`}
+                        cargando={cComercios.cargando} onActualizar={() => { void cargarComercios(true); }}
+                        aviso={comercios?.truncado ? `El panel trajo ${todosLosComercios.length} negocios y hay más: faltan calles y comercios en esta vista.` : null} />
+            <div className="panel-card glass">
+              <AdminCalles comercios={datosComercios} onCambio={() => { void cargarComercios(true); }} />
+            </div>
+          </Carga>
+        ) : <CargandoSeccion texto="Cargando la ciudad…" />
       )}
 
-      {tab === "pagos" && <TabPagos items={pagosPendientes} onConfirmar={doConfirmarPago} />}
-
-      {tab === "monitoreo" && <TabMonitoreo data={estadisticas} reservalo={reservaloResumen} comercios={todosLosComercios} />}
-      {tab === "kpis" && (
-        <TabKpis data={kpis} dias={diasKpis}
-                 onDias={(d) => { setDiasKpis(d); setKpis(null); loadKpis(d); }} />
-      )}
-      {tab === "vencimientos" && <VencimientosPanel />}
-
-      {tab === "reclamos" && (
-        <TabReclamos
-          reclamos={reclamos}
-          consultasReservalo={consultasReservalo}
-          onResponderReclamo={doResponderReclamo}
-          onResponderConsulta={doResponderConsultaReservalo}
-        />
+      {permitida && seccion === "suscripciones" && (
+        <Carga estado={cSusc} onReintentar={() => { void cargarSuscripciones(); }} que="las suscripciones">
+          <TabSuscripciones
+            items={suscripciones}
+            onSuspender={doSuspender}
+            onActivar={doActivar}
+            onPago={() => { void cargarSuscripciones(); refrescarNumeros(); }}
+          />
+        </Carga>
       )}
 
-      {tab === "cambio-numero" && (
-        <TabCambioNumero items={solicitudesCambioNumero} onAprobar={doAprobarSolicitud} onRechazar={doRechazarSolicitud} />
+      {permitida && seccion === "pagos" && (
+        <Carga estado={cPagos} onReintentar={() => { void cargarPagos(); }} que="los pagos">
+          <TabPagos items={pagosPendientes} onConfirmar={doConfirmarPago} />
+        </Carga>
       )}
 
-      {tab === "publicaciones" && <AnalisisOfertas />}
-      {tab === "publicaciones" && (
+      {permitida && seccion === "monitoreo" && (
+        <Carga estado={cEstad} onReintentar={() => { void cargarEstadisticas(); }} que="el monitoreo">
+          <TabMonitoreo data={estadisticas} reservalo={reservaloResumen} comercios={todosLosComercios}
+                        comerciosListos={cComercios.listo} />
+        </Carga>
+      )}
+
+      {permitida && seccion === "kpis" && (
+        <Carga estado={cKpis} onReintentar={() => { void cargarKpis(diasKpis); }} que="los KPIs">
+          <TabKpis data={kpis} dias={diasKpis}
+                   onDias={(d) => { setDiasKpis(d); setKpis(null); void cargarKpis(d); }} />
+        </Carga>
+      )}
+
+      {permitida && seccion === "reclamos" && (
+        <Carga estado={cReclamos} onReintentar={() => { void cargarReclamos(); }} que="los reclamos">
+          <TabReclamos
+            reclamos={reclamos}
+            consultasReservalo={consultasReservalo}
+            onResponderReclamo={doResponderReclamo}
+            onResponderConsulta={doResponderConsultaReservalo}
+          />
+        </Carga>
+      )}
+
+      {permitida && seccion === "cambio-numero" && (
+        <Carga estado={cCambio} onReintentar={() => { void cargarSolicitudes(); }} que="los cambios de número">
+          <TabCambioNumero items={solicitudesCambioNumero} onAprobar={doAprobarSolicitud} onRechazar={doRechazarSolicitud} />
+        </Carga>
+      )}
+
+      {permitida && seccion === "publicaciones" && <AnalisisOfertas />}
+      {permitida && seccion === "publicaciones" && (
+      <Carga estado={cPub} onReintentar={() => { void cargarPendientes(); }} que="las publicaciones">
       <div className="panel-card glass">
         <div className="ph" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
           <div><h3>Cola de aprobación</h3><span style={{ color: "var(--txt-3)", fontSize: 13 }}>Aprobá, rechazá o pedí cambios</span></div>
@@ -528,10 +597,9 @@ function AdminPanel() {
             </button>
           )}
         </div>
-        {loading && <div className="mod-item" style={{ justifyContent: "center", color: "var(--txt-3)" }}>Cargando…</div>}
-        {!loading && items.length === 0 && (
+        {items.length === 0 && (
           <div className="mod-item" style={{ justifyContent: "center", color: "var(--txt-3)" }}>
-            No hay publicaciones pendientes. (Si esperabas ver algunas, verificá que el backend FastAPI esté corriendo.)
+            No hay publicaciones pendientes.
           </div>
         )}
         {items.map((p) => (
@@ -587,8 +655,9 @@ function AdminPanel() {
           </div>
         ))}
       </div>
+      </Carga>
       )}
-    </div>
+    </AdminShell>
   );
 }
 
@@ -920,11 +989,15 @@ function TabKpis({ data, dias, onDias }: { data: Kpis | null; dias: number; onDi
 }
 
 function TabMonitoreo({
-  data, reservalo, comercios,
+  data, reservalo, comercios, comerciosListos,
 }: {
   data: EstadisticasAdmin | null;
   reservalo: ReservaloResumen | null;
   comercios: ComercioPorVerificar[];
+  /** La lista de comercios se baja en segundo plano al abrir Monitoreo (sólo
+   *  sirve para poner el nombre en «Reservas por negocio»): hasta que llega no
+   *  se muestra «?» sino puntos suspensivos. */
+  comerciosListos: boolean;
 }) {
   const [altas, setAltas] = useState<AltasDia[]>([]);
   useEffect(() => { altasPorDia(60).then((r) => setAltas(r.items ?? [])).catch(() => {}); }, []);
@@ -932,7 +1005,7 @@ function TabMonitoreo({
   if (!data) return <div className="panel-card glass" style={{ padding: 24, textAlign: "center", color: "var(--txt-3)" }}>Cargando…</div>;
 
   const totalAlertas = data.alertas.vencido + data.alertas.suspendido;
-  const nombrePorId = (id: string) => comercios.find((c) => c.id === id)?.nombre ?? "?";
+  const nombrePorId = (id: string) => comercios.find((c) => c.id === id)?.nombre ?? (comerciosListos ? "?" : "…");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1074,7 +1147,7 @@ function TabMonitoreo({
 
       {totalAlertas > 0 && (
         <div className="panel-card glass" style={{ padding: "12px 16px", border: "1px solid var(--pink)", color: "var(--pink)", fontSize: 13 }}>
-          <Ic n="aviso" s={14} /> {data.alertas.vencido} comercio(s) vencido(s) y {data.alertas.suspendido} suspendido(s). Revisá la pestaña "Suscripciones".
+          <Ic n="aviso" s={14} /> {data.alertas.vencido} comercio(s) vencido(s) y {data.alertas.suspendido} suspendido(s). Revisá la sección «Suscripciones».
         </div>
       )}
 
@@ -1264,7 +1337,7 @@ function TabSuscripciones({
 
 type FiltroComercio = "todos" | "pendientes" | "verificados" | "incompletos" | "sin-horario";
 type OrdenComercio = "recientes" | "alfabetico" | "estado";
-type VistaComercio = "lista" | "mapa" | "calles";
+type VistaComercio = "lista" | "mapa";
 
 function normTxt(s: string): string {
   return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -1456,7 +1529,7 @@ function ResumenPorCiudad({ todos, noComerciales, truncado }: {
 }
 
 function TabComercios({
-  todos, truncado, rubros, onVerificar, onRechazar, onEdited,
+  todos, truncado, rubros, onVerificar, onRechazar, onEdited, onIrCalles,
 }: {
   todos: ComercioPorVerificar[];
   truncado: boolean;
@@ -1464,6 +1537,8 @@ function TabComercios({
   onVerificar: (id: string) => void;
   onRechazar: (id: string) => void;
   onEdited: () => void;
+  /** «Calles y horarios» es su propia sección del menú; el botón de acá lleva a ella. */
+  onIrCalles: () => void;
 }) {
   const [filtro, setFiltro] = useState<FiltroComercio>("todos");
   const [q, setQ] = useState("");
@@ -1587,15 +1662,20 @@ function TabComercios({
           <option value="estado">Pendientes primero</option>
         </select>
         <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
-          {(["lista", "mapa", "calles"] as VistaComercio[]).map((v) => (
-            <button key={v} onClick={() => setVista(v)}
-              style={{ padding: "7px 14px", fontSize: 13, cursor: "pointer", border: "none",
+          {(["lista", "mapa"] as VistaComercio[]).map((v) => (
+            <button key={v} onClick={() => setVista(v)} aria-pressed={vista === v}
+              style={{ padding: "11px 16px", fontSize: 13, cursor: "pointer", border: "none",
                 background: vista === v ? "var(--neon)22" : "transparent",
                 color: vista === v ? "var(--neon)" : "var(--txt-2)", fontWeight: vista === v ? 600 : 400 }}>
-              {v === "lista" ? "Lista" : v === "mapa" ? "Mapa" : "Calles"}
+              {v === "lista" ? "Lista" : "Mapa"}
             </button>
           ))}
         </div>
+        {/* Era la tercera vista de este selector y nadie la encontraba: ahora es
+            una sección del menú («Calles y horarios») y esto es un atajo. */}
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onIrCalles} style={{ minHeight: 44 }}>
+          <Ic n="reloj" s={15} /> Calles y horarios
+        </button>
       </div>
 
       {/* Filtros por estado */}
@@ -1605,7 +1685,7 @@ function TabComercios({
           const col = amber ? "var(--amber)" : "var(--neon)";
           return (
             <button key={key} onClick={() => setFiltro(key)}
-              style={{ padding: "5px 14px", borderRadius: 20, border: "1px solid", cursor: "pointer", fontSize: 13,
+              style={{ padding: "5px 14px", minHeight: 44, borderRadius: 20, border: "1px solid", cursor: "pointer", fontSize: 13,
                 borderColor: activo ? col : "var(--border)",
                 background: activo ? `${col}22` : "transparent",
                 color: activo ? col : "var(--txt-2)", fontWeight: activo ? 600 : 400 }}>
@@ -1620,12 +1700,7 @@ function TabComercios({
       {ciudadLista && <AnalisisMasivo ciudad={ciudadObj} onTerminado={onEdited} />}
 
       {/* Vista MAPA (D): tocar un pin abre el editor; ideal para los sin nombre */}
-      {vista === "calles" ? (
-        // Por calle: para cargar horarios de a cientos en vez de de a uno.
-        // Recibe `deLaCiudad` y no `filtradas`: el buscador y los chips sirven
-        // para encontrar UN comercio, y acá lo que importa es la calle entera.
-        <AdminCalles comercios={deLaCiudad} onCambio={onEdited} />
-      ) : vista === "mapa" ? (
+      {vista === "mapa" ? (
         <div style={{ padding: 12 }}>
           <AdminMap
             comercios={filtradas.map((c) => ({
@@ -1722,8 +1797,10 @@ function TabComercios({
             )}
           </div>
 
-          {/* Acciones */}
-          <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center", marginLeft: "auto" }}>
+          {/* Acciones. Pueden partirse en dos renglones: con `flexShrink: 0` y sin
+              wrap, a 360 px los 7-8 botones medían más que la tarjeta y
+              Verificar y Rechazar quedaban cortados, sin forma de tocarlos. */}
+          <div style={{ display: "flex", gap: 8, flex: "0 1 auto", minWidth: 0, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", marginLeft: "auto" }}>
             {c.whatsapp && (
               <a
                 href={`https://wa.me/${c.whatsapp}`}

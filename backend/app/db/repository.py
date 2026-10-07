@@ -163,6 +163,7 @@ class Repo(Protocol):
     def stats_admin(self) -> dict: ...
     def estadisticas_admin(self) -> dict: ...
     def altas_por_dia(self, dias: int = 60) -> list[dict]: ...
+    def resumen_admin(self, ciudad_slug: str | None, hoy) -> dict: ...
     def list_cargas_de_agentes(self, desde, hasta, ciudad_id: str | None = None) -> list[dict]: ...
     def insert_busqueda(
         self, query: str, resultados: int, comercios: list[str] | None = None
@@ -1979,6 +1980,22 @@ class SupabaseRepo:
         for d in sorted(por_dia.values(), key=lambda x: x["dia"], reverse=True):
             salida.append({**d, "agentes": len(d["agentes"])})
         return salida
+
+    def resumen_admin(self, ciudad_slug: str | None, hoy) -> dict:
+        """Los números del tablero del panel, ya contados en la base.
+
+        Delega en la función SQL `admin_resumen` (0139): comercios, por ciudad,
+        pendientes y actividad en un solo jsonb. NUNCA se bajan filas para
+        contarlas acá: PostgREST corta en 1000 sin avisar. `hoy` es el día de
+        Bolivia (un `date`); `ciudad_slug` None = todas, y un slug desconocido
+        da conteos en 0. Si la base falla, la excepción sube: quien llama
+        decide qué hacer (el tablero contesta 503).
+        """
+        params: dict = {"p_hoy": hoy.isoformat()}
+        if ciudad_slug:
+            params["p_ciudad_slug"] = ciudad_slug
+        data = self._db.rpc("admin_resumen", params).execute().data
+        return data if isinstance(data, dict) else {}
 
     def list_cargas_de_agentes(self, desde, hasta, ciudad_id: str | None = None) -> list[dict]:
         """Comercios activos cargados por un agente cuya hora de carga cae en [desde, hasta).

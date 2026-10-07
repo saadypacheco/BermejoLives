@@ -82,14 +82,34 @@ def permisos_de_roles(roles: list[str], catalogo: dict[str, list[str]] | None = 
     return sorted(juntos)
 
 
-def tiene(claims: dict, permiso: str) -> bool:
-    """¿Este token puede hacer esto?
+def permisos_de(claims: dict) -> list[str]:
+    """Los permisos que lleva un token. Si no los trae —un token emitido antes
+    de este cambio, que sigue vivo hasta que venza— cae en los roles del sistema,
+    que es exactamente lo que ese token podía hacer ayer.
 
-    Mira los permisos del token. Si no los trae —un token emitido antes de
-    este cambio, que sigue vivo hasta que venza— cae en los roles del sistema,
-    que es exactamente lo que ese token podía hacer ayer."""
+    SÓLO si el claim no viene. Una lista VACÍA es una respuesta: el rol se quedó
+    sin permisos. Con `if not permisos`, vaciar el rol «moderador» desde Equipo
+    —la única forma de apagar un rol del sistema, que no se puede borrar—
+    devolvía al token todos los permisos de moderador, y el admin creía haber
+    cortado el acceso."""
     permisos = claims.get("permisos")
-    if not permisos:
+    if permisos is None:
         roles = claims.get("roles") or ([claims["rol"]] if claims.get("rol") else [])
         permisos = permisos_de_roles(roles)
+    return list(permisos)
+
+
+def tiene(claims: dict, permiso: str) -> bool:
+    """¿Este token puede hacer esto?"""
+    permisos = permisos_de(claims)
     return TODO in permisos or permiso in permisos
+
+
+def es_del_panel(claims: dict) -> bool:
+    """¿Es alguien del equipo que usa el PANEL? (cualquier rol, con cualquier permiso)
+
+    Entra el que tiene algún permiso del panel o el comodín. NO entra el agente
+    de campo (su único permiso es cargar desde la calle: tiene su propia app),
+    ni un comercio ni un comprador (sus tokens no llevan permisos del equipo)."""
+    permisos = permisos_de(claims)
+    return TODO in permisos or any(p in permisos for p in TODOS if p != "comercios.cargar")

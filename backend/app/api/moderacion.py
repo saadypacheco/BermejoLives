@@ -9,12 +9,12 @@ import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.auth import hash_password, require_admin, require_moderador, require_permiso
+from app.core.auth import hash_password, require_admin, require_moderador, require_panel, require_permiso
 from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp, whatsapp_para_guardar
-from app.services import cargas, clasificador, contactos, demanda, difusion, planes, revision_ia, wa_grupos, wa_sesion
+from app.services import cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
@@ -1233,6 +1233,26 @@ def crear_grupo_comercio(
     logger.info("comercio.grupo_creado", comercio=comercio_id, grupo=jid, by=admin["email"])
     return {"ok": True, "grupo_jid": jid, "nombre": nombre,
             "grupos": repo.list_grupos_comercio(comercio_id)}
+
+
+@router.get("/admin/resumen")
+def admin_resumen(
+    ciudad: str | None = Query(default=None, max_length=80, description="slug de la ciudad; sin él, todas"),
+    _panel: dict = Depends(require_panel),
+    repo: Repo = Depends(get_repo),
+    reservalo: ReservaloSyncClient = Depends(get_reservalo_sync_client),
+) -> dict:
+    """El tablero de Inicio del panel: todos los números en UN pedido.
+
+    Lo puede pedir cualquier usuario del panel (no un agente de campo ni un
+    comercio). Un slug de ciudad desconocido da los conteos de comercios en 0.
+    Si una parte falla (p.ej. Reservalo no contesta) esa parte viene en `null`
+    y el resto igual; sólo si no se pueden contar los comercios contesta 503.
+    """
+    try:
+        return resumen_admin.armar_resumen(repo, reservalo, ciudad)
+    except resumen_admin.ResumenNoDisponible:
+        raise HTTPException(status_code=503, detail="No se pudo calcular el resumen. Probá de nuevo en un momento.")
 
 
 @router.get("/admin/altas-por-dia")

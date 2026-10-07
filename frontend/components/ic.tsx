@@ -63,6 +63,9 @@ export const ICONOS = {
   inicio: "House", guardado: "BookmarkSimple", documento: "FileText",
   desplegar: "CaretDown", enviar: "PaperPlaneTilt", web: "GlobeSimple",
   editar: "PencilSimple",
+  // El panel de administración: el botón que abre el menú lateral en el celular
+  // y el de cerrar sesión (`salir` ya es otra cosa: la excursión).
+  menu: "List", cerrar_sesion: "SignOut", actualizar: "ArrowsClockwise",
   // Logos de marcas ajenas. Van acá porque el sitio los usa como íconos
   // (las redes de un comercio en su ficha); los TILES de las redes de URUKU
   // siguen con el dibujo oficial de cada marca, en components/uruku-ui.tsx.

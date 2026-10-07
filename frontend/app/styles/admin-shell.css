@@ -1,0 +1,230 @@
+/* ============================================================
+   Panel de administración — el marco (barra de arriba + menú lateral).
+   Lo usa components/admin/admin-shell.tsx; el contenido de cada sección
+   sigue con sus propios estilos (pages.css: .panel-card, .mod-item, .mbtn…).
+
+   Todo cuelga de `.ash` y los colores salen de las variables del sitio
+   (design.css): si cambia la paleta, cambia acá sin tocar nada.
+
+   Pantalla ancha (>= 900px): menú fijo a la izquierda.
+   Celular (< 900px): el menú es un cajón que abre el botón de la barra.
+   Objetivos táctiles de 44 px o más en todo lo que se toca en el celular.
+   ============================================================ */
+
+.ash { --ash-top: 60px; --ash-lat: 272px; min-height: 100vh; }
+
+/* El layout raíz dibuja el aviso «Instalá URUKU» (components/install-prompt.tsx),
+   fijo arriba de todo y por encima de cualquier cosa (z-index 200): tapaba la
+   barra del panel y, con el aviso abierto, el logo, la ciudad y «Ver sitio»
+   quedaban escondidos. Es una invitación para compradores; en el panel del
+   equipo sobra. Sólo se esconde acá: el resto del sitio no cambia. */
+body:has(.ash) .install-banner { display: none; }
+
+/* ---------- Barra de arriba (fija) ---------- */
+.ash-top {
+  position: sticky; top: 0; z-index: 60;
+  height: var(--ash-top);
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 clamp(10px, 2vw, 24px);
+  background: rgba(10, 14, 24, .94);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--stroke);
+}
+
+.ash-marca {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 6px;
+  font-size: 21px; font-weight: 800; letter-spacing: .02em; color: var(--txt);
+  border-radius: 10px;
+}
+.ash-marca i { color: var(--neon); font-style: normal; }
+
+.ash-ciudad { flex: 0 1 340px; min-width: 0; }
+.ash-ciudad label { width: 100%; min-width: 0; }
+/* El select trae `width: auto` en línea; acá tiene que ocupar el renglón y medir
+   44 px de alto para el dedo. */
+.ash-ciudad select.adm-input { width: 100% !important; min-height: 44px; text-overflow: ellipsis; }
+
+.ash-top-der { margin-left: auto; display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+.ash-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; min-width: 44px; padding: 0 14px;
+  border-radius: 999px; border: 1px solid var(--stroke-2); background: var(--panel-2);
+  color: var(--txt); font-size: 13.5px; font-weight: 600; white-space: nowrap;
+  transition: border-color .15s var(--ease), background .15s var(--ease);
+}
+.ash-btn:hover { border-color: var(--neon); background: rgba(57, 255, 158, .08); }
+.ash-btn-lleno { width: 100%; }
+
+.ash-usuario {
+  display: none; align-items: center; gap: 6px; max-width: 220px;
+  font-size: 13px; color: var(--txt-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+
+.ash-burger {
+  display: none; align-items: center; justify-content: center; flex: 0 0 auto;
+  width: 44px; height: 44px; border-radius: 12px;
+  border: 1px solid var(--stroke-2); background: var(--panel-2); color: var(--txt);
+}
+
+/* ---------- Cuerpo: menú + contenido ---------- */
+.ash-body { display: grid; grid-template-columns: var(--ash-lat) minmax(0, 1fr); align-items: start; }
+
+.ash-lateral {
+  position: sticky; top: var(--ash-top);
+  height: calc(100vh - var(--ash-top)); height: calc(100dvh - var(--ash-top));
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  padding: 10px 12px 18px;
+  background: var(--bg-1); border-right: 1px solid var(--stroke);
+  display: flex; flex-direction: column;
+}
+.ash-lateral nav { flex: 1 0 auto; }
+.ash-lateral::-webkit-scrollbar { width: 6px; }
+.ash-lateral::-webkit-scrollbar-thumb { background: var(--stroke-2); border-radius: 999px; }
+
+.ash-grupo ul { list-style: none; margin: 0; padding: 0; }
+.ash-grupo-t {
+  margin: 16px 12px 6px; font-size: 11px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--txt-3);
+}
+
+.ash-item {
+  position: relative; display: flex; align-items: center; gap: 11px;
+  min-height: 40px; padding: 7px 12px; margin-bottom: 2px;
+  border-radius: 10px; color: var(--txt-2); font-size: 14px; font-weight: 500;
+  transition: background .15s var(--ease), color .15s var(--ease);
+}
+.ash-item:hover { background: var(--panel-2); color: var(--txt); }
+/* La sección activa se distingue por color Y por forma (fondo, barra al costado,
+   negrita): no depende de ver el verde. */
+.ash-item[aria-current="page"] {
+  background: rgba(57, 255, 158, .12); color: var(--neon); font-weight: 700;
+}
+.ash-item[aria-current="page"]::before {
+  content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px;
+  border-radius: 0 3px 3px 0; background: var(--neon);
+}
+.ash-item-txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ash-badge {
+  margin-left: auto; flex: 0 0 auto;
+  min-width: 24px; height: 22px; padding: 0 7px; border-radius: 999px;
+  display: inline-grid; place-items: center;
+  font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums;
+  background: rgba(255, 176, 32, .18); color: var(--amber);
+}
+.ash-badge.grave { background: rgba(255, 77, 141, .18); color: var(--pink); }
+
+/* En pantalla ancha el pie (usuario + Salir) es redundante: ya están arriba. */
+.ash-pie { display: none; padding-top: 14px; margin-top: 10px; border-top: 1px solid var(--stroke); }
+.ash-usuario-pie { margin: 0 0 10px; font-size: 13px; color: var(--txt-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ash-fondo { display: none; }
+
+/* ---------- Contenido (a todo el ancho) ---------- */
+.ash-main { min-width: 0; padding: 22px clamp(14px, 2.4vw, 32px) 64px; outline: none; }
+.ash-titulo { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font-size: 22px; font-weight: 700; line-height: 1.2; }
+.ash-ciudad-aviso { margin: -6px 0 14px; }
+.ash-ciudad-aviso:empty { display: none; }
+
+/* ---------- Estados de carga (components/admin/estado-seccion.tsx) ---------- */
+.ash-estado {
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px;
+  padding: 28px 20px; color: var(--txt-2); text-align: center;
+}
+.ash-estado-error { color: var(--pink); }
+.ash-estado-txt { display: inline-flex; align-items: center; gap: 8px; text-align: left; min-width: 0; }
+
+.ash-aviso {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  padding: 12px 16px; margin-bottom: 14px; border-radius: 12px; font-size: 13.5px;
+  border: 1px solid var(--stroke-2); background: var(--panel-2); color: var(--txt-2);
+}
+.ash-aviso-error { border-color: var(--amber); background: rgba(255, 194, 61, .08); color: var(--amber); }
+
+.ash-actualizando { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; color: var(--txt-3); }
+
+.ash-datos { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 12px; }
+.ash-datos-txt { font-size: 13px; color: var(--txt-3); }
+.ash-datos-aviso { flex-basis: 100%; margin: 0; font-size: 13px; color: var(--pink); }
+
+.ash-btn-grande { min-height: 44px; }
+
+.ash-spin {
+  width: 22px; height: 22px; border-radius: 50%; flex: 0 0 auto;
+  border: 3px solid var(--stroke-2); border-top-color: var(--neon);
+  animation: ash-giro .8s linear infinite;
+}
+.ash-spin-chico { width: 14px; height: 14px; border-width: 2px; }
+@keyframes ash-giro { to { transform: rotate(360deg); } }
+
+/* Sólo para lectores de pantalla. */
+.ash-sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.ash-saltar {
+  position: absolute; left: 8px; top: -60px; z-index: 100; padding: 10px 14px; border-radius: 10px;
+  background: var(--bg-2); color: var(--txt); border: 1px solid var(--neon);
+}
+.ash-saltar:focus { top: 8px; }
+
+/* El foco del teclado se ve en todo lo del marco. */
+.ash a:focus-visible, .ash button:focus-visible, .ash select:focus-visible {
+  outline: 2px solid var(--neon); outline-offset: 2px;
+}
+
+/* ---------- Pantallas medianas: lo que no entra en la barra se esconde ---------- */
+@media (min-width: 1100px) {
+  .ash-usuario { display: inline-flex; }
+}
+
+/* ---------- Celular y tablet angosta: el menú es un cajón ---------- */
+@media (max-width: 899px) {
+  .ash-top { gap: 8px; }
+  .ash-burger { display: inline-flex; }
+  .ash-ciudad { flex: 1 1 auto; }
+  /* El ícono del pin le quita lugar al nombre de la ciudad, que es lo que importa. */
+  .ash-ciudad label > svg { display: none !important; }
+  .ash-top-der { margin-left: 0; }
+  .ash-top-der .ash-salir { display: none; }
+
+  .ash-body { display: block; }
+
+  .ash-lateral {
+    position: fixed; top: var(--ash-top); left: 0; bottom: 0; z-index: 70;
+    height: auto; width: min(86vw, 320px);
+    transform: translateX(-102%); visibility: hidden;
+    transition: transform .22s var(--ease), visibility 0s linear .22s;
+    box-shadow: none; border-right: 1px solid var(--stroke-2);
+  }
+  .ash-lateral.abierto {
+    transform: none; visibility: visible; transition-delay: 0s;
+    box-shadow: 18px 0 40px -12px rgba(0, 0, 0, .7);
+  }
+  .ash-item { min-height: 46px; font-size: 15px; }
+  .ash-pie { display: block; }
+
+  .ash-fondo {
+    display: block; position: fixed; inset: var(--ash-top) 0 0 0; z-index: 65;
+    background: rgba(0, 0, 0, .6); opacity: 0; pointer-events: none;
+    transition: opacity .2s var(--ease);
+  }
+  .ash-fondo.abierto { opacity: 1; pointer-events: auto; }
+
+  .ash-main { padding-top: 16px; }
+  .ash-titulo { font-size: 19px; }
+}
+
+/* En un celular angosto "Ver sitio" queda en el ícono: sigue teniendo nombre
+   accesible (aria-label) y la barra no se desborda. */
+@media (max-width: 559px) {
+  .ash-btn-txt { display: none; }
+  .ash-top-der .ash-btn { padding: 0; width: 44px; }
+  .ash-marca { font-size: 19px; padding: 0 2px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ash-lateral, .ash-fondo, .ash-item, .ash-btn { transition: none; }
+  .ash-spin { animation-duration: 2.4s; }
+}

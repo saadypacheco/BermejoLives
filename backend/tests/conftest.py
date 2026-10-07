@@ -287,6 +287,102 @@ class FakeRepo:
         return [{**d, "agentes": len(d["agentes"])}
                 for d in sorted(por_dia.values(), key=lambda x: x["dia"], reverse=True)]
 
+    # Para probar el tablero: partes que la función SQL devolvería en null (su
+    # bloque falló) y un fallo total (la función no existe / la base cayó).
+    resumen_admin_nulos: frozenset = frozenset()
+    resumen_admin_falla: bool = False
+
+    def resumen_admin(self, ciudad_slug, hoy):
+        """Espejo en Python de la función SQL `admin_resumen` (0139): mismos
+        números, mismas reglas, mismo formato. Si cambia una, cambia la otra."""
+        from datetime import timedelta
+        from app.services import cargas
+
+        if self.resumen_admin_falla:
+            raise RuntimeError("PGRST202: Could not find the function public.admin_resumen")
+
+        ciudades = self.list_ciudades()
+        filtra = bool(ciudad_slug)
+        ciudad_id = next((c["id"] for c in ciudades if c["slug"] == ciudad_slug), None)
+
+        def en_ciudad(c):
+            return (not filtra) or (ciudad_id is not None and c.get("ciudad_id") == ciudad_id)
+
+        activos = [c for c in self.comercios.values() if c.get("activo", True)]
+        propios = [c for c in activos if en_ciudad(c)]
+        id_otros = self.rubros.get("otros")
+        vacio = lambda v: not (v or "").strip()
+        comercios = {
+            "total": len(propios),
+            "verificados": sum(1 for c in propios if c.get("verificado")),
+            "sin_verificar": sum(1 for c in propios if not c.get("verificado")),
+            "sin_horario": sum(1 for c in propios if vacio(c.get("horario"))),
+            "horario_estimado": sum(1 for c in propios if c.get("horario_estimado")),
+            "sin_whatsapp": sum(1 for c in propios if vacio(c.get("whatsapp"))),
+            "sin_foto": sum(1 for c in propios if vacio(c.get("portada_url"))),
+            "sin_rubro": sum(1 for c in propios
+                             if not c.get("rubro_id") or (id_otros and c.get("rubro_id") == id_otros)),
+        }
+        por_ciudad = [{
+            "slug": ci["slug"], "nombre": ci["nombre"],
+            "total": sum(1 for c in activos if c.get("ciudad_id") == ci["id"]),
+            "sin_verificar": sum(1 for c in activos if c.get("ciudad_id") == ci["id"] and not c.get("verificado")),
+            "sin_horario": sum(1 for c in activos if c.get("ciudad_id") == ci["id"] and vacio(c.get("horario"))),
+        } for ci in ciudades if ci.get("activa", True)]
+
+        hoy_s = hoy.isoformat()
+        d7, d30 = (hoy - timedelta(days=6)).isoformat(), (hoy - timedelta(days=29)).isoformat()
+
+        def dia_de(ts):
+            t = cargas.parse_ts(ts)
+            return cargas.dia_bolivia(t).isoformat() if t else None
+
+        ciudad_de_comercio = {c["id"]: c.get("ciudad_id") for c in self.comercios.values()}
+        visitas = [v for v in self.visitas if (not filtra or v.get("ciudad_slug") == ciudad_slug)]
+        contactos = [l for l in self.leads
+                     if (l.get("tipo") or "") != "vista" and l.get("comercio_id") in self.comercios
+                     and (not filtra or (ciudad_id is not None
+                                         and ciudad_de_comercio.get(l["comercio_id"]) == ciudad_id))]
+
+        serie: dict[str, dict] = {}
+
+        def sumar(dia, clave):
+            if dia and d30 <= dia <= hoy_s:
+                serie.setdefault(dia, {"dia": dia, "altas": 0, "visitas": 0, "contactos": 0})[clave] += 1
+
+        for c in propios:
+            sumar(dia_de(c.get("created_at")), "altas")
+        for v in visitas:
+            sumar(v.get("dia"), "visitas")
+        for l in contactos:
+            sumar(dia_de(l.get("created_at")), "contactos")
+
+        suscripciones = sum(
+            1 for c in activos
+            if c.get("suspendido") or (c.get("paga_hasta") and str(c["paga_hasta"]) <= (hoy + timedelta(days=5)).isoformat()))
+        pendientes = {
+            "publicaciones": sum(1 for p in self.publicaciones
+                                 if p.get("estado") == "pendiente" and p.get("activo", True)),
+            "comercios_sin_verificar": comercios["sin_verificar"],
+            "pagos": sum(1 for p in self.pagos.values() if p.get("estado") == "pendiente"),
+            "reclamos": sum(1 for r in self.reclamos.values() if r.get("estado") == "pendiente"),
+            "cambio_numero": sum(1 for x in self.solicitudes_numero.values() if x.get("estado") == "pendiente"),
+            "suscripciones": suscripciones,
+            "recepcion_sin_comercio": sum(1 for w in self.wa_inbox.values()
+                                          if w.get("resultado") == "sin_comercio"
+                                          and (dia_de(w.get("created_at")) or hoy_s) >= d7),
+        }
+        actividad = {
+            "visitas_7d": sum(1 for v in visitas if d7 <= str(v.get("dia")) <= hoy_s),
+            "contactos_7d": sum(1 for l in contactos if d7 <= (dia_de(l.get("created_at")) or "") <= hoy_s),
+            "serie_30d": [serie[d] for d in sorted(serie)],
+        }
+        for parte in self.resumen_admin_nulos:
+            grupo, _, clave = parte.partition(".")
+            {"pendientes": pendientes, "actividad": actividad}[grupo][clave] = None
+        return {"comercios": comercios, "por_ciudad": por_ciudad,
+                "pendientes": pendientes, "actividad": actividad}
+
     def list_cargas_de_agentes(self, desde, hasta, ciudad_id=None):
         """Mismo contrato que el real: activos, con agente, hora de carga en [desde, hasta)."""
         from app.services import cargas

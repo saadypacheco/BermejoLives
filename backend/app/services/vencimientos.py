@@ -13,6 +13,9 @@ from __future__ import annotations
 
 import socket
 import ssl
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import structlog
@@ -109,8 +112,66 @@ def vence_certificado(host: str, puerto: int = 443, timeout: float = 6.0) -> dic
                 # 30 días es el margen de Let's Encrypt: renueva a los 60 de 90.
                 # Si quedan menos, la renovación automática no está funcionando.
                 "estado": estado_de(dias, 30)}
+    except ssl.SSLCertVerificationError as exc:
+        # El certificado está, pero no se puede validar. Con uno VENCIDO
+        # (verify_code 10) el saludo TLS falla justamente así, y como `sin_dato`
+        # el tablero decía «al día» en el peor momento. Cualquier otra falla de
+        # validación (el certificado por defecto de Traefik, otro nombre) es
+        # igual de urgente: el visitante ve la pantalla roja del navegador.
+        logger.warning("vencimientos.tls_invalido", host=host, codigo=exc.verify_code, error=str(exc)[:120])
+        return {"host": host, "ok": False, "error": str(exc)[:120],
+                "estado": "vencido" if exc.verify_code == 10 else "critico"}
     except Exception as exc:  # noqa: BLE001
         # No poder consultarlo NO es "está bien". Un host que no responde puede
         # ser un servicio caído, y eso también hay que verlo en el panel.
         logger.info("vencimientos.tls_fallo", host=host, error=str(exc))
         return {"host": host, "ok": False, "error": str(exc)[:120], "estado": "sin_dato"}
+
+
+# ── El número del tablero ────────────────────────────────────────────────────
+#: Los estados que cuentan como alerta (los mismos que suma /admin/vencimientos).
+ESTADOS_ALERTA = {"vencido", "critico", "por_vencer"}
+
+#: Cuánto se recuerda el resultado de medir los certificados. Cambian a lo sumo
+#: una vez por día: medirlos en cada carga del tablero son cinco conexiones TLS
+#: (con timeout) para enterarse siempre de lo mismo.
+TTL_CERTIFICADOS_SEG = 600
+_cache_certs: dict = {"hasta": 0.0, "alertas": 0}
+_candado_certs = threading.Lock()
+_medicion_certs = threading.Lock()
+
+
+def limpiar_cache_certificados() -> None:
+    with _candado_certs:
+        _cache_certs.update(hasta=0.0, alertas=0)
+
+
+def alertas_de_certificados(timeout: float = 3.0) -> int:
+    """Cuántos certificados TLS están vencidos, críticos o por vencer. Nunca lanza.
+
+    Las cinco consultas van en paralelo (peor caso: un `timeout`, no cinco) y el
+    resultado se recuerda `TTL_CERTIFICADOS_SEG`. Un host que no responde es
+    `sin_dato` y NO suma, igual que en /admin/vencimientos; uno que responde con
+    un certificado que no valida (vencido, ajeno) SÍ suma."""
+    with _candado_certs:
+        if time.monotonic() < _cache_certs["hasta"]:
+            return _cache_certs["alertas"]
+    # Una sola medición a la vez: cuando vence el caché, los pedidos que llegan
+    # juntos esperan a la que está en curso en vez de abrir cinco conexiones
+    # TLS cada uno. El que entra después vuelve a mirar el caché.
+    with _medicion_certs:
+        with _candado_certs:
+            if time.monotonic() < _cache_certs["hasta"]:
+                return _cache_certs["alertas"]
+        with ThreadPoolExecutor(max_workers=len(HOSTS_TLS)) as pool:
+            certs = list(pool.map(lambda hq: vence_certificado(hq[0], timeout=timeout), HOSTS_TLS))
+        n = sum(1 for c in certs if c.get("estado") in ESTADOS_ALERTA)
+        with _candado_certs:
+            _cache_certs.update(hasta=time.monotonic() + TTL_CERTIFICADOS_SEG, alertas=n)
+        return n
+
+
+def contar_alertas(filas: list[dict]) -> int:
+    """Cuántas de las fechas cargadas a mano están vencidas, críticas o por vencer.
+    Las `sin_fecha` NO cuentan (son trabajo pendiente, no urgencia)."""
+    return sum(1 for i in con_estado(filas) if i["estado"] in ESTADOS_ALERTA)

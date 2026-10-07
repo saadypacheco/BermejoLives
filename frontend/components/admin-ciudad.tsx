@@ -127,22 +127,31 @@ export function nombreCiudad(c: Ciudad): string {
   return c.activa ? c.nombre : `${c.nombre} (sin abrir)`;
 }
 
-/** Selector de la cabecera. El `modo` lo decide la pestaña activa (ver el mapa
- *  en app/admin/page.tsx):
+/** Lo que hay que decirle a quien mira sobre cómo se porta esta sección con la
+ *  ciudad elegida. null = nada que avisar (la sección filtra). El fallo de carga
+ *  va primero: sin ciudades no hay nada que elegir, y eso importa más que el
+ *  modo de la sección. */
+function leyendaDe(modo: ModoCiudad, sinCiudades: boolean): { texto: string; aviso: boolean } | null {
+  if (sinCiudades) return { texto: "No se pudieron cargar las ciudades: el panel muestra todas", aviso: true };
+  if (modo === "global") return { texto: "Esta sección no depende de la ciudad", aviso: false };
+  if (modo === "pendiente") return { texto: "Esta sección todavía muestra todas las ciudades", aviso: true };
+  return null;
+}
+
+/** Selector de la cabecera. El `modo` lo decide la sección activa (ver
+ *  `components/admin/secciones.ts`):
  *   - filtra:    funciona normal.
- *   - global:    atenuado; la pestaña no depende de la ciudad.
- *   - pendiente: la pestaña todavía muestra todas las ciudades. La leyenda es
+ *   - global:    atenuado; la sección no depende de la ciudad.
+ *   - pendiente: la sección todavía muestra todas las ciudades. La leyenda es
  *     obligatoria: un selector que dice «Santa Cruz» sobre una lista que muestra
- *     todo estaría mintiendo. */
-export function SelectorCiudad({ modo }: { modo: ModoCiudad }) {
+ *     todo estaría mintiendo.
+ *
+ *  `sinLeyenda`: la barra de arriba es de alto fijo y no tiene dónde apoyar un
+ *  renglón de texto; ahí el selector va solo y la leyenda la dibuja `AvisoCiudad`
+ *  en otro lugar de la pantalla. */
+export function SelectorCiudad({ modo, sinLeyenda = false }: { modo: ModoCiudad; sinLeyenda?: boolean }) {
   const { ciudades, sinCiudades, slug, elegir } = useAdminCiudad();
-  // El fallo de carga va primero: sin ciudades no hay nada que elegir, y eso
-  // importa más que el modo de la pestaña.
-  const leyenda = sinCiudades ? "No se pudieron cargar las ciudades: el panel muestra todas"
-    : modo === "global" ? "Esta pestaña no depende de la ciudad"
-    : modo === "pendiente" ? "Esta pestaña todavía muestra todas las ciudades"
-    : null;
-  const aviso = sinCiudades || modo === "pendiente";
+  const leyenda = leyendaDe(modo, sinCiudades);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
@@ -155,14 +164,27 @@ export function SelectorCiudad({ modo }: { modo: ModoCiudad }) {
           {ciudades.map((c) => <option key={c.slug} value={c.slug}>{nombreCiudad(c)}</option>)}
         </select>
       </label>
-      {leyenda && (
-        <span id="admin-ciudad-leyenda"
-              style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: aviso ? "var(--amber)" : "var(--txt-3)" }}>
-          <Ic n={aviso ? "aviso" : "dato"} s={13} /> {leyenda}
-        </span>
-      )}
+      {leyenda && !sinLeyenda && <LeyendaCiudad leyenda={leyenda} />}
     </div>
   );
+}
+
+function LeyendaCiudad({ leyenda }: { leyenda: { texto: string; aviso: boolean } }) {
+  return (
+    <span id="admin-ciudad-leyenda"
+          style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: leyenda.aviso ? "var(--amber)" : "var(--txt-3)" }}>
+      <Ic n={leyenda.aviso ? "aviso" : "dato"} s={13} /> {leyenda.texto}
+    </span>
+  );
+}
+
+/** La leyenda del selector, suelta: para cuando el selector va en la barra de
+ *  arriba (`sinLeyenda`) y el aviso se dibuja con el contenido. Texto + ícono,
+ *  no sólo color. Sin aviso que dar no dibuja nada. */
+export function AvisoCiudad({ modo }: { modo: ModoCiudad }) {
+  const { sinCiudades } = useAdminCiudad();
+  const leyenda = leyendaDe(modo, sinCiudades);
+  return leyenda ? <LeyendaCiudad leyenda={leyenda} /> : null;
 }
 
 /** Lo que muestran Lugares y Adornos con «todas»: en vez de caer en Bermejo (que

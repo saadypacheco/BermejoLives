@@ -46,6 +46,26 @@ class ReservaloSyncClient:
             logger.warning("reservalo_sync.consultas.error", error=str(exc))
             return []
 
+    def contar_consultas_pendientes(self, timeout: float = 5.0) -> int | None:
+        """Cuántas consultas de soporte de Reservalo esperan respuesta.
+
+        A diferencia de `list_consultas` —que ante un error devuelve [] y es
+        indistinguible de «no hay ninguna»—, acá «no contestó» es None: el
+        tablero del panel tiene que poder decir «no sé» y no «0». Sin Reservalo
+        configurado (modo STUB) no hay consultas: 0. Timeout corto: el tablero
+        no puede esperar 15 segundos a otro servicio."""
+        if self._stub:
+            return 0
+        try:
+            r = httpx.get(self._u("/api/admin-sync/consultas"), headers=self._headers,
+                          params={"estado": "pendiente"}, timeout=timeout)
+            r.raise_for_status()
+            items = r.json().get("items", [])
+            return sum(1 for c in items if c.get("estado") == "pendiente")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("reservalo_sync.consultas_pendientes.error", error=str(exc))
+            return None
+
     def responder_consulta(self, consulta_id: int, respuesta: str, respondida_por: str) -> dict | None:
         if self._stub:
             return None

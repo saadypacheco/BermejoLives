@@ -13,7 +13,7 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
-from app.core.permisos import permisos_de_roles, tiene as tiene_permiso
+from app.core.permisos import es_del_panel, permisos_de_roles, tiene as tiene_permiso
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -126,6 +126,18 @@ def require_permiso(permiso: str):
     def dep(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
         return _con_permiso(creds, permiso)
     return dep
+
+
+def require_panel(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
+    """Cualquier usuario logueado en el panel, sea cual sea su rol.
+
+    Para lo que ve TODO el equipo (el tablero de Inicio): no pide un permiso
+    puntual, pide ser del panel. Un agente de campo, un comercio o un comprador
+    con token válido reciben 403."""
+    claims = _claims(creds)
+    if not es_del_panel(claims):
+        raise HTTPException(status_code=403, detail="Tu cuenta no tiene acceso al panel")
+    return claims
 
 
 def require_admin(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
