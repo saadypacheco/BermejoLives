@@ -12,6 +12,12 @@ URUKU nace de una necesidad que todos vivimos en Bermejo: encontrar quién vende
 
 Es una herramienta para contactar con los vendedores y con los servicios que tenemos en Bermejo. Le sirve al vecino, le sirve a la gente que viene de afuera a hacer sus compras y le sirve a los comercios, porque hace visibles sus productos y sus novedades.
 
+## Por qué se llama URUKU
+
+Por una planta que todos conocemos. De chicos la usábamos en el carnaval para jugar y pintarnos, y es la misma que le da el color amarillo a las empanadas.
+
+Está todos los días entre nosotros. Eso es lo que queremos que sea URUKU: algo de todos los días, bien nuestro.
+
 ## Quiénes somos
 
 Somos un equipo de profesionales que lleva varios meses trabajando en Bermejo. Recorrimos la ciudad cuadra por cuadra, hablamos con los comerciantes y cargamos cada local en su puerta, con su dueño.
