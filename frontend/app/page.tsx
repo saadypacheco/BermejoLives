@@ -3,6 +3,7 @@ import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
 import { Ic, IcRubro, climaIcono, type NombreIcono } from "@/components/ic";
 import { UnirmeComunidad } from "@/components/unirme-comunidad";
+import { ContactoUruku } from "@/components/contacto-uruku";
 import { AccesosCiudad } from "@/components/accesos-ciudad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import { getClima, getCotizaciones, getFeed, getFronteraEstado, getVideosPromo } from "@/lib/data";
@@ -203,6 +204,9 @@ export default async function InicioPage() {
           )}
         </div>
       </section>
+
+      {/* ===== El WhatsApp de URUKU, a la vista ===== */}
+      <ContactoUruku />
 
       {/* ===== La comunidad (sólo cuando hay enlace cargado; es la de los que cruzan a Bermejo) ===== */}
       {conGuia && <UnirmeComunidad variante="banner" />}

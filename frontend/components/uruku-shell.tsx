@@ -8,6 +8,7 @@ import { Asistente } from "@/components/asistente";
 import { Suspense } from "react";
 import { CatNav } from "@/components/catnav";
 import { SocialLinks, money } from "@/components/uruku-ui";
+import { WA_URUKU_TEXTO, waUruku } from "@/lib/contacto";
 import { Ic, climaIcono } from "@/components/ic";
 import { getClima, getCotizaciones, getRedes } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
@@ -157,6 +158,7 @@ export async function UrukuShell({
                 <h4>Para comercios</h4>
                 <Link href="/autoregistro" className="uk-foot-link"><Ic n="comercios" /><span>Publicar comercio</span><i>›</i></Link>
                 <Link href="/mi-comercio" className="uk-foot-link"><Ic n="usuario" /><span>Mi negocio</span><i>›</i></Link>
+                <a href={waUruku("Hola, quiero hacer una consulta a URUKU")} target="_blank" rel="noopener" className="uk-foot-link"><Ic n="whatsapp" /><span>WhatsApp {WA_URUKU_TEXTO}</span><i>›</i></a>
                 {/* El enlace a /planes salió del sitio el 2/10: los precios se deciden
           por ciudad y mostrar los de Bermejo en Santa Cruz es prometer algo
           que todavía no está decidido. La pantalla sigue existiendo para uso
