@@ -85,6 +85,8 @@ export function ManualesPanel() {
       <FilaFija tipo="admin" titulo="Manual del admin" bajada="Cómo se usa este panel, sección por sección." />
       <FilaFija tipo="comercio" titulo="Manual del comerciante"
                 bajada="Cómo entrar a Mi comercio y publicar. Se le puede mandar el enlace por WhatsApp." />
+      <FilaFija tipo="uruku" titulo="Qué es URUKU"
+                bajada="Para la gente y los medios: cómo nace, qué ofrece y el WhatsApp con su QR. No figura en el sitio: se comparte el enlace." />
     </div>
   );
 }
@@ -111,7 +113,8 @@ function FilaAgente({ u }: { u: UsuarioPanel }) {
 
 /** Un manual sin personalizar: «Abrir» y «Copiar enlace» (con la dirección completa). */
 function FilaFija({ tipo, titulo, bajada }: { tipo: Exclude<TipoManual, "agente">; titulo: string; bajada: string }) {
-  const ruta = `/manual/${tipo}`;
+  // «Qué es URUKU» tiene una dirección corta, para dictarla: uruku.bo/que-es-uruku.
+  const ruta = tipo === "uruku" ? "/que-es-uruku" : `/manual/${tipo}`;
   const [copiado, setCopiado] = useState(false);
   const [aMano, setAMano] = useState("");   // si el navegador no deja copiar: la dirección para copiar a mano
 

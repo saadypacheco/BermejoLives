@@ -3,7 +3,10 @@
 // «Manuales» del admin y los enlaces de Mi comercio y de la app del agente:
 // un manual nuevo se agrega acá y en `content/manuales/<tipo>.md`.
 
-export const TIPOS_MANUAL = ["agente", "admin", "comercio"] as const;
+// `uruku` no es un manual de uso: es «Qué es URUKU», para la gente y los medios
+// (7/10, lanzamiento). Va por el mismo camino porque necesita lo mismo: leerse
+// en el celular y guardarse como PDF. Su dirección corta es /que-es-uruku.
+export const TIPOS_MANUAL = ["agente", "admin", "comercio", "uruku"] as const;
 export type TipoManual = (typeof TIPOS_MANUAL)[number];
 
 export function esTipoManual(s: string): s is TipoManual {
@@ -15,6 +18,7 @@ export const TITULO_MANUAL: Record<TipoManual, string> = {
   agente: "Manual del agente",
   admin: "Manual del admin",
   comercio: "Manual del comerciante",
+  uruku: "Qué es URUKU",
 };
 
 /** Los datos con los que se personaliza el manual del agente. */

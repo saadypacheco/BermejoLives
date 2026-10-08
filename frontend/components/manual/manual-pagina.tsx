@@ -9,7 +9,7 @@
 // `fallback` del Suspense es esa misma versión); al montarse, si hay
 // parámetros, se completan sin que el texto salte.
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import "@/app/styles/manual.css";
 import { Ic } from "@/components/ic";
@@ -24,12 +24,14 @@ function limpio(s: string | null, max: number): string {
   return (s ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
-export function ManualPagina({ tipo, bloques }: { tipo: TipoManual; bloques: Bloque[] }) {
+/** `extra`: lo que va después del texto y que el Markdown no sabe dibujar (el
+ *  QR del contacto en «Qué es URUKU»). Lo arma el servidor. */
+export function ManualPagina({ tipo, bloques, extra }: { tipo: TipoManual; bloques: Bloque[]; extra?: ReactNode }) {
   return (
-    <Suspense fallback={<Pagina tipo={tipo} bloques={bloques} v={MARCAS_POR_DEFECTO} />}>
+    <Suspense fallback={<Pagina tipo={tipo} bloques={bloques} v={MARCAS_POR_DEFECTO} extra={extra} />}>
       {tipo === "agente"
         ? <ConParametros tipo={tipo} bloques={bloques} />
-        : <Pagina tipo={tipo} bloques={bloques} v={MARCAS_POR_DEFECTO} />}
+        : <Pagina tipo={tipo} bloques={bloques} v={MARCAS_POR_DEFECTO} extra={extra} />}
     </Suspense>
   );
 }
@@ -44,7 +46,7 @@ function ConParametros({ tipo, bloques }: { tipo: TipoManual; bloques: Bloque[] 
   return <Pagina tipo={tipo} bloques={bloques} v={v} />;
 }
 
-function Pagina({ tipo, bloques, v }: { tipo: TipoManual; bloques: Bloque[]; v: ValoresMarca }) {
+function Pagina({ tipo, bloques, v, extra }: { tipo: TipoManual; bloques: Bloque[]; v: ValoresMarca; extra?: ReactNode }) {
   const titulo = TITULO_MANUAL[tipo];
 
   // El navegador propone el título de la pestaña como nombre del PDF:
@@ -68,6 +70,7 @@ function Pagina({ tipo, bloques, v }: { tipo: TipoManual; bloques: Bloque[]; v: 
       </div>
 
       <ManualVista bloques={bloques} v={v} etiqueta={titulo} />
+      {extra}
     </div>
   );
 }

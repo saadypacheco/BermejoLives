@@ -1,4 +1,4 @@
-// /manual/agente · /manual/admin · /manual/comercio
+// /manual/agente · /manual/admin · /manual/comercio · /manual/uruku (= /que-es-uruku)
 //
 // El contenido vive en `content/manuales/<tipo>.md` (lo escribe el redactor) y
 // se lee ACÁ, en el servidor, una sola vez: `generateStaticParams` + `dynamicParams
@@ -13,10 +13,7 @@
 
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { ManualPagina } from "@/components/manual/manual-pagina";
-import { parsearManual } from "@/lib/manual-md";
+import { PaginaManualServidor } from "@/components/manual/manual-servidor";
 import { TIPOS_MANUAL, TITULO_MANUAL, esTipoManual } from "@/lib/manuales";
 
 export const dynamicParams = false;
@@ -34,13 +31,5 @@ export function generateMetadata({ params }: { params: { tipo: string } }): Meta
 
 export default async function ManualRuta({ params }: { params: { tipo: string } }) {
   if (!esTipoManual(params.tipo)) notFound();
-  let md: string;
-  try {
-    md = await readFile(path.join(process.cwd(), "content", "manuales", `${params.tipo}.md`), "utf8");
-  } catch {
-    // Sin el archivo no hay manual que mostrar: que el build lo diga en vez de
-    // publicar una página vacía.
-    throw new Error(`Falta content/manuales/${params.tipo}.md`);
-  }
-  return <ManualPagina tipo={params.tipo} bloques={parsearManual(md)} />;
+  return <PaginaManualServidor tipo={params.tipo} />;
 }
