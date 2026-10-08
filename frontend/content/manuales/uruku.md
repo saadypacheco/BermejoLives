@@ -8,7 +8,7 @@ Entrá a **uruku.bo**. No hace falta descargar nada ni registrarse.
 
 ## Cómo nace
 
-URUKU nace de una necesidad que todos vivimos en Bermejo: encontrar quién vende lo que buscamos, dónde está y cómo comunicarnos.
+URUKU nace de una necesidad que tenemos todos los que vivimos en Bermejo: saber quién vende lo que buscamos, dónde está y cómo comunicarnos con él.
 
 Es una herramienta para contactar con los vendedores y con los servicios que tenemos en Bermejo. Le sirve al vecino, le sirve a la gente que viene de afuera a hacer sus compras y le sirve a los comercios, porque hace visibles sus productos y sus novedades.
 
@@ -35,7 +35,7 @@ No es un listado copiado de internet: es Bermejo tal como es.
 
 ## Quién puede entrar
 
-Cualquier persona, desde el celular o la computadora. Para la gente es gratis: buscar, ver el mapa y escribirle a un comercio no cuesta nada.
+Cualquier persona, desde el celular o la computadora, sin descargar nada ni registrarse. Buscás lo que necesitás, mirás el mapa y le escribís al comercio que elijas.
 
 También se puede entrar desde Argentina: quien planea venir a comprar puede ver antes qué hay en Bermejo y adónde ir.
 
