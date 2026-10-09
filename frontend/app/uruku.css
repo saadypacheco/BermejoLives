@@ -196,8 +196,23 @@
 .uk-head-strip { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
 /* En el celular la tira de redes y cotizaciones baja a su propio renglón: al
-   lado del logo no entra y comprimiría el selector de ciudad. */
-.uk-head-strip { order: 2; flex-basis: 100%; }
+   lado del logo no entra y comprimiría el selector de ciudad.
+   UN SOLO renglón, nunca dos: con `flex-wrap: wrap` heredado, en un Android de
+   360 px (338 útiles) las redes y la cotización suman ~360 y la cotización
+   caía a una TERCERA fila; en el iPhone, 30 px más ancho, entraba justo y no
+   se veía. Ahora la cotización se achica y se desliza de costado (ya tenía
+   `overflow-x: auto` y `min-width: 0`, que con el wrap nunca se usaban). */
+.uk-head-strip { order: 2; flex-basis: 100%; flex-wrap: nowrap; min-width: 0; }
+/* Y en los Android más angostos, un poco menos de aire para que entre entera
+   sin tener que deslizar. */
+@media (max-width: 420px) {
+  .uk-head-strip { gap: 8px; }
+  .uk-social-links { gap: 5px; }
+  .uk-social-links a { width: 24px; height: 24px; }
+  .uk-social-links svg { width: 14px; height: 14px; }
+  .uk-topinfo { gap: 10px; }
+  .uk-top-item { font-size: 11.5px; }
+}
 
 /* De tablet para arriba va en la MISMA fila que el logo, centrada entre el logo
    y el selector de ciudad. Eran dos filas y la segunda estaba casi vacía,

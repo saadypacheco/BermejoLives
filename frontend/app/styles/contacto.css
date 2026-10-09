@@ -1,0 +1,40 @@
+/* /contacto: el QR que muestran las promotoras. Fondo claro siempre (un QR se
+   lee mejor sobre blanco, y en la calle el sol lava los fondos oscuros) y
+   nada más en pantalla: ni la barra del sitio ni el aviso de instalar. */
+body:has(.ct-root) .install-banner,
+body:has(.ct-root) .uk-contesto { display: none !important; }
+body:has(.ct-root)::before, body:has(.ct-root)::after { display: none; }
+body:has(.ct-root) { background: #F9F6ED; color: #214533; }
+
+.ct-root {
+  min-height: 100vh; min-height: 100dvh;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 20px 16px 28px; text-align: center;
+  font-family: "Poppins", system-ui, sans-serif; color: #214533; background: #F9F6ED;
+}
+.ct-logo { height: 40px; width: auto; }
+
+.ct-tabs { display: flex; gap: 6px; padding: 4px; border-radius: 999px; background: #E6F2EA; width: min(100%, 440px); }
+.ct-tabs button {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 44px; padding: 8px 10px; border: 0; border-radius: 999px; cursor: pointer;
+  background: transparent; color: #214533; font: inherit; font-size: 14px; font-weight: 700;
+}
+.ct-tabs button.on { background: #1D8D52; color: #fff; }
+
+.ct-qr { width: min(86vw, 440px); aspect-ratio: 1; padding: 10px; border-radius: 20px; background: #fff;
+         box-shadow: 0 8px 28px rgba(33,69,51,.14); }
+.ct-qr img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+
+.ct-instruccion { max-width: 440px; margin: 0; font-size: 15px; line-height: 1.45; color: #4E6053; }
+.ct-numero { margin: 4px 0 0; display: inline-flex; align-items: center; gap: 8px;
+             font-size: 30px; font-weight: 800; letter-spacing: 1px; color: #214533; }
+.ct-sub { margin: 0; font-size: 14px; color: #4E6053; }
+
+.ct-acciones { display: flex; gap: 10px; width: min(100%, 440px); margin-top: 6px; }
+.ct-btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+          min-height: 48px; border-radius: 14px; font-weight: 700; font-size: 15px; text-decoration: none; }
+.ct-btn-sec { background: #fff; color: #214533; border: 1px solid #E6E2D6; }
+.ct-btn-wa { background: linear-gradient(135deg, #25d366, #128c4a); color: #fff; }
+.ct-bajar { flex: 0 0 auto; width: min(100%, 440px); cursor: pointer; font: inherit; font-weight: 700; }
+.ct-bajar:disabled { opacity: .6; }
