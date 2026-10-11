@@ -22,6 +22,7 @@ from starlette.responses import JSONResponse
 from app.api import asistente, auth, campo, comercio, contenido, health, moderacion, observabilidad, usuario, webhook
 from app.core.config import settings
 from app.core.ip import ip_cliente
+from app.core.limite_cuerpo import LimiteCuerpoMiddleware
 from app.services.clima import fetch_clima_bermejo
 from app.services.observabilidad import registrar_error, registrar_perf
 from app.db.repository import get_repo
@@ -185,6 +186,11 @@ def _cors_origins() -> list[str]:
     return list(out)
 
 
+# El tope al cuerpo va PRIMERO (o sea, más adentro que el CORS): así su 413 sale
+# con las cabeceras CORS y el navegador puede mostrar el mensaje en vez de un
+# «blocked by CORS policy». Ver app/core/limite_cuerpo.py.
+app.add_middleware(LimiteCuerpoMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
@@ -259,13 +265,30 @@ async def timing_middleware(request: Request, call_next):
     # cada miniatura —y volver de una ficha a los resultados las bajaba todas
     # de nuevo. Los nombres llevan un token aleatorio y una foto nueva es una
     # URL nueva, así que `immutable` es verdad: esa URL nunca cambia de contenido.
-    if request.url.path.startswith("/fotos/") and response.status_code == 200:
-        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    ruta = request.url.path
+    if ruta.startswith("/fotos/"):
+        # Lo que se sube lo sirve este mismo dominio: sin esto un navegador
+        # puede "adivinar" que un archivo es HTML y ejecutarlo.
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        if ruta.startswith("/fotos/catalogos/"):
+            # Un catálogo se reemplaza y se borra: nada de cache de un año. Se
+            # abre en el visor (inline) en vez de bajarse. Sin CSP sandbox: el
+            # visor de PDF del navegador no funciona dentro de uno.
+            if response.status_code in (200, 206, 304):
+                response.headers["Content-Disposition"] = 'inline; filename="catalogo.pdf"'
+                response.headers["Cache-Control"] = "public, max-age=3600"
+        elif response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response
 
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    if request.scope.get("cuerpo_excedido"):
+        # Un cuerpo cortado por LimiteCuerpoMiddleware: no es un error del
+        # servidor ni hay nada que registrar. La respuesta real la manda el
+        # middleware.
+        return JSONResponse({"detail": "El archivo es demasiado grande."}, status_code=413)
     logger.error("api.unhandled_exception", path=request.url.path, error=str(exc))
     await run_in_threadpool(
         registrar_error,

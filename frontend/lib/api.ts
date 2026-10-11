@@ -1,4 +1,5 @@
 // Cliente del backend FastAPI (ingesta + moderación).
+import { camposOpcionesFoto, errorDeRespuesta, type OpcionesFoto } from "@/lib/upload";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_admin_token";
 
@@ -345,7 +346,9 @@ export async function adminDeleteAdorno(id: string): Promise<void> {
 
 // ── Suscripciones ──────────────────────────────────────────────────────────
 
-export type EstadoSuscripcion = "activo" | "por_vencer" | "vencido" | "suspendido" | "sin_plan";
+// `cortesia`: plan de cortesía (no paga, no vence). Nunca cuenta como vencido ni
+// por vencer. Lo manda el backend (0143); si lo nombra distinto, ajustarlo acá.
+export type EstadoSuscripcion = "activo" | "por_vencer" | "vencido" | "suspendido" | "sin_plan" | "cortesia";
 
 export type ComercioSuscripcion = {
   id: string;
@@ -355,6 +358,8 @@ export type ComercioSuscripcion = {
   verificado: boolean;
   confiable?: boolean;
   plan?: string;
+  /** De cortesía: tiene el plan sin pagar y sin vencimiento (estrella incluida). */
+  plan_cortesia?: boolean;
   codigo?: string | null;
   suspendido: boolean;
   paga_hasta: string | null;
@@ -367,6 +372,17 @@ export async function listSuscripciones(): Promise<ComercioSuscripcion[]> {
   return itemsDe<ComercioSuscripcion>(res, "las suscripciones");
 }
 
+/** Pone a un comercio en un plan. Con `cortesia` el plan no se paga ni vence
+ *  (para quien ayuda a URUKU); sin ella, el vencimiento sigue lo que dicen los
+ *  pagos. Permiso `pagos`. */
+export async function asignarPlanComercio(comercioId: string, plan: string, cortesia: boolean) {
+  const res = await authFetch(`/admin/comercio/${comercioId}/plan`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ plan, cortesia }),
+  });
+  return res.json();
+}
 export type EstadisticasAdmin = {
   comercios_nuevos_7d: number;
   comercios_nuevos_30d: number;
@@ -626,13 +642,16 @@ export async function adminListarFotos(comercioId: string): Promise<FotoComercio
   return (await res.json()).items ?? [];
 }
 
-export async function adminSubirFoto(comercioId: string, file: File): Promise<FotoComercio> {
+/** `opts.reemplazar`: al llegar al tope (409, ver `datosTope`), reintenta
+ *  borrando esa foto. El admin no puede pagar un extra por el comercio. */
+export async function adminSubirFoto(comercioId: string, file: File, opts?: Pick<OpcionesFoto, "reemplazar">): Promise<FotoComercio> {
   const fd = new FormData();
   fd.append("foto", file);
+  for (const [k, v] of Object.entries(camposOpcionesFoto(opts))) fd.append(k, v);
   const res = await authFetch(`/admin/comercio/${comercioId}/fotos`, { method: "POST", body: fd });
   if (!res.ok) {
     const d = await res.json().catch(() => ({}));
-    throw new Error(d.detail ?? "No se pudo subir la foto");
+    throw errorDeRespuesta(res.status, d, "No se pudo subir la foto");
   }
   return (await res.json()).foto as FotoComercio;
 }
@@ -909,11 +928,13 @@ export async function listPagosPendientes(): Promise<PagoPendiente[]> {
   return itemsDe<PagoPendiente>(res, "los pagos pendientes");
 }
 
-export async function confirmarPago(pagoId: string, meses: number) {
+/** `plan` es opcional: sin él, confirmar sólo extiende la fecha (y el plan
+ *  queda como estaba, «gratis» en un comercio nuevo). */
+export async function confirmarPago(pagoId: string, meses: number, plan?: string) {
   const res = await authFetch(`/admin/pagos/${pagoId}/confirmar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ meses }),
+    body: JSON.stringify(plan ? { meses, plan } : { meses }),
   });
   return res.json();
 }
@@ -1407,6 +1428,9 @@ export type PlanAdmin = {
   /** Tope de publicaciones activas que el comercio guarda (null = sin tope). Al
    *  pasarse, el backend archiva la más vieja y borra su foto del disco. */
   publicaciones_guardadas: number | null;
+  /** Tope de fotos de la galería del local (0..1000). Al llegar, el comercio
+   *  elige entre pagar una foto extra o borrar la más vieja. */
+  fotos_max: number;
   precio_publicacion_extra: number; permite_extras: boolean; publica_meses: number | null;
   descripcion: string | null; incluye: string[]; funciones: Record<string, boolean>; activo: boolean; visible: boolean;
 };

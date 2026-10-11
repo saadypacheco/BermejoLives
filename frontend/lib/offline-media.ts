@@ -4,6 +4,10 @@
 // cuando vuelve. Distinta de offline-altas.ts: aquella difiere el ALTA (crear el
 // comercio); esta difiere el MATERIAL de uno existente (necesita su comercio_id).
 import { subirFotoCampo, subirVideoCampo } from "@/lib/campo";
+import { datosTope, type TopeFotos } from "@/lib/upload";
+
+/** La primera foto encolada que chocó con el tope de fotos al sincronizar. */
+export type TopeEnCola = { id: string; datos: TopeFotos };
 
 const DB = "uruku-offline";
 const STORE = "media";
@@ -79,11 +83,15 @@ async function borrar(id: string): Promise<void> {
  * sube se borra de la cola; lo que falla queda para el próximo intento. */
 export async function sincronizarMedia(
   comercioId?: string, onCambio?: () => void,
-): Promise<{ subidas: number; fallas: number }> {
+): Promise<{ subidas: number; fallas: number; tope?: TopeEnCola }> {
   if (typeof navigator !== "undefined" && !navigator.onLine) return { subidas: 0, fallas: 0 };
   const pend = (await todas()).filter((m) => !comercioId || m.comercioId === comercioId);
   let subidas = 0, fallas = 0;
+  let tope: TopeEnCola | undefined;
   for (const m of pend) {
+    // Si una foto ya chocó con el tope, las demás fotos chocarían igual: quedan
+    // en la cola (no se pierden) hasta que la persona decida qué hacer.
+    if (tope && m.kind === "foto") { fallas += 1; continue; }
     try {
       const file = new File([m.blob], m.name, { type: m.blob.type });
       if (m.kind === "video") await subirVideoCampo(m.comercioId, file, m.dur);
@@ -91,9 +99,16 @@ export async function sincronizarMedia(
       await borrar(m.id);
       subidas += 1;
       onCambio?.();
-    } catch {
+    } catch (ex) {
       fallas += 1;   // queda en la cola; se reintenta cuando haya señal
+      // Tope de fotos del plan (409): la foto SIGUE en la cola y se avisa, para
+      // que la persona elija (borrar la más vieja o, si es el dueño, pagar un extra).
+      const t = m.kind === "foto" ? datosTope(ex) : null;
+      if (t && !tope) tope = { id: m.id, datos: t };
     }
   }
-  return { subidas, fallas };
+  return { subidas, fallas, tope };
 }
+
+/** Saca una foto/video de la cola, ya resuelto (subido por otra vía). */
+export const quitarMedia = borrar;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { reportarError } from "@/lib/observabilidad";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -16,7 +16,9 @@ import { PermisoUbicacion } from "@/components/permiso-ubicacion";
 import { VolverAtras } from "@/components/volver-atras";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import { ReservaBarra } from "@/components/reserva-barra";
-import { WhatsApp, Pin, Search, Verified } from "@/components/icons";
+import { WhatsApp, Pin, Search } from "@/components/icons";
+import { EstrellaVerificado } from "@/components/estrella-verificado";
+import { ordenarCerca } from "@/lib/orden-cerca";
 import { FilterChip, OptionList } from "@/components/filter-chips";
 import { Ic, IcRubro } from "@/components/ic";
 import { HorarioBadge } from "@/components/horario-badge";
@@ -467,11 +469,31 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
   const zonaNom = zonas.find((z) => z.slug === zona)?.nombre;
   const distancia = (r: ResultadoBusqueda): number | null =>
     ubicacion && r.lat != null && r.lng != null ? distanciaMetros(ubicacion.lat, ubicacion.lng, r.lat, r.lng) : null;
-  // "Cerca de mí": TODOS los que coinciden (la carga del mapa), ordenados por
-  // distancia, y los que no tienen ubicación al final. Se muestran hasta 100:
-  // más allá de eso nadie mira, y el DOM de un celular lo agradece.
-  const base = cerca && ubicacion && resultsMapa
-    ? [...resultsMapa].sort((a, b) => (distancia(a) ?? 1e12) - (distancia(b) ?? 1e12)).slice(0, 100)
+  // "Cerca de mí": TODOS los que coinciden (la carga del mapa), en franjas:
+  // abiertos antes que cerrados (sin horario cuenta como abierto), después
+  // hasta 300 m / hasta 1 km / más lejos, y en cada franja primero la estrella
+  // (el plan más caro arriba) y luego el más cercano. Los que no tienen
+  // ubicación, al final. Ver lib/orden-cerca.ts. Se muestran hasta 100: más
+  // allá de eso nadie mira, y el DOM de un celular lo agradece.
+  //
+  // Memorizado: ordenar parsea el horario de cada resultado (hasta miles), y
+  // sin esto se repetía en cada render — por ejemplo, en cada tecla del buscador.
+  // Se recalcula si cambian los resultados o la ubicación, o cada minuto (un
+  // local puede abrir o cerrar mientras la lista está a la vista).
+  const [minuto, setMinuto] = useState(0);
+  useEffect(() => {
+    if (!cerca) return;
+    const t = window.setInterval(() => setMinuto((m) => m + 1), 60_000);
+    return () => window.clearInterval(t);
+  }, [cerca]);
+  const ordenCerca = useMemo(
+    () => (cerca && ubicacion && resultsMapa ? ordenarCerca(resultsMapa, distancia).slice(0, 100) : null),
+    // `distancia` sólo depende de `ubicacion`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cerca, ubicacion, resultsMapa, minuto],
+  );
+  const base = ordenCerca
+    ? ordenCerca
     : soloOfertas && resultsMapa
       ? resultsMapa
       : results;
@@ -831,14 +853,15 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
                       foto de 110px no se leen ninguna. */}
                   {susOfertas.length > 0
                     ? <span className="uk-resbadge oferta">¡Oferta!</span>
-                    : r.horario ? <HorarioBadge horario={r.horario} /> : null}
+                    : r.horario ? <HorarioBadge horario={r.horario} estimado={r.horario_estimado} /> : null}
                 </Link>
 
                 <div className="uk-resbody">
                   <div className="uk-restop">
                     <h4>
                       <Link href={`/comercios/${r.slug}`}>{r.nombre}</Link>
-                      {r.verificado && <span className="uk-verif"><Verified style={{ width: 15, height: 15 }} /></span>}
+                      {/* Sólo la estrella; la tilde `verificado` es interna. */}
+                      {r.estrella === true && <EstrellaVerificado s={15} />}
                     </h4>
                   </div>
 
@@ -855,6 +878,10 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
                       ? <span className="uk-pill">{r.subcategoria}</span>
                       : !rubroElegido && r.rubro_nombre && <span className="uk-pill">{r.rubro_nombre}</span>}
                     <span className="uk-pill blue">{MODALIDAD_LABEL[r.modalidad] ?? r.modalidad}</span>
+                    {/* Con la chapa de «¡Oferta!» sobre la foto, el horario
+                        pasaría sin verse: en «Cerca de mí» es lo que decide si
+                        vale la pena caminar. Sin horario cargado, nada. */}
+                    {susOfertas.length > 0 && r.horario && <HorarioBadge horario={r.horario} estimado={r.horario_estimado} />}
                   </div>
 
                   {/* Qué vende: primero lo que coincide con lo buscado y

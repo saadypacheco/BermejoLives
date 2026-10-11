@@ -18,6 +18,7 @@ import {
   pendientesAnalisis, analizarTanda, type ResultadoTanda,
   type ComercioSuscripcion, type EstadoSuscripcion,
   listPagosPendientes, confirmarPago, type PagoPendiente,
+  asignarPlanComercio, getPlanesAdmin, type PlanAdmin,
   enviarMensajeComercio,
   getEstadisticas, type EstadisticasAdmin,
   getKpis, type Kpis,
@@ -30,6 +31,8 @@ import {
   getResumenAdmin, type ResumenAdmin,
 } from "@/lib/api";
 import { getRubros } from "@/lib/data";
+import { datosTope, type TopeFotos } from "@/lib/upload";
+import { TopeFotosDialogo, type DecisionTope } from "@/components/tope-fotos-dialogo";
 import { AdminMap } from "@/components/admin-map";
 import { AdminCalles } from "@/components/admin-calles";
 import { PanelVisitas } from "@/components/panel-visitas";
@@ -336,9 +339,14 @@ function AdminPanel() {
     window.location.assign("/admin");
   }
 
-  async function doConfirmarPago(pagoId: string, meses: number) {
+  async function doConfirmarPago(pagoId: string, meses: number, plan?: string) {
     setPagosPendientes((prev) => prev.filter((p) => p.id !== pagoId)); // optimista
-    try { await confirmarPago(pagoId, meses); void cargarSuscripciones(); } catch { void cargarPagos(); }
+    try { await confirmarPago(pagoId, meses, plan); void cargarSuscripciones(); }
+    catch (e) {
+      // Volvía a aparecer el pago sin decir por qué (p. ej. «El plan «x» no existe»).
+      void cargarPagos();
+      alert(e instanceof Error && e.message ? `No se pudo confirmar el pago: ${e.message}` : "No se pudo confirmar el pago.");
+    }
     refrescarNumeros();
   }
 
@@ -383,7 +391,7 @@ function AdminPanel() {
   }
 
   async function doActivar(id: string) {
-    setSuscripciones((prev) => prev.map((c) => c.id === id ? { ...c, suspendido: false, suscripcion_estado: "activo" } : c));
+    setSuscripciones((prev) => prev.map((c) => c.id === id ? { ...c, suspendido: false, suscripcion_estado: c.plan_cortesia ? "cortesia" : "activo" } : c));
     try { await activarComercio(id); } catch { void cargarSuscripciones(); }
     refrescarNumeros();
   }
@@ -846,14 +854,34 @@ const ESTADO_CFG: Record<EstadoSuscripcion, { label: string; color: string }> = 
   vencido:    { label: "Vencido",      color: "var(--pink)" },
   suspendido: { label: "Suspendido",   color: "#888" },
   sin_plan:   { label: "Sin plan",     color: "var(--txt-3)" },
+  // De cortesía: tiene el plan sin pagar y sin vencimiento. Va aparte de
+  // «Activo» para que no se confunda con alguien que paga, y nunca alerta.
+  cortesia:   { label: "De cortesía",  color: "var(--blue-soft)" },
 };
+
+/** Las opciones de un selector de planes: los activos por orden, y el plan
+ *  actual aunque ya no esté en la lista (uno desactivado o inexistente), para
+ *  que el selector no mienta mostrando otro. */
+function opcionesDePlanes(planes: PlanAdmin[], actual?: string | null) {
+  const lista = planes.filter((p) => p.activo).sort((a, b) => a.orden - b.orden)
+    .map((p) => ({ slug: p.slug, nombre: p.nombre, precio_mes: p.precio_mes }));
+  const falta = actual && !lista.some((p) => p.slug === actual);
+  return falta ? [...lista, { slug: actual, nombre: actual, precio_mes: 0 }] : lista;
+}
 
 function TabPagos({
   items, onConfirmar,
 }: {
   items: PagoPendiente[];
-  onConfirmar: (pagoId: string, meses: number) => void;
+  onConfirmar: (pagoId: string, meses: number, plan?: string) => void;
 }) {
+  // El plan al que pasa el comercio al confirmar es opcional: sin elegir, sólo
+  // se extiende la fecha, como hasta ahora. Si la lista de planes no carga, el
+  // selector no aparece y confirmar sigue andando.
+  const [planes, setPlanes] = useState<PlanAdmin[]>([]);
+  const [planDe, setPlanDe] = useState<Record<string, string>>({});
+  useEffect(() => { getPlanesAdmin().then(setPlanes).catch(() => {}); }, []);
+  const opciones = opcionesDePlanes(planes);
   const METODO_LABEL: Record<string, string> = {
     "qr-bolivia": "QR Bolivia", "qr-argentina": "QR Argentina",
     transferencia: "Transferencia", efectivo: "Efectivo",
@@ -881,8 +909,18 @@ function TabPagos({
             <div className="mm"><span><Ic n="reloj" s={13} /> {new Date(p.created_at).toLocaleString("es-AR")}</span></div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginLeft: "auto" }}>
-            <button className="btn btn-primary btn-sm" onClick={() => onConfirmar(p.id, 1)}>Confirmar 1 mes</button>
-            <button className="btn btn-ghost btn-sm" onClick={() => onConfirmar(p.id, 2)}>Confirmar 2 meses</button>
+            {opciones.length > 0 && (
+              <label style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 12, color: "var(--txt-3)" }}>
+                Plan (opcional)
+                <select className="adm-input" value={planDe[p.id] ?? ""}
+                        onChange={(e) => setPlanDe((prev) => ({ ...prev, [p.id]: e.target.value }))}>
+                  <option value="">Sin cambiar el plan</option>
+                  {opciones.map((o) => <option key={o.slug} value={o.slug}>{o.nombre}</option>)}
+                </select>
+              </label>
+            )}
+            <button className="btn btn-primary btn-sm" onClick={() => onConfirmar(p.id, 1, planDe[p.id] || undefined)}>Confirmar 1 mes</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => onConfirmar(p.id, 2, planDe[p.id] || undefined)}>Confirmar 2 meses</button>
           </div>
         </div>
       ))}
@@ -1240,6 +1278,20 @@ function TabSuscripciones({
   const [filtro, setFiltro] = useState<EstadoSuscripcion | "todos">("todos");
   const [pagandoId, setPagandoId] = useState<string | null>(null);
   const [gestionandoId, setGestionandoId] = useState<string | null>(null);
+  const [planDeId, setPlanDeId] = useState<string | null>(null);
+  // Para escribir el NOMBRE del plan en cada fila y llenar el selector del modal.
+  const [planes, setPlanes] = useState<PlanAdmin[]>([]);
+  // Si la lista no llegó, el modal no deja guardar: con la lista vacía mostraba
+  // sólo el plan actual como gratis y, al guardar, le sacaba la cortesía al
+  // comercio sin avisar.
+  const [planesListos, setPlanesListos] = useState(false);
+  const [errPlanes, setErrPlanes] = useState("");
+  useEffect(() => {
+    getPlanesAdmin()
+      .then((ps) => { setPlanes(ps); setPlanesListos(true); })
+      .catch((e) => setErrPlanes(e instanceof Error && e.message ? e.message : "No se pudo leer la lista de planes."));
+  }, []);
+  const nombrePlan = (slug?: string) => planes.find((p) => p.slug === slug)?.nombre ?? slug ?? "gratis";
 
   const conteo = (e: EstadoSuscripcion) => items.filter((c) => c.suscripcion_estado === e).length;
   const visibles = filtro === "todos" ? items : items.filter((c) => c.suscripcion_estado === filtro);
@@ -1253,7 +1305,7 @@ function TabSuscripciones({
 
       {/* Contadores */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
-        {(["todos", "activo", "por_vencer", "vencido", "suspendido", "sin_plan"] as const).map((e) => {
+        {(["todos", "activo", "cortesia", "por_vencer", "vencido", "suspendido", "sin_plan"] as const).map((e) => {
           const n = e === "todos" ? items.length : conteo(e as EstadoSuscripcion);
           const cfg = e === "todos" ? { label: "Todos", color: "var(--txt-2)" } : ESTADO_CFG[e as EstadoSuscripcion];
           return (
@@ -1282,8 +1334,12 @@ function TabSuscripciones({
                 +{c.whatsapp} · {c.verificado ? "verificado" : "sin verificar"}
               </div>
               <div style={{ fontSize: 12, marginTop: 4 }}>
-                <span style={{ color: cfg.color, fontWeight: 600 }}>{cfg.label}</span>
-                {c.paga_hasta && (
+                <span style={{ color: cfg.color, fontWeight: 600 }}>
+                  {c.plan_cortesia && <><Ic n="estrella" s={13} peso="fill" />{" "}</>}{cfg.label}
+                </span>
+                <span style={{ color: "var(--txt-2)", marginLeft: 8 }}>· Plan {nombrePlan(c.plan)}</span>
+                {/* Un plan de cortesía no vence: ni la fecha ni «por vencer». */}
+                {c.paga_hasta && !c.plan_cortesia && (
                   <span style={{ color: "var(--txt-3)", marginLeft: 8 }}>
                     · vence {new Date(c.paga_hasta + "T12:00:00").toLocaleDateString("es-BO")}
                   </span>
@@ -1297,6 +1353,9 @@ function TabSuscripciones({
               }}><Ic n="enviar" s={15} /></button>
               <button className="btn btn-ghost btn-sm" title="Confiable y números autorizados" onClick={() => setGestionandoId(c.id)}>
                 <Ic n="mas_opciones" s={15} />
+              </button>
+              <button className="btn btn-ghost btn-sm" title="Elegir el plan o ponerlo de cortesía" onClick={() => setPlanDeId(c.id)}>
+                Plan
               </button>
               <button className="btn btn-ghost btn-sm" onClick={() => setPagandoId(c.id)}>
                 + Pago
@@ -1320,6 +1379,18 @@ function TabSuscripciones({
         <ModalGestionComercio
           comercio={items.find((c) => c.id === gestionandoId)!}
           onClose={() => setGestionandoId(null)}
+        />
+      )}
+
+      {/* Modal del plan: elegir plan y marcarlo de cortesía */}
+      {planDeId && (
+        <ModalPlanComercio
+          comercio={items.find((c) => c.id === planDeId)!}
+          planes={planes}
+          planesListos={planesListos}
+          errPlanes={errPlanes}
+          onClose={() => setPlanDeId(null)}
+          onDone={() => { setPlanDeId(null); onPago(); }}
         />
       )}
 
@@ -2567,14 +2638,29 @@ function FotosComercio({ comercioId, portada }: { comercioId: string; portada: s
 
   useEffect(() => { adminListarFotos(comercioId).then(setFotos).catch(() => {}); }, [comercioId]);
 
-  async function subir(file: File | undefined) {
+  // Tope de fotos del plan del comercio: el admin sólo puede reemplazar la más
+  // vieja (no paga extras por el comercio).
+  const [tope, setTope] = useState<{ datos: TopeFotos; file: File } | null>(null);
+
+  async function subir(file: File | undefined, reemplazar?: string) {
     if (!file) return;
     setErr(""); setSubiendo(true);
     try {
-      const nueva = await adminSubirFoto(comercioId, file);
-      setFotos((prev) => [...prev, nueva]);
-    } catch (e) { setErr(e instanceof Error ? e.message : "No se pudo subir"); }
+      const nueva = await adminSubirFoto(comercioId, file, reemplazar ? { reemplazar } : undefined);
+      setFotos((prev) => [...prev.filter((f) => f.id !== reemplazar), nueva]);
+      setTope(null);
+    } catch (e) {
+      const t = datosTope(e);
+      if (t) setTope({ datos: t, file });
+      else setErr(e instanceof Error ? e.message : "No se pudo subir");
+    }
     finally { setSubiendo(false); if (input.current) input.current.value = ""; }
+  }
+
+  function decidirTope(d: DecisionTope | null) {
+    const t = tope;
+    setTope(null);
+    if (d === "reemplazar" && t?.datos.mas_vieja) subir(t.file, t.datos.mas_vieja.id);
   }
 
   async function borrar(id: string) {
@@ -2616,6 +2702,7 @@ function FotosComercio({ comercioId, portada }: { comercioId: string; portada: s
           {subiendo ? "Subiendo…" : "+ Agregar foto"}
         </button>
         {err && <div style={{ color: "var(--pink)", marginTop: 6 }}>{err}</div>}
+        {tope && <TopeFotosDialogo tope={tope.datos} puedePagarExtra={false} onElegir={decidirTope} />}
 
         {/* Visor: la foto grande, sobre todo lo demás */}
         {ampliada && (
@@ -2920,6 +3007,84 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
           {err && <div style={{ color: "var(--pink)", fontSize: 13, marginTop: 10 }}>{err}</div>}
 
           <button className="btn btn-ghost" style={{ width: "100%", marginTop: 18 }} onClick={onClose}>Cerrar</button>
+        </div>
+      </div>
+    </Portal>
+  );
+}
+
+/** Elegir el plan de un comercio y, si corresponde, ponerlo «de cortesía»: tiene
+ *  el plan (y la estrella «Verificado por URUKU») sin pagar y sin vencimiento,
+ *  para quien ayuda a URUKU. No aparece en cobros, por vencer ni vencimientos. */
+function ModalPlanComercio({ comercio, planes, planesListos, errPlanes, onClose, onDone }: {
+  comercio: ComercioSuscripcion; planes: PlanAdmin[]; planesListos: boolean; errPlanes: string;
+  onClose: () => void; onDone: () => void;
+}) {
+  const opciones = opcionesDePlanes(planes, comercio.plan ?? "gratis");
+  const [plan, setPlan] = useState(comercio.plan ?? "gratis");
+  const [cortesia, setCortesia] = useState(!!comercio.plan_cortesia);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  // La cortesía sólo tiene sentido en un plan pago: en uno gratis no hay nada
+  // que regalar ni estrella que dar.
+  const esGratis = (opciones.find((o) => o.slug === plan)?.precio_mes ?? 0) <= 0;
+  const hayCortesia = cortesia && !esGratis;
+
+  async function guardar(e: React.FormEvent) {
+    e.preventDefault();
+    setErr("");
+    if (!planesListos) return;
+    if (comercio.plan_cortesia && !hayCortesia && !window.confirm(
+      `${comercio.nombre} deja de ser de cortesía: va a tener que pagar y su plan va a vencer. ¿Seguimos?`)) return;
+    if (hayCortesia && !comercio.plan_cortesia && !window.confirm(
+      `${comercio.nombre} va a tener el plan sin pagar y sin vencimiento, y no va a aparecer en cobros ni en vencimientos. ¿Seguimos?`)) return;
+    setSaving(true);
+    try {
+      await asignarPlanComercio(comercio.id, plan, hayCortesia);
+      onDone();
+    } catch (e2) {
+      setErr(e2 instanceof Error && e2.message ? e2.message : "No se pudo guardar el plan.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Portal>
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div className="glass" style={{ width: "100%", maxWidth: 420, borderRadius: 16, padding: 24 }}>
+          <h3 style={{ marginBottom: 4 }}>Plan del comercio</h3>
+          <p style={{ color: "var(--txt-3)", fontSize: 13, marginBottom: 18 }}>{comercio.nombre}</p>
+          <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, color: "var(--txt-2)" }}>
+              Plan
+              <select className="adm-input" value={plan} onChange={(e) => setPlan(e.target.value)}>
+                {opciones.map((o) => <option key={o.slug} value={o.slug}>{o.nombre}</option>)}
+              </select>
+            </label>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 14, opacity: esGratis ? 0.55 : 1 }}>
+              <input type="checkbox" checked={hayCortesia} disabled={esGratis}
+                     style={{ width: 20, height: 20, marginTop: 1 }}
+                     onChange={(e) => setCortesia(e.target.checked)} />
+              <span>
+                De cortesía (no paga, no vence)
+                <span style={{ display: "block", fontSize: 12, color: "var(--txt-3)", marginTop: 2 }}>
+                  {esGratis
+                    ? "Elegí un plan pago para poder darlo de cortesía."
+                    : "Tiene la estrella «Verificado por URUKU» y no aparece en cobros ni vencimientos."}
+                </span>
+              </span>
+            </label>
+            {!planesListos && !errPlanes && <span style={{ color: "var(--txt-3)", fontSize: 13 }}>Cargando los planes…</span>}
+            {errPlanes && <span style={{ color: "var(--pink)", fontSize: 13 }}><Ic n="aviso" s={14} /> {errPlanes}</span>}
+            {err && <span style={{ color: "var(--pink)", fontSize: 13 }}><Ic n="aviso" s={14} /> {err}</span>}
+            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+              <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={saving || !planesListos}>
+                {saving ? "Guardando…" : "Guardar plan"}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </Portal>

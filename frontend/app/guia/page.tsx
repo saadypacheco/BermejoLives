@@ -82,8 +82,11 @@ export default async function GuiaPage() {
   const t = tasasDe(cotizaciones);
   const diasCot = diasDesde(t.actualizado_en);
   const favorable = cambioFavorable(hist);
+  // Primero los de horario confirmado; los de horario estimado (el habitual de
+  // la calle) van después y dicen «suele estar abierto», como el buscador.
   const abiertos = comercios
     .filter((c) => c.horario && abiertoAhora(c.horario, ahora).estado === "abierto")
+    .sort((x, y) => Number(!!x.horario_estimado) - Number(!!y.horario_estimado))
     .slice(0, 12);
   const horasFrontera = frontera?.actualizado_en ? Math.floor((Date.now() - new Date(frontera.actualizado_en).getTime()) / 3600000) : null;
   // Sólo los que tienen el servicio de rubro PRINCIPAL: el filtro también
@@ -171,7 +174,7 @@ export default async function GuiaPage() {
                   {abiertos.map((c) => (
                     <li key={c.id}>
                       <Link href={`/comercios/${c.slug}`}><b>{c.nombre}</b>{c.subcategoria ? <span> · {c.subcategoria}</span> : null}</Link>
-                      <em>{(etiquetaHorario(abiertoAhora(c.horario, ahora), ahora) ?? "").toLowerCase()}</em>
+                      <em>{c.horario_estimado ? "suele estar " : ""}{(etiquetaHorario(abiertoAhora(c.horario, ahora), ahora) ?? "").toLowerCase()}</em>
                     </li>
                   ))}
                 </ul>

@@ -30,6 +30,7 @@ function FilaPlan({ p, onGuardado }: { p: PlanAdmin; onGuardado: () => void }) {
   const [v, setV] = useState({
     nombre: p.nombre, precio_mes: String(p.precio_mes), publicaciones_mes: p.publicaciones_mes == null ? "" : String(p.publicaciones_mes),
     publicaciones_guardadas: p.publicaciones_guardadas == null ? "" : String(p.publicaciones_guardadas),
+    fotos_max: String(p.fotos_max ?? ""),
     precio_publicacion_extra: String(p.precio_publicacion_extra), permite_extras: p.permite_extras,
     publica_meses: p.publica_meses == null ? "" : String(p.publica_meses), descripcion: p.descripcion ?? "",
     incluye: (p.incluye ?? []).join("\n"), visible: p.visible,
@@ -39,12 +40,20 @@ function FilaPlan({ p, onGuardado }: { p: PlanAdmin; onGuardado: () => void }) {
   const funciones = Object.keys(p.funciones ?? {}).filter((k) => p.funciones[k]);
 
   async function guardar() {
-    setEstado("guardando"); setMsg("");
+    setMsg("");
+    // Fotos del local: un entero de 0 a 1000. Vacío no vale (el tope siempre existe).
+    const fotosMax = Number(v.fotos_max);
+    if (v.fotos_max.trim() === "" || !Number.isInteger(fotosMax) || fotosMax < 0 || fotosMax > 1000) {
+      setEstado("error"); setMsg("Fotos del local (máximo): poné un número entero entre 0 y 1000.");
+      return;
+    }
+    setEstado("guardando");
     try {
       await guardarPlan(p.slug, {
         nombre: v.nombre.trim(), precio_mes: Number(v.precio_mes || 0),
         publicaciones_mes: v.publicaciones_mes.trim() === "" ? null : Number(v.publicaciones_mes),
         publicaciones_guardadas: v.publicaciones_guardadas.trim() === "" ? null : Number(v.publicaciones_guardadas),
+        fotos_max: fotosMax,
         precio_publicacion_extra: Number(v.precio_publicacion_extra || 0), permite_extras: v.permite_extras,
         publica_meses: v.publica_meses.trim() === "" ? null : Number(v.publica_meses),
         descripcion: v.descripcion.trim(), incluye: v.incluye.split("\n").map((s) => s.trim()).filter(Boolean),
@@ -72,12 +81,15 @@ function FilaPlan({ p, onGuardado }: { p: PlanAdmin; onGuardado: () => void }) {
         {campo("Precio/mes (Bs)", "precio_mes", { type: "number", inputMode: "decimal" })}
         {campo("Publicaciones/mes (vacío = sin límite)", "publicaciones_mes", { type: "number", inputMode: "numeric" })}
         {campo("Publicaciones guardadas (máx.) (vacío = sin tope)", "publicaciones_guardadas", { type: "number", inputMode: "numeric", min: 1 })}
+        {campo("Fotos del local (máximo)", "fotos_max", { type: "number", inputMode: "numeric", min: 0, max: 1000, step: 1 })}
         {campo("Extra (Bs c/u)", "precio_publicacion_extra", { type: "number", inputMode: "decimal" })}
         {campo("Meses que puede publicar (vacío = siempre)", "publica_meses", { type: "number", inputMode: "numeric" })}
       </div>
       <small style={{ opacity: .7, lineHeight: 1.4 }}>
         Publicaciones guardadas: cuando el comercio llega al máximo y entra una más, se archiva la más vieja
         y se borra su foto del disco. Es para que el disco no crezca sin control. Vacío = no se archiva nada.
+        Fotos del local: al llegar al máximo, el comercio elige entre pagar una foto extra (al precio de
+        «Extra») o borrar la más vieja. Si el pago vence, vuelve al máximo del plan gratis.
       </small>
       <label style={{ display: "grid", gap: 3, fontSize: 12 }}>
         <span style={{ opacity: .7 }}>Qué es, en una frase</span>

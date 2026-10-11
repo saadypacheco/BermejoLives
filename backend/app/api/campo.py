@@ -21,6 +21,9 @@ from app.models.schemas import LoginBody
 from app.services.clasificador import sugerir_rubros
 from app.services.imagenes import subir_foto_comercio, subir_foto_galeria, subir_video_comercio
 from app.services import cargas, planes
+from app.services import enlaces
+from app.services import fotos_galeria
+from app.services import ficha_catalogo as catalogo_svc
 from app.services.cuentas import nueva_clave_comercio
 from app.services.rubros import aplicar_rubros
 
@@ -178,6 +181,13 @@ async def alta_campo(
             agente=agente.get("email"),
         )
         raise HTTPException(status_code=400, detail="Falta la ubicación")
+    # Las redes y el sitio se validan ANTES de guardar la foto: un enlace con
+    # `javascript:` termina en el href de la ficha pública.
+    try:
+        enlaces.validar_redes({"tiktok_url": tiktok_url, "facebook_url": facebook_url,
+                               "instagram_url": instagram_url, "sitio_web": sitio_web})
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     # Alta mínima: solo la ubicación es obligatoria; whatsapp/teléfono/descripción/foto opcionales.
     # La ciudad la deciden las COORDENADAS, no el selector: un comercio está
     # donde está, y así nadie carga treinta locales en la ciudad equivocada
@@ -536,7 +546,16 @@ class _EditarComercioBody(BaseModel):
     sitio_web: str | None = None
     #: Su propio canal de WhatsApp (0133), no el de URUKU.
     canal_wa_url: str | None = None
+    #: Un ENLACE (Drive, una tienda). El PDF se sube aparte, por
+    #: POST /campo/mis-comercios/{id}/catalogo. Vacío borra; sólo http(s).
     catalogo_url: str | None = None
+    #: «Lo que suma» en la ficha (docs/ficha-destacados.md). Los booleanos en
+    #: null no se tocan; el pedido mínimo admite hasta 120 caracteres.
+    tiene_pasero: bool | None = None
+    envios_internacionales: bool | None = None
+    tiene_factura: bool | None = None
+    talles_especiales: bool | None = None
+    pedido_minimo: str | None = None
     #: El horario, como lo dicta el dueño («Lun-Sáb 8:00-12:00 y 14:30-20:00»).
     #: Faltaba: el filtro «Sin horario» de la app llevaba a un editor que no lo
     #: podía cargar. Es el dato que decide si alguien camina hasta el local.
@@ -551,7 +570,7 @@ def editar_mi_comercio(
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """El agente corrige un comercio de SU CIUDAD, parado en la puerta."""
-    _propio_o_404(repo, comercio_id, agente)
+    actual_comercio = _propio_o_404(repo, comercio_id, agente)
     if body.modalidad is not None and body.modalidad not in _MODALIDADES:
         raise HTTPException(status_code=400, detail=f"modalidad inválida: {body.modalidad}")
     patch = body.model_dump(exclude_unset=True, exclude={"rubro_slugs"})
@@ -581,10 +600,46 @@ def editar_mi_comercio(
         # calle (el que se carga por lote), igual que cuando lo escribe el admin.
         patch["horario"] = patch["horario"].strip()[:200]
         patch["horario_estimado"] = False
+    try:
+        enlaces.validar_redes(patch)
+        catalogo_svc.normalizar_ficha(patch)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not patch and body.rubro_slugs is None:
         raise HTTPException(status_code=400, detail="No hay campos para actualizar")
+    anterior = actual_comercio.get("catalogo_url") if "catalogo_url" in patch else None
     comercio = repo.update_comercio(comercio_id, patch, body.rubro_slugs)
+    if "catalogo_url" in patch:
+        # Cambió el catálogo (enlace nuevo o vaciado): si el anterior era un PDF
+        # nuestro, se borra del disco.
+        catalogo_svc.soltar_catalogo_reemplazado(anterior, patch["catalogo_url"], comercio_id)
     return {"ok": True, "comercio": comercio}
+
+
+@router.post("/campo/mis-comercios/{comercio_id}/catalogo")
+async def subir_catalogo_mi_comercio(
+    comercio_id: str,
+    request: Request,
+    agente: dict = Depends(auth.require_agente),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """El agente sube el catálogo en PDF (multipart, campo `archivo`, hasta 8 MB)
+    de un comercio de su ciudad. Reemplaza al anterior y borra el archivo viejo."""
+    comercio = _propio_o_404(repo, comercio_id, agente)
+    url = await catalogo_svc.subir_catalogo(repo, comercio, request, actor=agente["email"])
+    return {"catalogo_url": url}
+
+
+@router.delete("/campo/mis-comercios/{comercio_id}/catalogo")
+async def quitar_catalogo_mi_comercio(
+    comercio_id: str,
+    agente: dict = Depends(auth.require_agente),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Quita el catálogo: borra el PDF si es nuestro y deja `catalogo_url` en null."""
+    comercio = _propio_o_404(repo, comercio_id, agente)
+    await catalogo_svc.quitar_catalogo(repo, comercio, actor=agente["email"])
+    return {"ok": True}
 
 
 @router.post("/campo/mis-comercios/{comercio_id}/foto")
@@ -764,26 +819,33 @@ def crear_reclamo(body: _ReclamoIn, repo: Repo = Depends(get_repo)) -> dict:
 
 
 # ============================================================
-# Galería del comercio: hasta 10 fotos + 5 videos (<=60s c/u).
+# Galería del comercio: fotos según el plan (services/fotos_galeria.py) + 5 videos (<=60s c/u).
 # Los archivos van al disco del backend; la base guarda la referencia.
 # Todos scoped al agente dueño del comercio (_propio_o_404).
 # ============================================================
-_MAX_FOTOS = 10
 _MAX_VIDEOS = 5
 _MAX_VIDEO_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
 @router.get("/campo/mis-comercios/{comercio_id}/fotos")
 async def listar_fotos(comercio_id: str, agente: dict = Depends(auth.require_agente), repo: Repo = Depends(get_repo)) -> dict:
-    _propio_o_404(repo, comercio_id, agente)
-    return {"items": repo.list_fotos_comercio(comercio_id)}
+    comercio = _propio_o_404(repo, comercio_id, agente)
+    # `limite` = el tope de fotos de hoy (plan + extras): la galería muestra «23/50».
+    return fotos_galeria.listado(repo, comercio)
 
 
 @router.post("/campo/mis-comercios/{comercio_id}/fotos")
-async def agregar_foto(comercio_id: str, foto: UploadFile = File(...), agente: dict = Depends(auth.require_agente), repo: Repo = Depends(get_repo)) -> dict:
+async def agregar_foto(
+    comercio_id: str,
+    foto: UploadFile = File(...),
+    reemplazar: str | None = Form(None),
+    extra: str | None = Form(None),
+    agente: dict = Depends(auth.require_agente),
+    repo: Repo = Depends(get_repo),
+) -> dict:
     comercio = _propio_o_404(repo, comercio_id, agente)
-    if repo.count_fotos_comercio(comercio_id) >= _MAX_FOTOS:
-        raise HTTPException(status_code=409, detail=f"Máximo {_MAX_FOTOS} fotos por comercio")
+    # El agente no puede pagar (403 si manda extra=pagar); en el tope, 409.
+    subida = fotos_galeria.preparar(repo, comercio, reemplazar=reemplazar, extra=extra, puede_pagar=False)
     data = await foto.read()
     if not data:
         raise HTTPException(status_code=400, detail="Falta la foto")
@@ -795,18 +857,17 @@ async def agregar_foto(comercio_id: str, foto: UploadFile = File(...), agente: d
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not url:
         raise HTTPException(status_code=502, detail="No se pudo subir la foto, probá de nuevo")
-    row = repo.add_foto_comercio({
-        "comercio_id": comercio_id, "url": url, "thumb_url": thumb,
-        "orden": repo.count_fotos_comercio(comercio_id),
-    })
-    logger.info("campo.foto_add", comercio=comercio_id, agente=agente["email"])
+    row = fotos_galeria.registrar(repo, comercio, subida, url, thumb)
+    logger.info("campo.foto_add", comercio=comercio_id, agente=agente["email"],
+                reemplazo=bool(subida.reemplaza))
     return {"ok": True, "foto": row}
 
 
 @router.delete("/campo/mis-comercios/{comercio_id}/fotos/{foto_id}")
 async def borrar_foto(comercio_id: str, foto_id: str, agente: dict = Depends(auth.require_agente), repo: Repo = Depends(get_repo)) -> dict:
     _propio_o_404(repo, comercio_id, agente)
-    if not repo.delete_foto_comercio(foto_id, comercio_id):
+    from app.services.fotos_galeria import borrar_foto_por_id
+    if not borrar_foto_por_id(repo, comercio_id, foto_id):
         raise HTTPException(status_code=404, detail="Foto no encontrada")
     return {"ok": True}
 

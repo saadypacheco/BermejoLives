@@ -60,7 +60,8 @@ class Repo(Protocol):
     def imagen_en_uso(self, imagen_url: str, excepto_id: str) -> bool: ...
     def descartar_difusion_de(self, publicacion_id: str, motivo: str) -> int: ...
     def registrar_cargo_extra(self, comercio_id: str, publicacion_id: str | None,
-                              monto: float, moneda: str) -> dict: ...
+                              monto: float, moneda: str,
+                              concepto: str = "publicacion_extra") -> dict: ...
     def list_cargos_extra(self, estado: str | None, limite: int) -> list[dict]: ...
     def encolar_difusion(self, publicacion_id: str, destinos: list[str]) -> int: ...
     def difusion_pendientes(self, limite: int) -> list[dict]: ...
@@ -201,7 +202,8 @@ class Repo(Protocol):
     def set_comercio_confiable(self, comercio_id: str, valor: bool) -> dict: ...
     def crear_pago_pendiente(self, comercio_id: str, row: dict) -> dict: ...
     def list_pagos_pendientes(self) -> list[dict]: ...
-    def confirmar_pago(self, pago_id: str, meses: int, by: str) -> dict: ...
+    def confirmar_pago(self, pago_id: str, meses: int, by: str, plan: str | None = None) -> dict: ...
+    def asignar_plan_comercio(self, comercio_id: str, plan: str, cortesia: bool) -> dict | None: ...
     def marcar_destacados_cobrados(self, comercio_id: str) -> None: ...
     def crear_mensaje(self, row: dict) -> dict: ...
     def list_mensajes_de_comercio(self, comercio_id: str) -> list[dict]: ...
@@ -298,6 +300,7 @@ _COLS_COMERCIO_CAMPO = (
     "portada_url, portada_thumb_url, verificado, created_at, cargado_por, "
     "lugar_id, puesto, instagram_url, facebook_url, tiktok_url, sitio_web, "
     "canal_wa_url, catalogo_url, "
+    "tiene_pasero, envios_internacionales, tiene_factura, talles_especiales, pedido_minimo, "
     "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), "
     "comercio_rubros(rubros(nombre, slug)), "
     "lugares(nombre, tipo, lat, lng, portada_thumb_url)"
@@ -1809,9 +1812,15 @@ class SupabaseRepo:
         return len(res.data or [])
 
     def registrar_cargo_extra(self, comercio_id: str, publicacion_id: str | None,
-                              monto: float, moneda: str) -> dict:
+                              monto: float, moneda: str,
+                              concepto: str = "publicacion_extra") -> dict:
         fila = {"comercio_id": comercio_id, "publicacion_id": publicacion_id,
-                "monto": monto, "moneda": moneda}
+                "monto": monto, "moneda": moneda, "concepto": concepto}
+        if publicacion_id is None:
+            # Un cargo sin publicación (la foto extra, 0144): no hay nada con qué
+            # deduplicar, y `unique (publicacion_id)` no choca entre NULL.
+            res = self._db.table("cargos_extra").insert(fila).execute()
+            return (res.data or [{}])[0]
         # on_conflict por publicacion_id: si el webhook de WhatsApp repite el
         # mensaje —pasa— no se cobra dos veces la misma publicación.
         res = (self._db.table("cargos_extra")
@@ -2045,7 +2054,7 @@ class SupabaseRepo:
         # Eran 886 activos contra un tope de 1000: faltaban semanas para que
         # este panel empezara a contar de menos sin avisar.
         comercios = self._traer_todo(
-            "comercios", "id, nombre, created_at, suspendido, paga_hasta", "id",
+            "comercios", "id, nombre, created_at, suspendido, paga_hasta, plan_cortesia", "id",
             filtrar=lambda q: q.eq("activo", True))
 
         nuevos_7d = sum(1 for c in comercios if c["created_at"] >= hace_7d)
@@ -2056,6 +2065,8 @@ class SupabaseRepo:
             ph = c.get("paga_hasta")
             if c.get("suspendido"):
                 alertas["suspendido"] += 1
+            elif c.get("plan_cortesia"):
+                continue  # de cortesía: no paga ni vence, no es una alerta de cobro
             elif ph and ph < hoy:
                 alertas["vencido"] += 1
             elif ph and ph <= limite_aviso:
@@ -2204,7 +2215,7 @@ class SupabaseRepo:
 
         res = (
             self._db.table("comercios")
-            .select("id, slug, nombre, whatsapp, verificado, confiable, plan, codigo, suspendido, paga_hasta, created_at")
+            .select("id, slug, nombre, whatsapp, verificado, confiable, plan, plan_cortesia, codigo, suspendido, paga_hasta, created_at")
             .eq("activo", True)
             .order("nombre")
             .limit(500)
@@ -2214,8 +2225,12 @@ class SupabaseRepo:
 
         for c in items:
             ph = c.get("paga_hasta")
+            c["plan_cortesia"] = bool(c.get("plan_cortesia"))
             if c.get("suspendido"):
                 c["suscripcion_estado"] = "suspendido"
+            elif c["plan_cortesia"]:
+                # Sin cobro y sin vencimiento: nunca «por vencer» ni «vencido».
+                c["suscripcion_estado"] = "cortesia"
             elif not ph:
                 c["suscripcion_estado"] = "sin_plan"
             elif ph < hoy:
@@ -2297,6 +2312,7 @@ class SupabaseRepo:
             .update({"activo": False})
             .lt("paga_hasta", (hoy - timedelta(days=dias)).isoformat())
             .eq("activo", True)
+            .eq("plan_cortesia", False)  # la cortesía nunca vence
             .execute()
         )
         total = len(vencidos.data or [])
@@ -2309,6 +2325,7 @@ class SupabaseRepo:
                 .is_("paga_hasta", "null")
                 .lt("created_at", corte.isoformat())
                 .eq("activo", True)
+                .eq("plan_cortesia", False)
                 .execute()
             )
             total += len(nunca_pagaron.data or [])
@@ -2346,8 +2363,12 @@ class SupabaseRepo:
         )
         return res.data or []
 
-    def confirmar_pago(self, pago_id: str, meses: int, by: str) -> dict:
-        """El admin confirma un pago pendiente: lo marca confirmado y extiende paga_hasta."""
+    def confirmar_pago(self, pago_id: str, meses: int, by: str, plan: str | None = None) -> dict:
+        """El admin confirma un pago pendiente: lo marca confirmado y extiende paga_hasta.
+
+        Si viene `plan` (slug ya validado por el endpoint), además se lo asigna al
+        comercio: hasta ahora confirmar sólo corría la fecha y el plan se quedaba
+        en «gratis» (y sin plan pago no hay estrella)."""
         from datetime import date
         from calendar import monthrange
         from fastapi import HTTPException
@@ -2370,12 +2391,33 @@ class SupabaseRepo:
         self._db.table("pagos").update({
             "estado": "confirmado", "periodo_hasta": nueva, "registrado_por": by,
         }).eq("id", pago_id).execute()
-        self._db.table("comercios").update({
-            "paga_hasta": nueva, "suspendido": False,
-        }).eq("id", pago["comercio_id"]).execute()
+        cambios = {"paga_hasta": nueva, "suspendido": False}
+        if plan:
+            # Un pago confirmado con plan es un comercio que paga: deja de ser de
+            # cortesía (si no, seguiría sin vencer aunque ahora pague).
+            cambios["plan"] = plan
+            cambios["plan_cortesia"] = False
+        self._db.table("comercios").update(cambios).eq("id", pago["comercio_id"]).execute()
         # Los destacados pendientes quedan saldados con este pago.
         self.marcar_destacados_cobrados(pago["comercio_id"])
-        return {"ok": True, "paga_hasta": nueva, "comercio_id": pago["comercio_id"]}
+        out = {"ok": True, "paga_hasta": nueva, "comercio_id": pago["comercio_id"]}
+        if plan:
+            out["plan"] = plan
+        return out
+
+    def asignar_plan_comercio(self, comercio_id: str, plan: str, cortesia: bool) -> dict | None:
+        """Pone el plan de un comercio y si es de cortesía (sin cobro ni vencimiento).
+        Devuelve id, plan, plan_cortesia y paga_hasta; None si el comercio no existe."""
+        res = (self._db.table("comercios")
+               .update({"plan": plan, "plan_cortesia": bool(cortesia)})
+               .eq("id", comercio_id)
+               .execute())
+        if not res.data:
+            return None
+        fila = res.data[0]
+        return {"id": fila.get("id", comercio_id), "plan": fila.get("plan", plan),
+                "plan_cortesia": bool(fila.get("plan_cortesia", cortesia)),
+                "paga_hasta": fila.get("paga_hasta")}
 
     def marcar_destacados_cobrados(self, comercio_id: str) -> None:
         (self._db.table("publicaciones").update({"cobrado": True})
@@ -3167,7 +3209,7 @@ class SupabaseRepo:
         # vence hoy figuraba vencida cuatro horas antes.
         hoy = self._hoy_en_bolivia().isoformat()
         total = (self._db.table("comercios").select("id", count="exact").eq("activo", True).limit(1).execute().count) or 0
-        pagando = (self._db.table("comercios").select("id", count="exact").eq("activo", True).eq("suspendido", False).gte("paga_hasta", hoy).limit(1).execute().count) or 0
+        pagando = (self._db.table("comercios").select("id", count="exact").eq("activo", True).eq("suspendido", False).eq("plan_cortesia", False).gte("paga_hasta", hoy).limit(1).execute().count) or 0
 
         return {
             # Qué período están mirando estos números. Sin esto, el panel dice

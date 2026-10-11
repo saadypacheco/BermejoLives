@@ -43,6 +43,16 @@ def _tmp_fotos_dir(tmp_path, monkeypatch):
     yield
 
 
+@pytest.fixture(autouse=True)
+def _sin_limite_de_subidas_de_catalogo():
+    """El tope de subidas de catálogo por hora vive en memoria del proceso: sin
+    esto, lo que sube un test le cuenta al siguiente."""
+    from app.services import ficha_catalogo
+    ficha_catalogo.reiniciar_limites()
+    yield
+    ficha_catalogo.reiniciar_limites()
+
+
 class FakeRepo:
     """Implementación en memoria del Protocol Repo."""
 
@@ -104,6 +114,10 @@ class FakeRepo:
         # 0134: 70 publicaciones guardadas en todos los planes, como la migración.
         for _plan in self.planes.values():
             _plan.setdefault("publicaciones_guardadas", 70)
+        # 0144: fotos de galería por plan, como la migración.
+        for _slug, _fotos in {"gratis": 50, "publica": 100, "destacado": 300, "pro": 300,
+                              "empleado_ia": 300, "premium": 300}.items():
+            self.planes[_slug].setdefault("fotos_max", _fotos)
         self.wa_inbox: dict[str, dict] = {}          # wa_message_id -> row
         self.leads: list[dict] = []
         self.visitas: list[dict] = []
@@ -359,7 +373,9 @@ class FakeRepo:
 
         suscripciones = sum(
             1 for c in activos
-            if c.get("suspendido") or (c.get("paga_hasta") and str(c["paga_hasta"]) <= (hoy + timedelta(days=5)).isoformat()))
+            if c.get("suspendido")
+            or (not c.get("plan_cortesia") and c.get("paga_hasta")
+                and str(c["paga_hasta"]) <= (hoy + timedelta(days=5)).isoformat()))
         pendientes = {
             "publicaciones": sum(1 for p in self.publicaciones
                                  if p.get("estado") == "pendiente" and p.get("activo", True)),
@@ -660,13 +676,14 @@ class FakeRepo:
                 n += 1
         return n
 
-    def registrar_cargo_extra(self, comercio_id, publicacion_id, monto, moneda):
+    def registrar_cargo_extra(self, comercio_id, publicacion_id, monto, moneda,
+                              concepto="publicacion_extra"):
         if publicacion_id and any(c["publicacion_id"] == publicacion_id
                                   for c in self.cargos_extra):
             return {}
         fila = {"id": self._id("cargo"), "comercio_id": comercio_id,
                 "publicacion_id": publicacion_id, "monto": monto, "moneda": moneda,
-                "estado": "pendiente", "concepto": "publicacion_extra"}
+                "estado": "pendiente", "concepto": concepto}
         self.cargos_extra.append(fila)
         return fila
 
@@ -1369,6 +1386,8 @@ class FakeRepo:
             ph = c.get("paga_hasta")
             if c.get("suspendido"):
                 estado = "suspendido"
+            elif c.get("plan_cortesia"):
+                estado = "cortesia"
             elif not ph:
                 estado = "sin_plan"
             elif str(ph) < hoy:
@@ -1377,7 +1396,7 @@ class FakeRepo:
                 estado = "por_vencer"
             else:
                 estado = "activo"
-            out.append({**c, "suscripcion_estado": estado})
+            out.append({**c, "plan_cortesia": bool(c.get("plan_cortesia")), "suscripcion_estado": estado})
         return out
 
     def suspender_comercio(self, comercio_id):
@@ -1926,7 +1945,16 @@ class FakeRepo:
         self.marcar_destacados_cobrados(comercio_id)
         return {"paga_hasta": nueva, "comercio_id": comercio_id}
 
-    def confirmar_pago(self, pago_id, meses, by):
+    def asignar_plan_comercio(self, comercio_id, plan, cortesia):
+        c = self.comercios.get(comercio_id)
+        if not c:
+            return None
+        c["plan"] = plan
+        c["plan_cortesia"] = bool(cortesia)
+        return {"id": comercio_id, "plan": plan, "plan_cortesia": bool(cortesia),
+                "paga_hasta": c.get("paga_hasta")}
+
+    def confirmar_pago(self, pago_id, meses, by, plan=None):
         from datetime import date, timedelta
         pago = self.pagos.get(pago_id)
         if not pago:
@@ -1937,8 +1965,14 @@ class FakeRepo:
         pago.update({"estado": "confirmado", "registrado_por": by})
         c["paga_hasta"] = nueva
         c["suspendido"] = False
+        if plan:
+            c["plan"] = plan
+            c["plan_cortesia"] = False
         self.marcar_destacados_cobrados(pago["comercio_id"])
-        return {"ok": True, "paga_hasta": nueva, "comercio_id": pago["comercio_id"]}
+        out = {"ok": True, "paga_hasta": nueva, "comercio_id": pago["comercio_id"]}
+        if plan:
+            out["plan"] = plan
+        return out
 
     def ocultar_comercios_vencidos(self, dias=40, dias_gracia=None):
         from datetime import date, datetime, timedelta, timezone
@@ -1946,7 +1980,7 @@ class FakeRepo:
         corte = (datetime.now(timezone.utc) - timedelta(days=dias_gracia)).isoformat() if dias_gracia is not None else None
         n = 0
         for c in self.comercios.values():
-            if not c.get("activo", True):
+            if not c.get("activo", True) or c.get("plan_cortesia"):
                 continue
             ph = c.get("paga_hasta")
             if ph and str(ph) < limite:

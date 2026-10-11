@@ -1,5 +1,8 @@
 // Cliente del panel del COMERCIO logueado (login + chatbot de publicación).
-import { subirConProgreso } from "@/lib/upload";
+import {
+  subirConProgreso, postFormData, camposOpcionesFoto, listaFotos,
+  type OpcionesFoto, type ListaFotos,
+} from "@/lib/upload";
 import { detalleDeError } from "@/lib/acceso";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_comercio_token";
@@ -332,6 +335,14 @@ export type Perfil = {
   como_llegar?: string | null;
   horario?: string | null;
   pedido_minimo?: string | null;
+  /** «Lo que suma» en la ficha (spec docs/ficha-destacados.md). Todo opcional. */
+  canal_wa_url?: string | null;
+  /** Enlace externo o la URL del PDF subido con `subirCatalogoComercio`. */
+  catalogo_url?: string | null;
+  tiene_pasero?: boolean;
+  envios_internacionales?: boolean;
+  talles_especiales?: boolean;
+  tiene_factura?: boolean;
   modalidad?: string | null;
   plan?: string | null;
   verificado?: boolean;
@@ -350,7 +361,8 @@ export type Suscripcion = {
   paga_hasta: string | null;
   dias_restantes: number | null;
   suspendido: boolean;
-  estado: "gratis" | "activo" | "por_vencer" | "vencido" | "suspendido" | "sin_pago";
+  /** «cortesia»: el plan se lo dio URUKU sin cobro y no vence (docs/cerca-abiertos-estrella.md). */
+  estado: "gratis" | "activo" | "por_vencer" | "vencido" | "suspendido" | "sin_pago" | "cortesia";
   cargos_pendientes: { id: string; titulo: string | null; costo: number | null }[];
   total_cargos: number;
 };
@@ -382,6 +394,24 @@ export async function subirFotoPerfil(foto: File): Promise<Perfil> {
   if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.detail ?? "No se pudo subir la foto"); }
   return res.json();
 }
+
+/** Sube el catálogo en PDF (hasta 8 MB). Devuelve la URL pública que quedó en
+ *  `catalogo_url`; el servidor borra el archivo anterior. Si falla, el catálogo
+ *  que había queda como estaba. Va por XHR y no por `fetch`: ver `postFormData`. */
+export async function subirCatalogoComercio(file: File, onP?: (pct: number) => void): Promise<string | null> {
+  const fd = new FormData();
+  fd.append("archivo", file);
+  try {
+    const d = await postFormData<{ catalogo_url?: string | null }>(`${API}/comercio/catalogo`, fd, getCToken(), onP);
+    return d.catalogo_url ?? null;
+  } catch (e) {
+    if ((e as Error & { status?: number })?.status === 401) { clearComercio(); throw new Error("Tu sesión venció, volvé a entrar."); }
+    throw e;
+  }
+}
+/** Quita el catálogo: borra el archivo y deja `catalogo_url` en null. */
+export const quitarCatalogoComercio = (): Promise<{ ok: boolean }> =>
+  cFetch("/comercio/catalogo", { method: "DELETE" });
 export const getSuscripcion = (): Promise<Suscripcion> => cFetch("/comercio/suscripcion");
 export const getMetricas = (): Promise<Metricas> => cFetch("/comercio/metricas");
 
@@ -416,12 +446,14 @@ export const bajaPublicacion = (id: string): Promise<{ ok: boolean }> =>
 export type FotoGaleria = { id: string; url: string; thumb_url: string | null };
 export type VideoGaleria = { id: string; url: string; duracion_seg: number | null };
 
-export const listarFotosComercio = (): Promise<FotoGaleria[]> => cFetch("/comercio/fotos").then((d) => d.items ?? []);
+export const listarFotosComercio = (): Promise<ListaFotos<FotoGaleria>> => cFetch("/comercio/fotos").then((d) => listaFotos<FotoGaleria>(d));
 export const listarVideosComercio = (): Promise<VideoGaleria[]> => cFetch("/comercio/videos").then((d) => d.items ?? []);
 export const borrarFotoComercio = (id: string): Promise<void> => cFetch(`/comercio/fotos/${id}`, { method: "DELETE" }).then(() => undefined);
 export const borrarVideoComercio = (id: string): Promise<void> => cFetch(`/comercio/videos/${id}`, { method: "DELETE" }).then(() => undefined);
-export const subirFotoGaleriaComercio = (file: File, onP?: (p: number) => void): Promise<FotoGaleria> =>
-  subirConProgreso<{ foto: FotoGaleria }>(`${API}/comercio/fotos`, "foto", file, getCToken(), {}, onP).then((d) => d.foto);
+/** `opts`: cómo reintentar cuando la galería llegó al tope del plan (409):
+ *  `reemplazar=<id>` borra esa foto, `extra=pagar` cobra una foto extra. */
+export const subirFotoGaleriaComercio = (file: File, onP?: (p: number) => void, opts?: OpcionesFoto): Promise<FotoGaleria> =>
+  subirConProgreso<{ foto: FotoGaleria }>(`${API}/comercio/fotos`, "foto", file, getCToken(), camposOpcionesFoto(opts), onP).then((d) => d.foto);
 export const subirVideoGaleriaComercio = (file: File, dur: number | null, onP?: (p: number) => void): Promise<VideoGaleria> =>
   subirConProgreso<{ video: VideoGaleria }>(`${API}/comercio/videos`, "video", file, getCToken(), dur != null ? { duracion_seg: String(dur) } : {}, onP).then((d) => d.video);
 

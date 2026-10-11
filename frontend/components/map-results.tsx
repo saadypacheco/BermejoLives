@@ -6,7 +6,7 @@ import type { Ubicacion } from "@/lib/ubicacion";
 import { type ResultadoBusqueda, comoLlegarHref, waLink, MODALIDAD_LABEL } from "@/lib/types";
 import { registrarLead, type TipoLead } from "@/lib/campo";
 import { rubroStyle, loadLeaflet } from "@/lib/mapa-visual";
-import { rubroSvg, SVG_UBICACION } from "@/lib/iconos-mapa";
+import { rubroSvg, SVG_UBICACION, SVG_ESTRELLA } from "@/lib/iconos-mapa";
 import { adornoHTML, MEDIDAS, ZOOM_MIN_ADORNOS, type Adorno } from "@/lib/adornos";
 import { getAdornosMapa } from "@/lib/data";
 
@@ -20,11 +20,13 @@ function escapeAttr(v: string): string {
   return v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// Pin del mapa de resultados: color por rubro; los verificados resaltan (anillo).
+// Pin del mapa de resultados: color por rubro; los de estrella («Verificado por
+// URUKU», plan pago al día o de cortesía) resaltan (anillo). La tilde interna
+// `verificado` ya no se ve acá.
 function pinHtml(r: ResultadoBusqueda): string {
   const style = rubroStyle(r.rubro_slug);
-  const cls = r.verificado ? "ukpin destacado" : "ukpin pago";
-  const ring = r.verificado ? `<i class="ukpin-ring"></i>` : "";
+  const cls = r.estrella ? "ukpin destacado" : "ukpin pago";
+  const ring = r.estrella ? `<i class="ukpin-ring"></i>` : "";
   return `<div class="${cls}" style="--pc:${style.color}">${ring}<span class="ukpin-emo">${rubroSvg(r.rubro_slug)}</span></div>`;
 }
 
@@ -214,7 +216,7 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
     const withCoords = visibles.filter((r) => r.lat != null && r.lng != null);
     const bounds: [number, number][] = [];
     for (const r of withCoords) {
-      const size = r.verificado ? 34 : 22;
+      const size = r.estrella ? 34 : 22;
       const icon = L.divIcon({
         className: "", html: pinHtml(r), iconSize: [size, size], iconAnchor: [size / 2, size / 2],
       });
@@ -231,7 +233,7 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
       const popup = `
         <div class="map-pop">
           ${foto ? `<img class="map-pop-img" src="${escapeAttr(foto)}" alt="" loading="lazy">` : ""}
-          <b>${r.nombre}</b>
+          <b>${escapeAttr(r.nombre)}${r.estrella ? `<span class="map-pop-estrella" role="img" aria-label="Verificado por URUKU" title="Verificado por URUKU">${SVG_ESTRELLA}</span>` : ""}</b>
           <span>${MODALIDAD_LABEL[r.modalidad] ?? r.modalidad}${r.rubro_nombre ? " · " + r.rubro_nombre : ""}</span>
           <div class="map-pop-act">
             ${r.whatsapp ? `<a href="${waLink(r.whatsapp, "Hola, te vi en URUKU")}" target="_blank" rel="noopener" data-lead-comercio="${r.id}" data-lead-tipo="whatsapp">WhatsApp</a>` : ""}
@@ -239,7 +241,7 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
             <a href="/comercios/${r.slug}">Ver comercio</a>
           </div>
         </div>`;
-      const m = L.marker([r.lat, r.lng], { icon, zIndexOffset: r.verificado ? 300 : 0 }).bindPopup(popup);
+      const m = L.marker([r.lat, r.lng], { icon, zIndexOffset: r.estrella ? 300 + (r.plan_orden ?? 0) : 0 }).bindPopup(popup);
       m.__data = r;
       layer.addLayer(m);
       bounds.push([r.lat as number, r.lng as number]);

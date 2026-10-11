@@ -31,3 +31,6 @@ export function rubroSvg(slug: string | null | undefined): string {
 /** Los dos que no son rubros: la etiqueta de una galería y el punto suelto. */
 export const SVG_COMERCIOS = svg("comercios");
 export const SVG_UBICACION = svg("ubicacion");
+
+/** La estrella «Verificado por URUKU» del globo del mapa. */
+export const SVG_ESTRELLA = svg("estrella");

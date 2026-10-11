@@ -1,5 +1,8 @@
 // Cliente del "modo agente de campo" (alta rápida de comercios).
-import { postFormData, subirConProgreso } from "@/lib/upload";
+import {
+  postFormData, subirConProgreso, camposOpcionesFoto, listaFotos,
+  type OpcionesFoto, type ListaFotos,
+} from "@/lib/upload";
 // El `?ref=` con el que llegó esta persona (lo guarda RefCapture, primer toque,
 // y vence a los 30 días: ver lib/ref.ts).
 import { refGuardado } from "@/lib/ref";
@@ -104,16 +107,18 @@ export type FotoGaleria = { id: string; url: string; thumb_url: string | null; o
 export type VideoGaleria = { id: string; url: string; duracion_seg: number | null; orden?: number };
 
 const galH = () => ({ Authorization: `Bearer ${getAgenteToken() ?? ""}` });
-export const listarFotosCampo = (cid: string): Promise<FotoGaleria[]> =>
-  fetch(`${API}/campo/mis-comercios/${cid}/fotos`, { headers: galH() }).then((r) => r.json()).then((d) => d.items ?? []);
+export const listarFotosCampo = (cid: string): Promise<ListaFotos<FotoGaleria>> =>
+  fetch(`${API}/campo/mis-comercios/${cid}/fotos`, { headers: galH() }).then((r) => r.json()).then((d) => listaFotos<FotoGaleria>(d));
 export const listarVideosCampo = (cid: string): Promise<VideoGaleria[]> =>
   fetch(`${API}/campo/mis-comercios/${cid}/videos`, { headers: galH() }).then((r) => r.json()).then((d) => d.items ?? []);
 export const borrarFotoCampo = (cid: string, id: string): Promise<void> =>
   fetch(`${API}/campo/mis-comercios/${cid}/fotos/${id}`, { method: "DELETE", headers: galH() }).then(() => undefined);
 export const borrarVideoCampo = (cid: string, id: string): Promise<void> =>
   fetch(`${API}/campo/mis-comercios/${cid}/videos/${id}`, { method: "DELETE", headers: galH() }).then(() => undefined);
-export const subirFotoCampo = (cid: string, file: File, onP?: (p: number) => void): Promise<FotoGaleria> =>
-  subirConProgreso<{ foto: FotoGaleria }>(`${API}/campo/mis-comercios/${cid}/fotos`, "foto", file, getAgenteToken(), {}, onP).then((d) => d.foto);
+/** `opts`: cómo reintentar cuando la galería llegó al tope (409). El agente sólo
+ *  puede `reemplazar`: no compromete plata del comercio. */
+export const subirFotoCampo = (cid: string, file: File, onP?: (p: number) => void, opts?: Pick<OpcionesFoto, "reemplazar">): Promise<FotoGaleria> =>
+  subirConProgreso<{ foto: FotoGaleria }>(`${API}/campo/mis-comercios/${cid}/fotos`, "foto", file, getAgenteToken(), camposOpcionesFoto(opts), onP).then((d) => d.foto);
 export const subirVideoCampo = (cid: string, file: File, dur: number | null, onP?: (p: number) => void): Promise<VideoGaleria> =>
   subirConProgreso<{ video: VideoGaleria }>(`${API}/campo/mis-comercios/${cid}/videos`, "video", file, getAgenteToken(), dur != null ? { duracion_seg: String(dur) } : {}, onP).then((d) => d.video);
 
@@ -191,6 +196,9 @@ export type ComercioAgente = {
   email?: string | null;
   instagram_url?: string | null; facebook_url?: string | null; tiktok_url?: string | null;
   sitio_web?: string | null; canal_wa_url?: string | null; catalogo_url?: string | null;
+  /** «Lo que suma» en la ficha (spec docs/ficha-destacados.md). */
+  tiene_pasero?: boolean; envios_internacionales?: boolean; tiene_factura?: boolean; talles_especiales?: boolean;
+  pedido_minimo?: string | null;
   sin_cartel?: boolean;
   /** Quién lo dio de alta. Con dos agentes por ciudad, saber que la ficha es
    *  del otro evita la duda de «esto no lo cargué yo, ¿lo puedo tocar?». */
@@ -253,6 +261,10 @@ export type EditarComercioBody = {
   instagram_url?: string | null; facebook_url?: string | null;
   tiktok_url?: string | null; sitio_web?: string | null;
   canal_wa_url?: string | null; catalogo_url?: string | null;
+  /** «Lo que suma» en la ficha. Los tres tildes son booleanos; el pedido mínimo
+   *  es texto y vacío (null) lo borra. */
+  tiene_pasero?: boolean; envios_internacionales?: boolean; tiene_factura?: boolean; talles_especiales?: boolean;
+  pedido_minimo?: string | null;
   /** El horario como lo dicta el dueño. Vacío (o null) lo borra. */
   horario?: string | null;
 };
@@ -268,6 +280,35 @@ export async function editarComercioAgente(id: string, body: EditarComercioBody)
   if (!res.ok) {
     const d = await res.json().catch(() => ({}));
     throw new Error(d.detail ?? "No se pudo guardar");
+  }
+}
+
+/** Sube el catálogo en PDF (hasta 8 MB) de un comercio. Devuelve la URL pública
+ *  que quedó en `catalogo_url`; el servidor borra el archivo anterior. Si falla,
+ *  el catálogo que había queda como estaba. */
+export async function subirCatalogoCampo(id: string, file: File, onP?: (pct: number) => void): Promise<string | null> {
+  const fd = new FormData();
+  fd.append("archivo", file);
+  try {
+    const d = await postFormData<{ catalogo_url?: string | null }>(
+      `${API}/campo/mis-comercios/${encodeURIComponent(id)}/catalogo`, fd, getAgenteToken(), onP);
+    return d.catalogo_url ?? null;
+  } catch (e) {
+    if ((e as Error & { status?: number })?.status === 401) { clearAgente(); throw new Error("Sesión vencida, volvé a entrar"); }
+    throw e;
+  }
+}
+
+/** Quita el catálogo de un comercio: borra el archivo y deja `catalogo_url` en null. */
+export async function quitarCatalogoCampo(id: string): Promise<void> {
+  const res = await fetch(`${API}/campo/mis-comercios/${encodeURIComponent(id)}/catalogo`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` },
+  });
+  if (res.status === 401) { clearAgente(); throw new Error("Sesión vencida, volvé a entrar"); }
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(typeof d.detail === "string" && d.detail ? d.detail : "No se pudo quitar el catálogo");
   }
 }
 

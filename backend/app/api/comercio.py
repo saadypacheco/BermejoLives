@@ -28,6 +28,9 @@ from app.services.imagenes import (
     guardar_foto_local, procesar_imagen, subir_foto_comercio,
     subir_foto_galeria, subir_video_comercio,
 )
+from app.services import enlaces
+from app.services import ficha_catalogo as catalogo_svc
+from app.services import fotos_galeria
 from app.services import planes
 from app.services import ingreso_clave
 from app.services.cuentas import cuentas_de_numero, nueva_clave_comercio
@@ -51,6 +54,8 @@ _CAMPOS_EDITABLES = {
     "facebook_url", "instagram_url", "tiktok_url", "sitio_web", "logo_url",
     "direccion", "como_llegar", "horario", "pedido_minimo", "modalidad",
     "lat", "lng", "acepta_reservas",
+    # «Lo que suma» en la ficha (docs/ficha-destacados.md).
+    "canal_wa_url", "catalogo_url", "tiene_pasero", "envios_internacionales", "tiene_factura", "talles_especiales",
 }
 
 
@@ -524,6 +529,7 @@ _CAMPOS_PERFIL = (
     "portada_url", "direccion", "como_llegar", "horario", "pedido_minimo",
     "modalidad", "monedas_aceptadas", "plan", "verificado", "confiable",
     "lat", "lng", "acepta_reservas", "codigo",
+    "canal_wa_url", "catalogo_url", "tiene_pasero", "envios_internacionales", "tiene_factura", "talles_especiales",
 )
 
 
@@ -552,6 +558,14 @@ class PerfilUpdate(BaseModel):
     como_llegar: str | None = None
     horario: str | None = None
     pedido_minimo: str | None = None
+    #: «Lo que suma» en la ficha. Un texto vacío borra el dato; los enlaces,
+    #: sólo http(s). El catálogo como ARCHIVO se sube por POST /comercio/catalogo.
+    canal_wa_url: str | None = None
+    catalogo_url: str | None = None
+    tiene_pasero: bool | None = None
+    envios_internacionales: bool | None = None
+    tiene_factura: bool | None = None
+    talles_especiales: bool | None = None
     modalidad: str | None = None
     acepta_reservas: bool | None = None
     lat: float | None = None
@@ -606,9 +620,21 @@ def update_perfil(
     patch = {k: v for k, v in campos.items() if k in _CAMPOS_EDITABLES}
     if "modalidad" in patch and patch["modalidad"] not in _MODALIDADES:
         raise HTTPException(status_code=400, detail=f"modalidad inválida: {patch['modalidad']}")
+    try:
+        enlaces.validar_redes(patch)
+        catalogo_svc.normalizar_ficha(patch)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not patch and body.rubro_slugs is None:
         raise HTTPException(status_code=400, detail="No hay campos para actualizar")
+    anterior = None
+    if "catalogo_url" in patch:
+        anterior = (repo.get_comercio(claims["comercio_id"]) or {}).get("catalogo_url")
     comercio = repo.update_comercio(claims["comercio_id"], patch, body.rubro_slugs)
+    if "catalogo_url" in patch:
+        # Cambió el catálogo (enlace nuevo o vaciado): si el anterior era un PDF
+        # nuestro, se borra del disco.
+        catalogo_svc.soltar_catalogo_reemplazado(anterior, patch["catalogo_url"], claims["comercio_id"])
     logger.info("comercio.perfil_update", comercio=claims["comercio_id"], campos=list(patch))
     # Si cambió de qué vende, se recalculan los rubros. Sólo SUMA: si alguien los
     # curó a mano, ese trabajo no se pisa.
@@ -616,6 +642,32 @@ def update_perfil(
         aplicar_rubros(repo, comercio, repo.get_comercio_rubros(comercio["id"]))
     _sync_vendedor_tienda(comercio, patch)
     return _perfil_dict(repo, comercio)
+
+
+@router.post("/comercio/catalogo")
+async def subir_mi_catalogo(
+    request: Request,
+    claims: dict = Depends(auth.require_comercio),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Sube el catálogo en PDF (multipart, campo `archivo`, hasta 8 MB).
+
+    Reemplaza al anterior: guarda el nuevo, actualiza `catalogo_url` y después
+    borra el archivo viejo si era nuestro. El `Request` se lee a mano para cortar
+    el cuerpo apenas pasa el tope (ver `services/catalogo.leer_pdf`)."""
+    comercio = _mi_comercio(repo, claims)
+    url = await catalogo_svc.subir_catalogo(repo, comercio, request, actor=claims["comercio_id"])
+    return {"catalogo_url": url}
+
+
+@router.delete("/comercio/catalogo")
+async def quitar_mi_catalogo(
+    claims: dict = Depends(auth.require_comercio),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Quita el catálogo: borra el PDF si es nuestro y deja `catalogo_url` en null."""
+    await catalogo_svc.quitar_catalogo(repo, _mi_comercio(repo, claims), actor=claims["comercio_id"])
+    return {"ok": True}
 
 
 @router.put("/comercio/perfil/foto")
@@ -654,7 +706,11 @@ def _estado_suscripcion(comercio: dict) -> dict:
         except ValueError:
             dias = None
 
-    if plan == "gratis":
+    cortesia = bool(comercio.get("plan_cortesia"))
+    if cortesia:
+        # Sin cobro y sin vencimiento: ni «sin pago» ni «por vencer».
+        estado = "suspendido" if suspendido else "cortesia"
+    elif plan == "gratis":
         estado = "gratis"
     elif suspendido:
         estado = "suspendido"
@@ -670,8 +726,9 @@ def _estado_suscripcion(comercio: dict) -> dict:
     return {
         "plan": plan,
         "paga_hasta": paga_hasta,
-        "dias_restantes": dias,
+        "dias_restantes": None if cortesia else dias,
         "suspendido": suspendido,
+        "plan_cortesia": cortesia,
         "estado": estado,
     }
 
@@ -1077,7 +1134,6 @@ def marcar_leido(
 # ============================================================
 # Galería del comercio logueado (Mi comercio): mismas reglas que el lado agente.
 # ============================================================
-_GAL_MAX_FOTOS = 10
 _GAL_MAX_VIDEOS = 5
 _GAL_MAX_FOTO_BYTES = 15 * 1024 * 1024
 _GAL_MAX_VIDEO_BYTES = 50 * 1024 * 1024
@@ -1092,32 +1148,41 @@ def _mi_comercio(repo: Repo, claims: dict) -> dict:
 
 @router.get("/comercio/fotos")
 def mis_fotos(claims: dict = Depends(auth.require_comercio), repo: Repo = Depends(get_repo)) -> dict:
-    return {"items": repo.list_fotos_comercio(claims["comercio_id"])}
+    # `limite` = el tope de fotos de hoy (plan + extras): la galería muestra «23/50».
+    return fotos_galeria.listado(repo, _mi_comercio(repo, claims))
 
 
 @router.post("/comercio/fotos")
-async def agregar_mi_foto(foto: UploadFile = File(...), claims: dict = Depends(auth.require_comercio), repo: Repo = Depends(get_repo)) -> dict:
+async def agregar_mi_foto(
+    foto: UploadFile = File(...),
+    reemplazar: str | None = Form(None),
+    extra: str | None = Form(None),
+    claims: dict = Depends(auth.require_comercio),
+    repo: Repo = Depends(get_repo),
+) -> dict:
     cid = claims["comercio_id"]
-    if repo.count_fotos_comercio(cid) >= _GAL_MAX_FOTOS:
-        raise HTTPException(status_code=409, detail=f"Máximo {_GAL_MAX_FOTOS} fotos")
+    comercio = _mi_comercio(repo, claims)
+    # En el tope: 409 con las opciones; `extra=pagar` (sólo acá) o `reemplazar=<id>`.
+    subida = fotos_galeria.preparar(repo, comercio, reemplazar=reemplazar, extra=extra, puede_pagar=True)
     data = await foto.read()
     if not data:
         raise HTTPException(status_code=400, detail="Falta la foto")
     if len(data) > _GAL_MAX_FOTO_BYTES:
         raise HTTPException(status_code=413, detail="La foto supera los 15 MB")
     try:
-        url, thumb = subir_foto_galeria(_mi_comercio(repo, claims)["slug"], data)
+        url, thumb = subir_foto_galeria(comercio["slug"], data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not url:
         raise HTTPException(status_code=502, detail="No se pudo subir la foto, probá de nuevo")
-    row = repo.add_foto_comercio({"comercio_id": cid, "url": url, "thumb_url": thumb, "orden": repo.count_fotos_comercio(cid)})
+    row = fotos_galeria.registrar(repo, comercio, subida, url, thumb)
     return {"ok": True, "foto": row}
 
 
 @router.delete("/comercio/fotos/{foto_id}")
 def borrar_mi_foto(foto_id: str, claims: dict = Depends(auth.require_comercio), repo: Repo = Depends(get_repo)) -> dict:
-    if not repo.delete_foto_comercio(foto_id, claims["comercio_id"]):
+    from app.services.fotos_galeria import borrar_foto_por_id
+    if not borrar_foto_por_id(repo, claims["comercio_id"], foto_id):
         raise HTTPException(status_code=404, detail="Foto no encontrada")
     return {"ok": True}
 

@@ -656,7 +656,10 @@
 .uk-resic:hover { border-color: var(--uk-green); }
 .uk-btn-wa { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: linear-gradient(135deg,#25d366,#128c4a); color: #fff; border: 0; border-radius: var(--uk-radius-btn); padding: 10px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .uk-btn-ghost { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: var(--uk-surface); color: var(--uk-ink); border: 1px solid var(--uk-line); border-radius: var(--uk-radius-btn); padding: 10px; font-size: 13px; font-weight: 700; cursor: pointer; }
-.uk-verif { color: var(--uk-green); display: inline-flex; }
+/* La estrella «Verificado por URUKU» (plan pago al día o de cortesía). Dorada
+   del logo; es un ícono, no un texto, así que el contraste del dorado alcanza.
+   Reemplaza a la tilde verde de `verificado`, que pasó a ser sólo interna. */
+.uk-estrella { color: var(--uk-gold-b); display: inline-flex; vertical-align: middle; margin-left: 5px; }
 .uk-empty { color: var(--uk-ink-soft); font-size: 15px; padding: 30px 0; }
 
 /* ===== Ficha de comercio (/comercios/[slug]) ===== */
@@ -713,6 +716,26 @@
 .uk-ficha-vende { display: flex; gap: 6px; flex-wrap: wrap; }
 .uk-ficha-vende span { font-size: 12.5px; padding: 4px 10px; border-radius: 999px;
   background: var(--uk-chip); color: var(--uk-ink); }
+
+/* «Lo que suma» (spec docs/ficha-destacados.md): lo que el local cargó y hace
+   que lo elijan. Los que abren algo (canal, catálogo) son BOTONES con el verde
+   de marca; los que son sólo un dato (pasero, envíos, factura) son SELLOS, sin
+   borde de botón ni hover, para que no se confundan con algo que se toca. El
+   estado no depende del color: cada uno lleva su ícono y su texto. */
+.uk-suma { display: flex; flex-direction: column; gap: 8px; padding: 12px;
+  border: 1px solid var(--uk-line); border-radius: var(--uk-radius-sm); background: var(--uk-chip); }
+.uk-suma-tit { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--uk-ink-soft); }
+.uk-suma-botones { display: flex; flex-wrap: wrap; gap: 8px; }
+.uk-suma-btn { flex: 1 1 150px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 8px 14px; border: 2px solid var(--uk-green); border-radius: var(--uk-radius-btn);
+  background: var(--uk-surface); color: var(--uk-green); font-size: 14px; font-weight: 800; text-align: center; }
+/* `.uk a { color: inherit }` le gana a `.uk-suma-btn` (misma razón que el botón de WhatsApp). */
+.uk a.uk-suma-btn { color: var(--uk-green); }
+.uk a.uk-suma-btn:hover, .uk a.uk-suma-btn:focus-visible { background: var(--uk-green); color: #fff; }
+.uk-suma-sellos { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.uk-suma-sellos li { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px;
+  background: var(--uk-surface); border: 1px solid var(--uk-line); color: var(--uk-ink); font-size: 13px; font-weight: 700; }
+.uk-suma-sellos li svg { color: var(--uk-green); }
 
 /* El botón grande y con el número a la vista: en Bermejo el número ES el
    negocio, y verlo antes de tocar evita el viaje de ida y vuelta al teclado. */
@@ -1382,3 +1405,26 @@ a.uk-product-img { display: block; }
   .uk-pub .uk-product-desc { font-size: 12px; }
 }
 
+
+/* ---- «Fotos del local» como una tienda (components/galeria-tienda.tsx) ----
+   Columnas que siguen hacia abajo, fotos verticales grandes: 2 en el celular,
+   3 en la tableta, 4 en la compu. */
+.uk-tienda { margin-top: 24px; scroll-margin-top: 80px; }
+.uk-tienda-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (min-width: 600px) { .uk-tienda-grid { grid-template-columns: repeat(3, 1fr); gap: 14px; } }
+@media (min-width: 1000px) { .uk-tienda-grid { grid-template-columns: repeat(4, 1fr); gap: 18px; } }
+.uk-tienda-grid button { position: relative; display: block; width: 100%; padding: 0; border: 0; cursor: zoom-in;
+  background: var(--uk-chip); border-radius: var(--uk-radius-sm); overflow: hidden; }
+.uk-tienda-grid img, .uk-tienda-grid video { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block;
+  transition: transform .25s ease; }
+@media (hover: hover) { .uk-tienda-grid button:hover img { transform: scale(1.03); } }
+.uk-tienda-grid .con-video span { position: absolute; inset: 0; display: grid; place-items: center; color: #fff;
+  background: rgba(0,0,0,.25); }
+.uk-tienda-mas { display: flex; margin: 16px auto 0; min-height: 44px; padding: 10px 22px; }
+.uk-tienda-flecha { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px;
+  border-radius: 999px; border: 0; background: rgba(0,0,0,.55); color: #fff; display: grid; place-items: center; cursor: pointer; }
+.uk-tienda-flecha.izq { left: 12px; }
+.uk-tienda-flecha.der { right: 12px; }
+.uk-tienda-cuenta { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,.6); color: #fff; font-size: 13px; padding: 4px 12px; border-radius: 999px; }
+.uk a.uk-fgal-count { text-decoration: none; color: #fff; }

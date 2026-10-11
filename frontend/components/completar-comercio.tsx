@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   actualizarFotoComercioAgente, editarComercioAgente,
   listarFotosCampo, listarVideosCampo, subirFotoCampo, subirVideoCampo, borrarFotoCampo, borrarVideoCampo,
+  subirCatalogoCampo, quitarCatalogoCampo,
   type ComercioAgente, type EditarComercioBody, type Lugar,
 } from "@/lib/campo";
 import type { Rubro } from "@/lib/types";
@@ -11,6 +12,9 @@ import { comprimirImagen } from "@/lib/imagen";
 import { GaleriaUploader, type GaleriaApi } from "@/components/galeria-uploader";
 import { EditorHorario, recordarUltimoHorario } from "@/components/editor-horario";
 import { Ic, type NombreIcono } from "@/components/ic";
+import { CatalogoPdf } from "@/components/catalogo-pdf";
+import { TildesSuma, CLAVES_TILDES, type Tildes } from "@/components/tildes-suma";
+import { esCatalogoSubido, normalizarEnlace } from "@/lib/catalogo";
 
 /** La galería del local desde la app del agente. Exportada porque el final del
  *  alta la muestra sola cuando no pudo abrir «Completar comercio»: las fotos
@@ -18,7 +22,8 @@ import { Ic, type NombreIcono } from "@/components/ic";
 export function apiGaleriaCampo(id: string): GaleriaApi {
   return {
     cargarFotos: () => listarFotosCampo(id),
-    subirFoto: (file, onP) => subirFotoCampo(id, file, onP),
+    // El agente nunca paga el extra del comercio: sólo puede reemplazar la más vieja.
+    subirFoto: (file, onP, opts) => subirFotoCampo(id, file, onP, { reemplazar: opts?.reemplazar }),
     borrarFoto: (fid) => borrarFotoCampo(id, fid),
     cargarVideos: () => listarVideosCampo(id),
     subirVideo: (file, dur, onP) => subirVideoCampo(id, file, dur, onP),
@@ -48,6 +53,7 @@ export function apiGaleriaCampo(id: string): GaleriaApi {
 const CAMPOS_TEXTO = [
   "horario", "telefono", "direccion", "prod_obs_human", "puesto", "email",
   "instagram_url", "facebook_url", "tiktok_url", "sitio_web", "canal_wa_url", "catalogo_url",
+  "pedido_minimo",
 ] as const;
 type CampoTexto = (typeof CAMPOS_TEXTO)[number];
 type Campos = Record<CampoTexto, string> & { nombre: string; modalidad: string; lugar_id: string };
@@ -60,6 +66,16 @@ function desdeComercio(c: ComercioAgente): Campos {
     prod_obs_human: t(c.prod_obs_human), puesto: t(c.puesto), email: t(c.email),
     instagram_url: t(c.instagram_url), facebook_url: t(c.facebook_url), tiktok_url: t(c.tiktok_url),
     sitio_web: t(c.sitio_web), canal_wa_url: t(c.canal_wa_url), catalogo_url: t(c.catalogo_url),
+    pedido_minimo: t(c.pedido_minimo),
+  };
+}
+
+function tildesDe(c: ComercioAgente): Tildes {
+  return {
+    tiene_pasero: c.tiene_pasero === true,
+    envios_internacionales: c.envios_internacionales === true,
+    tiene_factura: c.tiene_factura === true,
+    talles_especiales: c.talles_especiales === true,
   };
 }
 
@@ -140,6 +156,9 @@ export function CompletarComercio({ comercio, rubros, lugares, abrirEn, sinWhats
 }) {
   const [base, setBase] = useState<Campos>(() => desdeComercio(comercio));
   const [f, setF] = useState<Campos>(base);
+  // Los tres tildes de «Lo que suma», aparte de los textos: son sí/no.
+  const [baseTildes, setBaseTildes] = useState<Tildes>(() => tildesDe(comercio));
+  const [tildes, setTildes] = useState<Tildes>(baseTildes);
   // Todos los rubros, el principal primero: si sólo se tomara el principal,
   // guardar los rubros borraría los secundarios sin que el agente lo vea.
   const [baseRubros, setBaseRubros] = useState<string[]>(() => {
@@ -192,8 +211,10 @@ export function CompletarComercio({ comercio, rubros, lugares, abrirEn, sinWhats
   // dejar un campo vacío que parece decir «no tiene».
 
   const rubrosCambiaron = [...rubroSlugs].sort().join("|") !== [...baseRubros].sort().join("|");
+  const tildesCambiados = CLAVES_TILDES.filter((k) => tildes[k] !== baseTildes[k]);
   const cambiados: string[] = [
     ...(Object.keys(f) as (keyof Campos)[]).filter((k) => f[k].trim() !== base[k].trim()),
+    ...tildesCambiados,
     ...(rubrosCambiaron ? ["rubros"] : []),
     ...(!tieneWa && !sinWhatsapp && waDigitos ? ["whatsapp"] : []),
   ];
@@ -230,11 +251,27 @@ export function CompletarComercio({ comercio, rubros, lugares, abrirEn, sinWhats
       const l = lugares.find((x) => x.id === f.lugar_id);
       patch.lugares = l ? { nombre: l.nombre, tipo: l.tipo, lat: l.lat, lng: l.lng, portada_thumb_url: l.portada_thumb_url ?? null } : null;
     }
+    // Canal y catálogo: en la ficha el botón sólo sale con un enlace http(s). Se
+    // completa el «https://» que falte y, si no es una dirección web, se avisa
+    // acá y no se guarda un dato que después no se ve. Con un PDF subido, el
+    // catálogo lo manejan los botones de subir/quitar y no se toca.
+    const fin: Campos = { ...f };
+    for (const [k, nombre] of [["canal_wa_url", "El canal"], ["catalogo_url", "El enlace del catálogo"]] as const) {
+      if (!fin[k].trim() || (k === "catalogo_url" && esCatalogoSubido(fin[k]))) continue;
+      const url = normalizarEnlace(fin[k]);
+      if (!url) {
+        setErr(`${nombre} tiene que ser un enlace web, como https://…`);
+        document.getElementById(k === "canal_wa_url" ? "cc-canal" : "cc-cat")?.focus();
+        return;
+      }
+      fin[k] = url;
+    }
     for (const k of CAMPOS_TEXTO) {
-      if (!cambio(k)) continue;
-      const v = f[k].trim() || null;   // vacío BORRA el dato (deshacer una red mal pegada)
+      if (fin[k].trim() === base[k].trim()) continue;
+      const v = fin[k].trim() || null;   // vacío BORRA el dato (deshacer una red mal pegada)
       body[k] = v; patch[k] = v;
     }
+    for (const k of tildesCambiados) { body[k] = tildes[k]; patch[k] = tildes[k]; }
     if (rubrosCambiaron) {
       if (rubroSlugs.length === 0) { setErr("Dejá al menos un rubro."); document.getElementById("cc-rubros")?.scrollIntoView({ block: "start" }); return; }
       body.rubro_slugs = rubroSlugs;
@@ -273,9 +310,20 @@ export function CompletarComercio({ comercio, rubros, lugares, abrirEn, sinWhats
     if (avisoWa) setErr(avisoWa);
     setGuardando(false);
     if (body.horario) recordarUltimoHorario(f.horario);
-    setBase({ ...f }); setBaseRubros(rubroSlugs);
+    setBase({ ...fin }); setF(fin); setBaseRubros(rubroSlugs);
+    setBaseTildes({ ...tildes });
     setWaCel(""); setGuardado(true);
     onGuardado(patch);
+  }
+
+  /** El PDF del catálogo ya está (o ya no está) en el servidor: se refleja en
+   *  lo guardado Y en lo tipeado, para que no cuente como «cambio sin guardar»,
+   *  y se avisa a la lista para que «Le falta» y la ficha abierta lo sepan. */
+  function catalogoCambio(url: string | null) {
+    const v = url ?? "";
+    setBase((b) => ({ ...b, catalogo_url: v }));
+    setF((p) => ({ ...p, catalogo_url: v }));
+    onGuardado({ catalogo_url: url });
   }
 
   async function subirPortada(file: File) {
@@ -496,10 +544,22 @@ export function CompletarComercio({ comercio, rubros, lugares, abrirEn, sinWhats
       {/* 7. REDES, CATÁLOGO Y CANAL */}
       <Seccion id="cc-redes" titulo="Redes, catálogo y canal" icono="instagram">
         <div>
-          <label className="campo-lbl" htmlFor="cc-cat">Su catálogo</label>
-          <input id="cc-cat" className="adm-input" value={f.catalogo_url} onChange={(e) => set("catalogo_url", e.target.value)}
-                 placeholder="Enlace a un PDF, Drive o su tienda" />
-          <p style={hintStyle}>Muchos mayoristas ya tienen uno armado y lo mandan por WhatsApp. Pedíselo.</p>
+          <div className="campo-lbl">Su catálogo</div>
+          {/* El PDF se sube al elegirlo (como las fotos), no con «Guardar». */}
+          <CatalogoPdf url={f.catalogo_url}
+            subir={(file, onP) => subirCatalogoCampo(comercio.id, file, onP)}
+            quitar={() => quitarCatalogoCampo(comercio.id)}
+            onCambio={catalogoCambio} />
+          {esCatalogoSubido(f.catalogo_url) ? (
+            <p style={hintStyle}>Para usar un enlace en vez del PDF, primero quitá el PDF.</p>
+          ) : (
+            <>
+              <label className="campo-lbl" htmlFor="cc-cat" style={{ marginTop: 10 }}>O un enlace</label>
+              <input id="cc-cat" className="adm-input" value={f.catalogo_url} onChange={(e) => set("catalogo_url", e.target.value)}
+                     placeholder="Enlace a un PDF, Drive o su tienda" />
+              <p style={hintStyle}>Muchos mayoristas ya tienen uno armado y lo mandan por WhatsApp. Pedíselo.</p>
+            </>
+          )}
         </div>
         <div>
           <label className="campo-lbl" htmlFor="cc-canal">Su canal de WhatsApp</label>
@@ -521,7 +581,19 @@ export function CompletarComercio({ comercio, rubros, lugares, abrirEn, sinWhats
         </div>
       </Seccion>
 
-      {/* 8. NOMBRE Y CORREO */}
+      {/* 8. LO QUE SUMA: sale destacado en la ficha, cada uno si está cargado. */}
+      <Seccion id="cc-suma" titulo="Lo que suma" icono="destacado">
+        <TildesSuma quien="agente" valor={tildes}
+          onChange={(k, v) => { setTildes((p) => ({ ...p, [k]: v })); setGuardado(false); setErr(""); }} />
+        <div>
+          <label className="campo-lbl" htmlFor="cc-pedido">Pedido mínimo</label>
+          <input id="cc-pedido" className="adm-input" value={f.pedido_minimo} onChange={(e) => set("pedido_minimo", e.target.value)}
+                 placeholder="Ej: 3 docenas, 200 Bs" />
+          <p style={hintStyle}>Todo es opcional: lo que se cargue aparece destacado en su ficha.</p>
+        </div>
+      </Seccion>
+
+      {/* 9. NOMBRE Y CORREO */}
       <Seccion id="cc-correo" titulo="Nombre y correo" icono="documento">
         <div>
           <label className="campo-lbl" htmlFor="cc-nombre">Nombre del cartel</label>

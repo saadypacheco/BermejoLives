@@ -6,15 +6,15 @@ import re
 from datetime import timedelta
 
 import structlog
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.auth import hash_password, require_admin, require_moderador, require_panel, require_permiso
+from app.core.auth import hash_password, require_admin, require_alguno, require_moderador, require_panel, require_permiso
 from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp, whatsapp_para_guardar
-from app.services import cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
+from app.services import enlaces, fotos_galeria, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
@@ -323,6 +323,12 @@ def editar_comercio(
     patch = {k: v for k, v in body.model_dump(exclude={"rubro_slugs"}).items() if v is not None}
     if not patch and not body.rubro_slugs:
         raise HTTPException(status_code=400, detail="Nada para actualizar")
+    # Los enlaces terminan en el href de la ficha pública: ni `javascript:` ni
+    # `usuario@` antes del dominio.
+    try:
+        enlaces.validar_redes(patch)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     # Si alguien escribe el horario a mano, deja de ser el estimado de la
     # calle: lo confirmó una persona. Sin esto la ficha seguiría diciendo
     # «confirmá antes de ir» justo en los que ya fueron confirmados.
@@ -813,6 +819,46 @@ def registrar_pago(
     }
 
 
+def _exigir_plan_valido(repo: Repo, plan: str) -> dict:
+    """400 si el slug no es un plan que exista y esté activo en `planes`."""
+    fila = repo.get_plan(plan)
+    if not fila or fila.get("activo") is False:
+        raise HTTPException(status_code=400, detail=f"El plan «{plan}» no existe.")
+    return fila
+
+
+class PlanComercioBody(BaseModel):
+    plan: str = Field(min_length=1, max_length=60)
+    # De cortesía: tiene el plan sin pagar y sin vencimiento (estrella incluida).
+    cortesia: bool = False
+
+
+@router.put("/admin/comercio/{comercio_id}/plan")
+def asignar_plan_comercio(
+    comercio_id: str,
+    body: PlanComercioBody,
+    admin: dict = Depends(require_permiso("pagos")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Pone el plan de un comercio y si es de cortesía.
+
+    La cortesía no paga ni vence: tiene estrella, no cuenta como «por vencer» y
+    el job de bajas no la oculta. No toca `paga_hasta` (eso lo mueven los pagos).
+    """
+    plan = body.plan.strip()
+    fila = _exigir_plan_valido(repo, plan)
+    # La cortesía es regalar un plan pago: uno gratis «de cortesía» se veía en el
+    # panel con estrella y en público no la tenía (el SQL lo cuenta como gratis).
+    if body.cortesia and float(fila.get("precio_mes") or 0) <= 0:
+        raise HTTPException(status_code=400, detail="La cortesía es para un plan pago: elegí un plan con precio.")
+    comercio = repo.asignar_plan_comercio(comercio_id, plan, body.cortesia)
+    if not comercio:
+        raise HTTPException(status_code=404, detail="comercio no encontrado")
+    logger.info("comercio.plan_asignado", comercio=comercio_id, plan=plan,
+                cortesia=body.cortesia, by=admin["email"])
+    return {"ok": True, "comercio": comercio, **{k: comercio[k] for k in ("plan", "plan_cortesia", "paga_hasta")}}
+
+
 @router.post("/admin/comercio/{comercio_id}/suspender")
 def suspender_comercio(
     comercio_id: str,
@@ -840,6 +886,9 @@ def activar_comercio(
 # ---- Pagos self-service pendientes de confirmación ----
 class ConfirmarPagoBody(BaseModel):
     meses: int = 1
+    # Slug del plan que se le asigna al comercio junto con el pago. Opcional: sin
+    # él, confirmar sólo extiende paga_hasta (como siempre).
+    plan: str | None = Field(default=None, max_length=60)
 
 
 @router.get("/admin/pagos/pendientes")
@@ -859,9 +908,16 @@ def confirmar_pago(
     admin: dict = Depends(require_permiso("pagos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """Confirma un pago pendiente: lo marca confirmado y extiende paga_hasta."""
-    result = repo.confirmar_pago(pago_id, body.meses, admin["email"])
-    logger.info("suscripcion.pago_confirmado", pago=pago_id, meses=body.meses, by=admin["email"])
+    """Confirma un pago pendiente: lo marca confirmado y extiende paga_hasta.
+
+    Si el body trae `plan`, además se lo asigna al comercio (el slug se valida
+    ANTES de tocar nada: un plan inexistente da 400 y el pago sigue pendiente).
+    """
+    plan = (body.plan or "").strip() or None
+    if plan:
+        _exigir_plan_valido(repo, plan)
+    result = repo.confirmar_pago(pago_id, body.meses, admin["email"], plan)
+    logger.info("suscripcion.pago_confirmado", pago=pago_id, meses=body.meses, plan=plan, by=admin["email"])
     comercio_id = result.get("comercio_id")
     return {
         **result,
@@ -1136,7 +1192,7 @@ def promover_importado(
         "direccion": imp.get("direccion"),
         "whatsapp": whatsapp_para_guardar(body.whatsapp or imp.get("whatsapp") or imp.get("telefono")),
         "horario": imp.get("horario"),
-        "sitio_web": imp.get("website"),
+        "sitio_web": enlaces.sanear_red(imp.get("website"), "El sitio web"),
         "verificado": False,
         "activo": True,
         # De dónde salió, escrito en la ficha. Sin esto, en seis meses nadie
@@ -1456,7 +1512,6 @@ def reclasificar_rubros(
 # Hasta ahora sólo podían tocarla el agente que lo cargó y el dueño del comercio.
 # El admin no tenía forma de ver ni sumar fotos, y las fotos son justamente lo
 # que hay que mirar para saber qué vende un local cuando el texto no alcanza.
-_ADMIN_MAX_FOTOS = 10
 _ADMIN_MAX_FOTO_BYTES = 15 * 1024 * 1024
 
 
@@ -1473,20 +1528,23 @@ def admin_listar_fotos(
     _mod: dict = Depends(require_moderador),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    _comercio_o_404(repo, comercio_id)
-    return {"items": repo.list_fotos_comercio(comercio_id)}
+    comercio = _comercio_o_404(repo, comercio_id)
+    # `limite` = el tope de fotos de hoy (plan + extras): la galería muestra «23/50».
+    return fotos_galeria.listado(repo, comercio)
 
 
 @router.post("/admin/comercio/{comercio_id}/fotos")
 async def admin_agregar_foto(
     comercio_id: str,
     foto: UploadFile = File(...),
+    reemplazar: str | None = Form(None),
+    extra: str | None = Form(None),
     mod: dict = Depends(require_moderador),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     comercio = _comercio_o_404(repo, comercio_id)
-    if repo.count_fotos_comercio(comercio_id) >= _ADMIN_MAX_FOTOS:
-        raise HTTPException(status_code=409, detail=f"Máximo {_ADMIN_MAX_FOTOS} fotos por comercio")
+    # El admin no puede comprometer plata del comercio (403 si manda extra=pagar).
+    subida = fotos_galeria.preparar(repo, comercio, reemplazar=reemplazar, extra=extra, puede_pagar=False)
     data = await foto.read()
     if not data:
         raise HTTPException(status_code=400, detail="Falta la foto")
@@ -1498,11 +1556,8 @@ async def admin_agregar_foto(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not url:
         raise HTTPException(status_code=502, detail="No se pudo subir la foto, probá de nuevo")
-    row = repo.add_foto_comercio({
-        "comercio_id": comercio_id, "url": url, "thumb_url": thumb,
-        "orden": repo.count_fotos_comercio(comercio_id),
-    })
-    logger.info("admin.foto_add", comercio=comercio_id, by=mod["email"])
+    row = fotos_galeria.registrar(repo, comercio, subida, url, thumb)
+    logger.info("admin.foto_add", comercio=comercio_id, by=mod["email"], reemplazo=bool(subida.reemplaza))
     return {"ok": True, "foto": row}
 
 
@@ -1514,7 +1569,8 @@ def admin_borrar_foto(
     repo: Repo = Depends(get_repo),
 ) -> dict:
     _comercio_o_404(repo, comercio_id)
-    if not repo.delete_foto_comercio(foto_id, comercio_id):
+    from app.services.fotos_galeria import borrar_foto_por_id
+    if not borrar_foto_por_id(repo, comercio_id, foto_id):
         raise HTTPException(status_code=404, detail="Foto no encontrada")
     logger.info("admin.foto_del", comercio=comercio_id, by=mod["email"])
     return {"ok": True}
@@ -2788,13 +2844,18 @@ class PlanBody(BaseModel):
     # para morir en Postgres con un 500 que no dice nada. Cien mil ya es «sin
     # tope» en la práctica; para eso está el null.
     publicaciones_guardadas: int | None = Field(default=None, gt=0, le=100_000)
+    # Cuántas fotos de galería admite el plan (0144). Entero 0..1000.
+    fotos_max: int | None = Field(default=None, ge=0, le=1000)
     activo: bool | None = None
     visible: bool | None = None
 
 
 @router.get("/admin/planes")
 async def admin_planes(
-    _mod: dict = Depends(require_moderador),
+    # También con `pagos`: Suscripciones elige el plan de un comercio con esta
+    # lista. Sólo con `moderar`, un rol de cobros abría «Plan» sin planes para
+    # elegir y, al guardar, le sacaba la cortesía al comercio sin darse cuenta.
+    _mod: dict = Depends(require_alguno("moderar", "pagos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Los planes como están hoy, con cuota y precios."""

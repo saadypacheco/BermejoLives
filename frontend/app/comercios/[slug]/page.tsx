@@ -10,15 +10,18 @@ import { ReservarBoton } from "@/components/reservar-boton";
 import { ReservaBarra } from "@/components/reserva-barra";
 import { GuardarBoton } from "@/components/guardar-boton";
 import { HorarioBadge } from "@/components/horario-badge";
+import { EstrellaVerificado } from "@/components/estrella-verificado";
 import { CompartirBoton } from "@/components/compartir-boton";
 import QRCode from "qrcode";
-import { getComercioBySlug, getOfertasComercio, getGaleriaComercio, nombreCiudadDe, getFuncionesDePlan } from "@/lib/data";
+import { getComercioBySlug, getOfertasComercio, getGaleriaComercio, nombreCiudadDe, getFuncionesDePlan, getPlanPublico } from "@/lib/data";
 import { FichaGaleria } from "@/components/ficha-galeria";
+import { GaleriaTienda } from "@/components/galeria-tienda";
 import { VistaLogger } from "@/components/vista-logger";
 import { VolverAResultados } from "@/components/volver-a-resultados";
 import { precioFmt, vencimientoFmt, contactoDeOferta, MODALIDAD_LABEL } from "@/lib/types";
+import { enlaceCanal, enlaceRed, urlHttp } from "@/lib/catalogo";
 import {
-  WhatsApp, Verified, Pin, Phone, Globe, Instagram, Facebook, TikTok,
+  WhatsApp, Pin, Phone, Globe, Instagram, Facebook, TikTok,
 } from "@/components/icons";
 
 export const dynamic = "force-dynamic"; // el header (ciudad por cookie) es dinámico
@@ -74,11 +77,14 @@ export default async function ComercioPage({ params }: { params: { slug: string 
   // en el servidor, por lo mismo que en el volante: la librería no viaja al
   // navegador.
   const urlFicha = `https://uruku.bo/comercios/${comercio.slug}`;
-  const [feed, galeria, funcionesPlan, qr] = await Promise.all([
+  const [feed, galeria, funcionesPlan, planPublico, qr] = await Promise.all([
     getOfertasComercio(comercio.id), getGaleriaComercio(comercio.id),
     // Las funciones del plan (decide si la ficha lleva el chatbot del local):
     // se leen junto con lo demás, no en serie.
     getFuncionesDePlan((comercio as { plan?: string | null }).plan),
+    // La estrella «Verificado por URUKU» (plan pago al día o de cortesía). Si
+    // la lectura falla, sin estrella.
+    getPlanPublico(comercio.id),
     // Con `?ref=`: la vista que llegue por este QR queda marcada como tal
     // (0114), distinta de la que llega por el volante o la tarjeta de mesa.
     QRCode.toDataURL(`${urlFicha}?ref=ficha-${comercio.slug}`, { width: 240, margin: 1, errorCorrectionLevel: "M",
@@ -99,15 +105,38 @@ export default async function ComercioPage({ params }: { params: { slug: string 
       ? contactoDeOferta({ ...p, comercio_whatsapp: comercio.whatsapp ?? "" })
       : null;
 
+  // Cada enlace pasa por `enlaceRed`: arma «@mitienda» como la dirección de la
+  // red y descarta lo que no sea web. Antes iban tal cual al href, y un
+  // `javascript:` cargado en «Sitio web» corría al tocarlo.
   const redes = [
-    comercio.tiktok_url && { label: "TikTok", href: comercio.tiktok_url, Icon: TikTok },
-    comercio.instagram_url && { label: "Instagram", href: comercio.instagram_url, Icon: Instagram },
-    comercio.facebook_url && { label: "Facebook", href: comercio.facebook_url, Icon: Facebook },
-    comercio.sitio_web && { label: "Sitio web", href: comercio.sitio_web, Icon: Globe },
-  ].filter(Boolean) as { label: string; href: string; Icon: typeof TikTok }[];
+    { label: "TikTok", href: enlaceRed("tiktok", comercio.tiktok_url), Icon: TikTok },
+    { label: "Instagram", href: enlaceRed("instagram", comercio.instagram_url), Icon: Instagram },
+    { label: "Facebook", href: enlaceRed("facebook", comercio.facebook_url), Icon: Facebook },
+    { label: "Sitio web", href: enlaceRed("web", comercio.sitio_web), Icon: Globe },
+  ].filter((r) => r.href) as { label: string; href: string; Icon: typeof TikTok }[];
+
+  // «Lo que suma»: lo que el local cargó y hace que lo elijan. Todo opcional y
+  // sin relleno: lo que falta no aparece, y sin nada no hay fila. Los enlaces
+  // sólo si son web (http/https): un `href` suelto sería un botón roto.
+  //
+  // El canal y el catálogo llevan a otro lado bajo la marca URUKU: se muestran
+  // sólo si alguien de URUKU respondió por ese comercio — verificado,
+  // confiable, o cargado en la calle por un agente —. Un comercio recién
+  // registrado solo no puede poner «Ver catálogo» apuntando a cualquier cosa
+  // (la misma regla de confianza que las ofertas, AGENTS.md §4).
+  const deConfianza = comercio.verificado === true || comercio.confiable === true || comercio.fuente === "campo";
+  const canalHref = deConfianza ? enlaceCanal(comercio.canal_wa_url) : null;
+  const catalogoHref = deConfianza ? urlHttp(comercio.catalogo_url) : null;
+  const sellos = [
+    comercio.tiene_pasero === true && { n: "pasero" as const, texto: "Tiene pasero" },
+    comercio.envios_internacionales === true && { n: "envios" as const, texto: "Hace envíos" },
+    comercio.tiene_factura === true && { n: "factura" as const, texto: "Da factura" },
+    comercio.talles_especiales === true && { n: "ropa" as const, texto: "Talles especiales" },
+  ].filter(Boolean) as { n: "pasero" | "envios" | "factura" | "ropa"; texto: string }[];
+  const pedidoMinimo = (comercio.pedido_minimo ?? "").trim();
 
   const mapsHref =
-    comercio.como_llegar ??
+    urlHttp(comercio.como_llegar) ??
     (comercio.lat && comercio.lng
       ? `https://www.google.com/maps/search/?api=1&query=${comercio.lat},${comercio.lng}`
       : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(comercio.direccion ?? ciudadNombre)}`);
@@ -118,6 +147,7 @@ export default async function ComercioPage({ params }: { params: { slug: string 
   // comprador estaba por escribir.
   const secciones = [
     { id: "info", label: "Información" },
+    (galeria.fotos.length > 0 || galeria.videos.length > 0) && { id: "fotos", label: `Fotos (${galeria.fotos.length})` },
     ofertas.length > 0 && { id: "ofertas", label: `Ofertas (${ofertas.length})` },
     novedades.length > 0 && { id: "novedades", label: "Novedades" },
     (comercio.direccion || comercio.lat) && { id: "ubicacion", label: "Ubicación" },
@@ -144,7 +174,6 @@ export default async function ComercioPage({ params }: { params: { slug: string 
           <FichaGaleria
             portada={comercio.portada_url ?? null}
             fotos={galeria.fotos}
-            videos={galeria.videos}
             nombre={comercio.nombre}
             posicion={(comercio as { portada_pos?: number | null }).portada_pos ?? null}
           />
@@ -156,11 +185,9 @@ export default async function ComercioPage({ params }: { params: { slug: string 
           <aside className="uk-ficha-card">
             <h1>
               {comercio.nombre}
-              {comercio.verificado && (
-                <span className="uk-verif" title="Negocio verificado">
-                  <Verified style={{ width: 20, height: 20 }} />
-                </span>
-              )}
+              {/* Sólo la estrella. La tilde `verificado` es interna (la pone el
+                  admin al chequear los datos) y no se muestra en público. */}
+              {planPublico.estrella && <EstrellaVerificado s={20} />}
             </h1>
 
             <div className="uk-ficha-pills">
@@ -180,6 +207,34 @@ export default async function ComercioPage({ params }: { params: { slug: string 
             {vende.length > 0 && (
               <div className="uk-ficha-vende">
                 {vende.map((v) => <span key={v}><Ic n="si" s={13} /> {v}</span>)}
+              </div>
+            )}
+
+            {/* LO QUE SUMA. Entre lo que vende y el botón de WhatsApp: es lo que
+                decide ir a ESTE local y se tiene que ver sin bajar. Los que abren
+                algo son botones; los que son sólo un dato, sellos. */}
+            {(canalHref || catalogoHref || sellos.length > 0) && (
+              <div className="uk-suma" role="group" aria-label="Lo que suma este negocio">
+                <span className="uk-suma-tit">Lo que suma</span>
+                {(canalHref || catalogoHref) && (
+                  <div className="uk-suma-botones">
+                    {canalHref && (
+                      <a className="uk-suma-btn" href={canalHref} target="_blank" rel="noopener">
+                        <Ic n="whatsapp" s={18} /> Canal de WhatsApp
+                      </a>
+                    )}
+                    {catalogoHref && (
+                      <a className="uk-suma-btn" href={catalogoHref} target="_blank" rel="noopener">
+                        <Ic n="catalogo" s={18} /> Ver catálogo
+                      </a>
+                    )}
+                  </div>
+                )}
+                {sellos.length > 0 && (
+                  <ul className="uk-suma-sellos">
+                    {sellos.map((s) => <li key={s.n}><Ic n={s.n} s={17} /> {s.texto}</li>)}
+                  </ul>
+                )}
               </div>
             )}
 
@@ -237,6 +292,9 @@ export default async function ComercioPage({ params }: { params: { slug: string 
             {secciones.map((s) => <a key={s.id} href={`#${s.id}`}>{s.label}</a>)}
           </nav>
         )}
+
+        {/* ===== Las fotos del local, como una tienda: a todo el ancho ===== */}
+        <GaleriaTienda fotos={galeria.fotos} videos={galeria.videos} nombre={comercio.nombre} />
 
         <div className="uk-ficha-body">
           <main>
@@ -372,6 +430,12 @@ export default async function ComercioPage({ params }: { params: { slug: string 
                 <div className="uk-info-row">
                   <span className="ic"><Ic n="pagos" s={17} /></span>
                   <div><b>Acepta</b>{comercio.monedas_aceptadas.join(" · ")}</div>
+                </div>
+              )}
+              {pedidoMinimo && (
+                <div className="uk-info-row">
+                  <span className="ic"><Ic n="comprar" s={17} /></span>
+                  <div><b>Pedido mínimo</b>{pedidoMinimo}</div>
                 </div>
               )}
               {redes.length > 0 && redes.map((r) => (

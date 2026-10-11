@@ -30,7 +30,6 @@ export function PublicacionesGrid({ items, vacio }: { items: FeedItem[]; vacio?:
             <Link href={`/comercios/${p.comercio_slug}`} className="uk-product-com">
               {p.comercio_logo && <img src={p.comercio_logo} alt="" width={22} height={22} loading="lazy" />}
               <b>{p.comercio_nombre}</b>
-              {p.comercio_verificado && <span title="Negocio verificado"><Ic n="verificado" s={13} /></span>}
             </Link>
             <h4>{p.titulo ?? (p.tipo === "novedad" ? "Novedad" : "Oferta")}</h4>
             {p.descripcion && <p className="uk-product-desc">{p.descripcion}</p>}

@@ -63,6 +63,9 @@ export const ICONOS = {
   inicio: "House", guardado: "BookmarkSimple", documento: "FileText",
   desplegar: "CaretDown", enviar: "PaperPlaneTilt", web: "GlobeSimple",
   editar: "PencilSimple",
+  // «Lo que suma» en la ficha del comercio: el pasero (quien le cruza la compra
+  // al comprador), la factura y el catálogo. Los envíos usan `envios`.
+  pasero: "PersonSimpleWalk", factura: "Receipt", catalogo: "BookOpenText",
   // El panel de administración: el botón que abre el menú lateral en el celular
   // y el de cerrar sesión (`salir` ya es otra cosa: la excursión).
   menu: "List", cerrar_sesion: "SignOut", actualizar: "ArrowsClockwise",

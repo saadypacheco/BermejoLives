@@ -30,10 +30,14 @@ import {
   getMensajes, marcarLeido,
   getMisPublicaciones, editarPublicacion, bajaPublicacion,
   listarFotosComercio, listarVideosComercio, subirFotoGaleriaComercio, subirVideoGaleriaComercio, borrarFotoComercio, borrarVideoComercio,
+  subirCatalogoComercio, quitarCatalogoComercio,
   type ComercioSession, type Perfil, type Suscripcion, type Metricas,
   type ProductoDraft, type ProductoRef, type Mensaje, type Publicacion,
 } from "@/lib/comercio";
 import { GaleriaUploader } from "@/components/galeria-uploader";
+import { CatalogoPdf } from "@/components/catalogo-pdf";
+import { TildesSuma, CLAVES_TILDES, type Tildes } from "@/components/tildes-suma";
+import { enlaceRed, esCatalogoSubido, normalizarEnlace, urlHttp } from "@/lib/catalogo";
 import { ChatbotDelLocal } from "@/components/chatbot-del-local";
 import { FotoPrincipal } from "@/components/foto-principal";
 import { comprimirImagen } from "@/lib/imagen";
@@ -116,7 +120,7 @@ const NAV_ITEMS: { v: Vista; label: string; Icon: any }[] = [
 function Sidebar({ vista, setVista, sub, onLogout, noLeidos }: {
   vista: Vista; setVista: (v: Vista) => void; sub: Suscripcion | null; onLogout: () => void; noLeidos: number;
 }) {
-  const e = sub ? ESTADO[sub.estado] : null;
+  const e = sub ? (ESTADO[sub.estado] ?? ESTADO.activo) : null;
   return (
     <aside style={{ width: 244, flexShrink: 0, borderRight: "1px solid var(--stroke)", display: "flex", flexDirection: "column", padding: "22px 16px", position: "sticky", top: 0, height: "100vh" }}>
       <Link className="brand" href="/" style={{ marginBottom: 26, paddingLeft: 8 }}>
@@ -210,15 +214,17 @@ function Overview({ onEditar, onOfertas, onPlanes }: { onEditar: () => void; onO
     getMensajes().then((r) => setNoLeidos(r.no_leidos)).catch(() => {});
   }, []);
   if (!p) return <p style={{ color: "var(--txt-3)" }}>Cargando…</p>;
-  const e = sub ? ESTADO[sub.estado] : null;
+  const e = sub ? (ESTADO[sub.estado] ?? ESTADO.activo) : null;
   const wa = (p.whatsapp ?? "").replace(/\D/g, "");
-  const maps = p.como_llegar ?? (p.direccion ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.direccion)}` : "#");
+  // Los enlaces pasan por el mismo filtro que la ficha pública: nada que no
+  // sea web llega a un href (un `javascript:` corría al tocarlo).
+  const maps = urlHttp(p.como_llegar) ?? (p.direccion ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.direccion)}` : "#");
   const redes = [
-    p.instagram_url && { label: "Instagram", href: p.instagram_url, Icon: Instagram },
-    p.facebook_url && { label: "Facebook", href: p.facebook_url, Icon: Facebook },
-    p.tiktok_url && { label: "TikTok", href: p.tiktok_url, Icon: TikTok },
-    p.sitio_web && { label: "Sitio / Página", href: p.sitio_web, Icon: Globe },
-  ].filter(Boolean) as { label: string; href: string; Icon: any }[];
+    { label: "Instagram", href: enlaceRed("instagram", p.instagram_url), Icon: Instagram },
+    { label: "Facebook", href: enlaceRed("facebook", p.facebook_url), Icon: Facebook },
+    { label: "TikTok", href: enlaceRed("tiktok", p.tiktok_url), Icon: TikTok },
+    { label: "Sitio / Página", href: enlaceRed("web", p.sitio_web), Icon: Globe },
+  ].filter((r) => r.href) as { label: string; href: string; Icon: any }[];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -496,6 +502,8 @@ function GaleriaTab() {
   // padre, así que esta pestaña lo pide para sí.
   const [portada, setPortada] = useState<string | null>(null);
   useEffect(() => { getPerfil().then((p) => setPortada(p.portada_url ?? null)).catch(() => {}); }, []);
+  // El tope de fotos de su plan: lo manda el backend cuando carga la galería.
+  const [topeFotos, setTopeFotos] = useState<number | null>(null);
   return (
     <div className="glass" style={{ padding: 20, borderRadius: 16 }}>
       {/* La portada, arriba de todo y con su botón: es lo que el dueño viene
@@ -504,9 +512,12 @@ function GaleriaTab() {
       <FotoPrincipal url={portada}
                      onSubir={async (f) => { const p = await subirFotoPerfil(f); setPortada(p.portada_url ?? null); return p.portada_url; }} />
       <p style={{ color: "var(--txt-3)", fontSize: 14, marginTop: 20, marginBottom: 14 }}>
-        Y hasta 10 fotos y 5 videos (≤60s) más de tu local. Se muestran en tu ficha, después de la principal.
+        {topeFotos
+          ? `Y hasta ${topeFotos} fotos de tu plan y 5 videos (≤60s) más de tu local.`
+          : "Y las fotos que permite tu plan y hasta 5 videos (≤60s) más de tu local."}
+        {" "}Se muestran en tu ficha, después de la principal. Si llegás al tope, elegís entre pagar una foto extra o borrar la más vieja.
       </p>
-      <GaleriaUploader api={{
+      <GaleriaUploader puedePagarExtra onLimite={setTopeFotos} api={{
         cargarFotos: listarFotosComercio,
         subirFoto: subirFotoGaleriaComercio,
         borrarFoto: borrarFotoComercio,
@@ -590,9 +601,12 @@ const REDES: { k: keyof Perfil; label: string; ph: string }[] = [
   { k: "tiktok_url", label: "TikTok", ph: "tiktok.com/@tucomercio" },
   { k: "sitio_web", label: "Sitio / otra página", ph: "tusitio.com" },
 ];
+// `catalogo_url` NO está acá: según sea un enlace o un PDF subido se manda (o
+// no) aparte, en `guardar`. Ver «Lo que suma a tu negocio».
 const EDITABLES: (keyof Perfil)[] = [
   "nombre", "descripcion", "modalidad",
   ...CONTACTO.map((c) => c.k), ...REDES.map((r) => r.k),
+  "canal_wa_url", "pedido_minimo",
 ];
 const MODALIDAD_OPT: { v: string; t: string }[] = [
   { v: "mayorista", t: "Mayorista" }, { v: "minorista", t: "Minorista" }, { v: "ambos", t: "Mayor y menor" },
@@ -641,6 +655,12 @@ function PerfilTab() {
     getPerfil().then((p) => { setPerfil(p); setRubroSlugs(p.rubro_slugs ?? []); }).catch((e) => setErr(e.message));
   }, []);
   const set = (k: keyof Perfil, v: string) => setPerfil((p) => (p ? { ...p, [k]: v } : p));
+  const tildes: Tildes = {
+    tiene_pasero: perfil?.tiene_pasero === true,
+    envios_internacionales: perfil?.envios_internacionales === true,
+    tiene_factura: perfil?.tiene_factura === true,
+    talles_especiales: perfil?.talles_especiales === true,
+  };
 
   // Lo que falta completar (todo opcional, pero se lo mostramos como pendiente).
   const faltantes = perfil ? [
@@ -658,6 +678,21 @@ function PerfilTab() {
     setSaving(true); setErr(""); setMsg("");
     try {
       const patch: Record<string, unknown> = Object.fromEntries(EDITABLES.map((k) => [k, perfil[k] ?? ""]));
+      // Los enlaces tienen que ser web: en la ficha el botón sólo sale con http(s),
+      // y un enlace que no sale sin explicación es peor que avisar acá. Si pegó
+      // «whatsapp.com/channel/abc» sin https://, se completa solo.
+      const enlaces: [keyof Perfil, string][] = [["canal_wa_url", "El canal de WhatsApp"]];
+      // Con un PDF subido el catálogo lo manejan los botones de subir/quitar: no se
+      // reenvía su URL por acá.
+      if (!esCatalogoSubido(perfil.catalogo_url)) enlaces.push(["catalogo_url", "El enlace del catálogo"]);
+      for (const [k, nombre] of enlaces) {
+        const v = String(perfil[k] ?? "").trim();
+        if (!v) { patch[k] = ""; continue; }
+        const url = normalizarEnlace(v);
+        if (!url) { setErr(`${nombre} tiene que ser un enlace web, como https://…`); return; }
+        patch[k] = url;
+      }
+      for (const k of CLAVES_TILDES) patch[k] = perfil[k] === true;
       if (perfil.lat != null) patch.lat = perfil.lat;
       if (perfil.lng != null) patch.lng = perfil.lng;
       patch.acepta_reservas = perfil.acepta_reservas !== false;   // siempre booleano
@@ -811,6 +846,32 @@ function PerfilTab() {
         ))}
       </div>
 
+      {/* LO QUE SUMA: sale destacado en la ficha. Todo opcional. */}
+      <div className="glass" style={{ padding: "14px 18px", borderRadius: 16 }}>
+        <div style={{ fontSize: 12, color: "var(--txt-3)", fontWeight: 700, marginBottom: 2 }}>LO QUE SUMA A TU NEGOCIO</div>
+        <p style={{ fontSize: 12.5, color: "var(--txt-3)", margin: "0 0 4px", lineHeight: 1.4 }}>
+          Todo es opcional: lo que cargues aparece destacado en tu ficha.
+        </p>
+        <CampoRow label="Canal de WhatsApp" ph="Enlace de tu canal o comunidad" value={perfil.canal_wa_url ?? ""} onChange={(v) => set("canal_wa_url", v)} />
+        <div style={{ padding: "11px 2px", borderBottom: "1px solid var(--stroke)", display: "grid", gap: 8 }}>
+          <span style={{ fontSize: 13, color: "var(--txt-3)" }}>Catálogo</span>
+          <CatalogoPdf url={perfil.catalogo_url}
+            subir={(file, onP) => subirCatalogoComercio(file, onP)}
+            quitar={quitarCatalogoComercio}
+            onCambio={(url) => setPerfil((p) => (p ? { ...p, catalogo_url: url } : p))} />
+          {esCatalogoSubido(perfil.catalogo_url) ? (
+            <span style={{ fontSize: 12, color: "var(--txt-3)" }}>Para usar un enlace en vez del PDF, primero quitá el PDF.</span>
+          ) : (
+            <CampoRow label="o un enlace" ph="Drive, tu tienda en línea…" value={perfil.catalogo_url ?? ""} onChange={(v) => set("catalogo_url", v)} />
+          )}
+        </div>
+        <div style={{ padding: "11px 0", borderBottom: "1px solid var(--stroke)" }}>
+          <TildesSuma quien="dueno" valor={tildes}
+            onChange={(k, v) => setPerfil((p) => (p ? { ...p, [k]: v } : p))} />
+        </div>
+        <CampoRow label="Pedido mínimo" ph="Ej: 3 docenas, 200 Bs" value={perfil.pedido_minimo ?? ""} onChange={(v) => set("pedido_minimo", v)} />
+      </div>
+
       <label className="glass" style={{ padding: "14px 18px", borderRadius: 16, display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
         <input type="checkbox" checked={perfil.acepta_reservas !== false} onChange={(e) => setPerfil((p) => (p ? { ...p, acepta_reservas: e.target.checked } : p))} />
         <div><b style={{ fontSize: 14 }}>Acepto reservas</b><div style={{ fontSize: 12, color: "var(--txt-3)" }}>Si lo desactivás, no se muestran tus productos/reservas en la ficha.</div></div>
@@ -834,6 +895,7 @@ const ESTADO: Record<Suscripcion["estado"], { label: string; color: string; bg: 
   vencido:    { label: "Vencida",      color: "var(--pink)",  bg: "rgba(255,77,121,.08)" },
   suspendido: { label: "Suspendida",   color: "var(--pink)",  bg: "rgba(255,77,121,.08)" },
   sin_pago:   { label: "Sin pago aún", color: "var(--amber)", bg: "rgba(255,176,32,.08)" },
+  cortesia:   { label: "De cortesía",  color: "var(--neon)",  bg: "rgba(57,255,158,.08)" },
 };
 
 function SuscripcionTab() {
@@ -856,7 +918,8 @@ function SuscripcionTab() {
 
   if (err) return <p style={{ color: "var(--pink)" }}>{err}</p>;
   if (!sub) return <p style={{ color: "var(--txt-3)" }}>Cargando…</p>;
-  const e = ESTADO[sub.estado];
+  // Un estado que esta pantalla todavía no conoce no la tira abajo: se ve como «Al día».
+  const e = ESTADO[sub.estado] ?? ESTADO.activo;
   const total = sub.total_cargos > 0 ? Number(monto || 0) + sub.total_cargos : Number(monto || 0);
 
   async function enviar() {
@@ -875,7 +938,11 @@ function SuscripcionTab() {
       <div className="glass" style={{ padding: 18, borderRadius: 16, background: e.bg, borderLeft: `3px solid ${e.color}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
         <div>
           <div style={{ fontSize: 20, fontWeight: 800, color: e.color }}>● {e.label}</div>
-          {sub.paga_hasta ? (
+          {sub.estado === "cortesia" ? (
+            <div style={{ color: "var(--txt-2)", fontSize: 14, marginTop: 4 }}>
+              Tu plan te lo da URUKU, sin cobro y sin vencimiento.
+            </div>
+          ) : sub.paga_hasta ? (
             <div style={{ color: "var(--txt-2)", fontSize: 14, marginTop: 4 }}>
               {sub.dias_restantes !== null && sub.dias_restantes >= 0
                 ? <>Vence el <b>{sub.paga_hasta}</b> · faltan {sub.dias_restantes} días</>

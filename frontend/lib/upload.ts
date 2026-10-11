@@ -1,3 +1,77 @@
+// ---- Tope de fotos de la galería (409 del backend) ----
+
+/** Lo que el backend contesta (HTTP 409, `detail`) cuando la galería ya está en
+ *  el tope de fotos del plan. `mas_vieja` es la que se borraría si el comercio
+ *  elige reemplazar. */
+export type TopeFotos = {
+  mensaje: string;
+  codigo: "tope_fotos";
+  limite: number;
+  precio_extra: number;
+  moneda: string;
+  mas_vieja: { id: string; url: string } | null;
+};
+
+/** Cómo reintentar la subida que chocó con el tope: `reemplazar=<id>` borra esa
+ *  foto después de guardar la nueva; `extra=pagar` (sólo el comerciante) cobra
+ *  una foto extra y suma una. */
+export type OpcionesFoto = { reemplazar?: string; extra?: "pagar" };
+
+/** Lista de fotos de una galería + el tope actual de su plan (`null` si el
+ *  backend todavía no lo manda: la pantalla usa un respaldo). */
+export type ListaFotos<F> = { items: F[]; limite: number | null };
+
+export function listaFotos<F>(d: { items?: F[]; limite?: unknown } | null | undefined): ListaFotos<F> {
+  const l = d?.limite;
+  return { items: d?.items ?? [], limite: typeof l === "number" && l > 0 ? l : null };
+}
+
+export function camposOpcionesFoto(o?: OpcionesFoto): Record<string, string> {
+  const c: Record<string, string> = {};
+  if (o?.reemplazar) c.reemplazar = o.reemplazar;
+  if (o?.extra) c.extra = o.extra;
+  return c;
+}
+
+/** Error de subida que conserva el HTTP status y el `detail` crudo cuando no es
+ *  un texto (el 409 del tope trae un objeto). */
+export type ErrorSubida = Error & { status?: number; datos?: unknown };
+
+/** Arma el Error de una respuesta fallida. El `detail` de FastAPI es un texto,
+ *  una lista (422) o, en el tope de fotos, un objeto con `mensaje`. */
+export function errorDeRespuesta(status: number, cuerpo: unknown, porDefecto: string): ErrorSubida {
+  const detail = (cuerpo as { detail?: unknown } | null)?.detail;
+  let msg = porDefecto;
+  let datos: unknown;
+  if (typeof detail === "string" && detail) msg = detail;
+  else if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+    datos = detail;
+    const m = (detail as { mensaje?: unknown }).mensaje;
+    if (typeof m === "string" && m) msg = m;
+  }
+  const err: ErrorSubida = new Error(msg);
+  err.status = status;
+  err.datos = datos;
+  return err;
+}
+
+/** Si el error es el 409 del tope de fotos, devuelve sus datos; si no, null. */
+export function datosTope(ex: unknown): TopeFotos | null {
+  const e = ex as ErrorSubida | null;
+  if (!e || e.status !== 409 || !e.datos || typeof e.datos !== "object") return null;
+  const d = e.datos as Partial<TopeFotos>;
+  if (d.codigo !== "tope_fotos") return null;
+  const vieja = d.mas_vieja && typeof d.mas_vieja.id === "string" && d.mas_vieja.id ? d.mas_vieja : null;
+  return {
+    mensaje: d.mensaje ?? "Llegaste al tope de fotos de tu plan",
+    codigo: "tope_fotos",
+    limite: typeof d.limite === "number" ? d.limite : 0,
+    precio_extra: typeof d.precio_extra === "number" ? d.precio_extra : 0,
+    moneda: d.moneda ?? "BOB",
+    mas_vieja: vieja,
+  };
+}
+
 /** Sube un archivo con barra de progreso (XHR — fetch no da progreso de upload).
  * Clave con internet malo: el agente ve avanzar la subida en vez de esperar a ciegas. */
 export function subirConProgreso<T = any>(
@@ -22,9 +96,9 @@ export function subirConProgreso<T = any>(
       if (xhr.status >= 200 && xhr.status < 300) {
         try { resolve(JSON.parse(xhr.responseText)); } catch { resolve({} as T); }
       } else {
-        let msg = "No se pudo subir";
-        try { msg = JSON.parse(xhr.responseText).detail || msg; } catch {}
-        reject(new Error(msg));
+        let cuerpo: unknown = null;
+        try { cuerpo = JSON.parse(xhr.responseText); } catch {}
+        reject(errorDeRespuesta(xhr.status, cuerpo, "No se pudo subir"));
       }
     };
     xhr.onerror = () => reject(new Error("Error de red al subir"));
@@ -66,11 +140,19 @@ export function duracionVideo(file: File): Promise<number> {
  */
 export function postFormData<T = any>(
   url: string, fd: FormData, token: string | null,
+  /** Opcional: avance de la subida, de 0 a 100 (para los archivos grandes, como
+   *  el PDF del catálogo). Sin esto no cambia nada para quien ya lo usa. */
+  onProgress?: (pct: number) => void,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url);
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+    }
     // NO se setea Content-Type: lo pone el navegador con su delimitador. Ponerlo
     // a mano rompe el multipart, que es la otra forma de llegar a un cuerpo
     // ilegible del lado del servidor.

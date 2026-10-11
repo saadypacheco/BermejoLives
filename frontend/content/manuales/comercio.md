@@ -59,6 +59,63 @@ Tu plan tiene un cupo de publicaciones. Si necesitás más, consultalo con URUKU
 
 ---
 
+## Todo lo que podés mostrar en tu ficha
+
+Tu ficha es tu vidriera en URUKU. Todo es opcional, pero cada cosa que cargás es un motivo más para que te elijan. Lo que no cargás, no aparece.
+
+### Tus datos
+
+Se cargan en **Mi negocio** › **«Editar información»**.
+
+| Qué | Cómo se ve en tu ficha |
+|---|---|
+| Tu foto | La foto grande de tu ficha |
+| Qué vendés | Las palabras con las que te encuentran en el buscador |
+| Horario | Si estás **abierto ahora** |
+| Teléfono y dirección | En «Información del negocio» |
+| Instagram, Facebook, TikTok y tu sitio web | Enlaces directos a tus redes |
+
+### Lo que suma
+
+En la misma pantalla, en **«Lo que suma a tu negocio»**. Aparece destacado arriba de tu botón de WhatsApp.
+
+| Qué | Cómo se ve en tu ficha |
+|---|---|
+| Canal de WhatsApp | Botón **«Canal de WhatsApp»**. Tiene que ser un enlace de WhatsApp |
+| Catálogo | Botón **«Ver catálogo»**. Subí un PDF de hasta 8 MB o pegá un enlace (Drive, tu tienda) |
+| Tengo pasero | Sello **«Tiene pasero»** |
+| Hago envíos | Sello **«Hace envíos»** |
+| Doy factura | Sello **«Da factura»** |
+| Trabajo talles especiales | Sello **«Talles especiales»** |
+| Pedido mínimo | En «Información del negocio» |
+
+> El canal y el catálogo se muestran cuando URUKU ya verificó tu comercio.
+
+### Tus fotos y videos
+
+En **«Fotos y videos»**: fotos del local (hasta 15 MB cada una) y videos (hasta 50 MB). Se ven en la galería de tu ficha.
+
+La cantidad de fotos del local **depende de tu plan**: arriba de la galería ves cuántas tenés y cuál es tu tope (por ejemplo, «23/50»). Si tu pago está vencido, vale el tope del plan gratis: las fotos que ya subiste no se borran, pero no podés subir más hasta ponerte al día. Los videos son hasta 5, de hasta 60 segundos.
+
+**Si llegás al tope**, al subir otra foto la app te pregunta qué preferís:
+
+- **Pagar una foto extra.** Se suma una foto a tu galería y el costo se agrega a tu próximo pago.
+- **Borrar la más vieja.** Antes de confirmar te mostramos cuál es («Esta es la que se borraría»). Si aceptás, entra la foto nueva y se borra esa.
+- **Cancelar**, y no pasa nada.
+
+Si estabas sin señal y subiste fotos, quedan guardadas en tu celular; si al volver la señal no hay lugar, la app te avisa y te deja elegir entre las mismas opciones. No se pierden.
+
+### Tus ofertas y novedades
+
+Con **«Publicar oferta»**, o mandándolas por WhatsApp.
+
+- Una **oferta** aparece en la sección **«Ofertas»** de tu ficha. En **«Mis ofertas»** podés agregarle un descuento y hasta cuándo vale.
+- Una **novedad** (llegó mercadería nueva, cambiaste el horario) aparece en la sección **«Novedades»**.
+
+Las dos secciones aparecen solas en tu ficha cuando sale publicada la primera (si tu comercio no es confiable, después de que URUKU la revisa).
+
+---
+
 ## El chatbot de tu local
 
 Está en **«Mensajes»**.

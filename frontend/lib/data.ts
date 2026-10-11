@@ -20,6 +20,30 @@ function logSupaError(tag: string, error: unknown) {
   );
 }
 
+/**
+ * Las columnas de `comercios` que el público puede leer (migración 0145).
+ *
+ * Con anon NUNCA `select("*")` sobre `comercios`: PostgREST expande `*` a todas
+ * las columnas y falla entero (42501) si falta permiso en UNA. Desde la 0145 el
+ * público no lee `plan_cortesia`, `paga_hasta`, `cargado_por`, `capturado_en` ni
+ * `fotos_extra`. Cada columna de acá tiene que estar en el `grant select (...)`
+ * de esa migración (lo vigila backend/tests/test_comercios_columnas_publicas.py).
+ * Una columna nueva de la ficha: primero el grant en una migración, después acá.
+ *
+ * La estrella y el orden del plan NO salen de esta lista: los da
+ * `plan_publico()` / `buscar_comercios()` sin exponer fechas ni precios.
+ */
+export const COLUMNAS_COMERCIO = [
+  "id", "slug", "nombre", "descripcion", "logo_url", "portada_url", "portada_thumb_url", "portada_pos",
+  "whatsapp", "telefono", "email", "tiktok_url", "facebook_url", "instagram_url", "sitio_web",
+  "canal_wa_url", "catalogo_url", "zona_id", "direccion", "calle", "lat", "lng", "como_llegar",
+  "plan", "verificado", "rating", "destacado", "activo", "suspendido", "confiable", "fuente",
+  "created_at", "updated_at", "modalidad", "rubro_id", "ciudad_id", "lugar_id", "puesto", "codigo",
+  "monedas_aceptadas", "envios_internacionales", "origen_importacion", "pedido_minimo", "tiene_factura",
+  "horario", "horario_estimado", "tiene_stock", "acepta_reservas", "tiene_pasero", "talles_especiales",
+  "prod_obs_human", "prod_det_ia", "subcategoria", "contacto_ok", "contacto_no", "sin_cartel",
+].join(", ");
+
 export async function buscarComercios(f: FiltrosBusqueda, limit = 24, offset = 0): Promise<ResultadoBusqueda[]> {
   if (!hasSupabase) return [];
   const { data, error } = await supabase.rpc("buscar_comercios", {
@@ -327,9 +351,9 @@ export async function getOfertasDeComercios(ids: string[], porComercio = 3): Pro
 
 export async function getComercios(): Promise<Comercio[]> {
   if (hasSupabase) {
-    const { data, error } = await supabase.from("comercios").select("*").eq("destacado", true).limit(10);
+    const { data, error } = await supabase.from("comercios").select(COLUMNAS_COMERCIO).eq("destacado", true).limit(10);
     if (error) logSupaError("getComercios", error);
-    if (data) return data as Comercio[];
+    if (data) return data as unknown as Comercio[];
   } else {
     console.warn("getComercios: hasSupabase=false — faltan NEXT_PUBLIC_SUPABASE_URL/ANON_KEY");
   }
@@ -347,7 +371,6 @@ export type ComercioMapa = {
    *  acá: un local que vende neumáticos Y zapatillas tiene que aparecer en las
    *  dos categorías, que es el motivo de existir de `comercio_rubros`. */
   rubro_slugs: string[];
-  ficha_activa: boolean;   // muestra "Más información": suscripción al día (paga_hasta vigente, no suspendido)
   // Lugar (mercado/galería) al que pertenece, si está adentro de uno
   lugar_id: string | null; puesto: string | null;
   lugar_nombre: string | null; lugar_lat: number | null; lugar_lng: number | null;
@@ -410,7 +433,7 @@ export async function getComerciosMapa(
     const [data, { data: rubros, error: errorRubros }, { data: lugs }, rels] = await Promise.all([
       traerTodo<any>((desde, hasta) => supabase
         .from("comercios")
-        .select("id, slug, nombre, lat, lng, logo_url, portada_url, portada_thumb_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, plan, paga_hasta, suspendido, rubro_id, lugar_id, puesto, prod_obs_human, prod_det_ia, subcategoria")
+        .select("id, slug, nombre, lat, lng, logo_url, portada_url, portada_thumb_url, whatsapp, telefono, verificado, destacado, rating, direccion, descripcion, horario, como_llegar, plan, suspendido, rubro_id, lugar_id, puesto, prod_obs_human, prod_det_ia, subcategoria")
         .eq("activo", true)
         .not("lat", "is", null)
         .gte("lat", c0.latMin).lte("lat", c0.latMax)
@@ -442,8 +465,6 @@ export async function getComerciosMapa(
         lista.push(slug);
         rubrosDe.set(r.comercio_id, lista);
       }
-      // Gracia de 10 días: tras vencer el pago, la ficha sigue 10 días antes de pasar a "solo mapa".
-      const graceISO = new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10);
       return (data as any[]).map((c) => {
         const lg = c.lugar_id ? lugById.get(c.lugar_id) : null;
         return {
@@ -453,7 +474,6 @@ export async function getComerciosMapa(
           direccion: c.direccion, descripcion: c.descripcion, prod_obs_human: c.prod_obs_human ?? null, prod_det_ia: c.prod_det_ia ?? null, subcategoria: c.subcategoria ?? null, horario: c.horario, como_llegar: c.como_llegar,
           rubro_slug: slugById.get(c.rubro_id) ?? null, plan: c.plan ?? null,
           rubro_slugs: rubrosDe.get(c.id) ?? [],
-          ficha_activa: !c.suspendido && !!c.paga_hasta && String(c.paga_hasta).slice(0, 10) >= graceISO,
           lugar_id: c.lugar_id ?? null, puesto: c.puesto ?? null,
           lugar_nombre: lg?.nombre ?? null, lugar_lat: lg?.lat ?? null, lugar_lng: lg?.lng ?? null,
           lugar_portada_thumb_url: lg?.portada_thumb_url ?? null, lugar_video_url: lg?.video_url ?? null,
@@ -469,7 +489,7 @@ export async function getComerciosMapa(
     logo_url: c.logo_url, portada_url: c.portada_url, portada_thumb_url: null, whatsapp: c.whatsapp, telefono: c.telefono,
     verificado: c.verificado, destacado: c.destacado, rating: c.rating,
     direccion: c.direccion, descripcion: c.descripcion, prod_obs_human: null, prod_det_ia: null, subcategoria: null, horario: c.horario, como_llegar: c.como_llegar,
-    rubro_slug: null, plan: c.plan, ficha_activa: c.plan !== "gratis",
+    rubro_slug: null, plan: c.plan,
     rubro_slugs: [],
     lugar_id: null, puesto: null, lugar_nombre: null, lugar_lat: null, lugar_lng: null,
     lugar_portada_thumb_url: null, lugar_video_url: null, lugar_poligono: null,
@@ -494,8 +514,8 @@ export async function getLugaresPublicos(limit = 12): Promise<LugarPublico[]> {
 
 export async function getComercioBySlug(slug: string): Promise<Comercio | null> {
   if (hasSupabase) {
-    const { data } = await supabase.from("comercios").select("*").eq("slug", slug).limit(1);
-    const comercio = data?.[0] as Comercio | undefined;
+    const { data } = await supabase.from("comercios").select(COLUMNAS_COMERCIO).eq("slug", slug).limit(1);
+    const comercio = data?.[0] as unknown as Comercio | undefined;
     if (!comercio) return null;
     // Query chica aparte (no embed) — mismo motivo que getComerciosMapa: el
     // embed sobre "comercios" es lento por el import OSM masivo de esa tabla.
@@ -708,6 +728,25 @@ export async function getFuncionesDePlan(slug: string | null | undefined): Promi
     return ((data as { funciones?: Record<string, boolean> | null }).funciones) ?? {};
   } catch {
     return null;
+  }
+}
+
+/** La estrella «Verificado por URUKU» de UN comercio: plan pago al día o de
+ *  cortesía. Sale de `plan_publico` (0143), que NO devuelve precios: sólo si
+ *  tiene estrella y el orden de su plan. Si la lectura falla (sin base, sin
+ *  red, función todavía no migrada) devuelve «sin estrella»: mejor no
+ *  mostrarla que mostrar una que no podemos respaldar. */
+export async function getPlanPublico(comercioId: string): Promise<{ estrella: boolean; plan_orden: number }> {
+  const SIN = { estrella: false, plan_orden: 0 };
+  if (!hasSupabase || !comercioId) return SIN;
+  try {
+    const { data, error } = await supabase.rpc("plan_publico", { p_comercio: comercioId });
+    if (error) return SIN;
+    const fila = (Array.isArray(data) ? data[0] : data) as { estrella?: boolean; plan_orden?: number } | null | undefined;
+    if (!fila) return SIN;
+    return { estrella: fila.estrella === true, plan_orden: Number(fila.plan_orden ?? 0) || 0 };
+  } catch {
+    return SIN;
   }
 }
 

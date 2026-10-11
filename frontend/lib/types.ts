@@ -52,6 +52,20 @@ export type Comercio = {
   origen_importacion: string[] | null;
   pedido_minimo: string | null;
   tiene_factura: boolean;
+  /** «Lo que suma» en la ficha (spec docs/ficha-destacados.md). Todo opcional:
+   *  lo que no está cargado no aparece. `tiene_pasero` es de la 0141; las filas
+   *  viejas del demo no lo traen. */
+  /** Lo marca URUKU: lo que publica sale sin moderación. */
+  confiable?: boolean;
+  /** De dónde salió la ficha: «campo» = la cargó un agente en la calle. */
+  fuente?: string | null;
+  tiene_pasero?: boolean;
+  /** Trabaja talles especiales (0142). */
+  talles_especiales?: boolean;
+  /** El canal de WhatsApp del propio comercio (no el de URUKU). */
+  canal_wa_url?: string | null;
+  /** Enlace externo o la URL de un PDF subido al backend. */
+  catalogo_url?: string | null;
   horario: string | null;
   /** El horario se puso por lote —el habitual de la calle— y no lo confirmó
    *  nadie en el local (0127). La ficha tiene que decirlo: alguien que cruzó
@@ -154,6 +168,17 @@ export type ResultadoBusqueda = {
    *  llegaba a la pantalla y se tiraba. Sirve para decir "abierto ahora", que es
    *  lo que decide si vale la pena caminar hasta ahí. */
   horario: string | null;
+  /** Plan pago al día o de cortesía: la estrella «Verificado por URUKU».
+   *  Lo calcula `buscar_comercios` (0143) sin exponer precios. Opcional por si
+   *  la base todavía no tiene la migración: sin el dato, sin estrella. */
+  estrella?: boolean;
+  /** Orden del plan: más alto = plan más caro; 0 = gratis o no al día. Sólo
+   *  sirve para ordenar, no se muestra. */
+  plan_orden?: number;
+  /** El horario lo puso un lote —el habitual de la calle— y nadie lo confirmó
+   *  en el local (0127): el sello dice «Suele estar abierto». Lo devuelve
+   *  `buscar_comercios` desde la 0143. Opcional por si la base no la tiene. */
+  horario_estimado?: boolean;
   rank: number;
 };
 

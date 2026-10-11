@@ -250,13 +250,21 @@ def test_borrar_foto(client, repo):
     assert client.get(f"/campo/mis-comercios/{cid}/fotos", headers=h).json()["items"] == []
 
 
-def test_limite_10_fotos(client, repo):
+def test_tope_de_fotos_es_el_del_plan_no_10(client, repo):
+    """Antes el tope era 10 fijo; ahora es el `fotos_max` del plan (gratis = 50).
+    El conteo se siembra en el repo: no se suben 50 fotos de verdad
+    (el detalle está en test_fotos_por_plan.py)."""
     token = _agente_token(client)
     cid = _crear_comercio_propio(client, token)
     h = {"Authorization": f"Bearer {token}"}
-    for _ in range(10):
-        assert client.post(f"/campo/mis-comercios/{cid}/fotos", headers=h, files=_foto_test()).status_code == 200
-    assert client.post(f"/campo/mis-comercios/{cid}/fotos", headers=h, files=_foto_test()).status_code == 409
+    for i in range(10):
+        repo.comercio_fotos.append({"id": f"f{i}", "comercio_id": cid, "url": f"u{i}", "orden": i})
+    assert client.post(f"/campo/mis-comercios/{cid}/fotos", headers=h, files=_foto_test()).status_code == 200
+    for i in range(10, 50):
+        repo.comercio_fotos.append({"id": f"f{i}", "comercio_id": cid, "url": f"u{i}", "orden": i})
+    r = client.post(f"/campo/mis-comercios/{cid}/fotos", headers=h, files=_foto_test())
+    assert r.status_code == 409
+    assert r.json()["detail"]["codigo"] == "tope_fotos"
 
 
 def test_foto_comercio_ajeno_404(client, repo):

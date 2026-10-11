@@ -182,6 +182,8 @@ select:not(.adm-input) { color-scheme: dark; }
 .map-pop { width: 210px; }
 .map-pop b { display: block; font-size: 14px; margin-bottom: 2px; }
 .map-pop span { font-size: 12px; color: var(--txt-3); }
+/* La estrella «Verificado por URUKU» en el globo, junto al nombre. */
+.map-pop b .map-pop-estrella { display: inline-block; width: 14px; height: 14px; margin-left: 5px; vertical-align: -2px; color: #C98E38; }
 .map-pop-act { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
 .map-pop-act a { color: var(--neon); font-weight: 700; font-size: 12.5px; }
 

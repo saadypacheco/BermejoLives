@@ -109,6 +109,11 @@ Moderador → /admin › Publicaciones → aprobar/rechazar/cambios → estado '
 8. `npx supabase ...` (no el binario cacheado).
 9. Catálogo/perfil con **SSG + ISR** (`revalidate`), no SSR puro.
 10. `/api/health` (front) y `/health` (back) para debug remoto.
+11. **`comercios` se da por columnas** (0145): una columna nueva nace privada
+    para anon. Si el sitio público la usa, `grant select (columna)` en su
+    migración; si no, sumarla a `PRIVADAS_EXTRA` en
+    `test_comercios_columnas_publicas.py`. Nunca `select("*")` sobre `comercios`
+    desde el front (usar `COLUMNAS_COMERCIO` de `lib/data.ts`).
 
 ## 8. Correr local
 

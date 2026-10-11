@@ -161,8 +161,8 @@ export default function GuiaVentaPage() {
             depende de su precio y su atención.</li>
           <li><b>No prometer &ldquo;toda Argentina&rdquo;.</b> Lo cierto es Bermejo y los que
             cruzan de Aguas Blancas y Orán. Alcanza, y se puede sostener.</li>
-          <li><b>No vender el sello Verificado.</b> Significa que fuimos y lo vimos. Si se
-            compra, deja de servirle a nadie.</li>
+          <li><b>La estrella no se vende suelta.</b> &ldquo;Verificado por URUKU&rdquo; viene con
+            el plan pago al día: si deja de pagar, la pierde. No prometerla por otra cosa.</li>
           <li><b>Pro: no cerrar precio en la vereda.</b> Se anota el interés y se coordina
             aparte. Antes de venderlo hay que saber quién contesta y en qué horario — si
             se promete 24/7 y contesta nadie, se pierde el comercio y los tres de al lado.</li>

@@ -128,6 +128,18 @@ def require_permiso(permiso: str):
     return dep
 
 
+def require_alguno(*permisos: str):
+    """La guardia de un endpoint que sirve a más de un rol: «hace falta
+    ALGUNO de estos permisos». Ej.: la lista de planes la lee quien modera y
+    también quien cobra (Suscripciones asigna planes con `pagos`)."""
+    def dep(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
+        claims = _claims(creds)
+        if not any(tiene_permiso(claims, p) for p in permisos):
+            raise HTTPException(status_code=403, detail="Tu cuenta no tiene permiso para esto")
+        return claims
+    return dep
+
+
 def require_panel(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
     """Cualquier usuario logueado en el panel, sea cual sea su rol.
 
