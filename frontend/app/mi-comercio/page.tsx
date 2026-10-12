@@ -29,7 +29,7 @@ import {
   draftProducto, listProductos, crearProducto, borrarProducto, destacarProducto,
   getMensajes, marcarLeido,
   getMisPublicaciones, editarPublicacion, bajaPublicacion,
-  listarFotosComercio, listarVideosComercio, subirFotoGaleriaComercio, subirVideoGaleriaComercio, borrarFotoComercio, borrarVideoComercio,
+  listarFotosComercio, listarVideosComercio, subirFotoGaleriaComercio, subirVideoGaleriaComercio, borrarFotoComercio, borrarVideoComercio, usarComoPortadaComercio,
   subirCatalogoComercio, quitarCatalogoComercio,
   type ComercioSession, type Perfil, type Suscripcion, type Metricas,
   type ProductoDraft, type ProductoRef, type Mensaje, type Publicacion,
@@ -501,7 +501,8 @@ function GaleriaTab() {
   // El perfil, sólo por la foto principal: vive en PerfilTab y no en el
   // padre, así que esta pestaña lo pide para sí.
   const [portada, setPortada] = useState<string | null>(null);
-  useEffect(() => { getPerfil().then((p) => setPortada(p.portada_url ?? null)).catch(() => {}); }, []);
+  const [portadaThumb, setPortadaThumb] = useState<string | null>(null);
+  useEffect(() => { getPerfil().then((p) => { setPortada(p.portada_url ?? null); setPortadaThumb(p.portada_thumb_url ?? null); }).catch(() => {}); }, []);
   // El tope de fotos de su plan: lo manda el backend cuando carga la galería.
   const [topeFotos, setTopeFotos] = useState<number | null>(null);
   return (
@@ -510,17 +511,24 @@ function GaleriaTab() {
           a cambiar, y hasta hoy sólo se podía desde una miniatura de 58 px
           que en el celular no se veía que fuera tocable. */}
       <FotoPrincipal url={portada}
-                     onSubir={async (f) => { const p = await subirFotoPerfil(f); setPortada(p.portada_url ?? null); return p.portada_url; }} />
+                     confirmarCambio="La foto principal actual se reemplaza y no queda guardada. Si querés conservarla, elegí otra de tu galería con «Usar como portada». ¿Subir una nueva igual?"
+                     onSubir={async (f) => { const p = await subirFotoPerfil(f); setPortada(p.portada_url ?? null); setPortadaThumb(p.portada_thumb_url ?? null); return p.portada_url; }} />
       <p style={{ color: "var(--txt-3)", fontSize: 14, marginTop: 20, marginBottom: 14 }}>
         {topeFotos
           ? `Y hasta ${topeFotos} fotos de tu plan y 5 videos (≤60s) más de tu local.`
           : "Y las fotos que permite tu plan y hasta 5 videos (≤60s) más de tu local."}
         {" "}Se muestran en tu ficha, después de la principal. Si llegás al tope, elegís entre pagar una foto extra o borrar la más vieja.
       </p>
-      <GaleriaUploader puedePagarExtra onLimite={setTopeFotos} api={{
+      {/* «Usar como portada» actualiza la foto principal de arriba: `portada` es
+          el mismo estado que ella lee. */}
+      <GaleriaUploader puedePagarExtra onLimite={setTopeFotos}
+        portada={portada || portadaThumb ? { url: portada, thumb_url: portadaThumb } : null}
+        onPortada={(p) => { setPortada(p.url); setPortadaThumb(p.thumb_url); }}
+        api={{
         cargarFotos: listarFotosComercio,
         subirFoto: subirFotoGaleriaComercio,
         borrarFoto: borrarFotoComercio,
+        usarComoPortada: usarComoPortadaComercio,
         cargarVideos: listarVideosComercio,
         subirVideo: subirVideoGaleriaComercio,
         borrarVideo: borrarVideoComercio,

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   agenteLogin, getAgenteToken, clearAgente, altaComercioCampo,
-  misComercios, miComercio, eliminarComercioAgente, type ComercioAgente,
+  misComercios, miComercio, type ComercioAgente,
   listarLugares, crearLugar, editarLugar, subirPortadaLugar, subirVideoLugar, type Lugar,
   getAgenteEmail, getAgentePerfil, ciudadDelAgente,
 } from "@/lib/campo";
@@ -144,7 +144,6 @@ function MisComercios({ destino, onVolver, onLogout }: { destino: DestinoLista |
   // recorrer una cuadra comercio por comercio, perder el lugar es perder el hilo.
   const scrollLista = useRef(0);
   const restaurarScroll = useRef(false);
-  const [borrando, setBorrando] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [filtro, setFiltro] = useState<FiltroAg>(destino?.filtro && destino.filtro !== "cerca" ? destino.filtro : "todos");
   // Un solo comercio a la vista: el que se eligió con «Es este» en el alta. La
@@ -187,7 +186,7 @@ function MisComercios({ destino, onVolver, onLogout }: { destino: DestinoLista |
     if (destino?.filtro === "cerca") ubicarme();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // Mantiene la lista guardada al día cuando se edita o se da de baja uno.
+  // Mantiene la lista guardada al día cuando se edita.
   useEffect(() => { if (items) recordarLista(items); }, [items]);
   // «Es este»: apenas llega la lista se abre el editor de ese comercio.
   useEffect(() => {
@@ -199,14 +198,6 @@ function MisComercios({ destino, onVolver, onLogout }: { destino: DestinoLista |
     else if (fresca) { abiertoRef.current = true; setEnfocado(null); }
   }, [items, fresca, destino]);
   useEffect(() => { setLimitVis(50); }, [filtro, q, orden]);
-
-  async function eliminar(c: ComercioAgente) {
-    if (!window.confirm(`¿Dar de baja "${c.nombre}"? Deja de aparecer en URUKU, pero el registro no se borra.`)) return;
-    setBorrando(c.id);
-    try { await eliminarComercioAgente(c.id); setItems((prev) => prev?.filter((x) => x.id !== c.id) ?? prev); }
-    catch (e) { setErr(e instanceof Error ? e.message : "No se pudo eliminar"); }
-    finally { setBorrando(null); }
-  }
 
   const todos = items ?? [];
   // El comercio que se está completando, siempre en su última versión.
@@ -436,9 +427,6 @@ function MisComercios({ destino, onVolver, onLogout }: { destino: DestinoLista |
                     ? <><Ic n="reloj" s={14} /> Cargar horario</>
                     : <><Edit style={{ width: 14, height: 14 }} /> Editar</>}
                 </button>
-                <button className="btn btn-sm" style={{ flex: 1, border: "1px solid var(--stroke)", color: "var(--pink)" }} disabled={borrando === c.id} onClick={() => eliminar(c)}>
-                  {borrando === c.id ? "Eliminando…" : "Eliminar"}
-                </button>
               </div>
             </div>
             );
@@ -526,7 +514,8 @@ function CompletarTrasAlta({ comercioId, whatsapp, rubros, lugares }: {
         {err && (
           <div style={{ marginTop: 12 }}>
             <div className="campo-lbl">Fotos y videos del local</div>
-            <GaleriaUploader comercioId={comercioId} api={apiGaleriaCampo(comercioId)} />
+            {/* Sin el comercio cargado no se sabe cuál es la portada: no se ofrece «Usar como portada». */}
+            <GaleriaUploader comercioId={comercioId} api={{ ...apiGaleriaCampo(comercioId), usarComoPortada: undefined }} />
           </div>
         )}
       </div>

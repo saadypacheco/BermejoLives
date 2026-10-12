@@ -52,6 +52,7 @@ export const ICONOS = {
   ofertas: "Tag", novedades: "Megaphone", cambio: "ArrowsLeftRight", guia: "BookOpen",
   whatsapp: "WhatsappLogo", compartir: "ShareNetwork", favorito: "Heart", verificado: "SealCheck",
   volver: "ArrowLeft", seguir: "ArrowRight", abrir: "ArrowSquareOut", cerrar: "X",
+  arriba: "ArrowUp", abajo: "ArrowDown",
   si: "Check", listo: "CheckCircle", mas: "Plus", aviso: "Warning", ayuda: "Question",
   dato: "Info", reloj: "Clock", calendario: "CalendarBlank", usuario: "User", gente: "Users",
   foto: "Camera", video: "VideoCamera", descargar: "DownloadSimple", estrella: "Star",

@@ -139,10 +139,19 @@ def test_agente_guarda_los_seis_datos(client, repo, comercio):
 def test_agente_texto_vacio_borra(client, repo, comercio):
     comercio.update(canal_wa_url="https://x.com/c", catalogo_url="https://x.com/k", pedido_minimo="5")
     r = client.patch("/campo/mis-comercios/com-f", headers=_cabeceras_agente(),
-                     json={"canal_wa_url": "", "catalogo_url": "", "pedido_minimo": " "})
+                     json={"canal_wa_url": "", "pedido_minimo": " "})
     assert r.status_code == 200, r.text
     fila = repo.comercios["com-f"]
-    assert fila["canal_wa_url"] is None and fila["catalogo_url"] is None and fila["pedido_minimo"] is None
+    assert fila["canal_wa_url"] is None and fila["pedido_minimo"] is None
+    assert fila["catalogo_url"] == "https://x.com/k"            # el catálogo no lo toca
+
+
+def test_agente_no_vacia_el_catalogo_ni_con_un_enlace(client, repo, comercio):
+    """El agente sólo sube (ronda 2): vaciar `catalogo_url` es quitarlo, y es del admin."""
+    comercio.update(catalogo_url="https://x.com/k")
+    r = client.patch("/campo/mis-comercios/com-f", headers=_cabeceras_agente(), json={"catalogo_url": ""})
+    assert r.status_code == 403, r.text
+    assert repo.comercios["com-f"]["catalogo_url"] == "https://x.com/k"
 
 
 @pytest.mark.parametrize("campo", ["canal_wa_url", "catalogo_url"])
@@ -311,11 +320,12 @@ def test_cambiar_el_catalogo_a_un_enlace_borra_el_pdf_nuestro(client, repo, come
     assert repo.comercios["com-f"]["catalogo_url"] == "https://drive.google.com/file/d/nuevo"
 
 
-def test_el_agente_vaciar_el_catalogo_por_patch_borra_el_pdf_nuestro(client, repo, comercio):
+def test_el_agente_no_vacia_el_catalogo_por_patch_y_el_pdf_nuestro_queda(client, repo, comercio):
     pdf = _subir(client, "/campo/mis-comercios/com-f/catalogo", _cabeceras_agente()).json()["catalogo_url"]
     r = client.patch("/campo/mis-comercios/com-f", headers=_cabeceras_agente(), json={"catalogo_url": ""})
-    assert r.status_code == 200, r.text
-    assert not _archivo_de(pdf).exists()
+    assert r.status_code == 403, r.text
+    assert _archivo_de(pdf).exists()
+    assert repo.comercios["com-f"]["catalogo_url"] == pdf
 
 
 def test_reenviar_el_mismo_catalogo_en_el_perfil_no_borra_el_pdf(client, repo, comercio):
@@ -335,12 +345,13 @@ def test_comerciante_quita_el_catalogo(client, repo, comercio):
     assert not _archivo_de(url).exists()
 
 
-def test_agente_quita_el_catalogo(client, repo, comercio):
+def test_agente_no_quita_el_catalogo(client, repo, comercio):
+    """El agente sólo sube (ronda 2): quitar el catálogo borra el PDF, y eso es del admin."""
     url = _subir(client, "/campo/mis-comercios/com-f/catalogo", _cabeceras_agente()).json()["catalogo_url"]
     r = client.delete("/campo/mis-comercios/com-f/catalogo", headers=_cabeceras_agente())
-    assert r.status_code == 200 and r.json() == {"ok": True}
-    assert repo.comercios["com-f"]["catalogo_url"] is None
-    assert not _archivo_de(url).exists()
+    assert r.status_code == 403, r.text
+    assert repo.comercios["com-f"]["catalogo_url"] == url
+    assert _archivo_de(url).exists()
 
 
 def test_quitar_con_enlace_externo_deja_null_y_barre_los_huerfanos(client, repo, comercio):

@@ -1,7 +1,7 @@
 // Cliente del panel del COMERCIO logueado (login + chatbot de publicación).
 import {
-  subirConProgreso, postFormData, camposOpcionesFoto, listaFotos,
-  type OpcionesFoto, type ListaFotos,
+  subirConProgreso, postFormData, camposOpcionesFoto, listaFotos, respuestaPortada,
+  type OpcionesFoto, type ListaFotos, type RespuestaPortada,
 } from "@/lib/upload";
 import { detalleDeError } from "@/lib/acceso";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -331,6 +331,7 @@ export type Perfil = {
   sitio_web?: string | null;
   logo_url?: string | null;
   portada_url?: string | null;
+  portada_thumb_url?: string | null;
   direccion?: string | null;
   como_llegar?: string | null;
   horario?: string | null;
@@ -448,6 +449,11 @@ export type VideoGaleria = { id: string; url: string; duracion_seg: number | nul
 
 export const listarFotosComercio = (): Promise<ListaFotos<FotoGaleria>> => cFetch("/comercio/fotos").then((d) => listaFotos<FotoGaleria>(d));
 export const listarVideosComercio = (): Promise<VideoGaleria[]> => cFetch("/comercio/videos").then((d) => d.items ?? []);
+/** «Usar como portada»: intercambia la foto elegida con la portada actual (la
+ *  anterior entra a la galería). Devuelve la portada nueva y la galería reacomodada. */
+export const usarComoPortadaComercio = (fotoId: string): Promise<RespuestaPortada<FotoGaleria>> =>
+  cFetch("/comercio/portada", { method: "PUT", body: JSON.stringify({ foto_id: fotoId }) })
+    .then((d) => respuestaPortada<FotoGaleria>(d));
 export const borrarFotoComercio = (id: string): Promise<void> => cFetch(`/comercio/fotos/${id}`, { method: "DELETE" }).then(() => undefined);
 export const borrarVideoComercio = (id: string): Promise<void> => cFetch(`/comercio/videos/${id}`, { method: "DELETE" }).then(() => undefined);
 /** `opts`: cómo reintentar cuando la galería llegó al tope del plan (409):

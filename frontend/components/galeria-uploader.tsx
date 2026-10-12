@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { comprimirImagen } from "@/lib/imagen";
 import { useObjectUrls } from "@/lib/object-url";
-import { duracionVideo, datosTope, type ListaFotos, type OpcionesFoto, type TopeFotos } from "@/lib/upload";
+import { duracionVideo, datosTope, type ListaFotos, type OpcionesFoto, type RespuestaPortada, type TopeFotos } from "@/lib/upload";
 import { encolarMedia, listarMedia, sincronizarMedia, quitarMedia, type MediaPendiente } from "@/lib/offline-media";
 import { Ic } from "@/components/ic";
 import { TopeFotosDialogo, type DecisionTope } from "@/components/tope-fotos-dialogo";
@@ -12,12 +12,19 @@ export type FotoG = { id: string; url: string; thumb_url: string | null };
 export type VideoG = { id: string; url: string; duracion_seg: number | null };
 
 /** El padre inyecta las operaciones (agente vs dueño usan endpoints distintos). */
+/** La portada vigente del comercio (la foto principal, aparte de la galería). */
+export type PortadaG = { url: string | null; thumb_url: string | null };
+
 export type GaleriaApi = {
   /** Trae las fotos y, si el backend lo manda, el tope actual del plan (`limite`). */
   cargarFotos: () => Promise<ListaFotos<FotoG>>;
   /** `opts`: reintento tras el 409 del tope (`reemplazar=<id>` o `extra=pagar`). */
   subirFoto: (file: File, onP: (p: number) => void, opts?: OpcionesFoto) => Promise<FotoG>;
-  borrarFoto: (id: string) => Promise<void>;
+  /** Sin esta función no hay botón de borrar (el agente de campo no borra: lo hace URUKU). */
+  borrarFoto?: (id: string) => Promise<void>;
+  /** «Usar como portada»: intercambia la foto elegida con la portada actual y
+   *  devuelve la portada nueva y la galería reacomodada. Sin ella no hay botón. */
+  usarComoPortada?: (fotoId: string) => Promise<RespuestaPortada<FotoG>>;
   cargarVideos: () => Promise<VideoG[]>;
   subirVideo: (file: File, dur: number | null, onP: (p: number) => void) => Promise<VideoG>;
   borrarVideo: (id: string) => Promise<void>;
@@ -37,8 +44,16 @@ function esErrorRed(ex: unknown): boolean {
 /** `comercioId` opcional: si viene, las subidas que fallen por señal se guardan
  * en el celu (cola offline) y se suben solas cuando vuelve la señal. Es la 2ª
  * pasada del agente (video + fotos extra sobre un local ya cargado). */
-export function GaleriaUploader({ api, comercioId, puedePagarExtra = false, onFotos, onFotosError, onLimite }: {
+export function GaleriaUploader({ api, comercioId, puedePagarExtra = false, portada: portadaProp, onPortada, refrescar, onFotos, onFotosError, onLimite }: {
   api: GaleriaApi; comercioId?: string;
+  /** La portada que ya tiene el comercio: va primero, con la etiqueta «Portada». */
+  portada?: PortadaG | null;
+  /** Avisa que la portada cambió (tras «Usar como portada»), para que quien la
+   *  muestra en otro lado (la foto principal, la tarjeta) se ponga al día. */
+  onPortada?: (p: PortadaG) => void;
+  /** Un número que el padre sube cuando la galería cambió por fuera (p. ej. subió
+   *  otra portada y la anterior pasó a la galería): se vuelve a pedir la lista. */
+  refrescar?: number;
   /** Sólo la galería del COMERCIANTE: en el tope puede pagar una foto extra. El
    *  agente y el admin no comprometen plata del comercio: sólo borrar la más vieja. */
   puedePagarExtra?: boolean;
@@ -60,6 +75,9 @@ export function GaleriaUploader({ api, comercioId, puedePagarExtra = false, onFo
   const [sincronizando, setSincronizando] = useState(false);
   const [err, setErr] = useState("");
   const [limite, setLimite] = useState(LIMITE_FOTOS_RESPALDO);
+  const [portada, setPortada] = useState<PortadaG | null>(portadaProp ?? null);
+  // Foto que se está pasando a portada (una a la vez).
+  const [cambiando, setCambiando] = useState<string | null>(null);
   // Diálogo del tope abierto: `resolver` devuelve la decisión a quien esperaba.
   const [dlg, setDlg] = useState<{ tope: TopeFotos; resolver: (d: DecisionTope | null) => void } | null>(null);
   // Foto de la cola sin señal que chocó con el tope al sincronizar.
@@ -68,6 +86,13 @@ export function GaleriaUploader({ api, comercioId, puedePagarExtra = false, onFo
   const videoInput = useRef<HTMLInputElement>(null);
 
   const offlineOn = !!comercioId;
+  const puedeBorrar = !!api.borrarFoto;
+  const portadaUrl = portadaProp?.url ?? null, portadaThumb = portadaProp?.thumb_url ?? null;
+  // Si el padre la cambia por otro camino (subió una nueva), se refleja acá.
+  useEffect(() => {
+    if (portadaProp === undefined) return;
+    setPortada(portadaUrl || portadaThumb ? { url: portadaUrl, thumb_url: portadaThumb } : null);
+  }, [portadaProp === undefined, portadaUrl, portadaThumb]);  // eslint-disable-line react-hooks/exhaustive-deps
   const pendFotos = useMemo(() => pendientes.filter((p) => p.kind === "foto"), [pendientes]);
   // Una URL por pendiente, revocadas juntas. Estaba `URL.createObjectURL(p.blob)`
   // adentro del JSX: eso crea una URL NUEVA cada vez que React redibuja —y
@@ -121,6 +146,12 @@ export function GaleriaUploader({ api, comercioId, puedePagarExtra = false, onFo
       setSincronizando(false);
     }
   }
+
+  const refrescarInicial = useRef(refrescar);
+  useEffect(() => {
+    if (refrescar === refrescarInicial.current) return;
+    void recargarFotos();
+  }, [refrescar]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sólo después de que llegó la lista: antes, «0» sería mentira.
   useEffect(() => { if (fotosListas) onFotos?.(fotos.length); }, [fotos.length, fotosListas]);  // eslint-disable-line react-hooks/exhaustive-deps
@@ -230,9 +261,28 @@ export function GaleriaUploader({ api, comercioId, puedePagarExtra = false, onFo
   }
 
   async function delFoto(id: string) {
+    if (!api.borrarFoto) return;
     if (!window.confirm("¿Borrar esta foto?")) return;
     await api.borrarFoto(id).catch(() => {});
     setFotos((f) => f.filter((x) => x.id !== id));
+  }
+
+  /** Intercambio: la elegida pasa a ser la portada y la portada anterior entra a
+   *  la galería. Si falla, no se toca nada: la portada anterior sigue igual. */
+  async function usarComoPortada(id: string) {
+    if (!api.usarComoPortada || cambiando) return;
+    setErr(""); setCambiando(id);
+    try {
+      const r = await api.usarComoPortada(id);
+      const nueva: PortadaG = { url: r.portada_url, thumb_url: r.portada_thumb_url };
+      setPortada(nueva); setFotos(r.fotos); aplicarLimite(r.limite);
+      onPortada?.(nueva);
+    } catch (ex) {
+      const sinRed = (typeof navigator !== "undefined" && !navigator.onLine) || ex instanceof TypeError;
+      setErr(sinRed
+        ? "Sin conexión: no se pudo cambiar la portada. La anterior sigue igual."
+        : "No se pudo cambiar la portada. Probá de nuevo: la anterior sigue igual.");
+    } finally { setCambiando(null); }
   }
   async function delVideo(id: string) {
     if (!window.confirm("¿Borrar este video?")) return;
@@ -269,17 +319,38 @@ export function GaleriaUploader({ api, comercioId, puedePagarExtra = false, onFo
         <div className="galup-tope" style={{ display: "flex", gap: 6, alignItems: "flex-start", margin: "0 0 8px", fontSize: 12.5, lineHeight: 1.4, color: "var(--txt-2)" }}>
           <span style={{ flex: "none", marginTop: 1 }}><Ic n="aviso" s={14} /></span>
           <span>
-            Llegaste al tope de fotos de tu plan. Si subís otra, {puedePagarExtra
-              ? "vas a poder pagar una foto extra o borrar la más vieja."
-              : "se te va a ofrecer borrar la más vieja."}
+            Llegaste al tope de fotos de tu plan.{" "}
+            {!puedeBorrar
+              ? "Las fotos las borra URUKU: avisale al admin si hay que liberar lugar."
+              : puedePagarExtra
+                ? "Si subís otra, vas a poder pagar una foto extra o borrar la más vieja."
+                : "Si subís otra, se te va a ofrecer borrar la más vieja."}
           </span>
         </div>
       )}
       <div className="galup-grid">
+        {/* La portada primero y con su etiqueta: es la foto que ve el comprador antes que nada. */}
+        {(portada?.url || portada?.thumb_url) && (
+          <div className="galup-cell">
+            <div className="galup-item galup-portada">
+              <img src={(portada.thumb_url || portada.url) as string} alt="Portada actual" />
+              <span className="galup-tag"><Ic n="estrella" s={11} peso="fill" /> Portada</span>
+            </div>
+          </div>
+        )}
         {fotos.map((f) => (
-          <div key={f.id} className="galup-item">
-            <img src={f.thumb_url || f.url} alt="" loading="lazy" />
-            <button type="button" className="galup-del" onClick={() => delFoto(f.id)} aria-label="Borrar"><Ic n="cerrar" s={13} /></button>
+          <div key={f.id} className="galup-cell">
+            <div className="galup-item">
+              <img src={f.thumb_url || f.url} alt="" loading="lazy" />
+              {puedeBorrar && (
+                <button type="button" className="galup-del" onClick={() => delFoto(f.id)} aria-label="Borrar"><Ic n="cerrar" s={13} /></button>
+              )}
+            </div>
+            {api.usarComoPortada && (
+              <button type="button" className="galup-usar" disabled={!!cambiando || subiendo} onClick={() => usarComoPortada(f.id)}>
+                {cambiando === f.id ? "Cambiando…" : "Usar como portada"}
+              </button>
+            )}
           </div>
         ))}
         {pendFotos.map((p, i) => (
@@ -322,7 +393,7 @@ export function GaleriaUploader({ api, comercioId, puedePagarExtra = false, onFo
       <input ref={fotoInput} type="file" accept="image/*" capture="environment" multiple hidden onChange={onFoto} />
       <input ref={videoInput} type="file" accept="video/*" capture="environment" hidden onChange={onVideo} />
 
-      {dlg && <TopeFotosDialogo tope={dlg.tope} puedePagarExtra={puedePagarExtra} onElegir={dlg.resolver} />}
+      {dlg && <TopeFotosDialogo tope={dlg.tope} puedePagarExtra={puedePagarExtra} puedeBorrar={puedeBorrar} onElegir={dlg.resolver} />}
     </div>
   );
 }

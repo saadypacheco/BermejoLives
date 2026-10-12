@@ -199,7 +199,7 @@ def test_con_el_pago_vencido_las_fotos_se_quedan_y_no_se_puede_subir_mas(client,
 
 # ══════════════════════════════════════════════════════════════ reemplazar
 
-@pytest.mark.parametrize("lado", ["comercio", "agente", "admin"])
+@pytest.mark.parametrize("lado", ["comercio", "admin"])
 def test_reemplazar_guarda_la_nueva_y_borra_la_vieja_de_base_y_disco(client, repo, lados, lado):
     c = _comercio(repo)
     _sembrar(repo, c["id"], 50, con_archivos=True)
@@ -225,9 +225,11 @@ def test_reemplazar_una_foto_ajena_se_rechaza_y_no_toca_nada(client, repo, lados
     repo.comercio_fotos.append({"id": "ajena", "comercio_id": otro["id"],
                                 "url": f"{BASE}/otro/ajena.jpg", "thumb_url": None,
                                 "orden": 0, "created_at": _stamp(0)})
-    for lado in ("comercio", "agente", "admin"):
+    for lado in ("comercio", "admin"):
         r = _post(client, repo, lado, lados[lado], c["id"], reemplazar="ajena")
         assert r.status_code == 404, lado
+    # El agente ni llega a mirar de quién es: reemplazar es borrar y no le toca.
+    assert _post(client, repo, "agente", lados["agente"], c["id"], reemplazar="ajena").status_code == 403
     assert "ajena" in _fotos_de(repo, otro["id"])
     assert _en_disco("otro", "ajena.jpg")
     assert len(repo.list_fotos_comercio(c["id"])) == 50
@@ -239,7 +241,7 @@ def test_si_falla_guardar_la_nueva_la_vieja_queda(client, repo, lados, monkeypat
     _sembrar(repo, c["id"], 50, con_archivos=True)
     for modulo in ("comercio", "campo", "moderacion"):
         monkeypatch.setattr(f"app.api.{modulo}.subir_foto_galeria", lambda slug, data: (None, None))
-    for lado in ("comercio", "agente", "admin"):
+    for lado in ("comercio", "admin"):
         r = _post(client, repo, lado, lados[lado], c["id"], reemplazar="f0")
         assert r.status_code == 502, lado
     assert "f0" in _fotos_de(repo, c["id"]) and len(repo.list_fotos_comercio(c["id"])) == 50
@@ -260,6 +262,19 @@ def test_si_falla_insertar_la_nueva_la_vieja_queda_y_no_sobra_archivo(client, re
     assert "f0" in _fotos_de(repo, c["id"])
     assert _en_disco("local", "s0.jpg")
     assert set((Path(settings.fotos_dir) / "local").iterdir()) == antes   # la nueva no quedó huérfana
+
+
+def test_el_agente_no_puede_reemplazar_en_el_tope(client, repo, lados):
+    """En el tope el agente sólo cancela: `reemplazar` es 403 y no cambia nada.
+    El 409 de tope (sin `reemplazar`) sigue igual."""
+    c = _comercio(repo)
+    _sembrar(repo, c["id"], 50, con_archivos=True)
+    r = _post(client, repo, "agente", lados["agente"], c["id"], reemplazar="f0")
+    assert r.status_code == 403
+    assert r.json()["detail"] == "Las fotos las borra URUKU. Avisale al admin."
+    assert len(repo.list_fotos_comercio(c["id"])) == 50 and "f0" in _fotos_de(repo, c["id"])
+    assert _en_disco("local", "s0.jpg")
+    assert _post(client, repo, "agente", lados["agente"], c["id"]).status_code == 409
 
 
 def test_reemplazar_sin_estar_en_el_tope_solo_sube(client, repo, lados):
@@ -438,7 +453,7 @@ def test_fotos_max_cero_es_valido_y_los_valores_fuera_de_rango_se_rechazan(clien
 
 # ══════════════════════════════════════════ borrar una foto borra el archivo
 
-@pytest.mark.parametrize("lado", ["comercio", "agente", "admin"])
+@pytest.mark.parametrize("lado", ["comercio", "admin"])
 def test_borrar_una_foto_la_saca_de_la_base_y_del_disco(client, repo, lados, lado):
     """Antes los tres «borrar foto» sólo borraban la fila y el archivo quedaba
     en el disco para siempre."""
@@ -451,6 +466,17 @@ def test_borrar_una_foto_la_saca_de_la_base_y_del_disco(client, repo, lados, lad
     assert "f1" not in _fotos_de(repo, c["id"])
     assert not _en_disco("local", "s1.jpg") and not _en_disco("local", "s1_t3.jpg")
     assert _en_disco("local", "s0.jpg") and _en_disco("local", "s2.jpg")
+
+
+def test_el_agente_no_borra_fotos_ni_el_archivo(client, repo, lados):
+    """El agente sólo sube: 403, la fila y los archivos quedan."""
+    c = _comercio(repo)
+    _sembrar(repo, c["id"], 3, con_archivos=True)
+    r = client.delete(f"/campo/mis-comercios/{c['id']}/fotos/f1", headers=_h(lados["agente"]))
+    assert r.status_code == 403
+    assert r.json()["detail"] == "Las fotos las borra URUKU. Avisale al admin."
+    assert "f1" in _fotos_de(repo, c["id"])
+    assert _en_disco("local", "s1.jpg") and _en_disco("local", "s1_t3.jpg")
 
 
 def test_borrar_una_foto_que_es_la_portada_no_borra_el_archivo(client, repo, lados):

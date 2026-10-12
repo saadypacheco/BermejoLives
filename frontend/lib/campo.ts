@@ -1,7 +1,7 @@
 // Cliente del "modo agente de campo" (alta rápida de comercios).
 import {
-  postFormData, subirConProgreso, camposOpcionesFoto, listaFotos,
-  type OpcionesFoto, type ListaFotos,
+  postFormData, subirConProgreso, camposOpcionesFoto, listaFotos, respuestaPortada,
+  type OpcionesFoto, type ListaFotos, type RespuestaPortada,
 } from "@/lib/upload";
 // El `?ref=` con el que llegó esta persona (lo guarda RefCapture, primer toque,
 // y vence a los 30 días: ver lib/ref.ts).
@@ -111,8 +111,22 @@ export const listarFotosCampo = (cid: string): Promise<ListaFotos<FotoGaleria>> 
   fetch(`${API}/campo/mis-comercios/${cid}/fotos`, { headers: galH() }).then((r) => r.json()).then((d) => listaFotos<FotoGaleria>(d));
 export const listarVideosCampo = (cid: string): Promise<VideoGaleria[]> =>
   fetch(`${API}/campo/mis-comercios/${cid}/videos`, { headers: galH() }).then((r) => r.json()).then((d) => d.items ?? []);
-export const borrarFotoCampo = (cid: string, id: string): Promise<void> =>
-  fetch(`${API}/campo/mis-comercios/${cid}/fotos/${id}`, { method: "DELETE", headers: galH() }).then(() => undefined);
+// El agente NO borra fotos (las borra URUKU): por eso acá no hay `borrarFotoCampo`.
+/** «Usar como portada»: intercambia la foto elegida con la portada actual (la
+ *  anterior entra a la galería). Devuelve la portada nueva y la galería reacomodada. */
+export async function usarComoPortadaCampo(cid: string, fotoId: string): Promise<RespuestaPortada<FotoGaleria>> {
+  const res = await fetch(`${API}/campo/mis-comercios/${cid}/portada`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...galH() },
+    body: JSON.stringify({ foto_id: fotoId }),
+  });
+  if (res.status === 401) { clearAgente(); throw new Error("Sesión vencida, volvé a entrar"); }
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(typeof d.detail === "string" && d.detail ? d.detail : "No se pudo cambiar la portada");
+  }
+  return respuestaPortada<FotoGaleria>(await res.json().catch(() => null));
+}
 export const borrarVideoCampo = (cid: string, id: string): Promise<void> =>
   fetch(`${API}/campo/mis-comercios/${cid}/videos/${id}`, { method: "DELETE", headers: galH() }).then(() => undefined);
 /** `opts`: cómo reintentar cuando la galería llegó al tope (409). El agente sólo
@@ -312,14 +326,15 @@ export async function quitarCatalogoCampo(id: string): Promise<void> {
   }
 }
 
-/** Re-sube la foto de un comercio que este agente cargó. Devuelve la nueva URL. */
-export async function actualizarFotoComercioAgente(id: string, foto: File): Promise<string | null> {
+/** Re-sube la foto de un comercio que este agente cargó. Devuelve la portada
+ *  nueva (original y miniatura); la anterior pasa a la galería, no se borra. */
+export async function actualizarFotoComercioAgente(id: string, foto: File): Promise<{ portada_url: string | null; portada_thumb_url: string | null }> {
   const form = new FormData();
   form.append("foto", foto);
   try {
-    const data = await postFormData<{ comercio?: { portada_url?: string | null } }>(
+    const data = await postFormData<{ comercio?: { portada_url?: string | null; portada_thumb_url?: string | null } }>(
       `${API}/campo/mis-comercios/${id}/foto`, form, getAgenteToken());
-    return data.comercio?.portada_url ?? null;
+    return { portada_url: data.comercio?.portada_url ?? null, portada_thumb_url: data.comercio?.portada_thumb_url ?? null };
   } catch (e) {
     if ((e as Error & { status?: number })?.status === 401) {
       clearAgente();
@@ -329,15 +344,7 @@ export async function actualizarFotoComercioAgente(id: string, foto: File): Prom
   }
 }
 
-/** Baja lógica (activo=false) — nunca se borra el registro real. */
-export async function eliminarComercioAgente(id: string): Promise<void> {
-  const res = await fetch(`${API}/campo/mis-comercios/${id}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` },
-  });
-  if (res.status === 401) { clearAgente(); throw new Error("Sesión vencida, volvé a entrar"); }
-  if (!res.ok) throw new Error("No se pudo eliminar");
-}
+// El agente tampoco da de baja comercios: eso es del admin (Negocios › Dar de baja).
 
 /** Registra un click de contacto (WhatsApp, teléfono, etc.) para un comercio. */
 export type TipoLead = "whatsapp" | "telefono" | "email" | "web" | "vista" | "mapa" | "reserva";

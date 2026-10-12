@@ -544,11 +544,13 @@ def test_aprobar_lo_de_un_comercio_apagado_lo_enciende(client, repo, admin_token
     salir en ningún lado). Los borradores nuevos ya no se crean."""
     h = {"Authorization": f"Bearer {admin_token}"}
     viejo = repo.seed_comercio(id="com-borrador", slug="comercio-988877", nombre="Comercio 8877",
-                               whatsapp="59199988877", activo=False)
+                               whatsapp="59199988877", activo=False, baja_motivo="borrador")
     pub = repo.insert_publicacion_directa({"comercio_id": viejo["id"], "tipo": "oferta",
                                            "estado": "pendiente", "titulo": "Campera"})
     client.post(f"/moderacion/publicaciones/{pub['id']}", headers=h, json={"estado": "aprobado"})
     assert repo.comercios[viejo["id"]]["activo"] is True, "aprobar la oferta enciende el comercio"
+    assert repo.comercios[viejo["id"]]["baja_motivo"] is None
+    # (Sólo el BORRADOR se enciende: la baja del admin no. Ver test_portada_ronda2.py.)
 
 
 def test_una_foto_con_texto_de_novedad_es_novedad_no_oferta():

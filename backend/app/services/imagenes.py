@@ -30,10 +30,47 @@ THUMB_CALIDAD = 74
 THUMB_SUFIJO = "_t3"
 
 
+#: Tope de píxeles de una foto de entrada (40 megapíxeles: una cámara de 12 MP ni se acerca).
+#: Un JPEG de 15 MB comprimido puede declarar 20.000 x 20.000 px y pedir ~1,2 GB de RAM
+#: al descomprimirlo ("bomba de descompresión"): con esto Pillow se niega antes de decodificar.
+MAX_PIXELES = 40_000_000
+
+_pillow_listo = False
+
+
+def _preparar_pillow() -> None:
+    """Pone el tope de píxeles y hace que el aviso de Pillow sea un ERROR. Una sola vez.
+
+    Por defecto Pillow sólo AVISA (`DecompressionBombWarning`) entre 1x y 2x el tope y
+    recién lanza `DecompressionBombError` arriba de 2x: una imagen de 60 MP pasaba con un
+    warning en el log. Acá el aviso corta igual que el error."""
+    global _pillow_listo
+    from PIL import Image
+
+    Image.MAX_IMAGE_PIXELS = MAX_PIXELES      # barato; por si alguien lo cambió en el medio
+    if _pillow_listo:
+        return
+    import warnings
+
+    warnings.simplefilter("error", Image.DecompressionBombWarning)
+    _pillow_listo = True
+
+
+def _exigir_tamano_razonable(img) -> None:
+    """ValueError si la imagen declara más de `MAX_PIXELES`. Se mira el ENCABEZADO (el
+    ancho y el alto), sin decodificar nada. Es la red de seguridad del filtro de
+    warnings, que otro código (los tests, un `-W`) puede pisar."""
+    ancho, alto = img.size
+    if ancho * alto > MAX_PIXELES:
+        raise ValueError(f"La imagen es demasiado grande ({ancho}x{alto} px)")
+
+
 def procesar_imagen(data: bytes, max_side: int = 1600, quality: int = 82) -> bytes:
     from PIL import Image, ImageOps
 
+    _preparar_pillow()
     img = Image.open(BytesIO(data))
+    _exigir_tamano_razonable(img)
     img.verify()                       # valida que sea una imagen real
     img = Image.open(BytesIO(data))    # reabrir tras verify()
     img = ImageOps.exif_transpose(img).convert("RGB")

@@ -30,7 +30,7 @@ from app.services.imagenes import (
 )
 from app.services import enlaces
 from app.services import ficha_catalogo as catalogo_svc
-from app.services import fotos_galeria
+from app.services import fotos_galeria, portada
 from app.services import planes
 from app.services import ingreso_clave
 from app.services.cuentas import cuentas_de_numero, nueva_clave_comercio
@@ -57,6 +57,25 @@ _CAMPOS_EDITABLES = {
     # «Lo que suma» en la ficha (docs/ficha-destacados.md).
     "canal_wa_url", "catalogo_url", "tiene_pasero", "envios_internacionales", "tiene_factura", "talles_especiales",
 }
+
+
+MSG_BAJA_ADMIN = "Tu comercio fue dado de baja por URUKU. Escribinos para volver."
+
+
+def _comercio_escribe(
+    claims: dict = Depends(auth.require_comercio),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Como `require_comercio`, pero para lo que ESCRIBE: un comercio que el admin dio
+    de baja (`activo = false` con `baja_motivo = 'admin'`) puede entrar y mirar, no
+    publicar ni cambiar nada. Los dados de baja por vencimiento sí: tienen que poder
+    entrar a pagar. Sin esto, el token que ya tenía seguía sirviendo para todo."""
+    comercio = repo.get_comercio(claims["comercio_id"])
+    if comercio and comercio.get("activo") is False and comercio.get("baja_motivo") == "admin":
+        logger.info("comercio.escritura_bloqueada_por_baja", comercio=claims["comercio_id"])
+        raise HTTPException(status_code=403, detail=MSG_BAJA_ADMIN)
+    return claims
+
 
 
 @router.post("/auth/comercio/registro")
@@ -98,7 +117,7 @@ async def comercio_registro(
     if not data:
         raise HTTPException(status_code=400, detail="Falta la foto del negocio")
     try:
-        portada_url, portada_thumb = subir_foto_galeria(slug, data)
+        portada_url, portada_thumb = await run_in_threadpool(subir_foto_galeria, slug, data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -224,7 +243,7 @@ async def solicitar_cambio_numero(
     if not data:
         raise HTTPException(status_code=400, detail="Falta la foto del local")
     try:
-        foto_url = subir_foto_comercio(f"cambio-numero-{comercio['slug']}", data)
+        foto_url = await run_in_threadpool(subir_foto_comercio, f"cambio-numero-{comercio['slug']}", data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -435,7 +454,7 @@ def comercio_recuperar_confirmar(body: RecuperarConfirmarBody, request: Request,
 @router.post("/comercio/clave")
 def comercio_clave_nueva(
     response: Response,
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(_comercio_escribe),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Genera una clave nueva (la anterior deja de servir) y la devuelve UNA vez.
@@ -478,7 +497,7 @@ class PublicacionUpdate(BaseModel):
 def editar_publicacion(
     pub_id: str,
     body: PublicacionUpdate,
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(_comercio_escribe),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     patch = {
@@ -495,8 +514,16 @@ def editar_publicacion(
         raise HTTPException(status_code=404, detail="comercio no encontrado")
 
     # Re-moderación: una edición de un comercio NO confiable vuelve a pendiente.
+    #
+    # Y la de una oferta que el equipo BAJÓ (`rechazado`) o devolvió con cambios
+    # (`cambios`) también, sea o no confiable el comercio: si no, un comercio
+    # confiable editaba una oferta bajada y volvía a publicarla solo, pasando por
+    # arriba de la decisión de quien la bajó. Tiene que volver a mirarla una persona.
+    actual = repo.get_publicacion(pub_id)
+    bajada = bool(actual and actual.get("comercio_id") == claims["comercio_id"]
+                  and actual.get("estado") in ("rechazado", "cambios"))
     now = datetime.now(timezone.utc).isoformat()
-    if bool(comercio.get("confiable")):
+    if bool(comercio.get("confiable")) and not bajada:
         patch["estado"], patch["approved_at"] = "aprobado", now
     else:
         patch["estado"], patch["approved_at"] = "pendiente", None
@@ -511,7 +538,7 @@ def editar_publicacion(
 @router.delete("/comercio/publicaciones/{pub_id}")
 def baja_publicacion(
     pub_id: str,
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(_comercio_escribe),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     if not repo.baja_publicacion_de_comercio(pub_id, claims["comercio_id"]):
@@ -610,7 +637,7 @@ def _sync_vendedor_tienda(comercio: dict, patch: dict) -> None:
 @router.put("/comercio/perfil")
 def update_perfil(
     body: PerfilUpdate,
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(_comercio_escribe),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     campos = body.model_dump(exclude_unset=True, exclude={"rubro_slugs"})
@@ -647,7 +674,7 @@ def update_perfil(
 @router.post("/comercio/catalogo")
 async def subir_mi_catalogo(
     request: Request,
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(_comercio_escribe),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Sube el catálogo en PDF (multipart, campo `archivo`, hasta 8 MB).
@@ -662,7 +689,7 @@ async def subir_mi_catalogo(
 
 @router.delete("/comercio/catalogo")
 async def quitar_mi_catalogo(
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(_comercio_escribe),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Quita el catálogo: borra el PDF si es nuestro y deja `catalogo_url` en null."""
@@ -673,7 +700,7 @@ async def quitar_mi_catalogo(
 @router.put("/comercio/perfil/foto")
 async def update_perfil_foto(
     foto: UploadFile = File(...),
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(_comercio_escribe),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     comercio = repo.get_comercio(claims["comercio_id"])
@@ -683,12 +710,13 @@ async def update_perfil_foto(
     if not data:
         raise HTTPException(status_code=400, detail="Falta la foto")
     try:
-        portada_url, portada_thumb = subir_foto_galeria(comercio["slug"], data)
+        portada_url, portada_thumb = await run_in_threadpool(subir_foto_galeria, comercio["slug"], data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not portada_url:
         raise HTTPException(status_code=502, detail="No se pudo subir la foto, probá de nuevo")
-    updated = repo.update_comercio(claims["comercio_id"], {"portada_url": portada_url, "portada_thumb_url": portada_thumb}, None)
+    # Reinicia el recorte y borra del disco la portada anterior si la galería no la usa.
+    updated = portada.poner_nueva(repo, comercio, portada_url, portada_thumb)
     logger.info("comercio.perfil_foto_update", comercio=claims["comercio_id"])
     return _perfil_dict(repo, updated)
 
@@ -796,7 +824,7 @@ def get_metricas(
 @router.post("/comercio/publicar")
 def publicar(
     body: PublicarBody,
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(_comercio_escribe),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     if body.tipo not in _TIPOS:
@@ -893,7 +921,7 @@ class DraftBody(BaseModel):
 @router.post("/comercio/productos/draft")
 def producto_draft(
     body: DraftBody,
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(_comercio_escribe),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Arma el borrador para el preview: la IA infiere la categoría (o fallback)."""
@@ -931,7 +959,7 @@ async def crear_producto(
     categoria_slug: str = Form(...),
     descripcion: str | None = Form(None),
     fotos: list[UploadFile] = File(default=[]),
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(_comercio_escribe),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Confirma y publica: upsert del vendedor + alta del producto en el ecommerce + producto_ref."""
@@ -956,7 +984,7 @@ async def crear_producto(
         if not data:
             continue
         try:
-            procesada = procesar_imagen(data)
+            procesada = await run_in_threadpool(procesar_imagen, data)
         except Exception:  # noqa: BLE001
             raise HTTPException(status_code=400, detail="Una de las fotos no es válida")
         url = guardar_foto_local(f"productos/{comercio['slug']}/{secrets.token_hex(8)}.jpg", procesada)
@@ -995,7 +1023,7 @@ async def crear_producto(
 @router.delete("/comercio/productos/{ref_id}")
 def borrar_producto(
     ref_id: str,
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(_comercio_escribe),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     ref = repo.get_producto_ref(ref_id)
@@ -1013,7 +1041,7 @@ _DESTACADO_COSTO = 1000.0   # ARS por publicación destacada (se factura con la 
 @router.post("/comercio/productos/{ref_id}/destacar")
 def destacar_producto(
     ref_id: str,
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(_comercio_escribe),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Crea una publicación destacada en el feed para este producto. Tiene COSTO,
@@ -1076,7 +1104,7 @@ async def comercio_pago(
     metodo: str = Form("transferencia"),
     referencia: str | None = Form(None),
     comprobante: UploadFile | None = File(None),
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(_comercio_escribe),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """El comercio declara un pago con comprobante → queda PENDIENTE de confirmación del admin."""
@@ -1093,7 +1121,7 @@ async def comercio_pago(
     if comprobante is not None:
         data = await comprobante.read()
         if data:
-            comprobante_url = _subir_comprobante(comercio["id"], data)
+            comprobante_url = await run_in_threadpool(_subir_comprobante, comercio["id"], data)
 
     pago = repo.crear_pago_pendiente(claims["comercio_id"], {
         "monto": monto, "moneda": moneda, "metodo": metodo,
@@ -1122,7 +1150,7 @@ def mis_mensajes(
 @router.post("/comercio/mensajes/{mensaje_id}/leido")
 def marcar_leido(
     mensaje_id: str,
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(_comercio_escribe),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     m = repo.marcar_mensaje_leido(mensaje_id, claims["comercio_id"])
@@ -1157,7 +1185,7 @@ async def agregar_mi_foto(
     foto: UploadFile = File(...),
     reemplazar: str | None = Form(None),
     extra: str | None = Form(None),
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(_comercio_escribe),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     cid = claims["comercio_id"]
@@ -1170,7 +1198,7 @@ async def agregar_mi_foto(
     if len(data) > _GAL_MAX_FOTO_BYTES:
         raise HTTPException(status_code=413, detail="La foto supera los 15 MB")
     try:
-        url, thumb = subir_foto_galeria(comercio["slug"], data)
+        url, thumb = await run_in_threadpool(subir_foto_galeria, comercio["slug"], data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not url:
@@ -1179,8 +1207,20 @@ async def agregar_mi_foto(
     return {"ok": True, "foto": row}
 
 
+@router.put("/comercio/portada")
+def usar_mi_foto_como_portada(
+    body: portada.UsarPortadaBody,
+    claims: dict = Depends(_comercio_escribe),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Una foto de mi galería pasa a ser la portada (intercambio, sin tocar archivos)."""
+    actualizado = portada.usar_de_galeria(repo, _mi_comercio(repo, claims), body.foto_id)
+    logger.info("comercio.portada_de_galeria", comercio=claims["comercio_id"])
+    return portada.respuesta(repo, actualizado)
+
+
 @router.delete("/comercio/fotos/{foto_id}")
-def borrar_mi_foto(foto_id: str, claims: dict = Depends(auth.require_comercio), repo: Repo = Depends(get_repo)) -> dict:
+def borrar_mi_foto(foto_id: str, claims: dict = Depends(_comercio_escribe), repo: Repo = Depends(get_repo)) -> dict:
     from app.services.fotos_galeria import borrar_foto_por_id
     if not borrar_foto_por_id(repo, claims["comercio_id"], foto_id):
         raise HTTPException(status_code=404, detail="Foto no encontrada")
@@ -1196,7 +1236,7 @@ def mis_videos(claims: dict = Depends(auth.require_comercio), repo: Repo = Depen
 async def agregar_mi_video(
     video: UploadFile = File(...),
     duracion_seg: int | None = Form(None),
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(_comercio_escribe),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     cid = claims["comercio_id"]
@@ -1217,7 +1257,7 @@ async def agregar_mi_video(
 
 
 @router.delete("/comercio/videos/{video_id}")
-def borrar_mi_video(video_id: str, claims: dict = Depends(auth.require_comercio), repo: Repo = Depends(get_repo)) -> dict:
+def borrar_mi_video(video_id: str, claims: dict = Depends(_comercio_escribe), repo: Repo = Depends(get_repo)) -> dict:
     if not repo.delete_video_comercio(video_id, claims["comercio_id"]):
         raise HTTPException(status_code=404, detail="Video no encontrado")
     return {"ok": True}

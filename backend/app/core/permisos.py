@@ -21,6 +21,10 @@ from __future__ import annotations
 CATALOGO: list[tuple[str, str, str]] = [
     ("moderar",          "Aprobar o rechazar lo que mandan los comercios",        "Día a día"),
     ("comercios.editar", "Editar la ficha de cualquier comercio",                 "Día a día"),
+    # La cuenta es aparte de la ficha: el WhatsApp es la llave de ingreso a Mi
+    # comercio, `confiable` decide si publica sin cola. Quien corrige fichas
+    # (el publicador) no tiene por qué manejar cuentas.
+    ("comercios.cuenta", "Cambiar WhatsApp, confiable, números y grupos de un comercio", "Día a día"),
     ("comercios.cargar", "Cargar comercios desde la calle (app de campo)",        "Día a día"),
     ("contenido",        "Cotización, estado de la frontera, videos y redes",     "Día a día"),
     ("ayuda",            "Contestar preguntas y cargar el saber local",           "Día a día"),
@@ -57,12 +61,12 @@ ROLES_BASE: dict[str, dict] = {
     "moderador": {
         "nombre": "Moderador",
         "descripcion": "Aprueba lo que llega, corrige fichas y contesta la Ayuda.",
-        "permisos": ["moderar", "comercios.editar", "ayuda", "lugares", "whatsapp", "rubros"],
+        "permisos": ["moderar", "comercios.editar", "comercios.cuenta", "ayuda", "lugares", "whatsapp", "rubros"],
     },
     "publicador": {
         "nombre": "Publicador",
-        "descripcion": "Carga la cotización, el estado del paso y los videos.",
-        "permisos": ["contenido", "moderar"],
+        "descripcion": "Carga la cotización, el estado del paso y los videos, y corrige fichas.",
+        "permisos": ["contenido", "moderar", "comercios.editar"],
     },
     "agente": {
         "nombre": "Agente de campo",

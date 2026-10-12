@@ -186,26 +186,25 @@ def test_actualizar_foto_comercio_ajeno_404(client, repo):
     assert r.status_code == 404
 
 
-def test_eliminar_mi_comercio_es_baja_logica(client, repo):
+def test_el_agente_ya_no_puede_dar_de_baja_un_comercio(client, repo):
+    """El agente sólo sube (docs/portada-y-permisos.md): la ruta DELETE ya no existe
+    y el comercio sigue activo y en su listado."""
     token = _agente_token(client)
     _crear_comercio_propio(client, token)
     comercio_id = list(repo.comercios)[-1]
 
     r = client.delete(f"/campo/mis-comercios/{comercio_id}", headers={"Authorization": f"Bearer {token}"})
-    assert r.status_code == 200, r.text
-    # Sigue existiendo el registro (baja lógica, no DELETE real)
-    assert comercio_id in repo.comercios
-    assert repo.comercios[comercio_id]["activo"] is False
-    # Y ya no aparece en el listado del agente
+    assert r.status_code in (404, 405), r.text
+    assert repo.comercios[comercio_id].get("activo", True) is True
     r2 = client.get("/campo/mis-comercios", headers={"Authorization": f"Bearer {token}"})
-    assert all(i["id"] != comercio_id for i in r2.json()["items"])
+    assert any(i["id"] == comercio_id for i in r2.json()["items"])
 
 
-def test_eliminar_comercio_ajeno_404(client, repo):
+def test_el_agente_no_da_de_baja_un_comercio_ajeno(client, repo):
     token = _agente_token(client)
     otro = repo.crear_comercio({"nombre": "Otro", "slug": "otro", "cargado_por": "otro@x.com"})
     r = client.delete(f"/campo/mis-comercios/{otro['id']}", headers={"Authorization": f"Bearer {token}"})
-    assert r.status_code == 404
+    assert r.status_code in (404, 405)
     assert repo.comercios[otro["id"]].get("activo", True) is True
 
 
@@ -241,13 +240,16 @@ def test_agregar_y_listar_foto(client, repo):
     assert len(client.get(f"/campo/mis-comercios/{cid}/fotos", headers=h).json()["items"]) == 1
 
 
-def test_borrar_foto(client, repo):
+def test_el_agente_no_borra_fotos(client, repo):
+    """El agente sólo sube: borrar una foto da 403 y la foto queda."""
     token = _agente_token(client)
     cid = _crear_comercio_propio(client, token)
     h = {"Authorization": f"Bearer {token}"}
     fid = client.post(f"/campo/mis-comercios/{cid}/fotos", headers=h, files=_foto_test()).json()["foto"]["id"]
-    assert client.delete(f"/campo/mis-comercios/{cid}/fotos/{fid}", headers=h).status_code == 200
-    assert client.get(f"/campo/mis-comercios/{cid}/fotos", headers=h).json()["items"] == []
+    r = client.delete(f"/campo/mis-comercios/{cid}/fotos/{fid}", headers=h)
+    assert r.status_code == 403
+    assert r.json()["detail"] == "Las fotos las borra URUKU. Avisale al admin."
+    assert len(client.get(f"/campo/mis-comercios/{cid}/fotos", headers=h).json()["items"]) == 1
 
 
 def test_tope_de_fotos_es_el_del_plan_no_10(client, repo):

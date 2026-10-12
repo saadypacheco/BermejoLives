@@ -10,6 +10,7 @@ import structlog
 import re
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, Request
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from app.core import auth
 from app.core.codigo import formatear as formatear_codigo
@@ -22,7 +23,7 @@ from app.services.clasificador import sugerir_rubros
 from app.services.imagenes import subir_foto_comercio, subir_foto_galeria, subir_video_comercio
 from app.services import cargas, planes
 from app.services import enlaces
-from app.services import fotos_galeria
+from app.services import fotos_galeria, portada
 from app.services import ficha_catalogo as catalogo_svc
 from app.services.cuentas import nueva_clave_comercio
 from app.services.rubros import aplicar_rubros
@@ -220,7 +221,8 @@ async def alta_campo(
     if foto is not None:
         data = await foto.read()
         if data:
-            portada_url, portada_thumb = _subir_foto(slug, foto, data)
+            # Pillow (decodificar, achicar, recomprimir) es CPU: fuera del event loop.
+            portada_url, portada_thumb = await run_in_threadpool(_subir_foto, slug, foto, data)
 
     def _none(v: str | None) -> str | None:
         return v.strip() if v and v.strip() else None
@@ -414,7 +416,7 @@ async def lugar_portada(
     if not data:
         raise HTTPException(status_code=400, detail="Falta la foto")
     try:
-        url, thumb = subir_foto_galeria(f"lugares/{lugar_id}", data)
+        url, thumb = await run_in_threadpool(subir_foto_galeria, f"lugares/{lugar_id}", data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True, "lugar": repo.update_lugar(lugar_id, {"portada_url": url, "portada_thumb_url": thumb})}
@@ -608,10 +610,16 @@ def editar_mi_comercio(
     if not patch and body.rubro_slugs is None:
         raise HTTPException(status_code=400, detail="No hay campos para actualizar")
     anterior = actual_comercio.get("catalogo_url") if "catalogo_url" in patch else None
+    if anterior and anterior != patch.get("catalogo_url", anterior):
+        # EL AGENTE NO BORRA. Vaciar el catálogo es quitarlo, y reemplazar un PDF
+        # nuestro por un enlace es dejar el PDF sin dueño (se borraría del disco).
+        # Cambiar un enlace por otro enlace no borra nada y se permite.
+        if patch["catalogo_url"] is None or catalogo_svc.archivo_propio(anterior, comercio_id):
+            raise HTTPException(status_code=403, detail=fotos_galeria.MSG_AGENTE_NO_BORRA)
     comercio = repo.update_comercio(comercio_id, patch, body.rubro_slugs)
     if "catalogo_url" in patch:
-        # Cambió el catálogo (enlace nuevo o vaciado): si el anterior era un PDF
-        # nuestro, se borra del disco.
+        # Cambió el catálogo (enlace por enlace: el anterior no era un PDF nuestro,
+        # el agente no puede cambiar ese caso). Se deja por si cambia la regla.
         catalogo_svc.soltar_catalogo_reemplazado(anterior, patch["catalogo_url"], comercio_id)
     return {"ok": True, "comercio": comercio}
 
@@ -636,10 +644,9 @@ async def quitar_catalogo_mi_comercio(
     agente: dict = Depends(auth.require_agente),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """Quita el catálogo: borra el PDF si es nuestro y deja `catalogo_url` en null."""
-    comercio = _propio_o_404(repo, comercio_id, agente)
-    await catalogo_svc.quitar_catalogo(repo, comercio, actor=agente["email"])
-    return {"ok": True}
+    """El agente NO quita catálogos: borrar (y con eso el PDF del disco) es del admin y del comercio."""
+    _propio_o_404(repo, comercio_id, agente)
+    raise HTTPException(status_code=403, detail=fotos_galeria.MSG_AGENTE_NO_BORRA)
 
 
 @router.post("/campo/mis-comercios/{comercio_id}/foto")
@@ -649,29 +656,40 @@ async def actualizar_foto_mi_comercio(
     agente: dict = Depends(auth.require_agente),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """El agente re-sube la foto de un comercio que él mismo cargó."""
+    """El agente sube una portada nueva a un comercio de su ciudad.
+
+    Reinicia el recorte. El agente sólo sube y no borra archivos: la portada
+    anterior PASA A LA GALERÍA (aunque eso supere el tope del plan: ya existía) y
+    no se toca ningún archivo del disco.
+    """
     comercio = _propio_o_404(repo, comercio_id, agente)
     data = await foto.read()
     if not data:
         raise HTTPException(status_code=400, detail="Falta la foto")
-    portada_url, portada_thumb = _subir_foto(comercio["slug"], foto, data)
+    portada_url, portada_thumb = await run_in_threadpool(_subir_foto, comercio["slug"], foto, data)
     if not portada_url:
         raise HTTPException(status_code=502, detail="No se pudo subir la foto, probá de nuevo")
-    updated = repo.update_comercio(comercio_id, {"portada_url": portada_url, "portada_thumb_url": portada_thumb}, None)
+    updated = portada.poner_nueva(repo, comercio, portada_url, portada_thumb, conservar_anterior=True)
     logger.info("campo.foto_update", comercio=comercio_id, agente=agente["email"])
     return {"ok": True, "comercio": updated}
 
 
-@router.delete("/campo/mis-comercios/{comercio_id}")
-def eliminar_mi_comercio(
+@router.put("/campo/mis-comercios/{comercio_id}/portada")
+def usar_como_portada_mi_comercio(
     comercio_id: str,
+    body: portada.UsarPortadaBody,
     agente: dict = Depends(auth.require_agente),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """Baja lógica (activo=false) — nunca se borra el registro."""
-    _propio_o_404(repo, comercio_id, agente)
-    repo.desactivar_comercio(comercio_id)
-    return {"ok": True}
+    """Una foto de la galería pasa a ser la portada (intercambio, sin tocar archivos)."""
+    comercio = _propio_o_404(repo, comercio_id, agente)
+    actualizado = portada.usar_de_galeria(repo, comercio, body.foto_id)
+    logger.info("campo.portada_de_galeria", comercio=comercio_id, agente=agente["email"])
+    return portada.respuesta(repo, actualizado)
+
+
+# EL AGENTE SÓLO SUBE. No da de baja comercios ni borra fotos: eso lo hace el
+# admin (docs/portada-y-permisos.md). Por eso no hay `DELETE /campo/mis-comercios/{id}`.
 
 
 class _LeadIn(BaseModel):
@@ -844,6 +862,9 @@ async def agregar_foto(
     repo: Repo = Depends(get_repo),
 ) -> dict:
     comercio = _propio_o_404(repo, comercio_id, agente)
+    if (reemplazar or "").strip():
+        # Reemplazar es borrar la más vieja: el agente no borra. En el tope sólo cancela.
+        raise HTTPException(status_code=403, detail=fotos_galeria.MSG_AGENTE_NO_BORRA)
     # El agente no puede pagar (403 si manda extra=pagar); en el tope, 409.
     subida = fotos_galeria.preparar(repo, comercio, reemplazar=reemplazar, extra=extra, puede_pagar=False)
     data = await foto.read()
@@ -852,7 +873,7 @@ async def agregar_foto(
     if len(data) > _MAX_FOTO_BYTES:
         raise HTTPException(status_code=413, detail="La foto supera los 15 MB")
     try:
-        url, thumb = subir_foto_galeria(comercio["slug"], data)
+        url, thumb = await run_in_threadpool(subir_foto_galeria, comercio["slug"], data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not url:
@@ -866,10 +887,8 @@ async def agregar_foto(
 @router.delete("/campo/mis-comercios/{comercio_id}/fotos/{foto_id}")
 async def borrar_foto(comercio_id: str, foto_id: str, agente: dict = Depends(auth.require_agente), repo: Repo = Depends(get_repo)) -> dict:
     _propio_o_404(repo, comercio_id, agente)
-    from app.services.fotos_galeria import borrar_foto_por_id
-    if not borrar_foto_por_id(repo, comercio_id, foto_id):
-        raise HTTPException(status_code=404, detail="Foto no encontrada")
-    return {"ok": True}
+    # El agente sólo sube: borrar fotos es del admin (y del propio comercio).
+    raise HTTPException(status_code=403, detail=fotos_galeria.MSG_AGENTE_NO_BORRA)
 
 
 @router.get("/campo/mis-comercios/{comercio_id}/videos")
@@ -910,6 +929,5 @@ async def agregar_video(
 @router.delete("/campo/mis-comercios/{comercio_id}/videos/{video_id}")
 async def borrar_video(comercio_id: str, video_id: str, agente: dict = Depends(auth.require_agente), repo: Repo = Depends(get_repo)) -> dict:
     _propio_o_404(repo, comercio_id, agente)
-    if not repo.delete_video_comercio(video_id, comercio_id):
-        raise HTTPException(status_code=404, detail="Video no encontrado")
-    return {"ok": True}
+    # El agente sólo sube: borrar videos es del admin (y del propio comercio).
+    raise HTTPException(status_code=403, detail=fotos_galeria.MSG_AGENTE_NO_BORRA)

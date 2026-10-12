@@ -28,10 +28,13 @@ const boton: React.CSSProperties = {
  * backdrop-filter y un `position: fixed` adentro se centraría sobre la tarjeta
  * y no sobre la pantalla.
  */
-export function TopeFotosDialogo({ tope, puedePagarExtra, onElegir }: {
+export function TopeFotosDialogo({ tope, puedePagarExtra, puedeBorrar = true, onElegir }: {
   tope: TopeFotos;
   /** Sólo la galería del comerciante: el agente y el admin no comprometen plata. */
   puedePagarExtra: boolean;
+  /** `false` (el agente de campo): las fotos las borra URUKU, así que no se ofrece
+   *  borrar la más vieja y sólo queda «Cancelar». */
+  puedeBorrar?: boolean;
   /** `null` = cancelar. */
   onElegir: (d: DecisionTope | null) => void;
 }) {
@@ -54,6 +57,7 @@ export function TopeFotosDialogo({ tope, puedePagarExtra, onElegir }: {
   if (!montado) return null;
 
   const pagar = puedePagarExtra && tope.precio_extra > 0;
+  const reemplazar = puedeBorrar && !!tope.mas_vieja;
   return createPortal(
     <div
       onClick={(e) => { if (e.target === e.currentTarget) onElegir(null); }}
@@ -76,12 +80,18 @@ export function TopeFotosDialogo({ tope, puedePagarExtra, onElegir }: {
           </h2>
           <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--txt-2, #aab4c3)", lineHeight: 1.45 }}>
             {tope.limite > 0
-              ? `Tu galería ya tiene las ${tope.limite} fotos que permite tu plan. Para subir esta, elegí qué hacer.`
-              : "Tu galería ya tiene todas las fotos que permite tu plan. Para subir esta, elegí qué hacer."}
+              ? `Tu galería ya tiene las ${tope.limite} fotos que permite tu plan.`
+              : "Tu galería ya tiene todas las fotos que permite tu plan."}
+            {puedeBorrar || pagar ? " Para subir esta, elegí qué hacer." : " Para subir esta hay que liberar lugar."}
           </p>
+          {!puedeBorrar && !pagar && (
+            <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: 1.45 }}>
+              Las fotos las borra URUKU: avisale al admin si hay que liberar lugar.
+            </p>
+          )}
         </div>
 
-        {tope.mas_vieja && (
+        {reemplazar && tope.mas_vieja && (
           <div style={{
             display: "flex", alignItems: "center", gap: 12, padding: 10, borderRadius: 12,
             border: "1px solid var(--stroke-2, #444)",
@@ -109,7 +119,7 @@ export function TopeFotosDialogo({ tope, puedePagarExtra, onElegir }: {
               </small>
             </div>
           )}
-          {tope.mas_vieja && (
+          {reemplazar && (
             <button type="button" onClick={() => onElegir("reemplazar")}
               style={{ ...boton, background: "transparent", color: "var(--txt, #e8edf4)", border: "1.5px solid var(--pink, #d33)" }}>
               <Ic n="cerrar" s={16} /> Borrar esa y subir la nueva

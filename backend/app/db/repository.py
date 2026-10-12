@@ -18,6 +18,14 @@ logger = structlog.get_logger()
 _SLUG_GENERICO = re.compile(r"^comercio(-\d+)?$")
 
 
+def limpiar_busqueda(q: str | None, largo: int = 80) -> str:
+    """El texto de una búsqueda, listo para ir en un filtro de PostgREST.
+
+    Saca lo que rompe la sintaxis de `or=(...)` (coma, paréntesis, comillas, barra invertida) y
+    los comodines (`*`, `%`): lo que se escribe se busca como texto, no como patrón."""
+    return re.sub(r'[,()"\\*%]', " ", q or "").strip()[:largo].strip()
+
+
 def _normalizar_rubro(texto: str) -> str:
     """Agrupa variantes: 'Juguetería', 'jugueterias', '🧸 Juguetería' → 'jugueteria'."""
     import unicodedata
@@ -45,6 +53,8 @@ class Repo(Protocol):
     def insert_publicacion(self, row: dict) -> dict: ...
     def insert_publicacion_directa(self, row: dict) -> dict: ...
     def list_publicaciones(self, estado: str | None) -> list[dict]: ...
+    def buscar_publicaciones(self, estado: str | None, q: str | None = None,
+                             offset: int = 0, limit: int = 100) -> tuple[list[dict], int]: ...
     def get_publicacion(self, pub_id: str) -> dict | None: ...
     def publicaciones_sin_revision_ia(self, limite: int) -> list[dict]: ...
     def guardar_veredicto_ia(self, pub_id: str, veredicto: str, motivo: str | None,
@@ -58,6 +68,7 @@ class Repo(Protocol):
     def publicaciones_activas_de(self, comercio_id: str) -> list[dict]: ...
     def archivar_publicacion(self, pub_id: str) -> None: ...
     def imagen_en_uso(self, imagen_url: str, excepto_id: str) -> bool: ...
+    def foto_en_uso_por_comercios(self, url: str) -> bool: ...
     def descartar_difusion_de(self, publicacion_id: str, motivo: str) -> int: ...
     def registrar_cargo_extra(self, comercio_id: str, publicacion_id: str | None,
                               monto: float, moneda: str,
@@ -78,6 +89,8 @@ class Repo(Protocol):
     def list_comercios_admin(self, verificado: bool | None) -> list[dict]: ...
     def set_comercio_verificado(self, comercio_id: str, valor: bool) -> dict: ...
     def desactivar_comercio(self, comercio_id: str) -> dict: ...
+    def reactivar_comercio(self, comercio_id: str) -> dict: ...
+    def list_comercios_dados_de_baja(self, ciudad_slug: str | None, limit: int = 500) -> list[dict]: ...
     def get_comercio_usuario(self, email: str) -> dict | None: ...
     def get_comercio_usuario_por_whatsapp(self, whatsapp: str) -> dict | None: ...
     def get_comercio_por_whatsapp(self, whatsapp: str) -> dict | None: ...
@@ -182,7 +195,7 @@ class Repo(Protocol):
     def ocultar_comercios_vencidos(self, dias: int = 40, dias_gracia: int | None = None) -> int: ...
     def get_comercio_por_numero(self, numero: str) -> dict | None: ...
     def vincular_wa_jid(self, comercio_id: str, wa_jid: str) -> None: ...
-    def get_comercio_por_grupo(self, grupo_jid: str) -> dict | None: ...
+    def get_comercio_por_grupo(self, grupo_jid: str, incluir_inactivos: bool = False) -> dict | None: ...
     def vincular_grupo_comercio(self, grupo_jid: str, comercio_id: str,
                                 nombre: str | None, origen: str, by: str) -> None: ...
     def list_grupos_comercio(self, comercio_id: str) -> list[dict]: ...
@@ -248,6 +261,7 @@ class Repo(Protocol):
     def list_fotos_comercio(self, comercio_id: str) -> list[dict]: ...
     def add_foto_comercio(self, row: dict) -> dict: ...
     def delete_foto_comercio(self, foto_id: str, comercio_id: str) -> bool: ...
+    def update_foto_comercio(self, foto_id: str, comercio_id: str, patch: dict) -> dict | None: ...
     def count_fotos_comercio(self, comercio_id: str) -> int: ...
     def list_videos_comercio(self, comercio_id: str) -> list[dict]: ...
     def add_video_comercio(self, row: dict) -> dict: ...
@@ -385,12 +399,23 @@ class SupabaseRepo:
         self._db.table("comercios").update({"wa_jid": wa_jid}).eq("id", comercio_id).execute()
 
     # ---- grupos de WhatsApp (uno por comerciante) ----
-    def get_comercio_por_grupo(self, grupo_jid: str) -> dict | None:
+    def get_comercio_por_grupo(self, grupo_jid: str, incluir_inactivos: bool = False) -> dict | None:
+        """El comercio al que está atado un grupo.
+
+        Un comercio dado de baja NO identifica a nadie: su grupo deja de juntarle
+        publicaciones (igual que su número y su código). Sólo se pide con
+        `incluir_inactivos=True` para saber de quién ES el grupo —no atarlo dos
+        veces—, no para atribuirle lo que llega."""
         res = (
             self._db.table("comercio_wa_grupos")
             .select("comercio_id").eq("grupo_jid", grupo_jid).limit(1).execute()
         )
-        return self.get_comercio(res.data[0]["comercio_id"]) if res.data else None
+        if not res.data:
+            return None
+        comercio = self.get_comercio(res.data[0]["comercio_id"])
+        if comercio and not incluir_inactivos and comercio.get("activo") is False:
+            return None
+        return comercio
 
     def vincular_grupo_comercio(self, grupo_jid: str, comercio_id: str,
                                 nombre: str | None, origen: str, by: str) -> None:
@@ -1136,6 +1161,9 @@ class SupabaseRepo:
         publicar por WhatsApp desde cualquier número, sin login ni pago."""
         if not row.get("codigo"):
             row = {**row, "codigo": self._codigo_libre()}
+        if row.get("activo") is False and not row.get("baja_motivo"):
+            # Un alta que nace apagada es un borrador: espera que alguien la mire.
+            row = {**row, "baja_motivo": "borrador"}
         res = self._db.table("comercios").insert(row).execute()
         return res.data[0]
 
@@ -1643,6 +1671,36 @@ class SupabaseRepo:
         res = q.order("created_at", desc=True).limit(200).execute()
         return res.data or []
 
+    def buscar_publicaciones(self, estado: str | None, q: str | None = None,
+                             offset: int = 0, limit: int = 100) -> tuple[list[dict], int]:
+        """Una página de publicaciones y el total REAL que cumple el filtro.
+
+        Es la lista «Publicadas» del panel: `list_publicaciones` corta en 200 y no
+        busca, así que una oferta aprobada hace semanas no se podía encontrar para
+        bajarla. `q` mira el título y el nombre del comercio (sin distinguir
+        mayúsculas). El orden es el de siempre, lo más nuevo primero, con `id` de
+        desempate para que el paginado sea total."""
+        offset = max(0, int(offset or 0))
+        limit = max(1, int(limit or 1))
+        sel = (self._db.table("publicaciones")
+               .select("*, comercios(nombre, slug, logo_url)", count="exact")
+               .eq("activo", True))
+        if estado:
+            sel = sel.eq("estado", estado)
+        texto = limpiar_busqueda(q)
+        if texto:
+            partes = [f"titulo.ilike.*{texto}*"]
+            ids = (self._db.table("comercios").select("id")
+                   .ilike("nombre", f"%{texto}%").limit(500).execute().data or [])
+            if ids:
+                partes.append("comercio_id.in.(" + ",".join(str(c["id"]) for c in ids) + ")")
+            sel = sel.or_(",".join(partes))
+        res = (sel.order("created_at", desc=True).order("id", desc=True)
+               .range(offset, offset + limit - 1).execute())
+        items = res.data or []
+        total = res.count if res.count is not None else offset + len(items)
+        return items, int(total)
+
     def get_publicacion(self, pub_id: str) -> dict | None:
         res = self._db.table("publicaciones").select("*").eq("id", pub_id).limit(1).execute()
         return res.data[0] if res.data else None
@@ -1813,6 +1871,23 @@ class SupabaseRepo:
                .neq("id", excepto_id).limit(1).execute())
         return bool(res.data)
 
+    def foto_en_uso_por_comercios(self, url: str) -> bool:
+        """¿Alguna fila de galería o alguna portada, de CUALQUIER comercio, usa esta URL?
+
+        Es la última guarda antes de borrar un archivo del disco: la URL es la
+        identidad del archivo, y si una fila de `comercio_fotos` (aunque sea de otro
+        comercio, o un duplicado) o una portada (`portada_url` / `portada_thumb_url`)
+        todavía la apunta, borrarla rompe esa foto. No filtra por `activo`: un comercio
+        dado de baja se puede reactivar y tiene que encontrar sus fotos."""
+        if not url:
+            return False
+        for tabla, columna in (("comercio_fotos", "url"), ("comercio_fotos", "thumb_url"),
+                               ("comercios", "portada_url"), ("comercios", "portada_thumb_url")):
+            res = self._db.table(tabla).select("id").eq(columna, url).limit(1).execute()
+            if res.data:
+                return True
+        return False
+
     def descartar_difusion_de(self, publicacion_id: str, motivo: str) -> int:
         """Marca como `omitido` lo que esa publicación tenía PENDIENTE en la
         cola de difusión. Devuelve cuántas filas descartó.
@@ -1878,8 +1953,45 @@ class SupabaseRepo:
         return res.data[0] if res.data else {}
 
     def desactivar_comercio(self, comercio_id: str) -> dict:
-        res = self._db.table("comercios").update({"activo": False}).eq("id", comercio_id).execute()
+        """Baja lógica hecha por una persona del equipo: `baja_motivo = 'admin'`."""
+        res = (self._db.table("comercios").update({"activo": False, "baja_motivo": "admin"})
+               .eq("id", comercio_id).execute())
         return res.data[0] if res.data else {}
+
+    def reactivar_comercio(self, comercio_id: str) -> dict:
+        """Deshace la baja lógica: vuelve a `activo = true` y borra el motivo.
+        {} si el comercio no existe."""
+        res = (self._db.table("comercios").update({"activo": True, "baja_motivo": None})
+               .eq("id", comercio_id).execute())
+        return res.data[0] if res.data else {}
+
+    def list_comercios_dados_de_baja(self, ciudad_slug: str | None, limit: int = 500) -> list[dict]:
+        """Los comercios dados de baja POR EL ADMIN, los últimos primero.
+
+        Trae lo justo para la lista «Dados de baja» del panel. Lista `baja_motivo`
+        `admin` y los viejos sin motivo (null); NO los `vencido` (se reactivan solos
+        al pagar) ni los `borrador` (los enciende aprobar lo que mandaron). Con
+        `ciudad_slug` filtra por esa ciudad; si la ciudad no existe, la lista queda vacía.
+        """
+        q = (self._db.table("comercios")
+             .select("id, slug, nombre, portada_thumb_url, updated_at, baja_motivo, "
+                     "rubros!comercios_rubro_id_fkey(nombre)")
+             .eq("activo", False)
+             .or_("baja_motivo.is.null,baja_motivo.eq.admin"))
+        if ciudad_slug:
+            ciudad_id = self.get_ciudad_id(ciudad_slug)
+            if not ciudad_id:
+                return []
+            q = q.eq("ciudad_id", ciudad_id)
+        res = q.order("updated_at", desc=True).limit(limit).execute()
+        return [
+            {"id": c["id"], "slug": c.get("slug"), "nombre": c.get("nombre"),
+             "rubro_nombre": (c.get("rubros") or {}).get("nombre"),
+             "portada_thumb_url": c.get("portada_thumb_url"),
+             "updated_at": c.get("updated_at"),
+             "baja_motivo": c.get("baja_motivo")}
+            for c in (res.data or [])
+        ]
 
     # ---- leads ----
     def insert_lead(self, row: dict) -> dict:
@@ -2294,8 +2406,8 @@ class SupabaseRepo:
         self._db.table("comercios").update({
             "paga_hasta": nueva_fecha,
             "suspendido": False,
-            "activo": True,
         }).eq("id", comercio_id).execute()
+        self._reactivar_si_lo_apago_el_pago(comercio_id)
 
         return {"paga_hasta": nueva_fecha}
 
@@ -2303,7 +2415,20 @@ class SupabaseRepo:
         self._db.table("comercios").update({"suspendido": True}).eq("id", comercio_id).execute()
 
     def activar_comercio(self, comercio_id: str) -> None:
-        self._db.table("comercios").update({"suspendido": False, "activo": True}).eq("id", comercio_id).execute()
+        """Levanta la suspensión (`suspendido = false`) y reactiva lo que el pago apagó.
+
+        Una baja del admin (o una vieja sin motivo) NO se deshace desde acá: sólo
+        «Reactivar» en Dados de baja. Antes `activo = true` iba siempre y un pago
+        o un «Activar» le devolvía al mapa un comercio que el admin acababa de bajar."""
+        self._db.table("comercios").update({"suspendido": False}).eq("id", comercio_id).execute()
+        self._reactivar_si_lo_apago_el_pago(comercio_id)
+
+    def _reactivar_si_lo_apago_el_pago(self, comercio_id: str) -> None:
+        """`activo = true` sólo si la baja fue por vencimiento (o un borrador).
+        No toca a un comercio activo ni a uno dado de baja por el admin / sin motivo."""
+        (self._db.table("comercios").update({"activo": True, "baja_motivo": None})
+         .eq("id", comercio_id).eq("activo", False)
+         .in_("baja_motivo", ["vencido", "borrador"]).execute())
 
     def ocultar_comercios_vencidos(self, dias: int = 40, dias_gracia: int | None = None) -> int:
         """Baja automática del mapa. Devuelve cuántos ocultó.
@@ -2325,7 +2450,7 @@ class SupabaseRepo:
         hoy = date.today()
         vencidos = (
             self._db.table("comercios")
-            .update({"activo": False})
+            .update({"activo": False, "baja_motivo": "vencido"})
             .lt("paga_hasta", (hoy - timedelta(days=dias)).isoformat())
             .eq("activo", True)
             .eq("plan_cortesia", False)  # la cortesía nunca vence
@@ -2337,7 +2462,7 @@ class SupabaseRepo:
             corte = datetime.now(timezone.utc) - timedelta(days=dias_gracia)
             nunca_pagaron = (
                 self._db.table("comercios")
-                .update({"activo": False})
+                .update({"activo": False, "baja_motivo": "vencido"})
                 .is_("paga_hasta", "null")
                 .lt("created_at", corte.isoformat())
                 .eq("activo", True)
@@ -2740,6 +2865,12 @@ class SupabaseRepo:
     def delete_foto_comercio(self, foto_id: str, comercio_id: str) -> bool:
         res = self._db.table("comercio_fotos").delete().eq("id", foto_id).eq("comercio_id", comercio_id).execute()
         return bool(res.data)
+
+    def update_foto_comercio(self, foto_id: str, comercio_id: str, patch: dict) -> dict | None:
+        """Cambia campos de UNA foto de la galería (sólo si es de ese comercio)."""
+        res = (self._db.table("comercio_fotos").update(patch)
+               .eq("id", foto_id).eq("comercio_id", comercio_id).execute())
+        return res.data[0] if res.data else None
 
     def count_fotos_comercio(self, comercio_id: str) -> int:
         return len(self.list_fotos_comercio(comercio_id))

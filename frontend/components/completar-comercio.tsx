@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   actualizarFotoComercioAgente, editarComercioAgente,
-  listarFotosCampo, listarVideosCampo, subirFotoCampo, subirVideoCampo, borrarFotoCampo, borrarVideoCampo,
+  listarFotosCampo, listarVideosCampo, subirFotoCampo, subirVideoCampo, borrarVideoCampo, usarComoPortadaCampo,
   subirCatalogoCampo, quitarCatalogoCampo,
   type ComercioAgente, type EditarComercioBody, type Lugar,
 } from "@/lib/campo";
@@ -24,7 +24,8 @@ export function apiGaleriaCampo(id: string): GaleriaApi {
     cargarFotos: () => listarFotosCampo(id),
     // El agente nunca paga el extra del comercio: sólo puede reemplazar la más vieja.
     subirFoto: (file, onP, opts) => subirFotoCampo(id, file, onP, { reemplazar: opts?.reemplazar }),
-    borrarFoto: (fid) => borrarFotoCampo(id, fid),
+    // Sin `borrarFoto` a propósito: el agente sólo sube. Las fotos las borra URUKU.
+    usarComoPortada: (fid) => usarComoPortadaCampo(id, fid),
     cargarVideos: () => listarVideosCampo(id),
     subirVideo: (file, dur, onP) => subirVideoCampo(id, file, dur, onP),
     borrarVideo: (vid) => borrarVideoCampo(id, vid),
@@ -180,6 +181,8 @@ export function CompletarComercio({ comercio, rubros, lugares, abrirEn, sinWhats
   const [subiendoPortada, setSubiendoPortada] = useState(false);
   const [portadaFalla, setPortadaFalla] = useState<{ file: File; msg: string } | null>(null);
   const portadaInput = useRef<HTMLInputElement>(null);
+  // Sube cada vez que cambia la portada por fuera de la galería, para que ésta se relea.
+  const [refrescoGaleria, setRefrescoGaleria] = useState(0);
 
   const set = (k: keyof Campos, v: string) => { setF((p) => ({ ...p, [k]: v })); setGuardado(false); setErr(""); };
 
@@ -330,15 +333,17 @@ export function CompletarComercio({ comercio, rubros, lugares, abrirEn, sinWhats
     setSubiendoPortada(true); setPortadaFalla(null);
     try {
       const comp = await comprimirImagen(file).catch(() => file);
-      const url = await actualizarFotoComercioAgente(comercio.id, comp);
-      onGuardado({ portada_url: url });
+      const nueva = await actualizarFotoComercioAgente(comercio.id, comp);
+      onGuardado({ portada_url: nueva.portada_url, portada_thumb_url: nueva.portada_thumb_url });
+      // La portada anterior pasó a la galería: se vuelve a pedir la lista.
+      setRefrescoGaleria((n) => n + 1);
     } catch (e) {
       setPortadaFalla({ file, msg: textoError(e).replace("no se guardó", "no se subió") });
     } finally { setSubiendoPortada(false); }
   }
   function elegirPortada() {
     // Reemplazarla no tiene vuelta atrás: se confirma si ya hay una.
-    if (comercio.portada_url && !window.confirm("Ya tiene foto de la vidriera. ¿Reemplazarla por una nueva?")) return;
+    if (comercio.portada_url && !window.confirm("Ya tiene foto de la vidriera. ¿Subir una nueva? La foto actual pasa a la galería.")) return;
     portadaInput.current?.click();
   }
 
@@ -537,7 +542,10 @@ export function CompletarComercio({ comercio, rubros, lugares, abrirEn, sinWhats
           )}
         </div>
         <div id="cc-galeria" style={{ scrollMarginTop: 8 }}>
-          <GaleriaUploader comercioId={comercio.id} onFotos={(n) => { setNFotos(n); setFotosSinDato(false); }} onFotosError={() => setFotosSinDato(true)} api={apiGaleriaCampo(comercio.id)} />
+          <GaleriaUploader comercioId={comercio.id}
+            portada={comercio.portada_url || comercio.portada_thumb_url ? { url: comercio.portada_url, thumb_url: comercio.portada_thumb_url } : null}
+            onPortada={(p) => onGuardado({ portada_url: p.url, portada_thumb_url: p.thumb_url })} refrescar={refrescoGaleria}
+            onFotos={(n) => { setNFotos(n); setFotosSinDato(false); }} onFotosError={() => setFotosSinDato(true)} api={apiGaleriaCampo(comercio.id)} />
         </div>
       </Seccion>
 

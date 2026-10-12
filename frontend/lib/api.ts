@@ -1,5 +1,5 @@
 // Cliente del backend FastAPI (ingesta + moderación).
-import { camposOpcionesFoto, errorDeRespuesta, type OpcionesFoto } from "@/lib/upload";
+import { camposOpcionesFoto, respuestaPortada, subirConProgreso, type OpcionesFoto, type RespuestaPortada } from "@/lib/upload";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_admin_token";
 
@@ -100,6 +100,24 @@ export type PendingPub = {
 export async function listPendientes(estado = "pendiente"): Promise<PendingPub[]> {
   const res = await authFetch(`/moderacion/publicaciones?estado=${estado}`);
   return itemsDe<PendingPub>(res, "las publicaciones");
+}
+
+/** Una página de las publicaciones ya publicadas: `total` es el real (no el de la página). */
+export type PaginaPublicadas = { items: PendingPub[]; total: number };
+
+/** Las publicadas (estado «aprobado»), con búsqueda por título o comercio y paginado
+ *  por `offset` (el backend manda hasta 100 por vez). */
+export async function listPublicadas(q: string, offset: number): Promise<PaginaPublicadas> {
+  const params = new URLSearchParams({ estado: "aprobado", offset: String(offset) });
+  if (q.trim()) params.set("q", q.trim());
+  const res = await authFetch(`/moderacion/publicaciones?${params.toString()}`);
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(detalleLegible(d.detail) ?? `No se pudo cargar las publicadas (HTTP ${res.status})`);
+  }
+  const data = (await res.json().catch(() => ({}))) as { items?: PendingPub[]; total?: number };
+  const items = data.items ?? [];
+  return { items, total: typeof data.total === "number" ? data.total : offset + items.length };
 }
 
 export async function moderar(id: string, estado: string, motivo?: string, tipo?: string) {
@@ -254,9 +272,31 @@ export async function verificarComercio(id: string) {
   return okDe(res, "verificar el negocio");
 }
 
+/** «Dar de baja» un negocio (activo = false; nunca se borra el registro). Es la
+ *  ruta de siempre, que ahora pide `comercios.editar`. */
 export async function rechazarComercio(id: string) {
   const res = await authFetch(`/moderacion/comercios/${id}/rechazar`, { method: "POST" });
-  return okDe(res, "rechazar el negocio");
+  return okDe(res, "dar de baja el negocio");
+}
+
+/** Un negocio dado de baja, como lo lista `GET /admin/comercios/dados-de-baja`. */
+export type ComercioDadoDeBaja = {
+  id: string; slug: string; nombre: string; rubro_nombre: string | null;
+  portada_thumb_url: string | null; updated_at: string | null;
+  /** Quién lo dio de baja: 'admin', o null en los viejos (sin motivo registrado). */
+  baja_motivo?: string | null;
+};
+
+export async function adminListarDadosDeBaja(ciudadSlug?: string | null): Promise<ComercioDadoDeBaja[]> {
+  const q = ciudadSlug ? `?ciudad=${encodeURIComponent(ciudadSlug)}` : "";
+  const res = await authFetch(`/admin/comercios/dados-de-baja${q}`);
+  return itemsDe<ComercioDadoDeBaja>(res, "los negocios dados de baja");
+}
+
+/** Vuelve a poner activo un negocio dado de baja. */
+export async function adminReactivarComercio(id: string) {
+  const res = await authFetch(`/admin/comercio/${id}/reactivar`, { method: "POST" });
+  return okDe(res, "reactivar el negocio");
 }
 
 // ── Lugares (mercados / galerías / referencias): ABM desde el admin ──────────
@@ -642,18 +682,46 @@ export async function adminListarFotos(comercioId: string): Promise<FotoComercio
   return (await res.json()).items ?? [];
 }
 
+/** Sube con `subirConProgreso` (y no con `authFetch`) a propósito: `authFetch`
+ *  lanza un Error de texto ante cualquier !ok y pierde el `detail` en objeto del
+ *  409 del tope de fotos, así que el diálogo del tope nunca llegaba a abrirse. */
+async function subirAdmin<T>(path: string, file: File, extra: Record<string, string> = {}, onP?: (p: number) => void): Promise<T> {
+  try {
+    return await subirConProgreso<T>(`${API}${path}`, "foto", file, getToken(), extra, onP);
+  } catch (e) {
+    if ((e as { status?: number })?.status === 401) {
+      clearToken();
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("uk-sesion-vencida"));
+      throw new Error("Se venció la sesión. Entrá de nuevo.");
+    }
+    throw e;
+  }
+}
+
 /** `opts.reemplazar`: al llegar al tope (409, ver `datosTope`), reintenta
  *  borrando esa foto. El admin no puede pagar un extra por el comercio. */
 export async function adminSubirFoto(comercioId: string, file: File, opts?: Pick<OpcionesFoto, "reemplazar">): Promise<FotoComercio> {
-  const fd = new FormData();
-  fd.append("foto", file);
-  for (const [k, v] of Object.entries(camposOpcionesFoto(opts))) fd.append(k, v);
-  const res = await authFetch(`/admin/comercio/${comercioId}/fotos`, { method: "POST", body: fd });
-  if (!res.ok) {
-    const d = await res.json().catch(() => ({}));
-    throw errorDeRespuesta(res.status, d, "No se pudo subir la foto");
-  }
-  return (await res.json()).foto as FotoComercio;
+  const d = await subirAdmin<{ foto: FotoComercio }>(`/admin/comercio/${comercioId}/fotos`, file, camposOpcionesFoto(opts));
+  return d.foto;
+}
+
+/** Sube una PORTADA nueva (`POST /admin/comercio/{id}/foto`, multipart `foto`). El
+ *  servidor reinicia el recorte (`portada_pos = null`) y borra la portada anterior
+ *  del disco si la galería no la usa. Devuelve las URLs nuevas. */
+export async function adminSubirPortada(comercioId: string, file: File): Promise<{ portada_url: string | null; portada_thumb_url: string | null }> {
+  const d = await subirAdmin<{ comercio?: { portada_url?: string | null; portada_thumb_url?: string | null } }>(`/admin/comercio/${comercioId}/foto`, file);
+  return { portada_url: d.comercio?.portada_url ?? null, portada_thumb_url: d.comercio?.portada_thumb_url ?? null };
+}
+
+/** «Usar como portada»: `PUT /admin/comercio/{id}/portada` con `{foto_id}`. Es un
+ *  intercambio: la portada anterior entra a la galería. */
+export async function adminUsarComoPortada(comercioId: string, fotoId: string): Promise<RespuestaPortada<FotoComercio>> {
+  const res = await authFetch(`/admin/comercio/${comercioId}/portada`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ foto_id: fotoId }),
+  });
+  return respuestaPortada<FotoComercio>(await okDe(res, "cambiar la portada"));
 }
 
 export async function adminBorrarFoto(comercioId: string, fotoId: string): Promise<void> {

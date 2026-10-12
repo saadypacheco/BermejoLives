@@ -26,6 +26,28 @@ export function listaFotos<F>(d: { items?: F[]; limite?: unknown } | null | unde
   return { items: d?.items ?? [], limite: typeof l === "number" && l > 0 ? l : null };
 }
 
+/** Lo que contesta «Usar como portada» (`PUT <base>/portada`): la portada nueva y
+ *  la galería ya reacomodada (la portada anterior entró en lugar de la elegida). */
+export type RespuestaPortada<F> = {
+  portada_url: string | null;
+  portada_thumb_url: string | null;
+  fotos: F[];
+  limite: number | null;
+};
+
+export function respuestaPortada<F>(
+  d: { portada_url?: unknown; portada_thumb_url?: unknown; fotos?: F[]; limite?: unknown } | null | undefined,
+): RespuestaPortada<F> {
+  const txt = (x: unknown) => (typeof x === "string" && x ? x : null);
+  const l = d?.limite;
+  return {
+    portada_url: txt(d?.portada_url),
+    portada_thumb_url: txt(d?.portada_thumb_url),
+    fotos: d?.fotos ?? [],
+    limite: typeof l === "number" && l > 0 ? l : null,
+  };
+}
+
 export function camposOpcionesFoto(o?: OpcionesFoto): Record<string, string> {
   const c: Record<string, string> = {};
   if (o?.reemplazar) c.reemplazar = o.reemplazar;

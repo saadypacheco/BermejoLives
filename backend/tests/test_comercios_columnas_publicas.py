@@ -28,7 +28,8 @@ import pytest
 RAIZ = Path(__file__).resolve().parents[2]
 PRIVADAS = ("plan_cortesia", "paga_hasta", "cargado_por", "capturado_en")
 # Otras que a propósito NO se dan (la 0145 lo explica): datos internos.
-PRIVADAS_EXTRA = ("fotos_extra", "wa_jid", "rubro_revisado_por")
+# `baja_motivo` (0147): por qué está dado de baja un comercio; dato interno, nace privada (regla 11).
+PRIVADAS_EXTRA = ("fotos_extra", "wa_jid", "rubro_revisado_por", "baja_motivo")
 NO_VAN_EN_LA_LISTA = PRIVADAS + PRIVADAS_EXTRA
 
 

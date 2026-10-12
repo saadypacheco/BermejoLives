@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
-  listPendientes, moderar, revisarConIA, type VeredictoIA, login, getToken, clearToken, type PendingPub,
+  listPendientes, listPublicadas, moderar, revisarConIA, type VeredictoIA, login, getToken, clearToken, type PendingPub,
   listTodosComercios, verificarComercio, rechazarComercio,
   editarComercio, type ComercioPorVerificar,
   listSuscripciones, registrarPago, suspenderComercio, activarComercio,
@@ -14,7 +14,8 @@ import {
   altasPorDia, type AltasDia,
   rubrosDeComercio, editarRubrosComercio,
   adminListarFotos, adminSubirFoto, adminBorrarFoto, type FotoComercio,
-  analizarComercio, type AnalisisIA,
+  adminSubirPortada, adminUsarComoPortada, adminListarDadosDeBaja, adminReactivarComercio, type ComercioDadoDeBaja,
+  analizarComercio, type AnalisisIA, type PropuestaIA,
   pendientesAnalisis, analizarTanda, type ResultadoTanda,
   type ComercioSuscripcion, type EstadoSuscripcion,
   listPagosPendientes, confirmarPago, type PagoPendiente,
@@ -55,6 +56,7 @@ import { puedo } from "@/lib/api";
 import { RubroRecalcular } from "@/components/rubro-recalcular";
 import { CatalogoPanel } from "@/components/catalogo-panel";
 import { ImageLightbox } from "@/components/image-lightbox";
+import { FotoPrincipal } from "@/components/foto-principal";
 import type { Ciudad, Rubro } from "@/lib/types";
 import { precioFmt, MODALIDAD_LABEL, comoLlegarHref } from "@/lib/types";
 import { EditorHorario, recordarUltimoHorario } from "@/components/editor-horario";
@@ -64,7 +66,7 @@ import { CargasPanel } from "@/components/cargas-panel";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Dashboard } from "@/components/admin/dashboard";
 import { defSeccion, seccionDeUrl, type SeccionAdmin } from "@/components/admin/secciones";
-import { BarraDatos, Carga, CargandoSeccion, mensajeDeError, useCarga } from "@/components/admin/estado-seccion";
+import { BarraDatos, Carga, CargandoSeccion, ErrorSeccion, mensajeDeError, useCarga } from "@/components/admin/estado-seccion";
 
 /** Los comercios de la ciudad elegida (slug), o todos si no hay ninguna. */
 function deCiudad(lista: ComercioPorVerificar[], slug: string | null): ComercioPorVerificar[] {
@@ -137,6 +139,8 @@ function AdminPanel() {
   const [reclamos, setReclamos] = useState<Reclamo[]>([]);
   const [consultasReservalo, setConsultasReservalo] = useState<ConsultaReservalo[]>([]);
   const [solicitudesCambioNumero, setSolicitudesCambioNumero] = useState<SolicitudCambioNumero[]>([]);
+  // Publicaciones: la cola por aprobar o lo que ya está publicado (para bajarlo).
+  const [vistaPub, setVistaPub] = useState<"pendientes" | "publicadas">("pendientes");
   const [cPub, correrPub] = useCarga("No se pudieron cargar las publicaciones");
   const [cComercios, correrComercios] = useCarga("No se pudieron cargar los negocios");
   const [cSusc, correrSusc] = useCarga("No se pudieron cargar las suscripciones");
@@ -378,8 +382,10 @@ function AdminPanel() {
       : prev.items.map((c) => (c.id === id ? { ...c, verificado: true } : c)) });
     try {
       accion === "verificar" ? await verificarComercio(id) : await rechazarComercio(id);
-    } catch {
+    } catch (e) {
       void cargarComercios(true);   // falló el server: volvemos a la verdad de la BD
+      // Sin permiso (403) o sin red: se dice, no se deja la tarjeta volviendo sola.
+      alert(mensajeDeError(e, accion === "rechazar" ? "No se pudo dar de baja el negocio" : "No se pudo verificar el negocio"));
     }
     refrescarNumeros();
   }
@@ -597,6 +603,22 @@ function AdminPanel() {
 
       {permitida && seccion === "publicaciones" && <AnalisisOfertas />}
       {permitida && seccion === "publicaciones" && (
+        <div role="group" aria-label="Qué publicaciones ver" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          {([["pendientes", `Pendientes (${items.length})`], ["publicadas", "Publicadas"]] as const).map(([k, label]) => (
+            <button key={k} type="button" aria-pressed={vistaPub === k} onClick={() => setVistaPub(k)}
+              style={{ padding: "5px 16px", minHeight: 44, borderRadius: 20, border: "1px solid", cursor: "pointer", fontSize: 13.5,
+                borderColor: vistaPub === k ? "var(--neon)" : "var(--border)",
+                background: vistaPub === k ? "var(--neon)22" : "transparent",
+                color: vistaPub === k ? "var(--neon)" : "var(--txt-2)", fontWeight: vistaPub === k ? 600 : 400 }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {permitida && seccion === "publicaciones" && vistaPub === "publicadas" && (
+        <PublicadasPanel onBajada={refrescarNumeros} />
+      )}
+      {permitida && seccion === "publicaciones" && vistaPub === "pendientes" && (
       <Carga estado={cPub} onReintentar={() => { void cargarPendientes(); }} que="las publicaciones">
       <div className="panel-card glass">
         <div className="ph" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
@@ -668,6 +690,145 @@ function AdminPanel() {
       </Carga>
       )}
     </AdminShell>
+  );
+}
+
+/** Las ofertas, videos y novedades que YA están publicadas (estado «aprobado»),
+ *  para poder bajar una que no tendría que verse. «Bajar» pide el motivo y la pasa
+ *  a «rechazado»: sale del feed, de la ficha y de /ofertas. */
+function PublicadasPanel({ onBajada }: { onBajada: () => void }) {
+  const [lista, setLista] = useState<PendingPub[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [err, setErr] = useState("");
+  const [busqueda, setBusqueda] = useState("");     // lo que escribe la persona
+  const [q, setQ] = useState("");                   // lo que se pide (con debounce)
+  const [masCargando, setMasCargando] = useState(false);
+  const [errMas, setErrMas] = useState("");
+  const [bajando, setBajando] = useState<string | null>(null);   // la que tiene el motivo abierto
+  const [motivo, setMotivo] = useState("");
+  const [enCurso, setEnCurso] = useState(false);
+  const [errBaja, setErrBaja] = useState("");
+  // Descarta respuestas viejas: si se escribe rápido, sólo vale la última búsqueda.
+  const pedido = useRef(0);
+
+  // Espera a que la persona deje de escribir antes de pedir.
+  useEffect(() => {
+    const t = setTimeout(() => setQ(busqueda.trim()), 350);
+    return () => clearTimeout(t);
+  }, [busqueda]);
+
+  const cargar = useCallback(() => {
+    const mio = ++pedido.current;
+    setErr(""); setErrMas("");
+    listPublicadas(q, 0)
+      .then((r) => { if (mio === pedido.current) { setLista(r.items); setTotal(r.total); } })
+      .catch((e) => { if (mio === pedido.current) setErr(mensajeDeError(e, "No se pudieron cargar las publicadas")); });
+  }, [q]);
+  useEffect(() => { cargar(); }, [cargar]);
+
+  async function verMas() {
+    if (!lista || masCargando) return;
+    const mio = pedido.current;
+    setMasCargando(true); setErrMas("");
+    try {
+      const r = await listPublicadas(q, lista.length);
+      if (mio !== pedido.current) return;
+      setLista((prev) => {
+        const vistos = new Set((prev ?? []).map((x) => x.id));
+        return [...(prev ?? []), ...r.items.filter((x) => !vistos.has(x.id))];
+      });
+      setTotal(r.total);
+    } catch (e) {
+      setErrMas(mensajeDeError(e, "No se pudieron cargar más"));
+    } finally { setMasCargando(false); }
+  }
+
+  async function bajar(p: PendingPub) {
+    if (!motivo.trim()) { setErrBaja("Escribí el motivo: queda registrado."); return; }
+    setErrBaja(""); setEnCurso(true);
+    try {
+      await moderar(p.id, "rechazado", motivo.trim());
+      setLista((prev) => prev?.filter((x) => x.id !== p.id) ?? prev);
+      setTotal((t) => Math.max(0, t - 1));
+      setBajando(null); setMotivo("");
+      onBajada();
+    } catch (e) {
+      // Queda abierta, con lo escrito: no se pierde el motivo por un corte de red.
+      setErrBaja(mensajeDeError(e, "No se pudo bajar la publicación"));
+    } finally { setEnCurso(false); }
+  }
+
+  if (err) return <ErrorSeccion mensaje={err} onReintentar={cargar} />;
+  if (!lista) return <CargandoSeccion texto="Cargando las publicadas…" />;
+
+  return (
+    <div className="panel-card glass">
+      <div className="ph">
+        <h3>Publicadas</h3>
+        <span style={{ color: "var(--txt-3)", fontSize: 13 }}>Lo que ya se ve en el feed y en las fichas. «Bajar» la saca.</span>
+      </div>
+      <div style={{ padding: "0 16px 12px" }}>
+        <label className="campo-lbl" htmlFor="pub-buscar">Buscar por título o por comercio</label>
+        <input id="pub-buscar" type="search" className="adm-input" value={busqueda} maxLength={80}
+          onChange={(e) => setBusqueda(e.target.value)} placeholder="Ej: pizza, Farmacia Central…" />
+        <div aria-live="polite" style={{ marginTop: 6, fontSize: 12.5, color: "var(--txt-3)" }}>
+          {lista.length} de {total} {total === 1 ? "publicada" : "publicadas"}{q ? ` para «${q}»` : ""}
+        </div>
+      </div>
+      {lista.length === 0 && (
+        <div className="mod-item" style={{ justifyContent: "center", color: "var(--txt-3)" }}>
+          {q ? `No hay publicadas que coincidan con «${q}».` : "No hay publicaciones publicadas."}
+        </div>
+      )}
+      {lista.map((p) => (
+        <div className="mod-item" key={p.id}>
+          <img src={p.imagen_url ?? "https://picsum.photos/seed/ph/240/168"} alt="" />
+          <div style={{ minWidth: 0 }}>
+            <h4>{p.comercios?.nombre ?? "Comercio"} · <span style={{ textTransform: "capitalize", color: "var(--blue-soft)" }}>{p.tipo}</span></h4>
+            <p>{p.descripcion ?? p.titulo}</p>
+            <div className="mm">
+              {p.precio != null && <span style={{ color: "var(--neon)", fontWeight: 700 }}>{precioFmt(p.precio, p.moneda)}</span>}
+              {p.tiktok_url && <span><Ic n="videos" s={13} /> TikTok adjunto</span>}
+              <span><Ic n="reloj" s={13} /> {new Date(p.created_at).toLocaleString("es-BO")}</span>
+              <span style={{ color: "var(--neon)" }}><Ic n="listo" s={13} /> publicada</span>
+            </div>
+          </div>
+          {bajando !== p.id && (
+            <div className="mod-actions">
+              <button type="button" className="btn btn-ghost btn-sm" style={{ minHeight: 44, color: "var(--pink)", borderColor: "var(--pink)" }}
+                onClick={() => { setBajando(p.id); setMotivo(""); setErrBaja(""); }}>
+                <Ic n="cerrar" s={14} /> Bajar
+              </button>
+            </div>
+          )}
+          {bajando === p.id && (
+            <div style={{ gridColumn: "1 / -1", display: "grid", gap: 8 }}>
+              <label style={{ fontSize: 12.5, color: "var(--txt-3)" }}>Motivo de la baja (obligatorio)
+                <input className="adm-input" style={{ marginTop: 4 }} value={motivo} autoFocus maxLength={300}
+                  onChange={(e) => setMotivo(e.target.value)} placeholder="Ej: la oferta ya venció, el precio estaba mal" />
+              </label>
+              {errBaja && <span role="alert" style={{ color: "var(--pink)", fontSize: 13 }}><Ic n="aviso" s={13} /> {errBaja}</span>}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button type="button" className="btn btn-ghost btn-sm" style={{ minHeight: 44 }} disabled={enCurso}
+                  onClick={() => { setBajando(null); setErrBaja(""); }}>Cancelar</button>
+                <button type="button" className="btn btn-primary btn-sm" style={{ minHeight: 44, background: "var(--pink)", borderColor: "var(--pink)" }}
+                  disabled={enCurso} onClick={() => bajar(p)}>
+                  {enCurso ? "Bajando…" : "Bajar esta publicación"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+      {lista.length < total && (
+        <div style={{ padding: 16, textAlign: "center" }}>
+          {errMas && <div role="alert" style={{ color: "var(--pink)", fontSize: 13, marginBottom: 8 }}><Ic n="aviso" s={13} /> {errMas}</div>}
+          <button type="button" className="btn btn-ghost" style={{ minHeight: 44 }} disabled={masCargando} onClick={verMas}>
+            {masCargando ? "Cargando…" : `Ver más (${lista.length} de ${total})`}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1285,6 +1446,8 @@ function TabSuscripciones({
   const [filtro, setFiltro] = useState<EstadoSuscripcion | "todos">("todos");
   const [pagandoId, setPagandoId] = useState<string | null>(null);
   const [gestionandoId, setGestionandoId] = useState<string | null>(null);
+  // Confiable, números autorizados, grupos y «mensaje al comercio» son llaves de la cuenta.
+  const puedeCuenta = puedo("comercios.cuenta");
   const [planDeId, setPlanDeId] = useState<string | null>(null);
   // Para escribir el NOMBRE del plan en cada fila y llenar el selector del modal.
   const [planes, setPlanes] = useState<PlanAdmin[]>([]);
@@ -1354,6 +1517,8 @@ function TabSuscripciones({
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              {/* La cuenta (confiable, números, grupos, mensajes) es de admin y moderador: el publicador no la ve. */}
+              {puedeCuenta && (<>
               <button className="btn btn-ghost btn-sm" title="Enviar mensaje al comercio" onClick={async () => {
                 const cuerpo = prompt(`Mensaje para ${c.nombre}:`);
                 if (cuerpo && cuerpo.trim()) { try { await enviarMensajeComercio(c.id, cuerpo.trim()); alert("Mensaje enviado"); } catch { alert("No se pudo enviar"); } }
@@ -1361,6 +1526,7 @@ function TabSuscripciones({
               <button className="btn btn-ghost btn-sm" title="Confiable y números autorizados" onClick={() => setGestionandoId(c.id)}>
                 <Ic n="mas_opciones" s={15} />
               </button>
+              </>)}
               <button className="btn btn-ghost btn-sm" title="Elegir el plan o ponerlo de cortesía" onClick={() => setPlanDeId(c.id)}>
                 Plan
               </button>
@@ -1621,6 +1787,9 @@ function TabComercios({
   onIrCalles: () => void;
 }) {
   const [filtro, setFiltro] = useState<FiltroComercio>("todos");
+  // Dar de baja y reactivar piden `comercios.editar` (lo mismo que editar la ficha).
+  const puedeEditar = puedo("comercios.editar");
+  const [modo, setModo] = useState<"activos" | "baja">("activos");
   const [q, setQ] = useState("");
   const [orden, setOrden] = useState<OrdenComercio>("recientes");
   // Foto ampliada. Vive acá y no en cada tarjeta: el overlay va a pantalla
@@ -1723,6 +1892,27 @@ function TabComercios({
 
       {/* Resumen por ciudad: arriba de todo, porque es lo que dice dónde mirar. */}
       <ResumenPorCiudad todos={todos} noComerciales={noComerciales} truncado={truncado} />
+
+      {/* Activos o dados de baja. Sólo con permiso: la baja y la reactivación piden `comercios.editar`. */}
+      {puedeEditar && (
+        <div role="group" aria-label="Qué negocios ver" style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "16px 16px 0" }}>
+          {([["activos", "Activos"], ["baja", "Dados de baja"]] as const).map(([k, label]) => (
+            <button key={k} type="button" aria-pressed={modo === k} onClick={() => setModo(k)}
+              style={{ padding: "5px 16px", minHeight: 44, borderRadius: 20, border: "1px solid", cursor: "pointer", fontSize: 13.5,
+                borderColor: modo === k ? "var(--neon)" : "var(--border)",
+                background: modo === k ? "var(--neon)22" : "transparent",
+                color: modo === k ? "var(--neon)" : "var(--txt-2)", fontWeight: modo === k ? 600 : 400 }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {modo === "baja" && puedeEditar && (
+        <DadosDeBaja ciudad={ciudad} onReactivado={onEdited} />
+      )}
+
+      {modo === "activos" && (<>
 
       {/* Buscador (A) + orden (G) + vista lista/mapa (D) */}
       <div style={{ display: "flex", gap: 8, padding: "16px 16px 0", flexWrap: "wrap", alignItems: "center" }}>
@@ -1921,14 +2111,22 @@ function TabComercios({
               <Edit style={{ width: 16, height: 16 }} />
             </button>
             {!c.verificado && (
-              <>
-                <button className="mbtn approve" title="Verificar" onClick={() => onVerificar(c.id)}>
-                  <Verified style={{ width: 16, height: 16 }} />
-                </button>
-                <button className="mbtn reject" title="Rechazar" onClick={() => onRechazar(c.id)}>
-                  <X style={{ width: 16, height: 16 }} />
-                </button>
-              </>
+              <button className="mbtn approve" title="Verificar" onClick={() => onVerificar(c.id)}>
+                <Verified style={{ width: 16, height: 16 }} />
+              </button>
+            )}
+            {/* Baja lógica: deja de verse, el registro no se borra y se puede
+                reactivar desde «Dados de baja». Por eso confirma antes. */}
+            {puedeEditar && (
+              <button type="button" className="btn btn-ghost btn-sm" title="Dar de baja este negocio"
+                style={{ minHeight: 44, color: "var(--pink)", borderColor: "var(--pink)" }}
+                onClick={() => {
+                  if (window.confirm(`¿Dar de baja "${c.nombre || "este negocio"}"?
+
+Deja de verse en URUKU. No se borra: lo podés reactivar desde «Dados de baja».`)) onRechazar(c.id);
+                }}>
+                <Ic n="cerrar" s={14} /> Dar de baja
+              </button>
             )}
           </div>
 
@@ -1989,6 +2187,70 @@ function TabComercios({
           />
         );
       })()}
+      </>)}
+    </div>
+  );
+}
+
+/** Los negocios dados de baja de la ciudad elegida, con «Reactivar». Pide su
+ *  lista al abrirse (no viene con la de activos). */
+function DadosDeBaja({ ciudad, onReactivado }: { ciudad: string | null; onReactivado: () => void }) {
+  const [lista, setLista] = useState<ComercioDadoDeBaja[] | null>(null);
+  const [err, setErr] = useState("");
+  const [reactivando, setReactivando] = useState<string | null>(null);
+  const [errFila, setErrFila] = useState<{ id: string; msg: string } | null>(null);
+
+  const cargar = useCallback(() => {
+    setErr(""); setLista(null);
+    adminListarDadosDeBaja(ciudad).then(setLista).catch((e) => setErr(mensajeDeError(e, "No se pudieron cargar los negocios dados de baja")));
+  }, [ciudad]);
+  useEffect(() => { cargar(); }, [cargar]);
+
+  async function reactivar(c: ComercioDadoDeBaja) {
+    if (!window.confirm(`¿Reactivar "${c.nombre || "este negocio"}"? Vuelve a verse en URUKU.`)) return;
+    setErrFila(null); setReactivando(c.id);
+    try {
+      await adminReactivarComercio(c.id);
+      setLista((prev) => prev?.filter((x) => x.id !== c.id) ?? prev);
+      onReactivado();   // la lista de activos ya no es la misma
+    } catch (e) {
+      setErrFila({ id: c.id, msg: mensajeDeError(e, "No se pudo reactivar") });
+    } finally { setReactivando(null); }
+  }
+
+  if (err) return <ErrorSeccion mensaje={err} onReintentar={cargar} />;
+  if (!lista) return <CargandoSeccion texto="Cargando los negocios dados de baja…" />;
+  if (lista.length === 0) {
+    return <div style={{ padding: 24, textAlign: "center", color: "var(--txt-3)" }}>
+      <Ic n="listo" s={16} /> No hay negocios dados de baja{ciudad ? " en esta ciudad" : ""}.
+    </div>;
+  }
+  return (
+    <div>
+      <div style={{ padding: "12px 16px", color: "var(--txt-3)", fontSize: 13 }}>
+        {lista.length} {lista.length === 1 ? "negocio dado de baja" : "negocios dados de baja"}. No se ven en URUKU hasta que los reactives.
+      </div>
+      {lista.map((c) => (
+        <div key={c.id} style={{ display: "flex", gap: 12, padding: "12px 16px", borderTop: "1px solid var(--border)", alignItems: "center", flexWrap: "wrap" }}>
+          {c.portada_thumb_url
+            ? <img src={c.portada_thumb_url} alt="" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 10, flexShrink: 0 }} />
+            : <div aria-hidden style={{ width: 56, height: 56, borderRadius: 10, background: "var(--border)", display: "grid", placeItems: "center", flexShrink: 0 }}><Ic n="comercios" s={22} /></div>}
+          <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>{c.nombre || "Sin nombre"}</div>
+            <div style={{ fontSize: 12, color: "var(--txt-3)" }}>
+              {c.rubro_nombre ?? "Sin rubro"}
+              {c.updated_at ? ` · dado de baja ${new Date(c.updated_at).toLocaleDateString("es-BO")}` : ""}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--txt-3)" }}>
+              <Ic n={c.baja_motivo === "admin" ? "cerrajeria" : "aviso"} s={12} /> {c.baja_motivo === "admin" ? "Dado de baja por el admin" : "Sin motivo registrado"}
+            </div>
+            {errFila?.id === c.id && <div role="alert" style={{ color: "var(--pink)", fontSize: 12.5, marginTop: 4 }}><Ic n="aviso" s={12} /> {errFila.msg}</div>}
+          </div>
+          <button type="button" className="btn btn-primary btn-sm" style={{ minHeight: 44 }} disabled={reactivando === c.id} onClick={() => reactivar(c)}>
+            <Ic n="actualizar" s={14} /> {reactivando === c.id ? "Reactivando…" : "Reactivar"}
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
@@ -2006,6 +2268,13 @@ function normalizarRed(valor: string, base: string): string | undefined {
   if (v.includes(".") && !v.startsWith("@")) return `https://${v.replace(/^\/+/, "")}`;
   return base + v.replace(/^@+/, "");
 }
+
+/** Un `fieldset` sin su marco: sólo sirve para deshabilitar de una vez todos los
+ *  campos de adentro (sólo lectura), sin tocar uno por uno. */
+const FS_MODAL: React.CSSProperties = { border: 0, margin: 0, padding: 0, minWidth: 0, display: "flex", flexDirection: "column", gap: 12 };
+
+/** La portada vigente de un negocio, como la maneja el modal. */
+type PortadaAdmin = { url: string | null; thumb: string | null };
 
 function ModalEditar({
   comercio, rubros, onClose, onDone,
@@ -2062,13 +2331,61 @@ function ModalEditar({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
+  // Sin `comercios.editar` la ficha se abre en sólo lectura: nada de Guardar,
+  // Analizar ni cambiar la portada (el servidor igual contestaría 403 después de
+  // haber escrito todo). La galería usa el permiso de moderar y sigue andando.
+  const puedeEditar = puedo("comercios.editar");
+  // El WhatsApp es la llave de la cuenta del comercio: sólo lo cambia quien tiene `comercios.cuenta`.
+  const puedeCuenta = puedo("comercios.cuenta");
+  // La portada vive acá y no en `comercio`: ese viene de la lista y no se entera
+  // de lo que se cambia con el modal abierto.
+  const [portada, setPortada] = useState<PortadaAdmin>({ url: comercio.portada_url ?? null, thumb: comercio.portada_thumb_url ?? null });
+  // Lo que la IA dejó escrito en el servidor (se muestra en «Detectado por IA»).
+  const [ia, setIa] = useState({ productos: comercio.prod_det_ia ?? "", subcategoria: comercio.subcategoria ?? "" });
+  // Algo ya cambió en el servidor sin pasar por «Guardar» (portada, clasificación):
+  // al cerrar hay que refrescar la lista de negocios.
+  const cambioEnServidor = useRef(false);
+  const [codigoCopiado, setCodigoCopiado] = useState<"si" | "no" | null>(null);
+
+  function cerrar() {
+    if (cambioEnServidor.current) onDone(); else onClose();
+  }
+
   // El formulario es largo (42 categorías) y el botón Cancelar queda muy abajo:
   // sin Escape ni cruz en el encabezado, se entra al editor y no se ve cómo salir.
+  const cerrarRef = useRef(cerrar);
+  cerrarRef.current = cerrar;
   useEffect(() => {
-    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onEsc = (e: KeyboardEvent) => {
+      // Con la foto ampliada abierta, Escape cierra la foto y no el modal.
+      if (e.key === "Escape" && !document.querySelector(".lightbox-backdrop")) cerrarRef.current();
+    };
     document.addEventListener("keydown", onEsc);
     return () => document.removeEventListener("keydown", onEsc);
-  }, [onClose]);
+  }, []);
+
+  async function copiarCodigo() {
+    if (!comercio.codigo) return;
+    try {
+      await navigator.clipboard.writeText(`URUKU-${comercio.codigo}`);
+      setCodigoCopiado("si");
+    } catch { setCodigoCopiado("no"); }
+    setTimeout(() => setCodigoCopiado(null), 2500);
+  }
+
+  /** «Aplicar» de la IA: el servidor ya escribió la clasificación; acá se pone al
+   *  día el formulario SIN cerrar el modal y sin tocar lo que se había escrito. */
+  async function aplicarIA(p: PropuestaIA) {
+    cambioEnServidor.current = true;
+    if (p.descripcion) setDescripcion(p.descripcion);
+    setIa({ productos: p.productos, subcategoria: p.subcategoria });
+    // Los rubros que quedaron son los del servidor: se piden en vez de adivinarlos.
+    const slugs = await rubrosDeComercio(comercio.id).catch(() => p.rubro_slugs);
+    if (slugs.length) {
+      setRubroSlugs(slugs);
+      setPrincipal((actual) => (slugs.includes(actual) ? actual : slugs[0]));
+    }
+  }
 
   async function persistir(): Promise<boolean> {
     setSaving(true);
@@ -2080,7 +2397,8 @@ function ModalEditar({
         // apagaría el flag (el trigger entiende "escribieron un nombre").
         sin_cartel: sinCartel,
         nombre: sinCartel ? undefined : (nombre.trim() || undefined),
-        whatsapp: whatsapp || undefined,
+        // Sin el permiso no se manda: el servidor lo rechazaría entero con 403.
+        whatsapp: puedeCuenta ? (whatsapp || undefined) : undefined,
         telefono: telefono || undefined,
         descripcion: descripcion || undefined,
         modalidad: modalidad || undefined,
@@ -2130,7 +2448,7 @@ function ModalEditar({
 
   return (
     <Portal>
-      <div onClick={onClose}
+      <div onClick={cerrar}
         style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
         <div className="glass" onClick={(e) => e.stopPropagation()}
           style={{ width: "100%", maxWidth: 480, borderRadius: 16, padding: 24, maxHeight: "90vh", overflowY: "auto" }}>
@@ -2159,48 +2477,45 @@ function ModalEditar({
                     style={{ opacity: haySiguiente ? 1 : .35 }}>→</button>
                 </>
               )}
-            <button type="button" onClick={onClose} aria-label="Cerrar"
-              style={{ background: "none", border: "none", color: "var(--txt-2)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>
+            <button type="button" onClick={cerrar} aria-label="Cerrar"
+              style={{ background: "none", border: "none", color: "var(--txt-2)", fontSize: 22, cursor: "pointer", lineHeight: 1, minWidth: 44, minHeight: 44 }}>
               <Ic n="cerrar" s={16} />
             </button>
             </div>
           </div>
-          {/* Primero de todo: es la acción principal del trabajo de clasificación.
-              Antes estaba después de las fotos y quedaba fuera de la vista. */}
-          <AnalisisComercio comercioId={comercio.id} onAplicado={onDone} />
+          {!puedeEditar && (
+            <div role="status" style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 4, padding: "10px 12px", borderRadius: 10,
+                                        border: "1px solid var(--amber)", background: "rgba(255,176,32,.08)", fontSize: 13, lineHeight: 1.45 }}>
+              <span style={{ flexShrink: 0, marginTop: 1 }}><Ic n="seguridad" s={16} /></span>
+              <span>Sólo lectura: tu cuenta no tiene permiso para editar negocios. Las fotos de la galería sí las podés agregar o borrar.</span>
+            </div>
+          )}
+
+          {/* ARRIBA DE TODO, la foto principal: es lo primero que ve el comprador y
+              lo que más se viene a cambiar. «Subir otra» la reemplaza; el recorte
+              sólo mueve qué parte se ve en la tarjeta de resultados. */}
+          <div style={{ marginTop: 12 }}>
+            <FotoPrincipal
+              url={portada.url ?? portada.thumb}
+              soloLectura={!puedeEditar}
+              textoBoton="Subir otra"
+              compacto
+              aspecto="2 / 1"
+              recorte={puedeEditar ? { valor: portadaPos, onChange: setPortadaPos } : undefined}
+              confirmarCambio="La foto principal actual se reemplaza y no queda guardada. Si querés conservarla, elegí otra de la galería con «Usar como portada». ¿Subir una nueva igual?"
+              onSubir={async (f) => {
+                const r = await adminSubirPortada(comercio.id, f);
+                setPortada({ url: r.portada_url, thumb: r.portada_thumb_url });
+                setPortadaPos(null);            // el servidor reinicia el recorte con la foto nueva
+                cambioEnServidor.current = true;
+                return r.portada_url;
+              }}
+            />
+          </div>
 
           <form onSubmit={guardar} style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
-            {/* La foto al lado del campo, no 300px más abajo: el nombre se lee
-                del cartel de la propia foto, y tenerla que ir a buscar con el
-                scroll era el paso que hacía lento el ir uno por uno. */}
-            <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-              {(comercio.portada_url || comercio.portada_thumb_url) && (
-                <div style={{ flexShrink: 0, width: 200 }}>
-                  {/* La vista previa tiene la MISMA forma que la tarjeta de
-                      resultados —una franja apaisada— y no un cuadrado. Ajustar
-                      el recorte mirando un cuadrado es ajustar a ciegas: lo que
-                      se corta en la tarjeta es otra cosa. */}
-                  <a href={comercio.portada_url ?? comercio.portada_thumb_url ?? "#"}
-                     target="_blank" rel="noopener" title="Abrir la foto en grande"
-                     style={{ display: "block" }}>
-                    <img src={comercio.portada_url ?? comercio.portada_thumb_url ?? ""} alt=""
-                         style={{ width: 200, height: 100, objectFit: "cover", borderRadius: 12,
-                                  display: "block",
-                                  objectPosition: `center ${portadaPos ?? 50}%` }} />
-                  </a>
-                  <label style={{ fontSize: 11, color: "var(--txt-3)", display: "block", marginTop: 6 }}>
-                    Encuadre {portadaPos == null ? "(sin ajustar)" : `${portadaPos}%`}
-                    <input type="range" min={0} max={100} step={5}
-                           value={portadaPos ?? 50}
-                           onChange={(e) => setPortadaPos(Number(e.target.value))}
-                           style={{ width: "100%", marginTop: 2 }} />
-                  </label>
-                  <div style={{ fontSize: 10.5, color: "var(--txt-3)", marginTop: -2 }}>
-                    Izquierda = el cartel · derecha = la vereda
-                  </div>
-                </div>
-              )}
-              <div style={{ fontSize: 12, color: "var(--txt-3)", flex: 1, minWidth: 0 }}>
+            <fieldset disabled={!puedeEditar} style={FS_MODAL}>
+              <div style={{ fontSize: 12, color: "var(--txt-3)" }}>
                 Nombre
                 {sinCartel ? (
                   // Sin cartel: no hay nada que tipear. Se muestra cómo se
@@ -2216,7 +2531,7 @@ function ModalEditar({
                 ) : (
                   <input className="adm-input" style={{ marginTop: 4, fontSize: 16, fontWeight: 600 }}
                     value={nombre} onChange={(e) => setNombre(e.target.value)}
-                    autoFocus placeholder="El nombre del cartel" />
+                    autoFocus={puedeEditar} placeholder="El nombre del cartel" />
                 )}
                 {/* En Bermejo la mayoría de los puestos no tiene cartel. Decirlo
                     es un dato, no un campo sin llenar: 555 de 1.248 figuraban
@@ -2228,15 +2543,29 @@ function ModalEditar({
                     No tiene cartel ni nombre propio
                   </span>
                 </label>
-                {comercio.codigo && (
-                  <div style={{ marginTop: 6, fontFamily: "monospace", color: "var(--neon)", fontSize: 12 }}>
-                    URUKU-{comercio.codigo}
-                  </div>
-                )}
               </div>
-            </div>
+              {/* El código dice para qué sirve: antes era un «URUKU-XXXX» suelto. */}
+              {comercio.codigo && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12.5, color: "var(--txt-2)" }}>
+                  <span>Código para publicar por WhatsApp:</span>
+                  <b style={{ fontFamily: "monospace", color: "var(--neon)", fontSize: 14 }}>URUKU-{comercio.codigo}</b>
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ minHeight: 44 }} onClick={copiarCodigo}>
+                    <Ic n="documento" s={14} /> Copiar
+                  </button>
+                  <span role="status" style={{ fontSize: 12, color: codigoCopiado === "no" ? "var(--pink)" : "var(--neon)" }}>
+                    {codigoCopiado === "si" && "Copiado"}
+                    {codigoCopiado === "no" && "No se pudo copiar: seleccionalo a mano"}
+                  </span>
+                </div>
+              )}
             <label style={{ fontSize: 12, color: "var(--txt-3)" }}>WhatsApp (opcional)
-              <input className="adm-input" style={{ marginTop: 4 }} value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="591XXXXXXXX" />
+              <input className="adm-input" style={{ marginTop: 4 }} value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="591XXXXXXXX"
+                disabled={!puedeCuenta} aria-describedby={puedeCuenta ? undefined : "wa-llave"} />
+              {!puedeCuenta && (
+                <span id="wa-llave" style={{ display: "block", marginTop: 4, fontSize: 12, color: "var(--amber)" }}>
+                  <Ic n="aviso" s={12} /> El WhatsApp es la llave de la cuenta: lo cambia un admin o moderador
+                </span>
+              )}
             </label>
             <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Teléfono (opcional)
               <input className="adm-input" style={{ marginTop: 4 }} value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Fijo o celular para llamar" />
@@ -2246,19 +2575,29 @@ function ModalEditar({
                 onChange={(e) => setProdObsHuman(e.target.value)}
                 placeholder="zapatillas, championes, chinelas, mochilas" />
             </label>
-            {comercio.prod_det_ia && (
+            {ia.productos && (
               <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Detectado por IA
                 <div style={{ marginTop: 4, padding: 8, border: "1px solid var(--border)", borderRadius: 8, color: "var(--txt-2)" }}>
-                  {comercio.prod_det_ia}
-                  {comercio.subcategoria && <div style={{ opacity: .8, marginTop: 4 }}>Subcategoría: {comercio.subcategoria}</div>}
+                  {ia.productos}
+                  {ia.subcategoria && <div style={{ opacity: .8, marginTop: 4 }}>Subcategoría: {ia.subcategoria}</div>}
                 </div>
               </div>
             )}
             <label style={{ fontSize: 12, color: "var(--txt-3)" }}>Descripción (la regenera la IA en cada análisis)
               <textarea className="adm-input" style={{ marginTop: 4, minHeight: 70, resize: "vertical" }} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Se completa al analizar las fotos" />
             </label>
-            <FotosComercio comercioId={comercio.id} portada={comercio.portada_url ?? null} />
+            </fieldset>
 
+            {/* La galería va FUERA del fieldset: subir y borrar fotos usa el permiso de
+                moderar, no el de editar, y tiene que andar también en sólo lectura. */}
+            <FotosComercio
+              comercioId={comercio.id}
+              portada={portada}
+              puedeEditar={puedeEditar}
+              onPortada={(pt) => { setPortada(pt); setPortadaPos(null); cambioEnServidor.current = true; }}
+            />
+
+            <fieldset disabled={!puedeEditar} style={FS_MODAL}>
             <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Categorías (tocá para elegir varias)
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6,
                             maxHeight: 170, overflowY: "auto", padding: 6,
@@ -2342,17 +2681,37 @@ function ModalEditar({
                 <input className="adm-input" style={{ gridColumn: "1 / -1" }} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (opcional)" />
               </div>
             </div>
-            {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
+
+              {/* Al final y plegado: es una herramienta de clasificación por IA, no la
+                  acción principal sobre las fotos. «Aplicar» actualiza el formulario
+                  sin cerrar el modal. */}
+              <details style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "4px 12px" }}>
+                <summary style={{ cursor: "pointer", minHeight: 44, display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 600 }}>
+                  <Ic n="destacado" s={15} /> Clasificar desde las fotos (IA)
+                </summary>
+                <div style={{ paddingBottom: 10 }}>
+                  <AnalisisComercio comercioId={comercio.id} onAplicado={aplicarIA} />
+                </div>
+              </details>
+            </fieldset>
+
+            {err && <span role="alert" style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
             <div style={{ display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
-              <button type="button" className="btn btn-ghost" style={{ flex: 1, minWidth: 110 }} onClick={onClose}>Cancelar</button>
-              <button type="submit" className="btn btn-primary" style={{ flex: 2, minWidth: 150 }} disabled={saving}>
-                {saving ? "Guardando…" : "Guardar cambios"}
-              </button>
-              {haySiguiente && (
-                <button type="button" className="btn btn-primary" style={{ flex: 2, minWidth: 170 }}
-                  disabled={saving} onClick={guardarYSeguir}>
-                  {saving ? "Guardando…" : "Guardar y siguiente →"}
-                </button>
+              {puedeEditar ? (
+                <>
+                  <button type="button" className="btn btn-ghost" style={{ flex: 1, minWidth: 110, minHeight: 44 }} onClick={cerrar}>Cancelar</button>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 2, minWidth: 150, minHeight: 44 }} disabled={saving}>
+                    {saving ? "Guardando…" : "Guardar cambios"}
+                  </button>
+                  {haySiguiente && (
+                    <button type="button" className="btn btn-primary" style={{ flex: 2, minWidth: 170, minHeight: 44 }}
+                      disabled={saving} onClick={guardarYSeguir}>
+                      {saving ? "Guardando…" : "Guardar y siguiente →"}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <button type="button" className="btn btn-ghost" style={{ flex: 1, minHeight: 44 }} onClick={cerrar}>Cerrar</button>
               )}
             </div>
           </form>
@@ -2508,14 +2867,15 @@ function Portal({ children }: { children: React.ReactNode }) {
  * La propuesta se muestra SIEMPRE antes de escribir. El modelo es elocuente
  * aunque no vea nada —ante una persiana cerrada va a inventar algo plausible—,
  * así que la confianza va en grande y la decisión es de una persona. */
-function AnalisisComercio({ comercioId, onAplicado }: { comercioId: string; onAplicado: () => void }) {
+function AnalisisComercio({ comercioId, onAplicado }: { comercioId: string; onAplicado: (p: PropuestaIA) => void | Promise<void> }) {
   const [res, setRes] = useState<AnalisisIA | null>(null);
   const [cargando, setCargando] = useState(false);
   const [aplicando, setAplicando] = useState(false);
+  const [aplicado, setAplicado] = useState(false);
   const [err, setErr] = useState("");
 
   async function analizar() {
-    setErr(""); setCargando(true); setRes(null);
+    setErr(""); setCargando(true); setRes(null); setAplicado(false);
     try { setRes(await analizarComercio(comercioId, false)); }
     catch (e) { setErr(e instanceof Error ? e.message : "No se pudo analizar"); }
     finally { setCargando(false); }
@@ -2524,9 +2884,12 @@ function AnalisisComercio({ comercioId, onAplicado }: { comercioId: string; onAp
   async function aplicar() {
     setErr(""); setAplicando(true);
     try {
-      await analizarComercio(comercioId, true);
+      // Lo que quedó escrito es lo de ESTA llamada (vuelve a mirar las fotos), no
+      // necesariamente lo que se vio en la vista previa: el formulario se pone al día con esto.
+      const r = await analizarComercio(comercioId, true);
       setRes(null);
-      onAplicado();
+      await onAplicado(r.propuesta);
+      setAplicado(true);
     } catch (e) { setErr(e instanceof Error ? e.message : "No se pudo aplicar"); }
     finally { setAplicando(false); }
   }
@@ -2547,7 +2910,12 @@ function AnalisisComercio({ comercioId, onAplicado }: { comercioId: string; onAp
         </button>
       </div>
 
-      {err && <div style={{ color: "var(--pink)", fontSize: 12.5, marginTop: 8 }}>{err}</div>}
+      {err && <div role="alert" style={{ color: "var(--pink)", fontSize: 12.5, marginTop: 8 }}>{err}</div>}
+      {aplicado && !res && (
+        <div role="status" style={{ color: "var(--neon)", fontSize: 12.5, marginTop: 8 }}>
+          <Ic n="listo" s={14} /> Aplicado: la descripción, los productos detectados y las categorías ya están actualizados arriba. Lo que escribiste sigue ahí.
+        </div>
+      )}
 
       {p && (
         <div style={{ marginTop: 10, fontSize: 12.5, lineHeight: 1.5 }}>
@@ -2634,16 +3002,37 @@ function AnalisisComercio({ comercioId, onAplicado }: { comercioId: string; onAp
  *
  * Existe porque para saber qué vende un local muchas veces hay que MIRAR la
  * vidriera: el texto que trajo el agente no siempre alcanza para clasificarlo.
- * Antes la única foto visible era el thumb de 64px de la lista, sin forma de
- * agrandarla, y no había manera de sumar fotos desde el panel. */
-function FotosComercio({ comercioId, portada }: { comercioId: string; portada: string | null }) {
-  const [fotos, setFotos] = useState<FotoComercio[]>([]);
+ *
+ * Va DENTRO del modal. Antes todo su contenido estaba envuelto en un `<Portal>`
+ * (que lo monta en `document.body`), y eso lo sacaba del modal: quedaba debajo del
+ * fondo oscuro, sin poder verse ni tocarse. El único pedazo que de verdad tiene
+ * que ir al `body` es la foto ampliada —`.glass` tiene backdrop-filter y un
+ * `position: fixed` adentro se centraría sobre el modal, no sobre la pantalla—, y
+ * ese sí lleva su Portal.
+ *
+ * `puedeEditar`: sin `comercios.editar` no hay «Usar como portada» (el servidor
+ * contestaría 403); agregar y borrar fotos usa otro permiso (moderar) y sigue.
+ */
+function FotosComercio({ comercioId, portada, puedeEditar, onPortada }: {
+  comercioId: string;
+  portada: PortadaAdmin;
+  puedeEditar: boolean;
+  onPortada: (p: PortadaAdmin) => void;
+}) {
+  // `null` = todavía no llegó la lista (cargando); distinto de «no tiene fotos».
+  const [fotos, setFotos] = useState<FotoComercio[] | null>(null);
+  const [errLista, setErrLista] = useState("");
   const [ampliada, setAmpliada] = useState<string | null>(null);
   const [subiendo, setSubiendo] = useState(false);
+  const [cambiando, setCambiando] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const input = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { adminListarFotos(comercioId).then(setFotos).catch(() => {}); }, [comercioId]);
+  const cargar = useCallback(() => {
+    setErrLista("");
+    adminListarFotos(comercioId).then(setFotos).catch((e) => setErrLista(mensajeDeError(e, "No se pudieron cargar las fotos")));
+  }, [comercioId]);
+  useEffect(() => { cargar(); }, [cargar]);
 
   // Tope de fotos del plan del comercio: el admin sólo puede reemplazar la más
   // vieja (no paga extras por el comercio).
@@ -2654,12 +3043,12 @@ function FotosComercio({ comercioId, portada }: { comercioId: string; portada: s
     setErr(""); setSubiendo(true);
     try {
       const nueva = await adminSubirFoto(comercioId, file, reemplazar ? { reemplazar } : undefined);
-      setFotos((prev) => [...prev.filter((f) => f.id !== reemplazar), nueva]);
+      setFotos((prev) => [...(prev ?? []).filter((f) => f.id !== reemplazar), nueva]);
       setTope(null);
     } catch (e) {
       const t = datosTope(e);
       if (t) setTope({ datos: t, file });
-      else setErr(e instanceof Error ? e.message : "No se pudo subir");
+      else setErr(mensajeDeError(e, "No se pudo subir la foto"));
     }
     finally { setSubiendo(false); if (input.current) input.current.value = ""; }
   }
@@ -2671,59 +3060,96 @@ function FotosComercio({ comercioId, portada }: { comercioId: string; portada: s
   }
 
   async function borrar(id: string) {
-    if (!window.confirm("¿Borrar esta foto?")) return;
-    await adminBorrarFoto(comercioId, id);
-    setFotos((prev) => prev.filter((f) => f.id !== id));
+    if (!window.confirm("¿Borrar esta foto? No se puede deshacer.")) return;
+    setErr("");
+    try {
+      await adminBorrarFoto(comercioId, id);
+      setFotos((prev) => prev?.filter((f) => f.id !== id) ?? prev);
+    } catch (e) { setErr(mensajeDeError(e, "No se pudo borrar la foto")); }
   }
 
-  const todas = [
-    ...(portada ? [{ id: "__portada", url: portada, thumb_url: portada }] : []),
-    ...fotos,
-  ];
+  /** Intercambio: la elegida pasa a ser la portada y la anterior entra a la galería. */
+  async function usarComoPortada(id: string) {
+    if (cambiando) return;
+    setErr(""); setCambiando(id);
+    try {
+      const r = await adminUsarComoPortada(comercioId, id);
+      setFotos(r.fotos);
+      onPortada({ url: r.portada_url, thumb: r.portada_thumb_url });
+    } catch (e) {
+      // La portada anterior sigue igual: no se tocó nada.
+      setErr(mensajeDeError(e, "No se pudo cambiar la portada") + ". La anterior sigue igual.");
+    } finally { setCambiando(null); }
+  }
+
+  const hayPortada = !!(portada.url || portada.thumb);
+  const celda: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 6, width: 96 };
+  const marco: React.CSSProperties = { position: "relative", width: 96, height: 96 };
+  const imagen: React.CSSProperties = { width: 96, height: 96, objectFit: "cover", borderRadius: 10, cursor: "zoom-in", display: "block" };
 
   return (
-    <Portal>
-      <div style={{ fontSize: 12, color: "var(--txt-3)" }}>
-        Fotos del local (tocá para ampliar)
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-          {todas.length === 0 && <span style={{ opacity: 0.7 }}>Sin fotos todavía.</span>}
-          {todas.map((f) => (
-            <div key={f.id} style={{ position: "relative" }}>
-              <img src={f.thumb_url ?? f.url} alt="" onClick={() => setAmpliada(f.url)}
-                style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, cursor: "zoom-in" }} />
-              {f.id !== "__portada" && (
-                <button type="button" onClick={() => borrar(f.id)} aria-label="Borrar foto"
+    <div style={{ fontSize: 12, color: "var(--txt-3)" }}>
+      Fotos del local (tocá para ampliar){fotos ? ` · ${fotos.length + (hayPortada ? 1 : 0)}` : ""}
+      {fotos === null && !errLista && <div style={{ marginTop: 6 }}><span className="ash-spin" aria-hidden /> Cargando las fotos…</div>}
+      {errLista && (
+        <div role="alert" style={{ marginTop: 6, color: "var(--pink)" }}>
+          <Ic n="aviso" s={13} /> {errLista}{" "}
+          <button type="button" className="link-more" style={{ minHeight: 44 }} onClick={cargar}>Reintentar</button>
+        </div>
+      )}
+      {fotos && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 6 }}>
+          {!hayPortada && fotos.length === 0 && <span style={{ opacity: 0.7 }}>Todavía no hay fotos.</span>}
+          {hayPortada && (
+            <div style={celda}>
+              <div style={marco}>
+                <img src={(portada.thumb ?? portada.url) as string} alt="Portada actual" onClick={() => setAmpliada((portada.url ?? portada.thumb) as string)}
+                  style={{ ...imagen, border: "2px solid var(--neon)" }} />
+                <span style={{ position: "absolute", left: 4, bottom: 4, display: "inline-flex", alignItems: "center", gap: 3, background: "var(--neon)", color: "#04240f",
+                               fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".03em", padding: "2px 6px", borderRadius: 999 }}>
+                  <Ic n="estrella" s={10} peso="fill" /> Portada
+                </span>
+              </div>
+            </div>
+          )}
+          {fotos.map((f) => (
+            <div key={f.id} style={celda}>
+              <div style={marco}>
+                <img src={f.thumb_url ?? f.url} alt="" onClick={() => setAmpliada(f.url)} style={imagen} />
+                <button type="button" onClick={() => borrar(f.id)} aria-label="Borrar foto" title="Borrar foto"
                   style={{ position: "absolute", top: -6, right: -6, background: "var(--pink)", color: "#fff",
-                           border: "none", borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 12 }}>
-                  ×
+                           border: "none", borderRadius: "50%", width: 24, height: 24, cursor: "pointer", display: "grid", placeItems: "center" }}>
+                  <Ic n="cerrar" s={12} />
+                </button>
+              </div>
+              {puedeEditar && (
+                <button type="button" className="btn btn-ghost btn-sm" disabled={!!cambiando}
+                  style={{ minHeight: 44, width: "100%", padding: "4px 4px", fontSize: 11.5, lineHeight: 1.2, whiteSpace: "normal", textAlign: "center" }}
+                  onClick={() => usarComoPortada(f.id)}>
+                  {cambiando === f.id ? "Cambiando…" : "Usar como portada"}
                 </button>
               )}
             </div>
           ))}
         </div>
+      )}
 
-        <input ref={input} type="file" accept="image/*" style={{ display: "none" }}
-          onChange={(e) => subir(e.target.files?.[0])} />
-        <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 8 }}
-          disabled={subiendo} onClick={() => input.current?.click()}>
-          {subiendo ? "Subiendo…" : "+ Agregar foto"}
-        </button>
-        {err && <div style={{ color: "var(--pink)", marginTop: 6 }}>{err}</div>}
-        {tope && <TopeFotosDialogo tope={tope.datos} puedePagarExtra={false} onElegir={decidirTope} />}
+      <input ref={input} type="file" accept="image/*" style={{ display: "none" }}
+        onChange={(e) => subir(e.target.files?.[0])} />
+      <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 8, minHeight: 44 }}
+        disabled={subiendo} onClick={() => input.current?.click()}>
+        {subiendo ? "Subiendo…" : "+ Agregar foto"}
+      </button>
+      {err && <div role="alert" style={{ color: "var(--pink)", marginTop: 6 }}><Ic n="aviso" s={13} /> {err}</div>}
+      {tope && <TopeFotosDialogo tope={tope.datos} puedePagarExtra={false} onElegir={decidirTope} />}
 
-        {/* Visor: la foto grande, sobre todo lo demás */}
-        {ampliada && (
-          <div onClick={() => setAmpliada(null)}
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.92)", zIndex: 1200,
-                     display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out" }}>
-            <img src={ampliada} alt="" style={{ maxWidth: "96vw", maxHeight: "92vh", objectFit: "contain" }} />
-            <button type="button" onClick={() => setAmpliada(null)} aria-label="Cerrar"
-              style={{ position: "fixed", top: 16, right: 20, background: "none", border: "none",
-                       color: "#fff", cursor: "pointer" }}><Ic n="cerrar" s={30} /></button>
-          </div>
-        )}
-      </div>
-    </Portal>
+      {/* Visor: la foto grande, sobre todo lo demás (por Portal: ver arriba). */}
+      {ampliada && (
+        <Portal>
+          <ImageLightbox src={ampliada} alt="Foto del local" onClose={() => setAmpliada(null)} />
+        </Portal>
+      )}
+    </div>
   );
 }
 

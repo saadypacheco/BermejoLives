@@ -10,11 +10,11 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.auth import hash_password, require_admin, require_alguno, require_moderador, require_panel, require_permiso
-from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS
+from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS, tiene as tiene_permiso
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp, whatsapp_para_guardar
-from app.services import enlaces, fotos_galeria, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
+from app.services import enlaces, fotos_galeria, portada, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
@@ -114,19 +114,33 @@ logger = structlog.get_logger()
 _ESTADOS = {"aprobado", "rechazado", "cambios"}
 
 
+#: Cuántas publicaciones trae como máximo una página de «Publicadas» (y de cualquier
+#: estado que no sea la cola de pendientes).
+PAGINA_PUBLICACIONES = 100
+
+
 @router.get("/moderacion/publicaciones")
 def listar(
     estado: str | None = Query(default="pendiente"),
+    q: str | None = Query(default=None, max_length=80,
+                          description="busca en el título y en el nombre del comercio (no aplica a pendientes)"),
+    offset: int = Query(default=0, ge=0, le=1_000_000,
+                        description="cuántas saltear, de a PAGINA_PUBLICACIONES (no aplica a pendientes)"),
     _mod: dict = Depends(require_moderador),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    items = repo.list_publicaciones(estado)
     # La cola de pendientes llega ORDENADA por lo que dijo la IA: rechazable y
     # dudoso arriba, lo limpio abajo. Es la mitad del valor de tener el
     # veredicto guardado; la otra mitad es no tener que apretar un botón.
+    # No cambia: sin `q` ni `offset`, hasta 200 de una.
     if estado == "pendiente":
-        items = revision_ia.ordenar_para_moderar(items)
-    return {"items": items, "total": len(items)}
+        items = revision_ia.ordenar_para_moderar(repo.list_publicaciones(estado))
+        return {"items": items, "total": len(items)}
+    # «Publicadas» y las demás: de a 100, con el total REAL y búsqueda. Antes
+    # cortaba en 200 y una oferta aprobada hace semanas no se podía encontrar
+    # para bajarla.
+    items, total = repo.buscar_publicaciones(estado, q, offset, PAGINA_PUBLICACIONES)
+    return {"items": items, "total": total}
 
 
 def _validar_codigo_al_aprobar(repo: Repo, pub_id: str) -> None:
@@ -180,18 +194,40 @@ def moderar(
     # El borrador que nació de un WhatsApp desconocido está apagado hasta que
     # alguien lo mire. Aprobar lo que mandó ES mirarlo: si no se enciende acá,
     # la oferta queda aprobada y sin salir en ningún lado.
+    #
+    # SÓLO el borrador (`baja_motivo = 'borrador'`). Un comercio que el admin dio de
+    # baja, o que se venció, NO se enciende por aprobar una oferta suya: antes
+    # cualquier moderador deshacía una baja sin querer. Los borradores viejos
+    # (anteriores a la 0147) los marca la migración con el mismo criterio con que se
+    # armaban; un inactivo sin motivo es una baja sin clasificar y se trata como
+    # baja del admin: se reactiva a propósito, desde «Dados de baja».
+    advertencia = None
     if body.estado == "aprobado":
         com = repo.get_comercio(updated.get("comercio_id"))
         if com and not com.get("activo", True):
-            repo.update_comercio(com["id"], {"activo": True}, None)
-            logger.info("moderacion.comercio_encendido", comercio=com.get("slug"), by=mod["email"])
+            if com.get("baja_motivo") == "borrador":
+                repo.update_comercio(com["id"], {"activo": True, "baja_motivo": None}, None)
+                logger.info("moderacion.comercio_encendido", comercio=com.get("slug"), by=mod["email"])
+            else:
+                advertencia = "El comercio está dado de baja: la publicación no se ve hasta que se reactive."
+                logger.info("moderacion.comercio_sigue_de_baja", comercio=com.get("slug"),
+                            motivo=com.get("baja_motivo"), by=mod["email"])
     # Aprobar es lo que dispara la difusión a las redes. `encolar` no manda
     # nada: sólo anota, y nunca lanza. Aprobar una oferta no puede fallar
     # porque a Meta se le venció un token.
     encoladas = difusion.encolar(repo, pub_id) if body.estado == "aprobado" else 0
+    if body.estado in ("rechazado", "cambios"):
+        # Bajar una oferta ya aprobada: lo que esperaba salir en las redes no sale.
+        try:
+            repo.descartar_difusion_de(pub_id, "la publicación se bajó de la moderación")
+        except Exception:  # noqa: BLE001 — la baja ya está hecha; la cola no la frena
+            logger.warning("moderacion.descartar_difusion_fallo", pub=pub_id, exc_info=True)
     logger.info("moderacion.accion", pub=pub_id, estado=body.estado, by=mod["email"],
                 difusion=encoladas)
-    return {"ok": True, "publicacion": updated, "difusion_encolada": encoladas}
+    out = {"ok": True, "publicacion": updated, "difusion_encolada": encoladas}
+    if advertencia:
+        out["advertencia"] = advertencia
+    return out
 
 
 class RevisarIABody(BaseModel):
@@ -258,14 +294,49 @@ def verificar_comercio(
 @router.post("/moderacion/comercios/{comercio_id}/rechazar")
 def rechazar_comercio(
     comercio_id: str,
-    mod: dict = Depends(require_moderador),
+    mod: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
+    """Da de baja (activo=false) un comercio. Pide `comercios.editar`, no sólo `moderar`."""
     updated = repo.desactivar_comercio(comercio_id)
     if not updated:
         raise HTTPException(status_code=404, detail="comercio no encontrado")
     logger.info("moderacion.comercio_rechazado", comercio=comercio_id, by=mod["email"])
     return {"ok": True, "comercio": updated}
+
+
+@router.post("/admin/comercio/{comercio_id}/reactivar")
+def reactivar_comercio(
+    comercio_id: str,
+    mod: dict = Depends(require_permiso("comercios.editar")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Deshace la baja de un comercio: vuelve a `activo = true` y borra el motivo.
+
+    Un comercio dado de baja por VENCIMIENTO (`baja_motivo = 'vencido'`) no se
+    reactiva a mano: se reactiva solo al registrar el pago (409)."""
+    actual = repo.get_comercio(comercio_id)
+    if not actual:
+        raise HTTPException(status_code=404, detail="Comercio no encontrado")
+    if actual.get("activo") is False and actual.get("baja_motivo") == "vencido":
+        raise HTTPException(status_code=409, detail="Se reactiva al registrar el pago")
+    updated = repo.reactivar_comercio(comercio_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Comercio no encontrado")
+    logger.info("moderacion.comercio_reactivado", comercio=comercio_id, by=mod["email"])
+    return {"ok": True}
+
+
+@router.get("/admin/comercios/dados-de-baja")
+def listar_dados_de_baja(
+    ciudad: str | None = Query(default=None, max_length=60, description="slug de la ciudad (opcional)"),
+    _mod: dict = Depends(require_permiso("comercios.editar")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Los comercios dados de baja por el admin (`baja_motivo` `admin`, o null en las bajas
+    viejas), para poder reactivarlos. Cada item trae `baja_motivo`. No salen los
+    `vencido` ni los `borrador`."""
+    return {"items": repo.list_comercios_dados_de_baja((ciudad or "").strip() or None)}
 
 
 # ── Suscripciones ─────────────────────────────────────────────────────────────
@@ -346,6 +417,13 @@ def editar_comercio(
         if mismo_numero(actual, patch["whatsapp"]):
             patch["whatsapp"] = whatsapp_para_guardar(patch["whatsapp"]) or patch["whatsapp"]
         else:
+            # El WhatsApp es la llave de ingreso a Mi comercio: cambiarlo es tocar
+            # la CUENTA, no la ficha. Corregir fichas (`comercios.editar`) no alcanza;
+            # el publicador no lo tiene. Mandar el mismo número (arriba) no es cambiarlo.
+            if not tiene_permiso(admin, "comercios.cuenta"):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Cambiar el WhatsApp de un comercio es de la cuenta. Pedíselo a un moderador o al admin.")
             patch["whatsapp"] = numero_para_cambiar(repo, comercio_id, patch["whatsapp"]) or ""
             cambia_numero = True
     updated = repo.update_comercio(comercio_id, patch, body.rubro_slugs)
@@ -877,7 +955,8 @@ def activar_comercio(
     admin: dict = Depends(require_permiso("pagos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """Reactiva un comercio suspendido."""
+    """Levanta la suspensión de un comercio. Si estaba oculto por vencimiento, vuelve al
+    mapa; una baja del admin NO se deshace desde acá (es «Reactivar» en Dados de baja)."""
     repo.activar_comercio(comercio_id)
     logger.info("suscripcion.activado", comercio=comercio_id, by=admin["email"])
     return {"ok": True}
@@ -935,7 +1014,7 @@ class MensajeAdminBody(BaseModel):
 def enviar_mensaje_comercio(
     comercio_id: str,
     body: MensajeAdminBody,
-    admin: dict = Depends(require_permiso("comercios.editar")),
+    admin: dict = Depends(require_permiso("comercios.cuenta")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """El admin le envía un mensaje/notificación al comercio (aparece en su bandeja)."""
@@ -1008,10 +1087,10 @@ class ConfiableBody(BaseModel):
 def set_confiable(
     comercio_id: str,
     body: ConfiableBody,
-    admin: dict = Depends(require_permiso("comercios.editar")),
+    admin: dict = Depends(require_permiso("comercios.cuenta")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """Marca (o desmarca) un comercio como confiable.
+    """Marca (o desmarca) un comercio como confiable. Pide `comercios.cuenta`.
 
     `confiable` decide si lo que publica sale directo o cae en la cola de
     moderación, pero no había NINGUNA forma de escribirlo: los únicos valores
@@ -1042,7 +1121,7 @@ def listar_numeros(
 def agregar_numero(
     comercio_id: str,
     body: NumeroBody,
-    admin: dict = Depends(require_permiso("comercios.editar")),
+    admin: dict = Depends(require_permiso("comercios.cuenta")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Autoriza un número a publicar en nombre del comercio.
@@ -1087,7 +1166,7 @@ def listar_grupos(
 def atar_grupo(
     comercio_id: str,
     body: GrupoBody,
-    admin: dict = Depends(require_permiso("comercios.editar")),
+    admin: dict = Depends(require_permiso("comercios.cuenta")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Ata un grupo a mano, para cuando no se puede usar el código.
@@ -1105,7 +1184,9 @@ def atar_grupo(
             status_code=400,
             detail="El ID de un grupo de WhatsApp termina en @g.us. Ese no es un grupo.")
 
-    ya = repo.get_comercio_por_grupo(jid)
+    # Con inactivos: un grupo atado a un comercio dado de baja sigue siendo SUYO (si no,
+    # el atado de acá no haría nada y diría que sí).
+    ya = repo.get_comercio_por_grupo(jid, incluir_inactivos=True)
     if ya and ya.get("id") != comercio_id:
         raise HTTPException(
             status_code=409,
@@ -1121,7 +1202,7 @@ def atar_grupo(
 def soltar_grupo(
     comercio_id: str,
     grupo_jid: str,
-    admin: dict = Depends(require_permiso("comercios.editar")),
+    admin: dict = Depends(require_permiso("comercios.cuenta")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Suelta el grupo. Las publicaciones que ya entraron por ahí quedan: son
@@ -1239,7 +1320,7 @@ def _ahora() -> str:
 @router.post("/admin/comercio/{comercio_id}/grupo")
 def crear_grupo_comercio(
     comercio_id: str,
-    admin: dict = Depends(require_permiso("comercios.editar")),
+    admin: dict = Depends(require_permiso("comercios.cuenta")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Arma el grupo de WhatsApp del comercio y lo deja atado.
@@ -1551,7 +1632,7 @@ async def admin_agregar_foto(
     if len(data) > _ADMIN_MAX_FOTO_BYTES:
         raise HTTPException(status_code=413, detail="La foto supera los 15 MB")
     try:
-        url, thumb = subir_foto_galeria(comercio["slug"], data)
+        url, thumb = await run_in_threadpool(subir_foto_galeria, comercio["slug"], data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not url:
@@ -1574,6 +1655,45 @@ def admin_borrar_foto(
         raise HTTPException(status_code=404, detail="Foto no encontrada")
     logger.info("admin.foto_del", comercio=comercio_id, by=mod["email"])
     return {"ok": True}
+
+
+@router.put("/admin/comercio/{comercio_id}/portada")
+def admin_usar_como_portada(
+    comercio_id: str,
+    body: portada.UsarPortadaBody,
+    mod: dict = Depends(require_permiso("comercios.editar")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Una foto de la galería pasa a ser la portada (intercambio, sin tocar archivos)."""
+    comercio = _comercio_o_404(repo, comercio_id)
+    actualizado = portada.usar_de_galeria(repo, comercio, body.foto_id)
+    logger.info("admin.portada_de_galeria", comercio=comercio_id, by=mod["email"])
+    return portada.respuesta(repo, actualizado)
+
+
+@router.post("/admin/comercio/{comercio_id}/foto")
+async def admin_subir_portada(
+    comercio_id: str,
+    foto: UploadFile = File(...),
+    mod: dict = Depends(require_permiso("comercios.editar")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Sube una portada nueva (multipart `foto`). Borra la anterior si la galería no la usa."""
+    comercio = _comercio_o_404(repo, comercio_id)
+    data = await foto.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Falta la foto")
+    if len(data) > _ADMIN_MAX_FOTO_BYTES:
+        raise HTTPException(status_code=413, detail="La foto supera los 15 MB")
+    try:
+        url, thumb = await run_in_threadpool(subir_foto_galeria, comercio["slug"], data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not url:
+        raise HTTPException(status_code=502, detail="No se pudo subir la foto, probá de nuevo")
+    actualizado = portada.poner_nueva(repo, comercio, url, thumb)
+    logger.info("admin.portada_nueva", comercio=comercio_id, by=mod["email"])
+    return {"ok": True, "comercio": actualizado}
 
 
 # ---- Clasificar un comercio desde sus fotos ----

@@ -51,8 +51,8 @@ def _atar_grupo_por_codigo_propio(repo: Repo, payload) -> str | None:
     if not codigo:
         return None
     grupo = payload.grupo_jid or ""
-    if repo.get_comercio_por_grupo(grupo):
-        return None                         # ya atado: no se pisa
+    if repo.get_comercio_por_grupo(grupo, incluir_inactivos=True):
+        return None                         # ya atado (aunque sea a uno de baja): no se pisa
     comercio = repo.get_comercio_por_codigo(codigo)
     if not comercio:
         logger.info("ingest.codigo_desconocido_propio", codigo=codigo, grupo=grupo)

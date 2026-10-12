@@ -367,7 +367,7 @@ def test_la_tabla_de_topes():
     esperado = {
         "/comercio/catalogo": 8, "/campo/mis-comercios/abc/catalogo": 8, "/comercio/fotos": 15,
         "/campo/comercio": 15, "/campo/mis-comercios/abc/foto": 15, "/campo/mis-comercios/abc/fotos": 15,
-        "/admin/comercio/abc/fotos": 15, "/comercio/perfil/foto": 15, "/auth/comercio/registro": 15,
+        "/admin/comercio/abc/fotos": 15, "/admin/comercio/abc/foto": 15, "/comercio/perfil/foto": 15, "/auth/comercio/registro": 15,
         "/comercio/abc/solicitar-cambio-numero": 15, "/campo/lugares/abc/portada": 15, "/comercio/pago": 15,
         "/comercio/productos": 45, "/comercio/videos": 50, "/campo/mis-comercios/abc/videos": 50,
         "/campo/lugares/abc/video": 50, "/contenido/videos-promo": 100, "/ingest/webhook": 25,

@@ -594,6 +594,15 @@ select:not(.adm-input) { color-scheme: dark; }
 .galup-clock { position: absolute; top: 4px; left: 4px; z-index: 1; display: flex; color: #FFC94D;
                filter: drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
 .galup-vid.galup-penditem { background: var(--panel); }
+/* La portada (primera) y «Usar como portada»: un botón de 44 px de alto debajo de cada foto. */
+.galup-cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.galup-portada { border-color: var(--neon); }
+.galup-tag { position: absolute; left: 4px; bottom: 4px; display: inline-flex; align-items: center; gap: 4px; background: var(--neon); color: #04240f;
+             font-size: 10.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; padding: 3px 7px; border-radius: 999px; }
+.galup-usar { min-height: 44px; padding: 4px 6px; border-radius: 10px; border: 1.5px solid var(--stroke-2); background: transparent;
+              color: var(--txt-2); font-size: 12px; font-weight: 700; line-height: 1.2; cursor: pointer; }
+.galup-usar:hover:not(:disabled) { border-color: var(--neon); color: var(--neon); }
+.galup-usar:disabled { opacity: .55; cursor: default; }
 
 /* ===== Galería en la ficha del comercio ===== */
 .gf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-top: 14px; }

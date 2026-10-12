@@ -21,7 +21,8 @@ La subida responde 409 con lo que la pantalla necesita para preguntar (ver
 `detalle_tope`). Después el comercio elige una de dos salidas, que viajan como
 campos del formulario de la misma subida:
   - `extra=pagar`      sólo el comerciante: cargo de Bs 5 + `fotos_extra` + 1.
-  - `reemplazar=<id>`  cualquiera: entra la nueva y RECIÉN DESPUÉS se borra la vieja.
+  - `reemplazar=<id>`  comercio y admin: entra la nueva y RECIÉN DESPUÉS se borra la vieja.
+                       El agente NO (403): sólo sube; en el tope puede cancelar.
 """
 from __future__ import annotations
 
@@ -45,6 +46,7 @@ _TOPE_DE_RESPALDO = 10
 _NINGUN_ID = "00000000-0000-0000-0000-000000000000"
 
 MSG_SOLO_COMERCIO = "Sólo el comercio puede pagar una foto extra."
+MSG_AGENTE_NO_BORRA = "Las fotos las borra URUKU. Avisale al admin."
 
 
 # ──────────────────────────────────────────────────────────── el tope
@@ -227,11 +229,17 @@ def registrar(repo, comercio: dict, subida: Subida, url: str, thumb: str | None)
 
 # ───────────────────────────────────────────────────── borrar fila y archivos
 
-def _ruta_en_disco(url: str | None) -> Path | None:
+def _ruta_en_disco(url: str | None, slug: str | None = None) -> Path | None:
     """La ruta de una foto de galería (`<slug>/<archivo>.jpg`) bajo `fotos_dir`,
     o None si no hay que tocarla: URL ajena a nuestra base, no canónica
     (`?`, `#`, `%`, `\\`), con `.`/`..`, de otra forma que dos tramos, o que
-    resuelta (siguiendo enlaces) caiga fuera de la carpeta de fotos."""
+    resuelta (siguiendo enlaces) caiga fuera de la carpeta de fotos.
+
+    Con `slug`, además la carpeta tiene que SER ese slug: las fotos de un comercio
+    viven en la carpeta de su slug. Sin esto, una URL guardada a mano en una fila
+    (`<base>/otro-comercio/foto.jpg`) hacía borrar el archivo de otro comercio.
+    Un comercio renombrado deja sus fotos viejas en la carpeta del slug anterior:
+    esas NO se borran (queda un archivo de más, nunca uno de menos)."""
     if not url:
         return None
     base = settings.fotos_public_base_url.rstrip("/") + "/"
@@ -242,6 +250,8 @@ def _ruta_en_disco(url: str | None) -> Path | None:
         return None
     partes = relativa.split("/")
     if len(partes) != 2 or any(p in ("", ".", "..") for p in partes):
+        return None
+    if slug is not None and partes[0] != slug:
         return None
     if not partes[1].endswith(".jpg"):
         return None
@@ -258,24 +268,35 @@ def _ruta_en_disco(url: str | None) -> Path | None:
 def borrar_archivos(comercio: dict, foto: dict, repo=None) -> None:
     """Borra del disco la foto grande y su miniatura. Nunca lanza.
 
-    No toca un archivo que otro lugar siga mostrando: la portada del propio
-    comercio o una publicación activa que apunte a la misma URL.
+    Sólo borra archivos de la carpeta del propio comercio (`<slug>/`) y no toca uno
+    que otro lugar siga mostrando, mirando TODO lo que pueda apuntarlo:
+      - la portada del propio comercio (lo que viene en `comercio`);
+      - cualquier otra fila de `comercio_fotos` y cualquier portada
+        (`portada_url` / `portada_thumb_url`) de CUALQUIER comercio;
+      - una publicación activa con la misma imagen.
+    Si no se puede comprobar (la base falla), no se borra: un archivo de más es
+    barato, uno de menos es una foto rota.
     """
     for campo in ("url", "thumb_url"):
         url = foto.get(campo)
-        ruta = _ruta_en_disco(url)
+        ruta = _ruta_en_disco(url, comercio.get("slug"))
         if ruta is None:
             if url:
                 logger.info("comercio.foto_archivo_no_se_borra", url=url,
-                            motivo="no es una foto de galería en forma canónica")
+                            motivo="no es una foto de galería de este comercio en forma canónica")
             continue
         if url in (comercio.get("portada_url"), comercio.get("portada_thumb_url")):
             logger.info("comercio.foto_archivo_en_uso", url=url, motivo="es la portada")
             continue
         try:
-            if repo is not None and repo.imagen_en_uso(url, _NINGUN_ID):
-                logger.info("comercio.foto_archivo_en_uso", url=url, motivo="la usa una publicación")
-                continue
+            if repo is not None:
+                if repo.imagen_en_uso(url, _NINGUN_ID):
+                    logger.info("comercio.foto_archivo_en_uso", url=url, motivo="la usa una publicación")
+                    continue
+                if repo.foto_en_uso_por_comercios(url):
+                    logger.info("comercio.foto_archivo_en_uso", url=url,
+                                motivo="la usa una fila de galería o una portada")
+                    continue
             ruta.unlink(missing_ok=True)
         except Exception:  # noqa: BLE001
             logger.warning("comercio.foto_archivo_borrar_fallo", url=url, exc_info=True)

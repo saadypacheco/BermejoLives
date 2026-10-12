@@ -206,9 +206,12 @@ class FakeRepo:
         if comercio_id in self.comercios:
             self.comercios[comercio_id]["wa_jid"] = wa_jid
 
-    def get_comercio_por_grupo(self, grupo_jid):
+    def get_comercio_por_grupo(self, grupo_jid, incluir_inactivos=False):
         fila = self.wa_grupos.get(grupo_jid)
-        return self.comercios.get(fila["comercio_id"]) if fila else None
+        c = self.comercios.get(fila["comercio_id"]) if fila else None
+        if c and not incluir_inactivos and c.get("activo", True) is False:
+            return None
+        return c
 
     def vincular_grupo_comercio(self, grupo_jid, comercio_id, nombre, origen, by):
         # ignore_duplicates: el primero que ata el grupo se queda con él.
@@ -675,6 +678,13 @@ class FakeRepo:
         return any(p.get("imagen_url") == imagen_url and p.get("activo", True)
                    and p["id"] != excepto_id for p in self.publicaciones)
 
+    def foto_en_uso_por_comercios(self, url):
+        if not url:
+            return False
+        if any(url in (f.get("url"), f.get("thumb_url")) for f in self.comercio_fotos):
+            return True
+        return any(url in (c.get("portada_url"), c.get("portada_thumb_url")) for c in self.comercios.values())
+
     def descartar_difusion_de(self, publicacion_id, motivo):
         n = 0
         for f in self.difusion:
@@ -773,6 +783,19 @@ class FakeRepo:
     def list_publicaciones(self, estado):
         return [p for p in self.publicaciones if p.get("activo") and (not estado or p.get("estado") == estado)]
 
+    def buscar_publicaciones(self, estado, q=None, offset=0, limit=100):
+        from app.db.repository import limpiar_busqueda
+        items = [p for p in self.publicaciones if p.get("activo") and (not estado or p.get("estado") == estado)]
+        texto = limpiar_busqueda(q).lower()
+        if texto:
+            def coincide(p):
+                nombre = (self.comercios.get(p.get("comercio_id")) or {}).get("nombre") or ""
+                return texto in (p.get("titulo") or "").lower() or texto in nombre.lower()
+            items = [p for p in items if coincide(p)]
+        items = sorted(items, key=lambda p: str(p.get("created_at") or ""), reverse=True)
+        total = len(items)
+        return items[max(0, offset):max(0, offset) + max(1, limit)], total
+
     def publicaciones_sin_revision_ia(self, limite):
         return [p for p in self.publicaciones
                 if p.get("estado") == "pendiente" and p.get("activo")
@@ -826,7 +849,37 @@ class FakeRepo:
         if not c:
             return {}
         c["activo"] = False
+        c["baja_motivo"] = "admin"
         return c
+
+    def reactivar_comercio(self, comercio_id):
+        c = self.comercios.get(comercio_id)
+        if not c:
+            return {}
+        c["activo"] = True
+        c["baja_motivo"] = None
+        return c
+
+    def list_comercios_dados_de_baja(self, ciudad_slug=None, limit=500):
+        ciudad_id = None
+        if ciudad_slug:
+            ciudad_id = self.get_ciudad_id(ciudad_slug)
+            if not ciudad_id:
+                return []
+        # Sólo las bajas del admin y las viejas sin motivo (no `vencido` ni `borrador`).
+        out = [c for c in self.comercios.values()
+               if c.get("activo", True) is False
+               and c.get("baja_motivo") in (None, "admin")
+               and (ciudad_id is None or c.get("ciudad_id") == ciudad_id)]
+        out.sort(key=lambda c: str(c.get("updated_at") or ""), reverse=True)
+        return [
+            {"id": c["id"], "slug": c.get("slug"), "nombre": c.get("nombre"),
+             "rubro_nombre": c.get("rubro_nombre"),
+             "portada_thumb_url": c.get("portada_thumb_url"),
+             "updated_at": c.get("updated_at"),
+             "baja_motivo": c.get("baja_motivo")}
+            for c in out[:limit]
+        ]
 
     # ---- cuentas ----
     def get_comercio_usuario(self, email):
@@ -945,6 +998,8 @@ class FakeRepo:
     def crear_comercio(self, row):
         cid = self._id("com")
         full = {"id": cid, **row}
+        if full.get("activo") is False and not full.get("baja_motivo"):
+            full["baja_motivo"] = "borrador"       # un alta que nace apagada es un borrador
         self.comercios[cid] = full
         if not full.get("codigo"):
             full["codigo"] = self._codigo_libre()
@@ -1095,6 +1150,13 @@ class FakeRepo:
         antes = len(self.comercio_fotos)
         self.comercio_fotos = [f for f in self.comercio_fotos if not (f["id"] == foto_id and f["comercio_id"] == comercio_id)]
         return len(self.comercio_fotos) < antes
+
+    def update_foto_comercio(self, foto_id, comercio_id, patch):
+        for f in self.comercio_fotos:
+            if f["id"] == foto_id and f["comercio_id"] == comercio_id:
+                f.update(patch)
+                return f
+        return None
 
     def count_fotos_comercio(self, comercio_id):
         return len(self.list_fotos_comercio(comercio_id))
@@ -1412,7 +1474,14 @@ class FakeRepo:
 
     def activar_comercio(self, comercio_id):
         if comercio_id in self.comercios:
-            self.comercios[comercio_id].update({"suspendido": False, "activo": True})
+            self.comercios[comercio_id]["suspendido"] = False
+            self._reactivar_si_lo_apago_el_pago(comercio_id)
+
+    def _reactivar_si_lo_apago_el_pago(self, comercio_id):
+        """Como el repo real: sólo se reactiva una baja por vencimiento (o un borrador)."""
+        c = self.comercios.get(comercio_id)
+        if c and c.get("activo", True) is False and c.get("baja_motivo") in ("vencido", "borrador"):
+            c.update({"activo": True, "baja_motivo": None})
 
     def buscar_comercios_por_nombre(self, q):
         nq = (q or "").lower()
@@ -1949,6 +2018,7 @@ class FakeRepo:
         self.pagos[pid] = {"id": pid, "comercio_id": comercio_id, "estado": "confirmado", **row}
         c["paga_hasta"] = nueva
         c["suspendido"] = False
+        self._reactivar_si_lo_apago_el_pago(comercio_id)
         self.marcar_destacados_cobrados(comercio_id)
         return {"paga_hasta": nueva, "comercio_id": comercio_id}
 
@@ -1992,9 +2062,11 @@ class FakeRepo:
             ph = c.get("paga_hasta")
             if ph and str(ph) < limite:
                 c["activo"] = False
+                c["baja_motivo"] = "vencido"
                 n += 1
             elif not ph and corte and str(c.get("created_at") or "") < corte:
                 c["activo"] = False
+                c["baja_motivo"] = "vencido"
                 n += 1
         return n
 
