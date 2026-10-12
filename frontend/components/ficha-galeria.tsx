@@ -11,7 +11,8 @@ import { Ic } from "@/components/ic";
  * resultados. Todas las demás —la mercadería— van más abajo, en «Fotos del
  * local», como una tienda (components/galeria-tienda.tsx): antes iban acá en
  * una tira de miniaturas, y con 50 o 300 fotos por plan mirar lo que vende un
- * local era tocar cuadradito por cuadradito.
+ * local era tocar cuadradito por cuadradito. Sin enlace «Ver las N fotos»:
+ * la vidriera está justo debajo.
  *
  * Sin portada, arriba va la primera foto de la galería.
  */
@@ -34,11 +35,6 @@ export function FichaGaleria({ portada, fotos, nombre, posicion }: {
           <img src={principal} alt={nombre}
                style={portada && posicion != null ? { objectPosition: `center ${posicion}%` } : undefined} />
         </button>
-        {fotos.length > 0 && (
-          <a className="uk-fgal-count" href="#fotos">
-            <Ic n="foto" s={14} /> Ver las {fotos.length} fotos del local
-          </a>
-        )}
       </div>
 
       {zoom && (

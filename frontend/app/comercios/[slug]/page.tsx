@@ -6,7 +6,6 @@ import { sinEmoji } from "@/lib/rubros";
 import { Ic } from "@/components/ic";
 import { WaLeadLink } from "@/components/wa-lead-link";
 import { LeadLink } from "@/components/lead-link";
-import { ReservarBoton } from "@/components/reservar-boton";
 import { ReservaBarra } from "@/components/reserva-barra";
 import { GuardarBoton } from "@/components/guardar-boton";
 import { HorarioBadge } from "@/components/horario-badge";
@@ -18,7 +17,7 @@ import { FichaGaleria } from "@/components/ficha-galeria";
 import { GaleriaTienda } from "@/components/galeria-tienda";
 import { VistaLogger } from "@/components/vista-logger";
 import { VolverAResultados } from "@/components/volver-a-resultados";
-import { precioFmt, vencimientoFmt, contactoDeOferta, MODALIDAD_LABEL } from "@/lib/types";
+import { MODALIDAD_LABEL } from "@/lib/types";
 import { enlaceCanal, enlaceRed, urlHttp } from "@/lib/catalogo";
 import {
   WhatsApp, Pin, Phone, Globe, Instagram, Facebook, TikTok,
@@ -91,19 +90,10 @@ export default async function ComercioPage({ params }: { params: { slug: string 
                                  color: { dark: "#0f2c33", light: "#ffffff" } }),
   ]);
 
-  // El feed del comercio trae los tres tipos mezclados. Separarlos es lo que
-  // permite darle a cada uno su sección: una novedad no es una oferta —no tiene
-  // precio ni vence— y mezclarlas hacía que ninguna se leyera como lo que es.
-  const ofertas = feed.filter((p) => p.tipo === "oferta");
-  const novedades = feed.filter((p) => p.tipo === "novedad");
+  // Ofertas y novedades van en la vidriera de fotos, con su etiqueta y un
+  // filtro por tipo (components/galeria-tienda.tsx). Los videos de TikTok no.
+  const publicaciones = feed.filter((p) => p.tipo === "oferta" || p.tipo === "novedad");
   const vende = loQueVende(comercio.prod_obs_human || comercio.prod_det_ia);
-
-  /** Devuelve null si no hay a quién escribirle: sin número, el botón sería
-   *  un enlace roto con cara de funcionar. */
-  const contacto = (p: (typeof feed)[number]) =>
-    (p.contacto_whatsapp || comercio.whatsapp)
-      ? contactoDeOferta({ ...p, comercio_whatsapp: comercio.whatsapp ?? "" })
-      : null;
 
   // Cada enlace pasa por `enlaceRed`: arma «@mitienda» como la dirección de la
   // red y descarta lo que no sea web. Antes iban tal cual al href, y un
@@ -140,18 +130,6 @@ export default async function ComercioPage({ params }: { params: { slug: string 
     (comercio.lat && comercio.lng
       ? `https://www.google.com/maps/search/?api=1&query=${comercio.lat},${comercio.lng}`
       : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(comercio.direccion ?? ciudadNombre)}`);
-
-  // Las secciones que existen de verdad, para la barra de anclas. Se arma con
-  // datos y no con una lista fija: una pestaña "Productos" que lleva a un hueco
-  // es peor que no tenerla — enseña que el sitio está vacío justo cuando el
-  // comprador estaba por escribir.
-  const secciones = [
-    { id: "info", label: "Información" },
-    (galeria.fotos.length > 0 || galeria.videos.length > 0) && { id: "fotos", label: `Fotos (${galeria.fotos.length})` },
-    ofertas.length > 0 && { id: "ofertas", label: `Ofertas (${ofertas.length})` },
-    novedades.length > 0 && { id: "novedades", label: "Novedades" },
-    (comercio.direccion || comercio.lat) && { id: "ubicacion", label: "Ubicación" },
-  ].filter(Boolean) as { id: string; label: string }[];
 
   // En la ficha de un local cuyo plan trae el chatbot, la ayuda es el
   // asistente de ESE local. En las demás, la de URUKU. Se decide por la
@@ -286,97 +264,24 @@ export default async function ComercioPage({ params }: { params: { slug: string 
           </aside>
         </div>
 
-        {/* ===== Las secciones que hay, como anclas ===== */}
-        {secciones.length > 1 && (
-          <nav className="uk-ficha-tabs">
-            {secciones.map((s) => <a key={s.id} href={`#${s.id}`}>{s.label}</a>)}
-          </nav>
+        {/* ===== Las fotos del local, como una tienda: a todo el ancho ===== */}
+        <GaleriaTienda fotos={galeria.fotos} videos={galeria.videos} publicaciones={publicaciones}
+                       nombre={comercio.nombre} comercioId={comercio.id} comercioWhatsapp={comercio.whatsapp ?? null} />
+
+        {/* Sin ofertas ni novedades el comercio igual sirve —tiene teléfono,
+            dirección y lo que vende—. Se dice por qué no hay, sin disimular. */}
+        {publicaciones.length === 0 && (
+          <section className="uk-ficha-sec uk-ficha-vacio">
+            <p>
+              Este negocio todavía no publicó ofertas en URUKU. Escribile por WhatsApp
+              y consultale por precios y disponibilidad.
+            </p>
+          </section>
         )}
 
-        {/* ===== Las fotos del local, como una tienda: a todo el ancho ===== */}
-        <GaleriaTienda fotos={galeria.fotos} videos={galeria.videos} nombre={comercio.nombre} />
-
-        <div className="uk-ficha-body">
-          <main>
-            {ofertas.length > 0 && (
-              <section id="ofertas" className="uk-ficha-sec">
-                <div className="uk-section-head">
-                  <h2><Ic n="ofertas" s={22} /> Ofertas de {comercio.nombre}</h2>
-                  <span style={{ color: "var(--uk-ink-soft)", fontSize: 13 }}>
-                    {ofertas.length} publicada{ofertas.length === 1 ? "" : "s"} por el negocio
-                  </span>
-                </div>
-                <div className="uk-product-grid">
-                  {ofertas.map((p) => {
-                    const wa = contacto(p);
-                    return (
-                      <article className="uk-product" key={p.id}>
-                        {/* La foto es lo que decide en ropa, calzado y bazar, y es
-                            lo único que SIEMPRE viene: el título puede faltar y el
-                            precio es opcional a propósito. */}
-                        {p.imagen_url && (
-                          <div className="uk-product-img">
-                            <img src={p.imagen_url} alt={p.titulo ?? ""} loading="lazy" decoding="async" />
-                            {p.descuento_pct != null && (
-                              <span className="uk-product-off">{p.descuento_pct}% OFF</span>
-                            )}
-                          </div>
-                        )}
-                        <h4>{p.titulo ?? "Oferta"}</h4>
-                        {p.descripcion && <p className="uk-product-desc">{p.descripcion}</p>}
-                        {/* Sin precio no decimos "consultar precio" y listo: el
-                            precio lo pone el comerciante si quiere, y muchos acá
-                            no pueden porque se les mueve con el cambio del día. */}
-                        {p.precio != null && <div className="price">{precioFmt(p.precio, p.moneda)}</div>}
-                        <ReservarBoton oferta={p} />
-                        {p.contacto_es_uruku && <span className="uk-marca-uruku">URUKU</span>}
-                        <div className="foot">
-                          <span>{p.vence_el ? `Hasta el ${vencimientoFmt(p.vence_el)}` : comercio.nombre}</span>
-                          {/* El lead se registra como contacto DEL COMERCIO aunque
-                              lo reciba URUKU: es el número que hay que poder
-                              mostrarle cuando se le ofrezca un plan. */}
-                          {wa && (
-                            <LeadLink className="wa-mini" comercioId={comercio.id} href={wa.href} tipo="whatsapp">
-                              <WhatsApp style={{ width: 17, height: 17, color: "#fff" }} />
-                            </LeadLink>
-                          )}
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
-
-            {novedades.length > 0 && (
-              <section id="novedades" className="uk-ficha-sec">
-                <div className="uk-section-head"><h2><Ic n="novedades" s={22} /> Novedades</h2></div>
-                <div className="uk-novedades">
-                  {novedades.map((n) => (
-                    <article key={n.id} className="uk-novedad">
-                      {n.imagen_url && <img src={n.imagen_url} alt="" loading="lazy" decoding="async" />}
-                      <div>
-                        <b>{n.titulo ?? "Novedad"}</b>
-                        {n.descripcion && <p>{n.descripcion}</p>}
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Sin ofertas ni novedades el comercio igual sirve —tiene teléfono,
-                dirección y lo que vende— pero la columna quedaría en blanco al
-                lado de una barra llena. Se dice por qué, sin disimular. */}
-            {ofertas.length === 0 && novedades.length === 0 && (
-              <section className="uk-ficha-sec uk-ficha-vacio">
-                <p>
-                  Este negocio todavía no publicó ofertas en URUKU. Escribile por WhatsApp
-                  y consultale por precios y disponibilidad.
-                </p>
-              </section>
-            )}
-          </main>
+        {/* Los datos del negocio, a todo el ancho: las ofertas y novedades, que
+            iban en la columna de al lado, ahora están en la vidriera. */}
+        <div className="uk-ficha-body solo">
 
           <aside className="uk-ficha-side">
             <div className="uk-info-card" id="info">

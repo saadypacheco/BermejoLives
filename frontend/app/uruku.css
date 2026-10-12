@@ -684,8 +684,12 @@
 .uk-fgal-main { position: relative; border-radius: var(--uk-radius); overflow: hidden; background: var(--uk-chip); }
 .uk-fgal-main button { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
 .uk-fgal-main img { width: 100%; height: 100%; min-height: 260px; max-height: 380px; object-fit: cover; display: block; }
-.uk-fgal-count { position: absolute; left: 12px; bottom: 12px; background: rgba(0,0,0,.62);
-  color: #fff; font-size: 12px; padding: 4px 9px; border-radius: 999px; }
+/* En la compu la foto llena la columna: tope fijo de alto dejaba una franja
+   vacía abajo, al lado de una tarjeta de contacto más alta. */
+@media (min-width: 901px) {
+  .uk-fgal, .uk-fgal-main { height: 100%; }
+  .uk-fgal-main img { max-height: none; }
+}
 .uk-fgal-tira { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
 .uk-fgal-tira button { position: relative; flex: 0 0 96px; height: 76px; padding: 0; border: 2px solid transparent;
                        background: var(--uk-chip); border-radius: var(--uk-radius-sm); overflow: hidden; cursor: pointer; }
@@ -1409,10 +1413,10 @@ a.uk-product-img { display: block; }
 /* ---- «Fotos del local» como una tienda (components/galeria-tienda.tsx) ----
    Columnas que siguen hacia abajo, fotos verticales grandes: 2 en el celular,
    3 en la tableta, 4 en la compu. */
-.uk-tienda { margin-top: 24px; scroll-margin-top: 80px; }
-.uk-tienda-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-@media (min-width: 600px) { .uk-tienda-grid { grid-template-columns: repeat(3, 1fr); gap: 14px; } }
-@media (min-width: 1000px) { .uk-tienda-grid { grid-template-columns: repeat(4, 1fr); gap: 18px; } }
+.uk-tienda { margin-top: 24px; scroll-margin-top: 180px; }
+.uk-tienda-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 600px) { .uk-tienda-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; } }
+@media (min-width: 1000px) { .uk-tienda-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; } }
 .uk-tienda-grid button { position: relative; display: block; width: 100%; padding: 0; border: 0; cursor: zoom-in;
   background: var(--uk-chip); border-radius: var(--uk-radius-sm); overflow: hidden; }
 .uk-tienda-grid img, .uk-tienda-grid video { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block;
@@ -1427,4 +1431,46 @@ a.uk-product-img { display: block; }
 .uk-tienda-flecha.der { right: 12px; }
 .uk-tienda-cuenta { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
   background: rgba(0,0,0,.6); color: #fff; font-size: 13px; padding: 4px 12px; border-radius: 999px; }
-.uk a.uk-fgal-count { text-decoration: none; color: #fff; }
+
+/* La vidriera con ofertas y novedades: etiqueta, % OFF, precio abajo y filtros. */
+.uk-tienda .uk-section-head { flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.uk-tienda-filtros { display: flex; gap: 8px; flex-wrap: wrap; }
+.uk-tienda-filtros button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 8px 14px;
+  border-radius: 999px; border: 1px solid var(--uk-line); background: var(--uk-surface); color: var(--uk-ink);
+  font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.uk-tienda-filtros button[aria-pressed="true"] { background: var(--uk-green); border-color: var(--uk-green); color: #fff; }
+.uk-tienda-tag { position: absolute; left: 8px; top: 8px; padding: 3px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 800; color: #fff; letter-spacing: .02em; }
+.uk-tienda-tag.oferta { background: var(--uk-red); }
+.uk-tienda-tag.novedad { background: #2563eb; }
+.uk-tienda-off { position: absolute; right: 8px; top: 8px; padding: 3px 8px; border-radius: 999px;
+  background: rgba(0,0,0,.7); color: #fff; font-size: 12px; font-weight: 800; }
+.uk-tienda-grid li { min-width: 0; }
+.uk-tienda-pie { display: flex; flex-direction: column; gap: 2px; padding: 8px 2px 0; font-size: 14px; }
+.uk-tienda-pie span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--uk-ink); }
+.uk-tienda-pie b { font-size: 15px; }
+.uk-tienda-texto { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  aspect-ratio: 3 / 4; padding: 16px; text-align: center; font-weight: 700; color: var(--uk-ink);
+  background: var(--uk-chip); overflow: hidden; }
+.uk-tienda-visor { gap: 12px; align-content: center; }
+/* Con una oferta o novedad abierta: foto y detalle apilados en el celular, uno
+   al lado del otro en la compu; si no entra, se desplaza. */
+.uk-tienda-visor.con-detalle { overflow-y: auto; }
+.uk-tienda-visor.con-detalle > img { max-height: 52vh; }
+@media (min-width: 901px) {
+  .uk-tienda-visor.con-detalle { grid-template-columns: auto minmax(300px, 380px); justify-content: center; }
+  .uk-tienda-visor.con-detalle > img { max-height: 86vh; max-width: 56vw; }
+  .uk-tienda-visor.con-detalle .uk-tienda-detalle { width: 100%; justify-self: stretch; }
+}
+.uk-tienda-detalle { position: relative; width: min(520px, 92vw); padding: 14px 16px 16px; border-radius: 14px;
+  background: var(--uk-surface); color: var(--uk-ink); cursor: auto; display: flex; flex-direction: column; gap: 6px; }
+.uk-tienda-detalle .uk-tienda-tag { position: static; align-self: flex-start; }
+.uk-tienda-detalle .tit { font-size: 17px; }
+.uk-tienda-detalle p { margin: 0; color: var(--uk-ink-soft); font-size: 14px; }
+.uk-tienda-detalle .precio { font-size: 20px; }
+.uk-tienda-detalle small { color: var(--uk-ink-soft); }
+.uk-tienda-detalle .acciones { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+
+/* Los datos del negocio solos, a todo el ancho: las tarjetas en columnas. */
+.uk-ficha-body.solo { grid-template-columns: 1fr; }
+.uk-ficha-body.solo .uk-ficha-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: start; }
