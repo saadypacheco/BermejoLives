@@ -59,9 +59,11 @@ async def _clima_loop():
 async def _baja_loop():
     """Baja automática diaria del mapa. Dos relojes:
 
-    - el que pagó y venció: `dias_vencido_baja` (40 = 10 de gracia + 1 mes en
-      'solo mapa');
+    - el que pagó y venció: `dias_vencido_baja`;
     - el que nunca pagó: `dias_gracia_sin_pago` desde el alta (la segunda pasada).
+
+    Las dos están apagadas por defecto (12/10/2026): el plan gratis es para
+    siempre y el que deja de pagar vuelve a gratis sin salir del mapa.
 
     Corre dentro del proceso, así que se reinicia en cada deploy; para dispararlo
     a mano está POST /admin/bajas/ejecutar.

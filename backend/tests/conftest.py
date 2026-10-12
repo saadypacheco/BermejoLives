@@ -2096,14 +2096,14 @@ class FakeRepo:
 
     def ocultar_comercios_vencidos(self, dias=40, dias_gracia=None):
         from datetime import date, datetime, timedelta, timezone
-        limite = (date.today() - timedelta(days=dias)).isoformat()
+        limite = (date.today() - timedelta(days=dias)).isoformat() if dias is not None else None
         corte = (datetime.now(timezone.utc) - timedelta(days=dias_gracia)).isoformat() if dias_gracia is not None else None
         n = 0
         for c in self.comercios.values():
             if not c.get("activo", True) or c.get("plan_cortesia"):
                 continue
             ph = c.get("paga_hasta")
-            if ph and str(ph) < limite:
+            if ph and limite and str(ph) < limite:
                 c["activo"] = False
                 c["baja_motivo"] = "vencido"
                 n += 1

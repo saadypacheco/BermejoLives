@@ -201,3 +201,25 @@ def test_bajas_manual_con_gracia_prendida(client, repo, admin_token, monkeypatch
     assert r.status_code == 200, r.text
     assert r.json()["ocultos"] == 1
     assert repo.comercios[c["id"]]["activo"] is False
+
+
+def test_el_que_dejo_de_pagar_sigue_en_el_mapa_como_gratis(client, repo, admin_token):
+    """Decisión del 12/10: el plan gratis es para siempre. El que pagó y venció
+    no se cae del mapa (antes, a los 40 días); vuelve a gratis y sigue."""
+    from app.core.config import settings
+    assert settings.dias_vencido_baja is None
+
+    c = repo.seed_comercio(nombre="Pagó una vez", plan="publica", paga_hasta=_hace(200)[:10], activo=True)
+    r = client.post("/admin/bajas/ejecutar", headers={"Authorization": f"Bearer {admin_token}"})
+    assert r.status_code == 200, r.text
+    assert r.json()["ocultos"] == 0
+    assert repo.comercios[c["id"]]["activo"] is True
+
+
+def test_la_baja_por_vencimiento_se_puede_volver_a_prender(client, repo, admin_token, monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "dias_vencido_baja", 40)
+    c = repo.seed_comercio(nombre="Pagó una vez", paga_hasta=_hace(200)[:10], activo=True)
+    r = client.post("/admin/bajas/ejecutar", headers={"Authorization": f"Bearer {admin_token}"})
+    assert r.json()["ocultos"] == 1
+    assert repo.comercios[c["id"]]["baja_motivo"] == "vencido"

@@ -543,7 +543,7 @@ function AvisoSuscripcion({ sub, onPagar }: { sub: Suscripcion; onPagar: () => v
   const rojo = e === "vencido" || e === "suspendido";
   const texto =
     e === "por_vencer" ? `Tu suscripción vence en ${sub.dias_restantes ?? "pocos"} días. Pagá para no perder tu ficha "Más información".`
-    : e === "vencido" ? `Tu suscripción venció. Tenés unos días de gracia; si no pagás, tu comercio pasa a "solo mapa" y después sale del mapa.`
+    : e === "vencido" ? `Tu suscripción venció. Tu comercio sigue en URUKU con el plan gratis: sin la estrella ni lo que incluye tu plan. Renová cuando quieras y vuelve todo.`
     : `Tu comercio está suspendido. Pagá/reactivá para volver a aparecer completo.`;
   return (
     <div style={{ margin: "16px 26px 0", padding: 14, borderRadius: 12, display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap",

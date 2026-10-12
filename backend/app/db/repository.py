@@ -199,7 +199,7 @@ class Repo(Protocol):
     def registrar_pago(self, comercio_id: str, row: dict) -> dict: ...
     def suspender_comercio(self, comercio_id: str) -> None: ...
     def activar_comercio(self, comercio_id: str) -> None: ...
-    def ocultar_comercios_vencidos(self, dias: int = 40, dias_gracia: int | None = None) -> int: ...
+    def ocultar_comercios_vencidos(self, dias: int | None = 40, dias_gracia: int | None = None) -> int: ...
     def get_comercio_por_numero(self, numero: str) -> dict | None: ...
     def vincular_wa_jid(self, comercio_id: str, wa_jid: str) -> None: ...
     def get_comercio_por_grupo(self, grupo_jid: str, incluir_inactivos: bool = False) -> dict | None: ...
@@ -2498,7 +2498,7 @@ class SupabaseRepo:
          .eq("id", comercio_id).eq("activo", False)
          .in_("baja_motivo", ["vencido", "borrador"]).execute())
 
-    def ocultar_comercios_vencidos(self, dias: int = 40, dias_gracia: int | None = None) -> int:
+    def ocultar_comercios_vencidos(self, dias: int | None = 40, dias_gracia: int | None = None) -> int:
         """Baja automática del mapa. Devuelve cuántos ocultó.
 
         Dos poblaciones distintas, con relojes distintos:
@@ -2510,21 +2510,24 @@ class SupabaseRepo:
            comercio cargado en la calle se quedaba en el mapa para siempre y la
            segunda pasada no tenía ninguna consecuencia si no pagaba.
 
-        `dias_gracia=None` desactiva la baja de los que nunca pagaron, que es el
-        comportamiento viejo (útil durante la captación inicial).
+        `dias_gracia=None` desactiva la baja de los que nunca pagaron, y
+        `dias=None` la de los que pagaron y vencieron (en producción, las dos
+        están apagadas: el plan gratis es para siempre — ver `config.py`).
         """
         from datetime import date, datetime, timedelta, timezone
 
         hoy = date.today()
-        vencidos = (
-            self._db.table("comercios")
-            .update({"activo": False, "baja_motivo": "vencido"})
-            .lt("paga_hasta", (hoy - timedelta(days=dias)).isoformat())
-            .eq("activo", True)
-            .eq("plan_cortesia", False)  # la cortesía nunca vence
-            .execute()
-        )
-        total = len(vencidos.data or [])
+        total = 0
+        if dias is not None:
+            vencidos = (
+                self._db.table("comercios")
+                .update({"activo": False, "baja_motivo": "vencido"})
+                .lt("paga_hasta", (hoy - timedelta(days=dias)).isoformat())
+                .eq("activo", True)
+                .eq("plan_cortesia", False)  # la cortesía nunca vence
+                .execute()
+            )
+            total += len(vencidos.data or [])
 
         if dias_gracia is not None:
             corte = datetime.now(timezone.utc) - timedelta(days=dias_gracia)

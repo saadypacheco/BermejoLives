@@ -238,9 +238,15 @@ class Settings(BaseSettings):
     clima_worker: bool = True
 
     # ---- Ciclo de vida del comercio en el mapa ----
-    # Días después de vencido el pago antes de sacarlo del mapa (10 de gracia +
-    # ~1 mes en "solo mapa").
-    dias_vencido_baja: int = 40
+    # Días después de vencido el pago antes de sacarlo del mapa.
+    #
+    # APAGADO (None) desde el 12/10/2026, decisión del dueño: el plan gratis es
+    # para siempre, y el que deja de pagar NO desaparece: vuelve a gratis (sin
+    # estrella, orden ni fotos de su plan, porque todo eso mira si está al día)
+    # y sigue en el mapa. Antes, a los 40 días de vencido se caía del mapa, y le
+    # iba peor al que pagó una vez que al que nunca pagó. Se prende con
+    # DIAS_VENCIDO_BAJA=40 si algún día se quiere volver a eso.
+    dias_vencido_baja: int | None = None
     # Días desde el alta que tiene un comercio que NUNCA pagó antes de caerse del
     # mapa. Es la segunda pasada: se carga rápido en la calle, y a los 2 meses o
     # paga o desaparece.
