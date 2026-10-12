@@ -197,6 +197,7 @@ class Repo(Protocol):
     def resumen_importados(self) -> list[dict]: ...
     def comercios_con_coords(self, ciudad_id: str | None) -> list[dict]: ...
     def agregar_numero_comercio(self, comercio_id: str, numero: str, etiqueta: str | None, by: str) -> dict: ...
+    def numero_autorizado_por_codigo(self, numero: str) -> bool: ...
     def list_numeros_comercio(self, comercio_id: str) -> list[dict]: ...
     def asegurar_comercio_usuario(self, comercio_id: str) -> dict: ...
     def set_comercio_confiable(self, comercio_id: str, valor: bool) -> dict: ...
@@ -502,6 +503,21 @@ class SupabaseRepo:
             "etiqueta": etiqueta, "created_by": by, "activo": True,
         }, on_conflict="numero").execute()
         return res.data[0]
+
+    def numero_autorizado_por_codigo(self, numero: str) -> bool:
+        """El número se autorizó solo, al mandar el código del local, y nadie del
+        equipo lo confirmó todavía (si lo carga el admin, `created_by` pasa a su
+        correo y deja de ser «por código»)."""
+        from app.core.telefono import normalizar_whatsapp
+
+        num = normalizar_whatsapp(numero)
+        if not num:
+            return False
+        res = (
+            self._db.table("comercio_numeros").select("created_by")
+            .eq("numero", num).eq("activo", True).limit(1).execute()
+        )
+        return bool(res.data) and res.data[0].get("created_by") == "ingest-codigo"
 
     def list_numeros_comercio(self, comercio_id: str) -> list[dict]:
         res = (

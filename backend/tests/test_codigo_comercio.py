@@ -114,7 +114,8 @@ def test_el_numero_queda_autorizado_y_no_hay_que_repetir_el_codigo(repo):
 
     pubs = [p for p in repo.publicaciones if p["comercio_id"] == c["id"]]
     assert len(pubs) == 2
-    assert pubs[1]["identidad_origen"] == "numero"
+    # Lo reconoce sin el código, pero sigue marcado: lo autorizó el código.
+    assert pubs[1]["identidad_origen"] == "numero_por_codigo"
 
 
 def test_sin_codigo_y_numero_desconocido_no_crea_nada(repo):
@@ -152,6 +153,50 @@ def test_confiable_por_numero_conocido_si_auto_aprueba(repo):
     _ingestar(repo, "59177777777", "oferta del día")
     pub = [p for p in repo.publicaciones if p["comercio_id"] == c["id"]][0]
     assert pub["estado"] == "aprobado"
+
+
+def test_numero_autorizado_por_codigo_nunca_publica_directo(repo):
+    """El código se ve en el volante: quien lo lea manda una vez con el código
+    (a moderación) y desde ahí su número queda reconocido. Ni así publica directo
+    en un comercio confiable."""
+    c = repo.seed_comercio(slug="ferreteria", nombre="Ferretería", codigo="K7M2", confiable=True, activo=True)
+    _ingestar(repo, "59177777777", "URUKU-K7M2 primera", "msg-1")
+    _ingestar(repo, "59177777777", "segunda, sin código", "msg-2")
+    _ingestar(repo, "59177777777", "tercera", "msg-3")
+    pubs = [p for p in repo.publicaciones if p["comercio_id"] == c["id"]]
+    assert [p["estado"] for p in pubs] == ["pendiente", "pendiente", "pendiente"]
+
+
+def test_cuando_el_equipo_autoriza_el_numero_publica_directo(repo):
+    from app.services import ingest
+    c = repo.seed_comercio(slug="ferreteria", nombre="Ferretería", codigo="K7M2", confiable=True, activo=True)
+    _ingestar(repo, "59177777777", "URUKU-K7M2 primera", "msg-1")
+    # El admin lo autoriza en el negocio (POST /admin/comercio/{id}/numeros).
+    repo.agregar_numero_comercio(c["id"], "59177777777", "dueño", "admin@uruku.bo")
+    assert not repo.numero_autorizado_por_codigo("59177777777")
+    _ingestar(repo, "59177777777", "segunda", "msg-2")
+    pubs = [p for p in repo.publicaciones if p["comercio_id"] == c["id"]]
+    assert pubs[1]["identidad_origen"] == "numero"
+    assert pubs[1]["estado"] == "aprobado"
+    assert ingest.NUMERO_POR_CODIGO == "ingest-codigo"
+
+
+def test_el_codigo_no_pisa_el_whatsapp_atado_al_comercio(repo):
+    c = repo.seed_comercio(slug="ferreteria", nombre="Ferretería", codigo="K7M2",
+                           wa_jid="59170000000@c.us", activo=True)
+    _ingestar(repo, "59177777777", "URUKU-K7M2 hola")
+    assert repo.comercios[c["id"]]["wa_jid"] == "59170000000@c.us"
+
+
+def test_el_codigo_ata_el_whatsapp_si_el_comercio_no_tenia(repo):
+    c = repo.seed_comercio(slug="ferreteria", nombre="Ferretería", codigo="K7M2", activo=True)
+    _ingestar(repo, "59177777777", "URUKU-K7M2 hola")
+    assert repo.comercios[c["id"]]["wa_jid"] == "59177777777@c.us"
+
+
+def test_la_ia_no_auto_aprueba_lo_que_entro_por_codigo():
+    from app.services.revision_ia import _ORIGENES_SIEMPRE_HUMANOS
+    assert {"codigo", "numero_por_codigo"} <= _ORIGENES_SIEMPRE_HUMANOS
 
 
 # ------------------------------------------------ validación al aprobar

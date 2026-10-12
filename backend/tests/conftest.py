@@ -196,6 +196,12 @@ class FakeRepo:
                 return c
         return None
 
+    def numero_autorizado_por_codigo(self, numero):
+        from app.core.telefono import normalizar_whatsapp
+        num = normalizar_whatsapp(numero)
+        return any(n["numero"] == num and n.get("activo", True) and n.get("created_by") == "ingest-codigo"
+                   for n in self.comercio_numeros)
+
     def vincular_wa_jid(self, comercio_id, wa_jid):
         if comercio_id in self.comercios:
             self.comercios[comercio_id]["wa_jid"] = wa_jid
@@ -431,7 +437,8 @@ class FakeRepo:
             raise HTTPException(status_code=400, detail=f"Número inválido: {numero}")
         for n in self.comercio_numeros:
             if n["numero"] == num:
-                n.update({"comercio_id": comercio_id, "etiqueta": etiqueta, "activo": True})
+                # Como el upsert real: pisa también `created_by`.
+                n.update({"comercio_id": comercio_id, "etiqueta": etiqueta, "created_by": by, "activo": True})
                 return n
         fila = {"id": self._id("num"), "comercio_id": comercio_id, "numero": num,
                 "etiqueta": etiqueta, "created_by": by, "activo": True}

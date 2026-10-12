@@ -75,7 +75,9 @@ def revisar_pendientes(repo, limite: int = 10) -> dict:
 #: `explorador`: URUKU publica el precio de un local que no lo pidió; una
 #: persona tiene que mirar la foto y el precio antes de que salga (spec de la
 #: limpieza de circuitos, 6/10/2026).
-_ORIGENES_SIEMPRE_HUMANOS = {"explorador"}
+# Lo que entró con el código del local (o por un número que autorizó el
+# código) lo mira una persona: el código está a la vista en el volante.
+_ORIGENES_SIEMPRE_HUMANOS = {"explorador", "codigo", "numero_por_codigo"}
 
 
 def _auto_aprueba(v: dict, pub: dict) -> bool:

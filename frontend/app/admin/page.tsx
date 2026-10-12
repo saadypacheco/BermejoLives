@@ -686,6 +686,13 @@ function IdentidadBadge({ pub }: { pub: PendingPub }) {
       </span>
     );
   }
+  if (pub.identidad_origen === "numero_por_codigo") {
+    return (
+      <span style={{ color: "var(--amber)" }} title="Este número quedó autorizado al mandar el código del local, no por alguien del equipo. Para que publique directo, autorizalo en el negocio.">
+        <Ic n="cerrajeria" s={13} /> número sin confirmar
+      </span>
+    );
+  }
   if (pub.identidad_origen === "desconocido") {
     return <span style={{ color: "var(--pink)" }} title="Ni número conocido ni código: no se sabe de qué comercio es"><Ic n="aviso" s={13} /> sin identificar</span>;
   }

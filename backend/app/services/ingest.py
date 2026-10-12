@@ -108,6 +108,10 @@ def _identificar_por_grupo(repo: Repo, payload) -> tuple[dict | None, str, str |
     return None, "grupo_desconocido", codigo
 
 
+# `created_by` de un número que se autorizó solo, al mandar el código del local.
+NUMERO_POR_CODIGO = "ingest-codigo"
+
+
 def _identificar_comercio(repo: Repo, payload) -> tuple[dict | None, str, str | None]:
     """Resuelve de qué comercio es este mensaje.
 
@@ -118,6 +122,9 @@ def _identificar_comercio(repo: Repo, payload) -> tuple[dict | None, str, str | 
     qué se apoyó la atribución al momento de aprobar:
       - 'numero': el número del remitente ya estaba asociado al comercio.
       - 'codigo': el número era desconocido y el mensaje traía el código del local.
+      - 'numero_por_codigo': el número ya estaba, pero lo autorizó el código (no
+        una persona del equipo). Nunca publica directo: el código se ve en el
+        volante, y antes en la ficha pública.
       - 'desconocido': ni número conocido ni código; no hay comercio (None).
     """
     from app.core.codigo import extraer_codigo
@@ -126,6 +133,8 @@ def _identificar_comercio(repo: Repo, payload) -> tuple[dict | None, str, str | 
 
     conocido = repo.get_comercio_by_jid(wa_jid) or repo.get_comercio_por_numero(payload.phone)
     if conocido:
+        if repo.numero_autorizado_por_codigo(payload.phone):
+            return conocido, "numero_por_codigo", None
         return conocido, "numero", None
 
     codigo = extraer_codigo(payload.body)
@@ -133,12 +142,15 @@ def _identificar_comercio(repo: Repo, payload) -> tuple[dict | None, str, str | 
         por_codigo = repo.get_comercio_por_codigo(codigo)
         if por_codigo:
             # El número queda autorizado para este comercio: de acá en adelante ya
-            # no hace falta repetir el código. El código es un vínculo de una vez
-            # entre un local físico y un número, no una contraseña permanente.
+            # no hace falta repetir el código. Pero autorizado POR EL CÓDIGO
+            # (`ingest-codigo`), no por una persona: sus publicaciones van siempre
+            # a moderación hasta que alguien del equipo lo autorice en el admin.
+            # Y no pisa el WhatsApp que el comercio ya tenía atado.
             try:
                 repo.agregar_numero_comercio(
-                    por_codigo["id"], payload.phone, "se identificó con el código", "ingest-codigo")
-                repo.vincular_wa_jid(por_codigo["id"], wa_jid)
+                    por_codigo["id"], payload.phone, "se identificó con el código", NUMERO_POR_CODIGO)
+                if not por_codigo.get("wa_jid"):
+                    repo.vincular_wa_jid(por_codigo["id"], wa_jid)
             except Exception:  # noqa: BLE001 — la publicación importa más que el vínculo
                 logger.warning("ingest.autorizar_numero_fallo", comercio=por_codigo["id"], exc_info=True)
             logger.info("ingest.identificado_por_codigo", comercio=por_codigo["slug"], codigo=codigo)
@@ -581,10 +593,11 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     # 3) Crear publicación. Comercio confiable -> publica directo; si no, a moderación.
     from datetime import datetime, timezone
 
-    # Un número nuevo que se identificó con el código NO hereda `confiable`: el
-    # código está en un papel en el local y cualquiera que lo vea podría publicar
-    # en nombre del comercio. La primera vez pasa por moderación siempre.
-    confiable = bool(comercio.get("confiable")) and identidad_origen != "codigo"
+    # Un número que se identificó con el código NO hereda `confiable`, ni la
+    # primera vez ni las siguientes: el código está en un papel en el local y
+    # cualquiera que lo vea podría publicar en nombre del comercio. Pasa a
+    # publicar directo recién cuando alguien del equipo autoriza el número.
+    confiable = bool(comercio.get("confiable")) and identidad_origen not in ("codigo", "numero_por_codigo")
 
     # En un grupo hay tres participantes y sólo uno publica. Si el mensaje vino
     # de un número que no es el del comercio ni uno nuestro, alguien agregó a un
