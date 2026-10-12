@@ -12,11 +12,13 @@
 // un tipo que el local no tiene no aparece. Antes iban en secciones aparte,
 // debajo de las fotos, y había que bajar todo para encontrarlas.
 //
-// Cada foto carga la miniatura (400 px) o la grande según el ancho que ocupa
-// (`srcSet`), y recién cuando se acerca a la pantalla (`loading="lazy"`): 300
-// fotos grandes de una vez tirarían cualquier celular. Se muestran de a 24, con
-// «Ver más». Tocar una la abre grande, con flechas (y el teclado) para pasar;
-// una oferta abierta muestra además su precio, el WhatsApp y «Reservar».
+// En la grilla va SIEMPRE la miniatura (300×400, 13-28 KB); la grande (100-200
+// KB) baja recién al abrir la foto. Con `srcSet` el celular —pantalla de alta
+// densidad— elegía la grande para cada cuadrito y la ficha tardaba en mostrar
+// algo. Arranca con 10 y suma 10 más cuando el que mira se acerca al final,
+// sin botón: como cualquier tienda, se sigue bajando. Tocar una la abre grande,
+// con flechas (y el teclado) para pasar; una oferta abierta muestra además su
+// precio, el WhatsApp y «Reservar».
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GaleriaFoto, GaleriaVideo } from "@/lib/data";
@@ -26,7 +28,7 @@ import { LeadLink } from "@/components/lead-link";
 import { ReservarBoton } from "@/components/reservar-boton";
 import { WhatsApp } from "@/components/icons";
 
-const DE_A = 24;
+const DE_A = 10;
 
 type Filtro = "oferta" | "novedad" | null;
 type Item =
@@ -47,6 +49,7 @@ export function GaleriaTienda({ fotos, videos, publicaciones, nombre, comercioId
   const [abierta, setAbierta] = useState<number | null>(null);
   const [video, setVideo] = useState<string | null>(null);
   const seccion = useRef<HTMLElement>(null);
+  const fin = useRef<HTMLDivElement>(null);
 
   const nOfertas = publicaciones.filter((p) => p.tipo === "oferta").length;
   const nNovedades = publicaciones.filter((p) => p.tipo === "novedad").length;
@@ -68,6 +71,18 @@ export function GaleriaTienda({ fotos, videos, publicaciones, nombre, comercioId
     setFiltro(t);
     seccion.current?.scrollIntoView({ block: "start" });
   }, [nOfertas, nNovedades]);
+
+  // Sumar 10 más cuando el final de la grilla está a menos de ~una pantalla.
+  const hayMas = cuantas < items.length;
+  useEffect(() => {
+    const el = fin.current;
+    if (!el || !hayMas) return;
+    const obs = new IntersectionObserver((entradas) => {
+      if (entradas.some((e) => e.isIntersecting)) setCuantas((c) => c + DE_A);
+    }, { rootMargin: "0px 0px 800px 0px" });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [hayMas, cuantas]);
 
   const mover = useCallback((paso: number) => {
     setAbierta((n) => (n === null ? n : (n + paso + items.length) % items.length));
@@ -123,8 +138,6 @@ export function GaleriaTienda({ fotos, videos, publicaciones, nombre, comercioId
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={it.clase === "foto" ? (it.thumb || it.url) : it.url}
-                  srcSet={it.clase === "foto" && it.thumb && it.thumb !== it.url ? `${it.thumb} 400w, ${it.url} 1280w` : undefined}
-                  sizes="(max-width: 600px) 50vw, (max-width: 1000px) 33vw, 25vw"
                   alt={it.clase === "pub" ? (it.pub.titulo ?? "") : `${nombre}, foto ${n + 1}`}
                   loading="lazy" decoding="async"
                 />
@@ -162,11 +175,8 @@ export function GaleriaTienda({ fotos, videos, publicaciones, nombre, comercioId
         ))}
       </ul>
 
-      {quedan > 0 && (
-        <button type="button" className="uk-btn-ghost uk-tienda-mas" onClick={() => setCuantas((c) => c + DE_A)}>
-          Ver más ({quedan})
-        </button>
-      )}
+      {/* El aviso para cargar más: invisible, al pie de la grilla. */}
+      {quedan > 0 && <div ref={fin} className="uk-tienda-fin" aria-hidden />}
 
       {item && abierta !== null && (
         <div className={`gf-lightbox uk-tienda-visor${item.clase === "pub" ? " con-detalle" : ""}`} onClick={() => setAbierta(null)} role="dialog" aria-modal
