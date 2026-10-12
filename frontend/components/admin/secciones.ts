@@ -62,7 +62,7 @@ export const MENU: GrupoMenu[] = [
   ] },
   { titulo: "Negocio", secciones: [
     { id: "planes", label: "Planes", icono: "estrella", permiso: "planes", ciudad: "global" },
-    { id: "suscripciones", label: "Suscripciones", icono: "calendario", permiso: "pagos", ciudad: "pendiente" },
+    { id: "suscripciones", label: "Suscripciones", icono: "calendario", permiso: "pagos", ciudad: "filtra" },
     { id: "pagos", label: "Pagos", icono: "pagos", permiso: "pagos", ciudad: "pendiente" },
     { id: "vencimientos", label: "Vencimientos", icono: "aviso", permiso: "moderar", ciudad: "global" },
   ] },

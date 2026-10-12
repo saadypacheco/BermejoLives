@@ -1486,12 +1486,14 @@ class FakeRepo:
         return sol
 
     # ---- suscripciones y estado de plataforma ----
-    def list_suscripciones(self):
+    def list_suscripciones(self, ciudad_id=None):
         from datetime import date, timedelta
         hoy, aviso = date.today().isoformat(), (date.today() + timedelta(days=5)).isoformat()
         out = []
         for c in self.comercios.values():
             if not c.get("activo", True):
+                continue
+            if ciudad_id and c.get("ciudad_id") != ciudad_id:
                 continue
             ph = c.get("paga_hasta")
             if c.get("suspendido"):

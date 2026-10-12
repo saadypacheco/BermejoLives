@@ -786,11 +786,12 @@ class PagoBody(BaseModel):
 
 @router.get("/admin/suscripciones")
 def listar_suscripciones(
+    ciudad: str | None = Query(default=None, max_length=60, description="slug de la ciudad (opcional)"),
     _admin: dict = Depends(require_permiso("pagos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """Lista todos los comercios con su estado de suscripción."""
-    items = repo.list_suscripciones()
+    """Lista los comercios con su estado de suscripción; con `ciudad`, sólo los de esa ciudad."""
+    items = repo.list_suscripciones(_ciudad_id_o_404(repo, ciudad) if ciudad else None)
     return {"items": items, "total": len(items)}
 
 

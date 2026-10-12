@@ -279,9 +279,10 @@ function AdminPanel() {
     setItems(await listPendientes("pendiente"));
   }), [correrPub]);
 
+  // Sigue a la ciudad elegida arriba: al cambiarla, la sección se vuelve a pedir.
   const cargarSuscripciones = useCallback(() => correrSusc(async () => {
-    setSuscripciones(await listSuscripciones());
-  }), [correrSusc]);
+    setSuscripciones(await listSuscripciones(slugCiudad));
+  }), [correrSusc, slugCiudad]);
 
   const cargarPagos = useCallback(() => correrPagos(async () => {
     setPagosPendientes(await listPagosPendientes());
@@ -1449,6 +1450,10 @@ function TabSuscripciones({
   onPago: () => void;
 }) {
   const [filtro, setFiltro] = useState<EstadoSuscripcion | "todos">("todos");
+  // Buscar por nombre, teléfono o código: con más de mil comercios por ciudad,
+  // recorrer la lista para registrar un pago no era una opción.
+  const [busqueda, setBusqueda] = useState("");
+  const [mostrar, setMostrar] = useState(100);
   const [pagandoId, setPagandoId] = useState<string | null>(null);
   const [gestionandoId, setGestionandoId] = useState<string | null>(null);
   // Confiable, números autorizados, grupos y «mensaje al comercio» son llaves de la cuenta.
@@ -1468,8 +1473,16 @@ function TabSuscripciones({
   }, []);
   const nombrePlan = (slug?: string) => planes.find((p) => p.slug === slug)?.nombre ?? slug ?? "gratis";
 
-  const conteo = (e: EstadoSuscripcion) => items.filter((c) => c.suscripcion_estado === e).length;
-  const visibles = filtro === "todos" ? items : items.filter((c) => c.suscripcion_estado === filtro);
+  const sinTildes = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const qTexto = sinTildes(busqueda.trim());
+  const qDigitos = busqueda.replace(/\D/g, "");
+  const base = !qTexto ? items : items.filter((c) =>
+    sinTildes(`${c.nombre} ${c.slug} ${c.codigo ?? ""}`).includes(qTexto)
+    || (qDigitos.length >= 4 && (c.whatsapp ?? "").replace(/\D/g, "").includes(qDigitos)));
+  const conteo = (e: EstadoSuscripcion) => base.filter((c) => c.suscripcion_estado === e).length;
+  const todosVisibles = filtro === "todos" ? base : base.filter((c) => c.suscripcion_estado === filtro);
+  // Se dibujan de a 100: mil filas con cinco botones cada una traban el panel.
+  const visibles = todosVisibles.slice(0, mostrar);
 
   return (
     <div className="panel-card glass">
@@ -1478,13 +1491,20 @@ function TabSuscripciones({
         <span style={{ color: "var(--txt-3)", fontSize: 13 }}>Gestión de pagos y estado de cada negocio</span>
       </div>
 
+      <div style={{ padding: "12px 16px 0" }}>
+        <input className="adm-input" type="search" value={busqueda} autoFocus
+          onChange={(e) => { setBusqueda(e.target.value); setMostrar(100); }}
+          placeholder="Buscar por nombre, teléfono o código"
+          aria-label="Buscar comercio" style={{ width: "100%", minHeight: 44 }} />
+      </div>
+
       {/* Contadores */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
         {(["todos", "activo", "cortesia", "por_vencer", "vencido", "suspendido", "sin_plan"] as const).map((e) => {
-          const n = e === "todos" ? items.length : conteo(e as EstadoSuscripcion);
+          const n = e === "todos" ? base.length : conteo(e as EstadoSuscripcion);
           const cfg = e === "todos" ? { label: "Todos", color: "var(--txt-2)" } : ESTADO_CFG[e as EstadoSuscripcion];
           return (
-            <button key={e} onClick={() => setFiltro(e)}
+            <button key={e} onClick={() => { setFiltro(e); setMostrar(100); }}
               style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid", cursor: "pointer",
                 borderColor: filtro === e ? cfg.color : "var(--border)",
                 background: filtro === e ? `${cfg.color}22` : "transparent",
@@ -1551,6 +1571,13 @@ function TabSuscripciones({
           </div>
         );
       })}
+      {todosVisibles.length > visibles.length && (
+        <div style={{ padding: 16, textAlign: "center" }}>
+          <button type="button" className="btn btn-ghost" style={{ minHeight: 44 }} onClick={() => setMostrar((m) => m + 100)}>
+            Ver más ({visibles.length} de {todosVisibles.length})
+          </button>
+        </div>
+      )}
 
       {/* Modal de gestión: confiable + números autorizados */}
       {gestionandoId && (

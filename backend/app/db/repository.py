@@ -195,7 +195,7 @@ class Repo(Protocol):
     def kpis_admin(self, dias: int = 30) -> dict: ...
     def insert_visita(self, fila: dict) -> None: ...
     def resumen_visitas(self, dias: int = 30) -> dict: ...
-    def list_suscripciones(self) -> list[dict]: ...
+    def list_suscripciones(self, ciudad_id: str | None = None) -> list[dict]: ...
     def registrar_pago(self, comercio_id: str, row: dict) -> dict: ...
     def suspender_comercio(self, comercio_id: str) -> None: ...
     def activar_comercio(self, comercio_id: str) -> None: ...
@@ -2393,21 +2393,31 @@ class SupabaseRepo:
 
     # ── suscripciones ────────────────────────────────────────────────────────
 
-    def list_suscripciones(self) -> list[dict]:
-        """Todos los comercios activos con su estado de suscripción."""
+    def list_suscripciones(self, ciudad_id: str | None = None) -> list[dict]:
+        """Todos los comercios activos con su estado de suscripción (de una ciudad, si se pide).
+
+        Antes cortaba en 500 de todas las ciudades mezcladas: la lista decía
+        «Todos (500)», los contadores salían mal y el comercio buscado podía no
+        estar. Ahora se pide por páginas hasta traerlos todos."""
         from datetime import date, timedelta
         hoy = date.today().isoformat()
         limite_aviso = (date.today() + timedelta(days=5)).isoformat()
 
-        res = (
-            self._db.table("comercios")
-            .select("id, slug, nombre, whatsapp, verificado, confiable, plan, plan_cortesia, codigo, suspendido, paga_hasta, created_at")
-            .eq("activo", True)
-            .order("nombre")
-            .limit(500)
-            .execute()
-        )
-        items = res.data or []
+        items: list[dict] = []
+        pagina = 1000
+        while True:
+            q = (
+                self._db.table("comercios")
+                .select("id, slug, nombre, whatsapp, verificado, confiable, plan, plan_cortesia, codigo, suspendido, paga_hasta, created_at")
+                .eq("activo", True)
+            )
+            if ciudad_id:
+                q = q.eq("ciudad_id", ciudad_id)
+            res = q.order("nombre").order("id").range(len(items), len(items) + pagina - 1).execute()
+            lote = res.data or []
+            items.extend(lote)
+            if len(lote) < pagina or len(items) >= 20000:
+                break
 
         for c in items:
             ph = c.get("paga_hasta")

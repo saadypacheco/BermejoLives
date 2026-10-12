@@ -460,3 +460,21 @@ def test_para_mirar_incluye_lo_que_quedo_sin_registrar(client, repo, admin_token
     r = client.get("/admin/whatsapp/entrantes?estado=problemas", headers=_h(admin_token))
     ids = [i["wa_message_id"] for i in r.json()["items"]]
     assert "s1" in ids and "p1" not in ids
+
+
+def test_suscripciones_filtra_por_ciudad(client, repo, admin_token):
+    """La sección sigue a la ciudad elegida arriba en el panel."""
+    repo.seed_comercio(slug="b1", nombre="De Bermejo", ciudad_id="ciu-1", activo=True)
+    repo.seed_comercio(slug="t1", nombre="De Tarija", ciudad_id="ciu-tarija", activo=True)
+    todos = {c["slug"] for c in client.get("/admin/suscripciones", headers=_h(admin_token)).json()["items"]}
+    assert {"b1", "t1"} <= todos
+    bermejo = client.get("/admin/suscripciones?ciudad=bermejo", headers=_h(admin_token)).json()["items"]
+    assert [c["slug"] for c in bermejo] == ["b1"]
+
+
+def test_suscripciones_no_corta_en_500(client, repo, admin_token):
+    """Antes traía sólo los primeros 500 y el comercio buscado podía no estar."""
+    for i in range(620):
+        repo.seed_comercio(slug=f"c{i}", nombre=f"Comercio {i:04d}", ciudad_id="ciu-1", activo=True)
+    r = client.get("/admin/suscripciones?ciudad=bermejo", headers=_h(admin_token)).json()
+    assert r["total"] == 620

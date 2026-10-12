@@ -416,8 +416,8 @@ export type ComercioSuscripcion = {
   created_at: string;
 };
 
-export async function listSuscripciones(): Promise<ComercioSuscripcion[]> {
-  const res = await authFetch("/admin/suscripciones");
+export async function listSuscripciones(ciudad?: string | null): Promise<ComercioSuscripcion[]> {
+  const res = await authFetch(`/admin/suscripciones${ciudad ? `?ciudad=${encodeURIComponent(ciudad)}` : ""}`);
   return itemsDe<ComercioSuscripcion>(res, "las suscripciones");
 }
 
