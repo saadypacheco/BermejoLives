@@ -1474,3 +1474,28 @@ a.uk-product-img { display: block; }
 /* Los datos del negocio solos, a todo el ancho: las tarjetas en columnas. */
 .uk-ficha-body.solo { grid-template-columns: 1fr; }
 .uk-ficha-body.solo .uk-ficha-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: start; }
+
+
+/* ---- Novedades de URUKU (migración 0150) ----
+   La tarjeta es hermana de `.uk-offer`: lo único propio es la etiqueta, que se
+   lee a 11 px (la de la oferta es de 9), y el play sobre la portada cuando la
+   novedad trae video. */
+.uk-offer-uruku .uk-offer-tag { font-size: 11px; padding: 5px 10px; }
+.uk-offer-play { position: absolute; z-index: 1; inset: 0; display: grid; place-items: center; color: #fff;
+                 pointer-events: none; filter: drop-shadow(0 2px 8px rgba(0,0,0,.55)); }
+.uk-nov-grupo { margin-bottom: 26px; }
+.uk-nov-grupo > h2 { margin: 0 0 12px; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+
+/* El detalle: /novedades/uruku/[id]. Una columna legible, el video a todo el
+   ancho y las fotos como vidriera (las clases `.uk-tienda-*` de arriba). */
+.uk-nov-det { max-width: 880px; padding: 18px 0 48px; }
+.uk-nov-det .volver { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-size: 14px; font-weight: 700; color: var(--uk-green); }
+.uk-nov-det .etiqueta { display: inline-block; padding: 5px 10px; border-radius: 8px; background: var(--uk-green); color: #fff;
+                        font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.uk-nov-det h1 { margin: 10px 0 6px; font-size: 28px; line-height: 1.15; overflow-wrap: anywhere; }
+.uk-nov-det .fecha { display: flex; align-items: center; gap: 6px; color: var(--uk-ink-soft); font-size: 14px; margin-bottom: 16px; }
+.uk-nov-det .texto { white-space: pre-line; font-size: 16px; line-height: 1.6; color: var(--uk-ink); margin: 0 0 20px; overflow-wrap: anywhere; }
+.uk-nov-det video { display: block; width: 100%; max-height: 70vh; background: #000; border-radius: var(--uk-radius-sm); margin: 0 0 22px; }
+.uk-nov-det .uk-tienda { margin-top: 8px; }
+.uk-nov-det .enlace { margin-top: 22px; }
+@media (max-width: 600px) { .uk-nov-det h1 { font-size: 23px; } }

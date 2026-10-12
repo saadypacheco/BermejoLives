@@ -6,7 +6,8 @@ import { Ic } from "@/components/ic";
 import { PublicacionesGrid, SolapasPublicaciones } from "@/components/publicaciones-grid";
 import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
-import { getPublicaciones } from "@/lib/data";
+import { getNovedadesUruku, getPublicaciones } from "@/lib/data";
+import { NovedadUrukuCard } from "@/components/novedad-uruku-card";
 import { RubrosDePublicaciones } from "@/components/rubros-publicaciones";
 import { ciudadActual } from "@/lib/ciudad-server";
 
@@ -33,7 +34,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     };
   }
   return {
-    title: n ? `Novedades de ${n} — URUKU` : "Novedades de los comercios — URUKU",
+    title: n ? `Novedades de ${n} — URUKU` : "Novedades — URUKU",
     description: "Lo que cuentan los comercios: mercadería nueva, horarios, cambios de local y lo que está pasando hoy.",
   };
 }
@@ -51,7 +52,11 @@ export default async function NovedadesPage({ searchParams }: Props) {
   // Se piden TODAS igual: la fila de rubros sale de acá, y el filtro se aplica
   // después. Con dos consultas la fila mostraría sólo el rubro ya elegido y no
   // habría forma de volver ni de saltar a otro.
-  const todas = await getPublicaciones("novedad", 60, ciudad?.slug);
+  const [todas, deUruku] = await Promise.all([
+    getPublicaciones("novedad", 60, ciudad?.slug),
+    // Con un rubro elegido se mira lo de los comercios de ese rubro: las de URUKU no tienen rubro.
+    rubro ? Promise.resolve([]) : getNovedadesUruku(ciudad?.id, 24),
+  ]);
   const items = rubro ? todas.filter((p) => p.rubro_slug === rubro) : todas;
   const nomRubro = rubro ? (todas.find((p) => p.rubro_slug === rubro)?.rubro_nombre ?? rubro) : null;
 
@@ -63,11 +68,26 @@ export default async function NovedadesPage({ searchParams }: Props) {
           <SolapasPublicaciones activa="novedades" />
         </div>
         <RubrosDePublicaciones items={todas} ruta="/novedades" activo={rubro} />
-        <p className="uk-pub-sub">Lo que cuentan los comercios: mercadería nueva, cambios de horario, lo que está pasando hoy.</p>
+        <p className="uk-pub-sub">Lo que cuenta URUKU y lo que cuentan los comercios: mercadería nueva, cambios de horario, lo que está pasando hoy.</p>
+
+        {/* Lo de URUKU, arriba: es lo que la marca quiere que se vea primero. */}
+        {deUruku.length > 0 && (
+          <section className="uk-nov-grupo" aria-labelledby="uk-nov-uruku">
+            <h2 id="uk-nov-uruku"><Ic n="novedades" s={20} tono="marca" /> De URUKU</h2>
+            <div className="uk-offers">
+              {deUruku.map((n) => <NovedadUrukuCard key={n.id} n={n} />)}
+            </div>
+          </section>
+        )}
+        {deUruku.length > 0 && items.length > 0 && (
+          <h2 style={{ fontSize: 18, margin: "0 0 12px" }}>De los comercios</h2>
+        )}
 
         <PublicacionesGrid
           items={items}
-          vacio={faltaParaLanzamiento() ? (
+          vacio={deUruku.length > 0 ? (
+            <div className="uk-empty">Los comercios todavía no publicaron novedades.</div>
+          ) : faltaParaLanzamiento() ? (
             <div className="uk-lanzamiento">
               <span className="uk-lanzamiento-tag">Nuevo en URUKU</span>
               <h2>Las novedades empiezan {FECHA_LANZAMIENTO}</h2>

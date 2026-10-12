@@ -565,6 +565,93 @@ export async function getVideosPromo(limit = 8): Promise<VideoPromo[]> {
   return (data as VideoPromo[]) ?? [];
 }
 
+// Novedades de URUKU (migración 0150): lo que cuenta la marca misma, p. ej. «URUKU
+// fue auspiciante del Festival del Lapacho». Anon lee sólo las activas y, por el
+// grant select por columnas, nunca `created_by`: por eso la lista es explícita y
+// no hay `select("*")`.
+export type NovedadFoto = { url: string; thumb_url: string | null };
+export type NovedadUruku = {
+  id: string;
+  ciudad_id: string | null;       // null = «todas las ciudades»
+  titulo: string;
+  texto: string | null;
+  fecha: string;                  // YYYY-MM-DD
+  portada_url: string | null;
+  portada_thumb_url: string | null;
+  fotos: NovedadFoto[];
+  video_url: string | null;
+  video_poster_url: string | null;
+  enlace_url: string | null;
+  destacada: boolean;
+  activo: boolean;
+};
+
+const COLUMNAS_NOVEDAD_URUKU = [
+  "id", "ciudad_id", "titulo", "texto", "fecha", "portada_url", "portada_thumb_url", "fotos",
+  "video_url", "video_poster_url", "enlace_url", "destacada", "activo",
+].join(", ");
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** `fotos` es jsonb: lo que no tenga forma de foto se descarta en vez de romper la página. */
+function novedadDeFila(r: Record<string, unknown>): NovedadUruku {
+  const txt = (x: unknown) => (typeof x === "string" && x ? x : null);
+  const fotos = Array.isArray(r.fotos)
+    ? (r.fotos as unknown[]).flatMap((f): NovedadFoto[] => {
+        const o = f as { url?: unknown; thumb_url?: unknown } | null;
+        return o && typeof o.url === "string" && o.url ? [{ url: o.url, thumb_url: txt(o.thumb_url) }] : [];
+      })
+    : [];
+  return {
+    id: String(r.id),
+    ciudad_id: txt(r.ciudad_id),
+    titulo: String(r.titulo ?? ""),
+    texto: txt(r.texto),
+    fecha: String(r.fecha ?? "").slice(0, 10),
+    portada_url: txt(r.portada_url),
+    portada_thumb_url: txt(r.portada_thumb_url),
+    fotos,
+    video_url: txt(r.video_url),
+    video_poster_url: txt(r.video_poster_url),
+    enlace_url: txt(r.enlace_url),
+    destacada: r.destacada === true,
+    activo: r.activo !== false,
+  };
+}
+
+/** Las novedades de URUKU de una ciudad (más las «de todas»): destacadas
+ *  primero y después la más nueva. Sin ciudad, sólo las «de todas». */
+export async function getNovedadesUruku(ciudadId: string | null | undefined, limit = 6): Promise<NovedadUruku[]> {
+  if (!hasSupabase) return [];
+  let q = supabase.from("novedades_uruku").select(COLUMNAS_NOVEDAD_URUKU).eq("activo", true);
+  // El id va a un filtro de texto de PostgREST: sólo pasa si es un uuid.
+  q = ciudadId && UUID.test(ciudadId) ? q.or(`ciudad_id.is.null,ciudad_id.eq.${ciudadId}`) : q.is("ciudad_id", null);
+  const { data, error } = await q
+    .order("destacada", { ascending: false }).order("fecha", { ascending: false }).order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) { logSupaError("getNovedadesUruku", error); return []; }
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map(novedadDeFila);
+}
+
+/** Una novedad de URUKU por id, o `null` si no existe o está dada de baja. */
+export async function getNovedadUruku(id: string): Promise<NovedadUruku | null> {
+  if (!hasSupabase || !UUID.test(id)) return null;
+  const { data, error } = await supabase.from("novedades_uruku").select(COLUMNAS_NOVEDAD_URUKU)
+    .eq("id", id).eq("activo", true).limit(1);
+  if (error) { logSupaError("getNovedadUruku", error); return null; }
+  const fila = (data as unknown as Record<string, unknown>[] | null)?.[0];
+  return fila ? novedadDeFila(fila) : null;
+}
+
+/** «12 oct 2026» a partir de un `YYYY-MM-DD`, sin pasar por la zona horaria
+ *  (un `new Date("2026-10-12")` en La Paz caía en el 11). */
+export function fechaNovedad(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return "";
+  const meses = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  return `${Number(m[3])} ${meses[Number(m[2]) - 1] ?? ""} ${m[1]}`;
+}
+
 // Videos recientes de comercios ("Recorrimos Bermejo" en la home Inicio).
 export type VideoRecap = { id: string; url: string; comercio_slug: string; comercio_nombre: string; portada_thumb_url: string | null };
 export async function getVideosRecientes(limit = 8): Promise<VideoRecap[]> {

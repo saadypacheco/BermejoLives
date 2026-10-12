@@ -6,7 +6,8 @@ import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { ContactoUruku } from "@/components/contacto-uruku";
 import { AccesosCiudad } from "@/components/accesos-ciudad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
-import { getClima, getCotizaciones, getFeed, getFronteraEstado, getVideosPromo } from "@/lib/data";
+import { getClima, getCotizaciones, getFeed, getFronteraEstado, getNovedadesUruku, getVideosPromo } from "@/lib/data";
+import { NovedadUrukuCard } from "@/components/novedad-uruku-card";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { titulo, descripcion, MARCA } from "@/lib/marca";
 import { precioFmt } from "@/lib/types";
@@ -69,7 +70,7 @@ const HERRAMIENTAS_SIN_GUIA: Acceso[] = [
   { i: "ubicacion", t: "Qué hay cerca tuyo", href: "/buscar?cerca=1" },
   { i: "mapa", t: "Todo en el mapa", href: "/buscar?vista=mapa" },
   { i: "ofertas", t: "Las ofertas de hoy", href: "/ofertas" },
-  { i: "novedades", t: "Novedades de los comercios", href: "/novedades" },
+  { i: "novedades", t: "Novedades", href: "/novedades" },
 ];
 
 const INFO: Acceso[] = [
@@ -78,7 +79,7 @@ const INFO: Acceso[] = [
   { i: "telefono", t: "Teléfonos útiles", d: "110 · 119 · 168 y dónde queda la policía", href: "/guia#seguridad" },
   { i: "celulares", t: "Comprar chip o eSIM", d: "Entel y Tigo", href: "/guia#conectividad" },
   { i: "video_play", t: "Videos guía", d: "Recorridos y tips", href: "/guia#ofertas" },
-  { i: "novedades", t: "Novedades", d: "Lo que cuentan los comercios", href: "/novedades" },
+  { i: "novedades", t: "Novedades", d: "De URUKU y de los comercios", href: "/novedades" },
 ];
 
 const ESTADO: Record<string, Record<string, [string, string]>> = {
@@ -138,19 +139,26 @@ export default async function InicioPage() {
   const conGuia = (ciudad?.slug ?? "bermejo") === "bermejo";
   // El peso argentino, en cualquier ciudad de frontera.
   const esFrontera = ciudad?.es_frontera ?? true;
-  const [feed, videos, frontera, clima, cotizaciones] = await Promise.all([
-    getFeed(12, ciudad?.slug), conGuia ? getVideosPromo(6) : Promise.resolve([]),
+  const [feed, novedadesUruku, videos, frontera, clima, cotizaciones] = await Promise.all([
+    getFeed(12, ciudad?.slug), getNovedadesUruku(ciudad?.id, 4), conGuia ? getVideosPromo(6) : Promise.resolve([]),
     conGuia ? getFronteraEstado(ciudad?.id) : Promise.resolve(null), conGuia ? getClima() : Promise.resolve(null), getCotizaciones(),
   ]);
   const nombre = ciudad?.nombre ?? "Bermejo";
   // La foto del hero es de la ciudad; sin foto propia, la de Bermejo sólo en
   // Bermejo. Otra ciudad sin foto va con el fondo liso, no con el río de otra.
   const ofertas = feed.filter((f) => f.tipo === "oferta");
-  // Cuando no hay ofertas se muestran las novedades, y entonces el título NO
-  // puede seguir diciendo «Ofertas destacadas»: la primera publicación del
-  // sitio era una novedad y el home la anunciaba como oferta.
+  // «Ofertas destacadas» y «Novedades» son dos secciones: las ofertas se
+  // quedan como estaban y las novedades —las de URUKU primero, después las de
+  // los comercios— van aparte. Antes, sin ofertas, las novedades se mostraban
+  // bajo el título de las ofertas y se confundían con ellas.
   const hayOfertas = ofertas.length > 0;
-  const cards = (hayOfertas ? ofertas : feed.filter((f) => f.tipo !== "video")).slice(0, 4);
+  const cards = ofertas.slice(0, 4);
+  const novComercios = feed.filter((f) => f.tipo === "novedad");
+  // Hasta cuatro tarjetas en total. Si también hay novedades de comercios, las
+  // de URUKU dejan al menos un lugar para ellas: la sección es de los dos.
+  const novUruku = novedadesUruku.slice(0, novComercios.length > 0 ? 3 : 4);
+  const novComerciosVisibles = novComercios.slice(0, 4 - novUruku.length);
+  const hayNovedades = novUruku.length + novComerciosVisibles.length > 0;
   const t = tasasDe(cotizaciones);
   const fechas = [frontera?.actualizado_en, t.actualizado_en].filter(Boolean) as string[];
   const ultima = fechas.length ? fechas.sort()[fechas.length - 1] : null;
@@ -262,7 +270,7 @@ export default async function InicioPage() {
       </section>
 
       {/* ===== El lanzamiento de las ofertas (hasta el lunes 28) ===== */}
-      {cards.length === 0 && faltaParaLanzamiento() && (
+      {!hayOfertas && !hayNovedades && faltaParaLanzamiento() && (
         <section className="uk-container uk-home-sec">
           <div className="uk-lanzamiento">
             <span className="uk-lanzamiento-tag">Nuevo en URUKU</span>
@@ -280,16 +288,14 @@ export default async function InicioPage() {
       )}
 
       {/* ===== Ofertas destacadas ===== */}
-      {cards.length > 0 && (
+      {hayOfertas && (
         <section className="uk-container uk-home-sec">
           <div className="uk-section-head">
             <h2>
-              {hayOfertas ? "Ofertas destacadas" : "Novedades de los comercios"}{" "}
+              Ofertas destacadas{" "}
               <small>De comercios de {nombre}.</small>
             </h2>
-            <Link href={hayOfertas ? "/ofertas" : "/novedades"}>
-              {hayOfertas ? "Ver más ofertas →" : "Ver todas las novedades →"}
-            </Link>
+            <Link href="/ofertas">Ver más ofertas →</Link>
           </div>
           {/* Grilla de cuatro, fija. Probé que las columnas siguieran a cuántas
               publicaciones hay y con una sola quedaba una tarjeta enorme que se
@@ -313,6 +319,34 @@ export default async function InicioPage() {
               </Link>
               );
             })}
+          </div>
+        </section>
+      )}
+
+      {/* ===== Novedades: las de URUKU primero, después las de los comercios ===== */}
+      {hayNovedades && (
+        <section className="uk-container uk-home-sec">
+          <div className="uk-section-head">
+            <h2>
+              Novedades{" "}
+              <small>{novUruku.length > 0 ? `De URUKU y de los comercios de ${nombre}.` : `De los comercios de ${nombre}.`}</small>
+            </h2>
+            <Link href="/novedades">Ver todas las novedades →</Link>
+          </div>
+          <div className="uk-offers">
+            {novUruku.map((n) => <NovedadUrukuCard key={n.id} n={n} />)}
+            {novComerciosVisibles.map((o) => (
+              <Link key={o.id} href={`/comercios/${o.comercio_slug}`}
+                className={`uk-offer${o.imagen_url ? "" : " sin-foto"}`}
+                style={o.imagen_url ? { backgroundImage: `url('${o.imagen_url}')` } : undefined}>
+                <span className="uk-offer-tag">{o.zona_nombre || o.comercio_nombre}</span>
+                {!o.imagen_url && <span className="uk-offer-emoji"><IcRubro slug={o.rubro_slug} s={64} peso="fill" /></span>}
+                <div className="uk-offer-body">
+                  <h3>{o.titulo}</h3>
+                  <small>{o.comercio_nombre}</small>
+                </div>
+              </Link>
+            ))}
           </div>
         </section>
       )}

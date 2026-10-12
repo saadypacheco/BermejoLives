@@ -46,7 +46,8 @@ MENSAJE = "El archivo es demasiado grande."
 #: (patrón de ruta, tope en MB). La primera que coincide gana.
 #: Fotos: _MAX_FOTO_BYTES (campo), _GAL_MAX_FOTO_BYTES (comercio),
 #: _ADMIN_MAX_FOTO_BYTES (admin): 15 MB. Videos: _MAX_VIDEO_BYTES (campo) y
-#: _GAL_MAX_VIDEO_BYTES (comercio): 50 MB; el promo de contenido.py: 100 MB.
+#: _GAL_MAX_VIDEO_BYTES (comercio): 50 MB; el promo de contenido.py: 100 MB. Las novedades
+#: de URUKU (contenido.py): fotos de 15 MB y video de 100 MB.
 #: Catálogo en PDF: ficha_catalogo.MAX_BYTES, 8 MB. Audio de «¿qué vende?»: 25 MB
 #: (el límite que ya tiene /campo/transcribir). Webhook de WAHA: 25 MB (un
 #: mensaje con media inline). `/comercio/productos` lleva hasta 3 fotos de 15 MB.
@@ -60,6 +61,9 @@ TABLA_DE_TOPES: tuple[tuple[re.Pattern, int], ...] = tuple(
         (r"^/ingest/webhook$", 25),
         # Video promo
         (r"^/contenido/videos-promo$", 100),
+        # Novedades de URUKU (0150): video (+ póster) de hasta 100 MB; portada y fotos de 15 MB
+        (r"^/contenido/novedades/[^/]+/video$", 100),
+        (r"^/contenido/novedades/[^/]+/(portada|fotos)$", 15),
         # Videos
         (r"^/comercio/videos$", 50),
         (r"^/campo/mis-comercios/[^/]+/videos$", 50),

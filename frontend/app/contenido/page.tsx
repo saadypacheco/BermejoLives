@@ -8,6 +8,7 @@ import {
   listarVideosPromo, subirVideoPromo, borrarVideoPromo, editarRed, type VideoPromoItem,
 } from "@/lib/publicador";
 import { Ic, climaIcono } from "@/components/ic";
+import { NovedadesUrukuPanel } from "@/components/novedades-uruku-panel";
 
 export default function ContenidoPage() {
   const [authed, setAuthed] = useState(false);
@@ -177,6 +178,9 @@ function Panel({ onLogout }: { onLogout: (motivo?: string) => void }) {
         </div>
         {videos.length === 0 && <p style={{ color: "var(--txt-3)", fontSize: 13 }}>Todavía no subiste videos.</p>}
       </div>
+
+      {/* Novedades de URUKU: lo que cuenta la marca, con portada, fotos y video */}
+      <NovedadesUrukuPanel flash={flash} fail={fail} />
 
       {/* Redes sociales */}
       <div className="glass" style={box}>

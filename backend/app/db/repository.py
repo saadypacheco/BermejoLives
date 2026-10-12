@@ -305,6 +305,13 @@ class Repo(Protocol):
     def list_videos_promo(self, solo_activos: bool = False) -> list[dict]: ...
     def add_video_promo(self, row: dict) -> dict: ...
     def delete_video_promo(self, video_id: str) -> bool: ...
+    # Novedades de URUKU (0150)
+    def list_novedades_uruku(self) -> list[dict]: ...
+    def get_novedad_uruku(self, novedad_id: str) -> dict | None: ...
+    def add_novedad_uruku(self, row: dict) -> dict: ...
+    def update_novedad_uruku(self, novedad_id: str, patch: dict) -> dict | None: ...
+    def agregar_foto_novedad_uruku(self, novedad_id: str, foto: dict, maximo: int) -> list[dict] | None: ...
+    def quitar_foto_novedad_uruku(self, novedad_id: str, url: str) -> dict | None: ...
     def list_redes(self) -> list[dict]: ...
     def update_red(self, clave: str, url: str | None) -> dict | None: ...
 
@@ -3210,6 +3217,41 @@ class SupabaseRepo:
     def delete_video_promo(self, video_id: str) -> bool:
         res = self._db.table("videos_promocionales").delete().eq("id", video_id).execute()
         return bool(res.data)
+
+    # ---- Novedades de URUKU (0150): baja lógica, nunca DELETE ----
+    def list_novedades_uruku(self) -> list[dict]:
+        """Todas, también las dadas de baja (es la lista del panel). Las destacadas
+        primero y después la fecha más nueva."""
+        res = (self._db.table("novedades_uruku").select("*")
+               .order("destacada", desc=True).order("fecha", desc=True)
+               .order("created_at", desc=True).execute())
+        return res.data or []
+
+    def get_novedad_uruku(self, novedad_id: str) -> dict | None:
+        res = self._db.table("novedades_uruku").select("*").eq("id", novedad_id).limit(1).execute()
+        return res.data[0] if res.data else None
+
+    def add_novedad_uruku(self, row: dict) -> dict:
+        res = self._db.table("novedades_uruku").insert(row).execute()
+        return res.data[0] if res.data else {}
+
+    def update_novedad_uruku(self, novedad_id: str, patch: dict) -> dict | None:
+        from datetime import datetime, timezone
+        patch = {**patch, "updated_at": datetime.now(timezone.utc).isoformat()}
+        res = self._db.table("novedades_uruku").update(patch).eq("id", novedad_id).execute()
+        return res.data[0] if res.data else None
+
+    def agregar_foto_novedad_uruku(self, novedad_id: str, foto: dict, maximo: int) -> list[dict] | None:
+        """Suma una foto en UNA sentencia (rpc): dos subidas en paralelo no se pisan.
+        None si la novedad no existe o ya tiene `maximo` fotos."""
+        res = self._db.rpc("novedad_agregar_foto",
+                           {"p_id": novedad_id, "p_foto": foto, "p_max": maximo}).execute()
+        return res.data or None
+
+    def quitar_foto_novedad_uruku(self, novedad_id: str, url: str) -> dict | None:
+        """Saca la foto de esa `url` y la devuelve ({url, thumb_url}); None si no estaba."""
+        res = self._db.rpc("novedad_quitar_foto", {"p_id": novedad_id, "p_url": url}).execute()
+        return res.data or None
 
     def insert_busqueda(
         self, query: str, resultados: int, comercios: list[str] | None = None

@@ -164,6 +164,7 @@ class FakeRepo:
         self.roles: dict[str, dict] = {}
         self.cotizaciones_historial: list[dict] = []
         self.videos_promo: list[dict] = []
+        self.novedades_uruku: dict[str, dict] = {}    # id -> fila (0150)
         self.redes: list[dict] = [
             {"clave": "tiktok", "etiqueta": "TikTok", "url": None, "orden": 1},
             {"clave": "instagram", "etiqueta": "Instagram", "url": None, "orden": 2},
@@ -1395,6 +1396,50 @@ class FakeRepo:
         antes = len(self.videos_promo)
         self.videos_promo = [v for v in self.videos_promo if v["id"] != video_id]
         return len(self.videos_promo) < antes
+
+    # ---- Novedades de URUKU (0150) ----
+    def list_novedades_uruku(self):
+        filas = list(reversed(list(self.novedades_uruku.values())))      # la más nueva primero
+        filas = sorted(filas, key=lambda n: n["fecha"], reverse=True)
+        return [dict(n) for n in sorted(filas, key=lambda n: not n["destacada"])]
+
+    def get_novedad_uruku(self, novedad_id):
+        n = self.novedades_uruku.get(novedad_id)
+        return dict(n) if n else None
+
+    def add_novedad_uruku(self, row):
+        from datetime import date, datetime, timezone
+        full = {"id": self._id("nov"), "ciudad_id": None, "texto": None, "fecha": date.today().isoformat(),
+                "portada_url": None, "portada_thumb_url": None, "fotos": [], "video_url": None,
+                "video_poster_url": None, "enlace_url": None, "destacada": False, "activo": True,
+                "created_by": None, "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(), **row}
+        self.novedades_uruku[full["id"]] = full
+        return dict(full)
+
+    def update_novedad_uruku(self, novedad_id, patch):
+        n = self.novedades_uruku.get(novedad_id)
+        if not n:
+            return None
+        n.update(patch)
+        return dict(n)
+
+    def agregar_foto_novedad_uruku(self, novedad_id, foto, maximo):
+        n = self.novedades_uruku.get(novedad_id)
+        if not n or len(n["fotos"]) >= min(maximo, 12):
+            return None
+        n["fotos"] = [*n["fotos"], dict(foto)]
+        return [dict(f) for f in n["fotos"]]
+
+    def quitar_foto_novedad_uruku(self, novedad_id, url):
+        n = self.novedades_uruku.get(novedad_id)
+        if not n:
+            return None
+        sacada = next((f for f in n["fotos"] if f.get("url") == url), None)
+        if sacada is None:
+            return None
+        n["fotos"] = [f for f in n["fotos"] if f.get("url") != url]
+        return dict(sacada)
 
     def list_redes(self):
         return sorted(self.redes, key=lambda x: x.get("orden", 0))

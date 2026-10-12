@@ -1,23 +1,29 @@
 """Contenido editable de la home Inicio: cotizaciones, clima y videos
 promocionales ("Recorrimos Bermejo"). Lo gestiona el rol `publicador` (o admin).
 La LECTURA la hace el frontend vía anon (RLS público); acá solo va la escritura."""
-from datetime import datetime, timedelta, timezone
+import secrets
+from datetime import date, datetime, timedelta, timezone
 
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 from app.core import auth
 from app.core.config import settings
 from app.db.repository import Repo, get_repo
 from app.models.schemas import LoginBody
+from app.services import novedades_uruku as novedades_svc
 from app.services.clima import fetch_clima_bermejo
-from app.services.imagenes import subir_video_comercio
+from app.services.enlaces import validar_http
+from app.services.imagenes import guardar_foto_local, procesar_imagen, subir_foto_galeria, subir_video_comercio
 
 router = APIRouter()
 logger = structlog.get_logger()
 
 _MAX_VIDEO_BYTES = 100 * 1024 * 1024  # promo puede pesar más que la galería
+_MAX_FOTO_NOVEDAD_BYTES = 15 * 1024 * 1024
+_VIDEOS_NOVEDAD = {"video/mp4", "video/webm", "video/quicktime"}
 
 
 @router.post("/auth/publicador/login")
@@ -155,6 +161,287 @@ def borrar_video_promo(video_id: str, _pub: dict = Depends(auth.require_publicad
     if not repo.delete_video_promo(video_id):
         raise HTTPException(status_code=404, detail="Video no encontrado")
     return {"ok": True}
+
+
+# ---- Novedades de URUKU (0150, docs/novedades-uruku.md) ----
+# Lo que URUKU cuenta en la sección «Novedades» del inicio. Mismo permiso que los videos
+# promo (`contenido`). La lectura pública la hace el sitio con anon; acá, la escritura.
+_MAX_TITULO = 120
+_MAX_TEXTO = 2000
+
+
+class NovedadIn(BaseModel):
+    """Los campos son laxos a propósito: se validan a mano para contestar 400 en español
+    (y no el 422 de pydantic). En el PATCH, lo que no viene no se toca; `texto`,
+    `enlace_url` y `ciudad_slug` mandados vacíos o en null se borran (`ciudad_slug`
+    vacío = «todas las ciudades»)."""
+    titulo: str | None = None
+    texto: str | None = None
+    fecha: str | None = None            # AAAA-MM-DD
+    ciudad_slug: str | None = None
+    enlace_url: str | None = None
+    destacada: bool | None = None
+
+
+class NovedadPatch(NovedadIn):
+    activo: bool | None = None
+
+
+def _validar_novedad(body: NovedadIn, repo: Repo, *, nueva: bool) -> dict:
+    """Devuelve las columnas a escribir (ya limpias) o lanza 400."""
+    dado = body.model_fields_set
+    out: dict = {}
+    if nueva or body.titulo is not None:
+        titulo = (body.titulo or "").strip()
+        if not titulo:
+            raise HTTPException(status_code=400, detail="Poné un título para la novedad.")
+        if len(titulo) > _MAX_TITULO:
+            raise HTTPException(status_code=400, detail=f"El título puede tener hasta {_MAX_TITULO} caracteres.")
+        out["titulo"] = titulo
+    if "texto" in dado:
+        texto = (body.texto or "").strip()
+        if len(texto) > _MAX_TEXTO:
+            raise HTTPException(status_code=400, detail=f"El texto puede tener hasta {_MAX_TEXTO} caracteres.")
+        out["texto"] = texto or None
+    if body.fecha is not None:
+        try:
+            out["fecha"] = date.fromisoformat(body.fecha.strip()).isoformat()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="La fecha tiene que ser AAAA-MM-DD.") from None
+    if "enlace_url" in dado:
+        enlace = (body.enlace_url or "").strip()
+        if enlace:
+            try:
+                enlace = validar_http(enlace, "El enlace")
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from None
+        out["enlace_url"] = enlace or None
+    if "ciudad_slug" in dado:
+        slug = (body.ciudad_slug or "").strip().lower()
+        if slug:
+            ciudad_id = repo.get_ciudad_id(slug)
+            if not ciudad_id:
+                raise HTTPException(status_code=400, detail="Esa ciudad no existe.")
+            out["ciudad_id"] = ciudad_id
+        else:
+            out["ciudad_id"] = None
+    if body.destacada is not None:
+        out["destacada"] = body.destacada
+    if isinstance(body, NovedadPatch) and body.activo is not None:
+        out["activo"] = body.activo
+    return out
+
+
+def _novedad_publica(row: dict, repo: Repo) -> dict:
+    """La fila para el panel: la de la base más `ciudad_slug` (null = todas)."""
+    slug = None
+    if row.get("ciudad_id"):
+        slug = next((c.get("slug") for c in repo.list_ciudades() if c.get("id") == row["ciudad_id"]), None)
+    return {**row, "ciudad_slug": slug}
+
+
+def _novedad_o_404(repo: Repo, novedad_id: str) -> dict:
+    row = repo.get_novedad_uruku(novedad_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Novedad no encontrada")
+    return row
+
+
+def _respuesta_novedad(row: dict, repo: Repo) -> dict:
+    """La novedad plana (como pide la spec) y también bajo `novedad` (como los videos promo)."""
+    n = _novedad_publica(row, repo)
+    return {**n, "ok": True, "novedad": n}
+
+
+async def _leer_imagen(archivo: UploadFile | None, que: str = "La foto") -> bytes:
+    if archivo is None:
+        raise HTTPException(status_code=400, detail=f"Falta {que[0].lower() + que[1:]}")
+    data = await archivo.read()
+    if not data:
+        raise HTTPException(status_code=400, detail=f"Falta {que[0].lower() + que[1:]}")
+    if len(data) > _MAX_FOTO_NOVEDAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"{que} supera los 15 MB")
+    return data
+
+
+@router.get("/contenido/novedades")
+def listar_novedades_uruku(_pub: dict = Depends(auth.require_publicador), repo: Repo = Depends(get_repo)) -> dict:
+    """Todas, también las dadas de baja: es la lista del panel."""
+    return {"items": [_novedad_publica(n, repo) for n in repo.list_novedades_uruku()]}
+
+
+@router.post("/contenido/novedades")
+def crear_novedad_uruku(body: NovedadIn, pub: dict = Depends(auth.require_publicador), repo: Repo = Depends(get_repo)) -> dict:
+    row = _validar_novedad(body, repo, nueva=True)
+    row["created_by"] = pub.get("email") or pub.get("sub")
+    creada = repo.add_novedad_uruku(row)
+    logger.info("contenido.novedad_uruku_add", id=creada.get("id"))
+    return _respuesta_novedad(creada, repo)
+
+
+@router.patch("/contenido/novedades/{novedad_id}")
+def editar_novedad_uruku(novedad_id: str, body: NovedadPatch, _pub: dict = Depends(auth.require_publicador),
+                         repo: Repo = Depends(get_repo)) -> dict:
+    _novedad_o_404(repo, novedad_id)
+    patch = _validar_novedad(body, repo, nueva=False)
+    if not patch:
+        raise HTTPException(status_code=400, detail="No hay nada que cambiar")
+    row = repo.update_novedad_uruku(novedad_id, patch)
+    if not row:
+        raise HTTPException(status_code=404, detail="Novedad no encontrada")
+    logger.info("contenido.novedad_uruku_edit", id=novedad_id, campos=sorted(patch))
+    return _respuesta_novedad(row, repo)
+
+
+@router.delete("/contenido/novedades/{novedad_id}")
+def dar_de_baja_novedad_uruku(novedad_id: str, _pub: dict = Depends(auth.require_publicador),
+                              repo: Repo = Depends(get_repo)) -> dict:
+    """Baja LÓGICA (`activo = false`): nunca se borra la fila ni sus archivos, así se
+    puede volver a activar con un PATCH."""
+    _novedad_o_404(repo, novedad_id)
+    repo.update_novedad_uruku(novedad_id, {"activo": False})
+    logger.info("contenido.novedad_uruku_baja", id=novedad_id)
+    return {"ok": True}
+
+
+async def _guardar_foto_novedad(novedad_id: str, data: bytes) -> tuple[str, str]:
+    """Pasa la foto por `services/imagenes.py` (JPG + miniatura) y la guarda en la carpeta
+    de la novedad. 400 si no es una imagen; 502 si el disco falla (sin dejar medio guardado)."""
+    try:
+        url, thumb = await run_in_threadpool(subir_foto_galeria, novedades_svc.carpeta(novedad_id), data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    if not url or not thumb:
+        novedades_svc.borrar_archivos(novedad_id, url, thumb)
+        raise HTTPException(status_code=502, detail="No se pudo subir la foto")
+    return url, thumb
+
+
+@router.post("/contenido/novedades/{novedad_id}/portada")
+async def subir_portada_novedad_uruku(
+    novedad_id: str,
+    foto: UploadFile | None = File(None),
+    _pub: dict = Depends(auth.require_publicador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    nov = _novedad_o_404(repo, novedad_id)
+    data = await _leer_imagen(foto)
+    url, thumb = await _guardar_foto_novedad(novedad_id, data)
+    if not repo.update_novedad_uruku(novedad_id, {"portada_url": url, "portada_thumb_url": thumb}):
+        novedades_svc.borrar_archivos(novedad_id, url, thumb)
+        raise HTTPException(status_code=404, detail="Novedad no encontrada")
+    # La portada de antes ya no la usa nadie: se saca del disco.
+    novedades_svc.borrar_archivos(novedad_id, nov.get("portada_url"), nov.get("portada_thumb_url"))
+    logger.info("contenido.novedad_uruku_portada", id=novedad_id)
+    return {"ok": True, "portada_url": url, "portada_thumb_url": thumb}
+
+
+@router.post("/contenido/novedades/{novedad_id}/fotos")
+async def agregar_foto_novedad_uruku(
+    novedad_id: str,
+    foto: UploadFile | None = File(None),
+    _pub: dict = Depends(auth.require_publicador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    nov = _novedad_o_404(repo, novedad_id)
+    mensaje_tope = f"Una novedad puede tener hasta {novedades_svc.MAX_FOTOS} fotos."
+    if len(nov.get("fotos") or []) >= novedades_svc.MAX_FOTOS:
+        raise HTTPException(status_code=409, detail=mensaje_tope)      # antes de procesar nada
+    data = await _leer_imagen(foto)
+    url, thumb = await _guardar_foto_novedad(novedad_id, data)
+    # El tope definitivo lo decide la base en una sola sentencia: varias subidas a la vez no lo pasan.
+    fotos = repo.agregar_foto_novedad_uruku(novedad_id, {"url": url, "thumb_url": thumb}, novedades_svc.MAX_FOTOS)
+    if fotos is None:
+        novedades_svc.borrar_archivos(novedad_id, url, thumb)
+        if repo.get_novedad_uruku(novedad_id):
+            raise HTTPException(status_code=409, detail=mensaje_tope)
+        raise HTTPException(status_code=404, detail="Novedad no encontrada")
+    logger.info("contenido.novedad_uruku_foto_add", id=novedad_id, fotos=len(fotos))
+    return {"ok": True, "foto": {"url": url, "thumb_url": thumb}, "fotos": fotos}
+
+
+@router.delete("/contenido/novedades/{novedad_id}/fotos")
+def sacar_foto_novedad_uruku(
+    novedad_id: str,
+    url: str = "",
+    _pub: dict = Depends(auth.require_publicador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Saca la foto de esa `url` de la lista y borra sus archivos (la grande y la miniatura)."""
+    _novedad_o_404(repo, novedad_id)
+    if not url.strip():
+        raise HTTPException(status_code=400, detail="Falta la url de la foto")
+    sacada = repo.quitar_foto_novedad_uruku(novedad_id, url.strip())
+    if not sacada:
+        raise HTTPException(status_code=404, detail="Esa foto no está en la novedad")
+    novedades_svc.borrar_archivos(novedad_id, sacada.get("url"), sacada.get("thumb_url"))
+    logger.info("contenido.novedad_uruku_foto_del", id=novedad_id)
+    actual = repo.get_novedad_uruku(novedad_id) or {}
+    return {"ok": True, "fotos": actual.get("fotos") or []}
+
+
+@router.post("/contenido/novedades/{novedad_id}/video")
+async def subir_video_novedad_uruku(
+    novedad_id: str,
+    video: UploadFile | None = File(None),
+    poster: UploadFile | None = File(None),
+    _pub: dict = Depends(auth.require_publicador),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """El video (mp4/webm/mov, hasta 100 MB) y, opcional, su póster (imagen). Con el
+    video solo, el póster de antes se borra (era del video anterior). Con el póster
+    solo, se cambia nada más el póster del video que ya tiene."""
+    nov = _novedad_o_404(repo, novedad_id)
+    if video is None and poster is None:
+        raise HTTPException(status_code=400, detail="Falta el video")
+    video_data = None
+    if video is not None:
+        tipo = (video.content_type or "").split(";")[0].strip().lower()
+        if tipo not in _VIDEOS_NOVEDAD:
+            raise HTTPException(status_code=400, detail="El video tiene que ser mp4, webm o mov")
+        video_data = await video.read()
+        if not video_data:
+            raise HTTPException(status_code=400, detail="Falta el video")
+        if len(video_data) > _MAX_VIDEO_BYTES:
+            raise HTTPException(status_code=413, detail="El video supera los 100 MB")
+    elif not nov.get("video_url"):
+        raise HTTPException(status_code=400, detail="Primero subí el video")
+    poster_jpg = None
+    if poster is not None:
+        poster_data = await _leer_imagen(poster, "El póster")
+        try:
+            poster_jpg = await run_in_threadpool(procesar_imagen, poster_data, 1280, 80)
+        except Exception:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail="El póster no es una imagen válida") from None
+
+    patch: dict = {}
+    nuevos: list[str] = []
+    if video_data is not None:
+        url_video = subir_video_comercio(novedades_svc.carpeta(novedad_id), video_data, video.content_type)
+        if not url_video:
+            raise HTTPException(status_code=502, detail="No se pudo subir el video")
+        nuevos.append(url_video)
+        patch["video_url"] = url_video
+        patch["video_poster_url"] = None
+    if poster_jpg is not None:
+        url_poster = guardar_foto_local(
+            f"{novedades_svc.carpeta(novedad_id)}/poster-{secrets.token_hex(8)}.jpg", poster_jpg)
+        if not url_poster:
+            novedades_svc.borrar_archivos(novedad_id, *nuevos)
+            raise HTTPException(status_code=502, detail="No se pudo subir el póster")
+        nuevos.append(url_poster)
+        patch["video_poster_url"] = url_poster
+
+    row = repo.update_novedad_uruku(novedad_id, patch)
+    if not row:
+        novedades_svc.borrar_archivos(novedad_id, *nuevos)
+        raise HTTPException(status_code=404, detail="Novedad no encontrada")
+    if "video_url" in patch:
+        novedades_svc.borrar_archivos(novedad_id, nov.get("video_url"))
+    if "video_poster_url" in patch:
+        novedades_svc.borrar_archivos(novedad_id, nov.get("video_poster_url"))
+    logger.info("contenido.novedad_uruku_video", id=novedad_id)
+    return {"ok": True, "video_url": row.get("video_url"), "video_poster_url": row.get("video_poster_url")}
 
 
 # ---- Redes sociales ----
