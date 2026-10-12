@@ -347,12 +347,16 @@ def test_la_clave_nueva_nunca_coincide_con_la_de_otro_comercio_del_numero(client
 
 
 # ═════════════════════════════════════════════════════════ criterio 4: el admin
+# El admin valida que el id del comercio sea un UUID (404 si no): los ids de los tests, también.
+ID_COMERCIO = "5f0c1b7e-3a2d-4c8e-9b1f-0a6d2e4c7b91"
+
+
 def _admin_con(permisos, email="m@uruku.bo"):
     return auth.make_token(email, rol="moderador", permisos=permisos)
 
 
 def test_el_admin_genera_una_clave_nueva_y_la_anterior_deja_de_servir(client, repo, admin_token):
-    c, cuenta = _con_cuenta(repo)
+    c, cuenta = _con_cuenta(repo, id=ID_COMERCIO)
     cuenta["clave_hash"] = auth.hash_password("004217")
     assert _ingresar(client, "70123456", "004217").status_code == 200
 
@@ -374,7 +378,7 @@ def test_el_admin_genera_una_clave_nueva_y_la_anterior_deja_de_servir(client, re
 
 
 def test_el_admin_destraba_al_dueno_bloqueado_por_fallos(client, repo, admin_token):
-    c, cuenta = _con_cuenta(repo)
+    c, cuenta = _con_cuenta(repo, id=ID_COMERCIO)
     cuenta["clave_hash"] = clave_comercio.hash_clave("BOUTIQUE-K7M2P9")
     for _ in range(5):
         assert _ingresar(client, "70123456", "BOUTIQUE-ZZZZZZ").status_code == 401
@@ -384,7 +388,7 @@ def test_el_admin_destraba_al_dueno_bloqueado_por_fallos(client, repo, admin_tok
 
 
 def test_el_admin_crea_la_cuenta_si_el_comercio_no_tenia(client, repo, admin_token):
-    c = repo.seed_comercio(id="com-9", slug="sin-cuenta", nombre="Sin Cuenta", whatsapp="59171112222", activo=True)
+    c = repo.seed_comercio(id=ID_COMERCIO, slug="sin-cuenta", nombre="Sin Cuenta", whatsapp="59171112222", activo=True)
     assert not repo.usuarios
     r = client.post(f"/admin/comercio/{c['id']}/clave", headers=_hdr(admin_token))
     assert r.status_code == 200 and r.json()["clave"].startswith("SIN-")
@@ -396,13 +400,13 @@ def test_el_admin_con_un_comercio_inexistente_da_404(client, repo, admin_token):
 
 
 def test_el_moderador_con_comercios_cuenta_puede(client, repo):
-    c, _u = _con_cuenta(repo)
+    c, _u = _con_cuenta(repo, id=ID_COMERCIO)
     r = client.post(f"/admin/comercio/{c['id']}/clave", headers=_hdr(_admin_con(["comercios.cuenta"])))
     assert r.status_code == 200 and "clave" in r.json()
 
 
 def test_sin_comercios_cuenta_es_403_y_no_toca_la_clave(client, repo):
-    c, cuenta = _con_cuenta(repo)
+    c, cuenta = _con_cuenta(repo, id=ID_COMERCIO)
     cuenta["clave_hash"] = auth.hash_password("004217")
     sin_permiso = {
         "sin permisos": _admin_con([]),
@@ -467,8 +471,10 @@ def test_ninguna_respuesta_de_comercio_ni_campo_trae_el_codigo(client, repo):
         "GET /comercio/mensajes": client.get("/comercio/mensajes", headers=h),
         "GET /comercio/fotos": client.get("/comercio/fotos", headers=h),
         "GET /comercio/videos": client.get("/comercio/videos", headers=h),
-        "POST /comercio/clave": client.post("/comercio/clave", headers=h),
-        "POST /auth/comercio/ingresar": _ingresar(client, "70002222", client.post("/comercio/clave", headers=h).json()["clave"]),
+        "POST /comercio/clave": (clave_nueva := client.post("/comercio/clave", headers=h)),
+        # Cambiar la clave cierra la sesión de antes (0149): la segunda va con el token nuevo.
+        "POST /auth/comercio/ingresar": _ingresar(client, "70002222", client.post(
+            "/comercio/clave", headers=_hdr(clave_nueva.json()["access_token"])).json()["clave"]),
         "GET /campo/mis-comercios": client.get("/campo/mis-comercios", headers=agente),
         "GET /campo/mis-comercios/{id}": client.get(f"/campo/mis-comercios/{com_id}", headers=agente),
         "PATCH /campo/mis-comercios/{id}": client.patch(f"/campo/mis-comercios/{com_id}", headers=agente,

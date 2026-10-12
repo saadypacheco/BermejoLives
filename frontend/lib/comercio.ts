@@ -37,6 +37,15 @@ function sinClaves(comercio: unknown): ComercioSession {
 }
 
 /** Guarda token + sesión (sin claves) y devuelve la sesión guardada. */
+/** El 401 de /comercio/*: «venció» o, si el backend lo dice, «se cerró porque
+ *  cambió la clave» (la generó el admin, se recuperó por WhatsApp o se anuló). */
+async function motivo401(res: Response): Promise<string> {
+  const d = await res.clone().json().catch(() => ({})) as { detail?: unknown };
+  return typeof d.detail === "string" && /cambi[oó] la clave/i.test(d.detail)
+    ? d.detail
+    : "Tu sesión venció, volvé a entrar.";
+}
+
 function guardarSesion(data: { access_token: string; comercio: unknown }): ComercioSession {
   const sesion = sinClaves(data.comercio);
   localStorage.setItem(TOKEN_KEY, data.access_token);
@@ -177,8 +186,11 @@ export async function comercioRecuperarConfirmar(whatsapp: string, codigo: strin
  *  claro: es la única vez que se ve, el servidor sólo guarda el hash. Se puede
  *  pedir hasta 3 veces por hora: el 429 trae su motivo y se muestra tal cual. */
 export async function generarClaveNueva(): Promise<string> {
-  const d = await cFetch("/comercio/clave", { method: "POST" }) as { clave?: unknown };
+  const d = await cFetch("/comercio/clave", { method: "POST" }) as { clave?: unknown; access_token?: unknown };
   if (typeof d.clave !== "string" || !d.clave) throw new Error("No se pudo generar la clave. Probá de nuevo.");
+  // Cambiar la clave cierra TODAS las sesiones, también ésta: el servidor manda
+  // un token nuevo y hay que quedarse con él para no salir de Mi comercio.
+  if (typeof d.access_token === "string" && d.access_token) localStorage.setItem(TOKEN_KEY, d.access_token);
   return d.clave;
 }
 
@@ -302,8 +314,9 @@ async function cFetch(path: string, init?: RequestInit) {
     },
   });
   if (res.status === 401) {
+    const motivo = await motivo401(res);
     clearComercio();
-    throw new Error("Tu sesión venció, volvé a entrar.");
+    throw new Error(motivo);
   }
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -385,7 +398,7 @@ export async function subirFotoPerfil(foto: File): Promise<Perfil> {
     headers: { Authorization: `Bearer ${getCToken() ?? ""}` },
     body: fd,
   });
-  if (res.status === 401) { clearComercio(); throw new Error("Tu sesión venció, volvé a entrar."); }
+  if (res.status === 401) { const motivo = await motivo401(res); clearComercio(); throw new Error(motivo); }
   if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.detail ?? "No se pudo subir la foto"); }
   return res.json();
 }
@@ -472,7 +485,7 @@ export async function pagarSuscripcion(
     headers: { Authorization: `Bearer ${getCToken() ?? ""}` },
     body: fd,
   });
-  if (res.status === 401) { clearComercio(); throw new Error("Tu sesión venció, volvé a entrar."); }
+  if (res.status === 401) { const motivo = await motivo401(res); clearComercio(); throw new Error(motivo); }
   if (!res.ok) {
     const d = await res.json().catch(() => ({}));
     throw new Error(d.detail ?? "No se pudo enviar el pago");
@@ -550,7 +563,7 @@ export async function crearProducto(
     headers: { Authorization: `Bearer ${getCToken() ?? ""}` },  // sin Content-Type: lo pone FormData
     body: fd,
   });
-  if (res.status === 401) { clearComercio(); throw new Error("Tu sesión venció, volvé a entrar."); }
+  if (res.status === 401) { const motivo = await motivo401(res); clearComercio(); throw new Error(motivo); }
   if (!res.ok) {
     const d = await res.json().catch(() => ({}));
     throw new Error(d.detail ?? "No se pudo publicar el producto");

@@ -75,7 +75,15 @@ def make_publicador_token(email: str) -> str:
     return pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 
-def make_comercio_token(comercio_id: str, email: str) -> str:
+def make_comercio_token(comercio_id: str, email: str, cuenta_id: str | None = None,
+                        ver: int | None = None) -> str:
+    """El token de Mi comercio.
+
+    Lleva `cuenta_id` y `ver` (la `credenciales_version` de esa cuenta al entrar):
+    cuando la clave cambia —la genera el admin, se pide otra, se recupera por
+    WhatsApp o se anula—, la versión de la cuenta sube y los tokens de antes dejan
+    de servir (`core/sesion_comercio.py`). Un token sin `ver` (emitido antes de este
+    cambio) cuenta como versión 0 hasta que venza."""
     payload = {
         "sub": email,
         "email": email,
@@ -83,6 +91,9 @@ def make_comercio_token(comercio_id: str, email: str) -> str:
         "comercio_id": comercio_id,
         "exp": int(time.time()) + settings.jwt_ttl_hours * 3600,
     }
+    if cuenta_id:
+        payload["cuenta_id"] = str(cuenta_id)
+        payload["ver"] = int(ver or 0)
     return pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 

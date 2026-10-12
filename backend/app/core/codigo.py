@@ -17,6 +17,8 @@ from __future__ import annotations
 import re
 import secrets
 
+from app.core.clave_comercio import RE_FORMA_DE_CLAVE
+
 PREFIJO = "URUKU"
 
 # Sin caracteres que se confundan al dictarlos o al leerlos de un papel:
@@ -61,16 +63,26 @@ def extraer_codigo(texto: str | None) -> str | None:
     con_prefijo = _RE_CON_PREFIJO.search(texto)
     if con_prefijo:
         return con_prefijo.group(1).upper()
-    pelado = _RE_PELADO.search(texto)
+    # El plan B no puede tomar como código un tramo de una CLAVE: `MESA-K7M2P9` tiene un
+    # «MESA» que cumple todo lo de un código pelado. Antes de buscar se tapa lo que tiene
+    # forma de clave (prefijo + 6 del azar).
+    sin_claves = RE_FORMA_DE_CLAVE.sub(" ", texto)
+    pelado = _RE_PELADO.search(sin_claves)
     return pelado.group(1).upper() if pelado else None
 
 
+#: Lo que de una fila de `comercios` sólo ve el equipo: el código vigente, el anterior
+#: (0149, lo guarda para las publicaciones que entraron antes del cambio) y el id con
+#: que el celular del agente reintenta un alta (0149).
+_SOLO_ADMIN = ("codigo", "codigo_formateado", "codigo_anterior", "alta_uid")
+
+
 def sin_codigo(fila: dict | None) -> dict | None:
-    """La fila de un comercio SIN el código (`codigo`, `codigo_formateado`).
+    """La fila de un comercio SIN el código (`codigo`, `codigo_formateado`, `codigo_anterior`).
 
     El código `URUKU-XXXX` es sólo del admin (docs/clave-automatica.md): ninguna
     respuesta de `/comercio/*`, `/campo/*` ni del autoregistro lo lleva. Devuelve
     una copia; no toca la fila original (la ingesta y el admin siguen usándola)."""
     if fila is None:
         return None
-    return {k: v for k, v in fila.items() if k not in ("codigo", "codigo_formateado")}
+    return {k: v for k, v in fila.items() if k not in _SOLO_ADMIN}

@@ -15,25 +15,44 @@ k7m2p9` es `BOUTIQUE-K7M2P9`. Se guarda SÓLO el hash de la forma normalizada,
 con el mismo hash que las contraseñas (`auth.hash_password`). Una clave vieja
 de 6 números normaliza a sí misma, así que sigue entrando hasta que se cambie.
 
+PEPPER (`CLAVE_PEPPER`, 12/10 revisión de seguridad): si está configurado, antes de
+PBKDF2 se pasa la clave normalizada por `HMAC-SHA256(CLAVE_PEPPER, normalizada)`. Con
+una base filtrada, el atacante no puede probar claves sin el pepper (que vive en el
+`.env` del backend, no en la base). El hash con pepper lleva el prefijo `p1$` para
+convivir con los que ya existen (sin pepper): se rehashean solos en el primer ingreso
+correcto. Sin `CLAVE_PEPPER` todo se comporta como antes (y el arranque avisa).
+
 La clave NUNCA va a un log: viaja una sola vez, en la respuesta que la genera.
 
 El comprador (`app/core/clave.py`, 6 números) NO usa este módulo.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import re
 import secrets
 import unicodedata
 
+import structlog
+
 from app.core import auth
+from app.core.config import settings
+
+logger = structlog.get_logger()
 
 # Sin caracteres que se confundan al dictarlos o leerlos de un papel: 0/O, 1/I/L.
 ALFABETO = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
 LARGO_AZAR = 6
 LARGO_PREFIJO_MAX = 8
 PREFIJO_SIN_NOMBRE = "LOCAL"
-#: Nunca es un prefijo válido: la clave se confundiría con el código URUKU-XXXX.
+#: Ningún prefijo puede EMPEZAR así: la clave se confundiría con el código URUKU-XXXX
+#: (y `URUKU1234` pasaría el filtro de «es igual a URUKU»).
 PREFIJO_PROHIBIDO = "URUKU"
+#: Marca de formato de un hash hecho con pepper (`p1$pbkdf2_sha256$...`). El hash viejo
+#: tiene 4 partes separadas por `$`; éste tiene 5, así que `auth.verify_password` nunca
+#: lo acepta por error.
+_MARCA_PEPPER = "p1$"
 
 #: Artículos y palabras de relleno que no sirven para recordar el nombre.
 _PALABRAS_VACIAS = frozenset({"el", "la", "los", "las", "lo", "de", "del", "y", "e",
@@ -42,6 +61,11 @@ _PALABRAS_VACIAS = frozenset({"el", "la", "los", "las", "lo", "de", "del", "y", 
 # Lo que se descarta al comparar: espacios, guiones (también los largos) y guion bajo.
 _RE_SEPARADORES = re.compile(r"[\s\-_‐-―−]+")
 _RE_CLAVE = re.compile(r"^[A-Z0-9]{6,24}$")
+#: Algo CON FORMA de clave nueva dentro de un texto: un prefijo de hasta 8, un separador
+#: opcional y los 6 caracteres del azar. Es sólo un filtro barato (no dice que sea una
+#: clave): la ingesta lo usa para detectar claves mandadas por WhatsApp y `extraer_codigo`
+#: para no confundir un tramo de la clave con un código.
+RE_FORMA_DE_CLAVE = re.compile(r"\b[A-Z0-9]{1,8}[\s\-_]?[2-9A-HJKMNP-Z]{6}\b", re.IGNORECASE)
 _MAX_CRUDO = 64          # una «clave» más larga que esto es basura: ni se mira
 
 
@@ -69,7 +93,7 @@ def _palabras(texto: str | None) -> list[str]:
 
 def _primera_utilizable(texto: str | None) -> str | None:
     for palabra in _palabras(texto):
-        if palabra != PREFIJO_PROHIBIDO:
+        if not palabra.startswith(PREFIJO_PROHIBIDO):       # «URUKU», «URUKU123»: otra palabra
             return palabra[:LARGO_PREFIJO_MAX]
     return None
 
@@ -119,7 +143,7 @@ def clave_distinta_de(hashes: list[str | None], prefijo: str) -> str:
     otros = [h for h in hashes if h]
     for _ in range(50):
         nueva = f"{prefijo}-{generar_azar()}"
-        if not any(auth.verify_password(normalizar(nueva), h) for h in otros):
+        if not any(clave_coincide(nueva, h) for h in otros):
             return nueva
     raise RuntimeError("no se pudo generar una clave distinta")      # prácticamente imposible
 
@@ -140,14 +164,39 @@ def es_clave(valor: str | None) -> bool:
     return bool(_RE_CLAVE.match(normalizar(valor)))
 
 
+def _con_pepper(normalizada: str) -> str:
+    """`HMAC-SHA256(CLAVE_PEPPER, normalizada)` en hexadecimal: lo que entra a PBKDF2."""
+    return hmac.new(settings.clave_pepper.encode(), normalizada.encode(), hashlib.sha256).hexdigest()
+
+
 def hash_clave(clave: str) -> str:
-    """El hash de la forma NORMALIZADA (el que se guarda)."""
-    return auth.hash_password(normalizar(clave))
+    """El hash de la forma NORMALIZADA (el que se guarda). Con `CLAVE_PEPPER`
+    puesto, lleva el pepper (`p1$...`); sin él, el formato de siempre."""
+    normalizada = normalizar(clave)
+    if settings.clave_pepper:
+        return _MARCA_PEPPER + auth.hash_password(_con_pepper(normalizada))
+    return auth.hash_password(normalizada)
+
+
+def necesita_rehash(hash_guardado: str | None) -> bool:
+    """¿Conviene volver a guardar este hash? Sí cuando hay pepper y el hash es de los
+    de antes (sin pepper): se hace al primer ingreso correcto, que es cuando la clave
+    está a la vista."""
+    return bool(hash_guardado) and bool(settings.clave_pepper) and not hash_guardado.startswith(_MARCA_PEPPER)
 
 
 def clave_coincide(clave: str | None, hash_guardado: str | None) -> bool:
     """¿Esta clave es la que dejó ese hash? Falso si no hay hash o si lo
-    tipeado no tiene forma de clave."""
+    tipeado no tiene forma de clave. Entiende los dos formatos (con y sin pepper);
+    un hash con pepper sin `CLAVE_PEPPER` configurado no se puede verificar (falso)."""
     if not hash_guardado or not es_clave(clave):
         return False
-    return auth.verify_password(normalizar(clave), hash_guardado)
+    normalizada = normalizar(clave)
+    if hash_guardado.startswith(_MARCA_PEPPER):
+        if not settings.clave_pepper:
+            logger.error("clave.hash_con_pepper_sin_pepper",
+                         detalle="hay claves guardadas con pepper y CLAVE_PEPPER está vacío: nadie con esas claves entra")
+            return False
+        return auth.verify_password(_con_pepper(normalizada), hash_guardado[len(_MARCA_PEPPER):])
+    return auth.verify_password(normalizada, hash_guardado)
+

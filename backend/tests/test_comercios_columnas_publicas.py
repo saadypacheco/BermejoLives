@@ -29,7 +29,10 @@ RAIZ = Path(__file__).resolve().parents[2]
 PRIVADAS = ("plan_cortesia", "paga_hasta", "cargado_por", "capturado_en")
 # Otras que a propósito NO se dan (la 0145 lo explica): datos internos.
 # `baja_motivo` (0147): por qué está dado de baja un comercio; dato interno, nace privada (regla 11).
-PRIVADAS_EXTRA = ("fotos_extra", "wa_jid", "rubro_revisado_por", "baja_motivo", "codigo")
+# `codigo_anterior` y `alta_uid` (0149): el código de antes de la regeneración y el id con que el
+# celular del agente reintenta un alta; nacen privadas.
+PRIVADAS_EXTRA = ("fotos_extra", "wa_jid", "rubro_revisado_por", "baja_motivo", "codigo",
+                  "codigo_anterior", "alta_uid")
 NO_VAN_EN_LA_LISTA = PRIVADAS + PRIVADAS_EXTRA
 # `codigo` (URUKU-XXXX) estaba en la lista de la 0145 (la ficha pública lo leía). La
 # 0148 (docs/clave-automatica.md) se lo quita a anon: desde ahí es privada. La 0145 ya
@@ -396,7 +399,9 @@ def test_ninguna_vista_ni_funcion_publica_expone_codigo():
     permitidas = {"0044_comercio_codigo.sql", "0065_comercio_wa_grupos.sql", "0087_vista_previa_de_palabras.sql",
                   "0089_revision_humana_de_rubros.sql", "0091_un_solo_texto_que_clasifica.sql",
                   "0092_el_principal_sale_de_lo_que_el_negocio_es.sql", "0145_comercios_columnas_publicas.sql",
-                  "0148_codigo_solo_admin.sql"}
+                  "0148_codigo_solo_admin.sql",
+                  # La 0149 regenera los códigos y guarda el anterior (privado); no los expone.
+                  "0149_publicaciones_columnas_y_codigos.sql"}
     for f in sorted(carpeta.glob("*.sql")):
         sql = _sin_comentarios_sql(f.read_text(encoding="utf-8"))
         if re.search(r"\bcodigo\b", sql) and f.name not in permitidas:

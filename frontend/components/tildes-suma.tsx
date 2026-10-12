@@ -28,12 +28,12 @@ const ITEMS: { k: keyof Tildes; icono: NombreIcono; dueno: string; agente: strin
  * se lee por el tilde y por el borde, no sólo por el color.
  *
  * `quien` decide la persona del verbo: el dueño en Mi comercio habla de sí
- * («Tengo pasero»); el agente habla del local («Tiene pasero»).
+ * («Tengo pasero»); el agente y el admin hablan del local («Tiene pasero»).
  */
 export function TildesSuma({ valor, onChange, quien }: {
   valor: Tildes;
   onChange: (k: keyof Tildes, v: boolean) => void;
-  quien: "dueno" | "agente";
+  quien: "dueno" | "agente" | "admin";
 }) {
   return (
     <div style={{ display: "grid", gap: 8 }}>

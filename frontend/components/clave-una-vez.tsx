@@ -13,7 +13,7 @@ import { Ic } from "@/components/ic";
  * Sin `onListo` no hay botón de seguir: la usa la app del agente, donde la
  * tarjeta queda a la vista hasta que se pasa al próximo comercio.
  */
-export function ClaveUnaVez({ clave, titulo = "Tu clave para entrar", aviso, onListo, textoListo = "Ya la guardé", compacta = false }: {
+export function ClaveUnaVez({ clave, titulo = "Tu clave para entrar", aviso, onListo, textoListo = "Ya la guardé", compacta = false, sinCopiar = false }: {
   clave: string;
   titulo?: string;
   /** Lo que se le dice a quien la lee. Por defecto, la regla general. */
@@ -21,6 +21,9 @@ export function ClaveUnaVez({ clave, titulo = "Tu clave para entrar", aviso, onL
   onListo?: () => void;
   textoListo?: string;
   compacta?: boolean;
+  /** Sin «Copiar»: en el celular del agente la clave quedaría en el historial
+   *  del portapapeles (y tienta a pegarla en un chat). Se anota a mano. */
+  sinCopiar?: boolean;
 }) {
   const [copiada, setCopiada] = useState(false);
   const [noCopio, setNoCopio] = useState(false);
@@ -48,10 +51,10 @@ export function ClaveUnaVez({ clave, titulo = "Tu clave para entrar", aviso, onL
       <p style={{ color: "var(--txt-2)", fontSize: compacta ? 12 : 14, margin: 0, lineHeight: 1.4 }}>
         {aviso ?? "Guardala: no se vuelve a mostrar. Con tu celular y esta clave entrás sin esperar el WhatsApp."}
       </p>
-      <button type="button" className="btn" onClick={copiar} aria-label="Copiar la clave"
+      {!sinCopiar && <button type="button" className="btn" onClick={copiar} aria-label="Copiar la clave"
         style={{ border: "1px solid var(--stroke)", padding: compacta ? "7px 12px" : undefined, fontSize: compacta ? 13 : undefined }}>
         {copiada ? <><Ic n="listo" s={15} /> Copiada</> : "Copiar"}
-      </button>
+      </button>}
       {noCopio && <span role="status" style={{ color: "var(--amber)", fontSize: 12.5 }}>No se pudo copiar: anotala tal como está en pantalla.</span>}
       {onListo && (
         <button type="button" className="btn btn-primary" onClick={onListo}>{textoListo}</button>

@@ -17,6 +17,7 @@ from app.core import auth
 from app.core import clave as claves
 from app.core import clave_comercio
 from app.core.config import settings
+from app.core.sesion_comercio import require_comercio_vigente
 from app.core.ip import ip_cliente
 from app.core.telefono import normalizar_whatsapp, whatsapp_para_guardar
 from app.core.text import slug_unico, slugify
@@ -63,10 +64,11 @@ MSG_BAJA_ADMIN = "Tu comercio fue dado de baja por URUKU. Escribinos para volver
 
 
 def _comercio_escribe(
-    claims: dict = Depends(auth.require_comercio),
+    claims: dict = Depends(require_comercio_vigente),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """Como `require_comercio`, pero para lo que ESCRIBE: un comercio que el admin dio
+    """Como `require_comercio_vigente` (token válido y sesión que no se cerró por un
+    cambio de clave), pero para lo que ESCRIBE: un comercio que el admin dio
     de baja (`activo = false` con `baja_motivo = 'admin'`) puede entrar y mirar, no
     publicar ni cambiar nada. Los dados de baja por vencimiento sí: tienen que poder
     entrar a pagar. Sin esto, el token que ya tenía seguía sirviendo para todo."""
@@ -159,7 +161,8 @@ async def comercio_registro(
     # entrar con celular + clave sin depender del WhatsApp.
     clave_inicial = nueva_clave_comercio(repo, comercio["id"], cuenta)
 
-    token = auth.make_comercio_token(comercio["id"], whatsapp.strip())
+    token = auth.make_comercio_token(comercio["id"], whatsapp.strip(), cuenta["id"],
+                                     cuenta.get("credenciales_version"))
     logger.info("comercio.registro", slug=slug, con_gps=True, con_foto=bool(portada_url), lugar=lugar_id)
     # La respuesta lleva una clave: que ningún navegador ni proxy la guarde.
     if response is not None:
@@ -187,7 +190,8 @@ def comercio_login(body: LoginBody, repo: Repo = Depends(get_repo)) -> dict:
     if not user or not auth.verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     comercio = repo.get_comercio(user["comercio_id"])
-    token = auth.make_comercio_token(user["comercio_id"], body.email)
+    token = auth.make_comercio_token(user["comercio_id"], body.email, user["id"],
+                                     user.get("credenciales_version"))
     return {"access_token": token, "comercio": _comercio_publico(comercio)}
 
 
@@ -269,7 +273,10 @@ def _token_de(cuenta: dict, comercio: dict) -> str:
     # «sub» del token no puede ser None (PyJWT lo rechaza al decodificar y el
     # comercio quedaría con un token que da 401 en cada pantalla).
     identidad = cuenta.get("email") or comercio.get("whatsapp") or str(cuenta["id"])
-    return auth.make_comercio_token(cuenta["comercio_id"], identidad)
+    # Con la versión de las credenciales con la que entra: si la clave cambia después,
+    # este token deja de servir (core/sesion_comercio.py).
+    return auth.make_comercio_token(cuenta["comercio_id"], identidad, cuenta["id"],
+                                    cuenta.get("credenciales_version"))
 
 
 class IngresarBody(BaseModel):
@@ -301,22 +308,32 @@ def comercio_ingresar(body: IngresarBody, request: Request, response: Response,
     cuentas = cuentas_de_numero(repo, numero)
     ids = [u["id"] for u in cuentas]
 
-    intento = ingreso_clave.abrir_intento(repo, "comercio_usuarios", clave_num, ids, ip)
+    intento = ingreso_clave.abrir_intento(repo, "comercio_usuarios", clave_num, ids, ip, cuentas)
 
     con_clave = [u for u in cuentas if u.get("clave_hash")]
     cuenta = next((u for u in con_clave if clave_comercio.clave_coincide(body.clave, u["clave_hash"])), None)
-    if not con_clave:
+    if not con_clave or not clave_comercio.es_clave(body.clave):
+        # Sin cuenta con clave, o con algo que ni tiene forma de clave (no se verifica
+        # nada): se gasta igual el tiempo de un PBKDF2, así la demora no delata qué
+        # números tienen cuenta.
         claves.gastar_tiempo(body.clave)
 
     if cuenta:
         ingreso_clave.cerrar_ok(repo, intento)
+        if clave_comercio.necesita_rehash(cuenta["clave_hash"]):
+            # Es el momento de pasar el hash viejo al formato con pepper: la clave está
+            # a la vista y se acaba de comprobar. No sube la versión (misma clave).
+            try:
+                repo.rehash_clave_comercio(cuenta["id"], clave_comercio.hash_clave(body.clave))
+            except Exception:  # noqa: BLE001 - el ingreso no se cae por no poder rehashear
+                logger.warning("comercio.ingresar.rehash_fallo", comercio_id=cuenta["comercio_id"], exc_info=True)
         comercio = repo.get_comercio(cuenta["comercio_id"])
         # Quién entró y cómo; nunca la clave ni el número.
         logger.info("comercio.ingresar.ok", comercio_id=cuenta["comercio_id"], metodo="clave", ip=ip)
         return {"access_token": _token_de(cuenta, comercio), "comercio": _comercio_publico(comercio)}
 
     logger.info("comercio.ingresar.fallo", metodo="clave", ip=ip)
-    ingreso_clave.cerrar_fallo(repo, "comercio_usuarios", intento, ids, ip)
+    ingreso_clave.cerrar_fallo(repo, "comercio_usuarios", intento, ids, ip, cuentas)
 
 
 class RecuperarBody(BaseModel):
@@ -461,14 +478,21 @@ def comercio_clave_nueva(
     if not claves.pedidos_de_clave.permitir(claims["comercio_id"]):
         logger.info("comercio.clave_nueva.limite", comercio_id=claims["comercio_id"])
         raise HTTPException(status_code=429, detail="Pediste muchas claves seguidas. Probá de nuevo en una hora.")
-    clave = nueva_clave_comercio(repo, claims["comercio_id"])
+    cuenta = (repo.get_cuenta_comercio(claims["comercio_id"], claims.get("cuenta_id"))
+              or repo.asegurar_comercio_usuario(claims["comercio_id"]))
+    clave = nueva_clave_comercio(repo, claims["comercio_id"], cuenta)
     logger.info("comercio.clave_nueva", comercio_id=claims["comercio_id"])
-    return {"clave": clave}
+    # Cambiar la clave cierra las sesiones de antes —incluida ésta—. Se devuelve un
+    # token a la versión nueva para que quien la pidió siga adentro sin volver a entrar;
+    # el que se la robó (o la tenía abierta en otro celular) queda afuera.
+    token = auth.make_comercio_token(claims["comercio_id"], claims.get("email") or claims["sub"],
+                                     cuenta["id"], cuenta.get("credenciales_version"))
+    return {"clave": clave, "access_token": token}
 
 
 @router.get("/comercio/mis-publicaciones")
 def mis_publicaciones(
-    claims: dict = Depends(auth.require_comercio), repo: Repo = Depends(get_repo)
+    claims: dict = Depends(require_comercio_vigente), repo: Repo = Depends(get_repo)
 ) -> dict:
     items = repo.list_publicaciones_de_comercio(claims["comercio_id"])
     return {"items": items, "total": len(items)}
@@ -598,7 +622,7 @@ class PerfilUpdate(BaseModel):
 
 @router.get("/comercio/perfil")
 def get_perfil(
-    claims: dict = Depends(auth.require_comercio), repo: Repo = Depends(get_repo)
+    claims: dict = Depends(require_comercio_vigente), repo: Repo = Depends(get_repo)
 ) -> dict:
     comercio = repo.get_comercio(claims["comercio_id"])
     if not comercio:
@@ -759,7 +783,7 @@ def _estado_suscripcion(comercio: dict) -> dict:
 
 @router.get("/comercio/suscripcion")
 def get_suscripcion(
-    claims: dict = Depends(auth.require_comercio), repo: Repo = Depends(get_repo)
+    claims: dict = Depends(require_comercio_vigente), repo: Repo = Depends(get_repo)
 ) -> dict:
     comercio = repo.get_comercio(claims["comercio_id"])
     if not comercio:
@@ -780,7 +804,7 @@ def get_suscripcion(
 
 @router.get("/comercio/metricas")
 def get_metricas(
-    claims: dict = Depends(auth.require_comercio), repo: Repo = Depends(get_repo)
+    claims: dict = Depends(require_comercio_vigente), repo: Repo = Depends(get_repo)
 ) -> dict:
     """Resumen para el comercio: visitas a su ficha + quién lo contactó + publicaciones."""
     leads = repo.list_leads_by_comercio(claims["comercio_id"], 30)
@@ -941,7 +965,7 @@ def producto_draft(
 
 @router.get("/comercio/productos")
 def list_productos(
-    claims: dict = Depends(auth.require_comercio), repo: Repo = Depends(get_repo)
+    claims: dict = Depends(require_comercio_vigente), repo: Repo = Depends(get_repo)
 ) -> dict:
     items = repo.list_producto_refs(claims["comercio_id"])
     return {"items": items, "total": len(items)}
@@ -1136,7 +1160,7 @@ async def comercio_pago(
 
 @router.get("/comercio/mensajes")
 def mis_mensajes(
-    claims: dict = Depends(auth.require_comercio), repo: Repo = Depends(get_repo)
+    claims: dict = Depends(require_comercio_vigente), repo: Repo = Depends(get_repo)
 ) -> dict:
     items = repo.list_mensajes_de_comercio(claims["comercio_id"])
     no_leidos = sum(1 for m in items if not m.get("leido"))
@@ -1171,7 +1195,7 @@ def _mi_comercio(repo: Repo, claims: dict) -> dict:
 
 
 @router.get("/comercio/fotos")
-def mis_fotos(claims: dict = Depends(auth.require_comercio), repo: Repo = Depends(get_repo)) -> dict:
+def mis_fotos(claims: dict = Depends(require_comercio_vigente), repo: Repo = Depends(get_repo)) -> dict:
     # `limite` = el tope de fotos de hoy (plan + extras): la galería muestra «23/50».
     return fotos_galeria.listado(repo, _mi_comercio(repo, claims))
 
@@ -1224,7 +1248,7 @@ def borrar_mi_foto(foto_id: str, claims: dict = Depends(_comercio_escribe), repo
 
 
 @router.get("/comercio/videos")
-def mis_videos(claims: dict = Depends(auth.require_comercio), repo: Repo = Depends(get_repo)) -> dict:
+def mis_videos(claims: dict = Depends(require_comercio_vigente), repo: Repo = Depends(get_repo)) -> dict:
     return {"items": repo.list_videos_comercio(claims["comercio_id"])}
 
 

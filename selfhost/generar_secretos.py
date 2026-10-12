@@ -8,7 +8,8 @@ Imprime lo necesario para pegar en dos archivos del VPS:
     NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY (JWT anon,
     público — se hornea en el bundle del frontend, no es secreto).
   - backend/.env: SUPABASE_SERVICE_ROLE_KEY (JWT service_role, SECRETO —
-    bypassa RLS, solo lo usan los backends).
+    bypassa RLS, solo lo usan los backends) y CLAVE_PEPPER (pepper del hash de las
+    claves de Mi comercio, SECRETO).
 
 Corré esto UNA sola vez por proyecto (Encontralo). Si se re-corre después
 de tener datos reales, invalida los tokens ya emitidos (no rompe nada,
@@ -29,6 +30,7 @@ def main() -> None:
     dominio = sys.argv[1] if len(sys.argv) > 1 else "encontralo.store"
 
     jwt_secret = secrets.token_urlsafe(48)
+    clave_pepper = secrets.token_urlsafe(48)
     authenticator_password = secrets.token_urlsafe(32)
     postgres_password = secrets.token_urlsafe(32)
 
@@ -47,6 +49,9 @@ def main() -> None:
     print()
     print("# --- pegar en backend/.env (reemplaza el SUPABASE_SERVICE_ROLE_KEY viejo) ---")
     print(f"SUPABASE_SERVICE_ROLE_KEY={service_token}")
+    print("# Pepper de las claves de Mi comercio (core/clave_comercio.py). SECRETO del backend; no lo")
+    print("# cambies después de ponerlo: las claves guardadas con el pepper viejo dejarían de servir.")
+    print(f"CLAVE_PEPPER={clave_pepper}")
 
 
 if __name__ == "__main__":

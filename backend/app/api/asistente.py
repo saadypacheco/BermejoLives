@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field, StringConstraints
 
 from app.core import auth
 from app.core.config import settings
+from app.core.sesion_comercio import require_comercio_vigente
 from app.db.repository import Repo, get_repo
 from app.services import asistente, planes
 
@@ -244,7 +245,7 @@ def admin_respuesta_local_activo(respuesta_id: str, body: ActivoIn, admin: dict 
 # ------------------------------------------------------------------ el dueño del local
 
 @router.get("/comercio/asistente/preguntas")
-def preguntas_de_mi_comercio(claims: dict = Depends(auth.require_comercio),
+def preguntas_de_mi_comercio(claims: dict = Depends(require_comercio_vigente),
                              repo: Repo = Depends(get_repo)) -> dict:
     """Lo que los clientes le preguntaron al asistente de SU local. Las que
     quedaron sin respuesta son las que el dueño tiene que mirar: son ventas
@@ -283,7 +284,7 @@ def _item_respuesta(s: dict) -> dict:
 
 @router.get("/comercio/asistente/respuestas")
 def respuestas_de_mi_comercio(limite: int = Query(200, ge=1, le=500), desde: int = Query(0, ge=0),
-                              claims: dict = Depends(auth.require_comercio),
+                              claims: dict = Depends(require_comercio_vigente),
                               repo: Repo = Depends(get_repo)) -> dict:
     """Las respuestas ACTIVAS que el dueño cargó para su chatbot."""
     filas = repo.list_respuestas_comercio(claims["comercio_id"], limite, desde)
@@ -291,7 +292,7 @@ def respuestas_de_mi_comercio(limite: int = Query(200, ge=1, le=500), desde: int
 
 
 @router.post("/comercio/asistente/respuestas")
-def crear_respuesta_de_mi_comercio(body: RespuestaLocalCreate, claims: dict = Depends(auth.require_comercio),
+def crear_respuesta_de_mi_comercio(body: RespuestaLocalCreate, claims: dict = Depends(require_comercio_vigente),
                                    repo: Repo = Depends(get_repo)) -> dict:
     comercio_id = claims["comercio_id"]
     conv = None
@@ -317,7 +318,7 @@ def crear_respuesta_de_mi_comercio(body: RespuestaLocalCreate, claims: dict = De
 
 @router.put("/comercio/asistente/respuestas/{respuesta_id}")
 def editar_respuesta_de_mi_comercio(respuesta_id: str, body: RespuestaLocalUpdate,
-                                    claims: dict = Depends(auth.require_comercio),
+                                    claims: dict = Depends(require_comercio_vigente),
                                     repo: Repo = Depends(get_repo)) -> dict:
     actual = repo.get_respuesta_comercio(claims["comercio_id"], respuesta_id) if _es_uuid(respuesta_id) else None
     if not actual:
@@ -330,7 +331,7 @@ def editar_respuesta_de_mi_comercio(respuesta_id: str, body: RespuestaLocalUpdat
 
 
 @router.delete("/comercio/asistente/respuestas/{respuesta_id}")
-def borrar_respuesta_de_mi_comercio(respuesta_id: str, claims: dict = Depends(auth.require_comercio),
+def borrar_respuesta_de_mi_comercio(respuesta_id: str, claims: dict = Depends(require_comercio_vigente),
                                     repo: Repo = Depends(get_repo)) -> dict:
     """Soft-delete: `activo = false`. La fila queda en la base."""
     actual = repo.get_respuesta_comercio(claims["comercio_id"], respuesta_id) if _es_uuid(respuesta_id) else None

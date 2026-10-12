@@ -98,9 +98,16 @@ class Repo(Protocol):
     def list_comercios_por_whatsapp(self, whatsapp: str) -> list[dict]: ...
     def list_comercio_usuarios_por_whatsapp(self, whatsapp: str) -> list[dict]: ...
     # La clave de 6 números (0137): sólo el hash, y el conteo de intentos.
-    def set_clave_comercio(self, user_id: str, clave_hash: str) -> None: ...
+    # Cambiar la clave SUBE `credenciales_version` (0149): las sesiones de antes dejan de servir.
+    # `set_clave_comercio` devuelve la versión nueva. `rehash_clave_comercio` NO la sube: es el
+    # mismo secreto con otro hash (pepper), no un cambio de credencial.
+    def set_clave_comercio(self, user_id: str, clave_hash: str) -> int: ...
+    def rehash_clave_comercio(self, user_id: str, clave_hash: str) -> None: ...
     def anular_clave_comercio(self, user_ids: list[str]) -> None: ...
     def anular_claves_de_comercio(self, comercio_id: str) -> None: ...
+    def get_cuenta_comercio(self, comercio_id: str, cuenta_id: str | None = None) -> dict | None: ...
+    def registrar_evento_comercio(self, comercio_id: str, tipo: str, actor: str) -> None: ...
+    def get_comercio_por_alta_uid(self, cargado_por: str, alta_uid: str) -> dict | None: ...
     def get_solicitud_cambio_numero(self, solicitud_id: str) -> dict | None: ...
     # Intentos de ingreso con clave (tabla `clave_fallos`, 0137): el conteo es atómico en la base.
     def registrar_intento_clave(self, tabla: str, numero: str, cuenta_ids: list[str], ip: str) -> dict: ...
@@ -331,6 +338,12 @@ _COLS_COMERCIO_ADMIN = (
     "sin_cartel, "
     "verificado, suspendido, paga_hasta, portada_url, portada_thumb_url, portada_pos, cargado_por, "
     "created_at, lugar_id, puesto, "
+    # «Lo que suma» en la ficha: el modal «Editar negocio» los lee de esta lista.
+    "canal_wa_url, catalogo_url, tiene_pasero, envios_internacionales, tiene_factura, "
+    "talles_especiales, pedido_minimo, "
+    # Las redes y el email: el modal los precarga; sin esto se veían vacíos
+    # aunque el comercio los tuviera.
+    "email, facebook_url, instagram_url, tiktok_url, sitio_web, "
     # Para que el panel cuente «con foto sin clasificar» (portada sin
     # ia_analizado_at) sin pedir otro endpoint: misma definición que
     # `contar_sin_analizar`.
@@ -950,22 +963,67 @@ class SupabaseRepo:
             {"password_hash": password_hash, "reset_code": None, "reset_code_expira": None}
         ).eq("id", user_id).execute()
 
-    def set_clave_comercio(self, user_id: str, clave_hash: str) -> None:
-        """Guarda el hash de la clave de 6 números (reemplaza la anterior). NO toca
-        los fallos: sólo `reiniciar_fallos_clave`, tras confirmar por WhatsApp."""
+    def _rotar_credenciales(self, user_ids: list[str], clave_hash: str | None) -> dict[str, int]:
+        """Cambia (o anula, con `None`) la clave de esas cuentas y SUBE su
+        `credenciales_version`, todo en una sola sentencia SQL (0149): las sesiones
+        emitidas antes dejan de servir. Devuelve {cuenta_id: versión nueva}."""
+        if not user_ids:
+            return {}
+        res = self._db.rpc("rotar_credenciales_comercio", {
+            "p_ids": [str(i) for i in user_ids], "p_clave_hash": clave_hash,
+        }).execute()
+        filas = res.data if isinstance(res.data, list) else ([res.data] if res.data else [])
+        return {f["id"]: int(f["credenciales_version"]) for f in filas}
+
+    def set_clave_comercio(self, user_id: str, clave_hash: str) -> int:
+        """Guarda el hash de la clave (reemplaza la anterior) y sube la versión de las
+        credenciales: la sesión abierta con la clave vieja se cierra. NO toca los
+        fallos: sólo `reiniciar_fallos_clave`, tras confirmar por WhatsApp."""
+        return self._rotar_credenciales([user_id], clave_hash).get(str(user_id), 0)
+
+    def rehash_clave_comercio(self, user_id: str, clave_hash: str) -> None:
+        """Vuelve a guardar el hash de LA MISMA clave (p. ej. ahora con pepper) sin subir
+        la versión: no es un cambio de credencial, las sesiones siguen valiendo."""
         self._db.table("comercio_usuarios").update({"clave_hash": clave_hash}).eq("id", user_id).execute()
 
     def anular_clave_comercio(self, user_ids: list[str]) -> None:
-        """10 fallos en 24 horas: la clave de esas cuentas deja de servir."""
-        if not user_ids:
-            return
-        self._db.table("comercio_usuarios").update({"clave_hash": None}).in_("id", user_ids).execute()
+        """10 fallos en 24 horas (o la clave mandada por WhatsApp): la clave de esas
+        cuentas deja de servir y sus sesiones también."""
+        self._rotar_credenciales(list(user_ids), None)
 
     def anular_claves_de_comercio(self, comercio_id: str) -> None:
         """Cambió el WhatsApp del comercio: la clave de sus cuentas deja de
         servir. Quien tenía el celular viejo y la clave no puede seguir entrando
         con el número nuevo, que es público en la ficha."""
-        self._db.table("comercio_usuarios").update({"clave_hash": None}).eq("comercio_id", comercio_id).execute()
+        res = self._db.table("comercio_usuarios").select("id").eq("comercio_id", comercio_id).execute()
+        self._rotar_credenciales([u["id"] for u in res.data or []], None)
+
+    def get_cuenta_comercio(self, comercio_id: str, cuenta_id: str | None = None) -> dict | None:
+        """La cuenta de Mi comercio de ese token: por `cuenta_id` si lo trae (y es de ese
+        comercio), o la primera activa del comercio (tokens de antes de la 0149).
+        Trae sólo lo que la sesión necesita, nunca el hash de la clave."""
+        q = (self._db.table("comercio_usuarios").select("id, comercio_id, credenciales_version")
+             .eq("comercio_id", comercio_id).eq("activo", True))
+        if cuenta_id:
+            q = q.eq("id", str(cuenta_id))
+        else:
+            q = q.order("created_at").order("id")
+        res = q.limit(1).execute()
+        return res.data[0] if res.data else None
+
+    def registrar_evento_comercio(self, comercio_id: str, tipo: str, actor: str) -> None:
+        """Deja constancia de algo que se le hizo a la cuenta de un comercio
+        (`comercio_eventos`, 0149). Lanza si no puede escribir: es una auditoría, no
+        un comentario."""
+        self._db.table("comercio_eventos").insert(
+            {"comercio_id": comercio_id, "tipo": tipo, "actor": actor}).execute()
+
+    def get_comercio_por_alta_uid(self, cargado_por: str, alta_uid: str) -> dict | None:
+        """El comercio que ese agente ya dio de alta con ese `alta_uid` (reintentos de la
+        cola offline del celular), esté activo o no."""
+        res = (self._db.table("comercios").select("*")
+               .eq("cargado_por", cargado_por).eq("alta_uid", alta_uid).limit(1).execute())
+        return res.data[0] if res.data else None
 
     def get_solicitud_cambio_numero(self, solicitud_id: str) -> dict | None:
         res = (self._db.table("solicitudes_cambio_numero").select("*")

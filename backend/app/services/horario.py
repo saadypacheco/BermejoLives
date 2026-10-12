@@ -30,6 +30,7 @@ class EstadoHorario:
     estado: str                       # "abierto" | "cerrado" | "desconocido"
     cierra_en: int | None = None      # minutos hasta el cierre, si está abierto
     abre_en: int | None = None        # minutos hasta la próxima apertura, si está cerrado
+    abre_hoy: bool | None = None      # cerrado: si hoy tiene algún horario (False = hoy no abre)
 
 
 def _norm(s: str) -> str:
@@ -82,15 +83,19 @@ def abierto_ahora(horario: str | None, ahora: datetime) -> EstadoHorario:
     if not horario or not horario.strip():
         return EstadoHorario("desconocido")
     texto = _norm(horario)
-    segmentos = [x.strip() for x in re.split(r"[·;|\n]+|,(?=\s*[a-z]{3})", texto) if x.strip()]
+    # El «+» también separa: «Mar-Sab 9:30-13 16-20 + Dom 9:30-13» (igual que lib/horario.ts).
+    segmentos = [x.strip() for x in re.split(r"[·;|+\n]+|,(?=\s*[a-z]{3})", texto) if x.strip()]
 
     rangos: list[tuple[set[int], int, int]] = []
+    dias_anteriores: set[int] | None = None
     for seg in segmentos:
         horas = _rangos_horarios(seg)
         if not horas:
             continue
         solo_dias = re.sub(r"\d{1,2}(?:[:.]\d{2})?", " ", seg)
-        dias = _dias_de_texto(solo_dias) or {1, 2, 3, 4, 5, 6, 7}
+        # Un tramo sin días hereda los del anterior («Lun a Sáb 8-12 · 14:30-20»).
+        dias = _dias_de_texto(solo_dias) or dias_anteriores or {1, 2, 3, 4, 5, 6, 7}
+        dias_anteriores = dias
         for desde, hasta in horas:
             if hasta > desde:
                 rangos.append((dias, desde, hasta))
@@ -123,7 +128,8 @@ def abierto_ahora(horario: str | None, ahora: datetime) -> EstadoHorario:
             falta = adelanto * 24 * 60 - minutos + desde
             if falta > 0:
                 abre_en = falta if abre_en is None else min(abre_en, falta)
-    return EstadoHorario("cerrado", abre_en=abre_en)
+    abre_hoy = any(ord_hoy in dias for dias, _d, _h in rangos)
+    return EstadoHorario("cerrado", abre_en=abre_en, abre_hoy=abre_hoy)
 
 
 def _hora(ahora: datetime, minutos: int) -> str:
@@ -131,14 +137,22 @@ def _hora(ahora: datetime, minutos: int) -> str:
     return f"{total // 60}:{total % 60:02d}"
 
 
+_NOMBRE_DIA = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+
+
 def etiqueta(e: EstadoHorario, ahora: datetime) -> str | None:
-    """Texto corto: "Abierto · cierra 19:00" / "Cerrado · abre 9:00"."""
+    """Texto corto, igual que `etiquetaHorario` del front: dice el día si no es hoy.
+    «Cerrado · abre 16:00» · «Cerrado · abre mañana 9:30» · «Cerrado hoy · abre
+    mañana 9:30» (hoy no abre) · «Cerrado · abre el martes 9:30»."""
     if e.estado == "desconocido":
         return None
     if e.estado == "abierto":
         if e.cierra_en is not None and e.cierra_en <= 120:
             return f"Abierto · cierra {_hora(ahora, e.cierra_en)}"
         return "Abierto ahora"
-    if e.abre_en is not None and e.abre_en <= 24 * 60:
-        return f"Cerrado · abre {_hora(ahora, e.abre_en)}"
-    return "Cerrado"
+    cerrado = "Cerrado hoy" if e.abre_hoy is False else "Cerrado"
+    if e.abre_en is None:
+        return cerrado
+    dias = (ahora.hour * 60 + ahora.minute + e.abre_en) // (24 * 60)
+    cuando = "" if dias == 0 else "mañana " if dias == 1 else f"el {_NOMBRE_DIA[(ahora.weekday() + dias) % 7]} "
+    return f"{cerrado} · abre {cuando}{_hora(ahora, e.abre_en)}"

@@ -46,6 +46,11 @@ def nueva_clave_comercio(repo, comercio_id: str, cuenta: dict | None = None,
     los borra: si no, quien comparte el número podría limpiarse el contador
     pidiendo claves.
 
+    Guardar la clave SUBE la `credenciales_version` de la cuenta (0149): las sesiones
+    abiertas con la clave anterior se cierran. La versión nueva queda en `cuenta`
+    (`cuenta["credenciales_version"]`), para que quien emite un token enseguida —la
+    confirmación por WhatsApp, `POST /comercio/clave`— lo firme con la vigente.
+
     La clave nunca se loguea."""
     cuenta = cuenta or repo.asegurar_comercio_usuario(comercio_id)
     comercio = repo.get_comercio(comercio_id) or {}
@@ -55,7 +60,7 @@ def nueva_clave_comercio(repo, comercio_id: str, cuenta: dict | None = None,
     prefijo = clave_comercio.prefijo_de(comercio.get("nombre"), bool(comercio.get("sin_cartel")),
                                         comercio.get("subcategoria"), rubro)
     nueva = clave_comercio.clave_distinta_de(hashes, prefijo)
-    repo.set_clave_comercio(cuenta["id"], clave_comercio.hash_clave(nueva))
+    cuenta["credenciales_version"] = repo.set_clave_comercio(cuenta["id"], clave_comercio.hash_clave(nueva))
     if reiniciar_fallos and comercio.get("whatsapp"):
         numero = normalizar_whatsapp(comercio["whatsapp"]) or comercio["whatsapp"].strip()
         repo.reiniciar_fallos_clave("comercio_usuarios", numero[:32])

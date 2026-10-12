@@ -215,6 +215,15 @@ class Settings(BaseSettings):
     # Auth del panel (JWT self-contained, igual patrón que mentorcomercial)
     jwt_secret: str = "bermejo-dev-secret-change-in-prod"
     jwt_ttl_hours: int = 168           # 7 días
+
+    # Pepper de las claves de comercio: HMAC-SHA256(pepper, clave) antes de PBKDF2
+    # (core/clave_comercio.py). Es un secreto del backend, NO va en la base: con la
+    # base filtrada sola no se pueden probar claves. Generalo con
+    #     python -c "import secrets; print(secrets.token_urlsafe(48))"
+    # y ponelo en backend/.env como CLAVE_PEPPER. Vacío = las claves se guardan como
+    # antes (PBKDF2 sin pepper) y el arranque avisa. NO lo cambies después: las claves
+    # guardadas con el pepper viejo dejarían de servir (se anulan y se piden de nuevo).
+    clave_pepper: str = ""
     admin_email: str = "admin@bermejolive.com"
     admin_password: str = "bermejo1234"
 

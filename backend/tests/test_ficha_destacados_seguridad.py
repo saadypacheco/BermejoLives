@@ -365,7 +365,7 @@ def test_el_webhook_acepta_hasta_25mb_y_corta_mas(client, repo):
 
 def test_la_tabla_de_topes():
     esperado = {
-        "/comercio/catalogo": 8, "/campo/mis-comercios/abc/catalogo": 8, "/comercio/fotos": 15,
+        "/comercio/catalogo": 8, "/campo/mis-comercios/abc/catalogo": 8, "/admin/comercio/abc/catalogo": 8, "/comercio/fotos": 15,
         "/campo/comercio": 15, "/campo/mis-comercios/abc/foto": 15, "/campo/mis-comercios/abc/fotos": 15,
         "/admin/comercio/abc/fotos": 15, "/admin/comercio/abc/foto": 15, "/comercio/perfil/foto": 15, "/auth/comercio/registro": 15,
         "/comercio/abc/solicitar-cambio-numero": 15, "/campo/lugares/abc/portada": 15, "/comercio/pago": 15,
@@ -390,7 +390,7 @@ def test_toda_ruta_con_archivos_tiene_tope_propio():
         concreta = re.sub(r"\{[^}]+\}", "abc", ruta)
         assert tope_para(concreta) > TOPE_POR_DEFECTO, f"{ruta} quedó con el tope por defecto (2 MB)"
     # las que leen el Request a mano no figuran como multipart en OpenAPI
-    for ruta in ("/comercio/catalogo", "/campo/mis-comercios/abc/catalogo", "/ingest/webhook"):
+    for ruta in ("/comercio/catalogo", "/campo/mis-comercios/abc/catalogo", "/admin/comercio/abc/catalogo", "/ingest/webhook"):
         assert tope_para(ruta) > TOPE_POR_DEFECTO
 
 

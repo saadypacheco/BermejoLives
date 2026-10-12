@@ -29,7 +29,7 @@ export function GenerarClaveComercio({ comercioId, nombre }: { comercioId: strin
   if (clave) {
     return (
       <ClaveUnaVez clave={clave} titulo={`Clave nueva de ${nombre}`} compacta onListo={() => setClave(null)} textoListo="Listo"
-        aviso="Anotala y entregásela al dueño en un papel aparte; no se vuelve a mostrar. La clave anterior ya no sirve." />
+        aviso="Entregala sólo al dueño, en mano o por el WhatsApp de la ficha; no se vuelve a mostrar. La anterior ya no sirve y su sesión abierta se cierra." />
     );
   }
 

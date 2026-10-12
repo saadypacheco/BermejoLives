@@ -196,6 +196,15 @@ export type ComercioPorVerificar = {
   comercio_rubros?: { rubros: { nombre: string; slug: string } | null }[];
   ciudades?: { nombre: string; slug: string };
   lugares?: { nombre: string; tipo: string; lat: number | null; lng: number | null; portada_thumb_url?: string | null } | null;
+  /** «Lo que suma» en la ficha (spec docs/ficha-destacados.md). El modal los lee
+   *  del comercio que recibe; si el servidor no los manda, arrancan vacíos. */
+  canal_wa_url?: string | null;
+  catalogo_url?: string | null;
+  pedido_minimo?: string | null;
+  tiene_pasero?: boolean | null;
+  envios_internacionales?: boolean | null;
+  tiene_factura?: boolean | null;
+  talles_especiales?: boolean | null;
 };
 
 /** Todos los comercios activos. `truncado` avisa que el backend llegó a su tope
@@ -685,9 +694,9 @@ export async function adminListarFotos(comercioId: string): Promise<FotoComercio
 /** Sube con `subirConProgreso` (y no con `authFetch`) a propósito: `authFetch`
  *  lanza un Error de texto ante cualquier !ok y pierde el `detail` en objeto del
  *  409 del tope de fotos, así que el diálogo del tope nunca llegaba a abrirse. */
-async function subirAdmin<T>(path: string, file: File, extra: Record<string, string> = {}, onP?: (p: number) => void): Promise<T> {
+async function subirAdmin<T>(path: string, file: File, extra: Record<string, string> = {}, onP?: (p: number) => void, campo = "foto"): Promise<T> {
   try {
-    return await subirConProgreso<T>(`${API}${path}`, "foto", file, getToken(), extra, onP);
+    return await subirConProgreso<T>(`${API}${path}`, campo, file, getToken(), extra, onP);
   } catch (e) {
     if ((e as { status?: number })?.status === 401) {
       clearToken();
@@ -711,6 +720,19 @@ export async function adminSubirFoto(comercioId: string, file: File, opts?: Pick
 export async function adminSubirPortada(comercioId: string, file: File): Promise<{ portada_url: string | null; portada_thumb_url: string | null }> {
   const d = await subirAdmin<{ comercio?: { portada_url?: string | null; portada_thumb_url?: string | null } }>(`/admin/comercio/${comercioId}/foto`, file);
   return { portada_url: d.comercio?.portada_url ?? null, portada_thumb_url: d.comercio?.portada_thumb_url ?? null };
+}
+
+/** Sube el catálogo en PDF (`POST /admin/comercio/{id}/catalogo`, multipart
+ *  `archivo`, hasta 8 MB). Se sube al elegirlo, no con «Guardar». Devuelve la URL
+ *  que quedó en `catalogo_url`. Si falla, el catálogo anterior queda como estaba. */
+export async function adminSubirCatalogo(comercioId: string, file: File, onP?: (pct: number) => void): Promise<string | null> {
+  const d = await subirAdmin<{ catalogo_url?: string | null }>(`/admin/comercio/${encodeURIComponent(comercioId)}/catalogo`, file, {}, onP, "archivo");
+  return d.catalogo_url ?? null;
+}
+
+/** Quita el catálogo (`DELETE /admin/comercio/{id}/catalogo`): borra el archivo. */
+export async function adminQuitarCatalogo(comercioId: string): Promise<void> {
+  await authFetch(`/admin/comercio/${encodeURIComponent(comercioId)}/catalogo`, { method: "DELETE" });
 }
 
 /** «Usar como portada»: `PUT /admin/comercio/{id}/portada` con `{foto_id}`. Es un

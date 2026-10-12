@@ -8,6 +8,8 @@ export type EstadoHorario = {
   // minutos hasta el próximo cambio (cierre si está abierto, apertura si está cerrado); null si no aplica
   cierraEn?: number | null;
   abreEn?: number | null;
+  /** Cerrado: si hoy tiene algún horario (false = hoy no abre, p. ej. el lunes). */
+  abreHoy?: boolean;
 };
 
 // Lunes=1 … Domingo=7 (así los rangos "vie a lun" se expanden bien); JS getDay: Dom=0.
@@ -100,16 +102,24 @@ export function abiertoAhora(horario: string | null | undefined, now: Date = aho
   if (!horario || !horario.trim()) return { estado: "desconocido" };
   const texto = norm(horario);
 
-  // Segmentos por · , ; | / salto de línea (cada uno con sus días+horas).
-  const segmentos = texto.split(/[·;|\n]+|,(?=\s*[a-z]{3})/).map((x) => x.trim()).filter(Boolean);
+  // Segmentos por · , ; | + / salto de línea (cada uno con sus días+horas).
+  // El «+» se usa al cargar («Mar-Sab 9:30-13 16-20 + Dom 9:30-13»): sin
+  // partir ahí, los días de las dos partes se juntaban en un solo rango y el
+  // domingo heredaba los horarios de la semana.
+  const segmentos = texto.split(/[·;|+\n]+|,(?=\s*[a-z]{3})/).map((x) => x.trim()).filter(Boolean);
 
   const rangos: Rango[] = [];
+  let diasAnteriores: Set<number> | null = null;
   for (const seg of segmentos) {
     const horas = rangosHorarios(seg);
     if (horas.length === 0) continue;
-    // Los días se toman del texto sin las horas.
+    // Los días se toman del texto sin las horas. Un tramo sin días hereda los
+    // del anterior: «Lun a Sáb 8-12 · 14:30-20» es la tarde de lunes a sábado,
+    // no de todos los días (antes el domingo figuraba abierto a la tarde).
+    // Sin días en ningún tramo previo, se asumen todos.
     const soloDias = seg.replace(/\d{1,2}(?:[:.]\d{2})?/g, " ");
-    const dias = diasDeTexto(soloDias) ?? new Set([1, 2, 3, 4, 5, 6, 7]); // sin día → asumimos todos
+    const dias: Set<number> = diasDeTexto(soloDias) ?? diasAnteriores ?? new Set([1, 2, 3, 4, 5, 6, 7]);
+    diasAnteriores = dias;
     for (const h of horas) {
       if (h.hasta > h.desde) { rangos.push({ dias, desde: h.desde, hasta: h.hasta }); continue; }
       // CRUZA LA MEDIANOCHE: "22-4" no es un rango vacío, es un boliche.
@@ -130,6 +140,10 @@ export function abiertoAhora(horario: string | null | undefined, now: Date = aho
   }
 
   if (rangos.length === 0) return { estado: "desconocido" };
+  // ¿Abre en algún momento HOY? Sin esto, un lunes que no abre se leía igual
+  // que una siesta: «Cerrado · abre 9:30», y parecía que abría hoy.
+  const ordDia = now.getDay() === 0 ? 7 : now.getDay();
+  const abreHoy = rangos.some((r) => r.dias.has(ordDia));
 
   const ordHoy = now.getDay() === 0 ? 7 : now.getDay();
   const ahora = now.getHours() * 60 + now.getMinutes();
@@ -154,18 +168,30 @@ export function abiertoAhora(horario: string | null | undefined, now: Date = aho
       if (falta > 0) abreEn = abreEn == null ? falta : Math.min(abreEn, falta);
     }
   }
-  return { estado: "cerrado", abreEn };
+  return { estado: "cerrado", abreEn, abreHoy };
 }
 
-/** Texto corto para el badge, ej. "Abierto · cierra 19:00" / "Cerrado · abre 9:00". */
+const NOMBRE_DIA = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+/** Texto corto para el badge. Siempre dice CUÁNDO abre, con el día si no es hoy:
+ *  «Abierto · cierra 13:00» · «Cerrado · abre 16:00» · «Cerrado · abre mañana 9:30»
+ *  · «Cerrado hoy · abre mañana 9:30» (hoy no abre) · «Cerrado · abre el martes 9:30».
+ *  Empieza siempre con «Abierto»/«Cerrado»: el sello estimado lo convierte en
+ *  «Suele estar cerrado…». */
 export function etiquetaHorario(e: EstadoHorario, now: Date = ahoraEnBolivia()): string | null {
   if (e.estado === "desconocido") return null;
-  const fmt = (min: number) => {
-    const t = new Date(now.getTime() + min * 60000);
-    return `${t.getHours()}:${String(t.getMinutes()).padStart(2, "0")}`;
-  };
+  const enMin = (min: number) => new Date(now.getTime() + min * 60000);
+  const hora = (t: Date) => `${t.getHours()}:${String(t.getMinutes()).padStart(2, "0")}`;
   if (e.estado === "abierto") {
-    return e.cierraEn != null && e.cierraEn <= 120 ? `Abierto · cierra ${fmt(e.cierraEn)}` : "Abierto ahora";
+    return e.cierraEn != null && e.cierraEn <= 120 ? `Abierto · cierra ${hora(enMin(e.cierraEn))}` : "Abierto ahora";
   }
-  return e.abreEn != null && e.abreEn <= 24 * 60 ? `Cerrado · abre ${fmt(e.abreEn)}` : "Cerrado";
+  const cerrado = e.abreHoy === false ? "Cerrado hoy" : "Cerrado";
+  if (e.abreEn == null) return cerrado;
+  const t = enMin(e.abreEn);
+  // Días de calendario entre hoy y la apertura (no horas: a las 23:00, abrir a
+  // las 9:00 es «mañana» aunque falten 10 horas).
+  const dias = Math.round((new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime()
+    - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86400000);
+  const cuando = dias === 0 ? "" : dias === 1 ? "mañana " : `el ${NOMBRE_DIA[t.getDay()]} `;
+  return `${cerrado} · abre ${cuando}${hora(t)}`;
 }

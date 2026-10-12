@@ -293,8 +293,17 @@ def _hdr(token):
     return {"Authorization": f"Bearer {token}"}
 
 
-def auth_token(comercio_id):
+def auth_token(comercio_id, repo=None):
+    """El token de Mi comercio. Con `repo`, como el que se emite al entrar HOY (con la versión
+    vigente de las credenciales de la cuenta): cambiar la clave cierra las sesiones de antes
+    (0149), así que después de generar una clave hace falta uno nuevo. Sin `repo`, un token
+    de los de antes (sin versión): sirve mientras la cuenta no haya cambiado de clave."""
     from app.core import auth
+    if repo is not None:
+        cuenta = next((u for u in repo.usuarios.values() if u["comercio_id"] == comercio_id), None)
+        if cuenta:
+            return auth.make_comercio_token(comercio_id, "x@y.com", cuenta["id"],
+                                            cuenta.get("credenciales_version"))
     return auth.make_comercio_token(comercio_id, "x@y.com")
 
 
@@ -520,7 +529,7 @@ def test_el_numero_de_uruku_nunca_abre_una_cuenta(client, repo, monkeypatch):
 
 def test_generar_otra_clave_deja_sin_efecto_la_anterior(client, repo):
     c, _u, vieja = _comercio_con_clave(client, repo)
-    nueva = client.post("/comercio/clave", headers=_hdr(auth_token(c["id"]))).json()["clave"]
+    nueva = client.post("/comercio/clave", headers=_hdr(auth_token(c["id"], repo))).json()["clave"]
     if nueva != vieja:
         assert _ingresar(client, "70123456", vieja).status_code == 401
     assert _ingresar(client, "70123456", nueva).status_code == 200
@@ -653,7 +662,7 @@ def test_el_perfil_ya_no_trae_el_codigo_ni_el_codigo_formateado(client, repo):
 def test_criterio_12_la_clave_nunca_va_a_un_log_a_la_ficha_ni_al_enlace(client, repo, capfd):
     com = _alta_de_campo(client)
     cuenta = _cuenta(repo, com["id"])
-    clave = client.post("/comercio/clave", headers=_hdr(auth_token(com["id"]))).json()["clave"]
+    clave = client.post("/comercio/clave", headers=_hdr(auth_token(com["id"], repo))).json()["clave"]
     _ingresar(client, "70002222", clave)
     _ingresar(client, "70002222", _mala(clave))
     _codigo, conf = _recuperar_y_confirmar(client, repo, "70002222", "59170002222")
@@ -669,7 +678,7 @@ def test_criterio_12_la_clave_nunca_va_a_un_log_a_la_ficha_ni_al_enlace(client, 
     for fila in repo.comercios.values():
         assert not any("clave" in k for k in fila), fila.keys()
     # Ni en la ficha ni en el enlace de WhatsApp.
-    perfil = client.get("/comercio/perfil", headers=_hdr(auth_token(com["id"]))).text
+    perfil = client.get("/comercio/perfil", headers=_hdr(auth_token(com["id"], repo))).text
     assert "clave" not in perfil
     wa = client.post("/auth/comercio/recuperar", json={"whatsapp": "70002222"}).json()["wa_link"]
     assert clave not in wa and nueva not in wa
@@ -951,7 +960,12 @@ def test_criterio_14_con_un_comercio_propio_en_el_numero_de_la_victima_12_claves
 
 # ---- criterio 15: 10 fallos en 24 horas anulan la clave
 def test_criterio_15_diez_fallos_en_24_horas_anulan_la_clave_y_solo_se_entra_por_whatsapp(client, repo):
-    _c, cuenta, clave = _comercio_con_clave(client, repo)
+    """Sólo la clave VIEJA de 6 números (la nueva `PREFIJO-AZAR` queda cubierta por el bloqueo
+    de 5 fallos en 15 minutos: ver `test_clave_seguridad.py`)."""
+    _c, cuenta, _nueva = _comercio_con_clave(client, repo)
+    cuenta["clave_hash"] = claves.hash_clave("123456")          # como la guardaba la versión anterior
+    cuenta["credenciales_version"] = 0
+    clave = "123456"
     for _ in range(2):                               # 8 fallos en dos tandas de 4
         for _ in range(4):
             assert _ingresar(client, "70123456", _mala(clave)).status_code == 401
@@ -1080,7 +1094,7 @@ def test_los_buckets_vacios_o_vencidos_del_limitador_se_limpian():
 # ---- criterio 17: el WhatsApp ya no se edita desde Mi comercio (la PoC 2)
 def test_criterio_17_put_perfil_no_cambia_el_whatsapp(client, repo):
     v, _clave = _victima(client, repo)
-    t = auth_token("victima")
+    t = auth_token("victima", repo)
     for valor in ("71111111", None, "59170123456"):
         r = client.put("/comercio/perfil", headers=_hdr(t), json={"whatsapp": valor})
         assert r.status_code == 400, valor
@@ -1119,7 +1133,7 @@ def test_toda_respuesta_con_una_clave_lleva_cache_control_no_store(client, repo)
                         data={"nombre": "Mi Tienda", "whatsapp": "70001111", "lat": "-22.7", "lng": "-64.3"})
     campo = _alta_campo(client, "70002222")
     c, _u, clave = _comercio_con_clave(client, repo, whatsapp="59170123456", slug="ferre")
-    nueva = client.post("/comercio/clave", headers=_hdr(auth_token(c["id"])))
+    nueva = client.post("/comercio/clave", headers=_hdr(auth_token(c["id"], repo)))
     ingreso = _ingresar(client, "70123456", nueva.json()["clave"])
     _codigo, conf = _recuperar_y_confirmar(client, repo, "70123456", "59170123456")
     codigo_u = client.post("/auth/usuario/solicitar-codigo", json={"whatsapp": "70000001"}).json()["codigo"]
@@ -1137,7 +1151,13 @@ def test_toda_respuesta_con_una_clave_lleva_cache_control_no_store(client, repo)
 def test_post_comercio_clave_admite_3_por_hora_por_comercio_y_el_cuarto_da_429(client, repo):
     a = repo.seed_comercio(id="com-a", slug="a", nombre="A", whatsapp="59170123456", activo=True)
     b = repo.seed_comercio(id="com-b", slug="b", nombre="B", whatsapp="59170999888", activo=True)
-    estados = [client.post("/comercio/clave", headers=_hdr(auth_token(a["id"]))).status_code for _ in range(4)]
+    # Cada clave nueva cierra la sesión de antes: se sigue con el token que devuelve (0149).
+    token, estados = auth_token(a["id"]), []
+    for _ in range(4):
+        r = client.post("/comercio/clave", headers=_hdr(token))
+        estados.append(r.status_code)
+        if r.status_code == 200:
+            token = r.json()["access_token"]
     assert estados == [200, 200, 200, 429]
     assert client.post("/comercio/clave", headers=_hdr(auth_token(b["id"]))).status_code == 200   # otro comercio
 

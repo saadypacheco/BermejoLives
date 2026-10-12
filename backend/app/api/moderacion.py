@@ -3,10 +3,11 @@
 Escrituras con service_role (backend). Requiere JWT de admin.
 """
 import re
+import uuid
 from datetime import timedelta
 
 import structlog
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.auth import hash_password, require_admin, require_alguno, require_moderador, require_panel, require_permiso
@@ -14,7 +15,7 @@ from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS, tiene as ti
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp, whatsapp_para_guardar
-from app.services import enlaces, fotos_galeria, portada, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
+from app.services import enlaces, ficha_catalogo as catalogo_svc, fotos_galeria, portada, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
@@ -163,8 +164,12 @@ def _validar_codigo_al_aprobar(repo: Repo, pub_id: str) -> None:
     recibido = normalizar(pub.get("codigo_recibido"))
     comercio = repo.get_comercio(pub["comercio_id"])
     esperado = normalizar((comercio or {}).get("codigo"))
+    # Si el código del comercio se regeneró (0149) después de que esta publicación entró,
+    # lo que recibió es el código ANTERIOR, que `comercios.codigo_anterior` conserva. Se
+    # acepta sólo para esto: la ingesta de mensajes nuevos busca por el código vigente.
+    anterior = normalizar((comercio or {}).get("codigo_anterior"))
 
-    if not recibido or not esperado or recibido != esperado:
+    if not recibido or not esperado or recibido not in (esperado, anterior):
         raise HTTPException(
             status_code=409,
             detail=(
@@ -371,6 +376,13 @@ class EditarComercioBody(BaseModel):
     tiene_factura: bool | None = None
     envios_internacionales: bool | None = None
     tiene_stock: bool | None = None
+    #: «Lo que suma» en la ficha (docs/ficha-destacados.md), igual que el agente y
+    #: el comerciante. Un texto vacío borra el dato; los enlaces, sólo http(s) y el
+    #: canal, de WhatsApp. El catálogo como ARCHIVO va por POST /admin/comercio/{id}/catalogo.
+    canal_wa_url: str | None = None
+    catalogo_url: str | None = None
+    tiene_pasero: bool | None = None
+    talles_especiales: bool | None = None
     # Dónde recortar la portada: el % vertical que va al centro. 0 es arriba y
     # el `patch` descarta los None, así que un 0 legítimo sí viaja.
     portada_pos: int | None = Field(default=None, ge=0, le=100)
@@ -399,6 +411,7 @@ def editar_comercio(
     # `usuario@` antes del dominio.
     try:
         enlaces.validar_redes(patch)
+        catalogo_svc.normalizar_ficha(patch)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     # Si alguien escribe el horario a mano, deja de ser el estimado de la
@@ -427,7 +440,13 @@ def editar_comercio(
                     detail="Cambiar el WhatsApp de un comercio es de la cuenta. Pedíselo a un moderador o al admin.")
             patch["whatsapp"] = numero_para_cambiar(repo, comercio_id, patch["whatsapp"]) or ""
             cambia_numero = True
+    anterior = None
+    if "catalogo_url" in patch:
+        anterior = (repo.get_comercio(comercio_id) or {}).get("catalogo_url")
     updated = repo.update_comercio(comercio_id, patch, body.rubro_slugs)
+    if "catalogo_url" in patch:
+        # Enlace nuevo o vaciado: si el anterior era un PDF nuestro, se borra del disco.
+        catalogo_svc.soltar_catalogo_reemplazado(anterior, patch["catalogo_url"], comercio_id)
     if cambia_numero:
         repo.anular_claves_de_comercio(comercio_id)
     # LO QUE UNA PERSONA DEJÓ MARCADO ES LA LISTA, Y NO SE DISCUTE.
@@ -444,6 +463,38 @@ def editar_comercio(
         aplicar_rubros(repo, updated, repo.get_comercio_rubros(comercio_id))
     logger.info("moderacion.comercio_editado", comercio=comercio_id, campos=list(patch.keys()), by=admin["email"])
     return {"ok": True, "comercio": updated}
+
+
+def _comercio_o_404(repo: Repo, comercio_id: str) -> dict:
+    comercio = repo.get_comercio(comercio_id)
+    if not comercio:
+        raise HTTPException(status_code=404, detail="Comercio no encontrado")
+    return comercio
+
+
+@router.post("/admin/comercio/{comercio_id}/catalogo")
+async def subir_catalogo_admin(
+    comercio_id: str,
+    request: Request,
+    admin: dict = Depends(require_permiso("comercios.editar")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """El admin sube el catálogo en PDF (multipart, campo `archivo`, hasta 8 MB)
+    de cualquier comercio. Reemplaza al anterior y borra el archivo viejo."""
+    comercio = _comercio_o_404(repo, comercio_id)
+    url = await catalogo_svc.subir_catalogo(repo, comercio, request, actor=admin["email"])
+    return {"catalogo_url": url}
+
+
+@router.delete("/admin/comercio/{comercio_id}/catalogo")
+async def quitar_catalogo_admin(
+    comercio_id: str,
+    admin: dict = Depends(require_permiso("comercios.editar")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Quita el catálogo: borra el PDF si es nuestro y deja `catalogo_url` en null."""
+    await catalogo_svc.quitar_catalogo(repo, _comercio_o_404(repo, comercio_id), actor=admin["email"])
+    return {"ok": True}
 
 
 class HorarioLoteBody(BaseModel):
@@ -1118,8 +1169,18 @@ def generar_clave_comercio(
     publicador no la tiene. Crea la cuenta de Mi comercio si el comercio no tenía.
     La clave nunca va a un log."""
     response.headers["Cache-Control"] = "no-store"
-    if not repo.get_comercio(comercio_id):
+    try:
+        uuid.UUID(str(comercio_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Comercio no encontrado") from exc
+    comercio = repo.get_comercio(comercio_id)
+    if not comercio or comercio.get("activo") is False:
+        # Un comercio dado de baja no recibe claves: generarle una sería dejar una puerta
+        # abierta a algo que está apagado a propósito.
         raise HTTPException(status_code=404, detail="Comercio no encontrado")
+    # Auditoría ANTES de generar: si no se puede dejar constancia, no se cambia la clave
+    # (el evento no lleva la clave, sólo quién, cuándo y a qué comercio).
+    repo.registrar_evento_comercio(comercio_id, "clave_generada_por_admin", admin["email"])
     clave = nueva_clave_comercio(repo, comercio_id, reiniciar_fallos=True)
     logger.info("admin.clave_comercio_generada", comercio=comercio_id, by=admin["email"])
     return {"clave": clave}

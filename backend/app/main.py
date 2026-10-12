@@ -23,10 +23,12 @@ from app.api import asistente, auth, campo, comercio, contenido, health, moderac
 from app.core.config import settings
 from app.core.ip import ip_cliente
 from app.core.limite_cuerpo import LimiteCuerpoMiddleware
+from app.core.registro import configurar_logging
 from app.services.clima import fetch_clima_bermejo
 from app.services.observabilidad import registrar_error, registrar_perf
 from app.db.repository import get_repo
 
+configurar_logging()          # tracebacks sin variables locales (core/registro.py)
 logger = structlog.get_logger()
 
 
@@ -152,6 +154,11 @@ async def _wa_sesion_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("api.startup", service="bermejo", environment=settings.environment)
+    if not settings.clave_pepper:
+        # Sin pepper las claves de Mi comercio se guardan sólo con PBKDF2: una base filtrada
+        # permite probar claves. Se arregla poniendo CLAVE_PEPPER en backend/.env.
+        logger.warning("config.clave_pepper_vacio",
+                       detalle="CLAVE_PEPPER no está configurado: las claves de comercio se guardan sin pepper")
     tareas = []
     if settings.clima_worker:
         tareas.append(asyncio.create_task(_clima_loop()))

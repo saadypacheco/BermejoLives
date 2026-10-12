@@ -14,6 +14,7 @@ import {
   altasPorDia, type AltasDia,
   rubrosDeComercio, editarRubrosComercio,
   adminListarFotos, adminSubirFoto, adminBorrarFoto, type FotoComercio,
+  adminSubirCatalogo, adminQuitarCatalogo,
   adminSubirPortada, adminUsarComoPortada, adminListarDadosDeBaja, adminReactivarComercio, type ComercioDadoDeBaja,
   analizarComercio, type AnalisisIA, type PropuestaIA,
   pendientesAnalisis, analizarTanda, type ResultadoTanda,
@@ -58,6 +59,9 @@ import { RubroRecalcular } from "@/components/rubro-recalcular";
 import { CatalogoPanel } from "@/components/catalogo-panel";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { FotoPrincipal } from "@/components/foto-principal";
+import { CatalogoPdf } from "@/components/catalogo-pdf";
+import { TildesSuma, CLAVES_TILDES, type Tildes } from "@/components/tildes-suma";
+import { esCatalogoSubido, normalizarEnlace } from "@/lib/catalogo";
 import type { Ciudad, Rubro } from "@/lib/types";
 import { precioFmt, MODALIDAD_LABEL, comoLlegarHref } from "@/lib/types";
 import { EditorHorario, recordarUltimoHorario } from "@/components/editor-horario";
@@ -2329,6 +2333,22 @@ function ModalEditar({
   // elige a propósito.
   const [principal, setPrincipal] = useState<string>(_rubroActual ?? _todosSusRubros[0] ?? "");
   const [prodObsHuman, setProdObsHuman] = useState(comercio.prod_obs_human ?? "");
+  // «Lo que suma» (spec docs/ficha-destacados.md). Se guarda sólo lo que cambió
+  // respecto de lo que trajo el comercio: así un dato viejo que el servidor ya no
+  // acepta no tumba el guardado de todo lo demás.
+  const tildesIniciales = useRef<Tildes>({
+    tiene_pasero: comercio.tiene_pasero === true,
+    envios_internacionales: comercio.envios_internacionales === true,
+    tiene_factura: comercio.tiene_factura === true,
+    talles_especiales: comercio.talles_especiales === true,
+  });
+  const [tildes, setTildes] = useState<Tildes>(tildesIniciales.current);
+  const [canalWa, setCanalWa] = useState(comercio.canal_wa_url ?? "");
+  const canalBase = useRef(comercio.canal_wa_url ?? "");
+  const [catalogoUrl, setCatalogoUrl] = useState(comercio.catalogo_url ?? "");
+  const catalogoBase = useRef(comercio.catalogo_url ?? "");
+  const [pedidoMinimo, setPedidoMinimo] = useState(comercio.pedido_minimo ?? "");
+  const pedidoBase = useRef(comercio.pedido_minimo ?? "");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
@@ -2388,11 +2408,58 @@ function ModalEditar({
     }
   }
 
+  /** El PDF del catálogo ya está (o ya no está) en el servidor: se refleja en lo
+   *  guardado Y en lo tipeado, para que no cuente como cambio sin guardar, y se
+   *  marca para refrescar la lista al cerrar. */
+  function catalogoCambio(url: string | null) {
+    const v = url ?? "";
+    catalogoBase.current = v;
+    setCatalogoUrl(v);
+    cambioEnServidor.current = true;
+  }
+
+  /** Lo de «Lo que suma» que cambió. `""` BORRA el dato. Devuelve el texto del
+   *  error si un enlace no es una dirección web (en la ficha el botón sólo sale
+   *  con http/https, así que no se guarda algo que después no se ve). */
+  function cambiosDeSuma(): { cambios: Record<string, unknown> } | { error: string; foco: string } {
+    const cambios: Record<string, unknown> = {};
+    const enlaces = [
+      { k: "canal_wa_url", nombre: "El canal", id: "adm-canal", valor: canalWa, base: canalBase.current },
+      // Con un PDF subido, el catálogo lo manejan los botones de subir y quitar.
+      ...(esCatalogoSubido(catalogoUrl) ? [] : [
+        { k: "catalogo_url", nombre: "El enlace del catálogo", id: "adm-catalogo", valor: catalogoUrl, base: catalogoBase.current },
+      ]),
+    ];
+    for (const e of enlaces) {
+      const v = e.valor.trim();
+      if (v === e.base.trim()) continue;
+      if (!v) { cambios[e.k] = ""; continue; }
+      const url = normalizarEnlace(v);
+      if (!url) return { error: `${e.nombre} tiene que ser un enlace web, como https://…`, foco: e.id };
+      cambios[e.k] = url;
+    }
+    if (pedidoMinimo.trim() !== pedidoBase.current.trim()) cambios.pedido_minimo = pedidoMinimo.trim();
+    for (const k of CLAVES_TILDES) {
+      if (tildes[k] !== tildesIniciales.current[k]) cambios[k] = tildes[k];
+    }
+    return { cambios };
+  }
+
   async function persistir(): Promise<boolean> {
+    const suma = cambiosDeSuma();
+    if ("error" in suma) {
+      setErr(suma.error);
+      // Si la sección estaba plegada, el campo no se puede enfocar: se abre primero.
+      const det = document.getElementById("adm-suma");
+      if (det instanceof HTMLDetailsElement) det.open = true;
+      document.getElementById(suma.foco)?.focus();
+      return false;
+    }
     setSaving(true);
     setErr("");
     try {
       await editarComercio(comercio.id, {
+        ...suma.cambios,
         prod_obs_human: prodObsHuman || undefined,
         // Con "sin cartel" no se manda nombre: lo arma la base. Mandarlo
         // apagaría el flag (el trigger entiende "escribieron un nombre").
@@ -2686,6 +2753,51 @@ function ModalEditar({
                 <input className="adm-input" style={{ gridColumn: "1 / -1" }} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (opcional)" />
               </div>
             </div>
+
+            {/* LO QUE SUMA: sale destacado en la ficha, cada uno si está cargado. Lo
+                mismo que ve el agente y el comerciante. Plegable para no alargar
+                más el modal; arranca abierto. Sin `comercios.editar` el fieldset lo
+                deshabilita entero (el PDF también: sus botones quedan inertes). */}
+            <details id="adm-suma" open style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "4px 12px" }}>
+              <summary style={{ cursor: "pointer", minHeight: 44, display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 600 }}>
+                <Ic n="destacado" s={15} /> Lo que suma
+              </summary>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingBottom: 12 }}>
+                <TildesSuma quien="admin" valor={tildes}
+                  onChange={(k, v) => { setTildes((p) => ({ ...p, [k]: v })); setErr(""); }} />
+                <div>
+                  <label htmlFor="adm-pedido" style={{ fontSize: 12, color: "var(--txt-3)" }}>Pedido mínimo</label>
+                  <input id="adm-pedido" className="adm-input" style={{ marginTop: 4 }} value={pedidoMinimo}
+                    onChange={(e) => setPedidoMinimo(e.target.value)} placeholder="Ej: 3 docenas, 200 Bs" />
+                </div>
+                <div>
+                  <label htmlFor="adm-canal" style={{ fontSize: 12, color: "var(--txt-3)" }}>Canal de WhatsApp del comercio</label>
+                  <input id="adm-canal" className="adm-input" style={{ marginTop: 4 }} inputMode="url" autoCapitalize="none"
+                    value={canalWa} onChange={(e) => setCanalWa(e.target.value)}
+                    placeholder="https://whatsapp.com/channel/..." />
+                  <div style={{ fontSize: 11.5, color: "var(--txt-3)", marginTop: 4 }}>El de él, donde publica sus ofertas. No el de URUKU. Vacío lo quita.</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: "var(--txt-3)", marginBottom: 6 }}>Catálogo</div>
+                  {/* El PDF se sube al elegirlo (como las fotos), no con «Guardar cambios». */}
+                  <CatalogoPdf url={catalogoUrl}
+                    subir={(file, onP) => adminSubirCatalogo(comercio.id, file, onP)}
+                    quitar={() => adminQuitarCatalogo(comercio.id)}
+                    onCambio={catalogoCambio} />
+                  {esCatalogoSubido(catalogoUrl) ? (
+                    <div style={{ fontSize: 11.5, color: "var(--txt-3)", marginTop: 6 }}>Para usar un enlace en vez del PDF, primero quitá el PDF.</div>
+                  ) : (
+                    <>
+                      <label htmlFor="adm-catalogo" style={{ display: "block", fontSize: 12, color: "var(--txt-3)", marginTop: 10 }}>O un enlace</label>
+                      <input id="adm-catalogo" className="adm-input" style={{ marginTop: 4 }} inputMode="url" autoCapitalize="none"
+                        value={catalogoUrl} onChange={(e) => setCatalogoUrl(e.target.value)}
+                        placeholder="Enlace a un PDF, Drive o su tienda" />
+                      <div style={{ fontSize: 11.5, color: "var(--txt-3)", marginTop: 4 }}>Vacío lo quita. El enlace se guarda con «Guardar cambios».</div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </details>
 
               {/* Al final y plegado: es una herramienta de clasificación por IA, no la
                   acción principal sobre las fotos. «Aplicar» actualiza el formulario

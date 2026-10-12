@@ -72,7 +72,9 @@ export function CatalogoPdf({ url, subir, quitar, onCambio }: {
     } finally { setQuitando(false); }
   }
 
-  const boton = { minHeight: 44 } as const;
+  // En un contenedor angosto (el modal del admin en el celular) el texto largo
+  // del botón se pasaba del borde: que baje de renglón en vez de cortarse.
+  const boton = { minHeight: 44, maxWidth: "100%", whiteSpace: "normal" } as const;
 
   return (
     <div style={{ display: "grid", gap: 8 }}>

@@ -55,6 +55,7 @@ TABLA_DE_TOPES: tuple[tuple[re.Pattern, int], ...] = tuple(
         # Catálogo
         (r"^/comercio/catalogo$", 8),
         (r"^/campo/mis-comercios/[^/]+/catalogo$", 8),
+        (r"^/admin/comercio/[^/]+/catalogo$", 8),
         # Webhook de WAHA / Meta
         (r"^/ingest/webhook$", 25),
         # Video promo
@@ -94,7 +95,7 @@ def tope_para(ruta: str) -> int:
 
 #: El catálogo tiene su propio mensaje: es lo que la pantalla le muestra a quien
 #: lo sube, y «el archivo es demasiado grande» no dice cuánto puede pesar.
-_RUTA_CATALOGO = re.compile(r"^/(comercio/catalogo|campo/mis-comercios/[^/]+/catalogo)$")
+_RUTA_CATALOGO = re.compile(r"^/(comercio/catalogo|campo/mis-comercios/[^/]+/catalogo|admin/comercio/[^/]+/catalogo)$")
 MENSAJE_CATALOGO = "El catálogo puede pesar hasta 8 MB."
 
 

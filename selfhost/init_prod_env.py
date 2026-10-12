@@ -46,6 +46,7 @@ def main() -> None:
 
     # Backend / WhatsApp
     backend_jwt = tok(32)
+    clave_pepper = tok(48)          # pepper del hash de las claves de Mi comercio (core/clave_comercio.py)
     waha_api = tok(24)
     webhook = tok(24)
     waha_dash_user = "uruku"
@@ -76,6 +77,7 @@ def main() -> None:
         f"SUPABASE_PUBLIC_URL=https://db.{dom}\n"
         f"SUPABASE_SERVICE_ROLE_KEY={service}\n"
         f"JWT_SECRET={backend_jwt}\n"
+        f"CLAVE_PEPPER={clave_pepper}\n"
         f"ADMIN_EMAIL=admin@{dom}\n"
         f"ADMIN_PASSWORD={admin_pw}\n"
         f"AGENTE_EMAIL=agente@{dom}\n"

@@ -64,7 +64,7 @@ function ClavesPorEntregar({ claves, onEntregada }: { claves: ClavePorEntregar[]
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
       {claves.map((c) => (
-        <ClaveUnaVez key={c.clave + c.nombre} compacta clave={c.clave} titulo={`Clave de ${c.nombre}`}
+        <ClaveUnaVez key={c.clave + c.nombre} compacta sinCopiar clave={c.clave} titulo={`Clave de ${c.nombre}`}
           aviso={`Se subió recién. ${AVISO_CLAVE_AGENTE}`} onListo={() => onEntregada(c.clave)} textoListo="Ya se la di al dueño" />
       ))}
     </div>
@@ -856,6 +856,12 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       // sin señal llega todo junto y el admin lo ve como si fuera de un solo
       // minuto. Si va a la cola, esta hora viaja con el registro.
       capturado_en: new Date().toISOString(),
+      // Un id por alta. Si la respuesta se pierde y el alta va a la cola, el
+      // reintento lleva el MISMO id y el servidor no crea un segundo comercio.
+      // (randomUUID no existe en celulares viejos ni fuera de https.)
+      alta_uid: typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`,
     };
     if (f.nombre.trim()) campos.nombre = f.nombre.trim();
     if (cel) campos.whatsapp = prefijo + cel;
@@ -965,7 +971,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
             después. El servidor sólo guarda el hash. */}
         {doneClave && (
           <div style={{ marginBottom: 12 }}>
-            <ClaveUnaVez compacta clave={doneClave} titulo="Clave del comercio" aviso={AVISO_CLAVE_AGENTE}
+            <ClaveUnaVez compacta sinCopiar clave={doneClave} titulo="Clave del comercio" aviso={AVISO_CLAVE_AGENTE}
               onListo={() => setDoneClave(null)} textoListo="Listo" />
           </div>
         )}

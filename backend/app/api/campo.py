@@ -124,6 +124,55 @@ def _subir_foto(slug: str, foto: UploadFile, data: bytes) -> tuple[str | None, s
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+_RE_ALTA_UID = re.compile(r"^[A-Za-z0-9_.:\-]{1,64}$")
+
+
+def _alta_uid_valido(valor: str | None) -> str | None:
+    """El `alta_uid` limpio, o None si no vino. 400 si es más largo que 64 o trae caracteres raros."""
+    if valor is None or not valor.strip():
+        return None
+    limpio = valor.strip()
+    if not _RE_ALTA_UID.match(limpio):
+        raise HTTPException(status_code=400, detail="alta_uid inválido (hasta 64 letras, números, guion, punto o dos puntos)")
+    return limpio
+
+
+def _es_alta_uid_repetido(exc: Exception) -> bool:
+    texto = str(exc)
+    return ("23505" in texto or "duplicate key" in texto.lower()) and "alta_uid" in texto
+
+
+def _clave_nueva_del_alta(repo: Repo, comercio: dict) -> str | None:
+    """Crea la cuenta si falta y genera la clave (la anterior, si había, queda invalidada).
+    None si no se pudo: el dueño entra por «me olvidé» con su WhatsApp."""
+    try:
+        cuenta = repo.asegurar_comercio_usuario(comercio["id"])
+        return nueva_clave_comercio(repo, comercio["id"], cuenta)
+    except Exception:  # noqa: BLE001
+        logger.warning("campo.alta_sin_cuenta", comercio=comercio["id"], exc_info=True)
+        return None
+
+
+def _alta_repetida(repo: Repo, previo: dict, response: Response | None, con_video: bool, agente: dict) -> dict:
+    """El reintento de un alta ya cargada: no se crea nada, se devuelve el comercio y una
+    clave NUEVA (la del primer intento queda invalidada)."""
+    if previo.get("activo") is False:
+        raise HTTPException(status_code=409, detail="Ese alta ya se cargó y el comercio fue dado de baja. Avisale al equipo.")
+    clave = _clave_nueva_del_alta(repo, previo)
+    try:
+        rubros = len(repo.get_comercio_rubros(previo["id"]))
+    except Exception:  # noqa: BLE001
+        rubros = 0
+    logger.info("campo.alta_repetida", comercio=previo.get("slug"), cargado_por=agente.get("email"))
+    if response is not None:
+        response.headers["Cache-Control"] = "no-store"
+    return {"ok": True, "repetida": True,
+            "comercio": {"id": previo["id"], "nombre": previo.get("nombre"), "slug": previo.get("slug"),
+                         "ciudad": None, "rubros": rubros, "foto": bool(previo.get("portada_url")),
+                         "gps": previo.get("lat") is not None, "video": con_video},
+            "clave": clave, "clave_inicial": clave}
+
+
 @router.post("/campo/comercio")
 async def alta_campo(
     request: Request,
@@ -157,6 +206,12 @@ async def alta_campo(
     # Hora del celular al tocar «Guardar» (ISO 8601). Lo cargado sin señal llega
     # horas después: sin esto, «cuándo cargó» sería «cuándo volvió la señal».
     capturado_en: str | None = Form(None),
+    # Identificador del alta, generado en el celular al tocar «Guardar» (≤ 64 caracteres).
+    # La cola offline reintenta el mismo POST si se corta la señal a mitad; sin esto, un
+    # reintento duplicaba el comercio. Con el mismo `alta_uid` del mismo agente no se
+    # crea otro: se devuelve el que ya está, con una clave NUEVA (la del primer intento,
+    # que el agente nunca llegó a ver, queda invalidada).
+    alta_uid: str | None = Form(None),
     foto: UploadFile | None = File(None),
     response: Response = None,
     agente: dict = Depends(auth.require_agente),
@@ -189,6 +244,12 @@ async def alta_campo(
                                "instagram_url": instagram_url, "sitio_web": sitio_web})
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    # ¿Es el reintento de un alta que ya se cargó? Se mira ANTES de subir la foto.
+    alta_uid = _alta_uid_valido(alta_uid)
+    if alta_uid:
+        previo = repo.get_comercio_por_alta_uid(agente["email"], alta_uid)
+        if previo:
+            return _alta_repetida(repo, previo, response, bool(video_url and video_url.strip()), agente)
     # Alta mínima: solo la ubicación es obligatoria; whatsapp/teléfono/descripción/foto opcionales.
     # La ciudad la deciden las COORDENADAS, no el selector: un comercio está
     # donde está, y así nadie carga treinta locales en la ciudad equivocada
@@ -276,9 +337,17 @@ async def alta_campo(
     }
     if capturado_dt:
         fila["capturado_en"] = capturado_dt.isoformat()
+    if alta_uid:
+        fila["alta_uid"] = alta_uid
     try:
         comercio = repo.crear_comercio(fila)
     except Exception as exc:  # noqa: BLE001
+        # Dos reintentos del mismo alta en paralelo: el índice único (cargado_por, alta_uid)
+        # frena al segundo. El comercio ya está: se devuelve ése.
+        if alta_uid and _es_alta_uid_repetido(exc):
+            previo = repo.get_comercio_por_alta_uid(agente["email"], alta_uid)
+            if previo:
+                return _alta_repetida(repo, previo, response, bool(video_url and video_url.strip()), agente)
         # El celular manda la hora SIEMPRE (también lo que ya estaba en cola).
         # Si el backend sube antes que la 0138, o PostgREST no recargó el
         # esquema, el insert falla por la columna que no conoce, y sin esto
@@ -305,12 +374,7 @@ async def alta_campo(
     # volante ni en un WhatsApp, ni a un log. Se genera DESPUÉS de los rubros: en
     # un local sin cartel el prefijo sale de lo que vende. Si no se pudo crear la
     # cuenta, no hay clave que dar (`None`): entra por «me olvidé» con el WhatsApp.
-    clave = None
-    try:
-        cuenta = repo.asegurar_comercio_usuario(comercio["id"])
-        clave = nueva_clave_comercio(repo, comercio["id"], cuenta)
-    except Exception:  # noqa: BLE001
-        logger.warning("campo.alta_sin_cuenta", comercio=comercio["id"], exc_info=True)
+    clave = _clave_nueva_del_alta(repo, comercio)
 
     # video (link TikTok) opcional → publicación pendiente tipo video
     vurl = _none(video_url)

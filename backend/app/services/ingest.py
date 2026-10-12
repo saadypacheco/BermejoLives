@@ -21,7 +21,7 @@ import structlog
 
 from app.core.config import settings
 from app.db.repository import Repo, get_repo
-from app.services import difusion, planes
+from app.services import clave_filtrada, difusion, planes
 from app.models.whatsapp import WahaEvent, WahaMessagePayload
 
 logger = structlog.get_logger()
@@ -386,7 +386,6 @@ def _publicar_del_explorador(payload, event, repo: Repo) -> dict:
         "codigo_recibido": codigo,
         "identidad_origen": "explorador",
         "wa_message_id": payload.id,
-        "raw": event.payload,
     }
     creada = repo.insert_publicacion(row)
     # El tope de guardadas rige también para lo que sube URUKU: el disco es el
@@ -400,6 +399,35 @@ def _publicar_del_explorador(payload, event, repo: Repo) -> dict:
                          comercio["id"])
     return {"captured": True, "comercio": slug, "origen": "explorador",
             "estado": "pendiente", "codigo": codigo}
+
+
+def _atender_clave_filtrada(payload, event, repo: Repo, filtrada: dict) -> dict:
+    """El comerciante mandó su clave: no se publica, se guarda tapada y se anula.
+
+    El texto y el crudo se guardan con `[clave]` donde estaba (la clave nunca se escribe en
+    ningún lado), la cuenta pierde la clave y las sesiones abiertas con ella, y el motivo
+    queda en la bandeja para que el admin le avise y le genere otra."""
+    secretos = filtrada["secretos"]
+    cuentas = filtrada["cuentas"]
+    inserted = repo.insert_wa_inbox({
+        "wa_message_id": payload.id,
+        "wa_jid": payload.from_ or "",
+        "phone": payload.phone,
+        "tipo": payload.type,
+        "body": clave_filtrada.enmascarar(payload.body, secretos),
+        "media_url": payload.media_url,
+        "raw": clave_filtrada.enmascarar(event.payload, secretos),
+        "via": "cloud" if (event.session or "").lower() == "cloud" else "waha",
+    })
+    if not inserted and not repo.wa_inbox_sin_procesar(payload.id):
+        logger.info("ingest.duplicado", wa_message_id=payload.id)
+        return {"captured": True, "duplicate": True}
+    clave_filtrada.anular(repo, cuentas)
+    # Ni la clave ni el número a un log: sólo qué pasó y a qué comercios.
+    logger.warning("ingest.clave_por_whatsapp", comercios=[c["comercio_id"] for c in cuentas],
+                   en_grupo=bool(payload.es_grupo))
+    repo.marcar_wa_inbox(payload.id, "sin_permiso", clave_filtrada.MOTIVO, cuentas[0]["comercio_id"])
+    return {"captured": True, "publicada": False, "clave_anulada": True, "motivo": clave_filtrada.MOTIVO}
 
 
 def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
@@ -431,6 +459,13 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     match_confirmacion = _RE_CONFIRMAR.match(payload.body or "")
     if match_confirmacion:
         return _handle_confirmacion(payload, match_confirmacion.group(1), repo)
+
+    # 0) ¿Mandó su CLAVE de Mi comercio por WhatsApp? Una clave que se vio en un chat o en
+    #    un grupo ya no es secreta: se anula y el mensaje se guarda con la clave tapada.
+    #    Va ANTES de la bandeja para que la clave no se escriba nunca, ni en `body` ni en el crudo.
+    filtrada = clave_filtrada.detectar(repo, payload.phone, payload.body)
+    if filtrada:
+        return _atender_clave_filtrada(payload, event, repo, filtrada)
 
     # 1) Bitácora cruda (idempotente)
     inserted_inbox = repo.insert_wa_inbox(
@@ -651,7 +686,6 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         "codigo_recibido": codigo_recibido,
         "identidad_origen": identidad_origen,
         "wa_message_id": payload.id,
-        "raw": event.payload,
     }
     # LA FOTO Y EL PRECIO LLEGAN EN DOS MENSAJES.
     #

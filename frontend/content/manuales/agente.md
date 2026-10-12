@@ -140,7 +140,7 @@ Si hay más de 50, aparece **«Ver más (N restantes)»**.
 
 Es lo que el dueño necesita para entrar a «Mi comercio» desde el celular, junto con su celular. La genera URUKU sola y tiene la forma `NOMBRE-XXXXXX` (por ejemplo, `BOUTIQUE-K7M2P9`).
 
-**Al dar de alta un comercio nuevo**, la app te muestra «Clave del comercio» UNA sola vez. **Anotala y entregásela al dueño en un papel aparte**: no la pongas en el volante ni la mandes por WhatsApp. Podés tocar **«Copiar»** para pasarla; cuando ya la anotaste, tocá **«Listo»**.
+**Al dar de alta un comercio nuevo**, la app te muestra «Clave del comercio» UNA sola vez. **Anotala y entregásela al dueño en un papel aparte**: no la pongas en el volante ni la mandes por WhatsApp. Anotala a mano (la app no la copia, para que no quede en el celular); cuando ya la anotaste, tocá **«Listo»**.
 
 **No pases al próximo comercio sin habérsela entregado.** La clave se pierde al tocar «Listo», «Ya se la di al dueño», «Cargar otro comercio», «Otro puesto en…» o «Ver mis comercios cargados», y también al cerrar o recargar la app.
 

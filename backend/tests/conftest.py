@@ -25,6 +25,15 @@ def _reset_rate_limit():
 
 
 @pytest.fixture(autouse=True)
+def _sin_pepper(monkeypatch):
+    """CLAVE_PEPPER vacío por defecto: lo que valga en el .env de quien corre los tests no puede
+    cambiar el formato de los hashes. Los tests del pepper lo ponen a propósito."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "clave_pepper", "")
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _sin_pausa_de_difusion(monkeypatch):
     """La difusión pausa 20 segundos entre envíos para no parecer una ráfaga a
     WhatsApp. En los tests eso son minutos de suite dormida: la pausa se prueba
@@ -63,6 +72,8 @@ class FakeRepo:
         self.correcciones_rubro: list[dict] = []
         self.sinonimos_manuales: set[str] = set()
         self.usuarios: dict[str, dict] = {}          # email -> row
+        self.comercio_eventos: list[dict] = []       # tabla `comercio_eventos` (0149): auditoría de la cuenta
+        self.falla_auditoria = False                 # para probar que sin auditoría no se cambia la clave
         self.compradores: dict[str, dict] = {}       # id -> row (usuarios/favoritos: comprador, no comercio)
         self.clave_fallos: list[dict] = []           # tabla `clave_fallos` (0137): un intento de ingreso por fila
         self.favoritos: list[dict] = []               # {usuario_id, comercio_id}
@@ -915,19 +926,46 @@ class FakeRepo:
         return cuentas[0] if cuentas else None
 
     def set_clave_comercio(self, user_id, clave_hash):
+        """Como `rotar_credenciales_comercio` (0149): guarda el hash y SUBE la versión."""
         for u in self.usuarios.values():
             if u["id"] == user_id:
                 u["clave_hash"] = clave_hash
+                u["credenciales_version"] = int(u.get("credenciales_version") or 0) + 1
+                return u["credenciales_version"]
+        return 0
+
+    def rehash_clave_comercio(self, user_id, clave_hash):
+        for u in self.usuarios.values():
+            if u["id"] == user_id:
+                u["clave_hash"] = clave_hash          # la misma clave con otro hash: NO sube la versión
 
     def anular_clave_comercio(self, user_ids):
         for u in self.usuarios.values():
             if u["id"] in user_ids:
                 u["clave_hash"] = None
+                u["credenciales_version"] = int(u.get("credenciales_version") or 0) + 1
 
     def anular_claves_de_comercio(self, comercio_id):
         for u in self.usuarios.values():
             if u.get("comercio_id") == comercio_id:
                 u["clave_hash"] = None
+                u["credenciales_version"] = int(u.get("credenciales_version") or 0) + 1
+
+    def get_cuenta_comercio(self, comercio_id, cuenta_id=None):
+        for u in self.usuarios.values():
+            if u.get("comercio_id") == comercio_id and u.get("activo", True)                     and (cuenta_id is None or u["id"] == cuenta_id):
+                return {"id": u["id"], "comercio_id": comercio_id,
+                        "credenciales_version": int(u.get("credenciales_version") or 0)}
+        return None
+
+    def registrar_evento_comercio(self, comercio_id, tipo, actor):
+        if self.falla_auditoria:
+            raise RuntimeError("no se pudo escribir comercio_eventos")
+        self.comercio_eventos.append({"comercio_id": comercio_id, "tipo": tipo, "actor": actor})
+
+    def get_comercio_por_alta_uid(self, cargado_por, alta_uid):
+        return next((c for c in self.comercios.values()
+                     if c.get("cargado_por") == cargado_por and c.get("alta_uid") == alta_uid), None)
 
     def get_solicitud_cambio_numero(self, solicitud_id):
         return self.solicitudes_numero.get(solicitud_id)
@@ -996,6 +1034,9 @@ class FakeRepo:
                 u["reset_code"] = u["reset_code_expira"] = None
 
     def crear_comercio(self, row):
+        if row.get("alta_uid") and self.get_comercio_por_alta_uid(row.get("cargado_por"), row["alta_uid"]):
+            # El índice único parcial (cargado_por, alta_uid) de la 0149.
+            raise RuntimeError('duplicate key value violates unique constraint "idx_comercios_alta_uid" (23505)')
         cid = self._id("com")
         full = {"id": cid, **row}
         if full.get("activo") is False and not full.get("baja_motivo"):
