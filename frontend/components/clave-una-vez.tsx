@@ -4,11 +4,11 @@ import { useState } from "react";
 import { Ic } from "@/components/ic";
 
 /**
- * La clave de 6 números, mostrada UNA vez. El servidor guarda sólo el hash: si
+ * La clave (`NOMBRE-XXXXXX`, ej. `BOUTIQUE-K7M2P9`), mostrada UNA vez. El servidor guarda sólo el hash: si
  * se cierra esto sin anotarla, la única salida es generar otra. Lo usan los tres
  * lugares donde el backend la entrega: entrar por WhatsApp (`clave_nueva`),
  * «Generar clave nueva» en Mi comercio (`clave`) y el alta de campo
- * (`clave_inicial`).
+ * (`clave`).
  *
  * Sin `onListo` no hay botón de seguir: la usa la app del agente, donde la
  * tarjeta queda a la vista hasta que se pasa al próximo comercio.
@@ -38,16 +38,19 @@ export function ClaveUnaVez({ clave, titulo = "Tu clave para entrar", aviso, onL
       <div style={{ fontSize: 12, color: "var(--txt-3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em" }}>
         <Ic n="seguridad" s={14} /> {titulo}
       </div>
-      <div aria-label={`Clave ${clave.split("").join(" ")}`}
-        style={{ fontSize: compacta ? 34 : 44, fontWeight: 800, letterSpacing: ".18em", color: "var(--neon)", fontFamily: "monospace", userSelect: "all" }}>
+      {/* 15 caracteres con guion: el tamaño se achica con el ancho para que entre
+          en una línea en el celular, y si no entra corta en el guion, no en medio. */}
+      <div aria-label={`Clave ${clave.split("").map((c) => (c === "-" ? "guion" : c)).join(" ")}`}
+        style={{ fontSize: compacta ? "clamp(20px, 7vw, 30px)" : "clamp(24px, 8vw, 40px)", fontWeight: 800, letterSpacing: ".06em",
+          color: "var(--neon)", fontFamily: "monospace", userSelect: "all", overflowWrap: "anywhere" }}>
         {clave}
       </div>
       <p style={{ color: "var(--txt-2)", fontSize: compacta ? 12 : 14, margin: 0, lineHeight: 1.4 }}>
         {aviso ?? "Guardala: no se vuelve a mostrar. Con tu celular y esta clave entrás sin esperar el WhatsApp."}
       </p>
-      <button type="button" className="btn" onClick={copiar}
+      <button type="button" className="btn" onClick={copiar} aria-label="Copiar la clave"
         style={{ border: "1px solid var(--stroke)", padding: compacta ? "7px 12px" : undefined, fontSize: compacta ? 13 : undefined }}>
-        {copiada ? <><Ic n="listo" s={15} /> Clave copiada</> : "Copiar clave"}
+        {copiada ? <><Ic n="listo" s={15} /> Copiada</> : "Copiar"}
       </button>
       {noCopio && <span role="status" style={{ color: "var(--amber)", fontSize: 12.5 }}>No se pudo copiar: anotala tal como está en pantalla.</span>}
       {onListo && (

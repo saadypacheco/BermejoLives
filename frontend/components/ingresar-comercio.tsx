@@ -10,12 +10,13 @@ import {
   VariosNegocios, ClaveAnulada,
   type ComercioSession, type NegocioDelNumero,
 } from "@/lib/comercio";
-import { CONFIRMACION_VENCE_MS, LARGO_CLAVE, POLL_MS, mensajeDeError, soloClave } from "@/lib/acceso";
+import { CONFIRMACION_VENCE_MS, MAX_CLAVE_COMERCIO, POLL_MS, claveComercioPlausible, limpiarClaveComercio, mensajeDeError } from "@/lib/acceso";
 
 /**
  * Ingreso del comerciante, compartido por /mi-comercio y /autoregistro.
  *
- * 1. Lo normal es celular + clave de 6 números: no depende de WhatsApp.
+ * 1. Lo normal es celular + clave (`NOMBRE-XXXXXX`, o una de 6 números de las
+ *    viejas): no depende de WhatsApp.
  * 2. «Primera vez o te olvidaste la clave»: confirma con su WhatsApp (mandando
  *    él un mensaje). Si el negocio no tenía clave, ahí se le muestra, una vez.
  * 3. Email y contraseña queda, discreto, para las cuentas viejas que lo tienen.
@@ -69,6 +70,7 @@ function IngresarConClave({ whatsapp, setWhatsapp, onPrimeraVez, onUsarEmail, on
   onPrimeraVez: () => void; onUsarEmail: () => void; onLogged: (s: ComercioSession) => void;
 }) {
   const [clave, setClave] = useState("");
+  const [verClave, setVerClave] = useState(false);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   // La clave se anuló por seguridad: probar otra no sirve, sólo el WhatsApp.
@@ -77,7 +79,7 @@ function IngresarConClave({ whatsapp, setWhatsapp, onPrimeraVez, onUsarEmail, on
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!whatsapp.trim()) { setErr("Ingresá tu celular."); return; }
-    if (clave.length !== LARGO_CLAVE) { setErr(`La clave tiene ${LARGO_CLAVE} números.`); return; }
+    if (!claveComercioPlausible(clave)) { setErr("Escribí tu clave completa. Ej.: BOUTIQUE-K7M2P9."); return; }
     setErr(""); setAnulada(false); setLoading(true);
     try { onLogged(await comercioIngresar(whatsapp.trim(), clave)); }
     // 401 («Celular o clave incorrectos»), 401 de clave anulada y 429
@@ -94,9 +96,18 @@ function IngresarConClave({ whatsapp, setWhatsapp, onPrimeraVez, onUsarEmail, on
     <form onSubmit={submit} className="glass" style={tarjeta}>
       <h2 style={{ fontSize: 18, margin: 0 }}>Entrá con tu celular y tu clave</h2>
       <CampoCelular valor={whatsapp} onChange={setWhatsapp} idAyuda="cel-clave-negocio" />
-      <input className="adm-input" type="password" value={clave} onChange={(e) => setClave(soloClave(e.target.value))}
-        placeholder={`Tu clave de ${LARGO_CLAVE} números`} inputMode="numeric" pattern="[0-9]*" maxLength={LARGO_CLAVE}
-        autoComplete="current-password" aria-label={`Tu clave de ${LARGO_CLAVE} números`} />
+      <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+        <input className="adm-input" type={verClave ? "text" : "password"} value={clave}
+          onChange={(e) => setClave(limpiarClaveComercio(e.target.value))}
+          placeholder="Tu clave" maxLength={MAX_CLAVE_COMERCIO} style={{ flex: 1, minWidth: 0 }}
+          autoCapitalize="characters" autoCorrect="off" spellCheck={false}
+          autoComplete="current-password" aria-label="Tu clave" aria-describedby="ayuda-clave-negocio" />
+        <button type="button" className="btn btn-sm" onClick={() => setVerClave((v) => !v)} aria-pressed={verClave}
+          style={{ border: "1px solid var(--stroke)" }}>{verClave ? "Ocultar" : "Mostrar"}</button>
+      </div>
+      <span id="ayuda-clave-negocio" style={{ color: "var(--txt-3)", fontSize: 12.5 }}>
+        Ej.: BOUTIQUE-K7M2P9 (o tu clave de 6 números)
+      </span>
       {err && <span role="alert" style={{ color: "var(--pink)", fontSize: 13 }}><Ic n="aviso" s={14} /> {err}</span>}
       {anulada && (
         <button type="button" className="btn btn-primary" onClick={onPrimeraVez}>

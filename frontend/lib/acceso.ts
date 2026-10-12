@@ -15,6 +15,25 @@ export function soloClave(texto: string): string {
   return texto.replace(/\D/g, "").slice(0, LARGO_CLAVE);
 }
 
+/**
+ * La clave del COMERCIO (distinta de la del comprador, que sigue siendo de 6
+ * números): `NOMBRE-XXXXXX` (ej. `BOUTIQUE-K7M2P9`) o una clave vieja de 6
+ * números. El servidor normaliza (mayúsculas, sin espacios ni guiones) y acepta
+ * hasta 24 caracteres; acá sólo se descarta lo que no puede ser parte de una.
+ */
+export const MAX_CLAVE_COMERCIO = 24;
+export const MIN_CLAVE_COMERCIO = 6;
+
+/** Deja letras, números, guion y espacio (sin tildes ni símbolos), en mayúsculas. */
+export function limpiarClaveComercio(texto: string): string {
+  return texto.replace(/[^A-Za-z0-9 -]/g, "").toUpperCase().slice(0, MAX_CLAVE_COMERCIO);
+}
+
+/** ¿Tiene pinta de clave? Normaliza como el servidor y pide al menos 6 caracteres. */
+export function claveComercioPlausible(texto: string): boolean {
+  return texto.replace(/[\s-]/g, "").length >= MIN_CLAVE_COMERCIO;
+}
+
 /** Lo que dijo el backend (`detail`), tal cual; si no dijo nada, el texto de respaldo. */
 export async function detalleDeError(res: Response, respaldo: string): Promise<string> {
   const d: unknown = await res.json().catch(() => null);

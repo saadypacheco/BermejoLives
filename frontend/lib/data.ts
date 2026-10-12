@@ -38,7 +38,7 @@ export const COLUMNAS_COMERCIO = [
   "whatsapp", "telefono", "email", "tiktok_url", "facebook_url", "instagram_url", "sitio_web",
   "canal_wa_url", "catalogo_url", "zona_id", "direccion", "calle", "lat", "lng", "como_llegar",
   "plan", "verificado", "rating", "destacado", "activo", "suspendido", "confiable", "fuente",
-  "created_at", "updated_at", "modalidad", "rubro_id", "ciudad_id", "lugar_id", "puesto", "codigo",
+  "created_at", "updated_at", "modalidad", "rubro_id", "ciudad_id", "lugar_id", "puesto",
   "monedas_aceptadas", "envios_internacionales", "origen_importacion", "pedido_minimo", "tiene_factura",
   "horario", "horario_estimado", "tiene_stock", "acepta_reservas", "tiene_pasero", "talles_especiales",
   "prod_obs_human", "prod_det_ia", "subcategoria", "contacto_ok", "contacto_no", "sin_cartel",

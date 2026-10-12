@@ -53,6 +53,7 @@ import { ContactosPanel } from "@/components/contactos-panel";
 import { EquipoPanel } from "@/components/equipo-panel";
 import { ManualesPanel } from "@/components/admin/manuales-panel";
 import { puedo } from "@/lib/api";
+import { GenerarClaveComercio } from "@/components/admin/generar-clave";
 import { RubroRecalcular } from "@/components/rubro-recalcular";
 import { CatalogoPanel } from "@/components/catalogo-panel";
 import { ImageLightbox } from "@/components/image-lightbox";
@@ -2588,6 +2589,10 @@ function ModalEditar({
             </label>
             </fieldset>
 
+            {/* La clave de acceso del comercio: sólo con `comercios.cuenta`. Va FUERA
+                del fieldset (que se desactiva sin `comercios.editar`): no edita la ficha. */}
+            {puedeCuenta && <GenerarClaveComercio comercioId={comercio.id} nombre={comercio.nombre} />}
+
             {/* La galería va FUERA del fieldset: subir y borrar fotos usa el permiso de
                 moderar, no el de editar, y tiene que andar también en sólo lectura. */}
             <FotosComercio
@@ -3023,7 +3028,8 @@ function FotosComercio({ comercioId, portada, puedeEditar, onPortada }: {
   const [fotos, setFotos] = useState<FotoComercio[] | null>(null);
   const [errLista, setErrLista] = useState("");
   const [ampliada, setAmpliada] = useState<string | null>(null);
-  const [subiendo, setSubiendo] = useState(false);
+  // «3 de 8» mientras sube varias; null = no está subiendo.
+  const [subiendo, setSubiendo] = useState<{ n: number; de: number } | null>(null);
   const [cambiando, setCambiando] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const input = useRef<HTMLInputElement>(null);
@@ -3038,25 +3044,40 @@ function FotosComercio({ comercioId, portada, puedeEditar, onPortada }: {
   // vieja (no paga extras por el comercio).
   const [tope, setTope] = useState<{ datos: TopeFotos; file: File } | null>(null);
 
-  async function subir(file: File | undefined, reemplazar?: string) {
-    if (!file) return;
-    setErr(""); setSubiendo(true);
+  /** Sube una o varias, de a una (como la galería del agente y del comercio).
+   *  Si una choca con el tope del plan, frena ahí: se abre el diálogo para esa
+   *  foto y se avisa cuántas quedaron sin subir. */
+  async function subir(files: File[], reemplazar?: string) {
+    if (files.length === 0) return;
+    setErr("");
+    let subidas = 0;
     try {
-      const nueva = await adminSubirFoto(comercioId, file, reemplazar ? { reemplazar } : undefined);
-      setFotos((prev) => [...(prev ?? []).filter((f) => f.id !== reemplazar), nueva]);
-      setTope(null);
-    } catch (e) {
-      const t = datosTope(e);
-      if (t) setTope({ datos: t, file });
-      else setErr(mensajeDeError(e, "No se pudo subir la foto"));
-    }
-    finally { setSubiendo(false); if (input.current) input.current.value = ""; }
+      for (const file of files) {
+        setSubiendo({ n: subidas + 1, de: files.length });
+        try {
+          const nueva = await adminSubirFoto(comercioId, file, reemplazar ? { reemplazar } : undefined);
+          setFotos((prev) => [...(prev ?? []).filter((f) => f.id !== reemplazar), nueva]);
+          setTope(null);
+          subidas++;
+        } catch (e) {
+          const t = datosTope(e);
+          const resto = files.length - subidas - 1;
+          if (t) {
+            setTope({ datos: t, file });
+            if (resto > 0) setErr(`Llegó al tope del plan: ${resto} foto${resto === 1 ? "" : "s"} más quedaron sin subir.`);
+          } else {
+            setErr(mensajeDeError(e, "No se pudo subir la foto") + (resto > 0 ? ` · ${resto} sin subir` : ""));
+          }
+          return;
+        }
+      }
+    } finally { setSubiendo(null); if (input.current) input.current.value = ""; }
   }
 
   function decidirTope(d: DecisionTope | null) {
     const t = tope;
     setTope(null);
-    if (d === "reemplazar" && t?.datos.mas_vieja) subir(t.file, t.datos.mas_vieja.id);
+    if (d === "reemplazar" && t?.datos.mas_vieja) subir([t.file], t.datos.mas_vieja.id);
   }
 
   async function borrar(id: string) {
@@ -3134,11 +3155,11 @@ function FotosComercio({ comercioId, portada, puedeEditar, onPortada }: {
         </div>
       )}
 
-      <input ref={input} type="file" accept="image/*" style={{ display: "none" }}
-        onChange={(e) => subir(e.target.files?.[0])} />
+      <input ref={input} type="file" accept="image/*" multiple style={{ display: "none" }}
+        onChange={(e) => subir(Array.from(e.target.files ?? []))} />
       <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 8, minHeight: 44 }}
-        disabled={subiendo} onClick={() => input.current?.click()}>
-        {subiendo ? "Subiendo…" : "+ Agregar foto"}
+        disabled={!!subiendo} onClick={() => input.current?.click()}>
+        {subiendo ? (subiendo.de > 1 ? `Subiendo ${subiendo.n} de ${subiendo.de}…` : "Subiendo…") : "+ Agregar fotos"}
       </button>
       {err && <div role="alert" style={{ color: "var(--pink)", marginTop: 6 }}><Ic n="aviso" s={13} /> {err}</div>}
       {tope && <TopeFotosDialogo tope={tope.datos} puedePagarExtra={false} onElegir={decidirTope} />}

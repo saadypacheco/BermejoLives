@@ -34,7 +34,7 @@ export const dynamic = "force-dynamic";
  *    que los clientes lo abran.
  * 2. Como PDF, mandado al grupo de WhatsApp del local apenas se lo da de alta
  *    (Ctrl+P → Guardar como PDF, desde el admin). Queda fijado en el grupo,
- *    y el comerciante tiene ahí su QR, su código y cómo publicar, sin tener
+ *    y el comerciante tiene ahí su QR y cómo publicar, sin tener
  *    que acordarse de nada.
  *
  * Por eso el pie ya no lleva un número de teléfono: las ofertas se mandan al
@@ -49,10 +49,6 @@ export default async function VolantePage({ params }: { params: { slug: string }
     return <div style={{ padding: 40 }}>No encontramos ese comercio.</div>;
   }
 
-  // `codigo` viaja en la fila pero el tipo público no lo declara: es un dato de
-  // gestión, no de la ficha. Se lee con un cast acotado en vez de ensanchar el
-  // tipo, que lo haría aparecer en el autocompletado de todo el sitio.
-  const codigo = (comercio as { codigo?: string | null }).codigo ?? null;
   const url = `https://uruku.bo/comercios/${comercio.slug}`;
   const ciudadNombre = await nombreCiudadDe(comercio.ciudad_id);
   // Negro sobre blanco y margen 1: un QR impreso con poco contraste o sin borde
@@ -102,9 +98,9 @@ export default async function VolantePage({ params }: { params: { slug: string }
           </span>
         </div>
 
-        {codigo && (
-          <p className="vol-cod">Código de su local: <b>URUKU-{codigo}</b> · <a href={`/volante/${comercio.slug}/mesa`}>tarjeta de mesa</a></p>
-        )}
+        {/* El código URUKU-XXXX ya no se imprime: es un dato de gestión que
+            sólo ve el admin. Queda el atajo a la tarjeta de mesa (no se imprime). */}
+        <p className="vol-cod"><a href={`/volante/${comercio.slug}/mesa`}>Tarjeta de mesa</a></p>
         {/* El contacto de URUKU para el comerciante: el Anfitrión y el correo
             de comercios. Es lo que se le da en la mano; sin esto, la duda
             del jueves no tiene a quién ir. */}

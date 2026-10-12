@@ -100,8 +100,9 @@ Desde el **Samsung**:
 
 1. Grupo nuevo: `URUKU · <nombre del local>`.
 2. Agregar al comerciante y al **64610187** (la tablet).
-3. Mandar adentro **`URUKU-XXXX`** — el código del local. Está en su ficha del
-   admin y en el volante.
+3. Mandar adentro **`URUKU-XXXX`** — el código del local, **desde el número de
+   URUKU**. Está sólo en su ficha del admin: desde el 12/10 no se imprime ni
+   se le muestra al comerciante (`docs/clave-automatica.md`).
 
 La tablet lo ve y ata el grupo al comercio. Desde ahí, todo lo que mande el
 comerciante en ese grupo entra como oferta. En Admin › Negocios, la ficha del
@@ -110,7 +111,7 @@ comercio muestra el grupo atado.
 4. **Mandar el volante al grupo y fijarlo.** En el admin, el botón 🖨 del
    comercio abre `uruku.bo/volante/<slug>`; Ctrl+P → *Guardar como PDF* y
    ese PDF va al grupo (mantener apretado → *Fijar*). Es el mismo volante
-   que se deja impreso en el mostrador: tiene su QR, su código y dice que
+   que se deja impreso en el mostrador: tiene su QR (ya no el código) y dice que
    las ofertas se mandan a ese grupo — así el comerciante no tiene que
    acordarse de nada. Y no lleva ningún teléfono nuestro: si cambia el
    número que atiende, no hay cien papeles impresos que digan otra cosa.

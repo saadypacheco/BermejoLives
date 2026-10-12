@@ -136,15 +136,17 @@ Si hay más de 50, aparece **«Ver más (N restantes)»**.
 
 ---
 
-## La clave de 6 números
+## La clave del comercio
 
-Es lo que el dueño necesita para entrar a «Mi comercio» desde el celular. URUKU la genera.
+Es lo que el dueño necesita para entrar a «Mi comercio» desde el celular, junto con su celular. La genera URUKU sola y tiene la forma `NOMBRE-XXXXXX` (por ejemplo, `BOUTIQUE-K7M2P9`).
 
-**Al dar de alta un comercio nuevo**, la app te la muestra UNA sola vez. **Dásela en mano al dueño** — **nunca escrita**, ni en el volante, ni por WhatsApp. Que la anote él en su celular si quiere.
+**Al dar de alta un comercio nuevo**, la app te muestra «Clave del comercio» UNA sola vez. **Anotala y entregásela al dueño en un papel aparte**: no la pongas en el volante ni la mandes por WhatsApp. Podés tocar **«Copiar»** para pasarla; cuando ya la anotaste, tocá **«Listo»**.
 
-**No pases al próximo comercio sin habérsela dado.** La clave se pierde al tocar «Ya se la di al dueño», «Cargar otro comercio», «Otro puesto en…» o «Ver mis comercios cargados», y también al cerrar o recargar la app.
+**No pases al próximo comercio sin habérsela entregado.** La clave se pierde al tocar «Listo», «Ya se la di al dueño», «Cargar otro comercio», «Otro puesto en…» o «Ver mis comercios cargados», y también al cerrar o recargar la app.
 
-Si el dueño no tiene la clave, vos no podés generarla. Que entre a Mi comercio, toque **«¿Primera vez o te olvidaste la clave? Entrá con tu WhatsApp»** y confirme por WhatsApp: ahí le aparece una nueva.
+Si el dueño no tiene la clave, vos no podés generarla. Que entre a Mi comercio, toque **«¿Primera vez o te olvidaste la clave? Entrá con tu WhatsApp»** y confirme por WhatsApp: ahí le aparece una nueva. O pedísela al admin, que puede generar una nueva.
+
+El código `URUKU-XXXX` del comercio ya no se le muestra al agente ni al dueño: lo maneja el admin.
 
 ---
 
@@ -207,7 +209,7 @@ Un comercio bien cargado lleva entre 4 y 6 minutos.
 
 Si se corta la señal, el comercio que estés cargando se guarda en el celular. Cuando vuelva internet, se sube solo. Si querés forzar la subida, tocá **«Sincronizar»** en el aviso amarillo.
 
-La clave de un comercio que subió después, sin el dueño adelante, no la anotes: el dueño entra la primera vez por WhatsApp y recibe otra.
+La clave de un comercio que subió después se muestra en pantalla apenas sube. Si no tenés al dueño adelante, no la anotes: el dueño entra la primera vez por WhatsApp y recibe otra.
 
 ---
 

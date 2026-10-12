@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from app.core import auth
-from app.core.codigo import formatear as formatear_codigo
+from app.core.codigo import sin_codigo
 from app.core.config import settings
 from app.core.telefono import whatsapp_para_guardar
 from app.core.text import limpiar_ref, slug_unico, slugify
@@ -289,26 +289,28 @@ async def alta_campo(
         logger.error("campo.capturado_en_sin_columna", error=str(exc)[:200], agente=agente.get("email"))
         fila.pop("capturado_en")
         comercio = repo.crear_comercio(fila)
-    # La cuenta de Mi comercio, igual que al pagar (`asegurar_comercio_usuario`).
-    # Sin esto el comercio cargado en la calle no podía entrar jamás: la
-    # recuperación por WhatsApp busca justamente esa fila. Entra pidiendo el
-    # código desde el número de su ficha. Si falla no se cae el alta (el agente
-    # está en la calle, sin señal): la recuperación la crea al vuelo si falta.
-    #
-    # Y su clave de 6 números: la app del agente la muestra UNA vez, para dársela
-    # en mano. Nunca va en el volante ni en un WhatsApp. Si no se pudo crear la
-    # cuenta, no hay clave que dar (`None`): entra por «me olvidé» con el WhatsApp.
-    clave_inicial = None
-    try:
-        cuenta = repo.asegurar_comercio_usuario(comercio["id"])
-        clave_inicial = nueva_clave_comercio(repo, comercio["id"], cuenta)
-    except Exception:  # noqa: BLE001
-        logger.warning("campo.alta_sin_cuenta", comercio=comercio["id"], exc_info=True)
-
     # Los rubros se deducen de nombre + productos + descripción y se suman a los
     # que el agente haya elegido. En la calle no se eligen rubros: se anota lo que
     # se ve, y de ahí sale la categoría.
     aplicar_rubros(repo, comercio, rubro_slugs)
+
+    # La cuenta de Mi comercio, igual que al pagar (`asegurar_comercio_usuario`).
+    # Sin esto el comercio cargado en la calle no podía entrar jamás: la
+    # recuperación por WhatsApp busca justamente esa fila. Si falla no se cae el
+    # alta (el agente está en la calle, sin señal): la recuperación la crea al
+    # vuelo si falta.
+    #
+    # Y su CLAVE (`PREFIJO-AZAR`, docs/clave-automatica.md): la app del agente la
+    # muestra UNA vez, para dársela en mano en un papel aparte. Nunca va en el
+    # volante ni en un WhatsApp, ni a un log. Se genera DESPUÉS de los rubros: en
+    # un local sin cartel el prefijo sale de lo que vende. Si no se pudo crear la
+    # cuenta, no hay clave que dar (`None`): entra por «me olvidé» con el WhatsApp.
+    clave = None
+    try:
+        cuenta = repo.asegurar_comercio_usuario(comercio["id"])
+        clave = nueva_clave_comercio(repo, comercio["id"], cuenta)
+    except Exception:  # noqa: BLE001
+        logger.warning("campo.alta_sin_cuenta", comercio=comercio["id"], exc_info=True)
 
     # video (link TikTok) opcional → publicación pendiente tipo video
     vurl = _none(video_url)
@@ -329,18 +331,17 @@ async def alta_campo(
                 consentimiento=consentimiento, cargado_por=agente["email"])
     if response is not None:
         response.headers["Cache-Control"] = "no-store"
-    # El código va en la respuesta para poder dictárselo o anotárselo al dueño en
-    # el momento: es lo que le permite mandar ofertas por WhatsApp sin tener
-    # número cargado, sin login y sin haber pagado.
+    # El código URUKU-XXXX NO va acá: es sólo del admin (docs/clave-automatica.md).
+    # Lo que se le da en mano al dueño es la CLAVE, y ésta es la única vez que se ve.
     return {"ok": True, "comercio": {"id": comercio["id"], "nombre": comercio["nombre"], "slug": slug,
                                      "ciudad": ciudad_slug, "rubros": len(rubro_ids),
                                      "foto": bool(portada_url), "gps": lat is not None,
-                                     "video": bool(vurl),
-                                     "codigo": comercio.get("codigo"),
-                                     "codigo_formateado": formatear_codigo(comercio["codigo"]) if comercio.get("codigo") else None},
-            # La clave que se le da en mano al dueño, UNA vez. Sólo en la raíz (nunca
-            # dentro de `comercio`) y con `no-store`: que no quede en ningún caché.
-            "clave_inicial": clave_inicial}
+                                     "video": bool(vurl)},
+            # La clave que se le da en mano al dueño, UNA vez (`PREFIJO-AZAR`). Sólo en
+            # la raíz (nunca dentro de `comercio`) y con `no-store`: que no quede en
+            # ningún caché. `clave_inicial` es el nombre de antes: mismo valor.
+            "clave": clave,
+            "clave_inicial": clave}
 
 
 class LugarBody(BaseModel):
@@ -472,14 +473,14 @@ def mis_comercios(agente: dict = Depends(auth.require_agente), repo: Repo = Depe
     ciudad_id = _ciudad_del_agente(repo, agente)
     if not ciudad_id:
         logger.warning("campo.agente_sin_ciudad", agente=agente.get("email"))
-        return {"items": propios, "ciudad": None}
+        return {"items": [sin_codigo(c) for c in propios], "ciudad": None}
 
     # Los de su ciudad, más los propios de afuera. Sin repetir: los suyos que
     # SON de su ciudad ya vienen en la primera lista.
     de_la_ciudad = repo.list_comercios_de_ciudad(ciudad_id)
     vistos = {c["id"] for c in de_la_ciudad}
     afuera = [c for c in propios if c["id"] not in vistos]
-    return {"items": afuera + de_la_ciudad, "ciudad": agente.get("ciudad"),
+    return {"items": [sin_codigo(c) for c in afuera + de_la_ciudad], "ciudad": agente.get("ciudad"),
             "propios_de_otra_ciudad": len(afuera)}
 
 
@@ -518,7 +519,7 @@ def ver_mi_comercio(
     comercio = repo.get_comercio_campo(comercio_id)
     if not comercio:
         raise HTTPException(status_code=404, detail="Comercio no encontrado")
-    return {"comercio": comercio}
+    return {"comercio": sin_codigo(comercio)}
 
 
 class _EditarComercioBody(BaseModel):
@@ -621,7 +622,7 @@ def editar_mi_comercio(
         # Cambió el catálogo (enlace por enlace: el anterior no era un PDF nuestro,
         # el agente no puede cambiar ese caso). Se deja por si cambia la regla.
         catalogo_svc.soltar_catalogo_reemplazado(anterior, patch["catalogo_url"], comercio_id)
-    return {"ok": True, "comercio": comercio}
+    return {"ok": True, "comercio": sin_codigo(comercio)}
 
 
 @router.post("/campo/mis-comercios/{comercio_id}/catalogo")
@@ -671,7 +672,7 @@ async def actualizar_foto_mi_comercio(
         raise HTTPException(status_code=502, detail="No se pudo subir la foto, probá de nuevo")
     updated = portada.poner_nueva(repo, comercio, portada_url, portada_thumb, conservar_anterior=True)
     logger.info("campo.foto_update", comercio=comercio_id, agente=agente["email"])
-    return {"ok": True, "comercio": updated}
+    return {"ok": True, "comercio": sin_codigo(updated)}
 
 
 @router.put("/campo/mis-comercios/{comercio_id}/portada")

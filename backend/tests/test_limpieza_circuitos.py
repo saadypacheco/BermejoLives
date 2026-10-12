@@ -210,18 +210,22 @@ def test_si_varios_locales_comparten_el_numero_entra_al_que_tiene_cuenta(repo):
     assert repo.get_comercio_usuario_por_whatsapp("70123456")["comercio_id"] == "com-b"
 
 
-# ═══════════════════════════════════ el autoregistro devuelve el código (punto 5)
-def test_el_autoregistro_devuelve_el_codigo_uruku(client, repo):
+# ═══════════════════════════════════ el autoregistro NO devuelve el código (docs/clave-automatica.md)
+def test_el_autoregistro_ya_no_devuelve_el_codigo_uruku(client, repo):
+    """Desde la clave automática el código URUKU-XXXX es sólo del admin: el alta lo genera y lo
+    guarda (la ingesta lo sigue aceptando), pero no sale en la respuesta."""
     r = client.post("/auth/comercio/registro",
                     data={"nombre": "Mi Tienda", "whatsapp": "59170001111",
                           "lat": "-22.7361", "lng": "-64.3433"},
                     files=_foto())
     assert r.status_code == 200, r.text
     com = r.json()["comercio"]
-    assert com["codigo"] and len(com["codigo"]) == 4
-    assert com["codigo_formateado"] == f"URUKU-{com['codigo']}"
-    # Es el MISMO que está guardado: con ése ata un grupo o publica 1 a 1.
-    assert repo.get_comercio_por_codigo(com["codigo_formateado"])["id"] == com["id"]
+    assert "codigo" not in com and "codigo_formateado" not in com
+    (guardado,) = repo.comercios.values()
+    assert guardado["codigo"] and len(guardado["codigo"]) == 4          # existe, sólo que no se muestra
+    assert guardado["codigo"] not in r.text and f"URUKU-{guardado['codigo']}" not in r.text
+    # Y sigue sirviendo por la ingesta.
+    assert repo.get_comercio_por_codigo(f"URUKU-{guardado['codigo']}")["id"] == com["id"]
 
 
 # ═════════════════════════════════════════════════════ textos muertos (punto 7)
@@ -281,6 +285,7 @@ import re
 import pytest
 
 from app.core import clave as claves
+from app.core import clave_comercio
 from app.core.config import settings
 
 
@@ -320,7 +325,7 @@ def test_criterio_9_la_ficha_con_formato_libre_entra_con_70123456(client, repo):
     assert r.status_code == 200, r.text
     clave = r.json()["clave_inicial"]
     assert "clave_inicial" not in r.json()["comercio"]          # sólo en la raíz (tercera ronda)
-    assert re.fullmatch(r"\d{6}", clave)
+    assert re.fullmatch(CLAVE_NUEVA, clave)
     # La ficha quedó normalizada (E.164), no «+591 7012-3456».
     (c,) = repo.comercios.values()
     assert c["whatsapp"] == "59170123456"
@@ -396,13 +401,17 @@ def _comercio_con_clave(client, repo, whatsapp="59170123456", **kw):
     return c, cuenta, r.json()["clave"]
 
 
+# La clave automática del comercio: PREFIJO-AZAR (docs/clave-automatica.md).
+CLAVE_NUEVA = r"[A-Z0-9]{1,8}-[2-9A-HJKMNP-Z]{6}"
+
+
 def _mala(clave):
     return "999999" if clave != "999999" else "888888"
 
 
 def test_criterio_10_celular_mas_clave_correcta_entra(client, repo):
     c, _u, clave = _comercio_con_clave(client, repo)
-    assert re.fullmatch(r"\d{6}", clave)
+    assert re.fullmatch(CLAVE_NUEVA, clave)
     r = _ingresar(client, "70123456", clave)
     assert r.status_code == 200, r.text
     d = r.json()
@@ -464,13 +473,13 @@ def test_el_intento_se_registra_ANTES_de_verificar_la_clave(client, repo, monkey
     mientras PBKDF2 corre."""
     _c, _cuenta_, clave = _comercio_con_clave(client, repo)
     vistos = []
-    original = claves.clave_coincide
+    original = clave_comercio.clave_coincide
 
     def espiar(c, h):
         vistos.append(len(repo.clave_fallos))
         return original(c, h)
 
-    monkeypatch.setattr(claves, "clave_coincide", espiar)
+    monkeypatch.setattr(clave_comercio, "clave_coincide", espiar)
     _ingresar(client, "70123456", _mala(clave))
     assert vistos == [1]
 
@@ -542,11 +551,12 @@ def test_criterio_11_la_clave_de_cada_comercio_abre_el_suyo(client, repo):
 def test_la_clave_nueva_nunca_coincide_con_la_de_otro_comercio_del_numero(client, repo, monkeypatch):
     _dos_puestos(repo)
     ca = client.post("/comercio/clave", headers=_hdr(auth_token("com-a"))).json()["clave"]
-    # Se fuerza que el azar «saque» primero la clave de A: tiene que descartarla.
-    salidas = iter([ca, ca, "424242"])
-    monkeypatch.setattr(claves, "generar_clave", lambda: next(salidas))
+    # Se fuerza que el azar «saque» primero el de A (mismo prefijo: «Puesto»): tiene que descartarlo.
+    azar_a = ca.split("-")[1]
+    salidas = iter([azar_a, azar_a, "K7M2P9"])
+    monkeypatch.setattr(clave_comercio, "generar_azar", lambda: next(salidas))
     cb = client.post("/comercio/clave", headers=_hdr(auth_token("com-b"))).json()["clave"]
-    assert cb == "424242"
+    assert cb == "PUESTO-K7M2P9"
 
 
 def test_criterio_11_la_recuperacion_pide_elegir_y_el_codigo_queda_atado_a_esa_cuenta(client, repo):
@@ -607,7 +617,7 @@ def test_cada_confirmacion_por_whatsapp_del_comerciante_devuelve_una_clave_nueva
     _codigo, r = _recuperar_y_confirmar(client, repo, "70123456", "59170123456")
     assert r.status_code == 200, r.text
     nueva = r.json()["clave_nueva"]
-    assert re.fullmatch(r"\d{6}", nueva)
+    assert re.fullmatch(CLAVE_NUEVA, nueva)
     assert _ingresar(client, "70123456", nueva).status_code == 200
     if nueva != clave0:
         assert _ingresar(client, "70123456", clave0).status_code == 401      # la vieja quedó sin efecto
@@ -630,11 +640,12 @@ def test_el_autoregistro_devuelve_clave_inicial_y_con_ella_vuelve_a_entrar(clien
     assert _ingresar(client, "59170001111", clave).status_code == 200
 
 
-def test_el_perfil_trae_el_codigo_y_el_codigo_formateado(client, repo):
+def test_el_perfil_ya_no_trae_el_codigo_ni_el_codigo_formateado(client, repo):
     repo.seed_comercio(id="com-1", nombre="X", whatsapp="59170123456", activo=True, codigo="KPXN")
     r = client.get("/comercio/perfil", headers=_hdr(auth_token("com-1")))
     assert r.status_code == 200
-    assert r.json()["codigo"] == "KPXN" and r.json()["codigo_formateado"] == "URUKU-KPXN"
+    assert "codigo" not in r.json() and "codigo_formateado" not in r.json()
+    assert "KPXN" not in r.text
     assert "clave_hash" not in r.json() and "clave" not in r.json()
 
 
@@ -1095,11 +1106,11 @@ def test_clave_inicial_va_solo_en_la_raiz_del_autoregistro_y_del_alta_de_campo(c
     r = client.post("/auth/comercio/registro", files=_foto(),
                     data={"nombre": "Mi Tienda", "whatsapp": "70001111", "lat": "-22.7", "lng": "-64.3"})
     assert r.status_code == 200
-    assert re.fullmatch(r"\d{6}", r.json()["clave_inicial"])
+    assert re.fullmatch(CLAVE_NUEVA, r.json()["clave_inicial"])
     assert "clave_inicial" not in r.json()["comercio"]
     r = _alta_campo(client, "70002222")
     assert r.status_code == 200
-    assert re.fullmatch(r"\d{6}", r.json()["clave_inicial"])
+    assert re.fullmatch(CLAVE_NUEVA, r.json()["clave_inicial"])
     assert "clave_inicial" not in r.json()["comercio"]
 
 

@@ -6,24 +6,17 @@ import { ClaveUnaVez } from "@/components/clave-una-vez";
 import { generarClaveNueva } from "@/lib/comercio";
 
 /**
- * «Tu código y tu clave», en Mi comercio.
+ * «Tu clave», en Mi comercio.
  *
- * El código (`URUKU-KPXN`) NO es una clave: está impreso en el volante y se
- * manda en el grupo. Sólo sirve para publicar (y eso va a moderación) y para
- * atar un grupo de WhatsApp al negocio. La clave de 6 números es lo que abre el
- * panel; el servidor sólo guarda su hash, así que no se puede mostrar de nuevo:
- * si se perdió, se genera otra (y la anterior deja de servir).
+ * La clave (`BOUTIQUE-K7M2P9`) abre el panel junto con el celular; el servidor
+ * sólo guarda su hash, así que no se puede mostrar de nuevo: si se perdió, se
+ * genera otra (y la anterior deja de servir). El código `URUKU-XXXX` ya no se
+ * muestra acá: lo ve sólo el admin.
  */
-export function CodigoYClave({ codigoFormateado }: { codigoFormateado?: string | null }) {
+export function ClaveDelComercio() {
   const [paso, setPaso] = useState<"reposo" | "confirmar" | "generando">("reposo");
   const [clave, setClave] = useState<string | null>(null);
   const [err, setErr] = useState("");
-  const [copiado, setCopiado] = useState(false);
-
-  async function copiarCodigo() {
-    if (!codigoFormateado) return;
-    try { await navigator.clipboard.writeText(codigoFormateado); setCopiado(true); } catch { /* el código está a la vista */ }
-  }
 
   async function generar() {
     setPaso("generando"); setErr("");
@@ -44,29 +37,12 @@ export function CodigoYClave({ codigoFormateado }: { codigoFormateado?: string |
 
   return (
     <div className="glass" style={{ padding: 20, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-      <h3 style={{ margin: 0 }}>Tu código y tu clave</h3>
+      <h3 style={{ margin: 0 }}>Tu clave</h3>
 
-      {codigoFormateado && (
-        <div>
-          <div style={{ fontSize: 12, color: "var(--txt-3)", fontWeight: 700 }}>TU CÓDIGO</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 4 }}>
-            <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: ".04em", color: "var(--neon)", fontFamily: "monospace" }}
-              aria-label={`Código ${codigoFormateado}`}>{codigoFormateado}</span>
-            <button type="button" className="btn btn-sm" onClick={copiarCodigo} style={{ border: "1px solid var(--stroke)" }}>
-              {copiado ? <><Ic n="listo" s={14} /> Copiado</> : "Copiar"}
-            </button>
-          </div>
-          <p style={{ color: "var(--txt-2)", fontSize: 13.5, margin: "6px 0 0" }}>
-            Mandalo en un WhatsApp para publicar o para atar tu grupo.
-          </p>
-        </div>
-      )}
-
-      <div style={{ borderTop: codigoFormateado ? "1px solid var(--stroke)" : undefined, paddingTop: codigoFormateado ? 12 : 0 }}>
-        <div style={{ fontSize: 12, color: "var(--txt-3)", fontWeight: 700 }}>TU CLAVE</div>
-        <p style={{ color: "var(--txt-2)", fontSize: 13.5, margin: "4px 0 10px" }}>
-          Con tu celular y tu clave de 6 números entrás a este panel. No la podemos mostrar de nuevo;
-          si la perdiste, generá una nueva (la anterior deja de servir).
+      <div>
+        <p style={{ color: "var(--txt-2)", fontSize: 13.5, margin: "0 0 10px" }}>
+          Con tu celular y tu clave (tiene la forma NOMBRE-XXXXXX) entrás a este panel. No la podemos
+          mostrar de nuevo; si la perdiste, generá una nueva (la anterior deja de servir).
         </p>
 
         {paso === "confirmar" ? (

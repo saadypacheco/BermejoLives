@@ -737,6 +737,18 @@ export async function setConfiable(comercioId: string, confiable: boolean) {
   return res.json();
 }
 
+/** «Generar clave nueva» de un comercio (permiso `comercios.cuenta`):
+ *  `POST /admin/comercio/{id}/clave`. La anterior deja de servir. Devuelve la
+ *  clave en claro (`BOUTIQUE-K7M2P9`): es la única vez que se ve, el servidor
+ *  guarda sólo el hash. Nunca se guarda en el navegador ni se escribe en logs. */
+export async function adminGenerarClaveComercio(comercioId: string): Promise<string> {
+  const res = await authFetch(`/admin/comercio/${comercioId}/clave`, { method: "POST" });
+  const d: unknown = await res.json().catch(() => null);
+  const clave = typeof d === "object" && d !== null ? (d as Record<string, unknown>).clave : null;
+  if (typeof clave !== "string" || !clave) throw new Error("No se pudo generar la clave. Probá de nuevo.");
+  return clave;
+}
+
 export type NumeroComercio = {
   id: string; numero: string; etiqueta: string | null; created_by?: string | null;
 };

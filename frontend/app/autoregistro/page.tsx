@@ -26,31 +26,21 @@ type Step = "tipo" | "titulo" | "precio" | "descripcion" | "tiktok" | "imagen" |
 
 export default function PublicarPage() {
   const [sess, setSess] = useState<ComercioSession | null>(null);
-  // El código del negocio recién creado: se muestra una vez, antes del chatbot.
-  const [codigoNuevo, setCodigoNuevo] = useState<string | null>(null);
-  // La clave de entrada del negocio recién creado: va ANTES que el código, se
-  // muestra una vez y vive sólo en memoria (nunca en localStorage).
+  // La clave de entrada del negocio recién creado: se muestra una vez, antes
+  // del chatbot, y vive sólo en memoria (nunca en localStorage).
   const [claveNueva, setClaveNueva] = useState<string | null>(null);
   useEffect(() => setSess(getComercioSession()), []);
 
   if (!sess) {
     return <AuthView onLogged={setSess} onRegistrado={({ sesion, claveInicial }) => {
-      setCodigoNuevo(codigoVisible(sesion)); setClaveNueva(claveInicial); setSess(sesion);
+      setClaveNueva(claveInicial); setSess(sesion);
     }} />;
   }
   if (claveNueva) return <ClaveDelNegocio clave={claveNueva} nombre={sess.nombre} onListo={() => setClaveNueva(null)} />;
-  if (codigoNuevo) return <CodigoDelNegocio codigo={codigoNuevo} nombre={sess.nombre} onSeguir={() => setCodigoNuevo(null)} />;
   return <ChatBot sess={sess} onLogout={() => { clearComercio(); setSess(null); }} />;
 }
 
-/** `URUKU-XXXX` listo para mostrar (el backend manda `codigo_formateado`; si faltara, se arma desde `codigo`). */
-function codigoVisible(s: ComercioSession): string | null {
-  if (s.codigo_formateado) return s.codigo_formateado;
-  if (!s.codigo) return null;
-  return /^URUKU-/i.test(s.codigo) ? s.codigo.toUpperCase() : `URUKU-${s.codigo.toUpperCase()}`;
-}
-
-/** La clave con la que el dueño entra a su panel, una vez, antes del código. */
+/** La clave con la que el dueño entra a su panel, una vez, antes de seguir. */
 function ClaveDelNegocio({ clave, nombre, onListo }: { clave: string; nombre: string; onListo: () => void }) {
   return (
     <>
@@ -58,35 +48,7 @@ function ClaveDelNegocio({ clave, nombre, onListo }: { clave: string; nombre: st
       <div className="wrap" style={{ maxWidth: 480, paddingTop: 56 }}>
         <span className="eyebrow"><Ic n="listo" s={14} /> Negocio creado</span>
         <h1 style={{ fontSize: 28, margin: "10px 0 14px" }}>{nombre} ya está en URUKU</h1>
-        <ClaveUnaVez clave={clave} titulo="Tu clave para entrar" onListo={onListo} textoListo="Ya la guardé" />
-      </div>
-    </>
-  );
-}
-
-function CodigoDelNegocio({ codigo, nombre, onSeguir }: { codigo: string; nombre: string; onSeguir: () => void }) {
-  const [copiado, setCopiado] = useState(false);
-  async function copiar() {
-    try { await navigator.clipboard.writeText(codigo); setCopiado(true); } catch { /* sin portapapeles: el código está a la vista */ }
-  }
-  return (
-    <>
-      <Nav />
-      <div className="wrap" style={{ maxWidth: 480, paddingTop: 56 }}>
-        <span className="eyebrow"><Ic n="listo" s={14} /> Negocio creado</span>
-        <h1 style={{ fontSize: 28, margin: "10px 0 6px" }}>{nombre} ya está en URUKU</h1>
-        <div className="glass" style={{ padding: 22, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12, textAlign: "center" }}>
-          <div style={{ fontSize: 12, color: "var(--txt-3)", fontWeight: 700 }}>EL CÓDIGO DE TU NEGOCIO</div>
-          <div style={{ fontSize: 34, fontWeight: 800, letterSpacing: ".04em", color: "var(--neon)" }} aria-label={`Código ${codigo}`}>{codigo}</div>
-          <p style={{ color: "var(--txt-2)", fontSize: 14, margin: 0 }}>
-            Mandalo en un mensaje de WhatsApp para publicar una oferta o para atar tu grupo a tu negocio.
-            Guardalo: lo vas a necesitar.
-          </p>
-          <button type="button" className="btn" onClick={copiar} style={{ border: "1px solid var(--stroke)" }}>
-            {copiado ? "Código copiado" : "Copiar código"}
-          </button>
-          <button type="button" className="btn btn-primary" onClick={onSeguir}>Seguir a publicar <Send style={{ width: 15, height: 15 }} /></button>
-        </div>
+        <ClaveUnaVez clave={clave} titulo="Tu clave para entrar" onListo={onListo} textoListo="Ya la guardé" aviso="Anotala: no se vuelve a mostrar. Tiene la forma NOMBRE-XXXXXX; con tu celular y esta clave entrás a tu panel." />
       </div>
     </>
   );

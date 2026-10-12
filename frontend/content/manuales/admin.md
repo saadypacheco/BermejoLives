@@ -43,6 +43,8 @@ La lista de los comercios: nombre, ubicación, rubro, WhatsApp, horario y estado
 
 Para editar uno, tocá el **lápiz** («Editar»): nombre, rubros, horario, modalidad (mayorista, minorista o ambos), qué vende, fotos, redes y más. Ahí está también **«Igual que el anterior»** para repetir el último horario.
 
+El código `URUKU-XXXX` del comercio se ve **sólo acá**, en el admin. Con el permiso de cuentas aparece **«Generar clave nueva»**: pide confirmación (la clave anterior deja de servir), muestra la clave nueva `NOMBRE-XXXXXX` **una sola vez** y tiene **«Copiar»**. Anotala y entregásela al dueño en un papel aparte.
+
 **«Verificar»** — el botón aparece sólo en los que no están verificados. Tocalo cuando ya chequeaste que el comercio existe. No se deshace.
 
 **La X («Rechazar») da de baja el comercio**: deja de aparecer en el sitio.

@@ -47,7 +47,7 @@ import { PermisoUbicacion } from "@/components/permiso-ubicacion";
 import { Ic } from "@/components/ic";
 import { waUruku } from "@/lib/contacto";
 import { LoginComercio } from "@/components/ingresar-comercio";
-import { CodigoYClave } from "@/components/codigo-y-clave";
+import { ClaveDelComercio } from "@/components/clave-del-comercio";
 
 export default function MiComercioPage() {
   const [sess, setSess] = useState<ComercioSession | null>(null);
@@ -265,7 +265,7 @@ function Overview({ onEditar, onOfertas, onPlanes }: { onEditar: () => void; onO
             <InfoRow label="Dirección" value={p.direccion} Icon={Pin} />
             <InfoRow label="Horario" value={p.horario} Icon={ic("M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z")} />
           </div>
-          <CodigoYClave codigoFormateado={p.codigo_formateado ?? (p.codigo ? `URUKU-${p.codigo}` : null)} />
+          <ClaveDelComercio />
           <div className="glass" style={{ padding: 20, borderRadius: 16 }}>
             <h3 style={{ margin: "0 0 6px" }}>Redes y links</h3>
             {redes.length === 0 && <p style={{ color: "var(--txt-3)", fontSize: 13 }}>Todavía no cargaste redes. <button onClick={onEditar} style={{ color: "var(--neon)" }}>Agregar</button></p>}

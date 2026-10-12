@@ -8,11 +8,8 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_comercio_token";
 const COMERCIO_KEY = "bermejo_comercio";
 
-export type ComercioSession = { id: string; nombre: string; slug: string; confiable: boolean; lugar_nombre?: string | null;
-  /** Sólo lo trae el alta: el código `URUKU-XXXX` del negocio (mandado en un
-   *  WhatsApp sirve para publicar 1 a 1 o atar su grupo). */
-  codigo?: string; codigo_formateado?: string;
-};
+// El código `URUKU-XXXX` ya no viaja a la sesión del comercio: lo ve sólo el admin.
+export type ComercioSession = { id: string; nombre: string; slug: string; confiable: boolean; lugar_nombre?: string | null };
 
 export function getCToken(): string | null {
   return typeof window === "undefined" ? null : localStorage.getItem(TOKEN_KEY);
@@ -30,7 +27,7 @@ export function clearComercio() {
 /** Campos que NUNCA se guardan en el navegador: una clave en localStorage la lee
  *  cualquier script de la página. El backend ya no las manda dentro de `comercio`
  *  (`clave_inicial` viaja sólo en la raíz), pero acá se sacan igual. */
-const CAMPOS_SECRETOS = ["clave", "clave_inicial", "clave_nueva", "password", "pass", "contrasena"];
+const CAMPOS_SECRETOS = ["clave", "clave_inicial", "clave_nueva", "codigo", "codigo_formateado", "password", "pass", "contrasena"];
 
 /** Copia de `comercio` sin ninguna clave. */
 function sinClaves(comercio: unknown): ComercioSession {
@@ -78,7 +75,7 @@ export class ClaveAnulada extends Error {
   constructor(detalle: string) { super(detalle); this.name = "ClaveAnulada"; }
 }
 
-/** Entra con celular + clave de 6 números. 401 («Celular o clave incorrectos»),
+/** Entra con celular + clave (`NOMBRE-XXXXXX` o una vieja de 6 números). 401 («Celular o clave incorrectos»),
  *  401 de clave anulada y 429 («Demasiados intentos…») traen su motivo en
  *  `detail`: se muestra tal cual. */
 export async function comercioIngresar(whatsapp: string, clave: string): Promise<ComercioSession> {
@@ -173,7 +170,7 @@ export async function comercioRecuperarConfirmar(whatsapp: string, codigo: strin
   if (!res.ok) throw new Error(await detalleDeError(res, "No se pudo entrar"));
   const data = await res.json();
   // La clave nueva va sólo a la pantalla (en memoria): nunca al navegador.
-  return { sesion: guardarSesion(data), claveNueva: leerClave(data.clave_nueva) };
+  return { sesion: guardarSesion(data), claveNueva: leerClave(data.clave_nueva) ?? leerClave(data.clave) };
 }
 
 /** Genera una clave nueva (la anterior deja de servir). Devuelve la clave en
@@ -249,7 +246,7 @@ export async function comercioRegistro(payload: RegistroPayload): Promise<Regist
     throw new Error(detalle);
   }
   const data = await res.json();
-  return { sesion: guardarSesion(data), claveInicial: leerClave(data.clave_inicial) };
+  return { sesion: guardarSesion(data), claveInicial: leerClave(data.clave) ?? leerClave(data.clave_inicial) };
 }
 
 export type PublicarPayload = {
@@ -352,9 +349,6 @@ export type Perfil = {
   lat?: number | null;
   lng?: number | null;
   rubro_slugs?: string[];
-  /** El código del negocio (`KPXN`) y su forma para mostrar (`URUKU-KPXN`). */
-  codigo?: string | null;
-  codigo_formateado?: string | null;
 };
 
 export type Suscripcion = {

@@ -29,12 +29,21 @@ RAIZ = Path(__file__).resolve().parents[2]
 PRIVADAS = ("plan_cortesia", "paga_hasta", "cargado_por", "capturado_en")
 # Otras que a propósito NO se dan (la 0145 lo explica): datos internos.
 # `baja_motivo` (0147): por qué está dado de baja un comercio; dato interno, nace privada (regla 11).
-PRIVADAS_EXTRA = ("fotos_extra", "wa_jid", "rubro_revisado_por", "baja_motivo")
+PRIVADAS_EXTRA = ("fotos_extra", "wa_jid", "rubro_revisado_por", "baja_motivo", "codigo")
 NO_VAN_EN_LA_LISTA = PRIVADAS + PRIVADAS_EXTRA
+# `codigo` (URUKU-XXXX) estaba en la lista de la 0145 (la ficha pública lo leía). La
+# 0148 (docs/clave-automatica.md) se lo quita a anon: desde ahí es privada. La 0145 ya
+# está aplicada y no se toca, así que su lista conserva `codigo` y se descuenta acá.
+CERRADAS_POR_0148 = ("codigo",)
+NO_VAN_EN_LA_0145 = tuple(c for c in NO_VAN_EN_LA_LISTA if c not in CERRADAS_POR_0148)
 
 
 def _0145(carpeta="supabase/migrations") -> str:
     return (RAIZ / carpeta / "0145_comercios_columnas_publicas.sql").read_text(encoding="utf-8")
+
+
+def _0148(carpeta="supabase/migrations") -> str:
+    return (RAIZ / carpeta / "0148_codigo_solo_admin.sql").read_text(encoding="utf-8")
 
 
 def _sin_comentarios_sql(sql: str) -> str:
@@ -42,10 +51,16 @@ def _sin_comentarios_sql(sql: str) -> str:
 
 
 def _columnas_dadas() -> list[str]:
+    """La lista que da la 0145, tal cual está en el archivo (incluye `codigo`)."""
     sql = _sin_comentarios_sql(_0145())
     m = re.search(r"grant select \((.*?)\) on public\.comercios to anon, authenticated;", sql, re.S)
     assert m, "la 0145 no tiene el grant select (columnas)"
     return [c.strip() for c in m.group(1).split(",") if c.strip()]
+
+
+def _columnas_publicas() -> list[str]:
+    """Lo que anon puede leer HOY: la lista de la 0145 menos lo que cierra la 0148."""
+    return [c for c in _columnas_dadas() if c not in CERRADAS_POR_0148]
 
 
 # ───────────────────────────────────────────────────── la migración 0145
@@ -58,13 +73,13 @@ def test_la_0145_esta_igual_en_supabase_y_en_selfhost():
 
 def test_la_0145_no_da_las_columnas_privadas():
     dadas = _columnas_dadas()
-    for privada in NO_VAN_EN_LA_LISTA:
+    for privada in NO_VAN_EN_LA_0145:
         assert privada not in dadas, privada
     # Ni siquiera nombradas en un grant: sólo aparecen en comentarios y en la comprobación.
     sql = _sin_comentarios_sql(_0145())
     grants = re.findall(r"grant[^;]*;", sql, re.I)
     for g in grants:
-        for privada in NO_VAN_EN_LA_LISTA:
+        for privada in NO_VAN_EN_LA_0145:
             assert privada not in g, (privada, g)
     assert len(dadas) == len(set(dadas)), "columnas repetidas en el grant"
 
@@ -205,7 +220,7 @@ def test_el_buscador_de_archivos_anon_encuentra_los_que_son():
 
 
 def test_ningun_select_anon_sobre_comercios_usa_asterisco_ni_columnas_privadas_ni_no_dadas():
-    dadas = set(_columnas_dadas())
+    dadas = set(_columnas_publicas())
     vistos = 0
     for f in _archivos_anon():
         texto = f.read_text(encoding="utf-8")
@@ -253,11 +268,12 @@ def test_columnas_comercio_del_frontend_estan_todas_dadas():
     assert m, "lib/data.ts tiene que exportar COLUMNAS_COMERCIO"
     cols = re.findall(r'"(\w+)"', m.group(1))
     assert len(cols) == len(set(cols)), "columnas repetidas en COLUMNAS_COMERCIO"
-    dadas = set(_columnas_dadas())
+    dadas = set(_columnas_publicas())
     assert set(cols) <= dadas, f"COLUMNAS_COMERCIO pide columnas sin permiso: {sorted(set(cols) - dadas)}"
+    assert "codigo" not in cols          # 0148: el código es sólo del admin
     # Lo que lee la ficha pública.
     for col in ("id", "slug", "nombre", "plan", "horario", "horario_estimado", "rubro_id", "ciudad_id",
-                "codigo", "calle", "tiene_pasero", "talles_especiales", "canal_wa_url", "catalogo_url"):
+                "calle", "tiene_pasero", "talles_especiales", "canal_wa_url", "catalogo_url"):
         assert col in cols, col
 
 
@@ -322,7 +338,7 @@ def test_antes_de_la_0145_anon_veia_todo(pg):
 def test_0145_en_postgres_cierra_las_privadas_y_deja_las_publicas(pg):
     pg(_0145())
     for rol in ("anon", "authenticated"):
-        for privada in NO_VAN_EN_LA_LISTA:
+        for privada in NO_VAN_EN_LA_0145:
             r = pg(f"select {privada} from comercios;", rol=rol, check=False)
             assert r.returncode != 0 and "permission denied" in r.stderr, (rol, privada, r.stderr)
         # select * también (PostgREST lo expande y falla entero: por eso las columnas explícitas).
@@ -330,7 +346,7 @@ def test_0145_en_postgres_cierra_las_privadas_y_deja_las_publicas(pg):
         assert r.returncode != 0 and "permission denied" in r.stderr
         # Las que usan la ficha, el buscador y el mapa.
         cols = ", ".join(_columnas_dadas())
-        r = pg(f"select {cols} from comercios where activo;", rol=rol)
+        r = pg(f"select {cols} from comercios where activo;", rol=rol)     # tras la 0145 sola, `codigo` todavía se lee
         assert r.stdout.count("\n") == 1
     # Los filtros por columna privada también fallan.
     r = pg("select id from comercios where paga_hasta is not null;", rol="anon", check=False)
@@ -345,6 +361,72 @@ def test_0145_en_postgres_es_idempotente(pg):
     r = pg("select paga_hasta from comercios;", rol="anon", check=False)
     assert r.returncode != 0 and "permission denied" in r.stderr
     pg(f"select {', '.join(_columnas_dadas())} from comercios;", rol="anon")
+
+
+# ───────────────────────────────────────────────────── la migración 0148 (código sólo admin)
+
+def test_la_0148_esta_igual_en_supabase_y_en_selfhost():
+    a = (RAIZ / "supabase/migrations/0148_codigo_solo_admin.sql").read_bytes()
+    b = (RAIZ / "selfhost/postgres-init/0148_codigo_solo_admin.sql").read_bytes()
+    assert a == b and a
+
+
+def test_la_0148_cierra_solo_codigo_y_es_idempotente_y_recarga_postgrest():
+    sql = _sin_comentarios_sql(_0148())
+    assert "revoke select (codigo) on public.comercios from anon, authenticated;" in sql
+    assert "begin;" in sql and "commit;" in sql
+    assert sql.index("begin;") < sql.index("revoke select (codigo)") < sql.index("commit;")
+    assert sql.rstrip().endswith("notify pgrst, 'reload schema';")
+    # No vuelve a dar nada a anon ni toca otras columnas.
+    assert not re.search(r"\bgrant\b[^;]*\banon\b", sql, re.I)
+    assert len(re.findall(r"\brevoke\b", sql, re.I)) == 1
+    assert not re.search(r"create table(?! if not exists)", sql)
+
+
+def test_codigo_es_privada_para_el_test_y_no_la_pide_ningun_select_anon():
+    assert "codigo" in PRIVADAS_EXTRA and "codigo" in NO_VAN_EN_LA_LISTA
+    assert "codigo" not in _columnas_publicas() and "codigo" in _columnas_dadas()
+
+
+def test_ninguna_vista_ni_funcion_publica_expone_codigo():
+    """Revisión de las migraciones: `feed_publico`, `buscar_comercios`, `plan_publico` y
+    `plan_orden_de` (las que anon puede ejecutar o leer) no nombran `codigo`. Las únicas que lo
+    devuelven son las de revisión de rubros del panel (invoker: anon no las puede usar tras la 0148)."""
+    carpeta = RAIZ / "supabase/migrations"
+    permitidas = {"0044_comercio_codigo.sql", "0065_comercio_wa_grupos.sql", "0087_vista_previa_de_palabras.sql",
+                  "0089_revision_humana_de_rubros.sql", "0091_un_solo_texto_que_clasifica.sql",
+                  "0092_el_principal_sale_de_lo_que_el_negocio_es.sql", "0145_comercios_columnas_publicas.sql",
+                  "0148_codigo_solo_admin.sql"}
+    for f in sorted(carpeta.glob("*.sql")):
+        sql = _sin_comentarios_sql(f.read_text(encoding="utf-8"))
+        if re.search(r"\bcodigo\b", sql) and f.name not in permitidas:
+            pytest.fail(f"{f.name} nombra `codigo`: ¿lo expone a anon? Revisalo y, si es del panel, agregalo a la lista")
+
+
+def test_0148_en_postgres_cierra_codigo_y_deja_el_resto(pg):
+    pg(_0145())
+    pg("select codigo from comercios;", rol="anon")          # sigue abierto con la 0145 sola
+    pg(_0148())
+    for rol in ("anon", "authenticated"):
+        r = pg("select codigo from comercios;", rol=rol, check=False)
+        assert r.returncode != 0 and "permission denied" in r.stderr, (rol, r.stderr)
+        r = pg("select id from comercios where codigo is not null;", rol=rol, check=False)
+        assert r.returncode != 0 and "permission denied" in r.stderr
+        r = pg("select * from comercios;", rol=rol, check=False)
+        assert r.returncode != 0 and "permission denied" in r.stderr
+        r = pg(f"select {', '.join(_columnas_publicas())} from comercios where activo;", rol=rol)
+        assert r.stdout.count("\n") == 1
+    # El backend (service_role) lo sigue leyendo: admin e ingesta.
+    pg("select codigo from comercios;", rol="service_role")
+
+
+def test_0148_en_postgres_es_idempotente(pg):
+    pg(_0145())
+    pg(_0148())
+    pg(_0148())
+    r = pg("select codigo from comercios;", rol="anon", check=False)
+    assert r.returncode != 0 and "permission denied" in r.stderr
+    pg(f"select {', '.join(_columnas_publicas())} from comercios;", rol="anon")
 
 
 def test_0145_en_postgres_si_falta_una_columna_no_se_aplica_nada(pg):

@@ -89,18 +89,20 @@ export async function sugerirRubros(descripcion: string, rubros: { slug: string;
 
 export type AltaCampoResult = {
   ok: boolean;
+  // El código URUKU-XXXX ya no viaja al agente: lo ve sólo el admin.
   comercio: {
     id: string; nombre: string; slug: string; ciudad: string; foto: boolean; gps: boolean;
-    // Código del local, ya formateado como 'URUKU-K7M2'. Se le deja al dueño en
-    // papel: con eso publica por WhatsApp sin número propio, cuenta ni pago.
-    codigo?: string | null;
-    codigo_formateado?: string | null;
   };
-  /** La clave de 6 números con la que el dueño entra a su panel. Viene SÓLO en
-   *  esta respuesta (el servidor guarda el hash): se muestra una vez, para
-   *  dársela en mano. Nunca va al volante ni a un WhatsApp. */
-  clave_inicial?: string | null;
+  /** La clave del comercio (`BOUTIQUE-K7M2P9`) con la que el dueño entra a su
+   *  panel. Viene SÓLO en esta respuesta (el servidor guarda el hash): se
+   *  muestra una vez, para dársela en un papel aparte. Nunca va al volante ni a
+   *  un WhatsApp, ni a localStorage ni a logs. */
+  clave?: string | null;
 };
+
+/** Lo que manda el servidor: la clave viaja como `clave` (spec 12/10); se acepta
+ *  también `clave_inicial`, el nombre que tenía antes. */
+type AltaCampoCrudo = Omit<AltaCampoResult, "clave"> & { clave?: string | null; clave_inicial?: string | null };
 
 // ---- Galería (fotos/videos) del comercio, lado agente ----
 export type FotoGaleria = { id: string; url: string; thumb_url: string | null; orden?: number };
@@ -185,8 +187,10 @@ export async function altaComercioCampo(form: FormData): Promise<AltaCampoResult
   // Va por XHR y no por fetch: en Safari de iOS, con un service worker
   // registrado, fetch manda el FormData SIN CUERPO. Ver lib/upload.ts.
   try {
-    return await postFormData<AltaCampoResult>(
+    const r = await postFormData<AltaCampoCrudo>(
       `${API}/campo/comercio`, form, getAgenteToken());
+    const { clave_inicial, ...resto } = r;
+    return { ...resto, clave: resto.clave || clave_inicial || null };
   } catch (e) {
     if ((e as Error & { status?: number })?.status === 401) {
       clearAgente();

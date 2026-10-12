@@ -63,3 +63,14 @@ def extraer_codigo(texto: str | None) -> str | None:
         return con_prefijo.group(1).upper()
     pelado = _RE_PELADO.search(texto)
     return pelado.group(1).upper() if pelado else None
+
+
+def sin_codigo(fila: dict | None) -> dict | None:
+    """La fila de un comercio SIN el código (`codigo`, `codigo_formateado`).
+
+    El código `URUKU-XXXX` es sólo del admin (docs/clave-automatica.md): ninguna
+    respuesta de `/comercio/*`, `/campo/*` ni del autoregistro lo lleva. Devuelve
+    una copia; no toca la fila original (la ingesta y el admin siguen usándola)."""
+    if fila is None:
+        return None
+    return {k: v for k, v in fila.items() if k not in ("codigo", "codigo_formateado")}

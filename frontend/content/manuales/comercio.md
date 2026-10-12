@@ -10,7 +10,9 @@ Desde ahí manejás tu ficha, tus ofertas, tu suscripción y el chatbot de tu lo
 
 ### Si el agente de URUKU te dio la clave
 
-Entrás directo con **tu celular** y **la clave de 6 números** que te dio en mano.
+Entrás directo con **tu celular** y **la clave** que te entregó en un papel aparte. La clave tiene la forma `NOMBRE-XXXXXX` (por ejemplo, `BOUTIQUE-K7M2P9`): la primera parte te ayuda a recordarla y el resto es al azar. Podés escribirla en mayúsculas o minúsculas, con o sin el guion.
+
+Si tu clave es de las de antes, de 6 números, también sigue sirviendo hasta que la cambies.
 
 ### Si es la primera vez y no tenés clave
 
@@ -24,9 +26,9 @@ Para entrar así, tu negocio tiene que tener cargado ese mismo número de WhatsA
 
 ### Las veces siguientes
 
-Entrás con tu celular y tu clave de 6 números. Si te la olvidaste, repetí los pasos de arriba y recibís una nueva.
+Entrás con tu celular y tu clave. Si te la olvidaste, repetí los pasos de arriba y recibís una nueva.
 
-> **La clave no es el código `URUKU-XXXX`.** El código es público: aparece en tu ficha como una referencia («Ref. …»). La clave es privada: la guardás vos y no se la das a nadie.
+> **La clave es privada.** La guardás vos y no se la das a nadie. La entrega el agente de URUKU o el equipo de URUKU, o la obtenés confirmando por WhatsApp desde tu número registrado.
 
 ---
 
@@ -42,7 +44,7 @@ Tocá **«Editar información»** para cambiar los datos: si te mudaste, si camb
 
 > **Tu WhatsApp no se cambia ahí.** Si cambiaste de número, tocá **«Cambié de número»** dentro de «Editar información» (ver más abajo).
 
-En Mi negocio está también **«Tu código y tu clave»**.
+En Mi negocio está también **«Tu clave»**.
 
 ### Publicar una oferta
 
@@ -144,28 +146,21 @@ El plan y el pago se arreglan por WhatsApp con URUKU: en la app no hay botones d
 
 ---
 
-## Tu código y tu clave
+## Tu clave
 
-### El código `URUKU-XXXX`
+La clave tiene la forma `NOMBRE-XXXXXX` (por ejemplo, `BOUTIQUE-K7M2P9`). Es privada: con tu celular, es lo que te deja entrar. No se la des a nadie.
 
-Es público: aparece en tu ficha como una referencia («Ref. …»). Sirve para publicar por WhatsApp sin entrar a la app (ver más abajo).
+Te la entrega el agente de URUKU cuando das de alta tu comercio, o el equipo de URUKU si la pedís; también la recibís confirmando por WhatsApp si todavía no tenías una. Se muestra **una sola vez**: anotala.
 
-> No es una contraseña. Quien lo ve en tu ficha no puede entrar a tu cuenta: lo que protege tu acceso es tu clave.
-
-### La clave de 6 números
-
-Es privada. Con tu celular, es lo que te deja entrar. No se la des a nadie.
-
-En **«Tu código y tu clave»** podés tocar **«Generar clave nueva»** y confirmar con **«Sí, generar clave nueva»**. Se puede hasta 3 veces por hora. La clave anterior deja de servir.
+En **«Tu clave»** podés tocar **«Generar clave nueva»** y confirmar con **«Sí, generar clave nueva»**. Se puede hasta 3 veces por hora. La clave anterior deja de servir.
 
 ---
 
 ## Publicar por WhatsApp, sin entrar a la app
 
-1. **La primera vez**, desde tu número, mandale al número de URUKU tu oferta (foto y texto) **con tu código** `URUKU-XXXX`. Esa primera publicación siempre pasa por moderación.
-2. **Desde ahí, ese número queda autorizado**: publicás sin poner el código. Sale directo si tu comercio es confiable; si no, pasa por moderación.
+Mandale al número de URUKU tu oferta (foto y texto) **desde el número que tenés registrado** en tu comercio. No hace falta ningún código ni clave: URUKU te reconoce por el número.
 
-Un mensaje que trae **sólo** el código, sin oferta, no publica nada.
+Sale directo si tu comercio es confiable; si no, pasa por moderación. Si escribís desde otro número, el mensaje no se publica: pedile ayuda a URUKU.
 
 ### Un grupo de WhatsApp para tu negocio
 

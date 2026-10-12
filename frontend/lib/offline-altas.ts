@@ -179,7 +179,7 @@ export async function sincronizarPendientes(onCambio?: () => void): Promise<Resu
     const fd = armarFd(rec);
     try {
       const r = await altaComercioCampo(fd);
-      if (r.clave_inicial) claves.push({ nombre: r.comercio?.nombre || rec.campos.nombre || "(sin nombre)", clave: r.clave_inicial });
+      if (r.clave) claves.push({ nombre: r.comercio?.nombre || rec.campos.nombre || "(sin nombre)", clave: r.clave });
       await borrar(rec.id);
       subidas += 1;
       onCambio?.();

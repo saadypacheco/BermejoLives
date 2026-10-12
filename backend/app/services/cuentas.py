@@ -1,9 +1,10 @@
 """Cuentas de Mi comercio: lo que comparten el ingreso, la recuperación, el
-alta de campo y el autoregistro alrededor de la clave de 6 números y del número
-de WhatsApp que puede estar en más de un comercio."""
+alta de campo y el autoregistro alrededor de la clave automática
+(`PREFIJO-AZAR`, ver `core/clave_comercio.py`) y del número de WhatsApp que
+puede estar en más de un comercio."""
 from __future__ import annotations
 
-from app.core import clave as claves
+from app.core import clave_comercio
 from app.core.config import settings
 from app.core.telefono import normalizar_whatsapp, whatsapp_para_guardar
 
@@ -17,25 +18,44 @@ def cuentas_de_numero(repo, whatsapp: str | None) -> list[dict]:
     return repo.list_comercio_usuarios_por_whatsapp(whatsapp)
 
 
+def _rubro_principal(repo, comercio_id: str) -> str | None:
+    """El nombre del primer rubro real del comercio (sin «otros»): da el prefijo
+    de la clave de un local sin cartel que todavía no tiene subcategoría."""
+    try:
+        for slug in repo.get_comercio_rubros(comercio_id):
+            if slug and slug != "otros":
+                return repo.get_rubro_nombre(slug) or slug
+    except Exception:  # noqa: BLE001 - el rubro sólo adorna el prefijo: nunca tumba el alta
+        return None
+    return None
+
+
 def nueva_clave_comercio(repo, comercio_id: str, cuenta: dict | None = None,
                          reiniciar_fallos: bool = False) -> str:
-    """Genera una clave nueva para la cuenta de ese comercio, la guarda (sólo el
-    hash) y la devuelve UNA vez, para mostrarla.
+    """Genera una clave nueva (`PREFIJO-AZAR`) para la cuenta de ese comercio, la
+    guarda (sólo el hash de la forma normalizada) y la devuelve UNA vez, para
+    mostrarla. La anterior deja de servir.
 
     En un número con varios comercios la clave no puede coincidir con la de
     otro de ellos: es lo que permite que la clave identifique cuál se abre. Se
     verifica contra los hashes de las demás cuentas de ese número.
 
     `reiniciar_fallos` SÓLO cuando el dueño acaba de probar el número por WhatsApp
-    (la confirmación): ahí los fallos de ese número quedan obsoletos. Una clave
-    pedida desde adentro (`POST /comercio/clave`) NO los borra: si no, quien
-    comparte el número podría limpiarse el contador pidiendo claves."""
+    (la confirmación) o cuando la genera el admin: ahí los fallos de ese número
+    quedan obsoletos. Una clave pedida desde adentro (`POST /comercio/clave`) NO
+    los borra: si no, quien comparte el número podría limpiarse el contador
+    pidiendo claves.
+
+    La clave nunca se loguea."""
     cuenta = cuenta or repo.asegurar_comercio_usuario(comercio_id)
     comercio = repo.get_comercio(comercio_id) or {}
     hermanas = cuentas_de_numero(repo, comercio.get("whatsapp"))
     hashes = [u.get("clave_hash") for u in hermanas if u["id"] != cuenta["id"]]
-    nueva = claves.clave_distinta_de(hashes)
-    repo.set_clave_comercio(cuenta["id"], claves.hash_clave(nueva))
+    rubro = _rubro_principal(repo, comercio_id) if comercio.get("sin_cartel") else None
+    prefijo = clave_comercio.prefijo_de(comercio.get("nombre"), bool(comercio.get("sin_cartel")),
+                                        comercio.get("subcategoria"), rubro)
+    nueva = clave_comercio.clave_distinta_de(hashes, prefijo)
+    repo.set_clave_comercio(cuenta["id"], clave_comercio.hash_clave(nueva))
     if reiniciar_fallos and comercio.get("whatsapp"):
         numero = normalizar_whatsapp(comercio["whatsapp"]) or comercio["whatsapp"].strip()
         repo.reiniciar_fallos_clave("comercio_usuarios", numero[:32])

@@ -502,26 +502,28 @@ def test_BUG1_el_autoregistro_con_numero_con_espacios_puede_volver_a_entrar(clie
     assert client.post("/auth/comercio/recuperar", json={"whatsapp": "70001111"}).status_code == 200
 
 
-# ═══════════════════════════════════════ 5. AUTOREGISTRO devuelve el código
-def test_el_autoregistro_devuelve_codigo_y_codigo_formateado_distintos_en_cada_alta(client, repo):
+# ═══════════════════════════════════════ 5. AUTOREGISTRO: el código ya no sale (sólo admin)
+def test_el_autoregistro_genera_un_codigo_distinto_en_cada_alta_pero_no_lo_devuelve(client, repo):
     vistos = set()
     for i in range(5):
         r = client.post("/auth/comercio/registro",
                         data={"nombre": f"Tienda {i}", "whatsapp": f"5917000{i:04d}",
                               "lat": "-22.7361", "lng": "-64.3433"}, files=_foto())
         com = r.json()["comercio"]
-        assert com["codigo_formateado"] == f"URUKU-{com['codigo']}"
-        assert len(com["codigo"]) == 4 and com["codigo"].isalnum()
-        vistos.add(com["codigo"])
-        # y el código sirve de verdad para publicar 1 a 1 desde cualquier celular
+        assert "codigo" not in com and "codigo_formateado" not in com
+        guardado = repo.comercios[com["id"]]
+        assert len(guardado["codigo"]) == 4 and guardado["codigo"].isalnum()
+        assert guardado["codigo"] not in r.text
+        vistos.add(guardado["codigo"])
     assert len(vistos) == 5
 
 
-def test_el_codigo_del_autoregistro_sirve_para_publicar_desde_un_celular_cualquiera(client, repo):
+def test_el_codigo_de_un_comercio_registrado_sirve_para_publicar_desde_un_celular_cualquiera(client, repo):
+    """El código ya no se le muestra al dueño, pero el admin se lo dicta y la ingesta lo acepta."""
     r = client.post("/auth/comercio/registro",
                     data={"nombre": "Mi Tienda", "whatsapp": "59170001111",
                           "lat": "-22.7361", "lng": "-64.3433"}, files=_foto())
-    cf = r.json()["comercio"]["codigo_formateado"]
+    cf = f"URUKU-{repo.comercios[r.json()['comercio']['id']]['codigo']}"
     res = ingest.handle_message(_wh("w-pub", DESCONOCIDO, f"{cf} zapatillas Bs 250"), repo)
     assert res["estado"] == "pendiente"
     assert repo.publicaciones[0]["comercio_id"] == r.json()["comercio"]["id"]

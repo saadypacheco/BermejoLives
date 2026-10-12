@@ -15,7 +15,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core import auth
 from app.core import clave as claves
-from app.core.codigo import formatear as formatear_codigo
+from app.core import clave_comercio
 from app.core.config import settings
 from app.core.ip import ip_cliente
 from app.core.telefono import normalizar_whatsapp, whatsapp_para_guardar
@@ -161,7 +161,6 @@ async def comercio_registro(
 
     token = auth.make_comercio_token(comercio["id"], whatsapp.strip())
     logger.info("comercio.registro", slug=slug, con_gps=True, con_foto=bool(portada_url), lugar=lugar_id)
-    codigo = comercio.get("codigo")
     # La respuesta lleva una clave: que ningún navegador ni proxy la guarde.
     if response is not None:
         response.headers["Cache-Control"] = "no-store"
@@ -176,11 +175,8 @@ async def comercio_registro(
             "slug": comercio["slug"],
             "confiable": False,
             "lugar_nombre": lugar_nombre,   # mercado/galería detectado por GPS (o null)
-            # Su código URUKU-XXXX: es lo que le permite atar un grupo de
-            # WhatsApp o publicar 1 a 1 desde el celular. Sin esto el que se
-            # registraba solo no tenía forma de enterarse de cuál era.
-            "codigo": codigo,
-            "codigo_formateado": formatear_codigo(codigo) if codigo else None,
+            # El código URUKU-XXXX NO va acá: es sólo del admin (docs/clave-automatica.md).
+            # Publica desde su número registrado y entra con la clave de arriba.
         },
     }
 
@@ -284,7 +280,9 @@ class IngresarBody(BaseModel):
 @router.post("/auth/comercio/ingresar")
 def comercio_ingresar(body: IngresarBody, request: Request, response: Response,
                       repo: Repo = Depends(get_repo)) -> dict:
-    """Entra con celular + clave de 6 números (sin WhatsApp de por medio).
+    """Entra con celular + clave (sin WhatsApp de por medio): la automática
+    `PREFIJO-AZAR` (se compara sin importar mayúsculas, espacios ni guiones) o la
+    vieja de 6 números, que sigue sirviendo hasta que se cambie.
 
     Si el número está en varios comercios se prueba la clave contra la cuenta de
     cada uno y entra a la que coincide (al generar las claves se garantiza que no
@@ -306,7 +304,7 @@ def comercio_ingresar(body: IngresarBody, request: Request, response: Response,
     intento = ingreso_clave.abrir_intento(repo, "comercio_usuarios", clave_num, ids, ip)
 
     con_clave = [u for u in cuentas if u.get("clave_hash")]
-    cuenta = next((u for u in con_clave if claves.clave_coincide(body.clave, u["clave_hash"])), None)
+    cuenta = next((u for u in con_clave if clave_comercio.clave_coincide(body.clave, u["clave_hash"])), None)
     if not con_clave:
         claves.gastar_tiempo(body.clave)
 
@@ -555,7 +553,7 @@ _CAMPOS_PERFIL = (
     "facebook_url", "instagram_url", "tiktok_url", "sitio_web", "logo_url",
     "portada_url", "direccion", "como_llegar", "horario", "pedido_minimo",
     "modalidad", "monedas_aceptadas", "plan", "verificado", "confiable",
-    "lat", "lng", "acepta_reservas", "codigo",
+    "lat", "lng", "acepta_reservas",
     "canal_wa_url", "catalogo_url", "tiene_pasero", "envios_internacionales", "tiene_factura", "talles_especiales",
 )
 
@@ -563,9 +561,7 @@ _CAMPOS_PERFIL = (
 def _perfil_dict(repo: Repo, comercio: dict) -> dict:
     out = {k: comercio.get(k) for k in _CAMPOS_PERFIL}
     out["rubro_slugs"] = repo.get_comercio_rubros(comercio["id"])
-    # El código URUKU-XXXX, para mostrarlo en Mi comercio con su explicación.
-    codigo = comercio.get("codigo")
-    out["codigo_formateado"] = formatear_codigo(codigo) if codigo else None
+    # El código URUKU-XXXX ya no se muestra en Mi comercio: es sólo del admin.
     return out
 
 

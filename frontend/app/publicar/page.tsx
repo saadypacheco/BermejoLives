@@ -52,7 +52,7 @@ function EnlaceManual() {
   );
 }
 
-const AVISO_CLAVE_AGENTE = "Dásela en mano al dueño: es para entrar a su panel. No la anotes en el volante.";
+const AVISO_CLAVE_AGENTE = "Anotala y entregásela al dueño en un papel aparte; no se vuelve a mostrar. Es para entrar a su panel: no la pongas en el volante ni la mandes por WhatsApp.";
 
 type ClavePorEntregar = { nombre: string; clave: string };
 
@@ -663,12 +663,10 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   const [doneOffline, setDoneOffline] = useState(false);
   // Por qué quedó guardado sin subir. Vacío = de verdad no había señal.
   const [doneMotivo,  setDoneMotivo]  = useState("");
-  // Código del local recién dado de alta: hay que dictárselo o anotárselo al
-  // dueño en el momento — es lo que le permite mandar ofertas por WhatsApp sin
-  // tener número cargado, sin login y sin haber pagado.
-  const [doneCodigo,  setDoneCodigo]  = useState<string | null>(null);
-  // La clave de entrada del dueño (`clave_inicial`): viene SÓLO en la respuesta
-  // del alta. Se muestra una vez, para dársela en mano; nunca va al volante.
+  // La clave del comercio (`clave`, ej. BOUTIQUE-K7M2P9): viene SÓLO en la
+  // respuesta del alta. Se muestra una vez, para entregarla en un papel aparte;
+  // nunca va al volante, a localStorage ni a logs. El código URUKU-XXXX ya no
+  // se le muestra al agente: lo ve sólo el admin.
   const [doneClave,   setDoneClave]   = useState<string | null>(null);
   // Claves de altas guardadas sin señal que subieron después (en memoria: no se
   // guarda un secreto en el celular).
@@ -879,8 +877,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       if (foto) fd.append("foto", foto);
       const r = await altaComercioCampo(fd);
       setDone(r.comercio.nombre);
-      setDoneCodigo(r.comercio.codigo_formateado ?? null);
-      setDoneClave(r.clave_inicial ?? null);
+      setDoneClave(r.clave ?? null);
       setAltaId(r.comercio.id);
       setWhatsappCargado(campos.whatsapp ?? null);
       setCount((c) => c + 1);
@@ -927,7 +924,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   function limpiar() {
     setF({ ...EMPTY });
     setCoords(null); setGeoMsg(""); setFoto(null); setPreviewFile(null); setConsent(true);
-    setNuevoLugar(""); setEditMercado(false); setDone(null); setDoneOffline(false); setDoneMotivo(""); setDoneCodigo(null); setDoneClave(null); setAltaId(null); setWhatsappCargado(null); setErr("");
+    setNuevoLugar(""); setEditMercado(false); setDone(null); setDoneOffline(false); setDoneMotivo(""); setDoneClave(null); setAltaId(null); setWhatsappCargado(null); setErr("");
   }
   function otro() {
     limpiar();
@@ -947,7 +944,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       // Compacta a propósito: el agente está parado en la vereda con el dueño
       // enfrente, y todo lo que quede abajo del pliegue es algo que no va a
       // hacer. Se achicó el aire (padding 60→14, emoji 48→30, títulos), NO el
-      // contenido: el código, el WhatsApp y la galería siguen todos acá.
+      // contenido: la clave, el WhatsApp y la galería siguen todos acá.
       <div className="campo-wrap" style={{ textAlign: "center", paddingTop: 14 }}>
         <div style={{ lineHeight: 1, color: doneOffline ? "var(--amber)" : "var(--neon)" }}><Ic n={doneOffline ? "reloj" : "listo"} s={30} /></div>
         <h1 style={{ fontSize: 19, margin: "6px 0 2px" }}>¡{done} {doneOffline ? "guardado sin conexión" : "cargado"}!</h1>
@@ -968,39 +965,14 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
             después. El servidor sólo guarda el hash. */}
         {doneClave && (
           <div style={{ marginBottom: 12 }}>
-            <ClaveUnaVez compacta clave={doneClave} titulo="Clave de entrada del dueño" aviso={AVISO_CLAVE_AGENTE} />
+            <ClaveUnaVez compacta clave={doneClave} titulo="Clave del comercio" aviso={AVISO_CLAVE_AGENTE}
+              onListo={() => setDoneClave(null)} textoListo="Listo" />
           </div>
         )}
         {doneOffline && (
           <p style={{ color: "var(--amber)", fontSize: 12, margin: "0 0 12px" }}>
             <Ic n="reloj" s={13} /> La clave del dueño aparece acá cuando este comercio se suba.
           </p>
-        )}
-
-        {doneCodigo && (
-          <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 12, background: "var(--panel)", border: "2px solid var(--neon)" }}>
-            {/* El código y su explicación en una fila: el número grande manda y
-                el texto va al lado, no debajo. Gana un bloque de tres renglones. */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, textAlign: "left" }}>
-              <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: 2, color: "var(--neon)", fontFamily: "monospace", whiteSpace: "nowrap" }}>
-                {doneCodigo}
-              </div>
-              <p style={{ color: "var(--txt-3)", fontSize: 11.5, lineHeight: 1.35, margin: 0 }}>
-                Dejáselo al dueño: con esto manda ofertas por WhatsApp desde
-                cualquier celular, sin cuenta.
-              </p>
-            </div>
-            <button
-              className="btn btn-ghost"
-              style={{ width: "100%", marginTop: 8, padding: "7px 12px", fontSize: 13 }}
-              onClick={() => {
-                const texto = `Tu código de URUKU es ${doneCodigo}. Mandá tus ofertas por WhatsApp escribiendo ese código en el mensaje.`;
-                navigator.clipboard?.writeText(texto).catch(() => {});
-              }}
-            >
-              Copiar mensaje para el dueño
-            </button>
-          </div>
         )}
 
         {/* El WhatsApp va ACÁ y no en el formulario: el agente releva el local

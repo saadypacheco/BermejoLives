@@ -6,7 +6,7 @@ import re
 from datetime import timedelta
 
 import structlog
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.auth import hash_password, require_admin, require_alguno, require_moderador, require_panel, require_permiso
@@ -19,6 +19,7 @@ from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
 from app.services.sinonimos import desde_propuesta, sinonimos_para
+from app.services.cuentas import nueva_clave_comercio
 from app.services.rubros import SLUG_DESCARTE, aplicar_rubros, resolver_rubros
 from app.db.repository import Repo, get_repo
 from app.models.schemas import ModerarBody
@@ -1099,6 +1100,29 @@ def set_confiable(
     comercio = repo.set_comercio_confiable(comercio_id, body.confiable)
     logger.info("comercio.confiable", comercio=comercio_id, valor=body.confiable, by=admin["email"])
     return {"ok": True, "comercio": comercio}
+
+
+@router.post("/admin/comercio/{comercio_id}/clave")
+def generar_clave_comercio(
+    comercio_id: str,
+    response: Response,
+    admin: dict = Depends(require_permiso("comercios.cuenta")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """«Generar clave nueva»: la clave automática (`PREFIJO-AZAR`) del comercio.
+
+    La anterior deja de servir y se devuelve la nueva UNA sola vez (`{"clave": ...}`);
+    el admin se la pasa al dueño. Como lo hace quien administra la cuenta, los
+    fallos de ingreso de ese número quedan obsoletos (si no, un dueño bloqueado por
+    equivocarse seguiría bloqueado con la clave nueva). Pide `comercios.cuenta`: el
+    publicador no la tiene. Crea la cuenta de Mi comercio si el comercio no tenía.
+    La clave nunca va a un log."""
+    response.headers["Cache-Control"] = "no-store"
+    if not repo.get_comercio(comercio_id):
+        raise HTTPException(status_code=404, detail="Comercio no encontrado")
+    clave = nueva_clave_comercio(repo, comercio_id, reiniciar_fallos=True)
+    logger.info("admin.clave_comercio_generada", comercio=comercio_id, by=admin["email"])
+    return {"clave": clave}
 
 
 # ---- Números de WhatsApp autorizados a publicar por el comercio ----

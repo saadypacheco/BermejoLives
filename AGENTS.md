@@ -46,7 +46,7 @@ Cuatro canales de entrada, misma regla de confianza:
 A) Grupo WhatsApp:   Comerciante → grupo (atado a comercio) → WAHA → webhook
                      → identifica por grupo atado → publicacion
 
-B) Chat 1-a-1 código: Comerciante → CONFIRMAR-XXXXXX o URUKU-XXXX →
+B) Chat 1-a-1 código: Comerciante → CONFIRMAR-XXXXXX o URUKU-XXXX (se lo dicta el admin) →
                      WAHA → webhook → identifica por código → publicacion
 
 C) Chatbot/Cuenta:   Comercio logueado → /comercio/publicar → POST con foto/texto
@@ -67,7 +67,8 @@ Moderador → /admin › Publicaciones → aprobar/rechazar/cambios → estado '
 ```
 
 - **Cuentas de comercio:** tabla `comercio_usuarios` + JWT propio (`rol='comercio'`,
-  lleva `comercio_id`). **Entrada:** celular + clave de 6 números (lo normal), o
+  lleva `comercio_id`). **Entrada:** celular + clave `NOMBRE-XXXXXX` generada al azar
+  (se ve una vez; las viejas de 6 números siguen sirviendo; `docs/clave-automatica.md`), o
   WhatsApp + confirmación (primera vez / olvido de clave). El admin marca
   `confiable`.
 

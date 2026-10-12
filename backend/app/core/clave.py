@@ -1,4 +1,9 @@
-"""La clave secreta de 6 números (comerciante y comprador).
+"""La clave secreta de 6 números del COMPRADOR (y el bloqueo por intentos, que
+comparten el comprador y el comerciante).
+
+La clave del COMERCIO ya no es de 6 números: es `PREFIJO-AZAR` y vive en
+`app/core/clave_comercio.py` (docs/clave-automatica.md). Las claves viejas de 6
+números del comercio siguen entrando hasta que se cambien.
 
 Se entra con celular + clave. El código `URUKU-XXXX` del comercio NO sirve de
 clave: está impreso en el volante y se manda en el grupo. El mensaje de
