@@ -25,6 +25,9 @@ import { aCercanos, cercanosGuardados, listaEnMemoria, olvidarLista, recordarLis
 import { PermisoUbicacion } from "@/components/permiso-ubicacion";
 import { Ic } from "@/components/ic";
 import { ClaveUnaVez } from "@/components/clave-una-vez";
+import { QueHayAca } from "@/components/que-hay-aca";
+import { OfrecerComercio } from "@/components/ofrecer-comercio";
+import type { PosicionAca } from "@/components/mapa-aca";
 import { encolarAlta, sincronizarPendientes, listarPendientes,
          descartarPendiente, esIrrecuperable, type AltaPendiente } from "@/lib/offline-altas";
 
@@ -80,7 +83,11 @@ const PREFIJO: Record<string, string> = { Bolivia: "591", Argentina: "549" };
 // ─────────────────────────────────────────────
 export default function CampoPage() {
   const [authed, setAuthed] = useState(false);
-  const [vista, setVista] = useState<"form" | "lista">("form");
+  // La primera pantalla es «Qué hay acá» (mapa + lista de lo cargado cerca); de
+  // ahí se pasa al alta («form») o a «Comercios de mi ciudad» («lista»).
+  const [vista, setVista] = useState<"aca" | "form" | "lista">("aca");
+  // El GPS que ya tomó «Qué hay acá»: el alta arranca con la ubicación puesta.
+  const [gps, setGps] = useState<PosicionAca | null>(null);
   // A qué entrar en «Comercios de mi ciudad»: abrir un comercio para editarlo
   // (desde el aviso «ya cargado» del alta) o con un filtro puesto.
   const [destino, setDestino] = useState<DestinoLista | null>(null);
@@ -95,8 +102,23 @@ export default function CampoPage() {
   if (!authed) return <Login onOk={() => setAuthed(true)} />;
   const onLogout = () => { clearAgente(); olvidarLista(); setAuthed(false); };
   const irALista = (d: DestinoLista | null = null) => { setDestino(d); setVista("lista"); };
-  if (vista === "lista") return <MisComercios destino={destino} onVolver={() => { setDestino(null); setVista("form"); }} onLogout={onLogout} />;
-  return <FormCampo onLogout={onLogout} onVerMisComercios={irALista} />;
+  if (vista === "lista") {
+    return <MisComercios destino={destino} onLogout={onLogout}
+      onVolver={() => { setDestino(null); setVista("aca"); }}
+      onCargar={() => { setDestino(null); setGps(null); setVista("form"); }} />;
+  }
+  if (vista === "aca") {
+    return (
+      <QueHayAca
+        cabecera={<><EnlaceManual /><button className="link-more" onClick={onLogout} style={{ padding: "6px 12px" }}>Salir</button></>}
+        onCargarNuevo={(g) => { setGps(g); setVista("form"); }}
+        onMisComercios={() => irALista()}
+        // Las altas guardadas sin señal se suben desde la pantalla del alta.
+        onSubirPendientes={() => { setGps(null); setVista("form"); }}
+      />
+    );
+  }
+  return <FormCampo onLogout={onLogout} onVerMisComercios={irALista} gpsInicial={gps} onVerAca={() => setVista("aca")} />;
 }
 
 // ─────────────────────────────────────────────
@@ -130,7 +152,14 @@ function sinHorario(c: ComercioAgente): boolean {
 const RADIO_CERCA_M = 120;
 type OrdenAg = "recientes" | "alfabetico" | "estado";
 
-function MisComercios({ destino, onVolver, onLogout }: { destino: DestinoLista | null; onVolver: () => void; onLogout: () => void }) {
+function MisComercios({ destino, onVolver, onCargar, onLogout }: {
+  destino: DestinoLista | null;
+  /** «Volver»: a «Qué hay acá». */
+  onVolver: () => void;
+  /** «+ Cargar otro comercio»: al alta. */
+  onCargar: () => void;
+  onLogout: () => void;
+}) {
   // Arranca con lo último que se vio (si hay) y se actualiza al llegar la lista.
   const [items, setItems] = useState<ComercioAgente[] | null>(() => listaEnMemoria());
   const [rubros, setRubros] = useState<Rubro[]>([]);
@@ -295,7 +324,7 @@ function MisComercios({ destino, onVolver, onLogout }: { destino: DestinoLista |
         <button className="link-more" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={onVolver}>
           <Arrow style={{ width: 15, height: 15, transform: "rotate(180deg)" }} /> Volver
         </button>
-        <button className="btn btn-ghost" style={{ flex: 1 }} onClick={onVolver}>+ Cargar otro comercio</button>
+        <button className="btn btn-ghost" style={{ flex: 1 }} onClick={onCargar}>+ Cargar otro comercio</button>
       </div>
 
       {/* Buscador (A) + orden (G) + vista lista/mapa (D) */}
@@ -627,7 +656,13 @@ function ciudadMasCercana(ciudades: Ciudad[], lat: number, lng: number): Ciudad 
   return mejor;
 }
 
-function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVerMisComercios: (d?: DestinoLista) => void }) {
+function FormCampo({ onLogout, onVerMisComercios, gpsInicial, onVerAca }: {
+  onLogout: () => void;
+  onVerMisComercios: (d?: DestinoLista) => void;
+  /** El GPS que ya tomó «Qué hay acá»: el alta arranca con la ubicación puesta. */
+  gpsInicial: PosicionAca | null;
+  onVerAca: () => void;
+}) {
   const [ciudades, setCiudades] = useState<Ciudad[]>([]);
   const [rubros,   setRubros]   = useState<Rubro[]>([]);
 
@@ -648,7 +683,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   const [ultimoPuesto,setUltimoPuesto]= useState("");
   const [editMercado, setEditMercado] = useState(false);
 
-  const [coords,      setCoords]      = useState<{ lat: number; lng: number; acc: number } | null>(null);
+  const [coords,      setCoords]      = useState<{ lat: number; lng: number; acc: number } | null>(gpsInicial);
   const [geoMsg,      setGeoMsg]      = useState("");
   const [foto,        setFoto]        = useState<File | null>(null);
   // El File a previsualizar, no la URL: el hook la crea y la REVOCA sola. Antes
@@ -672,6 +707,8 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   // guarda un secreto en el celular).
   const [clavesSync,  setClavesSync]  = useState<ClavePorEntregar[]>([]);
   const [altaId,      setAltaId]      = useState<string | null>(null);
+  // El slug del comercio recién creado: arma el link de su ficha pública (WhatsApp).
+  const [altaSlug,    setAltaSlug]    = useState<string | null>(null);
   // El número que quedó cargado, venga del formulario o de la pantalla
   // siguiente. Null = todavía no hay ninguno.
   const [whatsappCargado, setWhatsappCargado] = useState<string | null>(null);
@@ -775,6 +812,13 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
     if (hayYaCargados) avisoRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [hayYaCargados]);
 
+  // «Qué hay acá» desde el alta: si ya había escrito o sacado la foto, se pregunta.
+  function volverAca() {
+    const hayAlgo = !!f.nombre.trim() || !!foto || !!f.direccion.trim() || !!f.prodObs.trim() || !!puesto.trim();
+    if (hayAlgo && !window.confirm("Vas a dejar esta carga sin guardar. ¿Volver a «Qué hay acá»?")) return;
+    onVerAca();
+  }
+
   // «Es este»: se abandona el alta y se abre ese comercio para completarlo. Si
   // ya había escrito o sacado la foto, se pregunta antes de tirarlo.
   function esEste(id: string) {
@@ -806,6 +850,21 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   // El rubro ya no se elige ni se sugiere en el campo: se deduce en el servidor
   // del texto cargado, y después la IA lo recalcula desde las fotos. Sacar la
   // llamada acá evita además un request en zonas sin señal.
+  // La ciudad y el prefijo del teléfono salen de dónde está parado el agente.
+  function aplicarCiudad(lat: number, lng: number) {
+    const cercana = ciudadMasCercana(ciudades, lat, lng);
+    if (cercana) {
+      setCiudadSlug(cercana.slug);
+      setPrefijo(PREFIJO[cercana.pais] ?? "591");
+    }
+  }
+  // Si el alta arranca con el GPS de «Qué hay acá», la ciudad se elige apenas
+  // llega la lista de ciudades.
+  useEffect(() => {
+    if (gpsInicial && ciudades.length > 0) aplicarCiudad(gpsInicial.lat, gpsInicial.lng);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ciudades]);
+
   function ubicar() {
     setGeoMsg("Obteniendo ubicación…");
     if (!navigator.geolocation) { setGeoMsg("Este dispositivo no tiene GPS disponible."); return; }
@@ -814,11 +873,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
         const lat = pos.coords.latitude, lng = pos.coords.longitude;
         setCoords({ lat, lng, acc: Math.round(pos.coords.accuracy) });
         setGeoMsg("");
-        const cercana = ciudadMasCercana(ciudades, lat, lng);
-        if (cercana) {
-          setCiudadSlug(cercana.slug);
-          setPrefijo(PREFIJO[cercana.pais] ?? "591");
-        }
+        aplicarCiudad(lat, lng);
       },
       (e) => setGeoMsg(geoErrorMsg(e)),
       { enableHighAccuracy: true, timeout: 10000 },
@@ -885,6 +940,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
       setDone(r.comercio.nombre);
       setDoneClave(r.clave ?? null);
       setAltaId(r.comercio.id);
+      setAltaSlug(r.comercio.slug || null);
       setWhatsappCargado(campos.whatsapp ?? null);
       setCount((c) => c + 1);
       // Con ?debugmem=1 imprime el heap después de cada alta. Es la única forma
@@ -930,7 +986,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
   function limpiar() {
     setF({ ...EMPTY });
     setCoords(null); setGeoMsg(""); setFoto(null); setPreviewFile(null); setConsent(true);
-    setNuevoLugar(""); setEditMercado(false); setDone(null); setDoneOffline(false); setDoneMotivo(""); setDoneClave(null); setAltaId(null); setWhatsappCargado(null); setErr("");
+    setNuevoLugar(""); setEditMercado(false); setDone(null); setDoneOffline(false); setDoneMotivo(""); setDoneClave(null); setAltaId(null); setAltaSlug(null); setWhatsappCargado(null); setErr("");
   }
   function otro() {
     limpiar();
@@ -1002,13 +1058,23 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
             del alta —sin «Volver»— porque el agente todavía está con el dueño. */}
         {altaId && <CompletarTrasAlta comercioId={altaId} whatsapp={whatsappCargado} rubros={rubros} lugares={lugares} />}
 
+        {/* OFRECER URUKU: los mismos ejemplos y las mismas dos acciones que la
+            ficha de «Qué hay acá». Recién cuando el alta ya subió (hay id y slug);
+            guardada sin señal no hay nada que mostrarle al dueño todavía. */}
+        {altaId && altaSlug && (
+          <div style={{ marginBottom: 12 }}>
+            <OfrecerComercio comercio={{ id: altaId, nombre: done, slug: altaSlug, whatsapp: whatsappCargado, rubroSlug: null }} />
+          </div>
+        )}
+
         {subioLugar && (
           <button className="btn btn-primary" style={{ width: "100%", marginBottom: 8, padding: "9px 12px", background: "#6d28d9", borderColor: "#6d28d9", color: "#fff" }} onClick={otroPuestoAca}>
             <Ic n="mas" s={15} /> Otro puesto en {subioLugar.nombre}
           </button>
         )}
         <button className={subioLugar ? "btn btn-ghost" : "btn btn-primary"} style={{ width: "100%", marginBottom: 8, padding: "9px 12px" }} onClick={otro}>Cargar otro comercio {subioLugar ? "(a la calle / otro)" : ""}</button>
-        <button className="link-more" onClick={() => onVerMisComercios()}>Ver mis comercios cargados</button>
+        <button className="link-more" style={{ minHeight: 44 }} onClick={onVerAca}>Volver a «Qué hay acá»</button>
+        <button className="link-more" style={{ minHeight: 44 }} onClick={() => onVerMisComercios()}>Ver mis comercios cargados</button>
       </div>
     );
   }
@@ -1026,6 +1092,7 @@ function FormCampo({ onLogout, onVerMisComercios }: { onLogout: () => void; onVe
               de distinguir "no hay nada guardado" de "no pude leerlo". */}
           <button className="link-more" onClick={verPendientes} style={{ padding: "6px 12px" }}
                   title="Lo que quedó guardado en este celular sin subir">Sin subir</button>
+          <button className="link-more" onClick={volverAca} style={{ padding: "6px 12px" }}>Qué hay acá</button>
           <button className="link-more" onClick={() => onVerMisComercios()} style={{ padding: "6px 12px" }}>Mis comercios</button>
           <EnlaceManual />
           <button className="link-more" onClick={onLogout} style={{ padding: "6px 12px" }}>Salir</button>

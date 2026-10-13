@@ -15,6 +15,7 @@ import { Ic, type NombreIcono } from "@/components/ic";
 import { CatalogoPdf } from "@/components/catalogo-pdf";
 import { TildesSuma, CLAVES_TILDES, type Tildes } from "@/components/tildes-suma";
 import { esCatalogoSubido, normalizarEnlace } from "@/lib/catalogo";
+import { calcularFaltas, type ClaveFalta, type Falta } from "@/lib/faltas";
 
 /** La galería del local desde la app del agente. Exportada porque el final del
  *  alta la muestra sola cuando no pudo abrir «Completar comercio»: las fotos
@@ -92,25 +93,6 @@ const PREFIJOS: { p: string; label: string }[] = [
   { p: "591", label: "+591 Bolivia" },
   { p: "549", label: "+549 Argentina" },
 ];
-
-type ClaveFalta = "horario" | "contacto" | "vidriera" | "fotos" | "vende" | "rubro" | "puesto";
-type Falta = { clave: ClaveFalta; label: string; ir: string; foco?: string };
-
-/** Lo que el comercio NO tiene, en el orden de la charla con el dueño. Se calcula
- *  de lo GUARDADO (el comercio que llega por props), no de lo que está tipeado:
- *  un ítem sale de la lista cuando el dato ya está a salvo. */
-function calcularFaltas(c: ComercioAgente, nFotos: number | null): Falta[] {
-  const r: Falta[] = [];
-  if (!(c.horario ?? "").trim()) r.push({ clave: "horario", label: "Horario", ir: "cc-horario" });
-  if (!(c.whatsapp ?? "").trim() && !(c.telefono ?? "").trim()) r.push({ clave: "contacto", label: "Contacto", ir: "cc-contacto", foco: "cc-wa" });
-  if (!c.portada_url) r.push({ clave: "vidriera", label: "Foto de la vidriera", ir: "cc-fotos" });
-  // null = la galería todavía no respondió: no se afirma que falta.
-  if (nFotos === 0) r.push({ clave: "fotos", label: "Fotos del local", ir: "cc-galeria" });
-  if (!(c.prod_obs_human ?? "").trim()) r.push({ clave: "vende", label: "Qué vende", ir: "cc-vende", foco: "cc-vende-txt" });
-  if (!c.rubros) r.push({ clave: "rubro", label: "Rubro", ir: "cc-rubros" });
-  if (c.lugar_id && !(c.puesto ?? "").trim()) r.push({ clave: "puesto", label: "Puesto", ir: "cc-mercado", foco: "cc-puesto" });
-  return r;
-}
 
 function textoError(e: unknown): string {
   const sinRed = (typeof navigator !== "undefined" && !navigator.onLine) || e instanceof TypeError;

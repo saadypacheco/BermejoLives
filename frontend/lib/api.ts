@@ -399,7 +399,21 @@ export async function adminDeleteAdorno(id: string): Promise<void> {
 // por vencer. Lo manda el backend (0143); si lo nombra distinto, ajustarlo acá.
 export type EstadoSuscripcion = "activo" | "por_vencer" | "vencido" | "suspendido" | "sin_plan" | "cortesia";
 
+/** Que a un comercio le interesa un plan: lo anota el agente de campo desde «Qué
+ *  hay acá» (spec docs/que-hay-aca.md). Es el último interés SIN pago posterior;
+ *  null o ausente = ninguno. */
+export type InteresPlan = {
+  /** El slug del plan (se muestra con su nombre). */
+  plan: string;
+  nota?: string | null;
+  /** Quién lo anotó («agente», o su correo). */
+  actor?: string | null;
+  created_at: string;
+};
+
 export type ComercioSuscripcion = {
+  /** Opcional: el backend todavía puede no mandarlo. */
+  interes?: InteresPlan | null;
   id: string;
   slug: string;
   nombre: string;

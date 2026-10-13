@@ -106,7 +106,7 @@ class Repo(Protocol):
     def anular_clave_comercio(self, user_ids: list[str]) -> None: ...
     def anular_claves_de_comercio(self, comercio_id: str) -> None: ...
     def get_cuenta_comercio(self, comercio_id: str, cuenta_id: str | None = None) -> dict | None: ...
-    def registrar_evento_comercio(self, comercio_id: str, tipo: str, actor: str) -> None: ...
+    def registrar_evento_comercio(self, comercio_id: str, tipo: str, actor: str, detalle: dict | None = None) -> None: ...
     def get_comercio_por_alta_uid(self, cargado_por: str, alta_uid: str) -> dict | None: ...
     def get_solicitud_cambio_numero(self, solicitud_id: str) -> dict | None: ...
     # Intentos de ingreso con clave (tabla `clave_fallos`, 0137): el conteo es atómico en la base.
@@ -248,6 +248,9 @@ class Repo(Protocol):
     def list_comercios_por_agente(self, email: str, limit: int) -> list[dict]: ...
     def list_comercios_de_ciudad(self, ciudad_id: str, limit: int = 4000) -> list[dict]: ...
     def get_comercio_campo(self, comercio_id: str) -> dict | None: ...
+    def contar_fotos_comercios(self, comercio_ids: list[str]) -> dict[str, int]: ...
+    def list_ejemplos_candidatos(self, ciudad_id: str, rubro_id: str | None = None, limite: int = 200) -> list[dict]: ...
+    def intereses_de_plan_pendientes(self) -> dict[str, dict]: ...
     def crear_solicitud_cambio_numero(self, row: dict) -> dict: ...
     def list_solicitudes_cambio_numero(self, estado: str | None) -> list[dict]: ...
     def aprobar_solicitud_cambio_numero(self, solicitud_id: str, by: str) -> dict | None: ...
@@ -330,9 +333,19 @@ _COLS_COMERCIO_CAMPO = (
     "lugar_id, puesto, instagram_url, facebook_url, tiktok_url, sitio_web, "
     "canal_wa_url, catalogo_url, "
     "tiene_pasero, envios_internacionales, tiene_factura, talles_especiales, pedido_minimo, "
+    # Para calcular `estado_plan` (docs/que-hay-aca.md). NO salen al agente: los quita
+    # `que_hay_aca.enriquecer`, que deja sólo el sello, sin precios ni `paga_hasta`.
+    "plan, plan_cortesia, paga_hasta, suspendido, "
     "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), "
     "comercio_rubros(rubros(nombre, slug)), "
     "lugares(nombre, tipo, lat, lng, portada_thumb_url)"
+)
+
+# Lo justo para elegir los ejemplos de «Qué hay acá» (`que_hay_aca.es_completo`).
+_COLS_EJEMPLO = (
+    "id, slug, nombre, whatsapp, horario, portada_url, portada_thumb_url, "
+    "prod_obs_human, descripcion, rubro_id, "
+    "rubros!comercios_rubro_id_fkey(nombre, slug)"
 )
 
 # Las columnas del listado del panel. En una constante porque la paginación
@@ -1018,12 +1031,16 @@ class SupabaseRepo:
         res = q.limit(1).execute()
         return res.data[0] if res.data else None
 
-    def registrar_evento_comercio(self, comercio_id: str, tipo: str, actor: str) -> None:
+    def registrar_evento_comercio(self, comercio_id: str, tipo: str, actor: str,
+                                  detalle: dict | None = None) -> None:
         """Deja constancia de algo que se le hizo a la cuenta de un comercio
         (`comercio_eventos`, 0149). Lanza si no puede escribir: es una auditoría, no
-        un comentario."""
-        self._db.table("comercio_eventos").insert(
-            {"comercio_id": comercio_id, "tipo": tipo, "actor": actor}).execute()
+        un comentario. `detalle` (0151, jsonb) trae los datos del evento, p. ej. el
+        plan y la nota de un `interes_plan`. Nunca una clave."""
+        fila: dict = {"comercio_id": comercio_id, "tipo": tipo, "actor": actor}
+        if detalle is not None:
+            fila["detalle"] = detalle
+        self._db.table("comercio_eventos").insert(fila).execute()
 
     def get_comercio_por_alta_uid(self, cargado_por: str, alta_uid: str) -> dict | None:
         """El comercio que ese agente ya dio de alta con ese `alta_uid` (reintentos de la
@@ -2723,6 +2740,81 @@ class SupabaseRepo:
         res = (self._db.table("comercios").select(_COLS_COMERCIO_CAMPO)
                .eq("id", comercio_id).eq("activo", True).limit(1).execute())
         return (res.data or [None])[0]
+
+    def contar_fotos_comercios(self, comercio_ids: list[str]) -> dict[str, int]:
+        """Fotos de galería por comercio, en UNA consulta agrupada (RPC `contar_fotos_comercios`,
+        0151). Sólo vienen los que tienen al menos una: el resto es 0. Se parte en tandas de
+        2000 ids sólo para no mandar un cuerpo enorme; una ciudad entera son 1 o 2 llamadas,
+        no una por comercio."""
+        ids = [str(i) for i in dict.fromkeys(comercio_ids) if i]
+        cuenta: dict[str, int] = {}
+        for i in range(0, len(ids), 2000):
+            res = self._db.rpc("contar_fotos_comercios", {"p_ids": ids[i:i + 2000]}).execute()
+            for cid, n in (res.data or {}).items():
+                cuenta[str(cid)] = int(n)
+        return cuenta
+
+    def list_ejemplos_candidatos(self, ciudad_id: str, rubro_id: str | None = None,
+                                 limite: int = 200) -> list[dict]:
+        """Comercios activos, no suspendidos, de la ciudad, con portada, WhatsApp y horario cargados
+        (lo que se puede filtrar en la base). Los más nuevos primero. La galería y «lo que
+        vende» los resuelve `que_hay_aca.es_completo`. Con `rubro_id`, sólo de ese rubro principal."""
+        q = (self._db.table("comercios").select(_COLS_EJEMPLO)
+             .eq("ciudad_id", ciudad_id).eq("activo", True).eq("suspendido", False)
+             .not_.is_("portada_url", "null")
+             .not_.is_("whatsapp", "null")
+             .not_.is_("horario", "null"))
+        if rubro_id:
+            q = q.eq("rubro_id", rubro_id)
+        return q.order("created_at", desc=True).limit(limite).execute().data or []
+
+    def intereses_de_plan_pendientes(self) -> dict[str, dict]:
+        """comercio_id -> el ÚLTIMO `interes_plan` que no tiene un pago confirmado después.
+
+        Dos lecturas en total (no una por comercio): los eventos `interes_plan` y los pagos
+        confirmados desde el interés más viejo. «Después» = `pagos.created_at` posterior al del
+        evento. (Un pago pendiente cargado ANTES del interés y confirmado DESPUÉS no lo cierra:
+        `pagos` no guarda cuándo se confirmó.)"""
+        from datetime import datetime
+
+        def ts(v):
+            return datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+
+        def todas(consulta_base) -> list[dict]:
+            filas: list[dict] = []
+            while len(filas) < 50000:
+                lote = consulta_base().range(len(filas), len(filas) + 999).execute().data or []
+                filas += lote
+                if len(lote) < 1000:
+                    break
+            return filas
+
+        eventos = todas(lambda: (self._db.table("comercio_eventos")
+                                 .select("id, comercio_id, actor, detalle, created_at")
+                                 .eq("tipo", "interes_plan")
+                                 .order("created_at", desc=True).order("id")))
+        ultimo: dict[str, dict] = {}
+        for e in eventos:
+            ultimo.setdefault(e["comercio_id"], e)
+        if not ultimo:
+            return {}
+        desde = min(e["created_at"] for e in ultimo.values())
+        pagos = todas(lambda: (self._db.table("pagos").select("id, comercio_id, created_at")
+                               .eq("estado", "confirmado").gte("created_at", desde)
+                               .order("created_at").order("id")))
+        ultimo_pago: dict[str, datetime] = {}
+        for p in pagos:
+            t = ts(p["created_at"])
+            if p["comercio_id"] not in ultimo_pago or t > ultimo_pago[p["comercio_id"]]:
+                ultimo_pago[p["comercio_id"]] = t
+        out: dict[str, dict] = {}
+        for cid, e in ultimo.items():
+            if cid in ultimo_pago and ultimo_pago[cid] > ts(e["created_at"]):
+                continue
+            d = e.get("detalle") or {}
+            out[cid] = {"plan": d.get("plan"), "nota": d.get("nota"),
+                        "actor": e.get("actor"), "created_at": e["created_at"]}
+        return out
 
     def list_comercios_por_agente(self, email: str, limit: int = 200) -> list[dict]:
         """Comercios que este agente de campo dio de alta (para que vea su propio recorrido)."""

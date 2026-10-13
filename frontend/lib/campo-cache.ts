@@ -10,17 +10,24 @@
  *  - En memoria: la lista completa, para que «Comercios de mi ciudad» abra al
  *    instante con lo último que se vio.
  *  - En el celular (localStorage): sólo lo mínimo para reconocer un local
- *    (nombre, rubro, punto y miniatura). Es una lista de LOCALES, sin números
- *    de contacto, y alcanza para el aviso sin conexión.
+ *    (nombre, rubro, punto, miniatura, sello del plan y qué le falta). Es una
+ *    lista de LOCALES, sin números de contacto, y alcanza para el aviso y para
+ *    «Qué hay acá» sin conexión.
  *
  * Todo el acceso al almacenamiento va en try/catch: en modo privado o con el
  * sitio bloqueado puede tirar, y el aviso es una ayuda, nunca un requisito.
  */
-import type { ComercioAgente } from "@/lib/campo";
+import type { ComercioAgente, EstadoPlan } from "@/lib/campo";
+import { calcularFaltas, etiquetasFaltas } from "@/lib/faltas";
 
 export type ComercioCercano = {
   id: string; nombre: string; lat: number; lng: number;
   rubro: string | null; thumb: string | null;
+  /** Para «Qué hay acá» sin señal: el sello del plan y qué le falta, ya resuelto.
+   *  Son estados y etiquetas, nunca datos de contacto. Opcionales: lo guardado
+   *  antes de esto no los tiene y la lista simplemente no los muestra. */
+  plan?: EstadoPlan | null;
+  faltan?: string[];
 };
 
 const CLAVE = "uruku_campo_cercanos_v1";
@@ -39,6 +46,8 @@ export function aCercanos(items: ComercioAgente[]): ComercioCercano[] {
     r.push({
       id: c.id, nombre: c.nombre ?? "", lat: c.lat, lng: c.lng,
       rubro: c.rubros?.nombre ?? null, thumb: c.portada_thumb_url || c.portada_url || null,
+      plan: c.estado_plan ?? null,
+      faltan: etiquetasFaltas(calcularFaltas(c, c.fotos_count ?? null)),
     });
   }
   return r;

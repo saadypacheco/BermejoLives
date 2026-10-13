@@ -1441,6 +1441,12 @@ function TabMonitoreo({
   );
 }
 
+/** «12/10/2026» de un instante ISO; si no se puede leer, el texto tal cual. */
+function fechaInteres(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("es-BO");
+}
+
 function TabSuscripciones({
   items, onSuspender, onActivar, onPago,
 }: {
@@ -1449,7 +1455,7 @@ function TabSuscripciones({
   onActivar: (id: string) => void;
   onPago: () => void;
 }) {
-  const [filtro, setFiltro] = useState<EstadoSuscripcion | "todos">("todos");
+  const [filtro, setFiltro] = useState<EstadoSuscripcion | "todos" | "interesados">("todos");
   // Buscar por nombre, teléfono o código: con más de mil comercios por ciudad,
   // recorrer la lista para registrar un pago no era una opción.
   const [busqueda, setBusqueda] = useState("");
@@ -1480,7 +1486,11 @@ function TabSuscripciones({
     sinTildes(`${c.nombre} ${c.slug} ${c.codigo ?? ""}`).includes(qTexto)
     || (qDigitos.length >= 4 && (c.whatsapp ?? "").replace(/\D/g, "").includes(qDigitos)));
   const conteo = (e: EstadoSuscripcion) => base.filter((c) => c.suscripcion_estado === e).length;
-  const todosVisibles = filtro === "todos" ? base : base.filter((c) => c.suscripcion_estado === filtro);
+  // «Interesados»: a los que el agente les anotó interés en un plan y todavía no pagaron.
+  const nInteresados = base.filter((c) => !!c.interes).length;
+  const todosVisibles = filtro === "todos" ? base
+    : filtro === "interesados" ? base.filter((c) => !!c.interes)
+    : base.filter((c) => c.suscripcion_estado === filtro);
   // Se dibujan de a 100: mil filas con cinco botones cada una traban el panel.
   const visibles = todosVisibles.slice(0, mostrar);
 
@@ -1500,9 +1510,11 @@ function TabSuscripciones({
 
       {/* Contadores */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
-        {(["todos", "activo", "cortesia", "por_vencer", "vencido", "suspendido", "sin_plan"] as const).map((e) => {
-          const n = e === "todos" ? base.length : conteo(e as EstadoSuscripcion);
-          const cfg = e === "todos" ? { label: "Todos", color: "var(--txt-2)" } : ESTADO_CFG[e as EstadoSuscripcion];
+        {(["todos", "interesados", "activo", "cortesia", "por_vencer", "vencido", "suspendido", "sin_plan"] as const).map((e) => {
+          const n = e === "todos" ? base.length : e === "interesados" ? nInteresados : conteo(e);
+          const cfg = e === "todos" ? { label: "Todos", color: "var(--txt-2)" }
+            : e === "interesados" ? { label: "Interesados", color: "var(--amber)" }
+            : ESTADO_CFG[e];
           return (
             <button key={e} onClick={() => { setFiltro(e); setMostrar(100); }}
               style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid", cursor: "pointer",
@@ -1540,6 +1552,18 @@ function TabSuscripciones({
                   </span>
                 )}
               </div>
+              {/* Que le interesa un plan: lo anotó el agente en la vereda. Texto + ícono, no sólo color. */}
+              {c.interes && (
+                <div style={{ marginTop: 6 }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, color: "var(--amber)", border: "1px solid var(--amber)", borderRadius: 999, padding: "2px 10px" }}>
+                    <Ic n="destacado" s={13} peso="fill" />
+                    Interesado: {nombrePlan(c.interes.plan)} · {(c.interes.actor || "agente").split("@")[0]} · {fechaInteres(c.interes.created_at)}
+                  </span>
+                  {c.interes.nota && (
+                    <div style={{ fontSize: 12, color: "var(--txt-2)", marginTop: 4, overflowWrap: "anywhere" }}>«{c.interes.nota}»</div>
+                  )}
+                </div>
+              )}
             </div>
             <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
               {/* La cuenta (confiable, números, grupos, mensajes) es de admin y moderador: el publicador no la ve. */}

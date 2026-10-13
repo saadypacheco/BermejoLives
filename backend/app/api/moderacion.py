@@ -790,8 +790,17 @@ def listar_suscripciones(
     _admin: dict = Depends(require_permiso("pagos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """Lista los comercios con su estado de suscripción; con `ciudad`, sólo los de esa ciudad."""
+    """Lista los comercios con su estado de suscripción; con `ciudad`, sólo los de esa ciudad.
+
+    Cada item suma `interes`: el último «Le interesa un plan» que anotó un agente y que no tiene un
+    pago confirmado después (`{plan, plan_nombre, nota, actor, created_at}`), o null. Se resuelve
+    con una consulta para toda la lista, no una por comercio."""
     items = repo.list_suscripciones(_ciudad_id_o_404(repo, ciudad) if ciudad else None)
+    intereses = repo.intereses_de_plan_pendientes()
+    nombres = {p["slug"]: p.get("nombre") for p in repo.list_planes()} if intereses else {}
+    for it in items:
+        i = intereses.get(it["id"])
+        it["interes"] = {**i, "plan_nombre": nombres.get(i["plan"]) or i["plan"]} if i else None
     return {"items": items, "total": len(items)}
 
 

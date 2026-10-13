@@ -959,10 +959,23 @@ class FakeRepo:
                         "credenciales_version": int(u.get("credenciales_version") or 0)}
         return None
 
-    def registrar_evento_comercio(self, comercio_id, tipo, actor):
+    def registrar_evento_comercio(self, comercio_id, tipo, actor, detalle=None):
         if self.falla_auditoria:
             raise RuntimeError("no se pudo escribir comercio_eventos")
-        self.comercio_eventos.append({"comercio_id": comercio_id, "tipo": tipo, "actor": actor})
+        fila = {"comercio_id": comercio_id, "tipo": tipo, "actor": actor}
+        if detalle is not None:        # 0151: sólo los eventos con detalle llevan fecha en el fake
+            fila.update({"detalle": detalle, "created_at": self._tic()})
+        self.comercio_eventos.append(fila)
+
+    def _tic(self):
+        """Una marca de tiempo ISO estrictamente creciente (dos llamadas seguidas nunca empatan)."""
+        from datetime import datetime, timedelta, timezone
+        t = datetime.now(timezone.utc)
+        ultimo = getattr(self, "_ultimo_tic", None)
+        if ultimo is not None and t <= ultimo:
+            t = ultimo + timedelta(microseconds=1)
+        self._ultimo_tic = t
+        return t.isoformat()
 
     def get_comercio_por_alta_uid(self, cargado_por, alta_uid):
         return next((c for c in self.comercios.values()
@@ -1054,6 +1067,39 @@ class FakeRepo:
     def get_comercio_campo(self, comercio_id):
         c = self.comercios.get(comercio_id)
         return c if c and c.get("activo", True) else None
+
+    def contar_fotos_comercios(self, comercio_ids):
+        """Como el RPC de la 0151: {comercio_id: n}, sólo los que tienen fotos."""
+        quiero = {str(i) for i in comercio_ids}
+        cuenta = {}
+        for f in self.comercio_fotos:
+            if str(f["comercio_id"]) in quiero:
+                cuenta[str(f["comercio_id"])] = cuenta.get(str(f["comercio_id"]), 0) + 1
+        return cuenta
+
+    def list_ejemplos_candidatos(self, ciudad_id, rubro_id=None, limite=200):
+        out = [c for c in self.comercios.values()
+               if c.get("ciudad_id") == ciudad_id and c.get("activo", True) and not c.get("suspendido")
+               and c.get("portada_url") and c.get("whatsapp") and c.get("horario")
+               and (not rubro_id or c.get("rubro_id") == rubro_id)]
+        return out[:limite]
+
+    def intereses_de_plan_pendientes(self):
+        """Como el repo real: el último `interes_plan` de cada comercio sin un pago confirmado después."""
+        ultimo = {}
+        for e in self.comercio_eventos:
+            if e["tipo"] == "interes_plan":
+                ultimo[e["comercio_id"]] = e              # el último en orden de llegada
+        out = {}
+        for cid, e in ultimo.items():
+            pagado = any(p.get("comercio_id") == cid and p.get("estado") == "confirmado"
+                         and str(p.get("created_at") or "") > e["created_at"]
+                         for p in self.pagos.values())
+            if not pagado:
+                d = e.get("detalle") or {}
+                out[cid] = {"plan": d.get("plan"), "nota": d.get("nota"),
+                            "actor": e["actor"], "created_at": e["created_at"]}
+        return out
 
     def list_comercios_por_agente(self, email, limit=200):
         items = [
@@ -2103,7 +2149,8 @@ class FakeRepo:
             raise HTTPException(status_code=404, detail="comercio no encontrado")
         nueva = (date.today() + timedelta(days=30 * max(1, int(row.get("meses", 1))))).isoformat()
         pid = self._id("pag")
-        self.pagos[pid] = {"id": pid, "comercio_id": comercio_id, "estado": "confirmado", **row}
+        self.pagos[pid] = {"id": pid, "comercio_id": comercio_id, "estado": "confirmado",
+                           "created_at": self._tic(), **row}
         c["paga_hasta"] = nueva
         c["suspendido"] = False
         self._reactivar_si_lo_apago_el_pago(comercio_id)

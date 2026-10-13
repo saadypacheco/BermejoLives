@@ -8,7 +8,7 @@ confirme. La foto va a Supabase Storage (bucket público 'comercios').
 import httpx
 import structlog
 import re
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, Request
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -21,7 +21,7 @@ from app.db.repository import Repo, get_repo
 from app.models.schemas import LoginBody
 from app.services.clasificador import sugerir_rubros
 from app.services.imagenes import subir_foto_comercio, subir_foto_galeria, subir_video_comercio
-from app.services import cargas, planes
+from app.services import cargas, planes, que_hay_aca
 from app.services import enlaces
 from app.services import fotos_galeria, portada
 from app.services import ficha_catalogo as catalogo_svc
@@ -537,15 +537,51 @@ def mis_comercios(agente: dict = Depends(auth.require_agente), repo: Repo = Depe
     ciudad_id = _ciudad_del_agente(repo, agente)
     if not ciudad_id:
         logger.warning("campo.agente_sin_ciudad", agente=agente.get("email"))
-        return {"items": [sin_codigo(c) for c in propios], "ciudad": None}
+        return {"items": [sin_codigo(c) for c in que_hay_aca.enriquecer(repo, propios)], "ciudad": None}
 
     # Los de su ciudad, más los propios de afuera. Sin repetir: los suyos que
     # SON de su ciudad ya vienen en la primera lista.
     de_la_ciudad = repo.list_comercios_de_ciudad(ciudad_id)
     vistos = {c["id"] for c in de_la_ciudad}
     afuera = [c for c in propios if c["id"] not in vistos]
-    return {"items": [sin_codigo(c) for c in afuera + de_la_ciudad], "ciudad": agente.get("ciudad"),
+    # Cada comercio suma `estado_plan`, `fotos_count` y `rubro_slug` (docs/que-hay-aca.md); las
+    # fotos se cuentan en UNA consulta para toda la lista, y sin precios ni `paga_hasta`.
+    items = que_hay_aca.enriquecer(repo, afuera + de_la_ciudad)
+    return {"items": [sin_codigo(c) for c in items], "ciudad": agente.get("ciudad"),
             "propios_de_otra_ciudad": len(afuera)}
+
+
+@router.get("/campo/planes")
+def planes_pagos(_agente: dict = Depends(auth.require_agente), repo: Repo = Depends(get_repo)) -> dict:
+    """Los planes de pago activos, SÓLO nombre y slug: para «Le interesa un plan».
+    Los precios no salen en la app del agente (están en la guía de venta)."""
+    pagos = [p for p in repo.list_planes() if _es_plan_pago(p)]
+    return {"items": [{"slug": p["slug"], "nombre": p.get("nombre") or p["slug"]} for p in pagos]}
+
+
+def _es_plan_pago(plan: dict | None) -> bool:
+    """Plan de pago = `precio_mes > 0` (la misma definición que la estrella, migración 0143)."""
+    try:
+        return float((plan or {}).get("precio_mes") or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+@router.get("/campo/ejemplos")
+def ejemplos_de_la_ciudad(
+    rubro: str | None = Query(default=None, max_length=80, description="slug del rubro a preferir"),
+    excluir: str | None = Query(default=None, max_length=64, description="id del comercio abierto"),
+    agente: dict = Depends(auth.require_agente),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Hasta 3 comercios COMPLETOS de la ciudad del agente para mostrarle al dueño cómo se ve un
+    local bien cargado. Prefiere el rubro pedido; si no alcanzan, completa con otros.
+    «Completo» está definido en `que_hay_aca.es_completo`. Sin ciudad asignada: lista vacía."""
+    ciudad_id = _ciudad_del_agente(repo, agente)
+    if not ciudad_id:
+        return {"items": []}
+    return {"items": que_hay_aca.ejemplos(repo, ciudad_id, (rubro or "").strip() or None,
+                                          (excluir or "").strip() or None)}
 
 
 def _propio_o_404(repo: Repo, comercio_id: str, agente: dict) -> dict:
@@ -583,7 +619,43 @@ def ver_mi_comercio(
     comercio = repo.get_comercio_campo(comercio_id)
     if not comercio:
         raise HTTPException(status_code=404, detail="Comercio no encontrado")
-    return {"comercio": sin_codigo(comercio)}
+    return {"comercio": sin_codigo(que_hay_aca.enriquecer(repo, [comercio])[0])}
+
+
+class _InteresBody(BaseModel):
+    plan: str
+    nota: str | None = None
+
+
+_MAX_NOTA_INTERES = 300
+
+
+@router.post("/campo/mis-comercios/{comercio_id}/interes")
+def anotar_interes(
+    comercio_id: str,
+    body: _InteresBody,
+    agente: dict = Depends(auth.require_agente),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """«Le interesa un plan»: el agente anota que el dueño quiere sumarse y el admin lo ve en
+    Suscripciones. Queda en `comercio_eventos` (`interes_plan`, `detalle` = {plan, nota}).
+    No cambia el plan ni cobra nada. Regla de ciudad de siempre (`_propio_o_404`)."""
+    comercio = _propio_o_404(repo, comercio_id, agente)
+    slug = (body.plan or "").strip()
+    plan = repo.get_plan(slug) if slug else None
+    if not plan or not plan.get("activo", True) or not _es_plan_pago(plan):
+        raise HTTPException(status_code=400, detail="Elegí un plan de pago de la lista")
+    nota = (body.nota or "").strip() or None
+    if nota and len(nota) > _MAX_NOTA_INTERES:
+        raise HTTPException(status_code=400, detail=f"La nota admite hasta {_MAX_NOTA_INTERES} caracteres")
+    try:
+        repo.registrar_evento_comercio(comercio["id"], "interes_plan", agente["email"],
+                                       {"plan": plan["slug"], "nota": nota})
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("campo.interes_plan_fallo", comercio=comercio["id"], exc_info=True)
+        raise HTTPException(status_code=502, detail="No se pudo anotar el interés, probá de nuevo") from exc
+    logger.info("campo.interes_plan", comercio=comercio["id"], plan=plan["slug"], agente=agente["email"])
+    return {"ok": True, "plan": plan["slug"], "nota": nota}
 
 
 class _EditarComercioBody(BaseModel):

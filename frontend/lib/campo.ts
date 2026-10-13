@@ -200,7 +200,17 @@ export async function altaComercioCampo(form: FormData): Promise<AltaCampoResult
   }
 }
 
+/** El plan de un comercio como lo ve el agente: sólo el estado, nunca precios ni
+ *  fechas de pago. Lo manda `/campo/mis-comercios` (spec docs/que-hay-aca.md). */
+export type EstadoPlan = "al_dia" | "cortesia" | "gratis" | "vencido";
+
 export type ComercioAgente = {
+  /** Del backend de «Qué hay acá». Opcionales: mientras el servidor no los
+   *  mande, la pantalla funciona igual y sólo omite el sello y el conteo de fotos. */
+  estado_plan?: EstadoPlan | null;
+  /** Fotos de la galería (sin contar la portada). */
+  fotos_count?: number | null;
+  rubro_slug?: string | null;
   id: string; slug: string; nombre: string; whatsapp: string | null; telefono: string | null; modalidad: string | null;
   direccion: string | null; lat: number | null; lng: number | null;
   /** La calle deducida del GPS (0127). Casi ningún comercio tiene dirección
@@ -266,6 +276,56 @@ export async function miComercio(id: string): Promise<ComercioAgente> {
   }
   if (!res.ok) throw new Error("No se pudo abrir el comercio");
   return (await res.json()).comercio as ComercioAgente;
+}
+
+// ---- «Qué hay acá»: ofrecer URUKU a un comercio (spec docs/que-hay-aca.md) ----
+
+/** Un comercio completo de la ciudad, para mostrarle al dueño cómo se ve uno bien cargado. */
+export type EjemploCampo = {
+  id: string; slug: string; nombre: string;
+  rubro_nombre: string | null; portada_thumb_url: string | null;
+};
+
+/** Un plan pago que se puede ofrecer. Sólo el nombre: los precios no van en la app. */
+export type PlanCampo = { slug: string; nombre: string };
+
+async function getCampo<T>(ruta: string, fallo: string): Promise<T> {
+  const res = await fetch(`${API}${ruta}`, { headers: { Authorization: `Bearer ${getAgenteToken() ?? ""}` } });
+  if (res.status === 401) { clearAgente(); throw new Error("Sesión vencida, volvé a entrar"); }
+  if (!res.ok) throw new Error(fallo);
+  return res.json() as Promise<T>;
+}
+
+/** Hasta 3 comercios completos de la ciudad del agente (prefiere el rubro dado y
+ *  deja afuera `excluir`, el comercio que se está ofreciendo). */
+export async function ejemplosCampo(rubro?: string | null, excluir?: string | null): Promise<EjemploCampo[]> {
+  const q = new URLSearchParams();
+  if (rubro) q.set("rubro", rubro);
+  if (excluir) q.set("excluir", excluir);
+  const d = await getCampo<{ items?: EjemploCampo[] }>(`/campo/ejemplos${q.toString() ? `?${q}` : ""}`, "No se pudieron traer los ejemplos");
+  return d.items ?? [];
+}
+
+/** Los planes pagos activos, sólo nombres. */
+export async function planesCampo(): Promise<PlanCampo[]> {
+  const d = await getCampo<{ items?: PlanCampo[] }>("/campo/planes", "No se pudieron traer los planes");
+  return d.items ?? [];
+}
+
+/** Anota que al comercio le interesa un plan; el admin lo ve en Suscripciones. */
+export async function anotarInteresPlan(comercioId: string, plan: string, nota?: string): Promise<void> {
+  const body: { plan: string; nota?: string } = { plan };
+  if (nota && nota.trim()) body.nota = nota.trim().slice(0, 300);
+  const res = await fetch(`${API}/campo/mis-comercios/${encodeURIComponent(comercioId)}/interes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAgenteToken() ?? ""}` },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401) { clearAgente(); throw new Error("Sesión vencida, volvé a entrar"); }
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(typeof d.detail === "string" && d.detail ? d.detail : "No se pudo anotar el interés");
+  }
 }
 
 export type EditarComercioBody = {

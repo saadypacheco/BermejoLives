@@ -79,7 +79,10 @@ export default function GuiaVentaPage() {
         </p>
         <p className="chico">
           Si el local todavía no está cargado, <b>cargalo ahí mismo</b> con la app de campo y
-          después mostráselo. Son dos minutos y es otra conversación.
+          después mostráselo. Son dos minutos y es otra conversación. Si ya está, la pantalla
+          <b> «Qué hay acá»</b> te lo muestra con lo que le falta, <b>ejemplos de locales
+          completos</b> para enseñarle, y te deja anotar su interés en un plan o mandarle su
+          ficha por WhatsApp.
         </p>
       </Bloque>
 
@@ -114,12 +117,16 @@ export default function GuiaVentaPage() {
       <Bloque titulo="Los precios, de memoria">
         <table className="guia-tabla">
           <tbody>
-            <tr><td><b>Básico</b></td><td>Gratis <b>el primer mes</b></td><td>Mapa, buscador y ficha</td></tr>
+            <tr><td><b>Básico</b></td><td>Gratis <b>para siempre</b>, sin vencimiento</td><td>Mapa, buscador y ficha</td></tr>
             <tr><td><b>Publica</b></td><td>Bs 70</td><td>15 publicaciones/mes · extra Bs 5</td></tr>
             <tr><td><b>Destacado</b></td><td>Bs 140</td><td>50 publicaciones + destacado + canal</td></tr>
             <tr><td><b>Pro</b></td><td>Consultá</td><td>Atención 24/7 del WhatsApp del comercio</td></tr>
           </tbody>
         </table>
+        <p className="chico">
+          El Básico no se vence: <b>el que deja de pagar un plan vuelve a Básico</b> y sigue
+          en el mapa. No se le saca la ficha.
+        </p>
         <p><b>Promoción de lanzamiento: paga un mes y tiene dos.</b></p>
         <p className="chico">
           La cuenta que cierra sola: 15 incluidas y Bs 5 la extra. A las 29 publicaciones
@@ -149,7 +156,7 @@ export default function GuiaVentaPage() {
           nos metemos en la venta.
         </Obj>
         <Obj q="&ldquo;Déjeme pensarlo.&rdquo;">
-          Listo — <b>el primer mes es gratis igual</b>, no hay que decidir nada hoy. Y ahí se
+          Listo — <b>el Básico es gratis para siempre</b>, no hay que decidir nada hoy. Y ahí se
           deja la ficha andando. El que la ve funcionando una semana vuelve solo; el que
           se siente apurado, no.
         </Obj>
