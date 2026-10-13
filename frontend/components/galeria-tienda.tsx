@@ -135,11 +135,9 @@ export function GaleriaTienda({ fotos, videos, publicaciones, nombre, comercioId
             <button type="button" onClick={() => setAbierta(n)}
                     aria-label={it.clase === "pub" ? `${etiqueta(it.pub)}: ${it.pub.titulo ?? nombre}` : `Ver la foto ${n + 1}`}>
               {it.url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <FotoEntera
                   src={it.clase === "foto" ? (it.thumb || it.url) : it.url}
                   alt={it.clase === "pub" ? (it.pub.titulo ?? "") : `${nombre}, foto ${n + 1}`}
-                  loading="lazy" decoding="async"
                 />
               ) : (
                 // Una novedad sin foto: el texto en el lugar de la imagen.
@@ -213,6 +211,22 @@ export function GaleriaTienda({ fotos, videos, publicaciones, nombre, comercioId
         </div>
       )}
     </section>
+  );
+}
+
+/** La foto ENTERA en un cuadro parejo: sin recortar, con la misma foto
+ *  difuminada atrás llenando lo que sobra (como las historias de Instagram).
+ *  Los flyers de los comercios traen texto hasta el borde y el recorte se lo
+ *  comía («ABILITAMOS», «ALE COLOR»). El fondo usa la misma miniatura: no baja
+ *  nada de más. */
+export function FotoEntera({ src, alt }: { src: string; alt: string }) {
+  return (
+    <span className="uk-tienda-marco">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img className="fondo" src={src} alt="" aria-hidden loading="lazy" decoding="async" />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img className="frente" src={src} alt={alt} loading="lazy" decoding="async" />
+    </span>
   );
 }
 

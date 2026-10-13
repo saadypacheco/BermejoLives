@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Ic } from "@/components/ic";
+import { FotoEntera } from "@/components/galeria-tienda";
 import type { NovedadFoto } from "@/lib/data";
 
 export function NovedadUrukuFotos({ fotos, titulo }: { fotos: NovedadFoto[]; titulo: string }) {
@@ -40,8 +41,7 @@ export function NovedadUrukuFotos({ fotos, titulo }: { fotos: NovedadFoto[]; tit
         {fotos.map((f, n) => (
           <li key={f.url}>
             <button type="button" onClick={() => setAbierta(n)} aria-label={`Ver la foto ${n + 1} de ${fotos.length}`}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={f.thumb_url || f.url} alt={`${titulo}, foto ${n + 1}`} loading="lazy" decoding="async" />
+              <FotoEntera src={f.thumb_url || f.url} alt={`${titulo}, foto ${n + 1}`} />
             </button>
           </li>
         ))}
