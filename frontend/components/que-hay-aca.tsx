@@ -13,11 +13,23 @@
  * se ve el punto, la lista, el plan y qué falta; la ficha completa y los
  * ejemplos necesitan conexión y la pantalla lo dice. El aviso «Ya cargados acá
  * cerca» del alta queda como red de seguridad.
+ *
+ * CALLES (spec docs/mapa-calles.md): el interruptor «Calles» pinta en el mapa las
+ * calles de la ciudad (verde recorrida, ámbar parcial, rojo pendiente, gris sin
+ * comercios) y abajo lista las pendientes más cercanas para ir a la siguiente.
+ * Tocar una calle (en el mapa o en la lista) abre su ficha para marcarla. Sin
+ * señal se ve la última capa guardada (lib/calles-cache.ts); marcar necesita señal.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  misComercios, ciudadDelAgente, listarLugares, type ComercioAgente, type EstadoPlan, type Lugar,
+  misComercios, ciudadDelAgente, listarLugares, campoCalles, campoMarcarCalle,
+  type ComercioAgente, type EstadoPlan, type Lugar,
 } from "@/lib/campo";
+import { capaGuardada, guardarVerCalles, leerVerCalles, recordarCapa } from "@/lib/calles-cache";
+import {
+  conMarca, fechaCalle, kmTxt, nombreCalle, pctTxt, pendientesCerca,
+  type CapaCalles, type EstadoMarca,
+} from "@/lib/calles";
 import { aCercanos, cercanosGuardados, listaEnMemoria, recordarLista, type ComercioCercano } from "@/lib/campo-cache";
 import { calcularFaltas, etiquetasFaltas } from "@/lib/faltas";
 import { geoErrorMsg, metros } from "@/lib/geo";
@@ -27,6 +39,7 @@ import type { Rubro } from "@/lib/types";
 import { MapaAca, type PosicionAca, type PinAca } from "@/components/mapa-aca";
 import { FichaAgente } from "@/components/ficha-agente";
 import { SelloPlan } from "@/components/sello-plan";
+import { CallePanel, EstadoCalleTag, LeyendaCalles } from "@/components/calle-panel";
 import { PermisoUbicacion } from "@/components/permiso-ubicacion";
 import { Ic } from "@/components/ic";
 import { Pin } from "@/components/icons";
@@ -36,6 +49,9 @@ export const RADIO_CERCA_M = 150;
 export const RADIO_LEJOS_M = 400;
 
 type EstadoDatos = "cargando" | "fresca" | "guardada" | "sin-datos";
+
+/** Cuántas calles pendientes se listan. Con más, la lista deja de servir para «la siguiente». */
+const MAX_PENDIENTES = 8;
 
 /** Un local de la lista, venga de la lista completa o de la guardada en el celular. */
 type ItemAca = {
@@ -96,6 +112,13 @@ export function QueHayAca({ cabecera, onCargarNuevo, onMisComercios, onSubirPend
   const scrollLista = useRef(0);
   const restaurar = useRef(false);
 
+  // Calles: apagadas por defecto; se recuerda si el agente las dejó prendidas.
+  const [verCalles, setVerCalles] = useState<boolean>(() => (typeof window === "undefined" ? false : leerVerCalles()));
+  const [capa, setCapa] = useState<CapaCalles | null>(null);
+  const [estCalles, setEstCalles] = useState<EstadoDatos>("cargando");
+  const [calleSel, setCalleSel] = useState<string | null>(null);
+  const mapaRef = useRef<HTMLDivElement>(null);
+
   // ── Ubicación ────────────────────────────────────────────────
   function ubicar() {
     setGeoMsg("");
@@ -116,6 +139,42 @@ export function QueHayAca({ cabecera, onCargarNuevo, onMisComercios, onSubirPend
       // Sin señal (o sesión vencida): se queda con lo que había.
       .catch(() => setEstado((e) => (e === "fresca" ? e : (listaEnMemoria() || cercanosGuardados()) ? "guardada" : "sin-datos")));
   }
+  function traerCalles() {
+    campoCalles()
+      .then((c) => { recordarCapa(c); setCapa(c); setEstCalles("fresca"); })
+      // Sin señal (o sesión vencida): se queda con la capa guardada, si la hay.
+      .catch(() => setEstCalles((e) => (e === "fresca" ? e : capaGuardada() ? "guardada" : "sin-datos")));
+  }
+  function alternarCalles() {
+    const v = !verCalles;
+    setVerCalles(v); guardarVerCalles(v);
+    if (!v) setCalleSel(null);
+  }
+  // Al prender: primero lo guardado (se ve al instante, también sin señal) y después lo fresco.
+  useEffect(() => {
+    if (!verCalles) return;
+    const g = capaGuardada();
+    if (g) setCapa((prev) => prev ?? g);
+    setEstCalles("cargando");
+    traerCalles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verCalles]);
+
+  async function marcarCalle(id: string, estado: EstadoMarca, nota: string) {
+    await campoMarcarCalle(id, estado, nota);
+    if (capa) {
+      // Se ve al instante; el servidor recalcula y se vuelve a pedir en segundo plano.
+      const nueva: CapaCalles = { ...capa, tramos: capa.tramos.map((t) => (t.id === id ? conMarca(t, estado, nota || null, null) : t)) };
+      recordarCapa(nueva); setCapa(nueva);
+    }
+    traerCalles();
+  }
+  function elegirCalleDeLaLista(id: string) {
+    setCalleSel(id);
+    // La lista queda abajo y el mapa arriba: sin esto la calle se elige y no se ve nada.
+    requestAnimationFrame(() => mapaRef.current?.scrollIntoView({ block: "start", behavior: "smooth" }));
+  }
+
   useEffect(() => {
     ubicar();
     traerLista();
@@ -136,6 +195,12 @@ export function QueHayAca({ cabecera, onCargarNuevo, onMisComercios, onSubirPend
     [base, radio],
   );
   const nLejos = useMemo(() => base.filter((x) => x.d <= RADIO_LEJOS_M).length, [base]);
+  const pendCerca = useMemo(
+    () => (verCalles && capa && aqui ? pendientesCerca(capa.tramos, aqui, MAX_PENDIENTES) : []),
+    [verCalles, capa, aqui],
+  );
+  const hayPendientes = !!capa && capa.tramos.some((t) => t.estado === "pendiente" || t.estado === "parcial");
+  const tramoSel = calleSel && capa ? capa.tramos.find((t) => t.id === calleSel) ?? null : null;
   const pines = useMemo<PinAca[]>(
     () => cerca.map((x) => ({ id: x.id, nombre: x.nombre, lat: x.lat, lng: x.lng, thumb: x.thumb, plan: x.plan })),
     [cerca],
@@ -212,7 +277,52 @@ export function QueHayAca({ cabecera, onCargarNuevo, onMisComercios, onSubirPend
         </div>
       )}
 
-      <MapaAca aqui={aqui} pines={pines} encuadreM={radio} onSelect={abrir} />
+      {/* Capa de calles: el interruptor va arriba del mapa, que es lo que cambia. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+        <button type="button" role="switch" aria-checked={verCalles} onClick={alternarCalles}
+                style={{ minHeight: 44, padding: "6px 14px", borderRadius: 999, cursor: "pointer", fontWeight: 700, fontSize: 14, display: "inline-flex", alignItems: "center", gap: 8,
+                         border: `2px solid ${verCalles ? "var(--neon)" : "var(--stroke)"}`, background: verCalles ? "rgba(18,161,95,.12)" : "transparent", color: "var(--txt)" }}>
+          <Ic n="ruta" s={17} /> Calles
+          <span style={{ fontSize: 12, fontWeight: 800, color: verCalles ? "var(--neon)" : "var(--txt-3)" }}>
+            {verCalles ? <><Ic n="si" s={12} /> Sí</> : "No"}
+          </span>
+        </button>
+        {verCalles && capa && capa.tramos.length > 0 && (
+          <span style={{ fontSize: 12.5, color: "var(--txt-2)" }}>
+            <b>{kmTxt(capa.resumen.km_recorridos)} de {kmTxt(capa.resumen.km_a_recorrer)} km recorridos ({pctTxt(capa.resumen.pct)} %)</b>
+          </span>
+        )}
+      </div>
+      {verCalles && capa && capa.tramos.length > 0 && <div style={{ marginBottom: 8 }}><LeyendaCalles /></div>}
+      {verCalles && estCalles === "cargando" && !capa && (
+        <p role="status" style={{ fontSize: 12.5, color: "var(--txt-3)", margin: "0 0 8px" }}><Ic n="reloj" s={13} /> Trayendo las calles…</p>
+      )}
+      {verCalles && estCalles === "guardada" && (
+        <p role="status" style={{ fontSize: 12.5, color: "var(--amber)", margin: "0 0 8px" }}>
+          <Ic n="aviso" s={12} /> Sin conexión: son las calles guardadas{fechaCalle(capaGuardada()?.guardada) ? ` el ${fechaCalle(capaGuardada()?.guardada)}` : ""} en el celular. Para marcar una calle hace falta señal.
+        </p>
+      )}
+      {verCalles && estCalles === "sin-datos" && (
+        <p role="alert" style={{ fontSize: 12.5, color: "var(--pink)", margin: "0 0 8px" }}>
+          <Ic n="aviso" s={12} /> No se pudieron traer las calles y no hay una capa guardada en el celular.{" "}
+          <button type="button" className="link-more" style={{ minHeight: 44 }} onClick={() => { setEstCalles("cargando"); traerCalles(); }}>Reintentar</button>
+        </p>
+      )}
+      {verCalles && capa && capa.tramos.length === 0 && estCalles !== "cargando" && (
+        <p role="status" style={{ fontSize: 12.5, color: "var(--txt-3)", margin: "0 0 8px" }}>
+          <Ic n="dato" s={12} /> Esta ciudad todavía no tiene calles cargadas. Las trae el panel de administración.
+        </p>
+      )}
+
+      <div ref={mapaRef} style={{ scrollMarginTop: 76 }}>
+        <MapaAca aqui={aqui} pines={pines} encuadreM={radio} onSelect={abrir}
+                 calles={verCalles && capa ? capa.tramos : null} calleSel={calleSel} onCalle={setCalleSel} />
+        {tramoSel && (
+          <div style={{ marginTop: 8 }}>
+            <CallePanel tramo={tramoSel} verQuien onCerrar={() => setCalleSel(null)} onMarcar={(e, n) => marcarCalle(tramoSel.id, e, n)} />
+          </div>
+        )}
+      </div>
 
       {/* Dónde estoy + actualizar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "10px 0 6px", flexWrap: "wrap" }}>
@@ -221,7 +331,7 @@ export function QueHayAca({ cabecera, onCargarNuevo, onMisComercios, onSubirPend
             ? <><Ic n="ubicacion" s={13} /> Tu ubicación, con ±{aqui.acc} m de precisión</>
             : buscandoGps ? <><Ic n="reloj" s={13} /> Tomando tu ubicación…</> : <><Ic n="aviso" s={13} /> Sin ubicación todavía</>}
         </span>
-        <button type="button" className="btn btn-ghost btn-sm" style={{ minHeight: 44 }} disabled={buscandoGps} onClick={() => { ubicar(); traerLista(); }}>
+        <button type="button" className="btn btn-ghost btn-sm" style={{ minHeight: 44 }} disabled={buscandoGps} onClick={() => { ubicar(); traerLista(); if (verCalles) traerCalles(); }}>
           <Ic n="actualizar" s={15} /> {buscandoGps ? "Ubicando…" : "Actualizar mi ubicación"}
         </button>
       </div>
@@ -244,6 +354,36 @@ export function QueHayAca({ cabecera, onCargarNuevo, onMisComercios, onSubirPend
       )}
       {aviso && (
         <p role="alert" style={{ fontSize: 12.5, color: "var(--amber)", margin: "0 0 8px" }}><Ic n="aviso" s={12} /> {aviso}</p>
+      )}
+
+      {/* Calles pendientes cerca: la siguiente a la que ir. */}
+      {verCalles && capa && capa.tramos.length > 0 && (
+        <section aria-label="Calles pendientes cerca" style={{ margin: "14px 0 4px" }}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 8px" }}>Calles pendientes cerca</h2>
+          {!aqui && (
+            <p style={{ color: "var(--txt-3)", fontSize: 13, margin: 0 }}><Ic n="ubicacion" s={13} /> Necesito tu ubicación para decirte cuáles quedan cerca. Tocá «Actualizar mi ubicación».</p>
+          )}
+          {aqui && !hayPendientes && (
+            <div style={vacio}><Ic n="listo" s={16} /> No quedan calles en rojo ni en ámbar en tu ciudad.</div>
+          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pendCerca.map(({ t, d }) => (
+              <button key={t.id} type="button" onClick={() => elegirCalleDeLaLista(t.id)}
+                      aria-label={`Ver la calle ${nombreCalle(t)}, ${Math.round(d)} metros`} aria-pressed={calleSel === t.id}
+                      style={{ display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%", minHeight: 56, padding: "8px 12px", borderRadius: 12, cursor: "pointer",
+                               border: `${calleSel === t.id ? 2 : 1}px solid ${calleSel === t.id ? "var(--neon)" : "var(--stroke)"}`, background: "var(--panel)", color: "inherit", font: "inherit" }}>
+                <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                  <span style={{ fontWeight: 700, fontSize: 15, overflowWrap: "anywhere", color: t.nombre ? "var(--txt)" : "var(--txt-3)" }}>{nombreCalle(t)}</span>
+                  <span style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <EstadoCalleTag estado={t.estado} />
+                    <span style={{ fontSize: 12, color: "var(--txt-3)" }}>{Math.round(t.cobertura)} % cubierta</span>
+                  </span>
+                </span>
+                <span style={{ fontSize: 13, color: "var(--neon)", fontWeight: 700, whiteSpace: "nowrap" }}>{metrosTxt(d)}</span>
+              </button>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* La lista */}

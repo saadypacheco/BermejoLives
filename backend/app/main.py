@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
-from app.api import asistente, auth, campo, comercio, contenido, health, moderacion, observabilidad, usuario, webhook
+from app.api import asistente, auth, calles, campo, comercio, contenido, health, moderacion, observabilidad, usuario, webhook
 from app.core.config import settings
 from app.core.ip import ip_cliente
 from app.core.limite_cuerpo import LimiteCuerpoMiddleware
@@ -325,6 +325,7 @@ app.include_router(health.router, tags=["health"])
 app.include_router(auth.router, tags=["auth"])
 app.include_router(comercio.router, tags=["comercio"])
 app.include_router(campo.router, tags=["campo"])
+app.include_router(calles.router, tags=["calles"])
 app.include_router(webhook.router, prefix="/ingest", tags=["ingesta"])
 app.include_router(moderacion.router, tags=["moderacion"])
 app.include_router(usuario.router, tags=["usuario"])

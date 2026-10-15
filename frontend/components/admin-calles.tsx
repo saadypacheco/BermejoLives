@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react";
 import { ponerHorarioEnLote, type ComercioPorVerificar } from "@/lib/api";
 import { Ic } from "@/components/ic";
+import { AdminCallesMapa } from "@/components/admin-calles-mapa";
+import { ElegirCiudad } from "@/components/admin-ciudad";
+import type { Ciudad } from "@/lib/types";
 
 /**
  * Los comercios agrupados por CALLE, para cargar horarios de a cientos.
@@ -42,9 +45,43 @@ type Grupo = {
   estimados: number;
 };
 
-export function AdminCalles({ comercios, onCambio }: {
+export function AdminCalles({ comercios, onCambio, ciudad }: {
   comercios: ComercioPorVerificar[];
   /** Para que la lista de afuera se entere y vuelva a pedir los datos. */
+  onCambio: () => void;
+  /** La ciudad elegida arriba (null = todas). El mapa se trabaja de a una ciudad. */
+  ciudad: Ciudad | null;
+}) {
+  const [pestana, setPestana] = useState<"horarios" | "mapa">("horarios");
+
+  return (
+    <div>
+      <div role="tablist" aria-label="Calles y horarios" style={{ display: "flex", gap: 6, padding: "12px 12px 0" }}>
+        {([["horarios", "Horarios", "reloj"], ["mapa", "Mapa", "mapa"]] as const).map(([id, texto, icono]) => {
+          const on = pestana === id;
+          return (
+            <button key={id} type="button" role="tab" id={`calles-tab-${id}`} aria-selected={on} aria-controls={`calles-panel-${id}`}
+                    onClick={() => setPestana(id)}
+                    style={{ minHeight: 44, padding: "8px 16px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 14,
+                             display: "inline-flex", alignItems: "center", gap: 6, color: on ? "var(--neon)" : "var(--txt-2)",
+                             border: `1px solid ${on ? "var(--neon)" : "var(--border)"}`,
+                             background: on ? "rgba(57,255,158,.10)" : "transparent" }}>
+              <Ic n={icono} s={16} /> {texto}
+            </button>
+          );
+        })}
+      </div>
+      <div role="tabpanel" id={`calles-panel-${pestana}`} aria-labelledby={`calles-tab-${pestana}`}>
+        {pestana === "mapa"
+          ? (ciudad ? <AdminCallesMapa ciudad={ciudad} /> : <div style={{ padding: 12 }}><ElegirCiudad que="calles" /></div>)
+          : <CallesPorHorario comercios={comercios} onCambio={onCambio} />}
+      </div>
+    </div>
+  );
+}
+
+function CallesPorHorario({ comercios, onCambio }: {
+  comercios: ComercioPorVerificar[];
   onCambio: () => void;
 }) {
   const [abierta, setAbierta] = useState<string | null>(null);

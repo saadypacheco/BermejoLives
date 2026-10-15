@@ -19,6 +19,7 @@
  */
 import type { ComercioAgente, EstadoPlan } from "@/lib/campo";
 import { calcularFaltas, etiquetasFaltas } from "@/lib/faltas";
+import { olvidarCapaCalles } from "@/lib/calles-cache";
 
 export type ComercioCercano = {
   id: string; nombre: string; lat: number; lng: number;
@@ -73,4 +74,5 @@ export function cercanosGuardados(): ComercioCercano[] | null {
 export function olvidarLista(): void {
   enMemoria = null;
   try { localStorage.removeItem(CLAVE); } catch { /* nada que borrar */ }
+  olvidarCapaCalles();   // la capa de calles también es de la ciudad de este agente
 }

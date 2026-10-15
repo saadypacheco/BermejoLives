@@ -15,7 +15,7 @@ from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS, tiene as ti
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp, whatsapp_para_guardar
-from app.services import enlaces, ficha_catalogo as catalogo_svc, fotos_galeria, portada, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
+from app.services import calles_mapa, enlaces, ficha_catalogo as catalogo_svc, fotos_galeria, portada, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
@@ -1379,6 +1379,7 @@ def promover_importado(
     rid = repo.get_rubro_id(rubro_slug)
     if rid:
         repo.set_comercio_rubros(comercio["id"], [rid])
+    calles_mapa.invalidar(imp.get("ciudad_id"))      # el mapa de calles cuenta este comercio
 
     repo.marcar_importado(importado_id, {
         "estado": "promovido", "comercio_id": comercio["id"],

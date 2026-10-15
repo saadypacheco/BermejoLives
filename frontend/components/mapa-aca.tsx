@@ -9,6 +9,10 @@
  * no baja se muestra un aviso y la lista de abajo sigue funcionando; si bajó
  * pero no hay planos (teselas), quedan el punto, el círculo y los pines sobre
  * gris, con un aviso.
+ *
+ * CALLES (spec docs/mapa-calles.md): con `calles` se pintan debajo de todo lo
+ * demás, en un canvas (son ~600 líneas), y tocar una llama a `onCalle`. Sin
+ * `calles` el mapa es el de siempre.
  */
 import { useEffect, useRef, useState } from "react";
 import { agregarTiles } from "@/lib/mapa-tiles";
@@ -17,6 +21,8 @@ import { SVG_COMERCIOS } from "@/lib/iconos-mapa";
 import { PLAN_CFG } from "@/components/sello-plan";
 import type { EstadoPlan } from "@/lib/campo";
 import { Ic } from "@/components/ic";
+import { crearRendererCalles, grosorPorZoom, pintarCalles, resaltarCalle } from "@/lib/calles-mapa";
+import type { TramoCalle } from "@/lib/calles";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
 /** El círculo de referencia: «a esta distancia es la puerta de al lado». */
@@ -30,12 +36,17 @@ export type PinAca = {
 
 export type PosicionAca = { lat: number; lng: number; acc: number };
 
-export function MapaAca({ aqui, pines, encuadreM, onSelect }: {
+export function MapaAca({ aqui, pines, encuadreM, onSelect, calles = null, calleSel = null, onCalle }: {
   aqui: PosicionAca | null;
   pines: PinAca[];
   /** Hasta dónde se acerca el mapa al ubicarse (150 m, o 400 al ampliar). */
   encuadreM: number;
   onSelect: (id: string) => void;
+  /** La capa de calles (null = apagada). */
+  calles?: TramoCalle[] | null;
+  /** La calle elegida: se resalta y, si queda fuera de la vista, el mapa va hasta ella. */
+  calleSel?: string | null;
+  onCalle?: (id: string) => void;
 }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);       // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -44,6 +55,14 @@ export function MapaAca({ aqui, pines, encuadreM, onSelect }: {
   const ajusteRef = useRef("");
   const onSelRef = useRef(onSelect);
   onSelRef.current = onSelect;
+  const onCalleRef = useRef(onCalle);
+  onCalleRef.current = onCalle;
+  const callesRef = useRef(calles);
+  callesRef.current = calles;
+  const rendererRef = useRef<any>(null);  // eslint-disable-line @typescript-eslint/no-explicit-any
+  const grupoCallesRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const lineasRef = useRef<Map<string, any>>(new Map()); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const haloRef = useRef<any>(null);      // eslint-disable-line @typescript-eslint/no-explicit-any
   const [listo, setListo] = useState(false);
   const [falla, setFalla] = useState(false);
   const [sinPlano, setSinPlano] = useState(false);
@@ -59,6 +78,10 @@ export function MapaAca({ aqui, pines, encuadreM, onSelect }: {
         const tiles = agregarTiles(L, map, { oscuro: true });
         tiles.on("tileerror", () => setSinPlano(true));
         tiles.on("tileload", () => setSinPlano(false));
+        // El canvas de las calles se crea ANTES que el resto de lo vectorial,
+        // así el círculo de 100 m y la precisión quedan por encima.
+        rendererRef.current = crearRendererCalles(L, map);
+        grupoCallesRef.current = L.layerGroup().addTo(map);
         capaRef.current = L.layerGroup().addTo(map);
         mapRef.current = map; Lref.current = L;
         setTimeout(() => { if (mapRef.current === map) map.invalidateSize(); }, 60);
@@ -67,9 +90,49 @@ export function MapaAca({ aqui, pines, encuadreM, onSelect }: {
       .catch(() => { if (!cancelado) setFalla(true); });
     return () => {
       cancelado = true;
-      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; capaRef.current = null; }
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; capaRef.current = null; grupoCallesRef.current = null; rendererRef.current = null; }
     };
   }, []);
+
+  // Las calles: una capa aparte, para que repintar los pines no las toque.
+  useEffect(() => {
+    const L = Lref.current, map = mapRef.current, grupo = grupoCallesRef.current;
+    if (!listo || !L || !map || !grupo) return;
+    grupo.clearLayers();
+    haloRef.current = null;
+    lineasRef.current = new Map();
+    if (!calles || calles.length === 0) return;
+    const g = grosorPorZoom(map.getZoom());
+    lineasRef.current = pintarCalles(L, rendererRef.current, grupo, calles, g, (id) => onCalleRef.current?.(id));
+    const t = calleSel ? calles.find((x) => x.id === calleSel) ?? null : null;
+    haloRef.current = resaltarCalle(L, rendererRef.current, grupo, null, t ? lineasRef.current.get(t.id) ?? null : null, t, g);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listo, calles]);
+
+  // La calle elegida: halo, y el mapa va hasta ella si no se la ve entera.
+  useEffect(() => {
+    const L = Lref.current, map = mapRef.current, grupo = grupoCallesRef.current;
+    if (!listo || !L || !map || !grupo) return;
+    const t = calleSel ? callesRef.current?.find((x) => x.id === calleSel) ?? null : null;
+    haloRef.current = resaltarCalle(L, rendererRef.current, grupo, haloRef.current, t ? lineasRef.current.get(t.id) ?? null : null, t, grosorPorZoom(map.getZoom()));
+    if (t) {
+      const b = L.latLngBounds(t.geom);
+      if (!map.getBounds().contains(b)) map.fitBounds(b, { padding: [30, 30], maxZoom: 18, animate: true });
+    }
+  }, [listo, calleSel]);
+
+  // Al acercar o alejar, el trazo cambia de grosor.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!listo || !map) return;
+    const alZoom = () => {
+      const g = grosorPorZoom(map.getZoom());
+      lineasRef.current.forEach((linea) => linea.setStyle({ weight: g }));
+      if (haloRef.current) haloRef.current.setStyle({ weight: g + 7 });
+    };
+    map.on("zoomend", alZoom);
+    return () => { map.off("zoomend", alZoom); };
+  }, [listo]);
 
   // Dibujo: tu punto, la precisión, el círculo y los pines.
   useEffect(() => {
@@ -144,7 +207,7 @@ export function MapaAca({ aqui, pines, encuadreM, onSelect }: {
       )}
       {sinPlano && (
         <div role="status" style={{ position: "absolute", left: 8, right: 8, bottom: 8, zIndex: 500, padding: "6px 10px", borderRadius: 10, background: "rgba(10,13,20,.88)", color: "var(--amber)", fontSize: 12 }}>
-          <Ic n="aviso" s={13} /> Sin señal: el mapa no baja los planos, pero tu punto y los locales siguen acá.
+          <Ic n="aviso" s={13} /> Sin señal: el mapa no baja los planos, pero {calles ? "tu punto, los locales y las calles" : "tu punto y los locales"} siguen acá.
         </div>
       )}
     </div>

@@ -3,6 +3,7 @@
 Patrón Protocol como en mentorcomercial para poder testear con un fake.
 """
 import re
+import uuid
 from typing import Protocol
 
 import structlog
@@ -315,6 +316,13 @@ class Repo(Protocol):
     def update_novedad_uruku(self, novedad_id: str, patch: dict) -> dict | None: ...
     def agregar_foto_novedad_uruku(self, novedad_id: str, foto: dict, maximo: int) -> list[dict] | None: ...
     def quitar_foto_novedad_uruku(self, novedad_id: str, url: str) -> dict | None: ...
+    # Mapa de calles recorridas (0152)
+    def upsert_calles_tramos(self, filas: list[dict]) -> int: ...
+    def list_calles_tramos(self, ciudad_id: str) -> list[dict]: ...
+    def get_calle_tramo(self, tramo_id: str) -> dict | None: ...
+    def list_calles_marcas_ultimas(self, ciudad_id: str) -> list[dict]: ...
+    def crear_calle_marca(self, row: dict) -> dict: ...
+    def list_comercios_para_calles(self, ciudad_id: str) -> list[dict]: ...
     def list_redes(self) -> list[dict]: ...
     def update_red(self, clave: str, url: str | None) -> dict | None: ...
 
@@ -3344,6 +3352,73 @@ class SupabaseRepo:
         """Saca la foto de esa `url` y la devuelve ({url, thumb_url}); None si no estaba."""
         res = self._db.rpc("novedad_quitar_foto", {"p_id": novedad_id, "p_url": url}).execute()
         return res.data or None
+
+    # ---- Mapa de calles recorridas (0152, docs/mapa-calles.md) ----
+    def upsert_calles_tramos(self, filas: list[dict]) -> int:
+        """Guarda tramos por (ciudad_id, osm_way_id): volver a importar actualiza, no duplica, y
+        conserva el id (las marcas siguen colgadas del mismo tramo). De a 200 por pedido."""
+        for i in range(0, len(filas), 200):
+            (self._db.table("calles_tramos")
+             .upsert(filas[i:i + 200], on_conflict="ciudad_id,osm_way_id").execute())
+        return len(filas)
+
+    def list_calles_tramos(self, ciudad_id: str) -> list[dict]:
+        """Los tramos activos de la ciudad. Pagina: PostgREST corta en 1000 sin avisar."""
+        filas: list[dict] = []
+        while True:
+            lote = (self._db.table("calles_tramos")
+                    .select("id, ciudad_id, osm_way_id, nombre, tipo, geom, longitud_m")
+                    .eq("ciudad_id", ciudad_id).eq("activo", True)
+                    .order("id").range(len(filas), len(filas) + 499).execute().data) or []
+            filas += lote
+            if len(lote) < 500:
+                return filas
+
+    def get_calle_tramo(self, tramo_id: str) -> dict | None:
+        """Un tramo activo, o None (también si el id no es un uuid: no es un error 500)."""
+        try:
+            uuid.UUID(str(tramo_id))
+        except ValueError:
+            return None
+        res = (self._db.table("calles_tramos")
+               .select("id, ciudad_id, osm_way_id, nombre, tipo, longitud_m")
+               .eq("id", tramo_id).eq("activo", True).limit(1).execute())
+        return res.data[0] if res.data else None
+
+    def list_calles_marcas_ultimas(self, ciudad_id: str) -> list[dict]:
+        """La ÚLTIMA marca de cada tramo de la ciudad (las marcas son un registro: se leen todas,
+        las más nuevas primero, y se queda con la primera de cada tramo)."""
+        ultimas: dict[str, dict] = {}
+        inicio = 0
+        while True:
+            lote = (self._db.table("calles_marcas")
+                    .select("id, tramo_id, estado, nota, actor, created_at, calles_tramos!inner(ciudad_id)")
+                    .eq("calles_tramos.ciudad_id", ciudad_id)
+                    .order("created_at", desc=True).order("id", desc=True)
+                    .range(inicio, inicio + 999).execute().data) or []
+            for m in lote:
+                m.pop("calles_tramos", None)
+                ultimas.setdefault(m["tramo_id"], m)
+            if len(lote) < 1000:
+                return list(ultimas.values())
+            inicio += 1000
+
+    def crear_calle_marca(self, row: dict) -> dict:
+        return self._db.table("calles_marcas").insert(row).execute().data[0]
+
+    def list_comercios_para_calles(self, ciudad_id: str) -> list[dict]:
+        """Lo mínimo de cada comercio ACTIVO de la ciudad que sirve para medir la cobertura de las
+        calles: dónde está y cuándo/quién lo cargó. Pagina de a 1000."""
+        filas: list[dict] = []
+        while True:
+            lote = (self._db.table("comercios")
+                    .select("id, lat, lng, created_at, capturado_en, cargado_por")
+                    .eq("ciudad_id", ciudad_id).eq("activo", True)
+                    .not_.is_("lat", "null").not_.is_("lng", "null")
+                    .order("id").range(len(filas), len(filas) + 999).execute().data) or []
+            filas += lote
+            if len(lote) < 1000:
+                return filas
 
     def insert_busqueda(
         self, query: str, resultados: int, comercios: list[str] | None = None

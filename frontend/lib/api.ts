@@ -1,4 +1,5 @@
 // Cliente del backend FastAPI (ingesta + moderación).
+import { normalizarCapa, type CapaCalles, type EstadoMarca } from "@/lib/calles";
 import { camposOpcionesFoto, respuestaPortada, subirConProgreso, type OpcionesFoto, type RespuestaPortada } from "@/lib/upload";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_admin_token";
@@ -1649,4 +1650,31 @@ export async function guardarPlan(slug: string, patch: Partial<Omit<PlanAdmin, "
   // veces lanza «body already used» justo cuando la respuesta no trae `plan`.
   const d = await res.json();
   return d.plan ?? d;
+}
+
+// ---- Mapa de calles recorridas (Admin › Calles y horarios › Mapa; spec docs/mapa-calles.md) ----
+
+/** Baja las calles de OpenStreetMap para la ciudad (puede tardar: Overpass).
+ *  Permiso `lugares`. Overpass caído = 502 con el motivo, que sube como Error. */
+export async function adminImportarCalles(ciudad: string): Promise<{ tramos: number; km: number }> {
+  const res = await authFetch(`/admin/calles/importar`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ciudad }),
+  });
+  const d = (await res.json().catch(() => ({}))) as { tramos?: unknown; km?: unknown };
+  return { tramos: typeof d.tramos === "number" ? d.tramos : 0, km: typeof d.km === "number" ? d.km : 0 };
+}
+
+/** Las calles de la ciudad con su estado, cobertura y última marca. */
+export async function adminMapaCalles(ciudad: string): Promise<CapaCalles> {
+  const res = await authFetch(`/admin/calles/mapa?ciudad=${encodeURIComponent(ciudad)}`);
+  return normalizarCapa(await res.json().catch(() => null));
+}
+
+/** Marca un tramo: recorrida, sin comercios o pendiente (volver a abrirlo). */
+export async function adminMarcarCalle(id: string, estado: EstadoMarca, nota?: string): Promise<void> {
+  const body: { estado: EstadoMarca; nota?: string } = { estado };
+  if (nota && nota.trim()) body.nota = nota.trim().slice(0, 200);
+  await authFetch(`/admin/calles/${encodeURIComponent(id)}/marca`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
 }

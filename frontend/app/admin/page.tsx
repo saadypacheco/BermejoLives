@@ -553,7 +553,7 @@ function AdminPanel() {
                         cargando={cComercios.cargando} onActualizar={() => { void cargarComercios(true); }}
                         aviso={comercios?.truncado ? `El panel trajo ${todosLosComercios.length} negocios y hay más: faltan calles y comercios en esta vista.` : null} />
             <div className="panel-card glass">
-              <AdminCalles comercios={datosComercios} onCambio={() => { void cargarComercios(true); }} />
+              <AdminCalles comercios={datosComercios} ciudad={ciudad} onCambio={() => { void cargarComercios(true); }} />
             </div>
           </Carga>
         ) : <CargandoSeccion texto="Cargando la ciudad…" />

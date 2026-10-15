@@ -165,6 +165,8 @@ class FakeRepo:
         self.cotizaciones_historial: list[dict] = []
         self.videos_promo: list[dict] = []
         self.novedades_uruku: dict[str, dict] = {}    # id -> fila (0150)
+        self.calles_tramos: dict[str, dict] = {}      # id -> fila (0152)
+        self.calles_marcas: list[dict] = []           # registro de marcas (0152)
         self.redes: list[dict] = [
             {"clave": "tiktok", "etiqueta": "TikTok", "url": None, "orden": 1},
             {"clave": "instagram", "etiqueta": "Instagram", "url": None, "orden": 2},
@@ -1486,6 +1488,49 @@ class FakeRepo:
             return None
         n["fotos"] = [f for f in n["fotos"] if f.get("url") != url]
         return dict(sacada)
+
+    # ---- Mapa de calles recorridas (0152) ----
+    def upsert_calles_tramos(self, filas):
+        """Como el repo real: único por (ciudad_id, osm_way_id); volver a importar actualiza y
+        conserva el id."""
+        for f in filas:
+            previo = next((t for t in self.calles_tramos.values()
+                           if t["ciudad_id"] == f["ciudad_id"] and t["osm_way_id"] == f["osm_way_id"]), None)
+            if previo:
+                previo.update({k: v for k, v in f.items()})
+            else:
+                tid = self._id("tramo")
+                self.calles_tramos[tid] = {"id": tid, "activo": True, **f}
+        return len(filas)
+
+    def list_calles_tramos(self, ciudad_id):
+        return [dict(t) for t in self.calles_tramos.values()
+                if t["ciudad_id"] == ciudad_id and t.get("activo", True)]
+
+    def get_calle_tramo(self, tramo_id):
+        t = self.calles_tramos.get(tramo_id)
+        return dict(t) if t and t.get("activo", True) else None
+
+    def list_calles_marcas_ultimas(self, ciudad_id):
+        ultimas = {}
+        for m in self.calles_marcas:                      # en orden de alta: la última pisa
+            t = self.calles_tramos.get(m["tramo_id"])
+            if t and t["ciudad_id"] == ciudad_id:
+                ultimas[m["tramo_id"]] = m
+        return [dict(m) for m in ultimas.values()]
+
+    def crear_calle_marca(self, row):
+        from datetime import datetime, timezone
+        full = {"id": self._id("marca"), "nota": None, "actor": None,
+                "created_at": datetime.now(timezone.utc).isoformat(), **row}
+        self.calles_marcas.append(full)
+        return dict(full)
+
+    def list_comercios_para_calles(self, ciudad_id):
+        return [{k: c.get(k) for k in ("id", "lat", "lng", "created_at", "capturado_en", "cargado_por")}
+                for c in self.comercios.values()
+                if c.get("ciudad_id") == ciudad_id and c.get("activo", True)
+                and c.get("lat") is not None and c.get("lng") is not None]
 
     def list_redes(self):
         return sorted(self.redes, key=lambda x: x.get("orden", 0))

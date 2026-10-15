@@ -3,6 +3,7 @@ import {
   postFormData, subirConProgreso, camposOpcionesFoto, listaFotos, respuestaPortada,
   type OpcionesFoto, type ListaFotos, type RespuestaPortada,
 } from "@/lib/upload";
+import { normalizarCapa, type CapaCalles, type EstadoMarca } from "@/lib/calles";
 // El `?ref=` con el que llegó esta persona (lo guarda RefCapture, primer toque,
 // y vence a los 30 días: ver lib/ref.ts).
 import { refGuardado } from "@/lib/ref";
@@ -500,4 +501,27 @@ export async function crearReclamo(body: { nombre?: string; contacto?: string; c
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error("No se pudo enviar el reclamo");
+}
+
+// ---- Mapa de calles recorridas, lado agente (spec docs/mapa-calles.md) ----
+
+/** Las calles de la ciudad del agente con su estado. */
+export async function campoCalles(): Promise<CapaCalles> {
+  return normalizarCapa(await getCampo<unknown>("/campo/calles", "No se pudieron traer las calles"));
+}
+
+/** El agente marca un tramo de SU ciudad. */
+export async function campoMarcarCalle(id: string, estado: EstadoMarca, nota?: string): Promise<void> {
+  const body: { estado: EstadoMarca; nota?: string } = { estado };
+  if (nota && nota.trim()) body.nota = nota.trim().slice(0, 200);
+  const res = await fetch(`${API}/campo/calles/${encodeURIComponent(id)}/marca`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${getAgenteToken() ?? ""}` },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401) { clearAgente(); throw new Error("Sesión vencida, volvé a entrar"); }
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(typeof d.detail === "string" && d.detail ? d.detail : "No se pudo marcar la calle");
+  }
 }

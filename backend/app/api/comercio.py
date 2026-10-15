@@ -24,6 +24,7 @@ from app.core.text import slug_unico, slugify
 from app.db.repository import Repo, get_repo
 from app.models.schemas import LoginBody, PublicarBody
 from app.services.clasificador import clasificar, generar_texto_comercio, sugerir_rubros
+from app.services import calles_mapa
 from app.services.lugares import elegir_lugar
 from app.services.imagenes import (
     guardar_foto_local, procesar_imagen, subir_foto_comercio,
@@ -155,6 +156,7 @@ async def comercio_registro(
     )
     if rubro_ids:
         repo.set_comercio_rubros(comercio["id"], rubro_ids)
+    calles_mapa.invalidar(ciudad_id)      # el mapa de calles cuenta este comercio
 
     cuenta = repo.crear_comercio_usuario({"comercio_id": comercio["id"], "nombre": nombre.strip()})
     # Su clave de 6 números: la ve UNA vez, acá. Es lo que le permite volver a

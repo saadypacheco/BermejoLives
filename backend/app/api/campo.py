@@ -22,6 +22,7 @@ from app.models.schemas import LoginBody
 from app.services.clasificador import sugerir_rubros
 from app.services.imagenes import subir_foto_comercio, subir_foto_galeria, subir_video_comercio
 from app.services import cargas, planes, que_hay_aca
+from app.services import calles_mapa
 from app.services import enlaces
 from app.services import fotos_galeria, portada
 from app.services import ficha_catalogo as catalogo_svc
@@ -362,6 +363,7 @@ async def alta_campo(
     # que el agente haya elegido. En la calle no se eligen rubros: se anota lo que
     # se ve, y de ahí sale la categoría.
     aplicar_rubros(repo, comercio, rubro_slugs)
+    calles_mapa.invalidar(comercio.get("ciudad_id") or fila.get("ciudad_id"))   # el mapa de calles cuenta este comercio
 
     # La cuenta de Mi comercio, igual que al pagar (`asegurar_comercio_usuario`).
     # Sin esto el comercio cargado en la calle no podía entrar jamás: la
