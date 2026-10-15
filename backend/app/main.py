@@ -200,6 +200,30 @@ def _cors_origins() -> list[str]:
 # «blocked by CORS policy». Ver app/core/limite_cuerpo.py.
 app.add_middleware(LimiteCuerpoMiddleware)
 
+
+class _GZipDatos:
+    """Comprime con gzip las respuestas de datos (JSON) de más de 1 KB.
+
+    El mapa de calles de una ciudad pesa ~1,2 MB en JSON y ~200 KB comprimido:
+    es la diferencia para el celular del agente con datos móviles. Lo de
+    `/fotos` (imágenes y videos) queda afuera aunque la versión de Starlette no
+    lo excluya: ya viene comprimido y el video necesita sus pedidos por rangos."""
+
+    def __init__(self, app):
+        from starlette.middleware.gzip import GZipMiddleware
+
+        self.app = app
+        self.gz = GZipMiddleware(app, minimum_size=1024)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and not scope.get("path", "").startswith("/fotos"):
+            await self.gz(scope, receive, send)
+        else:
+            await self.app(scope, receive, send)
+
+
+app.add_middleware(_GZipDatos)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),

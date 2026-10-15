@@ -69,3 +69,36 @@ nombre de calle, sin mapa.
 3. El agente marca una calle «sin comercios» y queda gris para todos.
 4. En la app del agente se ven las calles pintadas y las pendientes más cercanas.
 5. Tests verdes, `tsc` y `next build` ok, sin emoji.
+
+## Importar por cuadras (15/10/2026, migración 0153)
+
+**Problema (medido en producción, Tarija):** cada tramo era una vía entera de OSM (1.536 tramos para
+327,8 km; ~213 m de promedio, avenidas de más de 1 km). La cobertura se calculaba sobre la vía entera:
+una avenida con 10 comercios en 2 cuadras quedaba «pendiente» completa.
+
+**Cómo se parte** (`tramos_de_vias` en `backend/app/services/calles_mapa.py`):
+
+1. **En las esquinas.** `out geom` trae `nodes` (ids) además de `geometry`. Un nodo que está en dos o más
+   vías **importadas** es una esquina; cada vía se corta en sus esquinas interiores. Una vía filtrada
+   (`footway`, `service`…) no hace esquina; una vía no hace esquina consigo misma (lazos).
+2. **Por largo.** Una cuadra de más de 150 m (`CUADRA_MAX_M`) se parte en `ceil(largo / 150)` partes
+   iguales, con los cortes interpolados sobre la línea (empalman sin hueco). Con los 5 decimales de la
+   geometría una parte puede pasarse ~1 m de los 150.
+3. Cada pedazo es un tramo: `calles_tramos.parte` (0, 1, 2… en el orden de la vía).
+
+**Modelo (0153 `0153_calles_cuadras.sql`, dos carpetas, idempotente):** `parte int not null default 0`;
+el único `(ciudad_id, osm_way_id)` pasa a `(ciudad_id, osm_way_id, parte)`.
+
+**Reimportar:** upsert por `(ciudad_id, osm_way_id, parte)` (mismo id si la cuadra sigue). Los tramos de
+la ciudad que no vinieron quedan `activo = false` (baja lógica): las marcas viejas apuntan a ids que ya no
+se muestran. Si Overpass no devuelve ninguna vía o falla, no se da de baja nada. Respuesta `{tramos, km}`.
+
+**Lectura:** `GET /admin/calles/mapa` y `GET /campo/calles` no cambian (hay más tramos y más cortos).
+
+**Medido** con Overpass real sobre una caja de Tarija (3.666 vías, 915 km): 11.770 tramos, promedio 78 m,
+máximo 150 m. Para una ciudad del tamaño de la de producción (327,8 km) salen ~**4.200 tramos**. Con
+4.241 tramos y 1.300 comercios el cálculo tarda ~0,15 s (la caché lo guarda 5 minutos) y la respuesta pesa
+~1,2 MB sin comprimir (~200 KB con gzip).
+
+**Ojo al reimportar una ciudad ya importada:** el tramo `(vía, 0)` conserva su id, así que una marca que se
+hizo sobre una vía entera queda sobre su **primera cuadra**; las demás cuadras salen sin marca.

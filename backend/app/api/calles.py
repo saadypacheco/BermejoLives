@@ -50,7 +50,8 @@ def importar_calles(
     overpass=Depends(calles_mapa.get_overpass),
 ) -> dict:
     """Baja las calles de la ciudad de OpenStreetMap y las guarda como tramos. Se puede repetir:
-    actualiza por `osm_way_id`, no duplica y no toca las marcas. Responde `{tramos, km}`."""
+    actualiza por `(osm_way_id, parte)`, no duplica y no toca las marcas. Cada vía se parte en cuadras (esquinas
+    y <= 150 m); lo que ya no viene queda dado de baja. Responde `{tramos, km}`."""
     ciudad_id = _ciudad_o_404(repo, body.ciudad)
     r = calles_mapa.importar(repo, ciudad_id, repo.get_ciudad(body.ciudad.strip()), overpass)
     logger.info("admin.calles_importadas", ciudad=body.ciudad, tramos=r["tramos"], by=admin.get("email"))

@@ -8,9 +8,9 @@
  *
  * LO QUE RESALTA ES LO HECHO. En una ciudad recién empezada casi todo está
  * pendiente (Tarija: 1.471 de 1.536 cuadras) y pintar eso en rojo tapaba todo.
- * Ahora: lo recorrido en verde grueso, lo parcial en ámbar, las pendientes
- * PEGADAS a lo recorrido en naranja («seguir por acá»: es donde conviene ir) y
- * el resto de las pendientes en gris finito, de fondo.
+ * Ahora: lo recorrido en verde grueso, lo parcial en ámbar, las cuadras
+ * pendientes que TOCAN por una esquina a una recorrida en naranja («seguir por
+ * acá»: la cuadra siguiente) y el resto de las pendientes en gris finito.
  */
 import { COLOR_CALLE, COLOR_SIGUIENTE, TRAZO_CALLE, type TramoCalle } from "@/lib/calles";
 
@@ -21,8 +21,8 @@ import { COLOR_CALLE, COLOR_SIGUIENTE, TRAZO_CALLE, type TramoCalle } from "@/li
 /** Cuánto se acerca el dedo a una línea y sigue contando como toque. */
 const TOLERANCIA_PX = 12;
 
-/** Una pendiente a menos de esto de algo recorrido es «seguir por acá». */
-const RADIO_SIGUIENTE_M = 150;
+/** Dos puntas de cuadra a menos de esto son la misma esquina. */
+const ESQUINA_M = 25;
 
 /** Cómo se VE un tramo: el estado, más la división de las pendientes. */
 export type VisualCalle = "recorrida" | "parcial" | "siguiente" | "lejana" | "sin_comercios";
@@ -46,19 +46,23 @@ export function crearRendererCalles(L: any, map: any): any {
 
 const M_POR_GRADO = 111_320;
 
-/** Separa las pendientes en «siguiente» (a ≤ 150 m de algo recorrido o parcial)
- *  y «lejana». Grilla por celdas: sin esto serían 1.500 × 1.500 comparaciones. */
+/** Separa las pendientes en «siguiente» y «lejana». Siguiente = una cuadra
+ *  pendiente con una PUNTA en la misma esquina (≤ 25 m) que la punta de una
+ *  recorrida o parcial: la cuadra que sigue. Antes era «cualquier punto a
+ *  ≤ 150 m de algo recorrido», y con calles largas se encendía media ciudad
+ *  (Tarija: 97 km en naranja contra 3 km recorridos). Grilla por celdas. */
 export function clasificarCalles(tramos: TramoCalle[]): Map<string, VisualCalle> {
   const out = new Map<string, VisualCalle>();
   if (tramos.length === 0) return out;
   const lat0 = tramos[0].geom[0]?.[0] ?? -22;
   const mLng = M_POR_GRADO * Math.cos((lat0 * Math.PI) / 180);
-  const celda = RADIO_SIGUIENTE_M;
+  const celda = ESQUINA_M;
+  const puntas = (g: TramoCalle["geom"]) => (g.length > 0 ? [g[0], g[g.length - 1]] : []);
   const clave = (lat: number, lng: number) => `${Math.floor((lat * M_POR_GRADO) / celda)}:${Math.floor((lng * mLng) / celda)}`;
   const hechos = new Map<string, [number, number][]>();
   for (const t of tramos) {
     if (t.estado !== "recorrida" && t.estado !== "parcial") continue;
-    for (const p of t.geom) {
+    for (const p of puntas(t.geom)) {
       const k = clave(p[0], p[1]);
       const l = hechos.get(k); if (l) l.push(p); else hechos.set(k, [p]);
     }
@@ -68,14 +72,14 @@ export function clasificarCalles(tramos: TramoCalle[]): Map<string, VisualCalle>
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       for (const q of hechos.get(`${cy + dy}:${cx + dx}`) ?? []) {
         const d = Math.hypot((q[0] - lat) * M_POR_GRADO, (q[1] - lng) * mLng);
-        if (d <= RADIO_SIGUIENTE_M) return true;
+        if (d <= ESQUINA_M) return true;
       }
     }
     return false;
   };
   for (const t of tramos) {
     if (t.estado !== "pendiente") { out.set(t.id, t.estado); continue; }
-    out.set(t.id, hechos.size > 0 && t.geom.some((p) => cerca(p[0], p[1])) ? "siguiente" : "lejana");
+    out.set(t.id, hechos.size > 0 && puntas(t.geom).some((p) => cerca(p[0], p[1])) ? "siguiente" : "lejana");
   }
   return out;
 }
@@ -172,9 +176,10 @@ export function calcularZonas(tramos: TramoCalle[]): Zona[] {
 
 /** Verde más fuerte cuanto más recorrida; sin nada, sólo el borde. */
 function estiloZona(pct: number): Record<string, unknown> {
-  if (pct < 1) return { color: "#64748b", weight: 0.6, opacity: 0.35, fillColor: "#64748b", fillOpacity: 0.04 };
-  const fill = pct >= 70 ? 0.55 : pct >= 30 ? 0.38 : 0.22;
-  return { color: COLOR_CALLE.recorrida, weight: 0.8, opacity: 0.6, fillColor: COLOR_CALLE.recorrida, fillOpacity: fill };
+  // Sin bordes: la cuadrícula de líneas ensuciaba el mapa. Sólo relleno.
+  if (pct < 1) return { stroke: false, fillColor: "#64748b", fillOpacity: 0.07 };
+  const fill = pct >= 70 ? 0.6 : pct >= 30 ? 0.42 : pct >= 10 ? 0.28 : 0.16;
+  return { stroke: false, fillColor: COLOR_CALLE.recorrida, fillOpacity: fill };
 }
 
 /** Dibuja las zonas; tocar una avisa sus límites (para acercarse y ver las calles). */

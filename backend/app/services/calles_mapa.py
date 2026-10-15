@@ -2,7 +2,9 @@
 
 Tres cosas, todas en el servidor:
 
-  1. IMPORTAR las calles de una ciudad desde OpenStreetMap (Overpass) y guardarlas como tramos.
+  1. IMPORTAR las calles de una ciudad desde OpenStreetMap (Overpass) y guardarlas como tramos,
+     uno por CUADRA: cada vía se parte en sus esquinas y las cuadras largas en partes de <= 150 m
+     (ver `tramos_de_vias`).
   2. CALCULAR qué tan cubierto está cada tramo por los comercios cargados (`cobertura`) y en qué
      estado queda (`estado_de`), con la marca manual por encima.
   3. Guardar el resultado en una CACHÉ por ciudad, que una marca, un alta o una importación invalidan.
@@ -55,6 +57,7 @@ UA = "URUKU/1.0 (directorio de comercios; https://uruku.bo)"
 #: Las vías que entran al mapa: las que una persona camina a ofrecer algo. Con sus `_link`.
 RE_TIPOS = r"^(primary|secondary|tertiary|residential|unclassified|living_street|pedestrian)(_link)?$"
 _TIPOS = re.compile(RE_TIPOS)
+CUADRA_MAX_M = 150.0       # una cuadra más larga se parte en partes iguales de este largo o menos
 MARGEN_M = 400             # la caja es la extensión de los comercios + este margen
 CAJA_MAX_GRADOS = 0.3      # una caja más grande es un GPS roto, no una ciudad (~33 km)
 TIMEOUT_QUERY_S = 40       # el timeout que se le pide al servidor de Overpass
@@ -401,27 +404,103 @@ def get_overpass() -> Callable[[tuple[float, float, float, float]], list[dict]]:
     return descargar_vias
 
 
-def _redondear(geom_osm: list) -> list[list[float]]:
-    """Geometría de OSM [{lat, lon} | None, ...] -> [[lat,lng],...] con 5 decimales, sin repetidos
-    seguidos. Si `out geom(bbox)` dejó huecos (nodos fuera de la caja), queda el tramo continuo
-    más largo."""
-    corridas: list[list[list[float]]] = [[]]
-    for p in geom_osm or []:
+def _corrida_de_via(via: dict) -> list[tuple[int | None, float, float]]:
+    """Los puntos de una vía de Overpass como `(id_de_nodo, lat, lng)`, con el trazado crudo.
+
+    `out geom` trae `nodes` (ids) y `geometry` (coordenadas) en el mismo orden. Si la geometría
+    tiene huecos (`out geom(bbox)` deja en null los nodos fuera de la caja) queda la corrida
+    continua más larga. Sin `nodes` (o de otro largo) los ids son None: la vía no tiene esquinas
+    conocidas y sólo se parte por largo."""
+    geometria = via.get("geometry") or []
+    nodos = via.get("nodes")
+    if not isinstance(nodos, list) or len(nodos) != len(geometria):
+        nodos = [None] * len(geometria)
+    corridas: list[list[tuple[int | None, float, float]]] = [[]]
+    for nid, p in zip(nodos, geometria):
         if not isinstance(p, dict) or _num(p.get("lat")) is None or _num(p.get("lon")) is None:
             corridas.append([])
             continue
-        punto = [round(float(p["lat"]), 5), round(float(p["lon"]), 5)]
-        if not corridas[-1] or corridas[-1][-1] != punto:
-            corridas[-1].append(punto)
+        corridas[-1].append((nid if isinstance(nid, int) else None, float(p["lat"]), float(p["lon"])))
     return max(corridas, key=len)
 
 
-def tramos_de_vias(vias: list[dict], ciudad_id: str) -> list[dict]:
-    """Las filas de `calles_tramos` a partir de lo que devolvió Overpass.
+def _sin_repetidos(geom: list[list[float]]) -> list[list[float]]:
+    """Saca los puntos iguales al anterior (pasa al redondear a 5 decimales)."""
+    out: list[list[float]] = []
+    for p in geom:
+        if not out or out[-1] != p:
+            out.append(p)
+    return out
 
-    Sólo `highway` de `RE_TIPOS` (se vuelve a filtrar acá: no se confía en el servidor), con
-    al menos 2 puntos distintos. Sin nombre -> `nombre` null."""
-    filas = []
+
+def partir_largo(geom: list[list[float]], maximo: float = CUADRA_MAX_M) -> list[list[list[float]]]:
+    """Una línea [[lat,lng],...] en `ceil(largo / maximo)` partes IGUALES (cada una de `maximo` o
+    menos; con los 5 decimales de la geometría, a lo sumo ~1 m de más). Una línea corta queda como está.
+
+    Los cortes se interpolan sobre la línea, así que las partes empalman exactamente."""
+    if len(geom) < 2:
+        return [geom]
+    xy = proyector(sum(p[0] for p in geom) / len(geom))
+    pts = [xy(p[0], p[1]) for p in geom]
+    acum = [0.0]
+    for a, b in zip(pts, pts[1:]):
+        acum.append(acum[-1] + math.hypot(b[0] - a[0], b[1] - a[1]))
+    total = acum[-1]
+    k = max(1, math.ceil(total / maximo)) if total > 0 else 1
+    if k == 1:
+        return [geom]
+    partes: list[list[list[float]]] = []
+    actual = [geom[0]]
+    i = 0                                       # el segmento [i, i+1] donde cae el corte
+    for j in range(1, k):
+        corte = j * total / k
+        while i < len(geom) - 2 and acum[i + 1] < corte:
+            actual.append(geom[i + 1])
+            i += 1
+        largo = acum[i + 1] - acum[i]
+        t = 0.0 if largo <= 0 else min(1.0, max(0.0, (corte - acum[i]) / largo))
+        punto = [round(geom[i][0] + (geom[i + 1][0] - geom[i][0]) * t, 5),
+                 round(geom[i][1] + (geom[i + 1][1] - geom[i][1]) * t, 5)]
+        actual.append(punto)
+        partes.append(actual)
+        actual = [punto]
+    actual.extend(geom[i + 1:])
+    partes.append(actual)
+    limpias = [_sin_repetidos(p) for p in partes]
+    return [p for p in limpias if len(p) >= 2]
+
+
+def cuadras_de_via(corrida: list[tuple[int | None, float, float]], esquinas: set[int]) -> list[list[list[float]]]:
+    """Las cuadras de una vía: se corta en cada nodo INTERIOR que es una esquina (`esquinas`:
+    nodos compartidos con otra vía) y lo que pase de `CUADRA_MAX_M` se parte en partes iguales.
+
+    Devuelve geometrías [[lat,lng],...] a 5 decimales, en el orden de la vía, con al menos 2 puntos
+    distintos cada una. Los extremos de la vía ya son extremos de cuadra."""
+    puntos = [(nid, [round(lat, 5), round(lng, 5)]) for nid, lat, lng in corrida]
+    cortes = [i for i in range(1, len(puntos) - 1) if puntos[i][0] is not None and puntos[i][0] in esquinas]
+    limites = [0, *cortes, len(puntos) - 1]
+    cuadras: list[list[list[float]]] = []
+    for a, b in zip(limites, limites[1:]):
+        pedazo = _sin_repetidos([p for _, p in puntos[a:b + 1]])
+        if len(pedazo) >= 2:
+            cuadras.extend(partir_largo(pedazo))
+    return cuadras
+
+
+def tramos_de_vias(vias: list[dict], ciudad_id: str) -> list[dict]:
+    """Las filas de `calles_tramos` (una por CUADRA) a partir de lo que devolvió Overpass.
+
+    Sólo `highway` de `RE_TIPOS` (se vuelve a filtrar acá: no se confía en el servidor), con al
+    menos 2 puntos distintos. Sin nombre -> `nombre` null.
+
+    Cómo se parte cada vía:
+      1. En sus ESQUINAS: los nodos (ids de `nodes`) que comparte con OTRA vía importada. Una vía
+         filtrada (un `footway`) no hace esquina. Un nodo del medio que sea esquina corta la vía; los
+         extremos no hace falta.
+      2. Una cuadra de más de `CUADRA_MAX_M` (150 m) se parte en `ceil(largo/150)` partes iguales.
+    `parte` numera los pedazos de cada vía desde 0 en el orden de la vía: la clave del upsert es
+    `(ciudad_id, osm_way_id, parte)`."""
+    candidatas = []
     vistos: set[int] = set()
     for v in vias:
         tags = v.get("tags") or {}
@@ -431,18 +510,35 @@ def tramos_de_vias(vias: list[dict], ciudad_id: str) -> list[dict]:
             continue
         if not isinstance(way_id, int) or way_id in vistos:
             continue
-        geom = _redondear(v.get("geometry"))
-        if len(geom) < 2:
+        corrida = _corrida_de_via(v)
+        if len(_sin_repetidos([[round(lat, 5), round(lng, 5)] for _, lat, lng in corrida])) < 2:
             continue
         vistos.add(way_id)
+        candidatas.append((way_id, tags, tipo, corrida))
+
+    # un nodo en dos o más vías (distintas) es una esquina
+    por_nodo: dict[int, int] = {}
+    for _, _, _, corrida in candidatas:
+        for nid in {n for n, _, _ in corrida if n is not None}:
+            por_nodo[nid] = por_nodo.get(nid, 0) + 1
+    esquinas = {nid for nid, n in por_nodo.items() if n >= 2}
+
+    filas = []
+    for way_id, tags, tipo, corrida in candidatas:
         nombre = (tags.get("name") or "").strip() or None
-        filas.append({"ciudad_id": ciudad_id, "osm_way_id": way_id, "nombre": nombre, "tipo": tipo,
-                      "geom": geom, "longitud_m": int(round(largo_m(geom))), "activo": True})
+        for parte, geom in enumerate(cuadras_de_via(corrida, esquinas)):
+            filas.append({"ciudad_id": ciudad_id, "osm_way_id": way_id, "parte": parte, "nombre": nombre,
+                          "tipo": tipo, "geom": geom, "longitud_m": int(round(largo_m(geom))), "activo": True})
     return filas
 
 
 def importar(repo, ciudad_id: str, ciudad: dict | None, overpass: Callable) -> dict:
-    """Trae las calles de la ciudad y las guarda (upsert por `osm_way_id`). Responde `{tramos, km}`.
+    """Trae las calles de la ciudad y las guarda por cuadras (upsert por `(osm_way_id, parte)`).
+    Responde `{tramos, km}`.
+
+    Los tramos de la ciudad que NO vinieron en esta importación quedan dados de baja (`activo =
+    false`): las marcas colgadas de ellos dejan de mostrarse. Si Overpass no devuelve ninguna vía
+    no se da de baja nada (una respuesta vacía es más probable que sea un error que una ciudad sin calles).
 
     HTTPException 400 si no hay de dónde sacar la caja, 502 si Overpass falla."""
     comercios = repo.list_comercios_para_calles(ciudad_id)
@@ -464,6 +560,9 @@ def importar(repo, ciudad_id: str, ciudad: dict | None, overpass: Callable) -> d
     filas = tramos_de_vias(vias, ciudad_id)
     if filas:
         repo.upsert_calles_tramos(filas)
+        bajas = repo.baja_calles_tramos_ausentes(ciudad_id, {(f["osm_way_id"], f["parte"]) for f in filas})
+        if bajas:
+            logger.info("calles.tramos_dados_de_baja", ciudad=ciudad_id, bajas=bajas)
     invalidar(ciudad_id)
     km = round(sum(f["longitud_m"] for f in filas) / 1000, 2)
     logger.info("calles.importadas", ciudad=ciudad_id, tramos=len(filas), km=km)

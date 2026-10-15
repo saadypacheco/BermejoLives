@@ -42,7 +42,7 @@ export function LeyendaCalles({ porEstado, siguientes }: {
           <line x1="2" y1="4" x2="28" y2="4" stroke={COLOR_SIGUIENTE} strokeWidth="5" strokeLinecap="round" />
         </svg>
         <Ic n="seguir" s={14} />
-        <span><b>Seguir por acá</b>{siguientes ? ` · ${siguientes.n} (${kmTxt(siguientes.km)} km)` : " (pendientes al lado de lo recorrido)"}</span>
+        <span><b>Seguir por acá</b>{siguientes ? ` · ${siguientes.n} (${kmTxt(siguientes.km)} km)` : " (la cuadra que sigue a una recorrida)"}</span>
       </li>
       {ESTADOS_CALLE.map((e) => (
         <li key={e} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--txt-2)" }}>

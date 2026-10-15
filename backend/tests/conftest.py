@@ -1491,17 +1491,28 @@ class FakeRepo:
 
     # ---- Mapa de calles recorridas (0152) ----
     def upsert_calles_tramos(self, filas):
-        """Como el repo real: único por (ciudad_id, osm_way_id); volver a importar actualiza y
-        conserva el id."""
+        """Como el repo real: único por (ciudad_id, osm_way_id, parte); volver a importar actualiza
+        y conserva el id."""
         for f in filas:
             previo = next((t for t in self.calles_tramos.values()
-                           if t["ciudad_id"] == f["ciudad_id"] and t["osm_way_id"] == f["osm_way_id"]), None)
+                           if t["ciudad_id"] == f["ciudad_id"] and t["osm_way_id"] == f["osm_way_id"]
+                           and t.get("parte", 0) == f.get("parte", 0)), None)
             if previo:
                 previo.update({k: v for k, v in f.items()})
             else:
                 tid = self._id("tramo")
                 self.calles_tramos[tid] = {"id": tid, "activo": True, **f}
         return len(filas)
+
+    def baja_calles_tramos_ausentes(self, ciudad_id, claves):
+        """Como el repo real: baja lógica de los activos de la ciudad que no vinieron en `claves`."""
+        n = 0
+        for t in self.calles_tramos.values():
+            if (t["ciudad_id"] == ciudad_id and t.get("activo", True)
+                    and (t["osm_way_id"], t.get("parte", 0)) not in claves):
+                t["activo"] = False
+                n += 1
+        return n
 
     def list_calles_tramos(self, ciudad_id):
         return [dict(t) for t in self.calles_tramos.values()

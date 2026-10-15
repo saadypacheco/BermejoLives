@@ -318,6 +318,7 @@ class Repo(Protocol):
     def quitar_foto_novedad_uruku(self, novedad_id: str, url: str) -> dict | None: ...
     # Mapa de calles recorridas (0152)
     def upsert_calles_tramos(self, filas: list[dict]) -> int: ...
+    def baja_calles_tramos_ausentes(self, ciudad_id: str, claves: set[tuple[int, int]]) -> int: ...
     def list_calles_tramos(self, ciudad_id: str) -> list[dict]: ...
     def get_calle_tramo(self, tramo_id: str) -> dict | None: ...
     def list_calles_marcas_ultimas(self, ciudad_id: str) -> list[dict]: ...
@@ -3355,12 +3356,32 @@ class SupabaseRepo:
 
     # ---- Mapa de calles recorridas (0152, docs/mapa-calles.md) ----
     def upsert_calles_tramos(self, filas: list[dict]) -> int:
-        """Guarda tramos por (ciudad_id, osm_way_id): volver a importar actualiza, no duplica, y
-        conserva el id (las marcas siguen colgadas del mismo tramo). De a 200 por pedido."""
+        """Guarda tramos por (ciudad_id, osm_way_id, parte): volver a importar actualiza, no
+        duplica, y conserva el id (las marcas siguen colgadas del mismo tramo). De a 200 por pedido."""
         for i in range(0, len(filas), 200):
             (self._db.table("calles_tramos")
-             .upsert(filas[i:i + 200], on_conflict="ciudad_id,osm_way_id").execute())
+             .upsert(filas[i:i + 200], on_conflict="ciudad_id,osm_way_id,parte").execute())
         return len(filas)
+
+    def baja_calles_tramos_ausentes(self, ciudad_id: str, claves: set[tuple[int, int]]) -> int:
+        """Baja lógica (`activo = false`) de los tramos activos de la ciudad cuya clave
+        `(osm_way_id, parte)` no está en `claves` (lo que vino en la última importación). Devuelve
+        cuántos dio de baja. Nada de DELETE: las marcas siguen apuntando a su tramo."""
+        obsoletos: list[str] = []
+        inicio = 0
+        while True:
+            lote = (self._db.table("calles_tramos")
+                    .select("id, osm_way_id, parte")
+                    .eq("ciudad_id", ciudad_id).eq("activo", True)
+                    .order("id").range(inicio, inicio + 999).execute().data) or []
+            obsoletos += [t["id"] for t in lote if (t.get("osm_way_id"), t.get("parte") or 0) not in claves]
+            if len(lote) < 1000:
+                break
+            inicio += 1000
+        for i in range(0, len(obsoletos), 100):
+            (self._db.table("calles_tramos").update({"activo": False})
+             .eq("ciudad_id", ciudad_id).in_("id", obsoletos[i:i + 100]).execute())
+        return len(obsoletos)
 
     def list_calles_tramos(self, ciudad_id: str) -> list[dict]:
         """Los tramos activos de la ciudad. Pagina: PostgREST corta en 1000 sin avisar."""

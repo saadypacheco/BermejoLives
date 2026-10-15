@@ -168,7 +168,7 @@ export function AdminCallesMapa({ ciudad }: { ciudad: Ciudad }) {
       <p style={{ margin: 0, color: "var(--txt-3)", fontSize: 12.5 }}>
         {vista === "zonas"
           ? "Cada cuadrado son unas cuatro cuadras: cuanto más verde, más recorrido. Tocá uno para acercarte y ver sus calles."
-          : "Verde: ya recorrida. Ámbar: a medias. Naranja: pendiente pegada a lo recorrido, por donde conviene seguir. Gris finito: pendiente más lejos. Punteado: sin comercios. Tocá una calle para ver su ficha y marcarla."}
+          : "Verde: ya recorrida. Ámbar: a medias. Naranja: la cuadra pendiente que sigue a una recorrida (por donde conviene seguir). Gris finito: pendiente más lejos. Punteado: sin comercios. Tocá una calle para ver su ficha y marcarla."}
       </p>
 
       {tramo && (

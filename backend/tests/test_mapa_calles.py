@@ -580,6 +580,258 @@ def test_importar_con_el_cliente_real_caido_da_502(client, repo, admin, monkeypa
     assert r.status_code == 502 and "OpenStreetMap" in r.json()["detail"]
 
 
+# ══════════════════════════════════════════════ importar por cuadras (esquinas + cuadras largas)
+
+def _pt(norte_m, este_m):
+    return {"lat": round(LAT0 + norte_m * M_LAT, 5), "lon": round(LNG0 + este_m * M_LNG, 5)}
+
+
+def _via_n(way_id, nodos, metros, tipo="residential", nombre="Calle N"):
+    """Una vía de Overpass con `nodes` y `geometry` alineados; `metros` = [(norte, este), ...]."""
+    tags = {"highway": tipo}
+    if nombre:
+        tags["name"] = nombre
+    return {"type": "way", "id": way_id, "nodes": nodos, "tags": tags, "geometry": [_pt(n, e) for n, e in metros]}
+
+
+def _filas(vias):
+    return calles_mapa.tramos_de_vias(vias, BERMEJO)
+
+
+def _clave(f):
+    return (f["osm_way_id"], f["parte"])
+
+
+def test_dos_vias_que_se_cruzan_en_un_nodo_dan_cuatro_tramos():
+    filas = _filas([
+        _via_n(1, [10, 99, 11], [(0, 0), (100, 0), (200, 0)], nombre="Norte-Sur"),
+        _via_n(2, [12, 99, 13], [(100, -100), (100, 0), (100, 100)], nombre="Este-Oeste"),
+    ])
+    assert sorted(_clave(f) for f in filas) == [(1, 0), (1, 1), (2, 0), (2, 1)]
+    assert all(abs(f["longitud_m"] - 100) <= 1 for f in filas)
+    por = {_clave(f): f for f in filas}
+    # las dos mitades de una vía empalman en la esquina
+    assert por[(1, 0)]["geom"][-1] == por[(1, 1)]["geom"][0] == [round(LAT0 + 100 * M_LAT, 5), round(LNG0, 5)]
+    assert por[(1, 0)]["nombre"] == por[(1, 1)]["nombre"] == "Norte-Sur"
+
+
+def test_una_te_parte_solo_la_via_que_sigue_de_largo():
+    filas = _filas([
+        _via_n(1, [10, 99, 11], [(0, 0), (100, 0), (200, 0)]),       # pasa por el nodo 99
+        _via_n(2, [12, 99], [(100, 100), (100, 0)]),                 # termina en el nodo 99
+    ])
+    assert sorted(_clave(f) for f in filas) == [(1, 0), (1, 1), (2, 0)]
+
+
+def test_una_via_que_no_se_importa_no_hace_esquina():
+    filas = _filas([
+        _via_n(1, [10, 99, 11], [(0, 0), (100, 0), (140, 0)]),
+        _via_n(2, [12, 99, 13], [(100, -50), (100, 0), (100, 50)], tipo="footway"),
+        _via_n(3, [14, 99, 15], [(100, -50), (100, 0), (100, 50)], tipo="service"),
+    ])
+    assert [_clave(f) for f in filas] == [(1, 0)] and filas[0]["longitud_m"] in (139, 140, 141)
+
+
+def test_una_via_no_hace_esquina_consigo_misma():
+    """Un lazo (primer nodo = último) o un nodo repetido de la MISMA vía no la parte."""
+    lazo = _via_n(1, [1, 2, 3, 4, 1], [(0, 0), (0, 60), (60, 60), (60, 0), (0, 0)])
+    assert [_clave(f) for f in _filas([lazo])] == [(1, 0), (1, 1)]    # 240 m: sólo por largo, en 2 de 120
+    cruz = _via_n(2, [1, 2, 3, 2, 4], [(0, 0), (20, 0), (40, 0), (20, 0), (0, 0)])
+    assert [_clave(f) for f in _filas([cruz])] == [(2, 0)]
+
+
+def test_la_esquina_en_el_extremo_no_agrega_cortes():
+    filas = _filas([
+        _via_n(1, [1, 2], [(0, 0), (100, 0)]),
+        _via_n(2, [2, 3], [(100, 0), (200, 0)]),                    # empalma con la 1 en el extremo
+    ])
+    assert sorted(_clave(f) for f in filas) == [(1, 0), (2, 0)]
+
+
+def test_una_cuadra_larga_se_parte_en_partes_iguales_de_150_m_o_menos():
+    # 400 m en zigzag (4 vértices): ceil(400/150) = 3 partes de ~133 m
+    via = _via_n(1, [1, 2, 3, 4], [(0, 0), (150, 20), (260, -20), (400, 0)])
+    filas = sorted(_filas([via]), key=lambda f: f["parte"])
+    assert [f["parte"] for f in filas] == [0, 1, 2]
+    largos = [calles_mapa.largo_m(f["geom"]) for f in filas]
+    assert all(l <= calles_mapa.CUADRA_MAX_M + 1 for l in largos), largos
+    assert max(largos) - min(largos) < 3                              # iguales
+    assert sum(largos) == pytest.approx(calles_mapa.largo_m(
+        [[p["lat"], p["lon"]] for p in via["geometry"]]), abs=2)
+    for a, b in zip(filas, filas[1:]):                                # empalman sin hueco
+        assert a["geom"][-1] == b["geom"][0]
+    assert filas[0]["geom"][0] == [round(LAT0, 5), round(LNG0, 5)]
+    assert filas[-1]["geom"][-1] == [round(LAT0 + 400 * M_LAT, 5), round(LNG0, 5)]
+
+
+def test_una_cuadra_de_150_m_o_menos_no_se_parte():
+    assert [_clave(f) for f in _filas([_via_n(1, [1, 2], [(0, 0), (149, 0)])])] == [(1, 0)]
+    assert len(calles_mapa.partir_largo(_linea(largo=900, puntos=2))) == 6          # ceil(900/150)
+
+
+def test_esquinas_y_cuadras_largas_juntas_numeran_las_partes_en_orden():
+    # 500 m con esquina a los 300: 300 -> 2 partes de 150 y 200 -> 2 de 100 => partes 0..3
+    filas = _filas([
+        _via_n(1, [1, 99, 2], [(0, 0), (300, 0), (500, 0)]),
+        _via_n(2, [3, 99], [(300, 80), (300, 0)]),
+    ])
+    de_la_1 = sorted((f for f in filas if f["osm_way_id"] == 1), key=lambda f: f["parte"])
+    assert [f["parte"] for f in de_la_1] == [0, 1, 2, 3]
+    assert [round(f["longitud_m"], -1) for f in de_la_1] == [150, 150, 100, 100]
+    assert [f["osm_way_id"] for f in filas if f["osm_way_id"] == 2] == [2]
+
+
+def test_sin_nodes_solo_se_parte_por_largo_y_nodes_de_otro_largo_se_ignoran():
+    sin = {"type": "way", "id": 1, "tags": {"highway": "residential"},
+           "geometry": [_pt(0, 0), _pt(100, 0), _pt(200, 0)]}
+    assert [_clave(f) for f in _filas([sin])] == [(1, 0), (1, 1)]     # 200 m -> 2 de 100, aunque no haya esquinas
+    roto = {**sin, "id": 2, "nodes": [1, 2]}                          # 2 ids para 3 puntos
+    assert [_clave(f) for f in _filas([roto])] == [(2, 0), (2, 1)]
+
+
+def test_hueco_de_geometria_se_queda_con_la_corrida_mas_larga_y_sus_nodos():
+    via = _via_n(1, [1, 2, 3, 4, 5], [(0, 0), (50, 0), (100, 0), (130, 0), (160, 0)])
+    via["geometry"][1] = None                                         # nodo fuera de la caja
+    filas = _filas([via, _via_n(2, [4, 9], [(130, 0), (130, 50)])])   # el nodo 4 es esquina de la corrida (3,4,5)
+    assert sorted(_clave(f) for f in filas) == [(1, 0), (1, 1), (2, 0)]
+    primera = next(f for f in filas if _clave(f) == (1, 0))
+    assert primera["geom"][0] == [round(LAT0 + 100 * M_LAT, 5), round(LNG0, 5)]
+
+
+def test_importar_por_cuadras_responde_tramos_y_km_de_las_cuadras(client, repo, admin):
+    _comercio(repo, 0)
+    _inyectar(OverpassFalso([
+        _via_n(1, [10, 99, 11], [(0, 0), (100, 0), (200, 0)]),
+        _via_n(2, [12, 99, 13], [(100, -100), (100, 0), (100, 100)]),
+    ]))
+    r = client.post("/admin/calles/importar", headers=_h(admin), json={"ciudad": "bermejo"})
+    assert r.status_code == 200, r.text
+    assert set(r.json()) == {"tramos", "km"} and r.json()["tramos"] == 4 and r.json()["km"] == pytest.approx(0.4, abs=0.01)
+    assert sorted((t["osm_way_id"], t["parte"]) for t in repo.calles_tramos.values()) == [(1, 0), (1, 1), (2, 0), (2, 1)]
+
+
+def test_reimportar_da_de_baja_las_partes_viejas_y_conserva_las_que_siguen(client, repo, admin):
+    _comercio(repo, 0)
+    h = _h(admin)
+    larga = [(0, 0), (400, 0)]
+    _inyectar(OverpassFalso([_via_n(1, [1, 2], larga), _via_n(2, [3, 4], [(0, 50), (100, 50)])]))
+    assert client.post("/admin/calles/importar", headers=h, json={"ciudad": "bermejo"}).json()["tramos"] == 4
+    ids = {(t["osm_way_id"], t["parte"]): t["id"] for t in repo.calles_tramos.values()}
+    assert sorted(ids) == [(1, 0), (1, 1), (1, 2), (2, 0)]
+    client.post(f"/admin/calles/{ids[(1, 2)]}/marca", headers=h, json={"estado": "recorrida"})
+    client.post(f"/admin/calles/{ids[(1, 0)]}/marca", headers=h, json={"estado": "sin_comercios"})
+
+    # la vía 1 ahora es corta (una sola cuadra), la 2 ya no está y aparece la 3
+    _inyectar(OverpassFalso([_via_n(1, [1, 2], [(0, 0), (100, 0)]), _via_n(3, [5, 6], [(0, -50), (100, -50)])]))
+    r = client.post("/admin/calles/importar", headers=h, json={"ciudad": "bermejo"})
+    assert r.json()["tramos"] == 2 and r.json()["km"] == pytest.approx(0.2, abs=0.01)
+    activos = {(t["osm_way_id"], t["parte"]) for t in repo.calles_tramos.values() if t["activo"]}
+    assert activos == {(1, 0), (3, 0)}
+    assert {k for k in ids if not repo.calles_tramos[ids[k]]["activo"]} == {(1, 1), (1, 2), (2, 0)}   # baja lógica
+    assert len(repo.calles_tramos) == 5                                # nada se borra
+    assert repo.calles_tramos[ids[(1, 0)]]["longitud_m"] in (99, 100, 101)
+    mapa = _mapa_admin(client, admin)
+    assert {t["id"] for t in mapa["tramos"]} == {ids[(1, 0)], next(
+        t["id"] for t in repo.calles_tramos.values() if t["osm_way_id"] == 3)}
+    assert _por_id(mapa)[ids[(1, 0)]]["estado"] == "sin_comercios"     # la marca de la parte que sigue sigue en pie
+    assert mapa["resumen"]["km_total"] == pytest.approx(0.2, abs=0.01)  # lo dado de baja no cuenta
+
+    # y si una parte vuelve, se reactiva con su mismo id
+    _inyectar(OverpassFalso([_via_n(1, [1, 2], larga), _via_n(2, [3, 4], [(0, 50), (100, 50)])]))
+    client.post("/admin/calles/importar", headers=h, json={"ciudad": "bermejo"})
+    assert {t["id"] for t in repo.calles_tramos.values() if t["activo"]} == set(ids.values())
+
+
+def test_reimportar_lo_mismo_es_idempotente(client, repo, admin):
+    _comercio(repo, 0)
+    h = _h(admin)
+    vias = [_via_n(1, [1, 99, 2], [(0, 0), (300, 0), (500, 0)]), _via_n(2, [3, 99], [(300, 80), (300, 0)])]
+    _inyectar(OverpassFalso(vias))
+    primera = client.post("/admin/calles/importar", headers=h, json={"ciudad": "bermejo"}).json()
+    antes = {t["id"]: (t["osm_way_id"], t["parte"], t["activo"]) for t in repo.calles_tramos.values()}
+    segunda = client.post("/admin/calles/importar", headers=h, json={"ciudad": "bermejo"}).json()
+    assert primera == segunda and primera["tramos"] == 5
+    assert {t["id"]: (t["osm_way_id"], t["parte"], t["activo"]) for t in repo.calles_tramos.values()} == antes
+    assert all(a for _, _, a in antes.values())
+
+
+def test_reimportar_no_toca_las_calles_de_otra_ciudad(client, repo, admin):
+    _comercio(repo, 0)
+    ajena = _tramo(repo, ciudad=SANTA_CRUZ, way=77)
+    _inyectar(OverpassFalso([_via_n(1, [1, 2], [(0, 0), (100, 0)])]))
+    client.post("/admin/calles/importar", headers=_h(admin), json={"ciudad": "bermejo"})
+    assert repo.calles_tramos[ajena]["activo"]
+
+
+def test_una_respuesta_vacia_de_overpass_no_da_de_baja_nada(client, repo, admin):
+    _comercio(repo, 0)
+    t = _tramo(repo, way=5)
+    _inyectar(OverpassFalso([]))
+    r = client.post("/admin/calles/importar", headers=_h(admin), json={"ciudad": "bermejo"})
+    assert r.status_code == 200 and r.json() == {"tramos": 0, "km": 0.0}
+    assert repo.calles_tramos[t]["activo"]
+
+
+def test_overpass_caido_en_la_reimportacion_no_da_de_baja_nada(client, repo, admin):
+    _comercio(repo, 0)
+    t = _tramo(repo, way=5)
+    _inyectar(OverpassFalso(falla=True))
+    assert client.post("/admin/calles/importar", headers=_h(admin), json={"ciudad": "bermejo"}).status_code == 502
+    assert repo.calles_tramos[t]["activo"]
+
+
+# ══════════════════════════════════════════════ rendimiento con cuadras
+
+def test_5000_tramos_y_1300_comercios_rapido_y_respuesta_acotada(client, repo, admin):
+    """El tamaño de una ciudad como Tarija ya partida en cuadras: ~5.000 tramos de <= 150 m."""
+    rnd = random.Random(11)
+    filas = []
+    for i in range(5000):
+        lat = LAT0 + rnd.uniform(0, 5000) * M_LAT
+        lng = LNG0 + rnd.uniform(0, 5000) * M_LNG
+        geom = [[round(lat + k * 35 * M_LAT, 5), round(lng + k * rnd.uniform(-8, 8) * M_LNG, 5)] for k in range(4)]
+        filas.append({"ciudad_id": BERMEJO, "osm_way_id": i // 4, "parte": i % 4, "nombre": f"Avenida Siempre Viva {i // 4}",
+                      "tipo": "residential", "geom": geom, "longitud_m": int(calles_mapa.largo_m(geom)), "activo": True})
+    repo.upsert_calles_tramos(filas)
+    assert len(repo.calles_tramos) == 5000
+    for _ in range(1300):
+        _comercio(repo, rnd.uniform(0, 5000), rnd.uniform(0, 5000))
+    t0 = time.perf_counter()
+    r = client.get("/admin/calles/mapa?ciudad=bermejo", headers=_h(admin))
+    primera = time.perf_counter() - t0
+    assert r.status_code == 200 and len(r.json()["tramos"]) == 5000
+    assert primera < 2.0, f"{primera:.2f} s"
+    assert len(r.content) < 1_500_000, f"{len(r.content) / 1e6:.2f} MB"
+    print(f"\n[5000 tramos] calculo {primera:.2f} s, respuesta {len(r.content) / 1e6:.2f} MB")
+    t0 = time.perf_counter()
+    client.get("/admin/calles/mapa?ciudad=bermejo", headers=_h(admin))        # de la caché
+    assert time.perf_counter() - t0 < primera
+
+
+# ══════════════════════════════════════════════ el repo REAL: baja de lo que no vino
+
+def test_repo_real_da_de_baja_lo_que_no_vino_y_nada_mas():
+    tramos = [
+        {"id": "a", "osm_way_id": 1, "parte": 0}, {"id": "b", "osm_way_id": 1, "parte": 1},
+        {"id": "c", "osm_way_id": 2, "parte": 0}, {"id": "d", "osm_way_id": 3, "parte": None},
+    ]
+    repo = _repo_real({"calles_tramos": tramos})
+    # vinieron (1,0) y (3,0): sobran b y c; d (parte null -> 0) se queda
+    assert repo.baja_calles_tramos_ausentes("ciu", {(1, 0), (3, 0)}) == 2
+    updates = [ped for _, ped in repo._db.consultas if any(p[0] == "update" for p in ped)]
+    assert len(updates) == 1
+    por_nombre = {p[0]: p for p in updates[0]}
+    assert por_nombre["update"][1] == ({"activo": False},)                       # baja lógica, no delete
+    assert por_nombre["eq"][1] == ("ciudad_id", "ciu") and por_nombre["in_"][1] == ("id", ["b", "c"])
+    assert not any(p[0] == "delete" for _, ped in repo._db.consultas for p in ped)
+
+
+def test_repo_real_sin_nada_que_dar_de_baja_no_actualiza():
+    repo = _repo_real({"calles_tramos": [{"id": "a", "osm_way_id": 1, "parte": 0}]})
+    assert repo.baja_calles_tramos_ausentes("ciu", {(1, 0)}) == 0
+    assert not any(p[0] == "update" for _, ped in repo._db.consultas for p in ped)
+
+
 # ══════════════════════════════════════════════ rendimiento
 
 def test_600_tramos_y_1300_comercios_en_menos_de_un_segundo(client, repo, admin):
@@ -641,12 +893,12 @@ def _repo_real(datos=None):
     return repo
 
 
-def test_repo_real_upsert_por_ciudad_y_osm_way_id_de_a_200():
+def test_repo_real_upsert_por_ciudad_via_y_parte_de_a_200():
     repo = _repo_real()
     assert repo.upsert_calles_tramos([{"ciudad_id": "c", "osm_way_id": i} for i in range(450)]) == 450
     upserts = [p for _, ped in repo._db.consultas for p in ped if p[0] == "upsert"]
     assert [len(p[1][0]) for p in upserts] == [200, 200, 50]
-    assert all(p[2] == {"on_conflict": "ciudad_id,osm_way_id"} for p in upserts)
+    assert all(p[2] == {"on_conflict": "ciudad_id,osm_way_id,parte"} for p in upserts)
 
 
 def test_repo_real_se_queda_con_la_ultima_marca_de_cada_tramo():
@@ -728,3 +980,108 @@ def test_0152_en_postgres_real(pg0149):
     # RLS activo en las dos
     assert psql("select count(*) from pg_class where relname in ('calles_tramos','calles_marcas') and relrowsecurity;"
                 ).stdout.strip() == "2"
+
+
+# ══════════════════════════════════════════════ migración 0153 (cuadras)
+
+def _sql153(carpeta):
+    return (RAIZ / carpeta / "0153_calles_cuadras.sql").read_text(encoding="utf-8")
+
+
+def test_0153_igual_en_las_dos_carpetas():
+    assert _sql153("supabase/migrations") == _sql153("selfhost/postgres-init")
+
+
+def test_0153_idempotente_en_transaccion_y_sin_borrado_fisico():
+    low = _sql153("supabase/migrations").lower()
+    assert low.count("\nbegin;") == 1 and low.count("\ncommit;") == 1
+    assert "add column if not exists parte int not null default 0" in low
+    assert "create unique index if not exists calles_tramos_ciudad_way_parte_uq" in low
+    assert "(ciudad_id, osm_way_id, parte)" in low
+    assert "drop index if exists public.calles_tramos_ciudad_way_uq" in low
+    assert "comment on column public.calles_tramos.parte" in low
+    assert "delete from" not in low and "drop table" not in low and "drop column" not in low
+    assert "to anon" not in low and "to authenticated" not in low
+
+
+def test_0153_en_postgres_real(pg0149):
+    """Con `URUKU_PG_TEST_CONTAINER`: sobre una tabla de la 0152 con datos, la 0153 dos veces seguidas;
+    lo viejo queda en parte 0; ya caben varias partes de una vía y el upsert por (ciudad, vía, parte)
+    actualiza en vez de duplicar; el único viejo desapareció; los permisos siguen cerrados."""
+    psql = pg0149
+    psql("create table if not exists ciudades (id uuid primary key default gen_random_uuid(), slug text);"
+         "grant select on ciudades to anon, authenticated; grant all on ciudades to service_role;")
+    psql(_sql("supabase/migrations"))                               # el estado de antes: la 0152
+    ciudad = psql("insert into ciudades (slug) values ('tarija') returning id;", rol="service_role").stdout.split()[0]
+    geom = "'[[-21.53,-64.73],[-21.531,-64.73]]'"
+    psql(f"insert into calles_tramos (ciudad_id, osm_way_id, nombre, geom, longitud_m) "
+         f"values ('{ciudad}', 500, 'Avenida Larga', {geom}, 1200);", rol="service_role")
+    # antes de la 0153 una vía sólo cabe una vez
+    assert psql(f"insert into calles_tramos (ciudad_id, osm_way_id, geom) values ('{ciudad}', 500, {geom});",
+                rol="service_role", check=False).returncode != 0
+
+    sql = _sql153("supabase/migrations")
+    psql(sql)
+    psql(sql)                                                       # idempotente
+    assert psql(f"select parte from calles_tramos where osm_way_id = 500 and ciudad_id = '{ciudad}';",
+                rol="service_role").stdout.strip() == "0"           # lo que ya había quedó en parte 0
+    for parte in (1, 2):
+        psql(f"insert into calles_tramos (ciudad_id, osm_way_id, parte, nombre, geom, longitud_m) "
+             f"values ('{ciudad}', 500, {parte}, 'Avenida Larga', {geom}, 130);", rol="service_role")
+    assert psql(f"select count(*) from calles_tramos where osm_way_id = 500 and ciudad_id = '{ciudad}';",
+                rol="service_role").stdout.strip() == "3"
+    # la misma (ciudad, vía, parte) no se duplica; el upsert de PostgREST actualiza
+    assert psql(f"insert into calles_tramos (ciudad_id, osm_way_id, parte, geom) values ('{ciudad}', 500, 1, {geom});",
+                rol="service_role", check=False).returncode != 0
+    psql(f"""insert into calles_tramos (ciudad_id, osm_way_id, parte, nombre, geom)
+             values ('{ciudad}', 500, 1, 'Renombrada', {geom})
+             on conflict (ciudad_id, osm_way_id, parte) do update set nombre = excluded.nombre, activo = true;""",
+         rol="service_role")
+    assert psql(f"select count(*), count(*) filter (where nombre = 'Renombrada') from calles_tramos "
+                f"where osm_way_id = 500 and ciudad_id = '{ciudad}';", rol="service_role").stdout.strip() == "3|1"
+    # el único viejo ya no está; el nuevo sí
+    indices = psql("select indexname from pg_indexes where tablename = 'calles_tramos' order by 1;").stdout.split()
+    assert "calles_tramos_ciudad_way_uq" not in indices and "calles_tramos_ciudad_way_parte_uq" in indices
+    # baja lógica: se puede apagar una parte sin tocar las otras
+    psql(f"update calles_tramos set activo = false where osm_way_id = 500 and parte = 2 and ciudad_id = '{ciudad}';",
+         rol="service_role")
+    assert psql(f"select count(*) from calles_tramos where osm_way_id = 500 and activo and ciudad_id = '{ciudad}';",
+                rol="service_role").stdout.strip() == "2"
+    # los permisos de la 0152 siguen igual
+    for rol in ("anon", "authenticated"):
+        assert psql("select * from calles_tramos;", rol=rol, check=False).returncode != 0
+        assert psql("update calles_tramos set parte = 9;", rol=rol, check=False).returncode != 0
+
+
+def test_las_respuestas_grandes_salen_comprimidas(client):
+    """El mapa de una ciudad pesa ~1,2 MB en JSON: con gzip, ~200 KB para el celular."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.main import _GZipDatos
+
+    mini = FastAPI()
+
+    @mini.get("/datos")
+    def datos():
+        return {"x": "a" * 5000}
+
+    mini.add_middleware(_GZipDatos)
+    r = TestClient(mini).get("/datos", headers={"Accept-Encoding": "gzip"})
+    assert r.headers.get("content-encoding") == "gzip"
+
+
+def test_las_fotos_no_se_comprimen_de_nuevo():
+    from fastapi import FastAPI
+    from fastapi.responses import Response
+    from fastapi.testclient import TestClient
+    from app.main import _GZipDatos
+
+    mini = FastAPI()
+
+    @mini.get("/fotos/x.json")
+    def foto():
+        return Response(content=b"{" + b"a" * 5000 + b"}", media_type="application/json")
+
+    mini.add_middleware(_GZipDatos)
+    r = TestClient(mini).get("/fotos/x.json", headers={"Accept-Encoding": "gzip"})
+    assert "content-encoding" not in r.headers
