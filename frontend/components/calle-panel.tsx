@@ -11,7 +11,7 @@
 import { useEffect, useState } from "react";
 import { Ic, type NombreIcono } from "@/components/ic";
 import {
-  COLOR_CALLE, ESTADOS_CALLE, ETIQUETA_CALLE, TRAZO_CALLE, fechaCalle, kmTxt, nombreCalle, quienCorto,
+  COLOR_CALLE, COLOR_SIGUIENTE, ESTADOS_CALLE, ETIQUETA_CALLE, TRAZO_CALLE, fechaCalle, kmTxt, nombreCalle, quienCorto,
   type EstadoCalle, type EstadoMarca, type TramoCalle,
 } from "@/lib/calles";
 
@@ -30,9 +30,20 @@ export function EstadoCalleTag({ estado }: { estado: EstadoCalle }) {
 
 /** La leyenda del mapa: color, trazo de muestra, ícono y texto. El color solo no
  *  alcanza (daltonismo, sol en la pantalla). Con `porEstado` suma cuántos hay. */
-export function LeyendaCalles({ porEstado }: { porEstado?: Record<EstadoCalle, { n: number; km: number }> }) {
+export function LeyendaCalles({ porEstado, siguientes }: {
+  porEstado?: Record<EstadoCalle, { n: number; km: number }>;
+  /** Cuántas pendientes están pegadas a lo recorrido («Seguir por acá»). */
+  siguientes?: { n: number; km: number };
+}) {
   return (
     <ul aria-label="Leyenda del mapa" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "6px 12px" }}>
+      <li style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--txt-2)" }}>
+        <svg width="30" height="8" aria-hidden>
+          <line x1="2" y1="4" x2="28" y2="4" stroke={COLOR_SIGUIENTE} strokeWidth="5" strokeLinecap="round" />
+        </svg>
+        <Ic n="seguir" s={14} />
+        <span><b>Seguir por acá</b>{siguientes ? ` · ${siguientes.n} (${kmTxt(siguientes.km)} km)` : " (pendientes al lado de lo recorrido)"}</span>
+      </li>
       {ESTADOS_CALLE.map((e) => (
         <li key={e} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--txt-2)" }}>
           <svg width="30" height="8" aria-hidden>

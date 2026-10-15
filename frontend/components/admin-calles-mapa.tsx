@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { adminImportarCalles, adminMapaCalles, adminMarcarCalle, puedo } from "@/lib/api";
 import { agregarTiles } from "@/lib/mapa-tiles";
 import { loadLeaflet } from "@/lib/mapa-visual";
-import { crearRendererCalles, grosorPorZoom, pintarCalles, resaltarCalle } from "@/lib/calles-mapa";
+import { calcularZonas, clasificarCalles, crearRendererCalles, grosorPorZoom, pintarCalles, pintarZonas, reestilarCalles, resaltarCalle } from "@/lib/calles-mapa";
 import {
   conMarca, contarPorEstado, kmTxt, pctTxt,
   type CapaCalles, type EstadoMarca, type TramoCalle,
@@ -34,6 +34,9 @@ export function AdminCallesMapa({ ciudad }: { ciudad: Ciudad }) {
   const [capa, setCapa] = useState<CapaCalles | null>(null);
   const [err, setErr] = useState("");
   const [sel, setSel] = useState<string | null>(null);
+  // Zonas primero: con una ciudad recién empezada, la vista por cuadras es casi
+  // toda gris; las zonas muestran de un vistazo qué barrios ya se hicieron.
+  const [vista, setVista] = useState<"zonas" | "calles">("zonas");
   const [importando, setImportando] = useState(false);
   const [errImport, setErrImport] = useState("");
   const [okImport, setOkImport] = useState("");
@@ -131,6 +134,8 @@ export function AdminCallesMapa({ ciudad }: { ciudad: Ciudad }) {
 
   const resumen = capa!.resumen;
   const porEstado = contarPorEstado(tramos);
+  const visual = clasificarCalles(tramos);
+  const siguientes = tramos.reduce((a, t) => (visual.get(t.id) === "siguiente" ? { n: a.n + 1, km: a.km + t.longitud_m / 1000 } : a), { n: 0, km: 0 });
 
   return (
     <div style={{ padding: 12, display: "grid", gap: 10 }}>
@@ -146,13 +151,24 @@ export function AdminCallesMapa({ ciudad }: { ciudad: Ciudad }) {
         </button>
       </div>
 
-      <LeyendaCalles porEstado={porEstado} />
+      <div role="group" aria-label="Cómo ver el mapa" style={{ display: "flex", gap: 6 }}>
+        {(["zonas", "calles"] as const).map((v) => (
+          <button key={v} type="button" className={`btn btn-sm ${vista === v ? "btn-primary" : "btn-ghost"}`} style={{ minHeight: 40 }}
+                  aria-pressed={vista === v} onClick={() => setVista(v)}>
+            <Ic n={v === "zonas" ? "mapa" : "ruta"} s={15} /> {v === "zonas" ? "Zonas" : "Calles"}
+          </button>
+        ))}
+      </div>
+
+      {vista === "calles" && <LeyendaCalles porEstado={porEstado} siguientes={siguientes} />}
 
       <MapaCallesLeaflet tramos={tramos} centro={ciudad.lat != null && ciudad.lng != null ? [ciudad.lat, ciudad.lng] : null}
-                         ajusteKey={slug} sel={sel} onSel={setSel} />
+                         ajusteKey={slug} sel={sel} onSel={setSel} vista={vista} onVista={setVista} />
 
       <p style={{ margin: 0, color: "var(--txt-3)", fontSize: 12.5 }}>
-        Tocá una calle para ver su ficha y marcarla. Verde: ya recorrida. Ámbar: a medias. Rojo: falta pasar. Gris: calle de casas, sin comercios.
+        {vista === "zonas"
+          ? "Cada cuadrado son unas cuatro cuadras: cuanto más verde, más recorrido. Tocá uno para acercarte y ver sus calles."
+          : "Verde: ya recorrida. Ámbar: a medias. Naranja: pendiente pegada a lo recorrido, por donde conviene seguir. Gris finito: pendiente más lejos. Punteado: sin comercios. Tocá una calle para ver su ficha y marcarla."}
       </p>
 
       {tramo && (
@@ -167,13 +183,15 @@ export function AdminCallesMapa({ ciudad }: { ciudad: Ciudad }) {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function MapaCallesLeaflet({ tramos, centro, ajusteKey, sel, onSel }: {
+function MapaCallesLeaflet({ tramos, centro, ajusteKey, sel, onSel, vista, onVista }: {
   tramos: TramoCalle[];
   centro: [number, number] | null;
   /** Cambia cuando hay que volver a encuadrar (otra ciudad); marcar una calle no lo cambia. */
   ajusteKey: string;
   sel: string | null;
   onSel: (id: string | null) => void;
+  vista: "zonas" | "calles";
+  onVista: (v: "zonas" | "calles") => void;
 }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -186,6 +204,7 @@ function MapaCallesLeaflet({ tramos, centro, ajusteKey, sel, onSel }: {
   const tramosRef = useRef(tramos); tramosRef.current = tramos;
   const selRef = useRef(sel); selRef.current = sel;
   const onSelRef = useRef(onSel); onSelRef.current = onSel;
+  const onVistaRef = useRef(onVista); onVistaRef.current = onVista;
   const centroRef = useRef(centro); centroRef.current = centro;
   const [listo, setListo] = useState(false);
   const [falla, setFalla] = useState(false);
@@ -220,10 +239,19 @@ function MapaCallesLeaflet({ tramos, centro, ajusteKey, sel, onSel }: {
     if (!listo || !L || !map || !grupo) return;
     grupo.clearLayers();
     haloRef.current = null;
-    lineasRef.current = pintarCalles(L, renderer, grupo, tramos, grosorPorZoom(map.getZoom()), (id) => onSelRef.current(id));
-    const s = selRef.current;
-    const t = s ? tramos.find((x) => x.id === s) ?? null : null;
-    haloRef.current = resaltarCalle(L, renderer, grupo, null, t ? lineasRef.current.get(t.id) ?? null : null, t, grosorPorZoom(map.getZoom()));
+    lineasRef.current = new Map();
+    if (vista === "zonas") {
+      // Tocar una zona: acercarse a ella y pasar a ver sus calles.
+      pintarZonas(L, renderer, grupo, calcularZonas(tramos), (b) => {
+        map.fitBounds(b, { padding: [10, 10], animate: true });
+        onVistaRef.current("calles");
+      });
+    } else {
+      lineasRef.current = pintarCalles(L, renderer, grupo, tramos, grosorPorZoom(map.getZoom()), (id) => onSelRef.current(id));
+      const s = selRef.current;
+      const t = s ? tramos.find((x) => x.id === s) ?? null : null;
+      haloRef.current = resaltarCalle(L, renderer, grupo, null, t ? lineasRef.current.get(t.id) ?? null : null, t, grosorPorZoom(map.getZoom()));
+    }
 
     // Encuadre: sólo la primera vez para esta ciudad.
     if (ajustadoRef.current !== ajusteKey) {
@@ -233,7 +261,7 @@ function MapaCallesLeaflet({ tramos, centro, ajusteKey, sel, onSel }: {
       if (puntos.length > 1) map.fitBounds(puntos, { padding: [20, 20], animate: false });
       else if (centroRef.current) map.setView(centroRef.current, 15);
     }
-  }, [listo, tramos, ajusteKey]);
+  }, [listo, tramos, ajusteKey, vista]);
 
   // Calle elegida: halo blanco debajo y la línea encima.
   useEffect(() => {
@@ -249,7 +277,7 @@ function MapaCallesLeaflet({ tramos, centro, ajusteKey, sel, onSel }: {
     if (!listo || !L || !map) return;
     const alZoom = () => {
       const g = grosorPorZoom(map.getZoom());
-      lineasRef.current.forEach((linea) => linea.setStyle({ weight: g }));
+      reestilarCalles(lineasRef.current, g);
       if (haloRef.current) haloRef.current.setStyle({ weight: g + 7 });
     };
     map.on("zoomend", alZoom);

@@ -54,13 +54,17 @@ export type CapaCalles = { tramos: TramoCalle[]; resumen: ResumenCalles };
 
 export const ESTADOS_CALLE: EstadoCalle[] = ["recorrida", "parcial", "pendiente", "sin_comercios"];
 
-/** Colores de la capa. El mapa base es claro, así que son saturados y oscuros. */
+/** Colores de la capa. Resalta lo HECHO: lo pendiente es fondo gris (en una
+ *  ciudad recién empezada casi todo está pendiente, y en rojo tapaba todo). */
 export const COLOR_CALLE: Record<EstadoCalle, string> = {
   recorrida: "#1b9e5a",
   parcial: "#e69a00",
-  pendiente: "#e03a3e",
-  sin_comercios: "#8791a0",
+  pendiente: "#7c8794",
+  sin_comercios: "#a3acb8",
 };
+
+/** Las pendientes pegadas a lo recorrido: por donde conviene seguir. */
+export const COLOR_SIGUIENTE = "#e8590c";
 
 /** Estado = texto + ícono + trazo, no sólo color. */
 export const ETIQUETA_CALLE: Record<EstadoCalle, string> = {

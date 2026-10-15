@@ -21,7 +21,7 @@ import { SVG_COMERCIOS } from "@/lib/iconos-mapa";
 import { PLAN_CFG } from "@/components/sello-plan";
 import type { EstadoPlan } from "@/lib/campo";
 import { Ic } from "@/components/ic";
-import { crearRendererCalles, grosorPorZoom, pintarCalles, resaltarCalle } from "@/lib/calles-mapa";
+import { crearRendererCalles, grosorPorZoom, pintarCalles, reestilarCalles, resaltarCalle } from "@/lib/calles-mapa";
 import type { TramoCalle } from "@/lib/calles";
 
 const BERMEJO: [number, number] = [-22.7361, -64.3433];
@@ -127,7 +127,7 @@ export function MapaAca({ aqui, pines, encuadreM, onSelect, calles = null, calle
     if (!listo || !map) return;
     const alZoom = () => {
       const g = grosorPorZoom(map.getZoom());
-      lineasRef.current.forEach((linea) => linea.setStyle({ weight: g }));
+      reestilarCalles(lineasRef.current, g);
       if (haloRef.current) haloRef.current.setStyle({ weight: g + 7 });
     };
     map.on("zoomend", alZoom);
