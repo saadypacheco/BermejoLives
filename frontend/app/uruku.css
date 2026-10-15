@@ -1504,3 +1504,58 @@ a.uk-product-img { display: block; }
 .uk-nov-det .uk-tienda { margin-top: 8px; }
 .uk-nov-det .enlace { margin-top: 22px; }
 @media (max-width: 600px) { .uk-nov-det h1 { font-size: 23px; } }
+
+/* ===== FARMACIAS DE TURNO (spec docs/farmacias-de-turno.md) ===== */
+/* El sello: ícono + texto, nunca sólo color. Verde de marca (texto del manual). */
+.uk-turno-sello { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 800; line-height: 1.25; background: var(--uk-green-soft); color: var(--uk-green-ic); border: 1px solid color-mix(in srgb, var(--uk-green-ic) 40%, transparent); }
+.uk-turno-sello svg { flex-shrink: 0; }
+.uk-turno-sello.proximos { background: var(--uk-chip); color: var(--uk-ink); border-color: var(--uk-line); font-weight: 700; }
+.uk-turno-sello.proximos a { color: var(--uk-green-ic); text-decoration: underline; margin-left: 4px; white-space: nowrap; }
+.uk-ficha-turno { margin: 2px 0 6px; }
+
+.uk-turno { padding: 22px 0 44px; max-width: 980px; }
+.uk-turno h1 { font-size: 28px; margin: 0 0 6px; }
+.uk-turno-sub { margin: 0 0 18px; font-size: 15px; line-height: 1.5; color: var(--uk-ink-soft); max-width: 680px; }
+.uk-turno h2 { font-size: 19px; margin: 26px 0 12px; display: flex; align-items: center; gap: 8px; }
+.uk-turno-grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
+.uk-turno-card { padding: 16px; border: 1px solid var(--uk-line); border-radius: var(--uk-radius); background: var(--uk-surface); display: flex; flex-direction: column; gap: 10px; box-shadow: var(--uk-shadow-soft); }
+.uk-turno-card h3 { margin: 0; font-size: 19px; line-height: 1.25; overflow-wrap: anywhere; }
+.uk-turno-card h3 a:hover { text-decoration: underline; }
+.uk-turno-dato { margin: 0; display: flex; gap: 8px; align-items: flex-start; font-size: 14.5px; line-height: 1.4; color: var(--uk-ink); overflow-wrap: anywhere; }
+.uk-turno-dato svg { flex-shrink: 0; margin-top: 2px; color: var(--uk-green-ic); }
+.uk-turno-acciones { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.uk-turno-acciones .uk-btn, .uk-turno-acciones .uk-btn-ghost { flex: 1 1 140px; justify-content: center; min-height: 48px; font-size: 15px; padding: 12px 16px; }
+.uk-turno-acciones a.uk-btn-primary { color: #fff; }
+.uk-turno-mapa { position: relative; }
+.uk-turno-mapa .map-canvas { height: 340px; min-height: 280px; }
+.uk-turno-mapa-carga { margin: 8px 0 0; font-size: 13px; color: var(--uk-ink-soft); display: flex; align-items: center; gap: 6px; }
+.uk-turno-mapa-falla { display: flex; gap: 10px; align-items: flex-start; padding: 14px; border-radius: var(--uk-radius-sm); border: 1px dashed var(--uk-line); color: var(--uk-ink-soft); font-size: 14px; line-height: 1.4; }
+.uk-turno-aviso { display: flex; gap: 10px; align-items: flex-start; padding: 14px 16px; border-radius: var(--uk-radius-sm); border: 1px solid var(--uk-line); background: var(--uk-surface); font-size: 14.5px; line-height: 1.45; }
+.uk-turno-aviso svg { flex-shrink: 0; margin-top: 2px; }
+.uk-turno-aviso.error { border-color: var(--uk-red); }
+.uk-turno-aviso.error svg { color: var(--uk-red); }
+.uk-turno-aviso a { color: var(--uk-green-ic); font-weight: 700; text-decoration: underline; }
+.uk-turno-dias { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.uk-turno-dias li { display: grid; grid-template-columns: 1fr; gap: 6px; padding: 12px 14px; border: 1px solid var(--uk-line); border-radius: var(--uk-radius-sm); background: var(--uk-surface); }
+.uk-turno-dia { display: flex; flex-direction: column; font-size: 14.5px; }
+.uk-turno-dia small { font-size: 12.5px; color: var(--uk-ink-soft); font-weight: 400; }
+.uk-turno-dias .farmacias { display: flex; gap: 8px; flex-wrap: wrap; }
+.uk-turno-dias .farmacias a { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; min-height: 40px; border-radius: 999px; background: var(--uk-chip); font-weight: 700; font-size: 14px; }
+.uk-turno-dias .farmacias a:hover { outline: 1px solid var(--uk-green); }
+.uk-turno-norma { margin-top: 22px; padding: 12px 14px; border-left: 4px solid var(--uk-green); background: var(--uk-surface-2); border-radius: 0 var(--uk-radius-sm) var(--uk-radius-sm) 0; font-size: 14px; line-height: 1.5; color: var(--uk-ink-soft); }
+@media (min-width: 720px) {
+  .uk-turno h1 { font-size: 34px; }
+  .uk-turno-grid { grid-template-columns: 1fr 1fr; }
+  .uk-turno-dias li { grid-template-columns: 210px 1fr; align-items: center; }
+  .uk-turno-mapa .map-canvas { height: 400px; }
+}
+
+/* La tarjeta del inicio y de la guía: «Farmacias de turno hoy: A y B → Ver». */
+.uk-turno-hoy { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--uk-green-ic) 45%, transparent); border-radius: var(--uk-radius); background: var(--uk-green-soft); color: var(--uk-ink); min-height: 56px; }
+.uk-turno-hoy:hover { border-color: var(--uk-green); }
+.uk-turno-hoy > svg { flex-shrink: 0; color: var(--uk-green-ic); }
+.uk-turno-hoy span { flex: 1; min-width: 0; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; }
+.uk-turno-hoy b { font-weight: 800; }
+.uk-turno-hoy em { font-style: normal; font-weight: 800; color: var(--uk-green-ic); white-space: nowrap; }
+.uk-turno-hoy-wrap { margin: 14px auto 0; }
+.uk-guia .uk-turno-hoy { margin: 0 0 16px; }

@@ -31,8 +31,10 @@ PRIVADAS = ("plan_cortesia", "paga_hasta", "cargado_por", "capturado_en")
 # `baja_motivo` (0147): por qué está dado de baja un comercio; dato interno, nace privada (regla 11).
 # `codigo_anterior` y `alta_uid` (0149): el código de antes de la regeneración y el id con que el
 # celular del agente reintenta un alta; nacen privadas.
+# `ubicacion_aproximada` y `nota_interna` (0154, docs/farmacias-de-turno.md): si el punto del mapa se
+# calculó desde la dirección y las dudas internas del equipo sobre la ficha; nacen privadas.
 PRIVADAS_EXTRA = ("fotos_extra", "wa_jid", "rubro_revisado_por", "baja_motivo", "codigo",
-                  "codigo_anterior", "alta_uid")
+                  "codigo_anterior", "alta_uid", "ubicacion_aproximada", "nota_interna")
 NO_VAN_EN_LA_LISTA = PRIVADAS + PRIVADAS_EXTRA
 # `codigo` (URUKU-XXXX) estaba en la lista de la 0145 (la ficha pública lo leía). La
 # 0148 (docs/clave-automatica.md) se lo quita a anon: desde ahí es privada. La 0145 ya

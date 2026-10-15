@@ -166,6 +166,7 @@ class FakeRepo:
         self.videos_promo: list[dict] = []
         self.novedades_uruku: dict[str, dict] = {}    # id -> fila (0150)
         self.calles_tramos: dict[str, dict] = {}      # id -> fila (0152)
+        self.turnos_farmacia: dict[str, dict] = {}    # id -> fila (0154)
         self.calles_marcas: list[dict] = []           # registro de marcas (0152)
         self.redes: list[dict] = [
             {"clave": "tiktok", "etiqueta": "TikTok", "url": None, "orden": 1},
@@ -1069,6 +1070,29 @@ class FakeRepo:
     def get_comercio_campo(self, comercio_id):
         c = self.comercios.get(comercio_id)
         return c if c and c.get("activo", True) else None
+
+    # ---- Farmacias de turno (0154) ----
+    def get_comercio_por_slug(self, slug):
+        return next((c for c in self.comercios.values()
+                     if c.get("slug") == slug and c.get("activo", True)), None)
+
+    def get_comercio_por_nombre(self, ciudad_id, nombre, rubro_id):
+        return next((c for c in self.comercios.values()
+                     if c.get("ciudad_id") == ciudad_id and c.get("nombre") == nombre
+                     and c.get("rubro_id") == rubro_id and c.get("activo", True)), None)
+
+    def upsert_turnos_farmacia(self, filas):
+        """Como el repo real: único por (comercio_id, fecha); no manda `activo`, así que un
+        turno dado de baja sigue de baja."""
+        for f in filas:
+            previo = next((t for t in self.turnos_farmacia.values()
+                           if t["comercio_id"] == f["comercio_id"] and t["fecha"] == f["fecha"]), None)
+            if previo:
+                previo.update(f)
+            else:
+                tid = self._id("turno")
+                self.turnos_farmacia[tid] = {"id": tid, "activo": True, **f}
+        return len(filas)
 
     def contar_fotos_comercios(self, comercio_ids):
         """Como el RPC de la 0151: {comercio_id: n}, sólo los que tienen fotos."""

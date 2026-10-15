@@ -17,6 +17,8 @@ COPY app ./app
 # Scripts de mantenimiento que se corren con `docker compose exec`
 # (regenerar miniaturas, etc.). Sin esto no existen dentro del contenedor.
 COPY scripts ./scripts
+# Datos que se importan con un comando (rol de turnos de las farmacias, etc.).
+COPY data ./data
 
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

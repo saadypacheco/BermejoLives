@@ -13,12 +13,14 @@
  * deshace en una manchita. El relleno macizo se lee como silueta, que es
  * exactamente lo que hacía el emoji y lo que un mapa necesita.
  */
-import { RELLENO, POR_CLAVE } from "@/lib/iconos-dibujos";
+import { RELLENO, POR_CLAVE_RELLENO } from "@/lib/iconos-dibujos";
 
 /** El `<svg>` de una clave, al 100% de la caja que lo contenga: el tamaño y el
  *  color los pone el CSS del pin (`.ukpin-emo` y compañía). */
 function svg(clave: string): string {
-  const i = POR_CLAVE[clave] ?? POR_CLAVE.otros;
+  // El índice es el del RELLENO (`POR_CLAVE_RELLENO`), no el del duotono: son dos
+  // listas de distinto largo y indexar una con la otra daba pines sin dibujo.
+  const i = POR_CLAVE_RELLENO[clave] ?? POR_CLAVE_RELLENO.otros;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" fill="currentColor" viewBox="0 0 256 256">${RELLENO[i]}</svg>`;
 }
 
@@ -34,3 +36,6 @@ export const SVG_UBICACION = svg("ubicacion");
 
 /** La estrella «Verificado por URUKU» del globo del mapa. */
 export const SVG_ESTRELLA = svg("estrella");
+
+/** La cruz de «farmacia de turno ahora»: el pin destacado y el globo del mapa. */
+export const SVG_TURNO = svg("turno_farmacia");

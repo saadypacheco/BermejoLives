@@ -701,6 +701,12 @@ class _EditarComercioBody(BaseModel):
     #: Faltaba: el filtro «Sin horario» de la app llevaba a un editor que no lo
     #: podía cargar. Es el dato que decide si alguien camina hasta el local.
     horario: str | None = None
+    #: El GPS tomado en la puerta (docs/farmacias-de-turno.md). Van JUNTOS: con uno solo no
+    #: hay punto. Al guardarlos la ubicación deja de ser «aproximada»
+    #: (`ubicacion_aproximada = false`); si la IA o el cruce de calles la habían calculado,
+    #: ahora la confirmó una persona parada en el local.
+    lat: float | None = Field(None, ge=-90, le=90)
+    lng: float | None = Field(None, ge=-180, le=180)
 
 
 @router.patch("/campo/mis-comercios/{comercio_id}")
@@ -736,6 +742,13 @@ def editar_mi_comercio(
             )
         if patch["whatsapp"]:
             patch["whatsapp"] = whatsapp_para_guardar(patch["whatsapp"]) or patch["whatsapp"].strip()
+    if "lat" in patch or "lng" in patch:
+        # El GPS se re-toma entero: lat y lng juntos y con valor. Un punto a medias (o un
+        # `null`, que sería borrar la ubicación) saca al comercio del mapa.
+        if patch.get("lat") is None or patch.get("lng") is None:
+            raise HTTPException(status_code=400, detail="La ubicación necesita latitud y longitud")
+        # Tomada con el GPS en la puerta: deja de ser la calculada desde la dirección.
+        patch["ubicacion_aproximada"] = False
     if patch.get("horario"):
         # Lo dictó el dueño, parado en el local: deja de ser el estimado de la
         # calle (el que se carga por lote), igual que cuando lo escribe el admin.
@@ -756,6 +769,8 @@ def editar_mi_comercio(
         if patch["catalogo_url"] is None or catalogo_svc.archivo_propio(anterior, comercio_id):
             raise HTTPException(status_code=403, detail=fotos_galeria.MSG_AGENTE_NO_BORRA)
     comercio = repo.update_comercio(comercio_id, patch, body.rubro_slugs)
+    if "lat" in patch:
+        calles_mapa.invalidar(comercio.get("ciudad_id") or actual_comercio.get("ciudad_id"))   # el comercio se movió de cuadra
     if "catalogo_url" in patch:
         # Cambió el catálogo (enlace por enlace: el anterior no era un PDF nuestro,
         # el agente no puede cambiar ese caso). Se deja por si cambia la regla.

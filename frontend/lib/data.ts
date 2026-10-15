@@ -1,5 +1,6 @@
 import { supabase, hasSupabase } from "@/lib/supabase";
 import type { Adorno } from "@/lib/adornos";
+import { estaDeTurno, rangoTurnos, turnosAhora, type FarmaciaTurno, type TurnoFarmacia } from "@/lib/turnos-farmacia";
 import type { Comercio, FeedItem, Producto, Zona, Rubro, Ciudad, ResultadoBusqueda, FiltrosBusqueda } from "@/lib/types";
 
 // Diagnóstico temporal (self-host, 2026-07-10): supabase-js a veces no
@@ -510,6 +511,69 @@ export async function getLugaresPublicos(limit = 12): Promise<LugarPublico[]> {
     .map((l: any) => ({ id: l.id, nombre: l.nombre, tipo: l.tipo, portada_thumb_url: l.portada_thumb_url ?? null, n_comercios: l.comercios?.[0]?.count ?? 0 }))
     .filter((l) => l.n_comercios > 0)
     .slice(0, limit);
+}
+
+// ---- Farmacias de turno (spec docs/farmacias-de-turno.md) ----
+
+/** Las columnas de la farmacia que se piden en el embed. Todas están en
+ *  `COLUMNAS_COMERCIO` (o sea, ya son públicas para anon): `ubicacion_aproximada`
+ *  y `nota_interna` NO se piden nunca desde acá. */
+const COLUMNAS_FARMACIA = "id, slug, nombre, direccion, telefono, whatsapp, lat, lng, portada_thumb_url";
+
+type FilaTurno = {
+  id: string; comercio_id: string; fecha: string; inicio: string; fin: string;
+  comercios: FarmaciaTurno | FarmaciaTurno[] | null;
+};
+
+/** PostgREST devuelve el embed muchos-a-uno como objeto, pero un cambio de
+ *  relación lo vuelve lista: se acepta cualquiera de las dos. */
+function aTurnos(data: unknown): TurnoFarmacia[] {
+  return ((data ?? []) as FilaTurno[]).map((f) => ({
+    id: f.id, comercio_id: f.comercio_id, fecha: f.fecha, inicio: f.inicio, fin: f.fin,
+    comercios: Array.isArray(f.comercios) ? (f.comercios[0] ?? null) : f.comercios,
+  }));
+}
+
+/** Los turnos de una ciudad entre dos fechas (`YYYY-MM-DD`, inclusive), con la
+ *  farmacia. `null` si la lectura falló: la página tiene que poder decir «no
+ *  pude leer el rol» y no mostrar un «no hay turnos» que mentiría. Lectura
+ *  pública con anon (RLS: sólo turnos `activo` de comercios activos); el
+ *  `!inner` descarta turnos de una farmacia dada de baja. */
+export async function getTurnosFarmacia(ciudadId: string | null | undefined, desde: string, hasta: string): Promise<TurnoFarmacia[] | null> {
+  if (!hasSupabase || !ciudadId) return null;
+  const { data, error } = await supabase
+    .from("turnos_farmacia")
+    .select(`id, comercio_id, fecha, inicio, fin, comercios!inner(${COLUMNAS_FARMACIA}, ciudad_id)`)
+    .eq("comercios.ciudad_id", ciudadId)
+    .gte("fecha", desde).lte("fecha", hasta)
+    .order("fecha");
+  if (error) { logSupaError("getTurnosFarmacia", error); return null; }
+  return aTurnos(data);
+}
+
+/** Las farmacias de turno AHORA en la ciudad (dos, normalmente). `null` si no se pudo leer. */
+export async function getFarmaciasDeTurnoAhora(ciudadId: string | null | undefined, ahora: Date = new Date()): Promise<TurnoFarmacia[] | null> {
+  const { desde, hasta } = rangoTurnos(ahora, 1);
+  const turnos = await getTurnosFarmacia(ciudadId, desde, hasta);
+  return turnos ? turnosAhora(turnos, ahora) : null;
+}
+
+/** El turno vigente y los próximos de UNA farmacia (para su ficha). `[]` si no
+ *  tiene ninguno o si la lectura falló: la ficha simplemente no muestra el sello. */
+export async function getTurnosDeFarmacia(comercioId: string, ahora: Date = new Date(), cuantos = 5): Promise<TurnoFarmacia[]> {
+  if (!hasSupabase) return [];
+  const { desde } = rangoTurnos(ahora);
+  const { data, error } = await supabase
+    .from("turnos_farmacia")
+    .select("id, comercio_id, fecha, inicio, fin")
+    .eq("comercio_id", comercioId)
+    .gte("fecha", desde)
+    .order("fecha")
+    .limit(cuantos + 1);
+  if (error) { logSupaError("getTurnosDeFarmacia", error); return []; }
+  return aTurnos(data)
+    // El turno de «ayer» que ya terminó entra por el borde del rango: se descarta.
+    .filter((t) => estaDeTurno(t, ahora) || Date.parse(t.inicio) > ahora.getTime());
 }
 
 export async function getComercioBySlug(slug: string): Promise<Comercio | null> {

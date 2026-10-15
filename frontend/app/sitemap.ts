@@ -25,6 +25,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITIO}/novedades`, changeFrequency: "daily", priority: 0.8 },
     { url: `${SITIO}/guia`, changeFrequency: "weekly", priority: 0.9 },
     { url: `${SITIO}/cambio`, changeFrequency: "daily", priority: 0.8 },
+    { url: `${SITIO}/farmacias-de-turno`, changeFrequency: "daily", priority: 0.8 },
     // /planes salió del sitemap el 2/10: los precios se deciden por ciudad y
     // todavía no están definidos fuera de Bermejo. La página existe para uso
     // interno, pero no se ofrece ni se indexa.

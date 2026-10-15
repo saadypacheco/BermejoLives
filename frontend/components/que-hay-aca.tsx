@@ -63,6 +63,8 @@ type ItemAca = {
   /** El comercio completo; null si sólo hay lo guardado (sin señal). */
   c: ComercioAgente | null;
   d: number;
+  /** El punto salió de la dirección, no del GPS en la puerta. */
+  aprox: boolean;
 };
 
 function desdeComercio(c: ComercioAgente, aqui: PosicionAca | null): ItemAca | null {
@@ -73,6 +75,7 @@ function desdeComercio(c: ComercioAgente, aqui: PosicionAca | null): ItemAca | n
     plan: c.estado_plan ?? null,
     faltan: etiquetasFaltas(calcularFaltas(c, c.fotos_count ?? null)),
     c, d: aqui ? metros(aqui.lat, aqui.lng, c.lat, c.lng) : Infinity,
+    aprox: c.ubicacion_aproximada === true,
   };
 }
 
@@ -81,6 +84,7 @@ function desdeGuardado(x: ComercioCercano, aqui: PosicionAca | null): ItemAca {
     id: x.id, nombre: x.nombre, lat: x.lat, lng: x.lng, rubro: x.rubro, thumb: x.thumb,
     plan: x.plan ?? null, faltan: x.faltan ?? null, c: null,
     d: aqui ? metros(aqui.lat, aqui.lng, x.lat, x.lng) : Infinity,
+    aprox: false,
   };
 }
 
@@ -421,6 +425,11 @@ export function QueHayAca({ cabecera, onCargarNuevo, onMisComercios, onSubirPend
                 <span style={{ fontSize: 12.5, color: "var(--neon)", fontWeight: 700 }}>{metrosTxt(x.d)}</span>
                 <SelloPlan plan={x.plan} />
               </span>
+              {x.aprox && (
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--amber)", lineHeight: 1.3 }}>
+                  <Ic n="ubicacion" s={13} /> Ubicación aproximada: confirmala con el GPS en la puerta
+                </span>
+              )}
               {x.faltan !== null && (
                 x.faltan.length === 0
                   ? <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--neon)" }}><Ic n="listo" s={13} peso="fill" /> Completo</span>

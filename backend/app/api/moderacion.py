@@ -15,6 +15,7 @@ from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS, tiene as ti
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp, whatsapp_para_guardar
+from app.services import turnos_farmacia
 from app.services import calles_mapa, enlaces, ficha_catalogo as catalogo_svc, fotos_galeria, portada, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
@@ -773,6 +774,23 @@ def admin_delete_lugar(
     repo.update_lugar(lugar_id, {"activo": False})
     logger.info("admin.lugar_borrado", lugar=lugar_id, by=admin["email"])
     return {"ok": True}
+
+
+@router.post("/admin/farmacias/turnos/importar")
+def admin_importar_turnos_farmacia(
+    body: turnos_farmacia.RolDeTurnos,
+    admin: dict = Depends(require_permiso("lugares")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Importa el rol de turnos de las farmacias (docs/farmacias-de-turno.md): crea las fichas que
+    faltan, completa las que ya están (sin pisar lo cargado) y guarda los turnos de 08:00 a 08:00.
+    Idempotente: correrlo dos veces no duplica nada. Devuelve `{creadas, actualizadas, turnos, ...}`."""
+    try:
+        resumen = turnos_farmacia.importar(repo, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    logger.info("admin.turnos_farmacia_importados", by=admin["email"], **resumen)
+    return {"ok": True, **resumen}
 
 
 class PagoBody(BaseModel):

@@ -74,7 +74,8 @@ def extraer_codigo(texto: str | None) -> str | None:
 #: Lo que de una fila de `comercios` sólo ve el equipo: el código vigente, el anterior
 #: (0149, lo guarda para las publicaciones que entraron antes del cambio) y el id con
 #: que el celular del agente reintenta un alta (0149).
-_SOLO_ADMIN = ("codigo", "codigo_formateado", "codigo_anterior", "alta_uid")
+#: `nota_interna` (0154): dudas del equipo sobre la ficha; nunca sale en una respuesta de comercio ni de campo.
+_SOLO_ADMIN = ("codigo", "codigo_formateado", "codigo_anterior", "alta_uid", "nota_interna")
 
 
 def sin_codigo(fila: dict | None) -> dict | None:

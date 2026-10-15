@@ -229,6 +229,11 @@ export type ComercioAgente = {
   tiene_pasero?: boolean; envios_internacionales?: boolean; tiene_factura?: boolean; talles_especiales?: boolean;
   pedido_minimo?: string | null;
   sin_cartel?: boolean;
+  /** El punto del mapa se calculó desde la dirección (no se tomó con el GPS en la
+   *  puerta): puede estar corrido unos metros. El servidor lo pone en `false` al
+   *  re-tomar el GPS en «Completar». Opcional: mientras el backend no lo mande,
+   *  no se muestra ningún aviso. */
+  ubicacion_aproximada?: boolean;
   /** Quién lo dio de alta. Con dos agentes por ciudad, saber que la ficha es
    *  del otro evita la duda de «esto no lo cargué yo, ¿lo puedo tocar?». */
   cargado_por?: string | null;
@@ -344,6 +349,9 @@ export type EditarComercioBody = {
    *  es texto y vacío (null) lo borra. */
   tiene_pasero?: boolean; envios_internacionales?: boolean; tiene_factura?: boolean; talles_especiales?: boolean;
   pedido_minimo?: string | null;
+  /** El GPS tomado en la puerta. Van juntos (lat y lng); el servidor deja de
+   *  marcar la ubicación como aproximada (docs/farmacias-de-turno.md). */
+  lat?: number; lng?: number;
   /** El horario como lo dicta el dueño. Vacío (o null) lo borra. */
   horario?: string | null;
 };

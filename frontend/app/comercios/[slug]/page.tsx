@@ -12,7 +12,8 @@ import { HorarioBadge } from "@/components/horario-badge";
 import { EstrellaVerificado } from "@/components/estrella-verificado";
 import { CompartirBoton } from "@/components/compartir-boton";
 import QRCode from "qrcode";
-import { getComercioBySlug, getOfertasComercio, getGaleriaComercio, nombreCiudadDe, getFuncionesDePlan, getPlanPublico } from "@/lib/data";
+import { getComercioBySlug, getOfertasComercio, getGaleriaComercio, nombreCiudadDe, getFuncionesDePlan, getPlanPublico, getTurnosDeFarmacia } from "@/lib/data";
+import { estaDeTurno, etiquetaHasta, fechaCorta, turnosFuturos } from "@/lib/turnos-farmacia";
 import { FichaGaleria } from "@/components/ficha-galeria";
 import { GaleriaTienda } from "@/components/galeria-tienda";
 import { VistaLogger } from "@/components/vista-logger";
@@ -76,7 +77,8 @@ export default async function ComercioPage({ params }: { params: { slug: string 
   // en el servidor, por lo mismo que en el volante: la librería no viaja al
   // navegador.
   const urlFicha = `https://uruku.bo/comercios/${comercio.slug}`;
-  const [feed, galeria, funcionesPlan, planPublico, qr] = await Promise.all([
+  const ahora = new Date();
+  const [feed, galeria, funcionesPlan, planPublico, turnosFarmacia, qr] = await Promise.all([
     getOfertasComercio(comercio.id), getGaleriaComercio(comercio.id),
     // Las funciones del plan (decide si la ficha lleva el chatbot del local):
     // se leen junto con lo demás, no en serie.
@@ -84,11 +86,18 @@ export default async function ComercioPage({ params }: { params: { slug: string 
     // La estrella «Verificado por URUKU» (plan pago al día o de cortesía). Si
     // la lectura falla, sin estrella.
     getPlanPublico(comercio.id),
+    // El rol de turnos, sólo para las farmacias. Sin turnos (o si la lectura
+    // falla) la ficha queda como siempre.
+    comercio.rubro_slug === "farmacia" ? getTurnosDeFarmacia(comercio.id, ahora) : Promise.resolve([]),
     // Con `?ref=`: la vista que llegue por este QR queda marcada como tal
     // (0114), distinta de la que llega por el volante o la tarjeta de mesa.
     QRCode.toDataURL(`${urlFicha}?ref=ficha-${comercio.slug}`, { width: 240, margin: 1, errorCorrectionLevel: "M",
                                  color: { dark: "#0f2c33", light: "#ffffff" } }),
   ]);
+
+  // El sello de turno: «De turno ahora…» si está de turno, si no sus próximos 4.
+  const turnoVigente = turnosFarmacia.find((t) => estaDeTurno(t, ahora)) ?? null;
+  const turnosProximos = turnosFuturos(turnosFarmacia, ahora).slice(0, 4);
 
   // Ofertas y novedades van en la vidriera de fotos, con su etiqueta y un
   // filtro por tipo (components/galeria-tienda.tsx). Los videos de TikTok no.
@@ -177,6 +186,25 @@ export default async function ComercioPage({ params }: { params: { slug: string 
               )}
               <HorarioBadge horario={comercio.horario} estimado={comercio.horario_estimado} />
             </div>
+
+            {/* FARMACIA DE TURNO (spec docs/farmacias-de-turno.md). Ícono + texto:
+                el verde solo no alcanza para quien no distingue colores. */}
+            {turnoVigente ? (
+              <p className="uk-ficha-turno">
+                <span className="uk-turno-sello">
+                  <Ic n="turno_farmacia" s={18} peso="fill" />
+                  De turno ahora · {etiquetaHasta(turnoVigente.fin, ahora)} · atiende las 24 h
+                </span>
+              </p>
+            ) : turnosProximos.length > 0 && (
+              <p className="uk-ficha-turno">
+                <span className="uk-turno-sello proximos">
+                  <Ic n="calendario" s={18} />
+                  <span>Próximos turnos: {turnosProximos.map((t) => fechaCorta(t.fecha)).join(", ")}
+                    <Link href="/farmacias-de-turno">Ver quién está hoy</Link></span>
+                </span>
+              </p>
+            )}
 
             {comercio.descripcion && <p className="uk-ficha-desc">{comercio.descripcion}</p>}
 

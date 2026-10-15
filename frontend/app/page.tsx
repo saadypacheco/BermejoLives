@@ -6,7 +6,8 @@ import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { ContactoUruku } from "@/components/contacto-uruku";
 import { AccesosCiudad } from "@/components/accesos-ciudad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
-import { getClima, getCotizaciones, getFeed, getFronteraEstado, getNovedadesUruku, getVideosPromo } from "@/lib/data";
+import { getClima, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado, getNovedadesUruku, getVideosPromo } from "@/lib/data";
+import { TarjetaTurnoHoy } from "@/components/tarjeta-turno-hoy";
 import { NovedadUrukuCard } from "@/components/novedad-uruku-card";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { titulo, descripcion, MARCA } from "@/lib/marca";
@@ -139,9 +140,11 @@ export default async function InicioPage() {
   const conGuia = (ciudad?.slug ?? "bermejo") === "bermejo";
   // El peso argentino, en cualquier ciudad de frontera.
   const esFrontera = ciudad?.es_frontera ?? true;
-  const [feed, novedadesUruku, videos, frontera, clima, cotizaciones] = await Promise.all([
+  const [feed, novedadesUruku, videos, frontera, clima, cotizaciones, turnosHoy] = await Promise.all([
     getFeed(12, ciudad?.slug), getNovedadesUruku(ciudad?.id, 4), conGuia ? getVideosPromo(6) : Promise.resolve([]),
     conGuia ? getFronteraEstado(ciudad?.id) : Promise.resolve(null), conGuia ? getClima() : Promise.resolve(null), getCotizaciones(),
+    // Las farmacias de turno hoy: la tarjeta sólo aparece si la ciudad tiene turnos cargados.
+    getFarmaciasDeTurnoAhora(ciudad?.id),
   ]);
   const nombre = ciudad?.nombre ?? "Bermejo";
   // La foto del hero es de la ciudad; sin foto propia, la de Bermejo sólo en
@@ -212,6 +215,9 @@ export default async function InicioPage() {
           )}
         </div>
       </section>
+
+      {/* ===== Farmacias de turno hoy (sólo si la ciudad tiene turnos cargados) ===== */}
+      <TarjetaTurnoHoy turnos={turnosHoy} contenedor />
 
       {/* ===== El WhatsApp de URUKU, a la vista ===== */}
       <ContactoUruku />

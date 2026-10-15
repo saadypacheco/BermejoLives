@@ -886,3 +886,14 @@ select:not(.adm-input) { color-scheme: dark; }
    nada. Se marca para poder verlas de un vistazo entre las que sí agrupan. */
 .cat-chips li.cat-sola { border-color: rgba(245,158,11,.45); background: rgba(245,158,11,.07); }
 .cat-chips li.cat-sola i { color: #f59e0b; }
+
+/* FARMACIA DE TURNO AHORA (spec docs/farmacias-de-turno.md): el pin más grande
+   del mapa, verde con la cruz y un aro claro. El verde solo no alcanza para
+   quien no distingue colores: lo que lo marca es la cruz y el texto del globo. */
+.ukpin.turno { --pc: #15803d; border: 2px solid #fff; overflow: visible; box-shadow: 0 3px 12px rgba(21,128,61,.65); }
+.ukpin.turno .ukpin-emo { width: 24px; height: 24px; }
+.ukpin-ring.turno { border-color: #86efac; inset: -6px; animation: ukturno 2.2s ease-out infinite; }
+@keyframes ukturno { 0% { opacity: .95; transform: scale(.92); } 70%, 100% { opacity: 0; transform: scale(1.25); } }
+@media (prefers-reduced-motion: reduce) { .ukpin-ring.turno { animation: none; opacity: .9; } }
+.map-pop em.map-pop-turno { display: flex; align-items: center; gap: 5px; margin: 3px 0 4px; font-style: normal; font-size: 12px; font-weight: 800; color: var(--uk-green-ic, #4ade80); }
+.map-pop em.map-pop-turno .map-pop-turno-ic { display: inline-flex; width: 15px; height: 15px; flex-shrink: 0; color: inherit; font-size: inherit; }

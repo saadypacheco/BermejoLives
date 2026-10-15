@@ -249,6 +249,10 @@ class Repo(Protocol):
     def list_comercios_por_agente(self, email: str, limit: int) -> list[dict]: ...
     def list_comercios_de_ciudad(self, ciudad_id: str, limit: int = 4000) -> list[dict]: ...
     def get_comercio_campo(self, comercio_id: str) -> dict | None: ...
+    # Farmacias de turno (0154, docs/farmacias-de-turno.md).
+    def get_comercio_por_slug(self, slug: str) -> dict | None: ...
+    def get_comercio_por_nombre(self, ciudad_id: str, nombre: str, rubro_id: str) -> dict | None: ...
+    def upsert_turnos_farmacia(self, filas: list[dict]) -> int: ...
     def contar_fotos_comercios(self, comercio_ids: list[str]) -> dict[str, int]: ...
     def list_ejemplos_candidatos(self, ciudad_id: str, rubro_id: str | None = None, limite: int = 200) -> list[dict]: ...
     def intereses_de_plan_pendientes(self) -> dict[str, dict]: ...
@@ -337,6 +341,7 @@ class Repo(Protocol):
 # se pierde al guardar los rubros.
 _COLS_COMERCIO_CAMPO = (
     "id, slug, nombre, whatsapp, telefono, email, modalidad, direccion, calle, lat, lng, "
+    "ubicacion_aproximada, "
     "horario, horario_estimado, sin_cartel, prod_obs_human, subcategoria, "
     "portada_url, portada_thumb_url, verificado, created_at, cargado_por, "
     "lugar_id, puesto, instagram_url, facebook_url, tiktok_url, sitio_web, "
@@ -2749,6 +2754,30 @@ class SupabaseRepo:
         res = (self._db.table("comercios").select(_COLS_COMERCIO_CAMPO)
                .eq("id", comercio_id).eq("activo", True).limit(1).execute())
         return (res.data or [None])[0]
+
+    # ---- Farmacias de turno (0154) ----
+    def get_comercio_por_slug(self, slug: str) -> dict | None:
+        """Un comercio ACTIVO por su slug, o None."""
+        res = (self._db.table("comercios").select("id, slug, nombre, telefono, direccion, ciudad_id")
+               .eq("slug", slug).eq("activo", True).limit(1).execute())
+        return (res.data or [None])[0]
+
+    def get_comercio_por_nombre(self, ciudad_id: str, nombre: str, rubro_id: str) -> dict | None:
+        """Un comercio ACTIVO de esa ciudad con ese nombre exacto y ese rubro principal (el más
+        viejo si hubiera más de uno), o None. Es lo que reconoce la ficha que creó una
+        importación anterior."""
+        res = (self._db.table("comercios").select("id, slug, nombre, telefono, direccion, ciudad_id")
+               .eq("ciudad_id", ciudad_id).eq("nombre", nombre).eq("rubro_id", rubro_id)
+               .eq("activo", True).order("created_at").limit(1).execute())
+        return (res.data or [None])[0]
+
+    def upsert_turnos_farmacia(self, filas: list[dict]) -> int:
+        """Guarda turnos por (comercio_id, fecha): volver a importar actualiza inicio/fin y no
+        duplica. NO manda `activo`: un turno que alguien dio de baja no resucita. De a 200."""
+        for i in range(0, len(filas), 200):
+            (self._db.table("turnos_farmacia")
+             .upsert(filas[i:i + 200], on_conflict="comercio_id,fecha").execute())
+        return len(filas)
 
     def contar_fotos_comercios(self, comercio_ids: list[str]) -> dict[str, int]:
         """Fotos de galería por comercio, en UNA consulta agrupada (RPC `contar_fotos_comercios`,

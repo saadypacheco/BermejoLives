@@ -676,6 +676,10 @@ def update_perfil(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not patch and body.rubro_slugs is None:
         raise HTTPException(status_code=400, detail="No hay campos para actualizar")
+    # El dueño marcó dónde está: la ubicación deja de ser la aproximada que se
+    # calculó desde la dirección (docs/farmacias-de-turno.md).
+    if patch.get("lat") is not None and patch.get("lng") is not None:
+        patch["ubicacion_aproximada"] = False
     anterior = None
     if "catalogo_url" in patch:
         anterior = (repo.get_comercio(claims["comercio_id"]) or {}).get("catalogo_url")

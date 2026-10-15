@@ -1,0 +1,699 @@
+{
+ "ciudad": "bermejo",
+ "fuente": "Rol de turnos de farmacias privadas de Bermejo (fotos), 4/10 al 12/12/2026",
+ "turno": {
+  "hora_inicio": "08:00",
+  "duracion_horas": 24,
+  "zona": "America/La_Paz",
+  "norma": "DS 25235 (reglamento de la Ley del Medicamento), art. 74"
+ },
+ "farmacias": [
+  {
+   "nombre": "Amanecer",
+   "nombre_ficha": "Farmacia Amanecer",
+   "direccion": "Calle Gualberto Villarroel, esquina Belgrano",
+   "celular": "72946292",
+   "fijo": null,
+   "nota_interna": null,
+   "slug": "farmacia-amanecer"
+  },
+  {
+   "nombre": "Ángeles",
+   "nombre_ficha": "Farmacia Ángeles",
+   "direccion": "Avenida Barrientos, al lado del Mercado Campesino",
+   "celular": "74503461",
+   "fijo": null,
+   "nota_interna": null,
+   "slug": "farmacia-los-angeles"
+  },
+  {
+   "nombre": "Bermejo",
+   "nombre_ficha": "Farmacia Bermejo",
+   "direccion": "Avenida Barrientos, entre Germán Busch y Virgen de Chaguaya",
+   "celular": "72905917",
+   "fijo": null,
+   "nota_interna": "En el rol también figura 78256292 (18/11). Confirmar si ambos valen.",
+   "lat": -22.732061,
+   "lng": -64.341934,
+   "ubicacion_aproximada": true
+  },
+  {
+   "nombre": "Bolívar",
+   "nombre_ficha": "Farmacia Bolívar",
+   "direccion": "Calle Mariscal Santa Cruz, entre avenida Luis de Fuentes y Belgrano",
+   "celular": "72902010",
+   "fijo": null,
+   "nota_interna": null,
+   "lat": -22.735628,
+   "lng": -64.335318,
+   "ubicacion_aproximada": true
+  },
+  {
+   "nombre": "Copacabana",
+   "nombre_ficha": "Farmacia Copacabana",
+   "direccion": "Avenida Barrientos, entre Cochabamba y Ameller",
+   "celular": null,
+   "fijo": "6961117",
+   "nota_interna": null,
+   "slug": "farmacia-copacabana"
+  },
+  {
+   "nombre": "Corazón de Jesús",
+   "nombre_ficha": "Farmacia Corazón de Jesús",
+   "direccion": "Avenida Bolívar, entre avenida Barrientos y La Paz",
+   "celular": "72905738",
+   "fijo": null,
+   "nota_interna": null,
+   "slug": "farmacia-corazon-de-jesus"
+  },
+  {
+   "nombre": "Dorado",
+   "nombre_ficha": "Farmacia Dorado",
+   "direccion": "Avenida Luis de Fuentes, esquina Gualberto Villarroel y Germán Busch",
+   "celular": null,
+   "fijo": "6963028",
+   "nota_interna": "La fuente dice «esquina Gualberto V. y Germán B.»: ubicada en Luis de Fuentes y Gualberto Villarroel. Confirmar.",
+   "lat": -22.736511,
+   "lng": -64.335361,
+   "ubicacion_aproximada": true
+  },
+  {
+   "nombre": "Farma Sol",
+   "nombre_ficha": "Farmacia Farma Sol",
+   "direccion": "Barrio San José, calle Pando y José Yache",
+   "celular": "72950033",
+   "fijo": null,
+   "nota_interna": "El 10/11 figura el fijo 6961117, que también es de Copacabana: no se cargó.",
+   "lat": -22.726257,
+   "lng": -64.339277,
+   "ubicacion_aproximada": true
+  },
+  {
+   "nombre": "Farma Vida",
+   "nombre_ficha": "Farmacia Farma Vida",
+   "direccion": "Calle Aniceto Arce, entre Pando y Nils Klemen",
+   "celular": "67969991",
+   "fijo": null,
+   "nota_interna": null,
+   "lat": -22.73173,
+   "lng": -64.333713,
+   "ubicacion_aproximada": true
+  },
+  {
+   "nombre": "Madrid",
+   "nombre_ficha": "Farmacia Madrid",
+   "direccion": "Calle Madrid, entre avenida Bolívar y Gualberto Villarroel",
+   "celular": "67386618",
+   "fijo": null,
+   "nota_interna": null,
+   "lat": -22.73689,
+   "lng": -64.334216,
+   "ubicacion_aproximada": true
+  },
+  {
+   "nombre": "Popular",
+   "nombre_ficha": "Farmacia Popular",
+   "direccion": "Avenida Petrolera, pasaje Calama",
+   "celular": "67371663",
+   "fijo": null,
+   "nota_interna": null,
+   "slug": "farmacia-popular"
+  },
+  {
+   "nombre": "San Jorge",
+   "nombre_ficha": "Farmacia San Jorge",
+   "direccion": "Calle Cochabamba, entre Chuquisaca y José Yache",
+   "celular": null,
+   "fijo": "6961157",
+   "nota_interna": null,
+   "lat": -22.732979,
+   "lng": -64.34529,
+   "ubicacion_aproximada": true
+  },
+  {
+   "nombre": "San Miguel",
+   "nombre_ficha": "Farmacia San Miguel",
+   "direccion": "Avenida Bolívar, entre calle Beni y Argentina",
+   "celular": null,
+   "fijo": "6961040",
+   "nota_interna": null,
+   "lat": -22.731429,
+   "lng": -64.33763,
+   "ubicacion_aproximada": true
+  },
+  {
+   "nombre": "San Ramón",
+   "nombre_ficha": "Farmacia San Ramón",
+   "direccion": "Calle Beni, entre calle Ameller y Germán Busch",
+   "celular": "68538712",
+   "fijo": null,
+   "nota_interna": null,
+   "slug": "farmacia-san-ramon"
+  },
+  {
+   "nombre": "Santa Cecilia",
+   "nombre_ficha": "Farmacia Santa Cecilia",
+   "direccion": "Avenida Víctor Paz, entre Potosí y Oruro",
+   "celular": "76837573",
+   "fijo": null,
+   "nota_interna": null,
+   "lat": -22.736942,
+   "lng": -64.330924,
+   "ubicacion_aproximada": true
+  },
+  {
+   "nombre": "Santa Isabel",
+   "nombre_ficha": "Farmacia Santa Isabel",
+   "direccion": "Calle Belgrano, entre avenida Bolívar y Mariscal Santa Cruz",
+   "celular": "75135760",
+   "fijo": null,
+   "nota_interna": null,
+   "lat": -22.734942,
+   "lng": -64.335476,
+   "ubicacion_aproximada": true
+  },
+  {
+   "nombre": "Señor de Mayo",
+   "nombre_ficha": "Farmacia Señor de Mayo",
+   "direccion": "Avenida Oruro N.º 591, esquina Uriondo",
+   "celular": "75788657",
+   "fijo": null,
+   "nota_interna": null,
+   "slug": "farmacia-senor-de-mayo"
+  },
+  {
+   "nombre": "Señor de Santiago",
+   "nombre_ficha": "Farmacia Señor de Santiago",
+   "direccion": "Calle Mariscal Sucre, casi esquina Pando",
+   "celular": "71198945",
+   "fijo": null,
+   "nota_interna": null,
+   "lat": -22.727711,
+   "lng": -64.337541,
+   "ubicacion_aproximada": true
+  },
+  {
+   "nombre": "Victoria",
+   "nombre_ficha": "Farmacia Victoria",
+   "direccion": "Avenida Barrientos, esquina Ameller, al lado de librería Bermejo",
+   "celular": null,
+   "fijo": "6962503",
+   "nota_interna": null,
+   "lat": -22.732977,
+   "lng": -64.342853,
+   "ubicacion_aproximada": true
+  }
+ ],
+ "turnos": [
+  {
+   "fecha": "2026-10-04",
+   "farmacias": [
+    "Ángeles",
+    "Santa Isabel"
+   ]
+  },
+  {
+   "fecha": "2026-10-05",
+   "farmacias": [
+    "Corazón de Jesús",
+    "San Miguel"
+   ]
+  },
+  {
+   "fecha": "2026-10-06",
+   "farmacias": [
+    "Farma Sol",
+    "Santa Isabel"
+   ]
+  },
+  {
+   "fecha": "2026-10-07",
+   "farmacias": [
+    "Señor de Santiago",
+    "Madrid"
+   ]
+  },
+  {
+   "fecha": "2026-10-08",
+   "farmacias": [
+    "Corazón de Jesús",
+    "San Ramón"
+   ]
+  },
+  {
+   "fecha": "2026-10-09",
+   "farmacias": [
+    "San Jorge",
+    "Bolívar"
+   ]
+  },
+  {
+   "fecha": "2026-10-10",
+   "farmacias": [
+    "Popular",
+    "Santa Cecilia"
+   ]
+  },
+  {
+   "fecha": "2026-10-11",
+   "farmacias": [
+    "San Jorge",
+    "Bolívar"
+   ]
+  },
+  {
+   "fecha": "2026-10-12",
+   "farmacias": [
+    "Copacabana",
+    "Amanecer"
+   ]
+  },
+  {
+   "fecha": "2026-10-13",
+   "farmacias": [
+    "Victoria",
+    "Dorado"
+   ]
+  },
+  {
+   "fecha": "2026-10-14",
+   "farmacias": [
+    "Bermejo",
+    "Farma Vida"
+   ]
+  },
+  {
+   "fecha": "2026-10-15",
+   "farmacias": [
+    "Ángeles",
+    "San Miguel"
+   ]
+  },
+  {
+   "fecha": "2026-10-16",
+   "farmacias": [
+    "Señor de Mayo",
+    "Santa Isabel"
+   ]
+  },
+  {
+   "fecha": "2026-10-17",
+   "farmacias": [
+    "Farma Sol",
+    "Madrid"
+   ]
+  },
+  {
+   "fecha": "2026-10-18",
+   "farmacias": [
+    "Señor de Mayo",
+    "Madrid"
+   ]
+  },
+  {
+   "fecha": "2026-10-19",
+   "farmacias": [
+    "Señor de Santiago",
+    "San Ramón"
+   ]
+  },
+  {
+   "fecha": "2026-10-20",
+   "farmacias": [
+    "Corazón de Jesús",
+    "Bolívar"
+   ]
+  },
+  {
+   "fecha": "2026-10-21",
+   "farmacias": [
+    "Popular",
+    "Santa Cecilia"
+   ]
+  },
+  {
+   "fecha": "2026-10-22",
+   "farmacias": [
+    "San Jorge",
+    "Amanecer"
+   ]
+  },
+  {
+   "fecha": "2026-10-23",
+   "farmacias": [
+    "Copacabana",
+    "Dorado"
+   ]
+  },
+  {
+   "fecha": "2026-10-24",
+   "farmacias": [
+    "Bermejo",
+    "Farma Vida"
+   ]
+  },
+  {
+   "fecha": "2026-10-25",
+   "farmacias": [
+    "Victoria",
+    "San Miguel"
+   ]
+  },
+  {
+   "fecha": "2026-10-26",
+   "farmacias": [
+    "Victoria",
+    "Santa Isabel"
+   ]
+  },
+  {
+   "fecha": "2026-10-27",
+   "farmacias": [
+    "Ángeles",
+    "San Miguel"
+   ]
+  },
+  {
+   "fecha": "2026-10-28",
+   "farmacias": [
+    "Señor de Mayo",
+    "Madrid"
+   ]
+  },
+  {
+   "fecha": "2026-10-29",
+   "farmacias": [
+    "Farma Sol",
+    "San Ramón"
+   ]
+  },
+  {
+   "fecha": "2026-10-30",
+   "farmacias": [
+    "Señor de Santiago",
+    "Bolívar"
+   ]
+  },
+  {
+   "fecha": "2026-10-31",
+   "farmacias": [
+    "Señor de Mayo",
+    "Santa Cecilia"
+   ]
+  },
+  {
+   "fecha": "2026-11-01",
+   "farmacias": [
+    "Copacabana",
+    "Farma Vida"
+   ]
+  },
+  {
+   "fecha": "2026-11-02",
+   "farmacias": [
+    "Popular",
+    "Amanecer"
+   ]
+  },
+  {
+   "fecha": "2026-11-03",
+   "farmacias": [
+    "San Jorge",
+    "Dorado"
+   ]
+  },
+  {
+   "fecha": "2026-11-04",
+   "farmacias": [
+    "Copacabana",
+    "Farma Vida"
+   ]
+  },
+  {
+   "fecha": "2026-11-05",
+   "farmacias": [
+    "Victoria",
+    "San Miguel"
+   ]
+  },
+  {
+   "fecha": "2026-11-06",
+   "farmacias": [
+    "Ángeles",
+    "Santa Isabel"
+   ]
+  },
+  {
+   "fecha": "2026-11-07",
+   "farmacias": [
+    "Bermejo",
+    "Madrid"
+   ]
+  },
+  {
+   "fecha": "2026-11-08",
+   "farmacias": [
+    "Señor de Mayo",
+    "San Ramón"
+   ]
+  },
+  {
+   "fecha": "2026-11-09",
+   "farmacias": [
+    "Corazón de Jesús",
+    "Bolívar"
+   ]
+  },
+  {
+   "fecha": "2026-11-10",
+   "farmacias": [
+    "Farma Sol",
+    "San Ramón"
+   ]
+  },
+  {
+   "fecha": "2026-11-11",
+   "farmacias": [
+    "Señor de Santiago",
+    "Santa Cecilia"
+   ]
+  },
+  {
+   "fecha": "2026-11-12",
+   "farmacias": [
+    "Corazón de Jesús",
+    "Amanecer"
+   ]
+  },
+  {
+   "fecha": "2026-11-13",
+   "farmacias": [
+    "Popular",
+    "Dorado"
+   ]
+  },
+  {
+   "fecha": "2026-11-14",
+   "farmacias": [
+    "San Jorge",
+    "Farma Vida"
+   ]
+  },
+  {
+   "fecha": "2026-11-15",
+   "farmacias": [
+    "Bermejo",
+    "Dorado"
+   ]
+  },
+  {
+   "fecha": "2026-11-16",
+   "farmacias": [
+    "Copacabana",
+    "Madrid"
+   ]
+  },
+  {
+   "fecha": "2026-11-17",
+   "farmacias": [
+    "Victoria",
+    "Santa Isabel"
+   ]
+  },
+  {
+   "fecha": "2026-11-18",
+   "farmacias": [
+    "Bermejo",
+    "San Miguel"
+   ]
+  },
+  {
+   "fecha": "2026-11-19",
+   "farmacias": [
+    "Ángeles",
+    "San Ramón"
+   ]
+  },
+  {
+   "fecha": "2026-11-20",
+   "farmacias": [
+    "Farma Sol",
+    "Bolívar"
+   ]
+  },
+  {
+   "fecha": "2026-11-21",
+   "farmacias": [
+    "Señor de Mayo",
+    "Santa Cecilia"
+   ]
+  },
+  {
+   "fecha": "2026-11-22",
+   "farmacias": [
+    "Farma Sol",
+    "Amanecer"
+   ]
+  },
+  {
+   "fecha": "2026-11-23",
+   "farmacias": [
+    "Señor de Santiago",
+    "Dorado"
+   ]
+  },
+  {
+   "fecha": "2026-11-24",
+   "farmacias": [
+    "Corazón de Jesús",
+    "Amanecer"
+   ]
+  },
+  {
+   "fecha": "2026-11-25",
+   "farmacias": [
+    "Popular",
+    "Farma Vida"
+   ]
+  },
+  {
+   "fecha": "2026-11-26",
+   "farmacias": [
+    "San Jorge",
+    "San Miguel"
+   ]
+  },
+  {
+   "fecha": "2026-11-27",
+   "farmacias": [
+    "Copacabana",
+    "Santa Isabel"
+   ]
+  },
+  {
+   "fecha": "2026-11-28",
+   "farmacias": [
+    "Bermejo",
+    "Madrid"
+   ]
+  },
+  {
+   "fecha": "2026-11-29",
+   "farmacias": [
+    "Señor de Santiago",
+    "Santa Cecilia"
+   ]
+  },
+  {
+   "fecha": "2026-11-30",
+   "farmacias": [
+    "Victoria",
+    "San Ramón"
+   ]
+  },
+  {
+   "fecha": "2026-12-01",
+   "farmacias": [
+    "Ángeles",
+    "Bolívar"
+   ]
+  },
+  {
+   "fecha": "2026-12-02",
+   "farmacias": [
+    "Señor de Mayo",
+    "Santa Cecilia"
+   ]
+  },
+  {
+   "fecha": "2026-12-03",
+   "farmacias": [
+    "Farma Sol",
+    "Amanecer"
+   ]
+  },
+  {
+   "fecha": "2026-12-04",
+   "farmacias": [
+    "Señor de Santiago",
+    "Dorado"
+   ]
+  },
+  {
+   "fecha": "2026-12-05",
+   "farmacias": [
+    "Corazón de Jesús",
+    "Farma Vida"
+   ]
+  },
+  {
+   "fecha": "2026-12-06",
+   "farmacias": [
+    "Popular",
+    "Madrid"
+   ]
+  },
+  {
+   "fecha": "2026-12-07",
+   "farmacias": [
+    "San Jorge",
+    "San Miguel"
+   ]
+  },
+  {
+   "fecha": "2026-12-08",
+   "farmacias": [
+    "Popular",
+    "Santa Isabel"
+   ]
+  },
+  {
+   "fecha": "2026-12-09",
+   "farmacias": [
+    "Copacabana",
+    "Madrid"
+   ]
+  },
+  {
+   "fecha": "2026-12-10",
+   "farmacias": [
+    "Victoria",
+    "San Ramón"
+   ]
+  },
+  {
+   "fecha": "2026-12-11",
+   "farmacias": [
+    "Bermejo",
+    "Bolívar"
+   ]
+  },
+  {
+   "fecha": "2026-12-12",
+   "farmacias": [
+    "Ángeles",
+    "Santa Cecilia"
+   ]
+  }
+ ]
+}

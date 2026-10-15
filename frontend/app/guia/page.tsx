@@ -4,8 +4,9 @@ import { notFound } from "next/navigation";
 import { UrukuShell } from "@/components/uruku-shell";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { UnirmeComunidad } from "@/components/unirme-comunidad";
+import { TarjetaTurnoHoy } from "@/components/tarjeta-turno-hoy";
 import {
-  buscarComercios, getClima, getCotizacionHistorial, getCotizaciones, getFronteraEstado,
+  buscarComercios, getClima, getCotizacionHistorial, getFarmaciasDeTurnoAhora, getCotizaciones, getFronteraEstado,
   getSaberLocalPorSeccion, getVideosPromo, RUBROS_SERVICIO, type FronteraEstado, type SaberLocalPublico,
 } from "@/lib/data";
 import { cambioFavorable, diasDesde, DIAS_VIEJA, formatoMonto, tasasDe } from "@/lib/cambio";
@@ -73,9 +74,11 @@ export default async function GuiaPage() {
   const paso = ciudad?.paso_nombre ?? "Aguas Blancas";
   const monedaVecina = ciudad?.moneda_vecina ?? "ARS";
   const claveVecina = monedaVecina === "BRL" ? "brl_bob" : monedaVecina === "PEN" ? "pen_bob" : "ars_bob";
-  const [saber, frontera, clima, cotizaciones, hist, videos, comercios, ...servicios] = await Promise.all([
+  const [saber, frontera, clima, cotizaciones, hist, videos, comercios, turnosHoy, ...servicios] = await Promise.all([
     getSaberLocalPorSeccion(ciudad?.id), getFronteraEstado(ciudad?.id), getClima(), getCotizaciones(), getCotizacionHistorial(claveVecina, 8),
     getVideosPromo(6), buscarComercios({ ciudad: ciudad?.slug }, 300, 0),
+    // Farmacias de turno hoy: la tarjeta sólo aparece si la ciudad tiene turnos cargados.
+    getFarmaciasDeTurnoAhora(ciudad?.id),
     // Los servicios de la ciudad, por rubro: lo mismo que abre cada chip.
     ...RUBROS_SERVICIO.map(([slug]) => buscarComercios({ rubro: slug }, 40, 0)),
   ]);
@@ -104,6 +107,7 @@ export default async function GuiaPage() {
           actualiza en el día. Y lo que no esté acá, preguntalo al botón de <b>Ayuda</b>.
         </p>
         <UnirmeComunidad variante="chico" />
+        <TarjetaTurnoHoy turnos={turnosHoy} />
 
         {/* ---------- HOY ---------- */}
         <section className="uk-guia-hoy">

@@ -60,6 +60,8 @@ const tablaRubros = visual.split("CATEGORY_STYLE: Record<string, { color: string
 if (!tablaRubros) throw new Error("no encontré CATEGORY_STYLE en lib/mapa-visual.ts");
 const conRelleno = new Set([
   "otros", "comercios", "ubicacion", "estrella",
+  // La cruz de «farmacia de turno ahora»: va en el pin del mapa.
+  "turno_farmacia",
   // Los de components/icons.tsx que van rellenos por tamaño o porque son
   // logos (un logo de marca en duotono no se reconoce).
   "whatsapp", "verificado", "video_play", "guardado",

@@ -8,7 +8,9 @@ import { registrarLead, type TipoLead } from "@/lib/campo";
 import { rubroStyle, loadLeaflet } from "@/lib/mapa-visual";
 import { rubroSvg, SVG_UBICACION, SVG_ESTRELLA } from "@/lib/iconos-mapa";
 import { adornoHTML, MEDIDAS, ZOOM_MIN_ADORNOS, type Adorno } from "@/lib/adornos";
-import { getAdornosMapa } from "@/lib/data";
+import { getAdornosMapa, getFarmaciasDeTurnoAhora } from "@/lib/data";
+import { etiquetaHasta } from "@/lib/turnos-farmacia";
+import { PIN_TURNO, pinTurnoHtml, selloTurnoHtml } from "@/lib/mapa-turno";
 
 // Dónde arranca el mapa si la ciudad no trae coordenadas. Bermejo fue la
 // primera; con otra ciudad elegida manda la suya (ver `centro`).
@@ -57,6 +59,11 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
   const temaObsRef = useRef<MutationObserver | null>(null);
   const yoRef = useRef<any>(null);        // el punto azul y su círculo de precisión
   const LRef = useRef<any>(null);
+  // Qué farmacias están de turno ahora: comercio_id → «hasta mañana 08:00».
+  // Llega después del primer dibujo (es otra consulta) y repinta sólo los pines.
+  const [turnos, setTurnos] = useState<Map<string, string>>(() => new Map());
+  const turnosRef = useRef(turnos);
+  turnosRef.current = turnos;
   // Sube cuando Leaflet terminó de cargar: los efectos que dibujan encima
   // (servicios, el punto azul) corren antes de eso y tienen que repetirse.
   const [listo, setListo] = useState(0);
@@ -135,6 +142,28 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results]);
 
+  // Las farmacias de turno ahora. Sólo se pregunta si entre los resultados hay
+  // alguna farmacia: en el mapa de casas de cambio sería una consulta al aire.
+  // Si la lectura falla, el mapa queda como estaba (sin pin destacado).
+  const hayFarmacias = results.some((r) => r.rubro_slug === "farmacia");
+  useEffect(() => {
+    if (!hayFarmacias || !ciudad?.id) { setTurnos((t) => (t.size ? new Map() : t)); return; }
+    let vivo = true;
+    getFarmaciasDeTurnoAhora(ciudad.id).then((lista) => {
+      if (!vivo || !lista) return;
+      const ahora = new Date();
+      setTurnos(new Map(lista.map((t) => [t.comercio_id, etiquetaHasta(t.fin, ahora)])));
+    }).catch(() => { /* sin turnos el mapa sirve igual */ });
+    return () => { vivo = false; };
+  }, [hayFarmacias, ciudad?.id]);
+
+  // Al llegar los turnos, se redibujan los pines SIN reencuadrar: la persona
+  // pudo haber movido el mapa mientras tanto.
+  useEffect(() => {
+    if (LRef.current && mapRef.current) renderPins(LRef.current, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turnos]);
+
   // El punto azul. Se redibuja cuando cambia la posición; se centra sólo
   // cuando la persona tocó el botón (centrarEnMi sube). Si la posición ya se
   // sabía al abrir el mapa, se dibuja y NO se centra: el encuadre de los
@@ -204,21 +233,24 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
     });
   }
 
-  function renderPins(L: any) {
+  function renderPins(L: any, encuadrar = true) {
     const layer = clusterRef.current;
     if (!layer) return;
     layer.clearLayers();
+    const deTurno = turnosRef.current;
     const visibles = hayFiltro
       ? results
       // `plan` y `destacado` los agrega la 0077. Sin filtro, la primera vista
-      // es un lugar con cupo — y el cupo es lo que se vende.
-      : results.filter((r) => r.destacado || (r.plan && r.plan !== "gratis"));
+      // es un lugar con cupo — y el cupo es lo que se vende. Las farmacias de
+      // turno ahora entran siempre: es lo que más se busca de ellas.
+      : results.filter((r) => r.destacado || (r.plan && r.plan !== "gratis") || deTurno.has(r.id));
     const withCoords = visibles.filter((r) => r.lat != null && r.lng != null);
     const bounds: [number, number][] = [];
     for (const r of withCoords) {
-      const size = r.estrella ? 34 : 22;
+      const hasta = deTurno.get(r.id);
+      const size = hasta ? PIN_TURNO : r.estrella ? 34 : 22;
       const icon = L.divIcon({
-        className: "", html: pinHtml(r), iconSize: [size, size], iconAnchor: [size / 2, size / 2],
+        className: "", html: hasta ? pinTurnoHtml() : pinHtml(r), iconSize: [size, size], iconAnchor: [size / 2, size / 2],
       });
       // La foto va PRIMERO y adentro del globo.
       //
@@ -235,17 +267,19 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
           ${foto ? `<img class="map-pop-img" src="${escapeAttr(foto)}" alt="" loading="lazy">` : ""}
           <b>${escapeAttr(r.nombre)}${r.estrella ? `<span class="map-pop-estrella" role="img" aria-label="Verificado por URUKU" title="Verificado por URUKU">${SVG_ESTRELLA}</span>` : ""}</b>
           <span>${MODALIDAD_LABEL[r.modalidad] ?? r.modalidad}${r.rubro_nombre ? " · " + r.rubro_nombre : ""}</span>
+          ${hasta ? selloTurnoHtml(hasta) : ""}
           <div class="map-pop-act">
             ${r.whatsapp ? `<a href="${waLink(r.whatsapp, "Hola, te vi en URUKU")}" target="_blank" rel="noopener" data-lead-comercio="${r.id}" data-lead-tipo="whatsapp">WhatsApp</a>` : ""}
             <a href="${comoLlegarHref(r)}" target="_blank" rel="noopener" data-lead-comercio="${r.id}" data-lead-tipo="mapa">Cómo llegar</a>
             <a href="/comercios/${r.slug}">Ver comercio</a>
           </div>
         </div>`;
-      const m = L.marker([r.lat, r.lng], { icon, zIndexOffset: r.estrella ? 300 + (r.plan_orden ?? 0) : 0 }).bindPopup(popup);
+      const m = L.marker([r.lat, r.lng], { icon, zIndexOffset: hasta ? 600 : r.estrella ? 300 + (r.plan_orden ?? 0) : 0 }).bindPopup(popup);
       m.__data = r;
       layer.addLayer(m);
       bounds.push([r.lat as number, r.lng as number]);
     }
+    if (!encuadrar) return;
     if (bounds.length > 1) mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
     else if (bounds.length === 1) mapRef.current.setView(bounds[0], 16);
     // Sin ningún pin (una ciudad que se está cargando), el mapa se queda en
@@ -254,7 +288,7 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
   }
 
   const sinCoords = results.filter((r) => r.lat == null || r.lng == null).length;
-  const ocultos = hayFiltro ? 0 : results.filter((r) => !r.destacado && (!r.plan || r.plan === "gratis")).length;
+  const ocultos = hayFiltro ? 0 : results.filter((r) => !r.destacado && (!r.plan || r.plan === "gratis") && !turnos.has(r.id)).length;
 
   return (
     <div style={{ position: "relative" }}>

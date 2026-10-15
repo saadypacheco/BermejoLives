@@ -14,8 +14,9 @@
  */
 import { useEffect, useState } from "react";
 import {
-  listarFotosCampo, type ComercioAgente, type FotoGaleria, type Lugar,
+  editarComercioAgente, listarFotosCampo, type ComercioAgente, type FotoGaleria, type Lugar,
 } from "@/lib/campo";
+import { geoErrorMsg } from "@/lib/geo";
 import type { Rubro } from "@/lib/types";
 import { calcularFaltas } from "@/lib/faltas";
 import { CompletarComercio } from "@/components/completar-comercio";
@@ -45,6 +46,68 @@ function loQueSuma(c: ComercioAgente): { icono: NombreIcono; texto: string }[] {
   if ((c.pedido_minimo ?? "").trim()) r.push({ icono: "comprar", texto: `Pedido mínimo: ${(c.pedido_minimo ?? "").trim()}` });
   if ((c.catalogo_url ?? "").trim()) r.push({ icono: "catalogo", texto: "Tiene catálogo" });
   return r;
+}
+
+/** El GPS por encima del cual no se acepta el punto: un ±200 m en la cuadra
+ *  mueve el pin a otra puerta, que es justo lo que se quiere corregir. */
+const GPS_MAX_ERROR_M = 50;
+
+/**
+ * Aviso de «Ubicación aproximada» (el punto salió de la dirección, no del GPS)
+ * con el botón para confirmarla EN LA PUERTA. Mueve el pin del mapa, así que
+ * pide una confirmación aparte antes de guardar.
+ */
+function AvisoUbicacionAproximada({ id, onGuardado }: { id: string; onGuardado: (patch: Partial<ComercioAgente>) => void }) {
+  const [paso, setPaso] = useState<"aviso" | "confirmar" | "tomando">("aviso");
+  const [error, setError] = useState("");
+
+  function tomar() {
+    setError("");
+    if (typeof navigator === "undefined" || !("geolocation" in navigator)) { setError("Este dispositivo no tiene GPS disponible."); setPaso("aviso"); return; }
+    setPaso("tomando");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+        if (accuracy > GPS_MAX_ERROR_M) {
+          setError(`El GPS tiene ±${Math.round(accuracy)} m: es poco preciso. Salí al aire libre, esperá unos segundos y probá de nuevo.`);
+          setPaso("aviso");
+          return;
+        }
+        editarComercioAgente(id, { lat, lng })
+          .then(() => onGuardado({ lat, lng, ubicacion_aproximada: false }))
+          .catch((e: unknown) => { setError(e instanceof Error ? e.message : "No se pudo guardar. ¿Hay señal?"); setPaso("aviso"); });
+      },
+      (e) => { setError(geoErrorMsg(e)); setPaso("aviso"); },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  }
+
+  return (
+    <div role="note" style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, borderRadius: 12, border: "1px solid var(--amber)", background: "rgba(255,176,32,.08)", fontSize: 13.5, lineHeight: 1.4 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+        <span style={{ flexShrink: 0, marginTop: 1, color: "var(--amber)" }}><Ic n="ubicacion" s={16} /></span>
+        <span><b style={{ color: "var(--amber)" }}>Ubicación aproximada:</b> confirmala tomando el GPS en la puerta.</span>
+      </div>
+      {paso === "aviso" && (
+        <button type="button" className="btn btn-ghost" style={{ width: "100%", minHeight: 48 }} onClick={() => setPaso("confirmar")}>
+          <Ic n="ubicacion" s={16} /> Tomar el GPS acá
+        </button>
+      )}
+      {paso === "confirmar" && (
+        <div style={{ display: "grid", gap: 8 }}>
+          <span>¿Estás parado en la puerta de este local? Se va a mover el punto del mapa a donde estás.</span>
+          <div style={{ display: "grid", gap: 8 }}>
+            <button type="button" className="btn btn-primary" style={{ width: "100%", minHeight: 48 }} onClick={tomar}>
+              <Ic n="si" s={16} /> Sí, estoy en la puerta
+            </button>
+            <button type="button" className="btn btn-ghost" style={{ width: "100%", minHeight: 48 }} onClick={() => setPaso("aviso")}>Cancelar</button>
+          </div>
+        </div>
+      )}
+      {paso === "tomando" && <span role="status"><Ic n="reloj" s={14} /> Tomando el GPS…</span>}
+      {error && <span role="alert" style={{ color: "var(--amber)", fontWeight: 600 }}><Ic n="aviso" s={14} /> {error}</span>}
+    </div>
+  );
 }
 
 export function FichaAgente({ c, distancia, rubros, lugares, onVolver, onGuardado }: {
@@ -139,6 +202,10 @@ export function FichaAgente({ c, distancia, rubros, lugares, onVolver, onGuardad
           )}
         </div>
       </div>
+
+      {/* Ubicación aproximada: el punto salió de la dirección (p. ej. el rol de
+          farmacias de turno), no del GPS en la puerta. Texto + ícono, no sólo color. */}
+      {c.ubicacion_aproximada === true && <AvisoUbicacionAproximada id={c.id} onGuardado={onGuardado} />}
 
       {/* Datos */}
       <section style={caja} aria-label="Datos del local">
