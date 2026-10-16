@@ -24,17 +24,22 @@ Tres archivos en `frontend/content/manuales/`, escritos desde el código de hoy:
 | `agente.md` | El agente de campo | Sí: `{{NOMBRE}}`, `{{CIUDAD}}`, `{{MAIL}}` |
 | `admin.md` | Quien usa el panel | No |
 | `comercio.md` | El comerciante | No |
+| `comprador.md` | Quien busca y compra (público) | No |
 
 Markdown **acotado** (lo único que el sitio sabe dibujar):
 `#`, `##`, `###`, párrafos, listas `-` y `1.`, `**negrita**`, `*cursiva*`,
 `` `código` ``, tablas con `|`, `> nota` (recuadro destacado), y una línea
-`---` sola = **salto de página** al imprimir. Sin HTML, sin imágenes, sin emoji
+`---` sola = **salto de página** al imprimir, y capturas
+`![descripción](/manuales/capturas/<perfil>/<id>-mobile.png)` solas en su renglón
+(sólo archivos de `public/manuales/`; cada una tiene su entrada en
+`docs/manuales/capturas.json`; si el archivo todavía no existe, la página la
+omite en vez de mostrar una imagen rota). Sin HTML, sin emoji
 (los dibuja cada teléfono distinto). Nada de géneros: «parado/parada» se evita
 con otra redacción.
 
 ### 2. Las páginas
 
-- `/manual/agente`, `/manual/admin`, `/manual/comercio`: el manual con la
+- `/manual/agente`, `/manual/admin`, `/manual/comercio`, `/manual/comprador`: el manual con la
   identidad de URUKU, legible en el celular y **prolijo al imprimir en A4**
   (`@media print`: sin barra ni botones, saltos de página en `---`, la portada
   con el nombre). Arriba, un botón **«Guardar como PDF»** (`window.print()`) y
@@ -61,6 +66,7 @@ con otra redacción.
 ### 4. Enlaces desde donde se usa
 
 - **Mi comercio**: «¿Cómo se usa?» → `/manual/comercio`.
+- **Mi perfil** (`/perfil`, público): «Cómo se usa URUKU» → `/manual/comprador`.
 - **App del agente** (`/publicar`): «Manual» → `/manual/agente` con sus datos del
   token si los hay.
 

@@ -23,7 +23,7 @@ export function IngresarMenu() {
       {open && (
         <div className="uk-acct-menu">
           <Link href="/perfil" className="uk-acct-item" onClick={() => setOpen(false)}>
-            <b>Soy comprador</b><small>Guardá locales y ofertas (entrás con tu WhatsApp)</small>
+            <b>Soy comprador</b><small>Guardá tus locales favoritos (entrás con tu WhatsApp)</small>
           </Link>
           <Link href="/mi-comercio" className="uk-acct-item" onClick={() => setOpen(false)}>
             <b>Tengo un negocio</b><small>Entrá a tu panel de comercio</small>

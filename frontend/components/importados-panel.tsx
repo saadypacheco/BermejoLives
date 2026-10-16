@@ -178,7 +178,9 @@ function Fila({ item, rubros, onCambio }: {
   }
 
   async function descartar() {
-    const motivo = window.prompt("¿Por qué se descarta? (cerrado, duplicado, no es comercio…)") ?? "";
+    // Cancelar el cuadro devuelve null: entonces no se descarta nada. (Antes el
+    // `?? ""` lo convertía en un motivo vacío y descartaba igual.)
+    const motivo = window.prompt("¿Por qué se descarta? (cerrado, duplicado, no es comercio…)");
     if (motivo === null) return;
     setBusy(true);
     try { await descartarImportado(item.id, motivo); onCambio(); }

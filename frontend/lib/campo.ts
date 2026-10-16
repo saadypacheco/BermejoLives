@@ -130,8 +130,7 @@ export async function usarComoPortadaCampo(cid: string, fotoId: string): Promise
   }
   return respuestaPortada<FotoGaleria>(await res.json().catch(() => null));
 }
-export const borrarVideoCampo = (cid: string, id: string): Promise<void> =>
-  fetch(`${API}/campo/mis-comercios/${cid}/videos/${id}`, { method: "DELETE", headers: galH() }).then(() => undefined);
+// (Sin borrarVideoCampo: el agente no borra videos — el servidor responde 403.)
 /** `opts`: cómo reintentar cuando la galería llegó al tope (409). El agente sólo
  *  puede `reemplazar`: no compromete plata del comercio. */
 export const subirFotoCampo = (cid: string, file: File, onP?: (p: number) => void, opts?: Pick<OpcionesFoto, "reemplazar">): Promise<FotoGaleria> =>

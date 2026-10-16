@@ -20,9 +20,9 @@ Está todos los días entre nosotros. Eso es lo que queremos que sea URUKU: algo
 
 ## Quiénes somos
 
-Somos un equipo de profesionales que lleva varios meses trabajando en Bermejo. Recorrimos la ciudad cuadra por cuadra, hablamos con los comerciantes y cargamos cada local en su puerta, con su dueño.
+Somos un equipo de profesionales que lleva varios meses trabajando en Bermejo. Recorremos la ciudad cuadra por cuadra, hablamos con los comerciantes y cargamos los locales parados en su puerta.
 
-No es un listado copiado de internet: es Bermejo tal como es.
+Es Bermejo tal como es.
 
 ---
 
@@ -77,6 +77,7 @@ URUKU es una herramienta de todos: de los vecinos, de los comercios y de la gent
 ## Contacto
 
 - **Sitio:** uruku.bo
+- **Cómo se usa:** uruku.bo/manual/comprador
 - **WhatsApp:** 67 671 888
 
 Escaneá el código para escribirnos.

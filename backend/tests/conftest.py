@@ -25,6 +25,22 @@ def _reset_rate_limit():
 
 
 @pytest.fixture(autouse=True)
+def _observabilidad_sin_red(monkeypatch):
+    """Los registros de errores y de pedidos lentos (`services/observabilidad`)
+    usan `get_supabase()` directo, sin pasar por el repo falso: en los tests
+    abrían una conexión real y esperaban ~10 s por pedido lento. Acá fallan al
+    instante (el servicio ya silencia sus fallas). test_observabilidad.py pone
+    su propia base falsa encima."""
+    from app.services import observabilidad
+
+    def _sin_red():
+        raise RuntimeError("sin base en los tests")
+
+    monkeypatch.setattr(observabilidad, "get_supabase", _sin_red)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _sin_pepper(monkeypatch):
     """CLAVE_PEPPER vacío por defecto: lo que valga en el .env de quien corre los tests no puede
     cambiar el formato de los hashes. Los tests del pepper lo ponen a propósito."""
@@ -1055,7 +1071,9 @@ class FakeRepo:
             # El índice único parcial (cargado_por, alta_uid) de la 0149.
             raise RuntimeError('duplicate key value violates unique constraint "idx_comercios_alta_uid" (23505)')
         cid = self._id("com")
-        full = {"id": cid, **row}
+        from datetime import datetime, timezone
+        # Como la base real (`created_at default now()`).
+        full = {"id": cid, "created_at": datetime.now(timezone.utc).isoformat(), **row}
         if full.get("activo") is False and not full.get("baja_motivo"):
             full["baja_motivo"] = "borrador"       # un alta que nace apagada es un borrador
         self.comercios[cid] = full
@@ -1517,15 +1535,17 @@ class FakeRepo:
     def upsert_calles_tramos(self, filas):
         """Como el repo real: único por (ciudad_id, osm_way_id, parte); volver a importar actualiza
         y conserva el id."""
+        # Índice por clave: buscar fila por fila era cuadrático (10 s con 5.000 tramos).
+        por_clave = {(t["ciudad_id"], t["osm_way_id"], t.get("parte", 0)): t for t in self.calles_tramos.values()}
         for f in filas:
-            previo = next((t for t in self.calles_tramos.values()
-                           if t["ciudad_id"] == f["ciudad_id"] and t["osm_way_id"] == f["osm_way_id"]
-                           and t.get("parte", 0) == f.get("parte", 0)), None)
+            previo = por_clave.get((f["ciudad_id"], f["osm_way_id"], f.get("parte", 0)))
             if previo:
                 previo.update({k: v for k, v in f.items()})
             else:
                 tid = self._id("tramo")
-                self.calles_tramos[tid] = {"id": tid, "activo": True, **f}
+                nuevo = {"id": tid, "activo": True, **f}
+                self.calles_tramos[tid] = nuevo
+                por_clave[(f["ciudad_id"], f["osm_way_id"], f.get("parte", 0))] = nuevo
         return len(filas)
 
     def baja_calles_tramos_ausentes(self, ciudad_id, claves):

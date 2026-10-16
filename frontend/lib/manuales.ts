@@ -6,7 +6,10 @@
 // `uruku` no es un manual de uso: es «Qué es URUKU», para la gente y los medios
 // (7/10, lanzamiento). Va por el mismo camino porque necesita lo mismo: leerse
 // en el celular y guardarse como PDF. Su dirección corta es /que-es-uruku.
-export const TIPOS_MANUAL = ["agente", "admin", "comercio", "uruku"] as const;
+//
+// `comprador` es el manual de quien usa el sitio para buscar y comprar: es
+// público como el resto del sitio (no pide cuenta) y se ofrece desde Mi perfil.
+export const TIPOS_MANUAL = ["agente", "admin", "comercio", "comprador", "uruku"] as const;
 export type TipoManual = (typeof TIPOS_MANUAL)[number];
 
 export function esTipoManual(s: string): s is TipoManual {
@@ -18,6 +21,7 @@ export const TITULO_MANUAL: Record<TipoManual, string> = {
   agente: "Manual del agente",
   admin: "Manual del admin",
   comercio: "Manual del comerciante",
+  comprador: "Manual del comprador",
   uruku: "Qué es URUKU",
 };
 

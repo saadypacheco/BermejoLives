@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   actualizarFotoComercioAgente, editarComercioAgente,
-  listarFotosCampo, listarVideosCampo, subirFotoCampo, subirVideoCampo, borrarVideoCampo, usarComoPortadaCampo,
+  listarFotosCampo, listarVideosCampo, subirFotoCampo, subirVideoCampo, usarComoPortadaCampo,
   subirCatalogoCampo, quitarCatalogoCampo,
   type ComercioAgente, type EditarComercioBody, type Lugar,
 } from "@/lib/campo";
@@ -29,7 +29,7 @@ export function apiGaleriaCampo(id: string): GaleriaApi {
     usarComoPortada: (fid) => usarComoPortadaCampo(id, fid),
     cargarVideos: () => listarVideosCampo(id),
     subirVideo: (file, dur, onP) => subirVideoCampo(id, file, dur, onP),
-    borrarVideo: (vid) => borrarVideoCampo(id, vid),
+    // Sin `borrarVideo`: tampoco borra videos (el servidor responde 403).
   };
 }
 

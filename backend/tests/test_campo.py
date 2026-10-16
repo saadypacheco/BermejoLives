@@ -301,3 +301,51 @@ def test_limite_5_videos(client, repo):
     for _ in range(5):
         assert client.post(f"/campo/mis-comercios/{cid}/videos", headers=h, files=_video_file()).status_code == 200
     assert client.post(f"/campo/mis-comercios/{cid}/videos", headers=h, files=_video_file()).status_code == 409
+
+
+# ── Consentimiento del dueño y corrección del WhatsApp recién cargado ─────────
+def _alta(client, token, **extra):
+    data = {"nombre": "Kiosco La Esquina", "whatsapp": "59170001111", "rubro_slugs": ["servicios"],
+            "modalidad": "minorista", "lat": "-22.7361", "lng": "-64.3433", **extra}
+    r = client.post("/campo/comercio", headers={"Authorization": f"Bearer {token}"}, data=data, files=_foto_test())
+    assert r.status_code == 200, r.text
+    return r.json()["comercio"]["id"]
+
+
+def test_el_consentimiento_del_duenio_queda_guardado(client, repo):
+    """Antes la casilla «El dueño aceptó aparecer» sólo iba al log."""
+    token = _agente_token(client)
+    si = _alta(client, token, consentimiento="true")
+    no = _alta(client, token, nombre="Kiosco Dos", consentimiento="false")
+    assert repo.comercios[si]["consentimiento_dueno"] is True
+    assert repo.comercios[no]["consentimiento_dueno"] is False
+    assert repo.comercios[si]["consentimiento_dueno_en"]
+
+
+def test_el_agente_corrige_el_whatsapp_que_acaba_de_cargar(client, repo):
+    token = _agente_token(client)
+    cid = _alta(client, token)
+    r = client.patch(f"/campo/mis-comercios/{cid}", headers={"Authorization": f"Bearer {token}"},
+                     json={"whatsapp": "59170009999"})
+    assert r.status_code == 200, r.text
+    assert repo.comercios[cid]["whatsapp"].endswith("70009999")
+
+
+def test_pasadas_dos_horas_el_whatsapp_ya_no_se_cambia_desde_campo(client, repo):
+    from datetime import datetime, timedelta, timezone
+    token = _agente_token(client)
+    cid = _alta(client, token)
+    repo.comercios[cid]["created_at"] = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
+    r = client.patch(f"/campo/mis-comercios/{cid}", headers={"Authorization": f"Bearer {token}"},
+                     json={"whatsapp": "59170009999"})
+    assert r.status_code == 400
+
+
+def test_el_whatsapp_de_un_comercio_de_otro_no_se_cambia(client, repo):
+    token = _agente_token(client)
+    cid = _alta(client, token)
+    repo.comercios[cid]["cargado_por"] = "otro@uruku.bo"
+    r = client.patch(f"/campo/mis-comercios/{cid}", headers={"Authorization": f"Bearer {token}"},
+                     json={"whatsapp": "59170009999"})
+    assert r.status_code in (400, 404)      # 404 si además no es de su ciudad
+    assert repo.comercios[cid]["whatsapp"].endswith("70001111")

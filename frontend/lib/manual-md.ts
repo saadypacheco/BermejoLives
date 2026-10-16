@@ -15,6 +15,7 @@
  *   | tablas |
  *   > nota               recuadro destacado
  *   ---                  salto de página al imprimir
+ *   ![texto](/manuales/…png)   una captura, sola en su renglón (ver RE_IMAGEN)
  *   {{NOMBRE}} {{CIUDAD}} {{MAIL}}   marcas que se completan al mostrar
  *
  * NADA DE HTML. El resultado son nodos de datos; quien los dibuja crea
@@ -46,6 +47,7 @@ export type Bloque =
   | { t: "ul" | "ol"; items: ItemLista[]; inicio: number }
   | { t: "tabla"; cab: Inline[][] | null; filas: Inline[][][]; alin: ("izq" | "centro" | "der" | null)[] }
   | { t: "nota"; c: Bloque[] }
+  | { t: "img"; src: string; alt: string }
   | { t: "salto" };
 
 // ─────────────────────────────────────────────────────────── en línea ──
@@ -145,6 +147,19 @@ const RE_VINIETA = /^(\s*)[-*+]\s+(.*)$/;
 const RE_NUMERO = /^(\s*)(\d{1,3})[.)]\s+(.*)$/;
 const RE_NOTA = /^\s{0,3}>\s?(.*)$/;
 const RE_TABLA = /^\s*\|/;
+/** Una captura: `![descripción](/manuales/capturas/…/x-mobile.png)`, sola en su
+ *  renglón. SÓLO se aceptan archivos propios bajo `/manuales/` (en `public/`):
+ *  nada de direcciones de afuera ni `..`. Una imagen que no cumple queda como
+ *  texto común, igual que antes de que el parser conociera las imágenes. */
+const RE_IMAGEN = /^\s{0,3}!\[([^\]]*)\]\(([^)\s]+)\)\s*$/;
+const RE_SRC_IMAGEN = /^\/manuales\/[A-Za-z0-9_\-/]+\.(?:png|jpe?g|webp)$/;
+
+/** La imagen de un renglón, si es una captura válida. */
+export function imagenDe(l: string): { src: string; alt: string } | null {
+  const m = RE_IMAGEN.exec(l);
+  if (!m || !RE_SRC_IMAGEN.test(m[2]) || m[2].includes("//")) return null;
+  return { src: m[2], alt: m[1].trim() };
+}
 const RE_SEPARADOR_TABLA = /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$/;
 
 function sangria(s: string): number {
@@ -155,7 +170,7 @@ function sangria(s: string): number {
 
 /** ¿Esta línea abre un bloque propio (o sea, corta un párrafo)? */
 function abreBloque(l: string): boolean {
-  if (RE_TITULO.test(l) || RE_SALTO.test(l) || RE_NOTA.test(l) || RE_TABLA.test(l)) return true;
+  if (RE_TITULO.test(l) || RE_SALTO.test(l) || RE_NOTA.test(l) || RE_TABLA.test(l) || imagenDe(l)) return true;
   if (RE_VINIETA.test(l)) return true;
   const n = RE_NUMERO.exec(l);
   return !!n && n[2].length <= 2;
@@ -256,6 +271,9 @@ function parsearBloques(lineas: string[], profundidad = 0): Bloque[] {
     if (l.trim() === "") { i++; continue; }
 
     if (RE_SALTO.test(l)) { out.push({ t: "salto" }); i++; continue; }
+
+    const img = imagenDe(l);
+    if (img) { out.push({ t: "img", ...img }); i++; continue; }
 
     const t = RE_TITULO.exec(l);
     if (t) {

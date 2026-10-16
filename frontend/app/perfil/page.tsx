@@ -8,6 +8,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { ThemeToggle, ThemeNoFlash, POR_DEFECTO } from "@/components/uruku-theme";
 import { CompradorAuthForm } from "@/components/comprador-auth";
 import { Bookmark, User } from "@/components/icons";
+import { Ic } from "@/components/ic";
 import { getUsuarioSession, clearUsuario, type UsuarioSession } from "@/lib/usuario";
 
 // Tras loguearse, si vino con ?next (ej. desde la tienda uruku.bo/tienda), volver ahí.
@@ -70,6 +71,11 @@ export default function PerfilPage() {
             </button>
           </>
         )}
+
+        {/* El manual del comprador: público, con o sin cuenta (docs/manuales). */}
+        <Link href="/manual/comprador" className="btn btn-ghost" style={{ width: "100%", marginTop: 16, minHeight: 44 }}>
+          <Ic n="documento" s={18} /> Cómo se usa URUKU
+        </Link>
       </div>
       <BottomNav active="Perfil" />
     </div>

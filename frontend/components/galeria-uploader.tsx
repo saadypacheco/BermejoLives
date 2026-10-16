@@ -27,7 +27,8 @@ export type GaleriaApi = {
   usarComoPortada?: (fotoId: string) => Promise<RespuestaPortada<FotoG>>;
   cargarVideos: () => Promise<VideoG[]>;
   subirVideo: (file: File, dur: number | null, onP: (p: number) => void) => Promise<VideoG>;
-  borrarVideo: (id: string) => Promise<void>;
+  /** Sin esto no se muestra el botón de borrar videos (el agente sólo sube). */
+  borrarVideo?: (id: string) => Promise<void>;
 };
 
 // El tope de fotos lo manda el backend (depende del plan). Este número sólo se
@@ -286,7 +287,9 @@ export function GaleriaUploader({ api, comercioId, puedePagarExtra = false, port
   }
   async function delVideo(id: string) {
     if (!window.confirm("¿Borrar este video?")) return;
-    await api.borrarVideo(id).catch(() => {});
+    if (!api.borrarVideo) return;
+    // Sólo sale de la lista si el servidor lo borró de verdad.
+    try { await api.borrarVideo(id); } catch (ex) { setErr(ex instanceof Error && ex.message ? ex.message : "No se pudo borrar el video."); return; }
     setVideos((v) => v.filter((x) => x.id !== id));
   }
 
@@ -368,7 +371,7 @@ export function GaleriaUploader({ api, comercioId, puedePagarExtra = false, port
           <div key={v.id} className="galup-item galup-vid">
             <video src={v.url} muted playsInline preload="metadata" />
             <span className="galup-dur">{v.duracion_seg ? `${v.duracion_seg}s` : <Ic n="video_play" s={13} />}</span>
-            <button type="button" className="galup-del" onClick={() => delVideo(v.id)} aria-label="Borrar"><Ic n="cerrar" s={13} /></button>
+            {api.borrarVideo && <button type="button" className="galup-del" onClick={() => delVideo(v.id)} aria-label="Borrar"><Ic n="cerrar" s={13} /></button>}
           </div>
         ))}
         {pendVideos.map((p) => (

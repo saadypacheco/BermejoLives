@@ -5,8 +5,9 @@
 //  - Manual del agente: uno por agente del equipo, con su nombre, ciudad y
 //    correo ya puestos. «Abrir manual» lo abre en otra pestaña, listo para
 //    «Guardar como PDF» y mandarlo por WhatsApp.
-//  - Manual del admin y del comerciante: «Abrir» y «Copiar enlace». El del
-//    comerciante se manda tal cual por WhatsApp, con la dirección completa.
+//  - Manual del admin, del comerciante y del comprador: «Abrir» y «Copiar
+//    enlace». El del comerciante y el del comprador se mandan tal cual por
+//    WhatsApp, con la dirección completa.
 //
 // La lista de agentes sale de `/admin/equipo`, que pide el permiso `equipo`. Si
 // la persona no lo tiene (o falla la red) no se esconde nada: se avisa por qué
@@ -85,6 +86,8 @@ export function ManualesPanel() {
       <FilaFija tipo="admin" titulo="Manual del admin" bajada="Cómo se usa este panel, sección por sección." />
       <FilaFija tipo="comercio" titulo="Manual del comerciante"
                 bajada="Cómo entrar a Mi comercio y publicar. Se le puede mandar el enlace por WhatsApp." />
+      <FilaFija tipo="comprador" titulo="Manual del comprador"
+                bajada="Para quien busca y compra: el buscador, la ficha, el mapa, los guardados. Es público: se puede mandar el enlace a cualquiera." />
       <FilaFija tipo="uruku" titulo="Qué es URUKU"
                 bajada="Para la gente y los medios: cómo nace, qué ofrece y el WhatsApp con su QR. No figura en el sitio: se comparte el enlace." />
     </div>

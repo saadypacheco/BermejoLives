@@ -293,7 +293,11 @@ async def timing_middleware(request: Request, call_next):
     response = await call_next(request)
     duracion_ms = (time.perf_counter() - inicio) * 1000
     if duracion_ms > _UMBRAL_LENTO_BACKEND_MS:
-        await run_in_threadpool(registrar_perf, "backend", request.url.path, "duracion", duracion_ms)
+        # En segundo plano, DESPUÉS de responder: antes se esperaba el insert
+        # dentro del pedido, y un pedido lento se volvía más lento justamente
+        # por anotar que fue lento (en tests, 10 s de conexión por pedido).
+        asyncio.get_running_loop().run_in_executor(
+            None, registrar_perf, "backend", request.url.path, "duracion", duracion_ms)
     # Las fotos se cachean un año. Sin esta cabecera cada visita volvía a bajar
     # cada miniatura —y volver de una ficha a los resultados las bajaba todas
     # de nuevo. Los nombres llevan un token aleatorio y una foto nueva es una

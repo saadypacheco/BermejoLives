@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import "@/app/uruku.css";
+import "@/app/styles/mi-comercio.css";
 import { Nav } from "@/components/nav";
 import { ThemeToggle, ThemeNoFlash, POR_DEFECTO } from "@/components/uruku-theme";
 import {
@@ -117,39 +118,42 @@ const NAV_ITEMS: { v: Vista; label: string; Icon: any }[] = [
   { v: "config", label: "Configuración", Icon: Gear },
 ];
 
-function Sidebar({ vista, setVista, sub, onLogout, noLeidos }: {
+function Sidebar({ vista, setVista, sub, onLogout, noLeidos, abierto, onCerrar, lateralRef }: {
   vista: Vista; setVista: (v: Vista) => void; sub: Suscripcion | null; onLogout: () => void; noLeidos: number;
+  abierto: boolean; onCerrar: () => void; lateralRef: React.RefObject<HTMLElement>;
 }) {
   const e = sub ? (ESTADO[sub.estado] ?? ESTADO.activo) : null;
   return (
-    <aside style={{ width: 244, flexShrink: 0, borderRight: "1px solid var(--stroke)", display: "flex", flexDirection: "column", padding: "22px 16px", position: "sticky", top: 0, height: "100vh" }}>
-      <Link className="brand" href="/" style={{ marginBottom: 26, paddingLeft: 8 }}>
-        <b>URUKU</b><span>EN EL MAPA</span>
-      </Link>
-      <nav style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+    <aside ref={lateralRef} id="mic-menu" className={`mic-side${abierto ? " abierto" : ""}`} aria-label="Menú de Mi comercio">
+      <div className="mic-side-cab">
+        <Link className="brand" href="/">
+          <b>URUKU</b><span>EN EL MAPA</span>
+        </Link>
+        {/* Sólo en el celular: el cajón se cierra también con este botón. */}
+        <button type="button" className="mic-cerrar-cajon" onClick={onCerrar} aria-label="Cerrar el menú">
+          <Ic n="cerrar" s={22} />
+        </button>
+      </div>
+      <nav aria-label="Secciones de Mi comercio">
         {NAV_ITEMS.map((it) => {
           const active = vista === it.v || (it.v === "inicio" && vista === "editar");
           return (
-            <button key={it.v} onClick={() => setVista(it.v)} style={{
-              display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 10,
-              background: active ? "rgba(57,255,158,.10)" : "transparent",
-              color: active ? "var(--neon)" : "var(--txt-2)", fontWeight: 600, fontSize: 14.5, textAlign: "left",
-            }}>
-              <it.Icon style={{ width: 18, height: 18 }} />
-              <span style={{ flex: 1 }}>{it.label}</span>
-              {it.v === "mensajes" && noLeidos > 0 && <span style={{ background: "var(--neon)", color: "#04240f", borderRadius: 999, fontSize: 11, fontWeight: 800, padding: "1px 7px" }}>{noLeidos}</span>}
+            <button key={it.v} type="button" className="mic-item" aria-current={active ? "page" : undefined} onClick={() => setVista(it.v)}>
+              <it.Icon style={{ width: 20, height: 20, flexShrink: 0 }} />
+              <span className="mic-item-txt">{it.label}</span>
+              {it.v === "mensajes" && noLeidos > 0 && <span className="mic-badge">{noLeidos}<span className="sr-only"> sin leer</span></span>}
             </button>
           );
         })}
       </nav>
-      <div style={{ flex: 1 }} />
-      <div className="glass" style={{ padding: 14, borderRadius: 14, marginBottom: 8 }}>
+      <div className="mic-espacio" />
+      <div className="glass mic-plan">
         <div style={{ fontSize: 12, color: "var(--txt-3)" }}>Plan actual</div>
         <div style={{ fontWeight: 800, color: e?.color ?? "var(--txt)", marginTop: 2 }}>● {e?.label ?? "—"}</div>
         <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 4 }}>{sub?.paga_hasta ? `vence ${sub.paga_hasta}` : "Sin pago registrado"}</div>
         <button className="btn btn-primary btn-sm" onClick={() => setVista("suscripcion")} style={{ width: "100%", marginTop: 10 }}>Ver planes</button>
       </div>
-      <button onClick={onLogout} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", color: "var(--txt-2)", fontSize: 14 }}>
+      <button type="button" className="mic-salir" onClick={onLogout}>
         <Logout style={{ width: 18, height: 18 }} /> Cerrar sesión
       </button>
     </aside>
@@ -158,21 +162,23 @@ function Sidebar({ vista, setVista, sub, onLogout, noLeidos }: {
 
 function Topbar({ titulo, noLeidos }: { titulo: string; noLeidos: number }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 26px", borderBottom: "1px solid var(--stroke)", position: "sticky", top: 0, background: "var(--uk-header)", backdropFilter: "blur(10px)", zIndex: 4 }}>
-      <h1 style={{ fontSize: 22, margin: 0, flex: 1 }}>{titulo}</h1>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--panel)", border: "1px solid var(--stroke)", borderRadius: 12, padding: "8px 12px", width: 220 }}>
+    <div className="mic-topbar">
+      <h1 className="mic-topbar-t">{titulo}</h1>
+      <div className="mic-search">
         <Search style={{ width: 16, height: 16, color: "var(--txt-3)" }} />
-        <input placeholder="Buscar…" style={{ background: "transparent", border: "none", outline: "none", color: "var(--txt)", fontSize: 14, width: "100%" }} />
+        <input placeholder="Buscar…" aria-label="Buscar" />
       </div>
-      <div style={{ position: "relative", color: "var(--txt-2)", padding: 6 }}>
+      <div className="mic-campana" aria-hidden>
         <Bell style={{ width: 20, height: 20 }} />
-        {noLeidos > 0 && <span style={{ position: "absolute", top: 0, right: 0, background: "var(--neon)", color: "#04240f", borderRadius: 999, fontSize: 10, fontWeight: 800, padding: "0 5px" }}>{noLeidos}</span>}
+        {noLeidos > 0 && <span className="mic-campana-n">{noLeidos}</span>}
       </div>
-      {/* El manual del comerciante (docs/manuales.md): entrar, publicar, el chatbot. */}
-      <Link href="/manual/comercio" target="_blank" rel="noopener" className="btn btn-ghost" style={{ whiteSpace: "nowrap" }}>
-        <Ic n="ayuda" s={18} /> ¿Cómo se usa?
-      </Link>
-      <Link href="/autoregistro" className="btn btn-primary">Publicar oferta <Send /></Link>
+      <div className="mic-topbar-acc">
+        {/* El manual del comerciante (docs/manuales.md): entrar, publicar, el chatbot. */}
+        <Link href="/manual/comercio" target="_blank" rel="noopener" className="btn btn-ghost">
+          <Ic n="ayuda" s={18} /> ¿Cómo se usa?
+        </Link>
+        <Link href="/autoregistro" className="btn btn-primary">Publicar oferta <Send /></Link>
+      </div>
     </div>
   );
 }
@@ -182,7 +188,7 @@ function InfoRow({ label, value, Icon }: { label: string; value?: string | null;
     <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 0", borderBottom: "1px solid var(--stroke)" }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, color: "var(--txt-3)" }}>{label}</div>
-        <div style={{ fontSize: 15, color: "var(--txt)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis" }}>{value || "—"}</div>
+        <div className="mic-info-v" style={{ fontSize: 15, color: "var(--txt)", marginTop: 2 }}>{value || "—"}</div>
       </div>
       <Icon style={{ width: 18, height: 18, color: "var(--txt-3)", flexShrink: 0 }} />
     </div>
@@ -231,22 +237,22 @@ function Overview({ onEditar, onOfertas, onPlanes }: { onEditar: () => void; onO
       {/* HERO */}
       <div className="glass" style={{ padding: 22, borderRadius: 18, display: "flex", gap: 20, flexWrap: "wrap" }}>
         {(p.portada_url || p.logo_url)
-          ? <img src={(p.portada_url || p.logo_url) as string} alt="" style={{ width: 150, height: 130, borderRadius: 14, objectFit: "cover", flexShrink: 0 }} />
-          : <div style={{ width: 150, height: 130, borderRadius: 14, background: "rgba(57,255,158,.12)", display: "grid", placeItems: "center", color: "var(--neon)", fontSize: 42, fontWeight: 800, flexShrink: 0 }}>{(p.nombre || "?").charAt(0)}</div>}
-        <div style={{ flex: 1, minWidth: 240 }}>
+          ? <img className="mic-hero-img" src={(p.portada_url || p.logo_url) as string} alt="" style={{ width: 150, height: 130, borderRadius: 14, objectFit: "cover", flexShrink: 0 }} />
+          : <div className="mic-hero-img" style={{ width: 150, height: 130, borderRadius: 14, background: "rgba(57,255,158,.12)", display: "grid", placeItems: "center", color: "var(--neon)", fontSize: 42, fontWeight: 800, flexShrink: 0 }}>{(p.nombre || "?").charAt(0)}</div>}
+        <div style={{ flex: 1, minWidth: "min(240px, 100%)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
             <div>
               {p.verificado && <span style={{ background: "rgba(57,255,158,.14)", color: "var(--neon)", fontSize: 12, fontWeight: 700, padding: "3px 9px", borderRadius: 999 }}>Verificado</span>}
               <h2 style={{ fontSize: 26, margin: "8px 0 6px" }}>{p.nombre}</h2>
               <span style={{ background: "rgba(91,157,255,.12)", color: "var(--blue-soft)", fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 999 }}>{MODA_LABEL[p.modalidad ?? "mayorista"]}</span>
             </div>
-            <div style={{ display: "flex", gap: 8, alignSelf: "flex-start" }}>
+            <div className="mic-acciones">
               <button className="btn" onClick={onEditar} style={{ border: "1px solid var(--stroke)", whiteSpace: "nowrap" }}><Edit style={{ width: 15, height: 15 }} /> Editar información</button>
               <Link href="/autoregistro" className="btn btn-primary" style={{ whiteSpace: "nowrap" }}><Send style={{ width: 15, height: 15 }} /> Publicar servicio/oferta</Link>
             </div>
           </div>
           <p style={{ color: "var(--txt-2)", margin: "12px 0", maxWidth: 560 }}>{p.descripcion}</p>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div className="mic-fila-btns" style={{ gap: 10 }}>
             {wa && <a className="btn btn-primary" href={`https://wa.me/${wa}`} target="_blank" rel="noopener"><WhatsApp style={{ width: 17, height: 17 }} /> WhatsApp</a>}
             <a className="btn" href={maps} target="_blank" rel="noopener" style={{ border: "1px solid var(--stroke)" }}><Pin style={{ width: 16, height: 16 }} /> Cómo llegar</a>
           </div>
@@ -296,7 +302,7 @@ function Overview({ onEditar, onOfertas, onPlanes }: { onEditar: () => void; onO
 
           <div className="glass" style={{ padding: 20, borderRadius: 16 }}>
             <h3 style={{ margin: "0 0 10px" }}>Estado de suscripción</h3>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 800, color: e?.color ?? "var(--txt)" }}>● {e?.label ?? "—"}</div>
                 <div style={{ fontSize: 13, color: "var(--txt-3)", marginTop: 4 }}>{sub?.paga_hasta ? `Vence el ${sub.paga_hasta}` : "Todavía no registramos un pago."}</div>
@@ -406,19 +412,19 @@ function OfertasTab() {
       {items.map((it) => {
         const e = PUB_ESTADO[it.estado] ?? { label: it.estado, color: "var(--txt-3)" };
         return (
-          <div key={it.id} className="glass" style={{ padding: 14, borderRadius: 14, display: "flex", gap: 14, alignItems: "center" }}>
+          <div key={it.id} className="glass mic-oferta" style={{ padding: 14, borderRadius: 14 }}>
             <div style={{ width: 64, height: 64, borderRadius: 12, overflow: "hidden", background: "var(--panel)", flexShrink: 0, display: "grid", placeItems: "center", position: "relative" }}>
               {it.imagen_url ? <img src={it.imagen_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ color: "var(--txt-3)" }}><Ic n="ofertas" s={24} /></span>}
               {it.descuento_pct != null && <span style={{ position: "absolute", top: 4, left: 4, background: "var(--neon)", color: "#04240f", fontSize: 10, fontWeight: 800, padding: "1px 5px", borderRadius: 6 }}>-{it.descuento_pct}%</span>}
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.titulo ?? "(sin título)"}</div>
+            <div style={{ flex: "1 1 160px", minWidth: 0 }}>
+              <div style={{ fontWeight: 700, overflowWrap: "anywhere" }}>{it.titulo ?? "(sin título)"}</div>
               <div style={{ fontSize: 13, color: "var(--txt-3)", marginTop: 2 }}>
                 {it.precio != null ? `${it.moneda ?? ""} ${it.precio}` : "Sin precio"}{it.vence_el ? ` · vence ${it.vence_el}` : ""}
               </div>
               <span style={{ color: e.color, fontSize: 12, fontWeight: 700 }}>● {e.label}</span>
             </div>
-            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            <div className="mic-oferta-btns">
               <button className="btn btn-sm" style={{ border: "1px solid var(--stroke)" }} onClick={() => setEditing(it)}><Edit style={{ width: 14, height: 14 }} /> Editar</button>
               <button className="btn btn-sm" style={{ border: "1px solid var(--stroke)", color: "var(--pink)" }} onClick={() => eliminar(it.id)}>Eliminar</button>
             </div>
@@ -468,18 +474,18 @@ function OfertaEditForm({ pub, onCancel, onSaved }: { pub: Publicacion; onCancel
       <textarea className="adm-input" rows={3} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Descripción" style={{ resize: "vertical" }} />
       {esOferta && (
         <>
-          <div style={{ display: "flex", gap: 10 }}>
+          <div className="mic-fila2">
             <input className="adm-input" type="number" inputMode="numeric" value={precio} onChange={(e) => setPrecio(e.target.value)} placeholder="Precio" style={{ flex: 2 }} />
             <select className="adm-input" value={moneda} onChange={(e) => setMoneda(e.target.value)} style={{ flex: 1 }}>
               <option value="BOB">Bs</option><option value="USD">USD</option><option value="ARS">$ ARS</option>
             </select>
           </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1 }}>
+          <div className="mic-fila2">
+            <div className="mic-mitad" style={{ flex: 1 }}>
               <label className="campo-lbl">Descuento %</label>
               <input className="adm-input" type="number" inputMode="numeric" min={1} max={99} value={descuento} onChange={(e) => setDescuento(e.target.value)} placeholder="ej: 20 (opcional)" />
             </div>
-            <div style={{ flex: 1 }}>
+            <div className="mic-mitad" style={{ flex: 1 }}>
               <label className="campo-lbl">Válido hasta</label>
               <input className="adm-input" type="date" value={vence} onChange={(e) => setVence(e.target.value)} />
             </div>
@@ -488,7 +494,7 @@ function OfertaEditForm({ pub, onCancel, onSaved }: { pub: Publicacion; onCancel
       )}
       <input className="adm-input" value={imagen} onChange={(e) => setImagen(e.target.value)} placeholder="Link de imagen (opcional)" />
       {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
-      <div style={{ display: "flex", gap: 10 }}>
+      <div className="mic-fila-btns" style={{ gap: 10 }}>
         <button className="btn btn-primary" onClick={guardar} disabled={saving}>{saving ? "Guardando…" : "Guardar cambios"}</button>
         <button className="btn btn-ghost" onClick={onCancel} disabled={saving}>Cancelar</button>
       </div>
@@ -546,7 +552,7 @@ function AvisoSuscripcion({ sub, onPagar }: { sub: Suscripcion; onPagar: () => v
     : e === "vencido" ? `Tu suscripción venció. Tu comercio sigue en URUKU con el plan gratis: sin la estrella ni lo que incluye tu plan. Renová cuando quieras y vuelve todo.`
     : `Tu comercio está suspendido. Pagá/reactivá para volver a aparecer completo.`;
   return (
-    <div style={{ margin: "16px 26px 0", padding: 14, borderRadius: 12, display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap",
+    <div className="mic-aviso" role="status" style={{
       background: rojo ? "rgba(255,77,141,.1)" : "rgba(255,176,32,.1)", border: `1px solid ${rojo ? "var(--pink)" : "var(--amber)"}` }}>
       <span style={{ fontSize: 13.5, color: "var(--txt)" }}><Ic n={rojo ? "aviso" : "reloj"} s={15} /> {texto}</span>
       <button className="btn btn-primary btn-sm" onClick={onPagar}>Pagar ahora</button>
@@ -570,15 +576,78 @@ function Panel({ sess, onLogout }: { sess: ComercioSession; onLogout: () => void
     getMensajes().then((r) => setNoLeidos(r.no_leidos)).catch(() => {});
   }, [vista, intentoSub]);
 
+  // El menú lateral en el celular es un cajón (ver styles/mi-comercio.css).
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [sinConexion, setSinConexion] = useState(false);
+  const burger = useRef<HTMLButtonElement>(null);
+  const lateral = useRef<HTMLElement>(null);
+
+  // Elegir una sección cierra el cajón y vuelve arriba de todo: en el celular
+  // el contenido nuevo se leería desde la mitad de la pantalla anterior.
+  function ir(v: Vista) {
+    setVista(v);
+    setMenuAbierto(false);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0 });
+  }
+
+  // Cajón abierto: Escape lo cierra y devuelve el foco al botón, el fondo no se
+  // desplaza, y al pasar a pantalla ancha (donde el menú es fijo) se cierra solo.
+  useEffect(() => {
+    if (!menuAbierto) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setMenuAbierto(false); burger.current?.focus(); }
+    };
+    const ancha = window.matchMedia("(min-width: 1024px)");
+    const onAncha = () => { if (ancha.matches) setMenuAbierto(false); };
+    document.addEventListener("keydown", onKey);
+    ancha.addEventListener("change", onAncha);
+    const antes = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    lateral.current?.querySelector<HTMLElement>('[aria-current="page"]')?.focus({ preventScroll: true });
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      ancha.removeEventListener("change", onAncha);
+      document.body.style.overflow = antes;
+    };
+  }, [menuAbierto]);
+
+  // Sin conexión se avisa arriba: lo que se ve puede ser viejo y guardar va a fallar.
+  useEffect(() => {
+    const actualizar = () => setSinConexion(!navigator.onLine);
+    actualizar();
+    window.addEventListener("online", actualizar);
+    window.addEventListener("offline", actualizar);
+    return () => {
+      window.removeEventListener("online", actualizar);
+      window.removeEventListener("offline", actualizar);
+    };
+  }, []);
+
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
-      <Sidebar vista={vista} setVista={setVista} sub={sub} onLogout={onLogout} noLeidos={noLeidos} />
-      <div style={{ flex: 1, minWidth: 0 }}>
+    <div className="mic">
+      <header className="mic-bar">
+        <button ref={burger} type="button" className="mic-menu-btn"
+                aria-label={menuAbierto ? "Cerrar el menú" : "Abrir el menú"}
+                aria-expanded={menuAbierto} aria-controls="mic-menu"
+                onClick={() => setMenuAbierto((v) => !v)}>
+          <Ic n={menuAbierto ? "cerrar" : "menu"} s={24} /> Menú
+        </button>
+        <Link className="brand" href="/"><b>URUKU</b><span>EN EL MAPA</span></Link>
+      </header>
+      <Sidebar vista={vista} setVista={ir} sub={sub} onLogout={onLogout} noLeidos={noLeidos}
+               abierto={menuAbierto} onCerrar={() => { setMenuAbierto(false); burger.current?.focus(); }} lateralRef={lateral} />
+      <div className={`mic-fondo${menuAbierto ? " abierto" : ""}`} aria-hidden onClick={() => setMenuAbierto(false)} />
+      <div className="mic-main">
         <Topbar titulo={TITULOS[vista]} noLeidos={noLeidos} />
-        {sub && <AvisoSuscripcion sub={sub} onPagar={() => setVista("suscripcion")} />}
-        <div style={{ padding: "24px 26px", maxWidth: 1120 }}>
-          {vista === "inicio" && <Overview onEditar={() => setVista("editar")} onOfertas={() => setVista("ofertas")} onPlanes={() => setVista("suscripcion")} />}
-          {vista === "editar" && <div style={{ maxWidth: 720 }}><button className="btn" onClick={() => setVista("inicio")} style={{ border: "1px solid var(--stroke)", marginBottom: 14 }}><Arrow style={{ width: 15, height: 15, transform: "rotate(180deg)" }} /> Volver</button><PerfilTab /></div>}
+        {sinConexion && (
+          <div className="mic-aviso" role="status" style={{ background: "rgba(255,176,32,.1)", border: "1px solid var(--amber)" }}>
+            <span style={{ fontSize: 13.5, color: "var(--txt)" }}><Ic n="aviso" s={15} /> Sin conexión. Lo que ves puede estar desactualizado y los cambios no se van a guardar hasta que vuelva.</span>
+          </div>
+        )}
+        {sub && <AvisoSuscripcion sub={sub} onPagar={() => ir("suscripcion")} />}
+        <div className="mic-contenido">
+          {vista === "inicio" && <Overview onEditar={() => ir("editar")} onOfertas={() => ir("ofertas")} onPlanes={() => ir("suscripcion")} />}
+          {vista === "editar" && <div style={{ maxWidth: 720 }}><button className="btn" onClick={() => ir("inicio")} style={{ border: "1px solid var(--stroke)", marginBottom: 14 }}><Arrow style={{ width: 15, height: 15, transform: "rotate(180deg)" }} /> Volver</button><PerfilTab /></div>}
           {vista === "ofertas" && <div style={{ maxWidth: 780 }}><OfertasTab /></div>}
           {vista === "galeria" && <div style={{ maxWidth: 780 }}><GaleriaTab /></div>}
           {MOSTRAR_PRODUCTOS && vista === "productos" && <div style={{ maxWidth: 780 }}><ProductosTab /></div>}
@@ -622,13 +691,8 @@ const MODALIDAD_OPT: { v: string; t: string }[] = [
 
 function ChipToggle({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} style={{
-      padding: "6px 12px", borderRadius: 20, fontSize: 13, border: "1px solid",
-      borderColor: active ? "var(--neon)" : "var(--stroke)",
-      background: active ? "rgba(57,255,158,.12)" : "transparent",
-      color: active ? "var(--neon)" : "var(--txt-2)", cursor: "pointer",
-    }}>
-      {label}
+    <button type="button" className="mic-chip" aria-pressed={active} onClick={onClick}>
+      {active ? "✓ " : ""}{label}
     </button>
   );
 }
@@ -638,11 +702,10 @@ function CampoRow({ label, value, onChange, ph }: {
   label: string; value: string; onChange: (v: string) => void; ph: string;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 2px", borderBottom: "1px solid var(--stroke)" }}>
-      <span style={{ width: 92, flexShrink: 0, fontSize: 13, color: "var(--txt-3)" }}>{label}</span>
-      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={ph}
-        style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "var(--txt)", fontSize: 15, minWidth: 0 }} />
-    </div>
+    <label className="mic-campo">
+      <span>{label}</span>
+      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={ph} />
+    </label>
   );
 }
 
@@ -768,7 +831,7 @@ function PerfilTab() {
       <div>
         <div className="glass" style={{ padding: 20, borderRadius: 18, background: "linear-gradient(160deg, rgba(57,255,158,.06), transparent 60%)" }}>
           <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-            <label style={{ position: "relative", width: 58, height: 58, flexShrink: 0, cursor: "pointer" }}>
+            <label aria-label="Cambiar la foto del negocio" style={{ position: "relative", width: 58, height: 58, flexShrink: 0, cursor: "pointer" }}>
               {foto
                 ? <img src={foto} alt="" style={{ width: 58, height: 58, borderRadius: 16, objectFit: "cover" }} />
                 : <div style={{ width: 58, height: 58, borderRadius: 16, display: "grid", placeItems: "center", background: "rgba(57,255,158,.14)", color: "var(--neon)", fontSize: 26, fontWeight: 800 }}>{inicial}</div>}
@@ -823,7 +886,7 @@ function PerfilTab() {
             {ubicando ? "Obteniendo…" : <><Ic n="ubicacion" s={15} /> {perfil.lat && perfil.lng ? "Ubicación cargada — actualizar" : "Usar mi ubicación actual"}</>}
           </button>
           {perfil.lat && perfil.lng && (
-            <a href={`https://www.google.com/maps/search/?api=1&query=${perfil.lat},${perfil.lng}`} target="_blank" rel="noopener" style={{ fontSize: 13, color: "var(--blue-soft)" }}>
+            <a href={`https://www.google.com/maps/search/?api=1&query=${perfil.lat},${perfil.lng}`} target="_blank" rel="noopener" className="mic-enlace" style={{ fontSize: 13, color: "var(--blue-soft)" }}>
               Ver en el mapa
             </a>
           )}
@@ -834,12 +897,12 @@ function PerfilTab() {
       {/* CONTACTO */}
       <div className="glass" style={{ padding: "14px 18px", borderRadius: 16 }}>
         <div style={{ fontSize: 12, color: "var(--txt-3)", fontWeight: 700, marginBottom: 2 }}>CÓMO TE CONTACTAN</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 2px", borderBottom: "1px solid var(--stroke)", flexWrap: "wrap" }}>
-          <span style={{ width: 92, flexShrink: 0, fontSize: 13, color: "var(--txt-3)" }}>WhatsApp</span>
+        <div className="mic-campo" style={{ flexWrap: "wrap" }}>
+          <span>WhatsApp</span>
           <span aria-label="WhatsApp (no se edita acá)" style={{ flex: 1, minWidth: 0, color: "var(--txt)", fontSize: 15 }}>
             <Ic n="seguridad" s={13} /> {perfil.whatsapp || "Sin número"}
           </span>
-          <Link href="/recuperar-negocio" style={{ fontSize: 13, color: "var(--neon)" }}>Cambié de número</Link>
+          <Link href="/recuperar-negocio" className="mic-enlace" style={{ fontSize: 13, color: "var(--neon)" }}>Cambié de número</Link>
         </div>
         {CONTACTO.map((c) => (
           <CampoRow key={c.k} label={c.label} ph={c.ph} value={(perfil[c.k] as string) ?? ""} onChange={(v) => set(c.k, v)} />
@@ -885,7 +948,7 @@ function PerfilTab() {
         <div><b style={{ fontSize: 14 }}>Acepto reservas</b><div style={{ fontSize: 12, color: "var(--txt-3)" }}>Si lo desactivás, no se muestran tus productos/reservas en la ficha.</div></div>
       </label>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div className="mic-fila-btns">
         <button className="btn btn-primary" onClick={guardar} disabled={saving}>{saving ? "Guardando…" : "Guardar cambios"}</button>
         <Link href="/autoregistro" className="btn" style={{ border: "1px solid var(--stroke)" }}><Send style={{ width: 15, height: 15 }} /> Publicar servicio/oferta</Link>
         {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}
@@ -943,7 +1006,7 @@ function SuscripcionTab() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* INDICADOR DE ESTADO */}
-      <div className="glass" style={{ padding: 18, borderRadius: 16, background: e.bg, borderLeft: `3px solid ${e.color}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+      <div className="glass" style={{ padding: 18, borderRadius: 16, background: e.bg, borderLeft: `3px solid ${e.color}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <div>
           <div style={{ fontSize: 20, fontWeight: 800, color: e.color }}>● {e.label}</div>
           {sub.estado === "cortesia" ? (
@@ -1002,7 +1065,7 @@ function SuscripcionTab() {
               <option value="otro">Pagué de otra forma</option>
             </select>
 
-            <div style={{ display: "flex", gap: 10 }}>
+            <div className="mic-fila2">
               <input className="adm-input" type="number" inputMode="numeric" value={monto} onChange={(ev) => setMonto(ev.target.value)} placeholder="Monto" style={{ flex: 2 }} />
               <select className="adm-input" value={moneda} onChange={(ev) => setMoneda(ev.target.value)} style={{ flex: 1 }}>
                 {["BOB", "ARS", "USD"].map((c) => <option key={c} value={c}>{c}</option>)}
@@ -1124,12 +1187,12 @@ function MensajesTab() {
         const tel = (m.contacto ?? "").replace(/\D/g, "");
         return (
           <div key={m.id} className="glass" style={{ padding: 16, borderRadius: 14, borderLeft: m.leido ? "1px solid var(--stroke)" : "3px solid var(--neon)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-              <b>{m.autor === "admin" ? "URUKU" : (m.nombre || "Cliente")}{m.autor === "cliente" && m.contacto ? ` · ${m.contacto}` : ""}</b>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <b style={{ overflowWrap: "anywhere" }}>{m.autor === "admin" ? "URUKU" : (m.nombre || "Cliente")}{m.autor === "cliente" && m.contacto ? ` · ${m.contacto}` : ""}</b>
               <span style={{ fontSize: 12, color: "var(--txt-3)" }}>{new Date(m.created_at).toLocaleString("es-AR")}</span>
             </div>
             <p style={{ color: "var(--txt-2)", margin: "8px 0" }}>{m.cuerpo}</p>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               {m.autor === "cliente" && tel.length >= 6 && (
                 <a className="btn btn-sm" href={`https://wa.me/${tel}`} target="_blank" rel="noopener" style={{ border: "1px solid var(--wa)", color: "var(--wa)" }}>Responder por WhatsApp</a>
               )}
@@ -1173,14 +1236,14 @@ function ProductosTab() {
         <p style={{ color: "var(--txt-3)" }}>Todavía no cargaste productos. Sacá una foto, poné el precio y publicalo en segundos.</p>
       ) : (
         items.map((p) => (
-          <div key={p.id} className="glass" style={{ padding: 14, borderRadius: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <div key={p.id} className="glass" style={{ padding: 14, borderRadius: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <div>
               <div style={{ fontWeight: 700 }}>{p.titulo ?? "Producto"}</div>
               <div style={{ fontSize: 12, color: "var(--txt-3)" }}>
                 {p.precio != null ? `${p.moneda ?? ""} ${p.precio}` : ""} · {p.estado}
               </div>
             </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               {p.destacado_pub_id
                 ? <span style={{ fontSize: 12, color: "var(--amber)", fontWeight: 700 }}><Ic n="destacado" s={13} /> Destacado</span>
                 : <button className="btn" onClick={() => destacar(p.id)} style={{ border: "1px solid var(--amber)", color: "var(--amber)" }}>Destacar $1.000</button>}
@@ -1269,7 +1332,7 @@ function NuevoProducto({ onDone, onCancel }: { onDone: () => void; onCancel: () 
 
       <input className="adm-input" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título (ej: Campera de jean importada)" />
       <textarea className="adm-input" rows={3} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Descripción (podés indicar los talles)" />
-      <div style={{ display: "flex", gap: 10 }}>
+      <div className="mic-fila2">
         <input className="adm-input" type="number" inputMode="numeric" value={precio} onChange={(e) => setPrecio(e.target.value)} placeholder="Precio" style={{ flex: 2 }} />
         <select className="adm-input" value={moneda} onChange={(e) => setMoneda(e.target.value)} style={{ flex: 1 }}>
           {MONEDAS.map((m) => <option key={m} value={m}>{m}</option>)}

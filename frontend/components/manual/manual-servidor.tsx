@@ -6,11 +6,11 @@
 // El .md se lee durante `next build` (las dos rutas son estáticas) y queda
 // adentro del HTML generado: en producción no se abre ningún archivo.
 
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import QRCode from "qrcode";
 import { ManualPagina } from "@/components/manual/manual-pagina";
-import { parsearManual } from "@/lib/manual-md";
+import { parsearManual, type Bloque } from "@/lib/manual-md";
 import type { TipoManual } from "@/lib/manuales";
 import { WA_URUKU_TEXTO, waUruku } from "@/lib/contacto";
 
@@ -24,7 +24,32 @@ export async function PaginaManualServidor({ tipo }: { tipo: TipoManual }) {
     throw new Error(`Falta content/manuales/${tipo}.md`);
   }
   const extra = tipo === "uruku" ? await contactoConQr() : undefined;
-  return <ManualPagina tipo={tipo} bloques={parsearManual(md)} extra={extra} />;
+  const bloques = await sinCapturasFaltantes(parsearManual(md));
+  return <ManualPagina tipo={tipo} bloques={bloques} extra={extra} />;
+}
+
+/** Saca las capturas cuyo archivo todavía no está en `public/` (el .md puede
+ *  nombrar una captura antes de que se saque). Se resuelve en el build, así que
+ *  el manual publicado no muestra un ícono de imagen rota; si igual faltara una
+ *  en el navegador, `ManualImagen` la esconde. */
+async function sinCapturasFaltantes(bloques: Bloque[]): Promise<Bloque[]> {
+  const existe = async (src: string) => {
+    try { await access(path.join(process.cwd(), "public", ...src.split("/").filter(Boolean))); return true; }
+    catch { return false; }
+  };
+  const out: Bloque[] = [];
+  for (const b of bloques) {
+    if (b.t === "img") { if (await existe(b.src)) out.push(b); continue; }
+    if (b.t === "nota") { out.push({ ...b, c: await sinCapturasFaltantes(b.c) }); continue; }
+    if (b.t === "ul" || b.t === "ol") {
+      const items = [];
+      for (const it of b.items) items.push({ ...it, sub: await sinCapturasFaltantes(it.sub) });
+      out.push({ ...b, items });
+      continue;
+    }
+    out.push(b);
+  }
+  return out;
 }
 
 /** El WhatsApp de URUKU con su QR, al final de «Qué es URUKU». Estilos en

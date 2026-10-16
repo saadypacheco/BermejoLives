@@ -7,6 +7,7 @@
 
 import { Fragment, type ReactNode } from "react";
 import { Ic } from "@/components/ic";
+import { ManualImagen } from "@/components/manual/manual-imagen";
 import {
   aplicarMarcas, separarPortada, textoPlano, usaMarca,
   type Bloque, type Inline, type ValoresMarca,
@@ -77,6 +78,7 @@ function UnBloque({ b, v }: { b: Bloque; v: ValoresMarca }) {
           <div className="mn-nota-txt"><Bloques bloques={b.c} v={v} /></div>
         </aside>
       );
+    case "img": return <ManualImagen src={b.src} alt={b.alt} />;
     case "salto": return <hr className="mn-salto" />;
     default: return null;
   }

@@ -782,6 +782,21 @@ def test_overpass_caido_en_la_reimportacion_no_da_de_baja_nada(client, repo, adm
 
 # ══════════════════════════════════════════════ rendimiento con cuadras
 
+def _referencia_s() -> float:
+    """Cuánto tarda ESTA máquina, AHORA, en un cálculo fijo de Python puro.
+
+    Las pruebas de rendimiento comparan contra esto y no contra segundos de
+    reloj: con la máquina cargada (la demo, un build) el mapa llegó a tardar
+    6,8 s y el umbral fijo fallaba sin que el código hubiera cambiado. Si la
+    máquina está lenta, la referencia también."""
+    mejor = float("inf")
+    for _ in range(3):
+        t0 = time.perf_counter()
+        sum(i * i % 7 for i in range(300_000))
+        mejor = min(mejor, time.perf_counter() - t0)
+    return mejor
+
+
 def test_5000_tramos_y_1300_comercios_rapido_y_respuesta_acotada(client, repo, admin):
     """El tamaño de una ciudad como Tarija ya partida en cuadras: ~5.000 tramos de <= 150 m."""
     rnd = random.Random(11)
@@ -796,11 +811,14 @@ def test_5000_tramos_y_1300_comercios_rapido_y_respuesta_acotada(client, repo, a
     assert len(repo.calles_tramos) == 5000
     for _ in range(1300):
         _comercio(repo, rnd.uniform(0, 5000), rnd.uniform(0, 5000))
+    ref = _referencia_s()
     t0 = time.perf_counter()
     r = client.get("/admin/calles/mapa?ciudad=bermejo", headers=_h(admin))
     primera = time.perf_counter() - t0
     assert r.status_code == 200 and len(r.json()["tramos"]) == 5000
-    assert primera < 2.0, f"{primera:.2f} s"
+    # Sola mide ~0,3 s (≈ 10-15 referencias). Lo que tiene que atajar es volver
+    # a un cálculo N×M, que con 5.000 tramos es más de 100 veces más lento.
+    assert primera < 80 * ref, f"{primera:.2f} s = {primera / ref:.0f} referencias"
     assert len(r.content) < 1_500_000, f"{len(r.content) / 1e6:.2f} MB"
     print(f"\n[5000 tramos] calculo {primera:.2f} s, respuesta {len(r.content) / 1e6:.2f} MB")
     t0 = time.perf_counter()
@@ -846,11 +864,12 @@ def test_600_tramos_y_1300_comercios_en_menos_de_un_segundo(client, repo, admin)
     repo.upsert_calles_tramos(filas)
     for _ in range(1300):
         _comercio(repo, rnd.uniform(0, 3000), rnd.uniform(0, 3000))
+    ref = _referencia_s()
     t0 = time.perf_counter()
     r = client.get("/admin/calles/mapa?ciudad=bermejo", headers=_h(admin))
     primera = time.perf_counter() - t0
     assert r.status_code == 200 and len(r.json()["tramos"]) == 600
-    assert primera < 1.0, f"{primera:.2f} s"
+    assert primera < 40 * ref, f"{primera:.2f} s = {primera / ref:.0f} referencias"
     t0 = time.perf_counter()
     client.get("/admin/calles/mapa?ciudad=bermejo", headers=_h(admin))        # de la caché
     assert time.perf_counter() - t0 < primera

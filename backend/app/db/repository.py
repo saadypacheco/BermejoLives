@@ -377,7 +377,7 @@ _COLS_COMERCIO_ADMIN = (
     "talles_especiales, pedido_minimo, "
     # Las redes y el email: el modal los precarga; sin esto se veían vacíos
     # aunque el comercio los tuviera.
-    "email, facebook_url, instagram_url, tiktok_url, sitio_web, "
+    "email, facebook_url, instagram_url, tiktok_url, sitio_web, consentimiento_dueno, consentimiento_dueno_en, "
     # Para que el panel cuente «con foto sin clasificar» (portada sin
     # ia_analizado_at) sin pedir otro endpoint: misma definición que
     # `contar_sin_analizar`.

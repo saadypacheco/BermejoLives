@@ -1,5 +1,5 @@
 /* ============================================================
-   Manuales de uso (/manual/agente · /manual/admin · /manual/comercio)
+   Manuales de uso (/manual/agente · /manual/admin · /manual/comercio · /manual/comprador)
    Los usa components/manual/*. Todo cuelga de `.mn-root`.
 
    En PANTALLA es una hoja clara sobre fondo verdoso (los colores del manual de
@@ -141,6 +141,17 @@ body:has(.mn-root) { background: #F1F6F2; color: #14231B; }
 .mn-nota-txt .mn-p { margin: 0 0 8px; }
 .mn-nota-txt > :last-child { margin-bottom: 0; }
 
+/* ---------- Capturas ---------- */
+/* `![texto](/manuales/capturas/…)`: la de computadora a todo el ancho; la de
+   celular angosta y centrada, para que no ocupe tres pantallas. */
+.mn-figura { margin: 6px 0 22px; text-align: center; }
+.mn-figura img {
+  display: block; width: 100%; height: auto; margin: 0 auto;
+  border: 1px solid var(--mn-linea); border-radius: 12px; background: #fff;
+}
+.mn-figura-cel img { width: auto; max-width: min(100%, 300px); }
+.mn-figura figcaption { margin-top: 6px; font-size: 13.5px; line-height: 1.45; color: var(--mn-suave); }
+
 /* ---------- Salto de página ---------- */
 /* En pantalla es una raya fina con la leyenda de dónde corta la hoja. */
 .mn-salto {
@@ -182,9 +193,12 @@ body:has(.mn-root) { background: #F1F6F2; color: #14231B; }
 @page agente:first   { @bottom-left { content: none; } @bottom-right { content: none; } }
 @page admin:first    { @bottom-left { content: none; } @bottom-right { content: none; } }
 @page comercio:first { @bottom-left { content: none; } @bottom-right { content: none; } }
+@page comprador { size: A4; margin: 17mm 16mm 22mm; background: #fff; @bottom-left { content: "URUKU · Manual del comprador"; font: 9pt Poppins, "Segoe UI", sans-serif; color: #5b6b61; } @bottom-right { content: counter(page); font: 9pt Poppins, "Segoe UI", sans-serif; color: #5b6b61; } }
+@page comprador:first { @bottom-left { content: none; } @bottom-right { content: none; } }
 html:has(.mn-root[data-tipo="agente"]) { page: agente; }
 html:has(.mn-root[data-tipo="admin"]) { page: admin; }
 html:has(.mn-root[data-tipo="comercio"]) { page: comercio; }
+html:has(.mn-root[data-tipo="comprador"]) { page: comprador; }
 
 @media print {
   body:has(.mn-root), body:has(.mn-root) * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -226,6 +240,11 @@ html:has(.mn-root[data-tipo="comercio"]) { page: comercio; }
   .mn-tabla tr { break-inside: avoid; page-break-inside: avoid; }
 
   .mn-nota { break-inside: avoid; page-break-inside: avoid; margin-bottom: 5mm; }
+
+  .mn-figura { break-inside: avoid; page-break-inside: avoid; margin: 2mm 0 5mm; }
+  .mn-figura img { max-height: 200mm; width: auto; max-width: 100%; }
+  .mn-figura-cel img { max-height: 120mm; }
+  .mn-figura figcaption { font-size: 9pt; }
 
   /* `---` = hoja nueva. Invisible; la raya y la leyenda eran sólo de pantalla. */
   .mn-salto { margin: 0; height: 0; border: 0; break-after: page; page-break-after: always; }

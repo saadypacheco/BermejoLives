@@ -2677,6 +2677,19 @@ function ModalEditar({
                   </span>
                 </div>
               )}
+              {/* La casilla del alta del agente (0155). Sin dato = cargado antes o por otra vía. */}
+              {(() => {
+                const cx = comercio as { consentimiento_dueno?: boolean | null; consentimiento_dueno_en?: string | null; cargado_por?: string | null };
+                if (cx.consentimiento_dueno == null) return null;
+                const cuando = cx.consentimiento_dueno_en ? new Date(cx.consentimiento_dueno_en).toLocaleDateString("es-BO") : "";
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: cx.consentimiento_dueno ? "var(--txt-2)" : "var(--amber)" }}>
+                    <Ic n={cx.consentimiento_dueno ? "listo" : "aviso"} s={14} />
+                    {cx.consentimiento_dueno ? "El dueño aceptó aparecer en URUKU" : "El dueño NO dio su consentimiento en el alta"}
+                    {cuando ? ` · ${cuando}` : ""}{cx.cargado_por ? ` · ${cx.cargado_por.split("@")[0]}` : ""}
+                  </div>
+                );
+              })()}
             <label style={{ fontSize: 12, color: "var(--txt-3)" }}>WhatsApp (opcional)
               <input className="adm-input" style={{ marginTop: 4 }} value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="591XXXXXXXX"
                 disabled={!puedeCuenta} aria-describedby={puedeCuenta ? undefined : "wa-llave"} />

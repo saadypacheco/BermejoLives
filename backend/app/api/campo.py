@@ -8,6 +8,7 @@ confirme. La foto va a Supabase Storage (bucket público 'comercios').
 import httpx
 import structlog
 import re
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, Request
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
@@ -335,6 +336,10 @@ async def alta_campo(
         "tiene_stock": tiene_stock,
         "fuente": "campo",
         "cargado_por": agente["email"],
+        # La casilla «El dueño aceptó aparecer» del alta: antes sólo iba al log.
+        # Queda guardada con la hora, para poder responder si alguien pregunta.
+        "consentimiento_dueno": bool(consentimiento),
+        "consentimiento_dueno_en": datetime.now(timezone.utc).isoformat(),
     }
     if capturado_dt:
         fila["capturado_en"] = capturado_dt.isoformat()
@@ -586,6 +591,30 @@ def ejemplos_de_la_ciudad(
                                           (excluir or "").strip() or None)}
 
 
+#: Tiempo en que el agente que dio de alta un comercio puede corregir el
+#: WhatsApp que él mismo tipeó (se equivocó un dígito al cargarlo).
+_CORREGIR_WA_MIN = 120
+
+
+def _recien_cargado_por(comercio: dict, agente: dict) -> bool:
+    """El comercio lo cargó ESTE agente hace menos de 2 horas.
+
+    Corregir ahí el WhatsApp no abre nada nuevo: en el alta ya podía poner el
+    número que quisiera. Pasado ese rato, o si lo cargó otro, el número ya
+    cargado no se toca desde campo (ver `editar_mi_comercio`)."""
+    from datetime import datetime, timedelta, timezone
+
+    if (comercio.get("cargado_por") or "").lower() != (agente.get("email") or "").lower():
+        return False
+    try:
+        creado = datetime.fromisoformat(str(comercio.get("created_at")).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if creado.tzinfo is None:
+        creado = creado.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - creado <= timedelta(minutes=_CORREGIR_WA_MIN)
+
+
 def _propio_o_404(repo: Repo, comercio_id: str, agente: dict) -> dict:
     """Puede tocar lo de SU CIUDAD, lo haya cargado él o el otro agente.
 
@@ -735,7 +764,8 @@ def editar_mi_comercio(
         from app.core.telefono import whatsapp_para_guardar
 
         actual = (repo.get_comercio(comercio_id) or {}).get("whatsapp")
-        if actual and str(actual).strip() and not mismo_numero(actual, patch["whatsapp"]):
+        if (actual and str(actual).strip() and not mismo_numero(actual, patch["whatsapp"])
+                and not _recien_cargado_por(actual_comercio, agente)):
             raise HTTPException(
                 status_code=400,
                 detail="Este comercio ya tiene WhatsApp. Si cambió, el dueño lo pide desde «Cambié de número».",

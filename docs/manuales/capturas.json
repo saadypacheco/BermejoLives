@@ -1,0 +1,954 @@
+[
+  {
+    "perfil": "admin",
+    "id": "01-ingreso",
+    "ruta": "/admin",
+    "viewport": "desktop",
+    "pasos": "Abrir /admin sin sesión. Pantalla de ingreso con «tunombre@uruku.bo», «Contraseña» y «Entrar».",
+    "descripcion": "La pantalla de ingreso al panel"
+  },
+  {
+    "perfil": "admin",
+    "id": "02-sin-permiso",
+    "ruta": "/admin?s=equipo",
+    "viewport": "desktop",
+    "pasos": "Entrar con un usuario de rol «Moderador» (no tiene el permiso equipo) y abrir /admin?s=equipo directo. Se ve «No tenés permiso para entrar a esta sección.» y «Ir al Inicio».",
+    "descripcion": "La sección a la que no tenés permiso"
+  },
+  {
+    "perfil": "admin",
+    "id": "03-ciudad",
+    "ruta": "/admin",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Abrir el selector de ciudad de la barra de arriba (muestra «Todas las ciudades» y las ciudades; las inactivas dicen «(sin abrir)»).",
+    "descripcion": "El selector de ciudad del panel"
+  },
+  {
+    "perfil": "admin",
+    "id": "04-inicio",
+    "ruta": "/admin",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Esperar «Actualizado a las …». Capturar «Para hacer hoy» y las tarjetas (Comercios, Verificados, Con horario, Con WhatsApp, Visitas · 7 días, Contactos · 7 días).",
+    "descripcion": "El Inicio: «Para hacer hoy» y las tarjetas"
+  },
+  {
+    "perfil": "admin",
+    "id": "05-inicio-graficos",
+    "ruta": "/admin",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En el Inicio, bajar hasta los gráficos «Altas por día», «Visitas y contactos por día», «Fichas completas» y «Comercios por ciudad».",
+    "descripcion": "Los gráficos del Inicio"
+  },
+  {
+    "perfil": "admin",
+    "id": "06-negocios-lista",
+    "ruta": "/admin?s=negocios",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Comercios › «Negocios». Esperar «N negocios bajados». Capturar el «Resumen por ciudad», el buscador, el orden, «Lista»/«Mapa» y los filtros «Todos», «Pendientes», «Verificados», «Incompletos», «Sin horario».",
+    "descripcion": "Negocios: la lista con filtros"
+  },
+  {
+    "perfil": "admin",
+    "id": "07-negocios-incompletos",
+    "ruta": "/admin?s=negocios",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En Negocios, tocar el filtro «Incompletos (n)». Se ven los motivos (sin nombre, sin foto, sin contacto, sin clasificar, sin productos) en cada fila.",
+    "descripcion": "El filtro «Incompletos»"
+  },
+  {
+    "perfil": "admin",
+    "id": "08-negocios-mapa",
+    "ruta": "/admin?s=negocios",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En Negocios, tocar «Mapa» (al lado de «Lista»).",
+    "descripcion": "Negocios en vista de mapa"
+  },
+  {
+    "perfil": "admin",
+    "id": "09-editar-negocio",
+    "ruta": "/admin?s=negocios",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En Negocios, tocar el lápiz «Editar» de un comercio completo. Capturar el modal «Editar negocio» arriba: «X de Y», «←» «→», «Foto principal», «Nombre», «Código para publicar por WhatsApp», «WhatsApp (opcional)», «Teléfono (opcional)».",
+    "descripcion": "El editor de un negocio"
+  },
+  {
+    "perfil": "admin",
+    "id": "10-editar-fotos",
+    "ruta": "/admin?s=negocios",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En el editor de un comercio con varias fotos, bajar hasta «Fotos del local (tocá para ampliar) · N»: la etiqueta «Portada», «Usar como portada», el ícono «Borrar foto» y «+ Agregar fotos».",
+    "descripcion": "La foto principal y la galería en el editor"
+  },
+  {
+    "perfil": "admin",
+    "id": "11-editar-lo-que-suma",
+    "ruta": "/admin?s=negocios",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En el editor, bajar hasta el desplegable «Lo que suma»: tildes «Tiene pasero», «Hace envíos», «Da factura», «Trabaja talles especiales», «Pedido mínimo», «Canal de WhatsApp del comercio» y «Catálogo».",
+    "descripcion": "«Lo que suma» en el editor"
+  },
+  {
+    "perfil": "admin",
+    "id": "12-generar-clave",
+    "ruta": "/admin?s=negocios",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En el editor de un comercio DE PRUEBA, tocar «Generar clave nueva» y después «Sí, generar clave nueva». Capturar la tarjeta «Clave nueva de …» con «Copiar» y «Listo». (Invalida la clave real: sólo en la demo.)",
+    "descripcion": "Generar una clave nueva para el comercio"
+  },
+  {
+    "perfil": "admin",
+    "id": "13-solo-lectura",
+    "ruta": "/admin?s=negocios",
+    "viewport": "desktop",
+    "pasos": "Entrar con un usuario cuyo rol tenga «moderar» y NO «comercios.editar» (rol armado a mano en Equipo › «Roles y permisos»). Negocios › «Editar» en un comercio: aviso «Sólo lectura: tu cuenta no tiene permiso para editar negocios…» y el botón «Cerrar».",
+    "descripcion": "El editor en sólo lectura"
+  },
+  {
+    "perfil": "admin",
+    "id": "14-dar-de-baja",
+    "ruta": "/admin?s=negocios",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En Negocios, mostrar en una fila el botón «Dar de baja» (sin tocarlo: abre un cuadro del navegador que la captura no muestra).",
+    "descripcion": "El botón «Dar de baja» en la fila de un comercio"
+  },
+  {
+    "perfil": "admin",
+    "id": "15-dados-de-baja",
+    "ruta": "/admin?s=negocios",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En Negocios, tocar «Dados de baja». Se ve «N negocios dados de baja. No se ven en URUKU hasta que los reactives.», «Dado de baja por el admin» y «Reactivar».",
+    "descripcion": "La lista «Dados de baja» con «Reactivar»"
+  },
+  {
+    "perfil": "admin",
+    "id": "16-calles-horarios",
+    "ruta": "/admin?s=calles",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Comercios › «Calles y horarios», pestaña «Horarios»: la lista de calles con «N comercios» y «N sin horario».",
+    "descripcion": "Calles y horarios: la lista de calles"
+  },
+  {
+    "perfil": "admin",
+    "id": "17-calles-horario-calle",
+    "ruta": "/admin?s=calles",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En «Horarios», abrir la primera calle: «¿A qué rubros de esta calle les va el mismo horario?», los 4 atajos, los tildes «Sólo a los que no tienen horario» y «Marcarlo como estimado», y «Poner el horario a N comercios» (no tocarlo).",
+    "descripcion": "Una calle abierta, lista para ponerle el horario"
+  },
+  {
+    "perfil": "admin",
+    "id": "18-calles-zonas",
+    "ruta": "/admin?s=calles",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En «Calles y horarios», tocar la pestaña «Mapa». Queda en «Zonas», con «X de Y km recorridos (N %)».",
+    "descripcion": "El mapa por zonas"
+  },
+  {
+    "perfil": "admin",
+    "id": "19-calles-mapa",
+    "ruta": "/admin?s=calles",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En «Mapa», tocar el botón «Calles». Capturar el mapa con la leyenda «Seguir por acá», «Recorrida», «Parcial», «Pendiente», «Sin comercios».",
+    "descripcion": "El mapa de calles con su leyenda"
+  },
+  {
+    "perfil": "admin",
+    "id": "20-calles-ficha",
+    "ruta": "/admin?s=calles",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En «Mapa» › «Calles», tocar una calle. Capturar su ficha: «Cobertura», «Comercios», «Último paso», «Marca», «Nota (opcional)» y los botones «Recorrida», «Sin comercios», «Pendiente».",
+    "descripcion": "La ficha de una calle"
+  },
+  {
+    "perfil": "admin",
+    "id": "21-lugares",
+    "ruta": "/admin?s=lugares",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Comercios › «Lugares». Tocar un lugar de la lista y después «Dibujar manzana».",
+    "descripcion": "Lugares: el mapa con mercados y galerías"
+  },
+  {
+    "perfil": "admin",
+    "id": "22-importados",
+    "ruta": "/admin?s=importados",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Comercios › «Importados», filtro «Sin revisar»: el tilde «Ocultar N que parecen ya estar cargados», el selector de rubro, «Al mapa» y «Descartar».",
+    "descripcion": "Importados: los negocios de OpenStreetMap"
+  },
+  {
+    "perfil": "admin",
+    "id": "23-adornos",
+    "ruta": "/admin?s=adornos",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Comercios › «Adornos». Elegir «Lapacho» y tocar uno del mapa: «Tamaño», «Cuál» y «Borrar».",
+    "descripcion": "Adornos sobre el mapa"
+  },
+  {
+    "perfil": "admin",
+    "id": "24-cambio-numero",
+    "ruta": "/admin?s=cambio-numero",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Comercios › «Cambios de número» con al menos un pedido: «Número actual: +… → nuevo: +…», «Ver ubicación enviada», «Foto registrada», «Foto nueva», «Aprobar» y «Rechazar».",
+    "descripcion": "Un pedido de cambio de número"
+  },
+  {
+    "perfil": "admin",
+    "id": "25-publicaciones-pendientes",
+    "ruta": "/admin?s=publicaciones",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Contenido › «Publicaciones», pestaña «Pendientes (N)»: «Cola de aprobación», «Revisar todas con IA» y las tarjetas con el selector de tipo y los íconos «Revisar con IA», «Aprobar», «Solicitar cambios», «Rechazar».",
+    "descripcion": "La cola de publicaciones pendientes"
+  },
+  {
+    "perfil": "admin",
+    "id": "26-publicaciones-ia",
+    "ruta": "/admin?s=publicaciones",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En «Pendientes», usar una publicación con veredicto de IA guardado (o tocar el ícono «Revisar con IA» si la IA está prendida): el recuadro «IA sugiere …» con el porcentaje y el motivo.",
+    "descripcion": "El veredicto de la IA en una publicación"
+  },
+  {
+    "perfil": "admin",
+    "id": "27-publicaciones-bajar",
+    "ruta": "/admin?s=publicaciones",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Tocar la pestaña «Publicadas» y después «Bajar» en una tarjeta: se ve «Motivo de la baja (obligatorio)» con «Cancelar» y «Bajar esta publicación». Terminar con «Cancelar».",
+    "descripcion": "«Publicadas» con el botón «Bajar»"
+  },
+  {
+    "perfil": "admin",
+    "id": "28-recepcion",
+    "ruta": "/admin?s=whatsapp",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Contenido › «Recepción»: el estado del canal, el buscador «Buscar un comercio: nombre, código URUKU-XXXX o teléfono», los filtros «Para mirar», «Publicadas», «Ignoradas», «Últimas 150» y la vista «Por comercio».",
+    "descripcion": "Recepción: la bandeja de WhatsApp"
+  },
+  {
+    "perfil": "admin",
+    "id": "29-difusion",
+    "ruta": "/admin?s=difusion",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Contenido › «Difusión»: «Difusión a las redes», los destinos, los filtros «Todo», «Esperando», «Fallaron», «Publicadas» y el botón «Publicar» de una fila.",
+    "descripcion": "Difusión: la cola de envíos a las redes"
+  },
+  {
+    "perfil": "admin",
+    "id": "30-reclamos",
+    "ruta": "/admin?s=reclamos",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Contenido › «Reclamos»: las tarjetas «Reclamos (URUKU)» y «Consultas y reclamos (Reservalo)». Tocar «Responder» en un reclamo para ver «Tu respuesta…», «Enviar» y «Cancelar».",
+    "descripcion": "Reclamos de URUKU y consultas de Reservalo"
+  },
+  {
+    "perfil": "admin",
+    "id": "31-catalogo",
+    "ruta": "/admin?s=catalogo",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Catálogo › «Catálogo»: el resumen y «Lo buscaron y no lo encontraron». Tocar «Ver sólo los vacíos (N)».",
+    "descripcion": "Catálogo: lo que falta en la ciudad"
+  },
+  {
+    "perfil": "admin",
+    "id": "32-rubros",
+    "ruta": "/admin?s=rubros",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Catálogo › «Rubros»: «Categorías que la IA pidió y no existen». Tocar «Resolver» en una propuesta para ver «Es un rubro nuevo» y «Es otra forma de decir uno que existe».",
+    "descripcion": "Rubros: lo que pidió la IA y no existe"
+  },
+  {
+    "perfil": "admin",
+    "id": "33-revision-rubros",
+    "ruta": "/admin?s=revision-rubros",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Catálogo › «Revisar rubros», pestaña «No cierran (N)»: el bloque «Recalcular en tanda» y las filas con «Está bien», «→ (rubro)» y «Editar los rubros».",
+    "descripcion": "Revisar rubros: la cola «No cierran»"
+  },
+  {
+    "perfil": "admin",
+    "id": "34-editar-rubros",
+    "ruta": "/admin?s=revision-rubros",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En «Revisar rubros», tocar «Editar los rubros» en una fila: «Rubros de …», «Va a quedar así», «Por sus palabras», «La IA propone», «Todos los rubros», «Guardar el rubro» y «Ya estaba bien, no tocar».",
+    "descripcion": "El editor «Rubros de …»"
+  },
+  {
+    "perfil": "admin",
+    "id": "35-cargas-historial",
+    "ruta": "/admin?s=cargas",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Campo › «Cargas»: «Cargas del día» y el bloque «Historial» con las columnas Fecha, Agente, Comercios, Desde–hasta, Trabajado, Km.",
+    "descripcion": "Cargas: el historial"
+  },
+  {
+    "perfil": "admin",
+    "id": "36-cargas-dia",
+    "ruta": "/admin?s=cargas",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En «Historial», tocar una fila. Capturar el bloque «El día»: el resumen, «Comercios por hora», «El recorrido» y «Uno por uno».",
+    "descripcion": "Cargas: el detalle de un día"
+  },
+  {
+    "perfil": "admin",
+    "id": "37-planes",
+    "ruta": "/admin?s=planes",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Negocio › «Planes»: las tarjetas con «Precio/mes (Bs)», «Fotos del local (máximo)», «Extra (Bs c/u)», las casillas y «Guardar».",
+    "descripcion": "Planes: la tarjeta de cada plan"
+  },
+  {
+    "perfil": "admin",
+    "id": "38-suscripciones",
+    "ruta": "/admin?s=suscripciones",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Negocio › «Suscripciones»: el buscador «Buscar por nombre, teléfono o código», los filtros «Todos», «Interesados», «Activo», «De cortesía», «Por vencer», «Vencido», «Suspendido», «Sin plan», y una fila con el chip «Interesado: …» y los botones «Plan» y «+ Pago».",
+    "descripcion": "Suscripciones: la lista con filtros"
+  },
+  {
+    "perfil": "admin",
+    "id": "39-suscripciones-plan",
+    "ruta": "/admin?s=suscripciones",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En Suscripciones, tocar «Plan» en una fila: modal «Plan del comercio» con el selector «Plan» y la casilla «De cortesía (no paga, no vence)», «Cancelar» y «Guardar plan». Terminar con «Cancelar».",
+    "descripcion": "Elegir el plan o darlo de cortesía"
+  },
+  {
+    "perfil": "admin",
+    "id": "40-suscripciones-pago",
+    "ruta": "/admin?s=suscripciones",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En Suscripciones, tocar «+ Pago»: modal «Registrar pago» con monto, moneda, método, meses, comprobante, notas, «Cancelar» y «Confirmar pago». Terminar con «Cancelar».",
+    "descripcion": "Registrar un pago"
+  },
+  {
+    "perfil": "admin",
+    "id": "41-suscripciones-confiable",
+    "ruta": "/admin?s=suscripciones",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En Suscripciones, tocar el ícono «Confiable y números autorizados»: «Código del local», «Comercio confiable», «Rubros», «Grupo de WhatsApp» con «Atar», y «Números que pueden publicar» con «Autorizar número».",
+    "descripcion": "Código, confianza y números autorizados"
+  },
+  {
+    "perfil": "admin",
+    "id": "42-pagos",
+    "ruta": "/admin?s=pagos",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Negocio › «Pagos» con al menos un comprobante: «Pagos por confirmar», la miniatura, «Plan (opcional)», «Confirmar 1 mes» y «Confirmar 2 meses».",
+    "descripcion": "Pagos por confirmar"
+  },
+  {
+    "perfil": "admin",
+    "id": "43-vencimientos",
+    "ruta": "/admin?s=vencimientos",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Negocio › «Vencimientos»: la tarjeta «Vencimientos» con sus estados, tocar «+ Agregar» para ver el formulario, y la tarjeta «Certificados HTTPS».",
+    "descripcion": "Vencimientos y certificados"
+  },
+  {
+    "perfil": "admin",
+    "id": "44-monitoreo",
+    "ruta": "/admin?s=monitoreo",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Análisis › «Monitoreo»: «Visitas al sitio», «Altas por día» y las tarjetas.",
+    "descripcion": "Monitoreo"
+  },
+  {
+    "perfil": "admin",
+    "id": "45-kpis",
+    "ruta": "/admin?s=kpis",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Análisis › «KPIs», período «Últimos 30 días»: «Comercios activos», «Pagando», «Gratis», «Más buscado», «Sigue sin resultado», «Locales más visitados».",
+    "descripcion": "KPIs"
+  },
+  {
+    "perfil": "admin",
+    "id": "46-demanda",
+    "ruta": "/admin?s=demanda",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Análisis › «Demanda», tocar «30 días»: «Qué busca la gente», «Para decirle a un comerciante» con «Copiar», «No encontraron nada», «Lo más buscado».",
+    "descripcion": "Demanda: qué busca la gente"
+  },
+  {
+    "perfil": "admin",
+    "id": "47-compradores",
+    "ruta": "/admin?s=compradores",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Análisis › «Compradores»: «Importar un Excel o CSV», el resumen y la tabla «Por grupo» con «Copiar».",
+    "descripcion": "Compradores: importar y resumen por grupo"
+  },
+  {
+    "perfil": "admin",
+    "id": "48-equipo-personas",
+    "ruta": "/admin?s=equipo",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Equipo › «Equipo», pestaña «Personas»: el formulario «Agregar a alguien» (sin tocar «Crear») y la tabla «El equipo».",
+    "descripcion": "Equipo: agregar a alguien y la tabla del equipo"
+  },
+  {
+    "perfil": "admin",
+    "id": "49-equipo-roles",
+    "ruta": "/admin?s=equipo",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. En Equipo, tocar la pestaña «Roles y permisos» (no tocar los tildes: se guardan al instante).",
+    "descripcion": "Roles y permisos"
+  },
+  {
+    "perfil": "admin",
+    "id": "50-manuales",
+    "ruta": "/admin?s=manuales",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Equipo › «Manuales»: «Manual del agente» con la lista de agentes y «Abrir manual», y las tarjetas «Manual del admin», «Manual del comerciante», «Manual del comprador», «Qué es URUKU» con «Abrir» y «Copiar enlace».",
+    "descripcion": "Manuales"
+  },
+  {
+    "perfil": "admin",
+    "id": "51-ayuda",
+    "ruta": "/admin?s=ayuda",
+    "viewport": "desktop",
+    "pasos": "Entrar en /admin con un usuario Administrador (campos «tunombre@uruku.bo» y «Contraseña», botón «Entrar») y elegir la ciudad «Bermejo» en la barra de arriba. Menú Equipo › «Ayuda», pestaña «Preguntas y saber local»: «Sin respuesta (N)» y «Saber local (N)».",
+    "descripcion": "Ayuda: preguntas y saber local"
+  },
+  {
+    "perfil": "admin",
+    "id": "52-contenido",
+    "ruta": "/contenido",
+    "viewport": "desktop",
+    "pasos": "Abrir /contenido y entrar con un usuario Administrador o Publicador («Entrar»). Capturar «Contenido de la home» con los bloques Cotizaciones, La frontera hoy, Recorrimos Bermejo (videos) y Novedades de URUKU.",
+    "descripcion": "Contenido de la home"
+  },
+  {
+    "perfil": "admin",
+    "id": "53-contenido-novedad",
+    "ruta": "/contenido",
+    "viewport": "desktop",
+    "pasos": "En /contenido, bloque «Novedades de URUKU», tocar «Editar» en una novedad con portada y fotos: el formulario (Título, Texto, Fecha, Ciudad, Enlace, «Destacada: sale antes que las demás», «Guardar cambios») y los medios (Portada, «Fotos (N de 12)», Video).",
+    "descripcion": "Una novedad de URUKU: los datos y los medios"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "01-ingreso",
+    "ruta": "/mi-comercio",
+    "viewport": "mobile",
+    "pasos": "Abrir /mi-comercio sin sesión: «Entrá a tu negocio en URUKU», «Entrá con tu celular y tu clave», «Tu celular (ej: 70000000)», «Tu clave», «Mostrar», «Entrar» y «¿Primera vez o te olvidaste la clave? Entrá con tu WhatsApp».",
+    "descripcion": "La pantalla para entrar a tu negocio"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "02-ingreso-whatsapp",
+    "ruta": "/mi-comercio",
+    "viewport": "mobile",
+    "pasos": "En /mi-comercio sin sesión, tocar «¿Primera vez o te olvidaste la clave? Entrá con tu WhatsApp», escribir el celular de un comercio de prueba y tocar «Continuar». Capturar la pantalla con «Confirmar por WhatsApp».",
+    "descripcion": "Entrar por WhatsApp: el botón «Confirmar por WhatsApp»"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "03-clave-nueva",
+    "ruta": "/autoregistro?modo=registro",
+    "viewport": "mobile",
+    "pasos": "Clave de un solo uso: en la demo, completar el alta en /autoregistro?modo=registro y tocar «Crear cuenta y publicar» (o confirmar un CONFIRMAR simulado). Capturar «Tu clave para entrar» con «Copiar» y «Ya la guardé».",
+    "descripcion": "Tu clave nueva, que se muestra una sola vez"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "04-mi-negocio",
+    "ruta": "/mi-comercio",
+    "viewport": "mobile",
+    "pasos": "Entrar en /mi-comercio con el celular y la clave de un comercio de prueba («Tu celular», «Tu clave», «Entrar»). Queda en «Mi negocio»: el menú (Mi negocio, Fotos y videos, Mis ofertas, Contactos, Estadísticas, Mensajes, Configuración), «Plan actual» con «Ver planes», y las tarjetas.",
+    "descripcion": "«Mi negocio», la pantalla de inicio"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "05-aviso-pago",
+    "ruta": "/mi-comercio",
+    "viewport": "mobile",
+    "pasos": "Entrar con un comercio de prueba cuya suscripción esté por vencer (o vencida). Arriba se ve el aviso «Tu suscripción vence en N días…» con «Pagar ahora».",
+    "descripcion": "El aviso de suscripción con «Pagar ahora»"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "06-tu-clave",
+    "ruta": "/mi-comercio",
+    "viewport": "mobile",
+    "pasos": "Entrar en /mi-comercio con el celular y la clave de un comercio de prueba («Tu celular», «Tu clave», «Entrar»). En «Mi negocio», tarjeta «Tu clave», tocar «Generar clave nueva»: se ve la confirmación con «Sí, generar clave nueva» y «Cancelar».",
+    "descripcion": "Generar una clave nueva desde «Tu clave»"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "07-editar-informacion",
+    "ruta": "/mi-comercio",
+    "viewport": "mobile",
+    "pasos": "Entrar en /mi-comercio con el celular y la clave de un comercio de prueba («Tu celular», «Tu clave», «Entrar»). Tocar «Editar información»: los avisos, la vista previa «Así te ven tus clientes», CATEGORÍA, UBICACIÓN («Usar mi ubicación actual») y CÓMO TE CONTACTAN con «Cambié de número».",
+    "descripcion": "Editar información: la vista previa y tus datos"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "08-lo-que-suma",
+    "ruta": "/mi-comercio",
+    "viewport": "mobile",
+    "pasos": "Entrar en /mi-comercio con el celular y la clave de un comercio de prueba («Tu celular», «Tu clave», «Entrar»). En «Editar información», bajar hasta LO QUE SUMA A TU NEGOCIO: «Canal de WhatsApp», «Subir catálogo (PDF, hasta 8 MB)», los tildes «Tengo pasero», «Hago envíos», «Doy factura», «Trabajo talles especiales», «Pedido mínimo» y «Guardar cambios».",
+    "descripcion": "«Lo que suma a tu negocio» y el catálogo"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "09-cambie-de-numero",
+    "ruta": "/recuperar-negocio",
+    "viewport": "mobile",
+    "pasos": "Abrir /recuperar-negocio, escribir el nombre del comercio de prueba en «Nombre de tu negocio», tocar «Buscar» y elegirlo. Capturar el formulario: «Tu WhatsApp nuevo», «Usar mi ubicación actual», «Foto actual del local *» y «Enviar solicitud».",
+    "descripcion": "La solicitud de cambio de número"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "10-fotos-videos",
+    "ruta": "/mi-comercio",
+    "viewport": "mobile",
+    "pasos": "Entrar en /mi-comercio con el celular y la clave de un comercio de prueba («Tu celular», «Tu clave», «Entrar»). Tocar «Fotos y videos» en el menú: «Foto principal» con «Cambiar la foto principal», «Fotos del local N/M» con «Usar como portada» y «+ Foto», «Videos N/5 · ≤60s» con «+ Video».",
+    "descripcion": "Fotos y videos: la foto principal y la galería"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "11-tope-fotos",
+    "ruta": "/mi-comercio",
+    "viewport": "mobile",
+    "pasos": "Entrar con un comercio de prueba que tenga la galería llena (N/N). En «Fotos y videos», tocar «+ Foto» y elegir una imagen: diálogo «Llegaste al tope de fotos» con «Pagar Bs … por una foto extra», «Borrar esa y subir la nueva» y «Cancelar». Terminar con «Cancelar».",
+    "descripcion": "Llegaste al tope de fotos: las opciones"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "12-mis-ofertas",
+    "ruta": "/mi-comercio",
+    "viewport": "mobile",
+    "pasos": "Entrar en /mi-comercio con el celular y la clave de un comercio de prueba («Tu celular», «Tu clave», «Entrar»). Tocar «Mis ofertas» en el menú: publicaciones con los estados «En vivo», «En revisión», «Pide cambios», «Rechazada», y los botones «Editar», «Eliminar» y «Nueva oferta».",
+    "descripcion": "Mis ofertas con sus estados"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "13-editar-publicacion",
+    "ruta": "/mi-comercio",
+    "viewport": "mobile",
+    "pasos": "Entrar en /mi-comercio con el celular y la clave de un comercio de prueba («Tu celular», «Tu clave», «Entrar»). En «Mis ofertas», tocar «Editar» en una oferta: «Editar publicación» con título, descripción, precio, moneda, descuento, válido hasta, enlace de imagen y «Guardar cambios».",
+    "descripcion": "Editar una publicación"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "14-asistente",
+    "ruta": "/autoregistro",
+    "viewport": "mobile",
+    "pasos": "Entrar en /mi-comercio con el celular y la clave de un comercio de prueba («Tu celular», «Tu clave», «Entrar»). Tocar «Nueva oferta» (lleva a /autoregistro): «Asistente de publicación» con los botones «Una oferta», «Un video», «Una novedad».",
+    "descripcion": "El asistente: elegir qué querés publicar"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "15-asistente-confirmar",
+    "ruta": "/autoregistro",
+    "viewport": "mobile",
+    "pasos": "Entrar en /mi-comercio con el celular y la clave de un comercio de prueba («Tu celular», «Tu clave», «Entrar»). En el asistente, tocar «Una oferta» y contestar título, precio, detalle e imagen (escribir «no»). Capturar la confirmación con «Descuento %», «Válido hasta» y «Enviar a moderación» (o «Publicar en vivo» si es confiable). No tocar el botón.",
+    "descripcion": "El asistente: confirmar y publicar"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "16-contactos",
+    "ruta": "/mi-comercio",
+    "viewport": "mobile",
+    "pasos": "Entrar en /mi-comercio con el celular y la clave de un comercio de prueba («Tu celular», «Tu clave», «Entrar»). Tocar «Contactos» en el menú: «Cómo te contactan los clientes», «Visitas a tu ficha · últimos 30 días» y «Quién te contactó · últimos 30 días».",
+    "descripcion": "Contactos: visitas y quién te contactó"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "17-estadisticas",
+    "ruta": "/mi-comercio",
+    "viewport": "mobile",
+    "pasos": "Entrar en /mi-comercio con el celular y la clave de un comercio de prueba («Tu celular», «Tu clave», «Entrar»). Tocar «Estadísticas» en el menú: «Visitas a tu ficha», «Con qué te buscan · últimos 30 días», «Contactos» y «Tus publicaciones».",
+    "descripcion": "Estadísticas"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "18-mensajes-chatbot",
+    "ruta": "/mi-comercio",
+    "viewport": "mobile",
+    "pasos": "Entrar en /mi-comercio con el celular y la clave de un comercio de prueba («Tu celular», «Tu clave», «Entrar»). Con un comercio de plan Destacado, tocar «Mensajes» en el menú: «Preguntas al chatbot de tu local» con «Responder» y «Respuestas de tu chatbot» con «Agregar una respuesta».",
+    "descripcion": "Mensajes: las preguntas al chatbot de tu local"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "19-suscripcion",
+    "ruta": "/mi-comercio",
+    "viewport": "mobile",
+    "pasos": "Entrar en /mi-comercio con el celular y la clave de un comercio de prueba («Tu celular», «Tu clave», «Entrar»). Tocar «Ver planes» debajo del menú: el estado de la suscripción y «PAGAR SUSCRIPCIÓN» con «Consultá el monto y cómo pagar», método, monto, «N° de comprobante (opcional)», «FOTO DEL COMPROBANTE» y «Enviar comprobante».",
+    "descripcion": "Tu suscripción: el estado y el formulario de pago"
+  },
+  {
+    "perfil": "vendedor",
+    "id": "20-ficha-publica",
+    "ruta": "/comercios/<slug-del-comercio-de-prueba>",
+    "viewport": "mobile",
+    "pasos": "Abrir la ficha pública del comercio de prueba (con estrella, «Lo que suma» y ofertas): botones WhatsApp, «Cómo llegar», guardar, «Compartir» y los sellos.",
+    "descripcion": "Tu ficha, como la ve el comprador"
+  },
+  {
+    "perfil": "comprador",
+    "id": "01-ciudad",
+    "ruta": "/",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Abrir uruku.bo y tocar el botón de la ciudad (dice «Bermejo»): la lista de ciudades y «Próximamente».",
+    "descripcion": "Elegir la ciudad"
+  },
+  {
+    "perfil": "comprador",
+    "id": "02-inicio",
+    "ruta": "/",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Abrir uruku.bo: la fila de accesos, «Todo Bermejo en un solo lugar» con «Ver ofertas del día» y «Explorar servicios», la tarjeta «Hoy en Bermejo» y «Farmacias de turno hoy».",
+    "descripcion": "El Inicio de URUKU en Bermejo"
+  },
+  {
+    "perfil": "comprador",
+    "id": "03-inicio-servicios",
+    "ruta": "/",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». En el Inicio, bajar hasta «Servicios útiles», «Antes de comprar» y «Herramientas útiles».",
+    "descripcion": "Más abajo en el Inicio: servicios útiles y herramientas"
+  },
+  {
+    "perfil": "comprador",
+    "id": "04-buscar-resultados",
+    "ruta": "/buscar?q=zapatillas",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Buscar «zapatillas» («¿Qué estás buscando?» › «Buscar»): «N resultados», «Cerca de mí», «Lista»/«Mapa» y las tarjetas con «Ver negocio →».",
+    "descripcion": "Resultados de una búsqueda"
+  },
+  {
+    "perfil": "comprador",
+    "id": "05-buscar-servicio",
+    "ruta": "/buscar?q=baño",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Buscar «baño»: el título «Baños públicos en Bermejo» con «Ver en el mapa →».",
+    "descripcion": "Buscar un servicio: baños públicos"
+  },
+  {
+    "perfil": "comprador",
+    "id": "06-cerca-de-mi",
+    "ruta": "/buscar?cerca=1",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo», ubicación NO permitida: abrir /buscar?cerca=1. Sale el cartel que explica cómo activarla.",
+    "descripcion": "«Cerca de mí» con la ubicación bloqueada: cómo activarla"
+  },
+  {
+    "perfil": "comprador",
+    "id": "06b-cerca-de-mi-lista",
+    "ruta": "/buscar?cerca=1",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo», ubicación permitida (parado en el centro de Bermejo): abrir /buscar?cerca=1 y esperar la lista.",
+    "descripcion": "«Cerca de mí»: los abiertos primero, ordenados por cercanía"
+  },
+  {
+    "perfil": "comprador",
+    "id": "07-mapa",
+    "ruta": "/buscar?rubro=farmacia&vista=mapa",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Abrir el mapa del rubro farmacia y tocar un pin: el globo con foto, nombre y «WhatsApp», «Cómo llegar», «Ver comercio».",
+    "descripcion": "El mapa con los comercios de un rubro"
+  },
+  {
+    "perfil": "comprador",
+    "id": "08-ficha",
+    "ruta": "/comercios/<slug-con-estrella-y-ofertas>",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Abrir la ficha de un comercio con estrella y ofertas: foto, nombre con la estrella, pastillas («Responde», horario), «Lo que suma», «WhatsApp», «Cómo llegar», guardar y «Compartir».",
+    "descripcion": "La ficha de un comercio: foto, nombre, horario y contacto"
+  },
+  {
+    "perfil": "comprador",
+    "id": "09-ficha-fotos",
+    "ruta": "/comercios/<slug-con-estrella-y-ofertas>",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». En la ficha, bajar hasta «Fotos del local» con los filtros «Ofertas (N)» y «Novedades (N)».",
+    "descripcion": "«Fotos del local» con los filtros de ofertas y novedades"
+  },
+  {
+    "perfil": "comprador",
+    "id": "10-ficha-oferta",
+    "ruta": "/comercios/<slug-con-estrella-y-ofertas>",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». En «Fotos del local», tocar «Ofertas (N)» y después una oferta: el visor con título, precio, «Hasta el …», «Reservar» y «Consultar».",
+    "descripcion": "Una oferta abierta, con «Reservar» y «Consultar»"
+  },
+  {
+    "perfil": "comprador",
+    "id": "11-ficha-informacion",
+    "ruta": "/comercios/<slug-con-estrella-y-ofertas>",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». En la ficha, bajar hasta «Información del negocio», «Ubicación» y el cuadro «¿Hay algún dato incorrecto?» con «Informar un problema →».",
+    "descripcion": "«Información del negocio» y «¿Hay algún dato incorrecto?»"
+  },
+  {
+    "perfil": "comprador",
+    "id": "12-dato-incorrecto",
+    "ruta": "/reclamos?comercio_id=<id>&nombre_comercio=<nombre>",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». En la ficha, tocar «Informar un problema →»: «Dejar un comentario» con «Tu nombre (opcional)», «Tu WhatsApp o email (opcional)», «Contanos qué pasó…» y «Enviar comentario».",
+    "descripcion": "Avisar de un dato incorrecto"
+  },
+  {
+    "perfil": "comprador",
+    "id": "13-preguntame",
+    "ruta": "/",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Tocar el botón flotante «Preguntame» (Dax): el saludo «¡Hola! Soy Dax…», las sugerencias («¿Dónde cambio dólares?», «¿Qué hay abierto ahora?»…), «¿Qué necesitás?» y «Enviar». Si la IA está prendida, tocar una sugerencia y capturar la respuesta con «¿Te sirvió?».",
+    "descripcion": "Dax, el asistente de URUKU"
+  },
+  {
+    "perfil": "comprador",
+    "id": "14-chatbot-local",
+    "ruta": "/comercios/<slug-con-chatbot>",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Abrir la ficha de un comercio de plan Destacado y tocar «Preguntame»: «Preguntale a (comercio)», «Contesta con los datos del local» y las sugerencias «¿Están abiertos ahora?», «¿Qué ofertas tienen?», «¿Dónde quedan?».",
+    "descripcion": "El asistente de un comercio"
+  },
+  {
+    "perfil": "comprador",
+    "id": "15-reservas",
+    "ruta": "/reservas",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». En una ficha, abrir una oferta y tocar «Reservar»; después tocar «Ver reserva ›». Capturar «Tu reserva» con el producto, «Vaciar» y «Enviar reserva por WhatsApp».",
+    "descripcion": "Tu reserva, lista para mandar por WhatsApp"
+  },
+  {
+    "perfil": "comprador",
+    "id": "16-ofertas",
+    "ruta": "/ofertas",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Tocar «Ofertas» en la barra de abajo: «Ofertas de Bermejo», solapas «Ofertas»/«Novedades», el chip «Todo» y los de rubro, y las tarjetas.",
+    "descripcion": "Las ofertas del día"
+  },
+  {
+    "perfil": "comprador",
+    "id": "17-novedades",
+    "ruta": "/novedades",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Abrir /novedades: la sección «De URUKU» arriba y «De los comercios» debajo.",
+    "descripcion": "Las novedades, con las de URUKU arriba"
+  },
+  {
+    "perfil": "comprador",
+    "id": "18-novedad-uruku",
+    "ruta": "/novedades/uruku/<id>",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». En /novedades, tocar una tarjeta con la etiqueta «URUKU»: la página de la novedad con texto, fotos y «Compartir».",
+    "descripcion": "Una novedad de URUKU"
+  },
+  {
+    "perfil": "comprador",
+    "id": "19-turno-inicio",
+    "ruta": "/",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». En el Inicio, la tarjeta «Farmacias de turno hoy: …» con «Ver →» (requiere turnos cargados para hoy).",
+    "descripcion": "La tarjeta «Farmacias de turno hoy» en el Inicio"
+  },
+  {
+    "perfil": "comprador",
+    "id": "20-farmacias-turno",
+    "ruta": "/farmacias-de-turno",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Abrir /farmacias-de-turno: «Farmacias de turno en Bermejo», «De turno ahora» con «Llamar» y «Cómo llegar», «En el mapa» y «Próximos 7 días».",
+    "descripcion": "Las farmacias de turno"
+  },
+  {
+    "perfil": "comprador",
+    "id": "21-guia",
+    "ruta": "/guia",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Tocar «Guía» en la barra de abajo: «Para el que viene a Bermejo», «La frontera hoy», «El cambio hoy» y una pregunta abierta.",
+    "descripcion": "La guía para el que viene a comprar"
+  },
+  {
+    "perfil": "comprador",
+    "id": "22-cambio",
+    "ruta": "/cambio",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Tocar «Cambio» en la barra de abajo: la cotización, «¿Cuánto recibís?» con un monto escrito y «Dónde cambiar».",
+    "descripcion": "La calculadora de cambio"
+  },
+  {
+    "perfil": "comprador",
+    "id": "23-entrar",
+    "ruta": "/perfil",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Sin sesión, abrir /perfil, tocar «¿Primera vez o te olvidaste la clave? Confirmá con tu WhatsApp», escribir 70000000 y tocar «Continuar»: la pantalla con «Confirmar por WhatsApp».",
+    "descripcion": "Entrar con tu celular: confirmar por WhatsApp"
+  },
+  {
+    "perfil": "comprador",
+    "id": "24-perfil",
+    "ruta": "/perfil",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Con sesión de comprador: «Hola», el WhatsApp, «Ver mis locales guardados», «Cómo se usa URUKU» y «Cerrar sesión».",
+    "descripcion": "Mi perfil, con la sesión abierta"
+  },
+  {
+    "perfil": "comprador",
+    "id": "25-guardados",
+    "ruta": "/guardados",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Con sesión y al menos un local guardado (marcador de la ficha): «Tus locales guardados» con foto, dirección, WhatsApp y la X.",
+    "descripcion": "Tus locales guardados"
+  },
+  {
+    "perfil": "comprador",
+    "id": "26-te-contesto",
+    "ruta": "/",
+    "viewport": "mobile",
+    "pasos": "Celular 390×844, cookie de ciudad en «Bermejo». Tocar el WhatsApp de un comercio, adelantar el reloj más de 3 minutos y volver a la pestaña: el cartel «¿Te contestó …?» con «Sí», «No», «Todavía no».",
+    "descripcion": "La pregunta «¿Te contestó?»"
+  },
+  {
+    "perfil": "agente",
+    "id": "01-login",
+    "ruta": "/publicar",
+    "viewport": "mobile",
+    "pasos": "Abrir /publicar sin sesión: «Agente de campo», «URUKU · Carga de comercios», «tunombre@uruku.bo», «Contraseña» y «Entrar».",
+    "descripcion": "Pantalla de ingreso de la app del agente"
+  },
+  {
+    "perfil": "agente",
+    "id": "02-que-hay-aca",
+    "ruta": "/publicar",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. Queda en «Qué hay acá»: la precisión del GPS, «Actualizar mi ubicación», el mapa, «Cargados a menos de 150 m (N)» y «Cargar un local nuevo acá».",
+    "descripcion": "«Qué hay acá»: el mapa y los locales cargados cerca"
+  },
+  {
+    "perfil": "agente",
+    "id": "03-ficha-local",
+    "ruta": "/publicar",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. En «Qué hay acá», tocar un local de la lista («Abrir la ficha de …»): foto, «Verificado»/«Pendiente de verificar», Datos, Lo que suma, «Le falta (N)» con «Completar» y «Plan y estado».",
+    "descripcion": "La ficha del local en la app del agente"
+  },
+  {
+    "perfil": "agente",
+    "id": "04-ubicacion-aproximada",
+    "ruta": "/publicar",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. Abrir la ficha de una farmacia importada con ubicación aproximada: «Ubicación aproximada: confirmala tomando el GPS en la puerta». Tocar «Tomar el GPS acá» y capturar la pregunta con «Sí, estoy en la puerta» y «Cancelar». Terminar con «Cancelar».",
+    "descripcion": "Confirmar el GPS de un local con ubicación aproximada"
+  },
+  {
+    "perfil": "agente",
+    "id": "05-mapa-calles",
+    "ruta": "/publicar",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. En «Qué hay acá», prender el interruptor «Calles» (queda en «Sí»): «X de Y km recorridos (Z %)», la leyenda y «Calles pendientes cerca».",
+    "descripcion": "El mapa de calles prendido, con la leyenda"
+  },
+  {
+    "perfil": "agente",
+    "id": "06-ficha-calle",
+    "ruta": "/publicar",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. Con «Calles» prendido, tocar una calle de «Calles pendientes cerca» («Ver la calle …»): su ficha con «Cobertura», «Comercios», «Nota (opcional)» y los botones «Recorrida», «Sin comercios», «Pendiente».",
+    "descripcion": "La ficha de una calle, con los botones para marcarla"
+  },
+  {
+    "perfil": "agente",
+    "id": "07-alta-formulario",
+    "ruta": "/publicar",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. Tocar «Cargar un local nuevo acá», lejos de otros locales: «Nombre del cartel (si no tiene, dejalo vacío)», «Ubicación tomada — tomar de nuevo», «Foto del local (portada, opcional)», «El dueño aceptó aparecer en URUKU» y «Guardar comercio».",
+    "descripcion": "El formulario del alta"
+  },
+  {
+    "perfil": "agente",
+    "id": "08-ya-cargados-cerca",
+    "ruta": "/publicar",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. Tocar «Cargar un local nuevo acá» parado a menos de 40 m de un local cargado: «Ya cargados acá cerca» con «Es este».",
+    "descripcion": "El aviso de locales ya cargados a menos de 40 m"
+  },
+  {
+    "perfil": "agente",
+    "id": "09-alta-guardada",
+    "ruta": "/publicar",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. Completar el alta (GPS y foto) y tocar «Guardar comercio»: «¡… cargado!», la tarjeta «Clave del comercio» con «Listo» y «¿Tiene WhatsApp el local?».",
+    "descripcion": "Después de guardar: la clave y el WhatsApp"
+  },
+  {
+    "perfil": "agente",
+    "id": "10-completar-le-falta",
+    "ruta": "/publicar",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. En la ficha de un local incompleto, tocar «Completar»: «Completar comercio» con «Le falta (N)» y la sección Horario con sus atajos.",
+    "descripcion": "«Completar comercio»: la lista «Le falta» arriba"
+  },
+  {
+    "perfil": "agente",
+    "id": "11-completar-fotos",
+    "ruta": "/publicar",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. En «Completar comercio», bajar hasta «Fotos y videos»: la foto de la vidriera con «Cambiar foto», «Fotos del local N/tope», «+ Foto», «Usar como portada», «Videos» y «+ Video».",
+    "descripcion": "Fotos y videos del local en «Completar comercio»"
+  },
+  {
+    "perfil": "agente",
+    "id": "12-tope-fotos",
+    "ruta": "/publicar",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. Completar un comercio con la galería llena: el aviso «Llegaste al tope de fotos de tu plan. Las fotos las borra URUKU…».",
+    "descripcion": "El aviso de tope de fotos del plan"
+  },
+  {
+    "perfil": "agente",
+    "id": "13-completar-lo-que-suma",
+    "ruta": "/publicar",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. En «Completar comercio», bajar hasta «Lo que suma»: Tiene pasero, Hace envíos, Da factura, Trabaja talles especiales y «Pedido mínimo», con el botón «Guardar» abajo.",
+    "descripcion": "«Lo que suma» en «Completar comercio»"
+  },
+  {
+    "perfil": "agente",
+    "id": "14-ofrecer",
+    "ruta": "/publicar",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. En la ficha de un local, bajar hasta «Ofrecer»: «Mostrale cómo se ven otros» (con «Ver ficha»), «Le interesa un plan» y «Mandarle su ficha por WhatsApp».",
+    "descripcion": "Los tres bloques de «Ofrecer»"
+  },
+  {
+    "perfil": "agente",
+    "id": "15-interes-anotado",
+    "ruta": "/publicar",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. En «Le interesa un plan», tocar el nombre de un plan y «Anotar interés»: «Anotado: le interesa … El admin lo ve en Suscripciones.»",
+    "descripcion": "«Le interesa un plan» anotado"
+  },
+  {
+    "perfil": "agente",
+    "id": "16-comercios-mi-ciudad",
+    "ruta": "/publicar?vista=mis-comercios",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. Tocar «Mis comercios»: «Comercios de mi ciudad», el buscador, el orden, «Lista»/«Mapa» y los filtros «Acá», «Todos», «Pendientes», «Verificados», «Incompletos», «Sin horario».",
+    "descripcion": "«Comercios de mi ciudad» con sus filtros"
+  },
+  {
+    "perfil": "agente",
+    "id": "17-sin-horario",
+    "ruta": "/publicar?vista=mis-comercios",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. En «Comercios de mi ciudad», tocar el filtro «Sin horario»: «Ordenados por distancia…» y los botones «Cargar horario».",
+    "descripcion": "El filtro «Sin horario» con «Cargar horario»"
+  },
+  {
+    "perfil": "agente",
+    "id": "18-mis-comercios-mapa",
+    "ruta": "/publicar?vista=mis-comercios",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. En «Comercios de mi ciudad», tocar «Mapa»: los pines por rubro y «punto ámbar = falta completarlo».",
+    "descripcion": "«Mis comercios» en vista de mapa"
+  },
+  {
+    "perfil": "agente",
+    "id": "19-sin-conexion",
+    "ruta": "/publicar",
+    "viewport": "mobile",
+    "pasos": "Entrar en /publicar con un usuario de rol «Agente de campo» de Bermejo («tunombre@uruku.bo», «Contraseña», «Entrar»), con permiso de geolocalización y la ubicación simulada en el centro de Bermejo, al lado de comercios cargados. Cortar la conexión (modo sin red), cargar un alta y tocar «Guardar comercio»; después «Cargar otro comercio»: el aviso ámbar «1 guardado sin conexión — se sube con señal» con «Sincronizar», «Ver cuáles son» y «Descartar».",
+    "descripcion": "El aviso de altas guardadas sin conexión"
+  }
+]

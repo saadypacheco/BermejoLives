@@ -9,6 +9,9 @@ const buildTime = new Date().toISOString();
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // La demo local de los manuales (scripts/demo) compila en su propia carpeta
+  // para poder correr al lado de `npm run dev` sin pisarse el `.next`.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   env: {
     NEXT_PUBLIC_APP_VERSION: pkg.version,
     NEXT_PUBLIC_GIT_SHA: process.env.GIT_SHA || "dev",

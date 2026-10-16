@@ -166,9 +166,8 @@ export async function UrukuShell({
               </div>
               <div className="uk-foot-col">
                 <h4>Información</h4>
-                <a href="#" className="uk-foot-link"><Ic n="ayuda" /><span>Preguntas frecuentes</span><i>›</i></a>
-                <a href="#" className="uk-foot-link"><Ic n="documento" /><span>Términos y condiciones</span><i>›</i></a>
-                <a href="#" className="uk-foot-link"><Ic n="seguridad" /><span>Política de privacidad</span><i>›</i></a>
+                {/* Términos y privacidad vuelven cuando estén escritos: un enlace a «#» promete algo que no hay. */}
+                <a href="/manual/comprador" className="uk-foot-link"><Ic n="ayuda" /><span>Cómo se usa URUKU</span><i>›</i></a>
               </div>
             </div>
 

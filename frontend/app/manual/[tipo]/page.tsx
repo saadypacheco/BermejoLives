@@ -1,8 +1,8 @@
-// /manual/agente · /manual/admin · /manual/comercio · /manual/uruku (= /que-es-uruku)
+// /manual/agente · /manual/admin · /manual/comercio · /manual/comprador · /manual/uruku (= /que-es-uruku)
 //
 // El contenido vive en `content/manuales/<tipo>.md` (lo escribe el redactor) y
 // se lee ACÁ, en el servidor, una sola vez: `generateStaticParams` + `dynamicParams
-// = false` hacen que el build genere las tres páginas y que cualquier otra
+// = false` hacen que el build genere una página por manual y que cualquier otra
 // (`/manual/otra-cosa`) sea un 404.
 //
 // POR QUÉ NO HACE FALTA COPIAR EL .md AL SERVIDOR
