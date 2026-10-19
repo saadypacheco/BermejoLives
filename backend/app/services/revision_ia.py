@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 import structlog
 
 from app.core.config import settings
-from app.services import difusion
+from app.services import difusion, integracion
 from app.services.clasificador import moderar_publicacion
 
 logger = structlog.get_logger()
@@ -61,7 +61,9 @@ def revisar_pendientes(repo, limite: int = 10) -> dict:
                                   float(v.get("confianza") or 0))
         hechos["revisadas"] += 1
 
-        if _auto_aprueba(v, pub):
+        # Un comercio GESTIONADO por la integración de marketing nunca se auto-aprueba: lo aprueba esa
+        # integración (o un admin con override). Se mira recién acá para no consultar por cada pendiente.
+        if _auto_aprueba(v, pub) and not integracion.es_gestionado(repo, pub.get("comercio_id")):
             repo.set_estado_publicacion(pub["id"], "aprobado", v.get("motivo"), "ia-auto")
             difusion.encolar(repo, pub["id"])
             hechos["auto_aprobadas"] += 1

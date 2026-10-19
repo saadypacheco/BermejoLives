@@ -17,6 +17,10 @@ class ModerarBody(BaseModel):
     # quedaba fijo: el moderador aprobaba una novedad sabiendo que iba a
     # salir entre las ofertas, y no podía hacer nada.
     tipo: str | None = None
+    # Aprobar IGUAL una publicación de un comercio GESTIONADO por la integración de marketing (su
+    # aprobación es la de ese sistema, una sola). Sólo lo acepta un admin, exige un motivo y queda
+    # registrado en `integracion_eventos`.
+    override_gestionado: bool = False
 
 
 class RegistroBody(BaseModel):

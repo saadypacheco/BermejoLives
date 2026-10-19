@@ -182,6 +182,33 @@ def _validar_codigo_al_aprobar(repo: Repo, pub_id: str) -> None:
         )
 
 
+def _exigir_override_si_gestionado(repo: Repo, pub_id: str, body: ModerarBody, mod: dict) -> str | None:
+    """Un comercio GESTIONADO por la integración de marketing se aprueba desde ese sistema (una sola
+    aprobación). Desde acá: 409, salvo un override de admin con motivo, que queda registrado.
+
+    Devuelve el motivo a guardar (con el prefijo del override). No toca nada de los comercios comunes."""
+    from app.services import integracion
+
+    pub = repo.get_publicacion(pub_id) or {}
+    if not integracion.es_gestionado(repo, pub.get("comercio_id")):
+        return body.motivo
+    if not body.override_gestionado:
+        raise HTTPException(
+            status_code=409,
+            detail="Este comercio lo gestiona el sistema de marketing: la aprobación se hace desde ahí. "
+                   "Si hace falta aprobarla igual, un admin puede hacerlo con override y motivo.")
+    if not tiene_permiso(mod, "equipo"):
+        raise HTTPException(status_code=403, detail="Sólo un admin puede aprobar con override un comercio gestionado")
+    razon = (body.motivo or "").strip()
+    if len(razon) < 10:
+        raise HTTPException(status_code=422, detail="El override necesita un motivo (al menos 10 caracteres)")
+    repo.integracion_registrar_evento({
+        "tipo": "override_aprobacion", "actor": mod.get("email"), "comercio_id": pub.get("comercio_id"),
+        "detalle": {"publicacion_id": pub_id, "motivo": razon[:500]}})
+    logger.warning("moderacion.override_gestionado", pub=pub_id, comercio=pub.get("comercio_id"), by=mod.get("email"))
+    return f"override-gestionado: {razon}"
+
+
 @router.post("/moderacion/publicaciones/{pub_id}")
 def moderar(
     pub_id: str,
@@ -191,11 +218,13 @@ def moderar(
 ) -> dict:
     if body.estado not in _ESTADOS:
         raise HTTPException(status_code=400, detail=f"estado inválido: {body.estado}")
+    motivo = body.motivo
     if body.estado == "aprobado":
         _validar_codigo_al_aprobar(repo, pub_id)
+        motivo = _exigir_override_si_gestionado(repo, pub_id, body, mod)
     if body.tipo in ("oferta", "novedad", "video"):
         repo.update_publicacion(pub_id, {"tipo": body.tipo})
-    updated = repo.set_estado_publicacion(pub_id, body.estado, body.motivo, mod["email"])
+    updated = repo.set_estado_publicacion(pub_id, body.estado, motivo, mod["email"])
     if not updated:
         raise HTTPException(status_code=404, detail="publicación no encontrada")
     # El borrador que nació de un WhatsApp desconocido está apagado hasta que
@@ -3055,6 +3084,13 @@ async def admin_difusion_reintentar(
         # repetida en el muro es exactamente lo que hace que la gente deje de
         # seguir la página.
         raise HTTPException(409, "esa oferta ya se publicó; reintentarla la duplicaría")
+    if fila["estado"] == "incierto":
+        # Se mandó y no se sabe si salió: se le pregunta a Meta ANTES de volver a mandar.
+        r = await run_in_threadpool(difusion.resolver_incierto, repo, fila)
+        if r["estado"] != "pendiente":
+            logger.info("difusion.reintento_incierto", fila=fila_id, by=admin.get("sub"), **r)
+            return r
+        fila = await run_in_threadpool(repo.get_difusion_fila, fila_id) or fila
     r = await run_in_threadpool(difusion.procesar, repo, fila)
     logger.info("difusion.reintento", fila=fila_id, by=admin.get("sub"), **r)
     return r

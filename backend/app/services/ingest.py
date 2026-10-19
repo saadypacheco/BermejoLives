@@ -21,7 +21,7 @@ import structlog
 
 from app.core.config import settings
 from app.db.repository import Repo, get_repo
-from app.services import clave_filtrada, difusion, planes
+from app.services import clave_filtrada, difusion, integracion, planes
 from app.models.whatsapp import WahaEvent, WahaMessagePayload
 
 logger = structlog.get_logger()
@@ -201,7 +201,8 @@ def _puede_publicar_por_whatsapp(comercio: dict) -> bool:
 _MINUTOS_MISMA_OFERTA = 10
 
 
-def _fusionar_con_la_anterior(repo: Repo, comercio: dict, row: dict, tipo: str) -> dict | None:
+def _fusionar_con_la_anterior(repo: Repo, comercio: dict, row: dict, tipo: str,
+                              solo_pendiente: bool = False) -> dict | None:
     """Junta este mensaje con el anterior cuando son las dos mitades de una oferta.
 
     Sólo si se COMPLEMENTAN: una tiene foto y le falta el texto, la otra tiene
@@ -212,6 +213,10 @@ def _fusionar_con_la_anterior(repo: Repo, comercio: dict, row: dict, tipo: str) 
     """
     previa = repo.ultima_publicacion_de(comercio["id"], _MINUTOS_MISMA_OFERTA)
     if not previa:
+        return None
+    # Comercio gestionado: no se le cambia por abajo una publicación que la integración ya aprobó o
+    # rechazó (saldría modificada sin que nadie la vuelva a mirar). Sólo se junta con una pendiente.
+    if solo_pendiente and previa.get("estado") != "pendiente":
         return None
 
     texto_nuevo = (row.get("descripcion") or "").strip()
@@ -385,6 +390,7 @@ def _publicar_del_explorador(payload, event, repo: Repo) -> dict:
         "contacto_whatsapp": settings.wa_contacto_explorador.strip() or None,
         "codigo_recibido": codigo,
         "identidad_origen": "explorador",
+        "remitente_rol": "uruku_explorer",
         "wa_message_id": payload.id,
     }
     creada = repo.insert_publicacion(row)
@@ -634,6 +640,11 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     # publicar directo recién cuando alguien del equipo autoriza el número.
     confiable = bool(comercio.get("confiable")) and identidad_origen not in ("codigo", "numero_por_codigo")
 
+    # Quién mandó el mensaje, para la API de integración (que no ve teléfonos): `merchant` es el comercio;
+    # `third_party`, alguien que no está verificado como el comercio (sólo sabe el código, o es otro
+    # participante del grupo).
+    remitente_rol = "third_party" if identidad_origen in ("codigo", "grupo_desconocido") else "merchant"
+
     # En un grupo hay tres participantes y sólo uno publica. Si el mensaje vino
     # de un número que no es el del comercio ni uno nuestro, alguien agregó a un
     # cuarto: no se descarta en silencio —podría ser el mismo comerciante con
@@ -644,6 +655,14 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         if not (duenio and duenio.get("id") == comercio["id"]):
             logger.info("ingest.remitente_ajeno", grupo=payload.grupo_jid, comercio=slug)
             confiable = False
+            remitente_rol = "third_party"
+
+    # Un comercio GESTIONADO por la integración de marketing (está en su alcance) NUNCA publica directo,
+    # sea o no `confiable`: la oferta queda pendiente, sin difusión, hasta que la apruebe esa integración.
+    # Si no se puede saber, se trata como gestionado (pendiente es el estado seguro).
+    gestionado = integracion.es_gestionado(repo, comercio["id"])
+    if gestionado:
+        confiable = False
 
     now = datetime.now(timezone.utc).isoformat()
     tipo = _classify_tipo(payload)
@@ -685,6 +704,7 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         "origen": "whatsapp",
         "codigo_recibido": codigo_recibido,
         "identidad_origen": identidad_origen,
+        "remitente_rol": remitente_rol,
         "wa_message_id": payload.id,
     }
     # LA FOTO Y EL PRECIO LLEGAN EN DOS MENSAJES.
@@ -697,7 +717,7 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     #
     # Si lo último que mandó este comercio hace un rato es la mitad que le
     # falta a esto, se juntan en una sola.
-    fusionada = _fusionar_con_la_anterior(repo, comercio, row, tipo)
+    fusionada = _fusionar_con_la_anterior(repo, comercio, row, tipo, solo_pendiente=gestionado)
     if fusionada:
         logger.info("ingest.publicacion_fusionada", comercio=slug, pub=fusionada["id"], tipo=fusionada.get("tipo"))
         repo.marcar_wa_inbox(payload.id, "publicada", "se juntó con el mensaje anterior", comercio["id"])

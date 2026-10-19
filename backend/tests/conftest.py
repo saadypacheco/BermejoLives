@@ -78,7 +78,10 @@ def _sin_limite_de_subidas_de_catalogo():
     ficha_catalogo.reiniciar_limites()
 
 
-class FakeRepo:
+from tests.fake_integracion import FakeIntegracionMixin  # noqa: E402
+
+
+class FakeRepo(FakeIntegracionMixin):
     """Implementación en memoria del Protocol Repo."""
 
     def __init__(self):
@@ -743,21 +746,26 @@ class FakeRepo:
             for c in filas[:limite]]
 
     # ---- cola de difusión ----
-    def encolar_difusion(self, publicacion_id, destinos):
+    def encolar_difusion(self, publicacion_id, destinos, extra=None):
         nuevas = 0
         for d in destinos:
             if any(f["publicacion_id"] == publicacion_id and f["destino"] == d
                    for f in self.difusion):
                 continue
-            self.difusion.append({"id": self._id("dif"), "publicacion_id": publicacion_id,
+            self.difusion.append({"id": str(__import__("uuid").uuid4()), "publicacion_id": publicacion_id,
                                   "destino": d, "estado": "pendiente", "intentos": 0,
                                   "motivo": None, "url_publicada": None,
-                                  "created_at": "2026-01-01T00:00:00Z", "enviado_at": None})
+                                  "created_at": "2026-01-01T00:00:00Z", "enviado_at": None,
+                                  "texto_override": None, "imagen_url_override": None, "solicitado_por": None,
+                                  "external_post_id": None, "ig_container_id": None, "permalink": None,
+                                  "verificado_at": None, **(extra or {})})
             nuevas += 1
         return nuevas
 
     def difusion_pendientes(self, limite):
-        return [f for f in self.difusion if f["estado"] == "pendiente"][:limite]
+        # Como la real: sin lo que pidió la integración (lo envía sólo E9).
+        return [f for f in self.difusion
+                if f["estado"] == "pendiente" and not f.get("solicitado_por")][:limite]
 
     def wa_inbox_sin_procesar(self, wa_message_id):
         f = self.wa_inbox.get(wa_message_id)
@@ -780,10 +788,10 @@ class FakeRepo:
         return len([f for f in self.difusion
                     if f["destino"] == destino and f["estado"] == "enviado"])
 
-    def marcar_difusion(self, fila_id, estado, motivo, url=None):
+    def marcar_difusion(self, fila_id, estado, motivo, url=None, extra=None):
         for f in self.difusion:
             if f["id"] == fila_id:
-                f.update({"estado": estado, "motivo": motivo, "intentos": f["intentos"] + 1})
+                f.update({"estado": estado, "motivo": motivo, "intentos": f["intentos"] + 1, **(extra or {})})
                 if estado == "enviado":
                     f["url_publicada"] = url
                     f["enviado_at"] = "2026-01-01T00:00:01Z"
@@ -845,6 +853,7 @@ class FakeRepo:
         for p in self.publicaciones:
             if p["id"] == pub_id and p.get("comercio_id") == comercio_id and p.get("activo"):
                 p.update(patch)
+                self._integ_bump(p)
                 return p
         return None
 
@@ -859,6 +868,9 @@ class FakeRepo:
         for p in self.publicaciones:
             if p["id"] == pub_id:
                 p.update({"estado": estado, "motivo_moderacion": motivo, "moderado_por": by})
+                if estado == "aprobado":
+                    p["approved_at"] = self._ahora()
+                self._integ_bump(p)
                 return p
         return {}
 
@@ -1883,6 +1895,7 @@ class FakeRepo:
         for p in self.publicaciones:
             if p.get("id") == pub_id:
                 p.update(patch)
+                self._integ_bump(p)
                 return p
         return {}
 
