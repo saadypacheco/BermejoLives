@@ -96,6 +96,12 @@ class Settings(BaseSettings):
     facebook_page_token: str = ""
     instagram_user_id: str = ""
 
+    # Versión de la Graph API de Meta (Facebook, Instagram y WhatsApp Cloud usan el
+    # mismo versionado). Meta da de baja cada versión ~2 años después: la v20.0 se
+    # removió el 24/9/2026. Se cambia con GRAPH_API_VERSION en el .env, sin tocar
+    # código; todas las URLs salen de `graph_base()`.
+    graph_api_version: str = "v26.0"
+
     # Qué destinos salen SOLOS al aprobar. Los que no estén acá se encolan y
     # esperan un clic en el panel.
     #
@@ -191,6 +197,15 @@ class Settings(BaseSettings):
     # pregunta a WAHA y, si no está WORKING, queda un ERROR en los registros.
     wa_sesion_vigilar: bool = True
     wa_sesion_cada_seg: int = 300
+
+    def graph_base(self) -> str:
+        """`https://graph.facebook.com/<versión configurada>`, sin barra final."""
+        import re
+
+        version = (self.graph_api_version or "").strip()
+        if not re.fullmatch(r"v\d{1,3}\.\d{1,2}", version):
+            raise ValueError(f"GRAPH_API_VERSION inválida: {version!r} (esperado p. ej. v26.0)")
+        return f"https://graph.facebook.com/{version}"
 
     def destinos_automaticos(self) -> set[str]:
         return {d.strip() for d in self.difusion_auto.split(",") if d.strip()}

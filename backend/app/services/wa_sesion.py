@@ -86,8 +86,6 @@ def vigilar(sesion: str = "default") -> dict:
 
 # ───────────────────────────────────────── el Plan B: la API oficial de Meta
 
-_GRAPH = "https://graph.facebook.com/v20.0"
-
 
 def _cloud_activo() -> bool:
     """¿El interruptor está en la API oficial? Lo que SALE va por ahí."""
@@ -117,7 +115,7 @@ def estado_cloud() -> dict:
     if not pid or not token:
         return _cloud("SIN_CONFIGURAR", ok=False, configurado=False)
     try:
-        r = httpx.get(f"{_GRAPH}/{pid}",
+        r = httpx.get(f"{settings.graph_base()}/{pid}",
                       params={"fields": "display_phone_number,verified_name,quality_rating"},
                       headers={"Authorization": f"Bearer {token}"}, timeout=_TIMEOUT)
         if r.status_code in (400, 401):

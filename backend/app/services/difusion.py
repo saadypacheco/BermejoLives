@@ -152,10 +152,10 @@ def _enviar_facebook(texto: str, imagen_url: str | None) -> str | None:
     pid = settings.facebook_page_id.strip()
     token = settings.facebook_page_token.strip()
     if imagen_url:
-        url = f"https://graph.facebook.com/v20.0/{pid}/photos"
+        url = f"{settings.graph_base()}/{pid}/photos"
         datos = {"url": imagen_url, "caption": texto, "access_token": token}
     else:
-        url = f"https://graph.facebook.com/v20.0/{pid}/feed"
+        url = f"{settings.graph_base()}/{pid}/feed"
         datos = {"message": texto, "access_token": token}
 
     r = httpx.post(url, data=datos, timeout=_TIMEOUT)
@@ -180,7 +180,7 @@ def _enviar_instagram(texto: str, imagen_url: str | None) -> str | None:
     uid = settings.instagram_user_id.strip()
     token = settings.facebook_page_token.strip()
 
-    r = httpx.post(f"https://graph.facebook.com/v20.0/{uid}/media",
+    r = httpx.post(f"{settings.graph_base()}/{uid}/media",
                    data={"image_url": imagen_url, "caption": texto, "access_token": token},
                    timeout=_TIMEOUT)
     if r.status_code >= 400:
@@ -189,7 +189,7 @@ def _enviar_instagram(texto: str, imagen_url: str | None) -> str | None:
     if not contenedor:
         raise DifusionError("Instagram no devolvió el contenedor")
 
-    r2 = httpx.post(f"https://graph.facebook.com/v20.0/{uid}/media_publish",
+    r2 = httpx.post(f"{settings.graph_base()}/{uid}/media_publish",
                     data={"creation_id": contenedor, "access_token": token},
                     timeout=_TIMEOUT)
     if r2.status_code >= 400:
