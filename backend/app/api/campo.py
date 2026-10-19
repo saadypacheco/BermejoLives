@@ -196,7 +196,7 @@ async def alta_campo(
     video_url: str | None = Form(None),
     lat: float | None = Form(None),
     lng: float | None = Form(None),
-    consentimiento: bool = Form(True),
+    consentimiento: bool = Form(False),  # nunca se presume: el agente tilda la casilla delante del dueño
     # Campos del diferencial fronterizo
     monedas_aceptadas: list[str] = Form(default=[]),
     envios_internacionales: bool = Form(False),

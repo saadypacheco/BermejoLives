@@ -322,6 +322,13 @@ def test_el_consentimiento_del_duenio_queda_guardado(client, repo):
     assert repo.comercios[si]["consentimiento_dueno_en"]
 
 
+def test_sin_casilla_el_consentimiento_no_se_presume(client, repo):
+    """Si el formulario no lo manda, no queda un «sí» que nadie dio."""
+    token = _agente_token(client)
+    cid = _alta(client, token)
+    assert repo.comercios[cid]["consentimiento_dueno"] is False
+
+
 def test_el_agente_corrige_el_whatsapp_que_acaba_de_cargar(client, repo):
     token = _agente_token(client)
     cid = _alta(client, token)

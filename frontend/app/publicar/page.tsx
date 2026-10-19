@@ -692,7 +692,7 @@ function FormCampo({ onLogout, onVerMisComercios, gpsInicial, onVerAca }: {
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const preview = useObjectUrl(previewFile);
   const [comprimiendo,setComprimiendo]= useState(false);
-  const [consent,     setConsent]     = useState(true);
+  const [consent,     setConsent]     = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [done,        setDone]        = useState<string | null>(null);
   const [doneOffline, setDoneOffline] = useState(false);
