@@ -3532,18 +3532,21 @@ function ModalGestionComercio({ comercio, onClose }: { comercio: ComercioSuscrip
               <div style={{ padding: "8px 0", fontSize: 12.5, lineHeight: 1.5 }}>
                 {/* El flujo manual, paso a paso, porque es lo que hay que hacer
                     y no está escrito en ningún otro lado que se vea desde acá. */}
-                <b>El grupo se crea a mano:</b>
+                <b>El grupo se crea a mano.</b> El orden importa: el comerciante
+                nunca tiene que ver el código.
                 <ol style={{ margin: "6px 0 0", paddingLeft: 18, color: "var(--txt-2)" }}>
-                  <li>Desde el Samsung: grupo nuevo <span style={{ fontFamily: "monospace" }}>URUKU · {comercio.nombre}</span></li>
-                  <li>Agregar al comerciante y al número de la tablet (el Registrador, el que corre WAHA)</li>
+                  <li>Desde el Samsung: grupo nuevo <span style={{ fontFamily: "monospace" }}>URUKU · {comercio.nombre}</span>, <b>sólo con la tablet</b> (el Registrador)</li>
                   <li>Mandar adentro:{" "}
                     <span style={{ fontFamily: "monospace", color: "var(--neon)", fontWeight: 700 }}>
                       URUKU-{comercio.codigo ?? "XXXX"}
                     </span>
                   </li>
+                  <li>Recargar esta ficha hasta que el grupo aparezca acá abajo</li>
+                  <li>Borrar ese mensaje «para todos»</li>
+                  <li>Recién ahí, agregar al comerciante</li>
                 </ol>
                 <div style={{ color: "var(--txt-3)", marginTop: 6 }}>
-                  Con el código adentro, el grupo queda atado a este comercio solo y aparece acá.
+                  Nunca pongas el código en el nombre ni en la descripción del grupo.
                 </div>
               </div>
             )}
