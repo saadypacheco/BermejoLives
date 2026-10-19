@@ -1420,9 +1420,16 @@ a.uk-product-img { display: block; }
    Columnas que siguen hacia abajo, fotos verticales grandes: 2 en el celular,
    3 en la tableta, 4 en la compu. */
 .uk-tienda { margin-top: 24px; scroll-margin-top: 180px; }
-.uk-tienda-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-@media (min-width: 600px) { .uk-tienda-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; } }
-@media (min-width: 1000px) { .uk-tienda-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; } }
+/* Filas parejas: cada foto crece según SU proporción (flex-grow = ancho/alto, lo
+   pone el componente) y se ve entera, sin recorte ni franjas. `--fila` es el alto
+   de referencia de una fila; el ::after evita que la última fila se estire. */
+.uk-tienda-grid { --fila: 150px; list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.uk-tienda-grid::after { content: ""; flex-grow: 999999; }
+@media (min-width: 600px) { .uk-tienda-grid { --fila: 200px; gap: 12px; } }
+@media (min-width: 1000px) { .uk-tienda-grid { --fila: 240px; gap: 14px; } }
+.uk-tienda-foto { display: block; width: 100%; overflow: hidden; background: var(--uk-chip); }
+.uk-tienda-foto img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .25s ease; }
+@media (hover: hover) { .uk-tienda-grid button:hover .uk-tienda-foto img { transform: scale(1.03); } }
 .uk-tienda-grid button { position: relative; display: block; width: 100%; padding: 0; border: 0; cursor: zoom-in;
   background: var(--uk-chip); border-radius: var(--uk-radius-sm); overflow: hidden; }
 .uk-tienda-grid video { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; display: block; }
@@ -1461,7 +1468,7 @@ a.uk-product-img { display: block; }
 .uk-tienda-pie span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--uk-ink); }
 .uk-tienda-pie b { font-size: 15px; }
 .uk-tienda-texto { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-  aspect-ratio: 4 / 5; padding: 16px; text-align: center; font-weight: 700; color: var(--uk-ink);
+  aspect-ratio: 1; padding: 16px; text-align: center; font-weight: 700; color: var(--uk-ink);
   background: var(--uk-chip); overflow: hidden; }
 .uk-tienda-visor { gap: 12px; align-content: center; }
 /* Con una oferta o novedad abierta: foto y detalle apilados en el celular, uno

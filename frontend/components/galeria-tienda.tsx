@@ -48,6 +48,18 @@ export function GaleriaTienda({ fotos, videos, publicaciones, nombre, comercioId
   const [filtro, setFiltro] = useState<Filtro>(null);
   const [abierta, setAbierta] = useState<number | null>(null);
   const [video, setVideo] = useState<string | null>(null);
+  // La proporción de cada foto (ancho / alto), que sabe el navegador recién al
+  // cargarla: arma filas parejas donde cada una ocupa SU ancho (como Google
+  // Fotos). Antes iban en cuadros 4:5 y una horizontal quedaba con dos franjas
+  // difuminadas arriba y abajo que se veían raras.
+  const [prop, setProp] = useState<Record<string, number>>({});
+  const medir = useCallback((id: string, img: HTMLImageElement) => {
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    // Topes: una panorámica o una tira larguísima rompería la fila; ésas se
+    // recortan apenas en el borde.
+    const r = Math.min(2.2, Math.max(0.55, img.naturalWidth / img.naturalHeight));
+    setProp((p) => (p[id] && Math.abs(p[id] - r) < 0.01 ? p : { ...p, [id]: r }));
+  }, []);
   const seccion = useRef<HTMLElement>(null);
   const fin = useRef<HTMLDivElement>(null);
 
@@ -130,15 +142,21 @@ export function GaleriaTienda({ fotos, videos, publicaciones, nombre, comercioId
       </div>
 
       <ul className="uk-tienda-grid">
-        {visibles.map((it, n) => (
-          <li key={it.id}>
+        {visibles.map((it, n) => {
+          const r = it.url ? (prop[it.id] ?? 1) : 1;
+          return (
+          <li key={it.id} style={{ flexGrow: r, flexBasis: `calc(${r} * var(--fila))` }}>
             <button type="button" onClick={() => setAbierta(n)}
                     aria-label={it.clase === "pub" ? `${etiqueta(it.pub)}: ${it.pub.titulo ?? nombre}` : `Ver la foto ${n + 1}`}>
               {it.url ? (
-                <FotoEntera
-                  src={it.clase === "foto" ? (it.thumb || it.url) : it.url}
-                  alt={it.clase === "pub" ? (it.pub.titulo ?? "") : `${nombre}, foto ${n + 1}`}
-                />
+                <span className="uk-tienda-foto" style={{ aspectRatio: String(r) }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={it.clase === "foto" ? (it.thumb || it.url) : it.url}
+                       alt={it.clase === "pub" ? (it.pub.titulo ?? "") : `${nombre}, foto ${n + 1}`}
+                       loading="lazy" decoding="async"
+                       ref={(img) => { if (img?.complete) medir(it.id, img); }}
+                       onLoad={(e) => medir(it.id, e.currentTarget)} />
+                </span>
               ) : (
                 // Una novedad sin foto: el texto en el lugar de la imagen.
                 <span className="uk-tienda-texto">
@@ -161,10 +179,11 @@ export function GaleriaTienda({ fotos, videos, publicaciones, nombre, comercioId
               </div>
             )}
           </li>
-        ))}
+          );
+        })}
         {/* Los videos al final de la grilla, con su ícono de play. */}
         {quedan === 0 && !filtro && videos.map((v) => (
-          <li key={v.id}>
+          <li key={v.id} style={{ flexGrow: 0.8, flexBasis: "calc(0.8 * var(--fila))" }}>
             <button type="button" className="con-video" onClick={() => setVideo(v.url)} aria-label="Ver el video">
               <video src={v.url} preload="metadata" muted playsInline />
               <span><Ic n="video_play" s={40} /></span>
