@@ -2646,9 +2646,23 @@ function ModalEditar({
                     <div style={{ fontSize: 11.5, color: "var(--txt-3)", marginTop: 3 }}>
                       Lo arma URUKU con lo que vende y dónde está. Se actualiza solo si cambia el rubro o la calle.
                     </div>
+                    {/* Con el nombre armado no había dónde escribir: había que
+                        adivinar que se destildaba la casilla de abajo. */}
+                    {puedeEditar && (
+                      <button type="button"
+                              onClick={() => {
+                                setSinCartel(false); setNombre("");
+                                setTimeout(() => (document.getElementById("adm-nombre") as HTMLInputElement | null)?.focus(), 0);
+                              }}
+                              style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8, padding: "6px 12px",
+                                       borderRadius: 8, border: "1px solid var(--border)", background: "transparent",
+                                       color: "var(--txt-1)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                        <Ic n="editar" s={14} /> Ponerle nombre
+                      </button>
+                    )}
                   </div>
                 ) : (
-                  <input className="adm-input" style={{ marginTop: 4, fontSize: 16, fontWeight: 600 }}
+                  <input id="adm-nombre" className="adm-input" style={{ marginTop: 4, fontSize: 16, fontWeight: 600 }}
                     value={nombre} onChange={(e) => setNombre(e.target.value)}
                     autoFocus={puedeEditar} placeholder="El nombre del cartel" />
                 )}

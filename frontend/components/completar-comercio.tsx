@@ -352,7 +352,22 @@ export function CompletarComercio({ comercio, rubros, lugares, abrirEn, sinWhats
         </div>
         <div style={{ minWidth: 0 }}>
           <div className="eyebrow">Completar comercio</div>
-          <div style={{ fontWeight: 700, fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{comercio.nombre || "Sin nombre"}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{comercio.nombre || "Sin nombre"}</div>
+            {/* El campo vive al final (sección 9): sin esto, «no se puede
+                cambiar el nombre» parecía cierto. */}
+            <button type="button" aria-label="Cambiar el nombre"
+                    onClick={() => {
+                      const el = document.getElementById("cc-nombre") as HTMLInputElement | null;
+                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      el?.focus({ preventScroll: true });
+                      el?.select();
+                    }}
+                    style={{ flexShrink: 0, display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8,
+                             border: "1px solid var(--stroke)", background: "transparent", color: "var(--txt-2)", cursor: "pointer" }}>
+              <Ic n="editar" s={15} />
+            </button>
+          </div>
           <div style={{ fontSize: 12, color: "var(--txt-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{subtitulo}</div>
         </div>
       </div>
