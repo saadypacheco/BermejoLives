@@ -31,9 +31,13 @@ export function FichaGaleria({ portada, fotos, nombre, posicion }: {
     <div className="uk-fgal">
       <div className="uk-fgal-main">
         <button type="button" onClick={() => setZoom(principal)} aria-label="Ampliar foto">
+          {/* Entera adelante y desenfocada atrás: el recorte del panel (`posicion`)
+              sólo encuadra el fondo; la foto no se corta. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={principal} alt={nombre}
+          <img className="fondo" src={principal} alt="" aria-hidden
                style={portada && posicion != null ? { objectPosition: `center ${posicion}%` } : undefined} />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="frente" src={principal} alt={nombre} />
         </button>
       </div>
 
