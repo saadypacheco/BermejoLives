@@ -324,8 +324,8 @@ export function CompletarComercio({ comercio, rubros, lugares, abrirEn, sinWhats
     } finally { setSubiendoPortada(false); }
   }
   function elegirPortada() {
-    // Reemplazarla no tiene vuelta atrás: se confirma si ya hay una.
-    if (comercio.portada_url && !window.confirm("Ya tiene foto de la vidriera. ¿Subir una nueva? La foto actual pasa a la galería.")) return;
+    // El selector se abre YA (Chrome lo bloquea si un confirm tarda); se
+    // pregunta al elegir la foto, antes de subirla.
     portadaInput.current?.click();
   }
 
@@ -528,7 +528,11 @@ export function CompletarComercio({ comercio, rubros, lugares, abrirEn, sinWhats
               <Ic n="foto" s={16} /> {subiendoPortada ? "Subiendo…" : comercio.portada_url ? "Cambiar foto" : "Sacar foto / elegir"}
             </button>
             <input ref={portadaInput} type="file" accept="image/*" capture="environment" hidden
-                   onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void subirPortada(file); }} />
+                   onChange={(e) => {
+                     const file = e.target.files?.[0]; e.target.value = "";
+                     if (file && comercio.portada_url && !window.confirm("Ya tiene foto de la vidriera. ¿Subir esta? La foto actual pasa a la galería.")) return;
+                     if (file) void subirPortada(file);
+                   }} />
           </div>
           {portadaFalla && (
             <div role="alert" style={{ marginTop: 8, color: "var(--pink)", fontSize: 12.5 }}>

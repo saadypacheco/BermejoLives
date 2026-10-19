@@ -44,6 +44,7 @@ export function FotoPrincipal({ url, onSubir, soloLectura = false, textoBoton, a
   const [actual, setActual] = useState<{ base: string | null | undefined; ver: string | null | undefined } | null>(null);
   const [subiendo, setSubiendo] = useState(false);
   const [err, setErr] = useState("");
+  const [avisar, setAvisar] = useState(false);
 
   const mostrar = actual && actual.base === url ? actual.ver : url;
 
@@ -88,12 +89,33 @@ export function FotoPrincipal({ url, onSubir, soloLectura = false, textoBoton, a
           <>
             <input ref={input} type="file" accept="image/*" style={{ display: "none" }}
                    onChange={(e) => elegir(e.target.files?.[0])} />
-            <button type="button" className="btn btn-primary btn-sm" style={{ minHeight: 44 }} disabled={subiendo} onClick={() => {
-                      if (mostrar && confirmarCambio && !window.confirm(confirmarCambio)) return;
-                      input.current?.click();
-                    }}>
-              {subiendo ? "Subiendo…" : textoBoton ?? (mostrar ? "Cambiar la foto principal" : "Subir la foto principal")}
-            </button>
+            {/* El aviso va EN la pantalla y no en un window.confirm: Chrome sólo
+                deja abrir el selector de archivos unos segundos después del toque,
+                y quien leía el confirm con calma tocaba «OK» y no pasaba nada. Acá
+                el botón del aviso es un toque nuevo y abre el selector siempre. */}
+            {avisar ? (
+              <div role="alert" style={{ display: "grid", gap: 8, padding: 10, borderRadius: 10,
+                                          border: "1px solid var(--amber)", background: "rgba(255,176,32,.08)" }}>
+                <span style={{ fontSize: 12.5, lineHeight: 1.45, color: "var(--txt-2)" }}>{confirmarCambio}</span>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button type="button" className="btn btn-primary btn-sm" style={{ minHeight: 44 }}
+                          onClick={() => { setAvisar(false); input.current?.click(); }}>
+                    Elegir la foto nueva
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ minHeight: 44 }}
+                          onClick={() => setAvisar(false)}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" className="btn btn-primary btn-sm" style={{ minHeight: 44 }} disabled={subiendo} onClick={() => {
+                        if (mostrar && confirmarCambio) { setAvisar(true); return; }
+                        input.current?.click();
+                      }}>
+                {subiendo ? "Subiendo…" : textoBoton ?? (mostrar ? "Cambiar la foto principal" : "Subir la foto principal")}
+              </button>
+            )}
           </>
         )}
         {recorte && mostrar && (

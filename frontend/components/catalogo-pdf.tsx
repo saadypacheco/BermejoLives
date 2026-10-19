@@ -40,8 +40,8 @@ export function CatalogoPdf({ url, subir, quitar, onCambio }: {
 
   function elegir() {
     setErr("");
-    // Reemplazarlo borra el archivo anterior y no tiene vuelta atrás.
-    if (hayArchivo && !window.confirm("Ya hay un catálogo subido. ¿Reemplazarlo por el nuevo? El anterior se borra.")) return;
+    // El selector se abre YA: Chrome sólo lo deja abrir unos segundos después del
+    // toque, y un confirm antes se los comía. Se pregunta al elegir el archivo.
     input.current?.click();
   }
 
@@ -103,7 +103,12 @@ export function CatalogoPdf({ url, subir, quitar, onCambio }: {
           </button>
         )}
         <input ref={input} type="file" accept="application/pdf,.pdf" hidden
-               onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void alElegir(f); }} />
+               onChange={(e) => {
+                 const f = e.target.files?.[0]; e.target.value = "";
+                 // Reemplazarlo borra el archivo anterior y no tiene vuelta atrás.
+                 if (f && hayArchivo && !window.confirm("Ya hay un catálogo subido. ¿Reemplazarlo por el nuevo? El anterior se borra.")) return;
+                 if (f) void alElegir(f);
+               }} />
       </div>
 
       {pct !== null && (
