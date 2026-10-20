@@ -25,7 +25,7 @@ export async function login(email: string, password: string): Promise<void> {
   setToken(data.access_token);
 }
 
-async function authFetch(path: string, opts: RequestInit = {}) {
+export async function authFetch(path: string, opts: RequestInit = {}) {
   const res = await fetch(`${API}${path}`, {
     ...opts,
     headers: { ...(opts.headers ?? {}), Authorization: `Bearer ${getToken() ?? ""}` },
@@ -54,7 +54,12 @@ async function authFetch(path: string, opts: RequestInit = {}) {
     const d = await res.json().catch(() => ({} as { detail?: unknown }));
     // `detalleLegible`: en un 422 `detail` es un arreglo, y pasarlo tal cual a
     // `new Error()` deja el mensaje en «[object Object]».
-    throw new Error(detalleLegible(d.detail) ?? `Falló ${path} (HTTP ${res.status})`);
+    // `status` y `detail` van colgados del error: hay pantallas (Recepción › «Es de…»)
+    // que distinguen un 409 de un 400 y leen el `{codigo, mensaje}` del detalle.
+    throw Object.assign(
+      new Error(detalleLegible(d.detail) ?? `Falló ${path} (HTTP ${res.status})`),
+      { status: res.status, detail: d.detail },
+    );
   }
   return res;
 }
