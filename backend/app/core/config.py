@@ -186,6 +186,20 @@ class Settings(BaseSettings):
     # Meta no pasa por acá — cuando exista el número de la marca, ése sí manda.
     wa_solo_lectura: bool = True
 
+    # ── Fotos de números desconocidos y eventos de grupo (docs/grupos-por-comercio.md) ──
+    # La foto que manda alguien que todavía no sabemos de qué comercio es se
+    # guarda acá: disco PRIVADO del backend, NUNCA bajo `fotos_dir` (ése lo sirve
+    # /fotos, público). Se mira sólo por el endpoint autenticado del admin.
+    wa_received_dir: str = "/data/wa_received"
+    wa_received_retention_days: int = 30
+    # E1 sólo GUARDA los eventos de grupo de WAHA; actuar sobre ellos (comunidades,
+    # atar grupos) se enciende en la entrega siguiente con esta llave.
+    wa_events_act: bool = False
+    # Consultar a WAHA `GET /lids/{lid}` para traducir un LID a número. Sólo lectura;
+    # se enciende si la prueba del E0 dice que sirve. Con tope por hora.
+    wa_lid_lookup: bool = False
+    wa_lid_lookup_max_per_hour: int = 30
+
     # ── Vigilar la sesión de WhatsApp ───────────────────────────────────────
     # Estuvo caída tres días sin que nadie lo supiera. Cada pocos minutos se le
     # pregunta a WAHA y, si no está WORKING, queda un ERROR en los registros.

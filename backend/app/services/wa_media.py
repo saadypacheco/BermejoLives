@@ -94,16 +94,28 @@ def descargar_media(url: str | None) -> bytes | None:
         return None
 
 
-def guardar_imagen_publicacion(slug: str, media_url: str | None) -> str | None:
+def guardar_imagen_publicacion(slug: str, media_url: str | None,
+                               media_path: str | None = None) -> str | None:
     """Baja la imagen de WAHA y la deja en el disco propio. Devuelve la URL
     pública, o None si no se pudo (y entonces la publicación va sin imagen).
 
     Se guarda bajo el slug del comercio, igual que las fotos de la ficha, así
     todo lo de un local queda junto y se borra junto.
+
+    `media_path`: la foto ya estaba guardada en el disco PRIVADO (`wa_received`,
+    porque llegó de un número que todavía no se sabía de quién era). Se copia de
+    ahí en vez de pedírsela a WAHA, que ya la borró. Si el archivo no está (se
+    purgó), se intenta con la URL como siempre.
     """
     from app.services.imagenes import guardar_foto_local, procesar_imagen
 
-    data = descargar_media(media_url)
+    data = None
+    if media_path:
+        from app.services import wa_received
+
+        data = wa_received.read(media_path)
+    if not data:
+        data = descargar_media(media_url)
     if not data:
         return None
     try:
