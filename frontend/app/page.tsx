@@ -6,11 +6,9 @@ import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { ContactoUruku } from "@/components/contacto-uruku";
 import { AccesosCiudad } from "@/components/accesos-ciudad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
-import { buscarComercios, getClima, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado, getNovedadesUruku, getVideosPromo } from "@/lib/data";
+import { getClima, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado, getNovedadesUruku, getVideosPromo } from "@/lib/data";
 import { CarruselNovedades } from "@/components/carrusel-novedades";
-import { sinEmoji } from "@/lib/rubros";
-import { WA_URUKU_TEXTO, waUruku } from "@/lib/contacto";
-import { etiquetaHasta, listaNombres, nombreCorto } from "@/lib/turnos-farmacia";
+import { getPromo, tarjetasPromo } from "@/components/tarjetas-promo";
 import { TarjetaTurnoHoy } from "@/components/tarjeta-turno-hoy";
 import { NovedadUrukuCard } from "@/components/novedad-uruku-card";
 import { ciudadActual } from "@/lib/ciudad-server";
@@ -144,14 +142,13 @@ export default async function InicioPage() {
   const conGuia = (ciudad?.slug ?? "bermejo") === "bermejo";
   // El peso argentino, en cualquier ciudad de frontera.
   const esFrontera = ciudad?.es_frontera ?? true;
-  const [feed, novedadesUruku, videos, frontera, clima, cotizaciones, turnosHoy, comerciosCiudad] = await Promise.all([
+  const [feed, novedadesUruku, videos, frontera, clima, cotizaciones, turnosHoy, promo] = await Promise.all([
     getFeed(12, ciudad?.slug), getNovedadesUruku(ciudad?.id, 4), conGuia ? getVideosPromo(6) : Promise.resolve([]),
     conGuia ? getFronteraEstado(ciudad?.id) : Promise.resolve(null), conGuia ? getClima() : Promise.resolve(null), getCotizaciones(),
     // Las farmacias de turno hoy: la tarjeta sólo aparece si la ciudad tiene turnos cargados.
     getFarmaciasDeTurnoAhora(ciudad?.id),
-    // Sin texto, la búsqueda trae primero a los que tienen plan (estrella): de acá
-    // salen los destacados del carrusel de Novedades.
-    buscarComercios({ ciudad: ciudad?.slug }, 120, 0),
+    // Los destacados (comercios con plan) y sus productos, para el carrusel.
+    getPromo(ciudad?.slug),
   ]);
   const nombre = ciudad?.nombre ?? "Bermejo";
   // La foto del hero es de la ciudad; sin foto propia, la de Bermejo sólo en
@@ -168,17 +165,10 @@ export default async function InicioPage() {
   // de URUKU dejan al menos un lugar para ellas: la sección es de los dos.
   const novUruku = novedadesUruku.slice(0, novComercios.length > 0 ? 3 : 4);
   const novComerciosVisibles = novComercios.slice(0, 4 - novUruku.length);
-  // PUBLICIDAD: los comercios con plan pago al día (o de cortesía) que tienen
-  // foto, en orden al azar en cada visita para que todos roten parejo. Van en el
-  // carrusel después de las novedades, marcados «Destacado». Nunca se dice
-  // cuántos son ni se muestran precios.
-  const destacados = comerciosCiudad
-    .filter((c) => c.estrella === true && (c.portada_thumb_url || c.portada_url))
-    .map((c) => ({ c, k: Math.random() }))
-    .sort((a, b) => a.k - b.k)
-    .slice(0, 12)
-    .map(({ c }) => c);
-  const hayNovedades = novUruku.length + novComerciosVisibles.length + destacados.length > 0;
+  // La sección siempre tiene algo en Bermejo (los servicios); en otra ciudad,
+  // si hay novedades, destacados o farmacia de turno.
+  const hayNovedades = conGuia || novUruku.length + novComerciosVisibles.length + promo.destacados.length
+    + promo.productos.length + (turnosHoy ?? []).length > 0;
   const t = tasasDe(cotizaciones);
   const fechas = [frontera?.actualizado_en, t.actualizado_en].filter(Boolean) as string[];
   const ultima = fechas.length ? fechas.sort()[fechas.length - 1] : null;
@@ -370,56 +360,7 @@ export default async function InicioPage() {
                 </div>
               </Link>
             ))}
-            {/* SERVICIOS: la farmacia de turno (cambia cada día) y los baños cerca.
-                Van entre las novedades y la publicidad. */}
-            {(turnosHoy ?? []).length > 0 && (
-              <Link href="/farmacias-de-turno" className="uk-offer sin-foto uk-offer-servicio">
-                <span className="uk-offer-tag">De turno hoy</span>
-                <span className="uk-offer-emoji"><Ic n="turno_farmacia" s={64} peso="fill" /></span>
-                <div className="uk-offer-body">
-                  <h3>{listaNombres((turnosHoy ?? []).map((t) => t.comercios?.nombre).filter((n): n is string => Boolean(n)).map(nombreCorto))}</h3>
-                  <small>Farmacia de turno · {etiquetaHasta((turnosHoy ?? [])[0].fin)}</small>
-                </div>
-              </Link>
-            )}
-            {conGuia && (
-              <Link href="/buscar?rubro=banos&cerca=1" className="uk-offer sin-foto uk-offer-servicio">
-                <span className="uk-offer-tag">Servicio</span>
-                <span className="uk-offer-emoji"><IcRubro slug="banos" s={64} peso="fill" /></span>
-                <div className="uk-offer-body">
-                  <h3>Baños cerca de vos</h3>
-                  <small>Los más cercanos, en el mapa</small>
-                </div>
-              </Link>
-            )}
-            {/* SERVICIO DE URUKU (la empresa, no un comercio): compra por encargo y
-                guardería de compras, con garantía de custodia. Va al WhatsApp público
-                de URUKU con el mensaje armado. Sin precios: se definen después. */}
-            {conGuia && (
-              <a href={waUruku("Hola URUKU, quiero que retiren o hagan mis compras en Bermejo y me las guarden en la guardería")}
-                 target="_blank" rel="noopener" className="uk-offer sin-foto uk-offer-servicio uk-offer-uruku">
-                <span className="uk-offer-tag">Servicio URUKU</span>
-                <span className="uk-offer-emoji"><Ic n="encargo" s={64} peso="fill" /></span>
-                <div className="uk-offer-body">
-                  <h3>Retiramos o hacemos tus compras</h3>
-                  <small>Te las guardamos en la guardería URUKU · custodia garantizada · WhatsApp {WA_URUKU_TEXTO}</small>
-                </div>
-              </a>
-            )}
-            {destacados.map((c) => {
-              const foto = c.portada_thumb_url || c.portada_url;
-              return (
-                <Link key={`d-${c.id}`} href={`/comercios/${c.slug}`} className="uk-offer uk-offer-destacado"
-                      style={{ backgroundImage: `url(${JSON.stringify(foto)})`,
-                               ...(c.portada_pos != null ? { backgroundPosition: `center ${c.portada_pos}%` } : {}) }}>
-                  <span className="uk-offer-tag">Destacado</span>
-                  <div className="uk-offer-body">
-                    <h3>{c.nombre}</h3>
-                    {c.rubro_nombre && <small>{sinEmoji(c.rubro_nombre)}</small>}
-                  </div>
-                </Link>
-              );
-            })}
+            {tarjetasPromo({ promo, turnos: turnosHoy, conGuia })}
           </CarruselNovedades>
         </section>
       )}

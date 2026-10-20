@@ -736,6 +736,22 @@ export async function getVideosRecientes(limit = 8): Promise<VideoRecap[]> {
 // pública (anon) — las tarjetas usan el thumb, la ficha amplía a la grande.
 export type GaleriaFoto = { id: string; url: string; thumb_url: string | null };
 export type GaleriaVideo = { id: string; url: string; duracion_seg: number | null };
+/** Hasta `porComercio` fotos de galería de cada comercio, en UNA consulta (el
+ *  carrusel de destacados de la portada). Orden de la galería. */
+export async function getFotosDeComercios(ids: string[], porComercio = 2): Promise<(GaleriaFoto & { comercio_id: string })[]> {
+  if (!hasSupabase || ids.length === 0) return [];
+  const { data, error } = await supabase.from("comercio_fotos")
+    .select("id, url, thumb_url, comercio_id").in("comercio_id", ids).order("orden").limit(ids.length * 8);
+  if (error) { logSupaError("getFotosDeComercios", error); return []; }
+  const cuenta = new Map<string, number>();
+  return ((data ?? []) as (GaleriaFoto & { comercio_id: string })[]).filter((f) => {
+    const n = cuenta.get(f.comercio_id) ?? 0;
+    if (n >= porComercio) return false;
+    cuenta.set(f.comercio_id, n + 1);
+    return true;
+  });
+}
+
 export async function getGaleriaComercio(comercioId: string): Promise<{ fotos: GaleriaFoto[]; videos: GaleriaVideo[] }> {
   if (!hasSupabase) return { fotos: [], videos: [] };
   const [{ data: fotos }, { data: videos }] = await Promise.all([

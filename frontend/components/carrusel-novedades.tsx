@@ -15,7 +15,21 @@ import { Ic } from "@/components/ic";
 export function CarruselNovedades({ children, cadaMs = 4500 }: { children: React.ReactNode; cadaMs?: number }) {
   const pista = useRef<HTMLDivElement>(null);
   const [quieto, setQuieto] = useState(false);
+  // ¿Hay tarjetas fuera de la vista? Sin eso las flechas no tienen a dónde ir y
+  // parecen rotas (pasaba con 3 o 4 tarjetas en la compu).
+  const [desborda, setDesborda] = useState(false);
   const total = Children.count(children);
+
+  useEffect(() => {
+    const p = pista.current;
+    if (!p) return;
+    const medir = () => setDesborda(p.scrollWidth > p.clientWidth + 4);
+    medir();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(medir) : null;
+    ro?.observe(p);
+    window.addEventListener("resize", medir);
+    return () => { ro?.disconnect(); window.removeEventListener("resize", medir); };
+  }, [total]);
 
   const paso = useCallback(() => {
     const el = pista.current?.firstElementChild as HTMLElement | null;
@@ -54,7 +68,7 @@ export function CarruselNovedades({ children, cadaMs = 4500 }: { children: React
       <div ref={pista} className="uk-carrusel-pista" role="list">
         {Children.map(children, (c) => <div role="listitem" className="uk-carrusel-item">{c}</div>)}
       </div>
-      {total > 1 && (
+      {desborda && (
         <>
           <button type="button" className="uk-carrusel-flecha izq" aria-label="Anterior" onClick={() => mover(-1)}>
             <Ic n="volver" s={20} />

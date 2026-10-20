@@ -6,7 +6,9 @@ import { Ic } from "@/components/ic";
 import { PublicacionesGrid, SolapasPublicaciones } from "@/components/publicaciones-grid";
 import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
-import { getNovedadesUruku, getPublicaciones } from "@/lib/data";
+import { getFarmaciasDeTurnoAhora, getNovedadesUruku, getPublicaciones } from "@/lib/data";
+import { CarruselNovedades } from "@/components/carrusel-novedades";
+import { getPromo, tarjetasPromo } from "@/components/tarjetas-promo";
 import { NovedadUrukuCard } from "@/components/novedad-uruku-card";
 import { RubrosDePublicaciones } from "@/components/rubros-publicaciones";
 import { ciudadActual } from "@/lib/ciudad-server";
@@ -52,10 +54,14 @@ export default async function NovedadesPage({ searchParams }: Props) {
   // Se piden TODAS igual: la fila de rubros sale de acá, y el filtro se aplica
   // después. Con dos consultas la fila mostraría sólo el rubro ya elegido y no
   // habría forma de volver ni de saltar a otro.
-  const [todas, deUruku] = await Promise.all([
+  const conGuia = (ciudad?.slug ?? "bermejo") === "bermejo";
+  const [todas, deUruku, promo, turnos] = await Promise.all([
     getPublicaciones("novedad", 60, ciudad?.slug),
     // Con un rubro elegido se mira lo de los comercios de ese rubro: las de URUKU no tienen rubro.
     rubro ? Promise.resolve([]) : getNovedadesUruku(ciudad?.id, 24),
+    // Lo mismo que pasa el carrusel de la portada: servicios y destacados.
+    rubro ? Promise.resolve(null) : getPromo(ciudad?.slug),
+    rubro ? Promise.resolve(null) : getFarmaciasDeTurnoAhora(ciudad?.id),
   ]);
   const items = rubro ? todas.filter((p) => p.rubro_slug === rubro) : todas;
   const nomRubro = rubro ? (todas.find((p) => p.rubro_slug === rubro)?.rubro_nombre ?? rubro) : null;
@@ -69,6 +75,16 @@ export default async function NovedadesPage({ searchParams }: Props) {
         </div>
         <RubrosDePublicaciones items={todas} ruta="/novedades" activo={rubro} />
         <p className="uk-pub-sub">Lo que cuenta URUKU y lo que cuentan los comercios: mercadería nueva, cambios de horario, lo que está pasando hoy.</p>
+
+        {/* Servicios y comercios destacados (los que tienen plan), en carrusel. */}
+        {promo && (conGuia || promo.destacados.length + promo.productos.length + (turnos ?? []).length > 0) && (
+          <section className="uk-nov-grupo" aria-labelledby="uk-nov-destacados">
+            <h2 id="uk-nov-destacados"><Ic n="destacado" s={20} tono="marca" /> Destacados y servicios</h2>
+            <CarruselNovedades>
+              {tarjetasPromo({ promo, turnos, conGuia })}
+            </CarruselNovedades>
+          </section>
+        )}
 
         {/* Lo de URUKU, arriba: es lo que la marca quiere que se vea primero. */}
         {deUruku.length > 0 && (
