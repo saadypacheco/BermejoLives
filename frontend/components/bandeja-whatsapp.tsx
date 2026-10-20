@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Ic } from "@/components/ic";
-import { agregarNumeroAGrupos, getBandejaWa, probarCloud, reprocesarEntrante,
+import { agregarNumeroAGrupos, atarGrupo, getBandejaWa, probarCloud, reprocesarEntrante,
          type AgregarAGrupos, type BandejaWa, type WaEntrante } from "@/lib/api";
+import { buscarComercioPorNombre, type ComercioBusqueda } from "@/lib/comercio";
+import { assignNumber, getInboxMedia, getUnknown,
+         type Unknown, type UnknownGroup, type UnknownMessage, type UnknownPhone } from "@/lib/reception";
 
 const ETIQUETA: Record<string, { texto: string; color: string }> = {
   publicada: { texto: "Publicada", color: "var(--neon)" },
@@ -354,7 +357,7 @@ function Agrupada({ items, reprocesando, reprocesar }: {
  * Lo publicado y lo ignorado NO se listan solos: son miles de filas que no
  * piden nada. Aparecen cuando se busca un comercio, o a pedido.
  */
-export function BandejaWhatsApp() {
+function Entrantes() {
   const [estado, setEstado] = useState("problemas");
   const [q, setQ] = useState("");
   const [qAplicada, setQAplicada] = useState("");
@@ -499,6 +502,431 @@ export function BandejaWhatsApp() {
       )}
 
       {d && !d.config.solo_lectura && <AgregarANuevosGrupos />}
+    </div>
+  );
+}
+
+/* ───────────────────────── Sin dueño ─────────────────────────
+ *
+ * Fotos y grupos que llegaron y no se supo de quién son (docs/grupos-por-comercio.md
+ * §9.4). Sin esto la foto de un comerciante que escribió desde un número nuevo se
+ * perdía en silencio: acá se ve y, con «Es de…», se le pone dueño y se publica.
+ */
+
+const fechaCorta = (iso: string) =>
+  new Date(iso).toLocaleString("es-BO", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+/** Sigue el estado de la conexión: sin red no se puede asignar nada. */
+function useOnline(): boolean {
+  const [on, setOn] = useState(true);
+  useEffect(() => {
+    const act = () => setOn(navigator.onLine);
+    act();
+    window.addEventListener("online", act);
+    window.addEventListener("offline", act);
+    return () => { window.removeEventListener("online", act); window.removeEventListener("offline", act); };
+  }, []);
+  return on;
+}
+
+/**
+ * Miniatura PRIVADA: se baja con el token del panel y se muestra como `blob:`.
+ * La URL se revoca al desmontar o cuando cambia la foto. Se pide recién cuando
+ * entra en pantalla, para no bajar 60 fotos de una al abrir la pestaña.
+ */
+function Miniatura({ m }: { m: UnknownMessage }) {
+  const caja = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  const [intento, setIntento] = useState(0);
+  const [url, setUrl] = useState("");
+  const [estado, setEstado] = useState<"espera" | "cargando" | "ok" | "purgada" | "error">("espera");
+  const [grande, setGrande] = useState(false);
+
+  useEffect(() => {
+    const el = caja.current;
+    if (!el || typeof IntersectionObserver === "undefined") { setVisible(true); return; }
+    const io = new IntersectionObserver((es) => {
+      if (es.some((e) => e.isIntersecting)) { setVisible(true); io.disconnect(); }
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!visible || !m.has_media) return;
+    let vivo = true;
+    let creada = "";
+    setEstado("cargando");
+    getInboxMedia(m.wa_message_id)
+      .then((b) => {
+        if (!vivo) return;
+        if (!b) { setEstado("purgada"); return; }
+        creada = URL.createObjectURL(b);
+        setUrl(creada);
+        setEstado("ok");
+      })
+      .catch(() => { if (vivo) setEstado("error"); });
+    return () => {
+      vivo = false;
+      if (creada) URL.revokeObjectURL(creada);
+      setUrl("");
+    };
+  }, [visible, intento, m.has_media, m.wa_message_id]);
+
+  useEffect(() => {
+    if (!grande) return;
+    const f = (e: KeyboardEvent) => { if (e.key === "Escape") setGrande(false); };
+    window.addEventListener("keydown", f);
+    return () => window.removeEventListener("keydown", f);
+  }, [grande]);
+
+  const marco: React.CSSProperties = {
+    width: 72, height: 72, borderRadius: 8, flexShrink: 0, display: "flex", flexDirection: "column",
+    alignItems: "center", justifyContent: "center", gap: 2, fontSize: 10.5, textAlign: "center",
+    color: "var(--txt-3)", background: "rgba(127,127,127,.12)",
+  };
+
+  return (
+    <div ref={caja} style={{ flexShrink: 0 }}>
+      {estado === "ok" ? (
+        <>
+          <button type="button" onClick={() => setGrande(true)} aria-label="Ver la foto en grande"
+                  style={{ padding: 0, border: 0, background: "none", cursor: "zoom-in", display: "block" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={url} alt="Foto recibida" width={72} height={72}
+                 style={{ borderRadius: 8, objectFit: "cover", display: "block" }} />
+          </button>
+          {grande && (
+            <div role="dialog" aria-modal="true" aria-label="Foto recibida" onClick={() => setGrande(false)}
+                 style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,.85)",
+                          display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+              <button type="button" className="btn btn-sm btn-ghost" onClick={() => setGrande(false)}
+                      style={{ position: "absolute", top: 12, right: 12 }}>
+                <Ic n="cerrar" s={14} /> Cerrar
+              </button>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="Foto recibida" style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8 }} />
+            </div>
+          )}
+        </>
+      ) : !m.has_media ? (
+        <div style={marco}><Ic n="foto" s={16} />sin foto</div>
+      ) : estado === "purgada" ? (
+        <div style={marco}><Ic n="foto" s={16} />ya se borró</div>
+      ) : estado === "error" ? (
+        <button type="button" onClick={() => setIntento((n) => n + 1)} style={{ ...marco, border: 0, cursor: "pointer" }}>
+          <Ic n="aviso" s={16} />no cargó · reintentar
+        </button>
+      ) : (
+        <div style={marco} aria-busy="true"><Ic n="foto" s={16} />cargando</div>
+      )}
+    </div>
+  );
+}
+
+/** El buscador de comercio + confirmación de «Es de…». */
+function AsignarPanel({ it, offline, onCancelar, onHecho }: {
+  it: UnknownPhone | UnknownGroup; offline: boolean; onCancelar: () => void; onHecho: (texto: string) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [res, setRes] = useState<ComercioBusqueda[] | null>(null);
+  const [buscando, setBuscando] = useState(false);
+  const [errBusq, setErrBusq] = useState("");
+  const [elegido, setElegido] = useState<ComercioBusqueda | null>(null);
+  const [label, setLabel] = useState("Encargado/a");
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const t = q.trim();
+    if (t.length < 2) { setRes(null); setErrBusq(""); return; }
+    let vivo = true;
+    const h = setTimeout(() => {
+      setBuscando(true);
+      buscarComercioPorNombre(t)
+        .then((r) => { if (vivo) { setRes(r); setErrBusq(""); } })
+        .catch(() => { if (vivo) setErrBusq("No se pudo buscar. Revisá la conexión."); })
+        .finally(() => { if (vivo) setBuscando(false); });
+    }, 300);
+    return () => { vivo = false; clearTimeout(h); };
+  }, [q]);
+
+  const quien = it.kind === "phone" ? it.phone_masked : `el grupo ${it.group_name || it.group_jid.split("@")[0]}`;
+
+  const confirmar = async () => {
+    if (!elegido) return;
+    setEnviando(true); setError("");
+    try {
+      if (it.kind === "phone") {
+        const r = await assignNumber(it.phone, elegido.id, label.trim());
+        onHecho(
+          `Listo: ${it.phone_masked} es de ${elegido.nombre}. ` +
+          (r.reprocessed > 0
+            ? `Se reprocesaron ${r.reprocessed} ${r.reprocessed === 1 ? "mensaje" : "mensajes"} ` +
+              `(${r.published} publicados, ${r.ignored} ignorados).`
+            : "No había mensajes para reprocesar."));
+      } else {
+        await atarGrupo(elegido.id, it.group_jid, it.group_name ?? undefined);
+        onHecho(`Listo: el grupo quedó atado a ${elegido.nombre}. Lo que mande de ahora en más entra solo.`);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo asignar");
+    } finally { setEnviando(false); }
+  };
+
+  return (
+    <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: "rgba(127,127,127,.08)" }}>
+      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
+        ¿De qué comercio es {quien}?
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <input className="input" style={{ flex: 1, minWidth: 200 }} autoFocus
+               placeholder="Buscá el comercio por nombre" aria-label="Buscar comercio"
+               value={q} onChange={(e) => { setQ(e.target.value); setElegido(null); setError(""); }} />
+        <button type="button" className="btn btn-sm btn-ghost" onClick={onCancelar} disabled={enviando}>
+          <Ic n="cerrar" s={13} /> Cancelar
+        </button>
+      </div>
+
+      {buscando && <div style={{ fontSize: 12.5, color: "var(--txt-3)", marginTop: 6 }}>Buscando…</div>}
+      {errBusq && <div style={{ fontSize: 12.5, color: "var(--pink)", marginTop: 6 }}><Ic n="aviso" s={13} /> {errBusq}</div>}
+      {!buscando && !errBusq && res && res.length === 0 && (
+        <div style={{ fontSize: 12.5, color: "var(--txt-3)", marginTop: 6 }}>No hay comercios con ese nombre.</div>
+      )}
+
+      {!elegido && res && res.length > 0 && (
+        <ul style={{ listStyle: "none", margin: "8px 0 0", padding: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+          {res.map((c) => (
+            <li key={c.id}>
+              <button type="button" className="btn btn-ghost" onClick={() => { setElegido(c); setError(""); }}
+                      style={{ width: "100%", justifyContent: "flex-start", textAlign: "left", minHeight: 44 }}>
+                <b>{c.nombre}</b>
+                {c.direccion && <span style={{ color: "var(--txt-3)", fontSize: 12 }}> · {c.direccion}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {elegido && (
+        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: 13 }}>
+            <Ic n="comercios" s={14} />{" "}
+            {it.kind === "phone"
+              ? <>Vas a dejar <b>{it.phone_masked}</b> como número de <b>{elegido.nombre}</b> y se van a publicar sus fotos.</>
+              : <>Vas a atar este grupo a <b>{elegido.nombre}</b>.</>}
+          </div>
+          {it.kind === "phone" && (
+            <label style={{ fontSize: 12.5, color: "var(--txt-3)", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              Quién es
+              <input className="input" style={{ width: 200 }} value={label} maxLength={60}
+                     onChange={(e) => setLabel(e.target.value)} />
+            </label>
+          )}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" className="btn btn-primary" style={{ minHeight: 44 }}
+                    disabled={enviando || offline} onClick={confirmar}>
+              {enviando ? "Guardando…" : <><Ic n="listo" s={15} /> Confirmar</>}
+            </button>
+            <button type="button" className="btn btn-ghost" style={{ minHeight: 44 }}
+                    disabled={enviando} onClick={() => { setElegido(null); setError(""); }}>
+              Elegir otro
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div role="alert" style={{ marginTop: 8, fontSize: 13, color: "var(--pink)" }}>
+          <Ic n="aviso" s={14} /> {error}
+        </div>
+      )}
+      {offline && <div style={{ marginTop: 8, fontSize: 12.5, color: "var(--amber)" }}>Sin conexión: no se puede confirmar ahora.</div>}
+    </div>
+  );
+}
+
+const MAX_MINIATURAS = 4;
+
+function FilaSinDueno({ it, offline, abierta, onAbrir, onCerrar, onHecho }: {
+  it: Unknown; offline: boolean; abierta: boolean;
+  onAbrir: () => void; onCerrar: () => void; onHecho: (texto: string) => void;
+}) {
+  // Entradas a la comunidad (E2): se muestran, pero se resuelven con su propio flujo.
+  if (it.kind === "community_join") {
+    return (
+      <div className="panel-card glass" style={{ padding: 12, fontSize: 13 }}>
+        <b>Entró a la comunidad de comercios</b>
+        <span style={{ color: "var(--txt-3)", fontSize: 12.5 }}>
+          {" · "}{it.phone_masked ?? "número oculto"} · {fechaCorta(it.at)}
+        </span>
+        {it.candidates[0] && (
+          <div style={{ fontSize: 12.5, color: "var(--txt-2)", marginTop: 3 }}>
+            Probable: {it.candidates[0].nombre} ({it.candidates[0].why})
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const fotos = it.messages.filter((m) => m.has_media);
+  const textos = it.messages.filter((m) => m.body).slice(0, 2);
+  const titulo = it.kind === "phone"
+    ? <><Ic n="telefono" s={14} /> <b>{it.phone_masked}</b></>
+    : <><Ic n="gente" s={14} /> <b>Grupo sin atar</b> <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--txt-3)" }}>
+        {it.group_name || it.group_jid}</span></>;
+
+  return (
+    <div className="panel-card glass" style={{ padding: 12 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+        {titulo}
+        <span style={{ color: "var(--txt-3)", fontSize: 12.5 }}>
+          · {it.count} {it.count === 1 ? "mensaje" : "mensajes"} · último {fechaCorta(it.at)}
+        </span>
+        {!abierta && (
+          <button type="button" className="btn btn-sm btn-primary" style={{ marginLeft: "auto", minHeight: 40 }}
+                  disabled={offline} onClick={onAbrir}>
+            Es de…
+          </button>
+        )}
+      </div>
+
+      {it.messages.length > 0 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+          {it.messages.slice(0, MAX_MINIATURAS).map((m) => <Miniatura key={m.wa_message_id} m={m} />)}
+          {it.messages.length > MAX_MINIATURAS && (
+            <span style={{ alignSelf: "center", fontSize: 12, color: "var(--txt-3)" }}>
+              +{it.messages.length - MAX_MINIATURAS} más
+            </span>
+          )}
+        </div>
+      )}
+      {fotos.length === 0 && it.messages.length > 0 && (
+        <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 6 }}>Sin fotos guardadas.</div>
+      )}
+      {textos.map((m) => (
+        <div key={m.wa_message_id} style={{ fontSize: 12.5, color: "var(--txt-2)", marginTop: 4, maxHeight: 40, overflow: "hidden" }}>
+          «{m.body}»
+        </div>
+      ))}
+
+      {abierta && <AsignarPanel it={it} offline={offline} onCancelar={onCerrar} onHecho={onHecho} />}
+    </div>
+  );
+}
+
+function SinDueno({ items, cargando, err, dias, setDias, recargar, offline }: {
+  items: Unknown[] | null; cargando: boolean; err: string; dias: number;
+  setDias: (n: number) => void; recargar: () => void; offline: boolean;
+}) {
+  const [abierta, setAbierta] = useState<string | null>(null);
+  const [aviso, setAviso] = useState("");
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="panel-card glass" style={{ padding: "12px 16px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 220, fontSize: 12.5, color: "var(--txt-3)" }}>
+          Fotos y grupos que llegaron y no se sabe de quién son. Con <b>Es de…</b> se les pone
+          dueño y lo que estaba guardado se publica.
+        </div>
+        <label style={{ fontSize: 12.5, color: "var(--txt-3)", display: "flex", gap: 6, alignItems: "center" }}>
+          últimos
+          <select className="input" value={dias} onChange={(e) => setDias(Number(e.target.value))} style={{ width: 100 }}>
+            <option value={7}>7 días</option>
+            <option value={14}>14 días</option>
+            <option value={30}>30 días</option>
+          </select>
+        </label>
+        <button type="button" className="btn btn-sm btn-ghost" onClick={recargar} disabled={cargando} aria-label="Actualizar">
+          {cargando ? "…" : <Ic n="actualizar" s={14} />}
+        </button>
+      </div>
+
+      {offline && (
+        <div className="panel-card glass" role="status" style={{ padding: 12, fontSize: 13, color: "var(--amber)" }}>
+          <Ic n="aviso" s={15} /> Sin conexión. Podés mirar lo que ya cargó, pero no asignar hasta que vuelva.
+        </div>
+      )}
+
+      {aviso && (
+        <div className="panel-card glass" role="status" style={{ padding: 12, fontSize: 13, color: "var(--neon)",
+                                                                  display: "flex", gap: 8, alignItems: "center" }}>
+          <Ic n="listo" s={16} /> <span style={{ flex: 1 }}>{aviso}</span>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setAviso("")} aria-label="Cerrar aviso">
+            <Ic n="cerrar" s={13} />
+          </button>
+        </div>
+      )}
+
+      {err && (
+        <div className="panel-card glass" role="alert" style={{ padding: 14, color: "var(--pink)", fontSize: 13,
+                                                                  display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <Ic n="aviso" s={15} /> <span style={{ flex: 1 }}>{err}</span>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={recargar}>Reintentar</button>
+        </div>
+      )}
+
+      {cargando && !items && (
+        <div className="panel-card glass" aria-busy="true" style={{ padding: 24, textAlign: "center", color: "var(--txt-3)" }}>
+          Cargando lo que está sin dueño…
+        </div>
+      )}
+
+      {items && items.length === 0 && !err && (
+        <div className="panel-card glass" style={{ padding: 24, textAlign: "center", color: "var(--txt-3)" }}>
+          <Ic n="listo" s={18} /> No hay nada sin dueño en los últimos {dias} días.
+        </div>
+      )}
+
+      {(items ?? []).map((it) => (
+        <FilaSinDueno key={it.key} it={it} offline={offline} abierta={abierta === it.key}
+                      onAbrir={() => setAbierta(it.key)} onCerrar={() => setAbierta(null)}
+                      onHecho={(t) => { setAviso(t); setAbierta(null); recargar(); }} />
+      ))}
+    </div>
+  );
+}
+
+/** Recepción: lo que llegó (Entrantes) y lo que no tiene dueño (Sin dueño). */
+export function BandejaWhatsApp() {
+  const [pestana, setPestana] = useState<"entrantes" | "sin_dueno">("entrantes");
+  const [dias, setDias] = useState(30);
+  const [items, setItems] = useState<Unknown[] | null>(null);
+  const [err, setErr] = useState("");
+  const [cargando, setCargando] = useState(true);
+  const offline = !useOnline();
+
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    try { setItems(await getUnknown(dias)); setErr(""); }
+    catch (e) { setErr(e instanceof Error ? e.message : "No se pudo cargar lo que está sin dueño"); }
+    finally { setCargando(false); }
+  }, [dias]);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const n = items?.length ?? 0;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div role="tablist" aria-label="Recepción" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button type="button" role="tab" aria-selected={pestana === "entrantes"}
+                className={`btn btn-sm ${pestana === "entrantes" ? "btn-primary" : "btn-ghost"}`}
+                onClick={() => setPestana("entrantes")}>
+          Entrantes
+        </button>
+        <button type="button" role="tab" aria-selected={pestana === "sin_dueno"}
+                className={`btn btn-sm ${pestana === "sin_dueno" ? "btn-primary" : "btn-ghost"}`}
+                onClick={() => setPestana("sin_dueno")}>
+          Sin dueño{n > 0 ? ` (${n})` : ""}
+        </button>
+      </div>
+
+      {pestana === "entrantes"
+        ? <Entrantes />
+        : <SinDueno items={items} cargando={cargando} err={err} dias={dias} setDias={setDias}
+                    recargar={cargar} offline={offline} />}
     </div>
   );
 }
