@@ -9,6 +9,7 @@ import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import { buscarComercios, getClima, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado, getNovedadesUruku, getVideosPromo } from "@/lib/data";
 import { CarruselNovedades } from "@/components/carrusel-novedades";
 import { sinEmoji } from "@/lib/rubros";
+import { WA_URUKU_TEXTO, waUruku } from "@/lib/contacto";
 import { etiquetaHasta, listaNombres, nombreCorto } from "@/lib/turnos-farmacia";
 import { TarjetaTurnoHoy } from "@/components/tarjeta-turno-hoy";
 import { NovedadUrukuCard } from "@/components/novedad-uruku-card";
@@ -390,6 +391,20 @@ export default async function InicioPage() {
                   <small>Los más cercanos, en el mapa</small>
                 </div>
               </Link>
+            )}
+            {/* SERVICIO DE URUKU (la empresa, no un comercio): compra por encargo y
+                guardería de compras, con garantía de custodia. Va al WhatsApp público
+                de URUKU con el mensaje armado. Sin precios: se definen después. */}
+            {conGuia && (
+              <a href={waUruku("Hola URUKU, quiero hacer un encargo de compra en Bermejo")}
+                 target="_blank" rel="noopener" className="uk-offer sin-foto uk-offer-servicio uk-offer-uruku">
+                <span className="uk-offer-tag">Servicio URUKU</span>
+                <span className="uk-offer-emoji"><Ic n="encargo" s={64} peso="fill" /></span>
+                <div className="uk-offer-body">
+                  <h3>Te compramos y guardamos tus compras</h3>
+                  <small>Pedí desde Argentina · custodia con garantía URUKU · WhatsApp {WA_URUKU_TEXTO}</small>
+                </div>
+              </a>
             )}
             {destacados.map((c) => {
               const foto = c.portada_thumb_url || c.portada_url;
