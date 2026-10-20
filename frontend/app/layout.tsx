@@ -10,7 +10,7 @@ import { PreguntaContesto } from "@/components/pregunta-contesto";
 import { ContadorVisitas } from "@/components/contador-visitas";
 import { Suspense } from "react";
 import { MARCA, COLOR } from "@/lib/marca";
-import { Poppins } from "next/font/google";
+import localFont from "next/font/local";
 
 /** La tipografía de la marca (manual de identidad · Tipografía).
  *
@@ -22,9 +22,17 @@ import { Poppins } from "next/font/google";
  *  fuente del sistema. O sea que URUKU se veía con Segoe UI en Windows,
  *  Roboto en Android y SF en iPhone —tres marcas distintas— y encima pagaba
  *  la descarga de una fuente que nadie veía. */
-const poppins = Poppins({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+const poppins = localFont({
+  // Los archivos viven en el repo (app/fonts, licencia OFL) y no se bajan de
+  // Google al compilar: un corte de red del VPS hacia fonts.googleapis.com
+  // tumbaba el deploy entero (20/10/2026). Subconjunto latin: tiene á, ñ, ¿, ¡.
+  src: [
+    { path: "./fonts/poppins-latin-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/poppins-latin-500.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/poppins-latin-600.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/poppins-latin-700.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/poppins-latin-800.woff2", weight: "800", style: "normal" },
+  ],
   display: "swap",
   variable: "--uk-font",
 });
