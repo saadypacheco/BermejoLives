@@ -20,8 +20,9 @@ import re
 import structlog
 
 from app.core.config import settings
+from app.core.precio import extraer_precio, parece_oferta
 from app.db.repository import Repo, get_repo
-from app.services import clave_filtrada, difusion, planes
+from app.services import clave_filtrada, difusion, planes, wa_identity
 from app.models.whatsapp import WahaEvent, WahaMessagePayload
 
 logger = structlog.get_logger()
@@ -138,6 +139,11 @@ def _identificar_comercio(repo: Repo, payload) -> tuple[dict | None, str, str | 
         return conocido, "numero", None
 
     codigo = extraer_codigo(payload.body)
+    if codigo and settings.es_numero_propio(payload.phone):
+        # Doble candado del bug P1 (la guarda principal está en handle_message):
+        # un número de URUKU nunca se autoriza para un comercio.
+        logger.warning("ingest.codigo_de_numero_propio_ignorado")
+        return None, "desconocido", codigo
     if codigo:
         por_codigo = repo.get_comercio_por_codigo(codigo)
         if por_codigo:
@@ -430,7 +436,34 @@ def _atender_clave_filtrada(payload, event, repo: Repo, filtrada: dict) -> dict:
     return {"captured": True, "publicada": False, "clave_anulada": True, "motivo": clave_filtrada.MOTIVO}
 
 
-def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
+def _guardar_foto_recibida(payload, media_path: str | None) -> str | None:
+    """La foto de un mensaje que NO se pudo atribuir, al disco privado (P2).
+
+    Antes se perdía: sólo se copiaba si el mensaje terminaba publicando, y WAHA
+    la borra de su volumen. Si ya estaba guardada (reproceso) no se baja de nuevo.
+    Nunca lanza; sin foto devuelve None."""
+    if media_path:
+        return media_path
+    if not (payload.type == "image" or payload.has_media):
+        return None
+    from app.services import wa_received
+
+    return wa_received.save(payload)
+
+
+def _marcar_sin_comercio(repo: Repo, payload, motivo: str, media_path: str | None) -> None:
+    """`sin_comercio` + la foto a salvo en el disco privado, para el «Es de…»."""
+    guardada = _guardar_foto_recibida(payload, media_path)
+    repo.marcar_wa_inbox(payload.id, "sin_comercio", motivo)
+    if guardada and guardada != media_path:
+        repo.set_wa_inbox_media(payload.id, guardada)
+
+
+def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str | None = None) -> dict:
+    """Procesa un evento de mensaje de WAHA (o de Meta, ya traducido).
+
+    `media_path`: sólo lo pasa el reproceso («Es de…»): la foto ya está en el disco
+    privado de `wa_received` y es de ahí de donde se copia al publicar."""
     repo = repo or get_repo()
     event = WahaEvent.model_validate(event_dict)
 
@@ -496,6 +529,11 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
             logger.info("ingest.duplicado", wa_message_id=payload.id)
             return {"captured": True, "duplicate": True}
 
+    # 1.a) Si el remitente llegó como LID y WAHA trajo su número al lado, se guarda
+    #      el par: es lo que después deja saber quién es un LID sin preguntar.
+    #      Nunca lanza.
+    wa_identity.learn_from_message(repo, payload)
+
     # 1.b) En un grupo, los mensajes de los NUESTROS no son ofertas.
     #      El operativo ya está cubierto por fromMe (es el número vinculado a
     #      WAHA), pero los respaldos son otros teléfonos y entran como
@@ -510,7 +548,9 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     if settings.es_numero_explorador(payload.phone):
         return _publicar_del_explorador(payload, event, repo)
 
-    if payload.es_grupo and settings.es_numero_propio(payload.phone):
+    propio = wa_identity.sender_is_own(repo, payload)
+
+    if payload.es_grupo and propio:
         # El grupo lo crea el Anfitrión a mano desde la tablet, y lo natural es
         # que sea él quien mande el URUKU-XXXX para atarlo. Como su número es
         # propio, sin esto el código se descartaba antes de mirarlo y el grupo
@@ -528,6 +568,23 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
         repo.marcar_wa_inbox(payload.id, "ignorada", motivo)
         return {"captured": True, "publicada": False, "motivo": motivo}
 
+    if not payload.es_grupo and propio:
+        # EL BUG DEL NÚMERO PROPIO (P1). Un número de URUKU que escribía 1-a-1
+        # con un URUKU-XXXX válido (el Anfitrión probando, un respaldo, alguien
+        # del equipo mostrándole el sistema a un comerciante) llegaba a
+        # `_identificar_comercio`, que lo AUTORIZABA para ese comercio: desde ahí
+        # cada mensaje de ese teléfono —que habla con cien locales— se publicaba
+        # a nombre de ése. La guarda de propios sólo miraba grupos.
+        #
+        # Un número de URUKU no identifica ni publica por un chat directo, con
+        # código o sin él. (El explorador es la excepción y ya salió arriba.)
+        from app.core.codigo import extraer_codigo
+
+        logger.info("ingest.1a1_numero_propio", con_codigo=bool(extraer_codigo(payload.body)))
+        motivo = "1-a-1 de un número de URUKU: no identifica ni publica"
+        repo.marcar_wa_inbox(payload.id, "ignorada", motivo)
+        return {"captured": True, "publicada": False, "motivo": motivo}
+
     # 2) Identificar al comercio.
     #    En un GRUPO manda el grupo: está atado a un comercio y no cambia aunque
     #    el comerciante cambie de celular. En un chat 1-a-1 manda el número
@@ -541,7 +598,7 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
             # alguien mande el código en ese grupo, o lo ate desde el admin, se
             # sabe qué llegó antes. Lo que NO se hace es inventar un comercio.
             motivo = "el grupo no está asociado a ningún comercio"
-            repo.marcar_wa_inbox(payload.id, "sin_comercio", motivo)
+            _marcar_sin_comercio(repo, payload, motivo, media_path)
             return {"captured": True, "publicada": False, "motivo": motivo,
                     "grupo": payload.grupo_jid}
     else:
@@ -556,7 +613,7 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
             else:
                 motivo = "número desconocido y sin el código del local: no se creó ningún comercio"
             logger.info("ingest.sin_comercio_1a1", phone=payload.phone, con_codigo=bool(codigo_recibido))
-            repo.marcar_wa_inbox(payload.id, "sin_comercio", motivo)
+            _marcar_sin_comercio(repo, payload, motivo, media_path)
             return {"captured": True, "publicada": False, "motivo": motivo}
     # Sólo para logs y respuesta: un comercio identificado por código puede venir
     # de una fila parcial, y una línea de log no puede tumbar la ingesta.
@@ -595,6 +652,24 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     # y el código se le saca al guardar.
     if not (payload.type == "image" or payload.has_media) and not _sin_codigo(payload.body):
         motivo = "sólo el código: identifica, no publica"
+        repo.marcar_wa_inbox(payload.id, "ignorada", motivo, comercio.get("id"))
+        return {"captured": True, "comercio": slug, "publicada": False, "motivo": motivo,
+                "identidad_origen": identidad_origen}
+
+    # 2.d) La charla 1-a-1 no es una publicación (P3).
+    #
+    # El número de un comercio que le escribe al Registrador «hola, ¿cuánto sale
+    # el plan?» creaba una novedad PENDIENTE con ese texto, y el moderador la
+    # tenía que descartar. El Registrador no contesta: lo que se manda por acá es
+    # para publicar. Sin foto, sin precio (u oferta), sin TikTok y sin ubicación
+    # no hay nada que publicar. En un grupo no aplica: ahí el texto suelto sí
+    # puede ser una novedad del comerciante.
+    if (not payload.es_grupo
+            and not (payload.type == "image" or payload.has_media)
+            and not parece_oferta(payload.body)
+            and not _extract_tiktok(payload.body)):
+        motivo = "charla 1-a-1: el Registrador no contesta"
+        logger.info("ingest.charla_1a1", comercio=slug)
         repo.marcar_wa_inbox(payload.id, "ignorada", motivo, comercio.get("id"))
         return {"captured": True, "comercio": slug, "publicada": False, "motivo": motivo,
                 "identidad_origen": identidad_origen}
@@ -652,8 +727,6 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     # oferta que nadie abre, y el comerciante casi nunca lo manda en un campo:
     # lo manda en la frase. Si no hay uno claro, queda vacío — inventarlo es
     # peor que no tenerlo.
-    from app.core.precio import extraer_precio
-
     precio_detectado = extraer_precio(payload.body)
 
     # La imagen se baja a disco propio ACÁ, no se referencia la de WAHA: esa URL
@@ -663,7 +736,7 @@ def handle_message(event_dict: dict, repo: Repo | None = None) -> dict:
     if payload.type == "image" or payload.has_media:
         from app.services.wa_media import guardar_imagen_publicacion
 
-        imagen_url = guardar_imagen_publicacion(slug, payload.media_url)
+        imagen_url = guardar_imagen_publicacion(slug, payload.media_url, media_path)
 
     row = {
         "comercio_id": comercio["id"],

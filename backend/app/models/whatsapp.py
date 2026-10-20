@@ -68,6 +68,12 @@ class WahaMessagePayload(BaseModel):
         return key.get(campo) or None
 
     @property
+    def remitente_alt(self) -> str | None:
+        """El número que WAHA trae al lado cuando el remitente llega como LID
+        (`participantAlt` en un grupo, `remoteJidAlt` en un chat 1-a-1)."""
+        return self._alternativo("participantAlt" if self.es_grupo else "remoteJidAlt")
+
+    @property
     def remitente_jid(self) -> str | None:
         """El JID de quien escribió dentro del grupo.
 

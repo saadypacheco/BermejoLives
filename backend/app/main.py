@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
-from app.api import asistente, auth, calles, campo, comercio, contenido, health, moderacion, observabilidad, usuario, webhook
+from app.api import asistente, auth, calles, campo, comercio, contenido, health, moderacion, observabilidad, reception, usuario, webhook
 from app.core.config import settings
 from app.core.ip import ip_cliente
 from app.core.limite_cuerpo import LimiteCuerpoMiddleware
@@ -153,6 +153,25 @@ async def _wa_sesion_loop():
             logger.warning("wa_sesion_loop.error", error=str(exc))
 
 
+async def _wa_received_loop():
+    """Retención de las fotos de desconocidos: una vez al día borra el ARCHIVO de
+    las que pasaron `WA_RECEIVED_RETENTION_DAYS` y marca `media_purged_at`. La
+    fila de la bandeja queda.
+
+    Espera antes de la primera vuelta: el arranque no tiene que competir con la
+    limpieza, y no hay apuro (30 días de margen)."""
+    from app.services import wa_received
+
+    await asyncio.sleep(300)
+    while True:
+        try:
+            repo = get_repo()
+            await run_in_threadpool(wa_received.purge_expired, repo)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("wa_received_loop.error", error=str(exc))
+        await asyncio.sleep(86400)  # 1 día
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("api.startup", service="bermejo", environment=settings.environment)
@@ -171,6 +190,7 @@ async def lifespan(app: FastAPI):
         tareas.append(asyncio.create_task(_revision_ia_loop()))
     if settings.wa_sesion_vigilar:
         tareas.append(asyncio.create_task(_wa_sesion_loop()))
+    tareas.append(asyncio.create_task(_wa_received_loop()))
     yield
     for t in tareas:
         t.cancel()
@@ -356,6 +376,7 @@ app.include_router(campo.router, tags=["campo"])
 app.include_router(calles.router, tags=["calles"])
 app.include_router(webhook.router, prefix="/ingest", tags=["ingesta"])
 app.include_router(moderacion.router, tags=["moderacion"])
+app.include_router(reception.router, tags=["recepcion"])
 app.include_router(usuario.router, tags=["usuario"])
 app.include_router(observabilidad.router, tags=["observabilidad"])
 app.include_router(contenido.router, tags=["contenido"])

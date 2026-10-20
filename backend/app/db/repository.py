@@ -42,6 +42,11 @@ def _normalizar_rubro(texto: str) -> str:
     return " ".join(palabras)
 
 
+#: `created_by` de un número que se autorizó solo, al mandar el código del local
+#: (mismo valor que `ingest.NUMERO_POR_CODIGO`; acá para no importar el servicio).
+NUMERO_AUTORIZADO_POR_CODIGO = "ingest-codigo"
+
+
 class Repo(Protocol):
     def get_comercio_by_jid(self, wa_jid: str) -> dict | None: ...
     def actualizar_ubicacion_comercio(self, comercio_id: str, lat: float, lng: float, direccion: str | None) -> None: ...
@@ -82,6 +87,19 @@ class Repo(Protocol):
     def ultimo_wa_inbox_por_via(self) -> dict[str, str | None]: ...
     def wa_inbox_sin_procesar(self, wa_message_id: str) -> bool: ...
     def get_wa_inbox(self, wa_message_id: str) -> dict | None: ...
+    def set_wa_inbox_media(self, wa_message_id: str, media_path: str) -> None: ...
+    def list_wa_inbox_sin_dueno(self, dias: int = 30, phone: str | None = None,
+                                con_raw: bool = False) -> list[dict]: ...
+    def liberar_wa_inbox(self, wa_message_id: str, by: str) -> None: ...
+    def list_wa_inbox_media_vigente(self, corte_iso: str, limite: int = 500) -> list[dict]: ...
+    def marcar_wa_inbox_media_purgada(self, wa_message_id: str) -> None: ...
+    def insert_wa_group_event(self, row: dict) -> bool: ...
+    def upsert_wa_lid(self, lid: str, phone: str, source: str) -> None: ...
+    def get_wa_lid(self, lid: str) -> str | None: ...
+    def authorize_phone_if_free(self, comercio_id: str, phone: str, label: str | None, by: str) -> str: ...
+    def list_numeros_propios_autorizados(self, propios: list[str]) -> list[dict]: ...
+    def desactivar_numero_comercio(self, numero_id: str) -> None: ...
+    def list_wa_inbox_publicadas_de(self, numeros: list[str]) -> list[dict]: ...
     def marcar_difusion(self, fila_id: str, estado: str, motivo: str | None,
                         url: str | None = None) -> None: ...
     def list_difusion(self, estado: str | None, limite: int) -> list[dict]: ...
@@ -631,6 +649,124 @@ class SupabaseRepo:
         res = (self._db.table("wa_inbox").select("*")
                .eq("wa_message_id", wa_message_id).limit(1).execute())
         return res.data[0] if res.data else None
+
+    # ---- fotos de desconocidos, eventos de grupo y mapa LID (0159) ----
+    def set_wa_inbox_media(self, wa_message_id: str, media_path: str) -> None:
+        """Anota dónde quedó la foto en el disco PRIVADO. Nunca lanza: la foto ya
+        está guardada y el mensaje ya se marcó; perder la anotación no cambia eso."""
+        try:
+            (self._db.table("wa_inbox").update({"media_path": media_path})
+             .eq("wa_message_id", wa_message_id).execute())
+        except Exception:  # noqa: BLE001
+            logger.warning("set_wa_inbox_media.fallo", wa_message_id=wa_message_id, exc_info=True)
+
+    def list_wa_inbox_sin_dueno(self, dias: int = 30, phone: str | None = None,
+                                con_raw: bool = False) -> list[dict]:
+        """Lo que entró y todavía no se sabe de quién es (`sin_comercio`), de los
+        últimos `dias`, lo más nuevo primero. `phone` filtra por remitente."""
+        from datetime import datetime, timedelta, timezone
+
+        desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+        cols = ("wa_message_id, wa_jid, phone, tipo, body, media_path, media_purged_at, via, created_at"
+                + (", raw" if con_raw else ""))
+        q = (self._db.table("wa_inbox").select(cols)
+             .eq("resultado", "sin_comercio").gte("created_at", desde)
+             .order("created_at", desc=True).limit(2000))
+        if phone:
+            q = q.eq("phone", phone)
+        return q.execute().data or []
+
+    def liberar_wa_inbox(self, wa_message_id: str, by: str) -> None:
+        """Deja la fila SIN resultado para que la ingesta la retome (si no, la
+        rechaza como duplicada), anotando quién dijo «es de…»."""
+        from datetime import datetime, timezone
+
+        (self._db.table("wa_inbox")
+         .update({"resultado": None, "procesado": False, "motivo": None,
+                  "assigned_by": by, "assigned_at": datetime.now(timezone.utc).isoformat()})
+         .eq("wa_message_id", wa_message_id).execute())
+
+    def list_wa_inbox_media_vigente(self, corte_iso: str, limite: int = 500) -> list[dict]:
+        """Filas con foto guardada que todavía no se purgó y son de antes de `corte_iso`."""
+        res = (self._db.table("wa_inbox").select("wa_message_id, media_path, created_at")
+               .not_.is_("media_path", "null").is_("media_purged_at", "null")
+               .lte("created_at", corte_iso).order("created_at").limit(limite).execute())
+        return res.data or []
+
+    def marcar_wa_inbox_media_purgada(self, wa_message_id: str) -> None:
+        from datetime import datetime, timezone
+
+        (self._db.table("wa_inbox")
+         .update({"media_purged_at": datetime.now(timezone.utc).isoformat()})
+         .eq("wa_message_id", wa_message_id).execute())
+
+    def insert_wa_group_event(self, row: dict) -> bool:
+        """Guarda un evento de grupo crudo. False si ya estaba (`dedupe_key`)."""
+        res = (self._db.table("wa_group_events")
+               .upsert(row, on_conflict="dedupe_key", ignore_duplicates=True).execute())
+        return bool(res.data)
+
+    def upsert_wa_lid(self, lid: str, phone: str, source: str) -> None:
+        from datetime import datetime, timezone
+
+        self._db.table("wa_lid_map").upsert({
+            "lid": lid, "phone": phone, "source": source, "activo": True,
+            "last_seen_at": datetime.now(timezone.utc).isoformat(),
+        }, on_conflict="lid").execute()
+
+    def get_wa_lid(self, lid: str) -> str | None:
+        res = (self._db.table("wa_lid_map").select("phone")
+               .eq("lid", lid).eq("activo", True).limit(1).execute())
+        return res.data[0]["phone"] if res.data else None
+
+    def authorize_phone_if_free(self, comercio_id: str, phone: str, label: str | None, by: str) -> str:
+        """Autoriza un número para un comercio SIN mover el de otro.
+
+        Devuelve `'ok'` (quedó autorizado por `by`), `'already'` (ya lo estaba, por
+        una persona) u `'owned_by_other'` (es de otro comercio activo: no se toca).
+
+        `agregar_numero_comercio` hace un upsert por número: si el número era de
+        otro comercio, lo MUEVE en silencio. Acá se mira antes de escribir."""
+        from fastapi import HTTPException
+
+        from app.core.telefono import normalizar_whatsapp
+
+        num = normalizar_whatsapp(phone)
+        if not num:
+            raise HTTPException(status_code=400, detail=f"Número inválido: {phone}")
+        dueno = self.get_comercio_por_numero(num)
+        if dueno and dueno.get("id") != comercio_id:
+            return "owned_by_other"
+        if dueno:
+            fila = next((n for n in self.list_numeros_comercio(comercio_id) if n.get("numero") == num), None)
+            if fila and fila.get("created_by") != NUMERO_AUTORIZADO_POR_CODIGO:
+                return "already"
+        self.agregar_numero_comercio(comercio_id, num, label, by)
+        return "ok"
+
+    def list_numeros_propios_autorizados(self, propios: list[str]) -> list[dict]:
+        """`comercio_numeros` activos cuyo número es de URUKU (el bug P1 los dejó
+        ahí). Para el script de limpieza."""
+        if not propios:
+            return []
+        res = (self._db.table("comercio_numeros")
+               .select("id, comercio_id, numero, etiqueta, created_by, created_at, comercios(nombre, slug)")
+               .in_("numero", propios).eq("activo", True).execute())
+        return res.data or []
+
+    def desactivar_numero_comercio(self, numero_id: str) -> None:
+        """Baja lógica (`activo=false`) de un número autorizado. Nunca DELETE."""
+        self._db.table("comercio_numeros").update({"activo": False}).eq("id", numero_id).execute()
+
+    def list_wa_inbox_publicadas_de(self, numeros: list[str]) -> list[dict]:
+        """Lo que esos números hicieron publicar (para que el admin lo mire)."""
+        if not numeros:
+            return []
+        res = (self._db.table("wa_inbox")
+               .select("wa_message_id, phone, comercio_id, created_at, comercios(nombre, slug)")
+               .in_("phone", numeros).eq("resultado", "publicada")
+               .order("created_at", desc=True).limit(500).execute())
+        return res.data or []
 
 
     def ultimo_wa_inbox_por_via(self) -> dict[str, str | None]:

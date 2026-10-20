@@ -73,7 +73,7 @@ services:
       # `container_name` es único en todo el demonio de Docker, así que no puede
       # colisionar con otro proyecto.
       - WHATSAPP_HOOK_URL=http://buscadonde-backend:8000/ingest/webhook
-      - WHATSAPP_HOOK_EVENTS=message,message.any,session.status
+      - WHATSAPP_HOOK_EVENTS=message,message.any,session.status,group.v2.join,group.v2.leave,group.v2.participants,group.v2.update
       - WHATSAPP_HOOK_HMAC_KEY=${WEBHOOK_SECRET}
       - WHATSAPP_DOWNLOAD_MEDIA=true
       # Protege el dashboard (ahí se escanea el QR para vincular el
@@ -184,6 +184,7 @@ services:
     volumes:
       - whisper_models:/models      # cache del modelo de transcripción (persiste entre rebuilds)
       - comercio_fotos:/data/fotos  # fotos de comercio (reemplaza a Supabase Storage)
+      - wa_received:/data/wa_received  # fotos de desconocidos: PRIVADO, nunca bajo /data/fotos (se sirve por /fotos)
     networks: [traefik, internal]
     labels:
       - traefik.enable=true
@@ -199,6 +200,7 @@ volumes:
   whisper_models:
   postgres_data:
   comercio_fotos:
+  wa_received:
   waha_sessions:
   waha_media:
 

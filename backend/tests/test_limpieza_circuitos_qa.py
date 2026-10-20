@@ -138,9 +138,10 @@ def test_el_grupo_atado_por_un_numero_propio_sigue_andando(repo, monkeypatch):
     assert repo.publicaciones == []                    # un número propio no publica
 
 
-@pytest.mark.parametrize("texto", ["URUKU-K7M2 zapatillas Bs 250", "uruku k7m2 zapatillas 250",
-                                   "Uruku_K7M2 zapatillas 250", "URUKU K7M2 zapatillas 250"])
+@pytest.mark.parametrize("texto", ["URUKU-K7M2 zapatillas Bs 250", "uruku k7m2 zapatillas Bs 250",
+                                   "Uruku_K7M2 zapatillas Bs 250", "URUKU K7M2 zapatillas Bs 250"])
 def test_un_desconocido_con_un_codigo_valido_publica_y_queda_autorizado(repo, texto):
+    # (con precio: desde E1 un 1-a-1 de texto sin precio, foto ni TikTok es charla y no publica)
     c = repo.seed_comercio(id="com-x", slug="x", nombre="X", codigo="K7M2", activo=True)
     res = ingest.handle_message(_wh("w-c1", DESCONOCIDO, texto), repo)
     assert res.get("estado") == "pendiente", res

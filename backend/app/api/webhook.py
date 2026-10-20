@@ -17,7 +17,7 @@ from fastapi.responses import PlainTextResponse
 
 from app.core.config import settings
 from app.db.repository import Repo, get_repo
-from app.services import ingest, mensajeria
+from app.services import ingest, mensajeria, wa_events
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -156,4 +156,14 @@ async def webhook(
                          detalle="no entra ninguna oferta hasta que vuelva a WORKING")
         return {"ok": True, "handled": "session.status"}
 
+    if kind in wa_events.EVENTOS_DE_GRUPO:
+        # Entrar, salir, ascender, renombrar: se guarda crudo (idempotente) y se
+        # aprende el LID si trae el número. Con WA_EVENTS_ACT=false no se actúa.
+        result = await _con_reintento(wa_events.handle, event, repo)
+        return {"ok": True, **result}
+
+    # Cualquier otro evento se descarta, pero CON rastro: antes era mudo, y
+    # «WAHA no lo mandó» y «WAHA lo mandó con un nombre que no miramos» se veían
+    # exactamente igual (P7).
+    logger.info("webhook.evento_ignorado", evento=kind)
     return {"ok": True, "ignored": kind}

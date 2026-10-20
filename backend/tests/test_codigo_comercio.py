@@ -160,9 +160,9 @@ def test_numero_autorizado_por_codigo_nunca_publica_directo(repo):
     (a moderación) y desde ahí su número queda reconocido. Ni así publica directo
     en un comercio confiable."""
     c = repo.seed_comercio(slug="ferreteria", nombre="Ferretería", codigo="K7M2", confiable=True, activo=True)
-    _ingestar(repo, "59177777777", "URUKU-K7M2 primera", "msg-1")
-    _ingestar(repo, "59177777777", "segunda, sin código", "msg-2")
-    _ingestar(repo, "59177777777", "tercera", "msg-3")
+    _ingestar(repo, "59177777777", "URUKU-K7M2 primera Bs 10", "msg-1")
+    _ingestar(repo, "59177777777", "segunda Bs 20, sin código", "msg-2")
+    _ingestar(repo, "59177777777", "tercera Bs 30", "msg-3")
     pubs = [p for p in repo.publicaciones if p["comercio_id"] == c["id"]]
     assert [p["estado"] for p in pubs] == ["pendiente", "pendiente", "pendiente"]
 
@@ -170,11 +170,11 @@ def test_numero_autorizado_por_codigo_nunca_publica_directo(repo):
 def test_cuando_el_equipo_autoriza_el_numero_publica_directo(repo):
     from app.services import ingest
     c = repo.seed_comercio(slug="ferreteria", nombre="Ferretería", codigo="K7M2", confiable=True, activo=True)
-    _ingestar(repo, "59177777777", "URUKU-K7M2 primera", "msg-1")
+    _ingestar(repo, "59177777777", "URUKU-K7M2 primera Bs 10", "msg-1")
     # El admin lo autoriza en el negocio (POST /admin/comercio/{id}/numeros).
     repo.agregar_numero_comercio(c["id"], "59177777777", "dueño", "admin@uruku.bo")
     assert not repo.numero_autorizado_por_codigo("59177777777")
-    _ingestar(repo, "59177777777", "segunda", "msg-2")
+    _ingestar(repo, "59177777777", "segunda Bs 20", "msg-2")
     pubs = [p for p in repo.publicaciones if p["comercio_id"] == c["id"]]
     assert pubs[1]["identidad_origen"] == "numero"
     assert pubs[1]["estado"] == "aprobado"

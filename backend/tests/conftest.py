@@ -60,6 +60,14 @@ def _sin_pausa_de_difusion(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _tmp_wa_received_dir(tmp_path, monkeypatch):
+    """El disco PRIVADO de las fotos de desconocidos, aparte del de /fotos y en un tmp."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "wa_received_dir", str(tmp_path / "wa_received"))
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _tmp_fotos_dir(tmp_path, monkeypatch):
     """Apunta el volumen de fotos a un tmp escribible: así las subidas de
     foto/video no fallan por no poder escribir en /data/fotos."""
@@ -146,6 +154,8 @@ class FakeRepo:
                               "empleado_ia": 300, "premium": 300}.items():
             self.planes[_slug].setdefault("fotos_max", _fotos)
         self.wa_inbox: dict[str, dict] = {}          # wa_message_id -> row
+        self.wa_group_events: dict[str, dict] = {}   # dedupe_key -> fila (0159)
+        self.wa_lid_map: dict[str, dict] = {}        # lid -> fila (0159)
         self.leads: list[dict] = []
         self.visitas: list[dict] = []
         self.busquedas: list[dict] = []
@@ -765,6 +775,109 @@ class FakeRepo:
 
     def get_wa_inbox(self, wa_message_id):
         return self.wa_inbox.get(wa_message_id)
+
+    # ---- fotos de desconocidos, eventos de grupo y mapa LID (0159) ----
+    def set_wa_inbox_media(self, wa_message_id, media_path):
+        fila = self.wa_inbox.get(wa_message_id)
+        if fila is not None:
+            fila["media_path"] = media_path
+
+    def list_wa_inbox_sin_dueno(self, dias=30, phone=None, con_raw=False):
+        from datetime import datetime, timedelta, timezone
+        desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+        ahora = datetime.now(timezone.utc).isoformat()
+        salida = []
+        for f in self.wa_inbox.values():
+            if f.get("resultado") != "sin_comercio":
+                continue
+            if str(f.get("created_at") or ahora) < desde:
+                continue
+            if phone and f.get("phone") != phone:
+                continue
+            fila = {k: f.get(k) for k in ("wa_message_id", "wa_jid", "phone", "tipo", "body",
+                                          "media_path", "media_purged_at", "via")}
+            fila["created_at"] = f.get("created_at") or ahora
+            if con_raw:
+                fila["raw"] = f.get("raw")
+            salida.append(fila)
+        return sorted(salida, key=lambda x: str(x["created_at"]), reverse=True)
+
+    def liberar_wa_inbox(self, wa_message_id, by):
+        from datetime import datetime, timezone
+        fila = self.wa_inbox.get(wa_message_id)
+        if fila is not None:
+            fila.update({"resultado": None, "procesado": False, "motivo": None,
+                         "assigned_by": by, "assigned_at": datetime.now(timezone.utc).isoformat()})
+
+    def list_wa_inbox_media_vigente(self, corte_iso, limite=500):
+        from datetime import datetime, timezone
+        ahora = datetime.now(timezone.utc).isoformat()
+        return [{"wa_message_id": f["wa_message_id"], "media_path": f["media_path"],
+                 "created_at": f.get("created_at") or ahora}
+                for f in self.wa_inbox.values()
+                if f.get("media_path") and not f.get("media_purged_at")
+                and str(f.get("created_at") or ahora) <= corte_iso][:limite]
+
+    def marcar_wa_inbox_media_purgada(self, wa_message_id):
+        from datetime import datetime, timezone
+        fila = self.wa_inbox.get(wa_message_id)
+        if fila is not None:
+            fila["media_purged_at"] = datetime.now(timezone.utc).isoformat()
+
+    def insert_wa_group_event(self, row):
+        if row["dedupe_key"] in self.wa_group_events:
+            return False
+        self.wa_group_events[row["dedupe_key"]] = {"id": self._id("gev"), **row}
+        return True
+
+    def upsert_wa_lid(self, lid, phone, source):
+        previo = self.wa_lid_map.get(lid)
+        self.wa_lid_map[lid] = {"lid": lid, "phone": phone, "source": source, "activo": True,
+                                "first_seen_at": (previo or {}).get("first_seen_at", self._tic()),
+                                "last_seen_at": self._tic()}
+
+    def get_wa_lid(self, lid):
+        fila = self.wa_lid_map.get(lid)
+        return fila["phone"] if fila and fila.get("activo", True) else None
+
+    def authorize_phone_if_free(self, comercio_id, phone, label, by):
+        from app.core.telefono import normalizar_whatsapp
+        num = normalizar_whatsapp(phone)
+        if not num:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail=f"Número inválido: {phone}")
+        dueno = self.get_comercio_por_numero(num)
+        if dueno and dueno.get("id") != comercio_id:
+            return "owned_by_other"
+        if dueno:
+            fila = next((n for n in self.list_numeros_comercio(comercio_id) if n["numero"] == num), None)
+            if fila and fila.get("created_by") != "ingest-codigo":
+                return "already"
+        self.agregar_numero_comercio(comercio_id, num, label, by)
+        return "ok"
+
+    def list_numeros_propios_autorizados(self, propios):
+        salida = []
+        for n in self.comercio_numeros:
+            if n["numero"] in propios and n.get("activo", True):
+                c = self.comercios.get(n["comercio_id"]) or {}
+                salida.append({**n, "comercios": {"nombre": c.get("nombre"), "slug": c.get("slug")}})
+        return salida
+
+    def desactivar_numero_comercio(self, numero_id):
+        for n in self.comercio_numeros:
+            if n["id"] == numero_id:
+                n["activo"] = False
+
+    def list_wa_inbox_publicadas_de(self, numeros):
+        salida = []
+        for f in self.wa_inbox.values():
+            if f.get("phone") in numeros and f.get("resultado") == "publicada":
+                c = self.comercios.get(f.get("comercio_id")) or {}
+                salida.append({"wa_message_id": f["wa_message_id"], "phone": f["phone"],
+                               "comercio_id": f.get("comercio_id"), "created_at": f.get("created_at"),
+                               "comercios": {"nombre": c.get("nombre"), "slug": c.get("slug")}})
+        return salida
 
     def ultimo_wa_inbox_por_via(self):
         salida = {"waha": None, "cloud": None}
