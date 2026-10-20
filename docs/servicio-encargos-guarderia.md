@@ -349,7 +349,7 @@ L1 cliente (nombre, WhatsApp, ciudad) · L2 documento (hash + 3 dígitos) · L3 
 
 ## 11. Para el arquitecto
 
-**Numeración:** las migraciones arrancan en **0168** (0156-0158 marketing, 0159-0164 grupos, 0165-0166 cobro mensual, 0167 device tokens). Archivo idéntico en `supabase/migrations/` y `selfhost/postgres-init/`, con GRANTs explícitos y test.
+**Numeración:** las migraciones arrancan en **0169** (0156-0158 marketing, 0159-0164 grupos, 0165-0166 cobro mensual, 0167 device tokens, 0168 retención de WhatsApp de la E1). Archivo idéntico en `supabase/migrations/` y `selfhost/postgres-init/`, con GRANTs explícitos y test.
 
 **Entidades sugeridas (sin SQL definitivo):**
 - `service_clients`: nombre, whatsapp E.164, ciudad, país, `doc_type`, `doc_hash` (HMAC con secreto del backend), `doc_last3`, `usuario_id` opcional (segunda etapa), `activo`.

@@ -273,11 +273,10 @@ async def admin_wa_assign_group(
 
     previo = await run_in_threadpool(repo.get_comercio_por_grupo, group_jid, True)
     if previo and previo.get("id") != comercio["id"]:
-        if previo.get("activo") is not False:
-            raise conflicto(previo)
-        # Atado a un comercio dado de baja: ese vínculo no identifica a nadie. Se suelta.
-        await run_in_threadpool(repo.desvincular_grupo, group_jid)
-        previo = None
+        # También si el otro está de baja: soltar el vínculo hoy es un DELETE físico
+        # (`desvincular_grupo`) y AGENTS.md no lo permite. Se suelta a mano desde la
+        # ficha del comercio dado de baja; E3 trae la baja lógica de grupos.
+        raise conflicto(previo)
     if previo is None:
         await run_in_threadpool(repo.vincular_grupo_comercio, group_jid, comercio["id"], None, "admin", quien)
         # El vínculo ignora duplicados: si otro lo ató en el medio, quedó el de él.

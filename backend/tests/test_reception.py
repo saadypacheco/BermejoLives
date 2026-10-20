@@ -484,12 +484,15 @@ def test_grupo_atado_a_otro_comercio_activo_da_409_y_no_lo_roba(client, repo, ad
     assert repo.wa_grupos[GRUPO]["comercio_id"] == OTRO
 
 
-def test_grupo_atado_a_un_comercio_de_baja_se_rebinda(client, repo, admin_token):
+def test_grupo_atado_a_un_comercio_de_baja_no_se_roba(client, repo, admin_token):
+    """Soltar el vínculo viejo sería un DELETE físico (AGENTS.md: nunca). 409 y queda
+    como estaba; se suelta a mano desde la ficha del comercio de baja."""
     _comercio(repo)
     repo.seed_comercio(id=OTRO, slug="otro", nombre="Otro", activo=False)
     repo.vincular_grupo_comercio(GRUPO, OTRO, None, "codigo", "x")
-    assert _asignar_grupo(client, admin_token).status_code == 200
-    assert repo.wa_grupos[GRUPO]["comercio_id"] == COM
+    r = _asignar_grupo(client, admin_token)
+    assert r.status_code == 409 and r.json()["detail"]["codigo"] == "group_owned_by_other"
+    assert repo.wa_grupos[GRUPO]["comercio_id"] == OTRO
 
 
 def test_grupo_ya_atado_al_mismo_comercio_es_idempotente(client, repo, admin_token):
