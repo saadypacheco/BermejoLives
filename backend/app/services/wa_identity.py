@@ -190,6 +190,38 @@ def is_own(repo, numero_o_jid: str | None) -> bool:
     return settings.es_numero_propio(numero_o_jid)
 
 
+def sender_number(repo, payload) -> str | None:
+    """El número real de quien escribió (E.164 sin '+'), o None si llegó como LID y
+    no se sabe cuál es.
+
+    Un `…@c.us` es su número. Un LID se resuelve con el número que WAHA trajo al lado
+    (`participantAlt` / `remoteJidAlt`) o con el par ya aprendido (`wa_lid_map`, y WAHA si
+    `WA_LID_LOOKUP`). Si nada lo sabe es None: `payload.phone` en ese caso son los
+    dígitos del LID, que NO son un teléfono, y no puede usarse para autorizar a nadie."""
+    jid = payload.remitente_jid if payload.es_grupo else payload.from_
+    if not is_lid(jid):
+        return payload.phone or None
+    alt = phone_of_jid(payload.remitente_alt)
+    if alt:
+        return alt
+    return resolve(repo, jid)
+
+
+def number_of_inbox_row(repo, fila: dict) -> str | None:
+    """El número del remitente de una fila de `wa_inbox`, sin salir a WAHA.
+
+    Para la bandeja «sin dueño»: una fila de un LID cuyo `phone` son los dígitos del
+    propio LID no tiene número; si el par se aprendió después, está en `wa_lid_map`."""
+    jid = fila.get("wa_jid") or ""
+    phone = fila.get("phone") or ""
+    if not is_lid(jid):
+        return phone or None
+    if phone and phone != jid.split("@")[0].split(":")[0]:
+        return phone                         # WAHA trajo el número al lado cuando llegó
+    lid = _lid_normalizado(jid)
+    return repo.get_wa_lid(lid) if lid else None
+
+
 def sender_is_own(repo, payload) -> bool:
     """El que escribió este mensaje es un número de URUKU, aunque haya llegado como LID."""
     if settings.es_numero_propio(payload.phone):

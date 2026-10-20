@@ -89,8 +89,13 @@ class Repo(Protocol):
     def get_wa_inbox(self, wa_message_id: str) -> dict | None: ...
     def set_wa_inbox_media(self, wa_message_id: str, media_path: str) -> None: ...
     def list_wa_inbox_sin_dueno(self, dias: int = 30, phone: str | None = None,
-                                con_raw: bool = False) -> list[dict]: ...
-    def liberar_wa_inbox(self, wa_message_id: str, by: str) -> None: ...
+                                con_raw: bool = False, wa_jid: str | None = None) -> list[dict]: ...
+    def liberar_wa_inbox(self, wa_message_id: str, by: str) -> bool: ...
+    def count_wa_inbox_media_desde(self, phone: str, desde_iso: str) -> int: ...
+    def list_comercios_con_wa_jid_propio(self, jids: list[str]) -> list[dict]: ...
+    def limpiar_wa_jid_comercio(self, comercio_id: str) -> None: ...
+    def purgar_wa_group_events(self, corte_iso: str, limite: int = 500) -> int: ...
+    def purgar_wa_lid_inactivos(self, corte_iso: str, limite: int = 500) -> int: ...
     def list_wa_inbox_media_vigente(self, corte_iso: str, limite: int = 500) -> list[dict]: ...
     def marcar_wa_inbox_media_purgada(self, wa_message_id: str) -> None: ...
     def insert_wa_group_event(self, row: dict) -> bool: ...
@@ -661,9 +666,10 @@ class SupabaseRepo:
             logger.warning("set_wa_inbox_media.fallo", wa_message_id=wa_message_id, exc_info=True)
 
     def list_wa_inbox_sin_dueno(self, dias: int = 30, phone: str | None = None,
-                                con_raw: bool = False) -> list[dict]:
+                                con_raw: bool = False, wa_jid: str | None = None) -> list[dict]:
         """Lo que entró y todavía no se sabe de quién es (`sin_comercio`), de los
-        últimos `dias`, lo más nuevo primero. `phone` filtra por remitente."""
+        últimos `dias`, lo más nuevo primero. `phone` filtra por remitente y `wa_jid`
+        por chat (un grupo, por ejemplo)."""
         from datetime import datetime, timedelta, timezone
 
         desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
@@ -674,17 +680,44 @@ class SupabaseRepo:
              .order("created_at", desc=True).limit(2000))
         if phone:
             q = q.eq("phone", phone)
+        if wa_jid:
+            q = q.eq("wa_jid", wa_jid)
         return q.execute().data or []
 
-    def liberar_wa_inbox(self, wa_message_id: str, by: str) -> None:
+    def liberar_wa_inbox(self, wa_message_id: str, by: str) -> bool:
         """Deja la fila SIN resultado para que la ingesta la retome (si no, la
-        rechaza como duplicada), anotando quién dijo «es de…»."""
+        rechaza como duplicada), anotando quién dijo «es de…».
+
+        Es un update CONDICIONAL: sólo libera filas que siguen en `sin_comercio`.
+        Devuelve si la liberó. Dos «Es de…» al mismo tiempo se disputan la fila y
+        gana uno: el otro recibe False y no la reprocesa (no duplica ni re-fusiona)."""
         from datetime import datetime, timezone
 
-        (self._db.table("wa_inbox")
-         .update({"resultado": None, "procesado": False, "motivo": None,
-                  "assigned_by": by, "assigned_at": datetime.now(timezone.utc).isoformat()})
-         .eq("wa_message_id", wa_message_id).execute())
+        res = (self._db.table("wa_inbox")
+               .update({"resultado": None, "procesado": False, "motivo": None,
+                        "assigned_by": by, "assigned_at": datetime.now(timezone.utc).isoformat()})
+               .eq("wa_message_id", wa_message_id).eq("resultado", "sin_comercio").execute())
+        return bool(res.data)
+
+    def count_wa_inbox_media_desde(self, phone: str, desde_iso: str) -> int:
+        """Cuántas fotos se guardaron de ese remitente desde `desde_iso` (tope diario)."""
+        res = (self._db.table("wa_inbox").select("wa_message_id", count="exact")
+               .eq("phone", phone).not_.is_("media_path", "null")
+               .gte("created_at", desde_iso).limit(1).execute())
+        return int(getattr(res, "count", None) or 0)
+
+    def list_comercios_con_wa_jid_propio(self, jids: list[str]) -> list[dict]:
+        """Comercios (activos o no) cuyo `wa_jid` es de un número de URUKU: el bug P1
+        también los dejaba atados ahí. Para el script de limpieza."""
+        if not jids:
+            return []
+        res = (self._db.table("comercios").select("id, nombre, slug, wa_jid, activo")
+               .in_("wa_jid", jids).limit(500).execute())
+        return res.data or []
+
+    def limpiar_wa_jid_comercio(self, comercio_id: str) -> None:
+        """Suelta el `wa_jid` del comercio (queda NULL). No toca nada más."""
+        self._db.table("comercios").update({"wa_jid": None}).eq("id", comercio_id).execute()
 
     def list_wa_inbox_media_vigente(self, corte_iso: str, limite: int = 500) -> list[dict]:
         """Filas con foto guardada que todavía no se purgó y son de antes de `corte_iso`."""
@@ -707,12 +740,20 @@ class SupabaseRepo:
         return bool(res.data)
 
     def upsert_wa_lid(self, lid: str, phone: str, source: str) -> None:
+        """Guarda el par LID <-> número que acaba de verse.
+
+        No pisa lo que una persona dijo (`source='admin'`) ni reactiva una fila dada
+        de baja (`activo=false`): un mensaje cualquiera no puede deshacer una
+        corrección del equipo. Una fila nueva se inserta; una activa se actualiza."""
         from datetime import datetime, timezone
 
+        ahora = datetime.now(timezone.utc).isoformat()
         self._db.table("wa_lid_map").upsert({
-            "lid": lid, "phone": phone, "source": source, "activo": True,
-            "last_seen_at": datetime.now(timezone.utc).isoformat(),
-        }, on_conflict="lid").execute()
+            "lid": lid, "phone": phone, "source": source, "activo": True, "last_seen_at": ahora,
+        }, on_conflict="lid", ignore_duplicates=True).execute()
+        (self._db.table("wa_lid_map")
+         .update({"phone": phone, "source": source, "last_seen_at": ahora})
+         .eq("lid", lid).eq("activo", True).neq("source", "admin").execute())
 
     def get_wa_lid(self, lid: str) -> str | None:
         res = (self._db.table("wa_lid_map").select("phone")
@@ -726,7 +767,11 @@ class SupabaseRepo:
         una persona) u `'owned_by_other'` (es de otro comercio activo: no se toca).
 
         `agregar_numero_comercio` hace un upsert por número: si el número era de
-        otro comercio, lo MUEVE en silencio. Acá se mira antes de escribir."""
+        otro comercio, lo MUEVE en silencio. Acá nunca se pisa: se INSERTA, y si el
+        número ya existe (otra persona lo tomó entre la lectura y la escritura) el
+        conflicto se resuelve releyendo y decidiendo de nuevo. Tomar una fila vieja
+        (de baja, o de un comercio apagado, o mía «por código») es un update
+        condicional sobre el estado que se leyó."""
         from fastapi import HTTPException
 
         from app.core.telefono import normalizar_whatsapp
@@ -734,15 +779,38 @@ class SupabaseRepo:
         num = normalizar_whatsapp(phone)
         if not num:
             raise HTTPException(status_code=400, detail=f"Número inválido: {phone}")
-        dueno = self.get_comercio_por_numero(num)
-        if dueno and dueno.get("id") != comercio_id:
-            return "owned_by_other"
-        if dueno:
-            fila = next((n for n in self.list_numeros_comercio(comercio_id) if n.get("numero") == num), None)
-            if fila and fila.get("created_by") != NUMERO_AUTORIZADO_POR_CODIGO:
+        tabla = self._db.table
+
+        def fila_del_numero() -> dict | None:
+            r = (tabla("comercio_numeros").select("id, comercio_id, activo, created_by")
+                 .eq("numero", num).limit(1).execute())
+            return r.data[0] if r.data else None
+
+        for _ in range(3):
+            dueno = self.get_comercio_por_numero(num)
+            if dueno and dueno.get("id") != comercio_id:
+                return "owned_by_other"
+            fila = fila_del_numero()
+            if fila is None:
+                try:
+                    tabla("comercio_numeros").insert({
+                        "comercio_id": comercio_id, "numero": num, "etiqueta": label,
+                        "created_by": by, "activo": True}).execute()
+                    return "ok"
+                except Exception:  # noqa: BLE001 — choque de unicidad: otro lo tomó; se relee
+                    logger.info("authorize_phone.conflicto_al_insertar")
+                    continue
+            if (fila.get("activo") and fila.get("comercio_id") == comercio_id
+                    and fila.get("created_by") != NUMERO_AUTORIZADO_POR_CODIGO):
                 return "already"
-        self.agregar_numero_comercio(comercio_id, num, label, by)
-        return "ok"
+            tomada = (tabla("comercio_numeros")
+                      .update({"comercio_id": comercio_id, "etiqueta": label, "created_by": by, "activo": True})
+                      .eq("id", fila["id"]).eq("comercio_id", fila["comercio_id"])
+                      .eq("activo", fila["activo"]).execute())
+            if tomada.data:
+                return "ok"
+        # Tres vueltas sin lograrlo: alguien lo está moviendo. Mejor negarlo que pisarlo.
+        return "owned_by_other"
 
     def list_numeros_propios_autorizados(self, propios: list[str]) -> list[dict]:
         """`comercio_numeros` activos cuyo número es de URUKU (el bug P1 los dejó
@@ -757,6 +825,35 @@ class SupabaseRepo:
     def desactivar_numero_comercio(self, numero_id: str) -> None:
         """Baja lógica (`activo=false`) de un número autorizado. Nunca DELETE."""
         self._db.table("comercio_numeros").update({"activo": False}).eq("id", numero_id).execute()
+
+    def purgar_wa_group_events(self, corte_iso: str, limite: int = 500) -> int:
+        """Retención: vacía `raw` y `participants` de los eventos de grupo anteriores a
+        `corte_iso` y los marca con `purged_at`. La fila queda. Devuelve cuántos vació."""
+        from datetime import datetime, timezone
+
+        filas = (self._db.table("wa_group_events").select("id")
+                 .is_("purged_at", "null").lte("created_at", corte_iso)
+                 .order("created_at").limit(limite).execute().data) or []
+        ids = [r["id"] for r in filas]
+        if not ids:
+            return 0
+        (self._db.table("wa_group_events")
+         .update({"raw": {}, "participants": None,
+                  "purged_at": datetime.now(timezone.utc).isoformat()})
+         .in_("id", ids).execute())
+        return len(ids)
+
+    def purgar_wa_lid_inactivos(self, corte_iso: str, limite: int = 500) -> int:
+        """Retención: vacía el número (`phone=''`) de los pares LID dados de baja que no
+        se ven desde `corte_iso`. La fila queda. Devuelve cuántos vació."""
+        filas = (self._db.table("wa_lid_map").select("lid")
+                 .eq("activo", False).neq("phone", "").lte("last_seen_at", corte_iso)
+                 .order("last_seen_at").limit(limite).execute().data) or []
+        lids = [r["lid"] for r in filas]
+        if not lids:
+            return 0
+        self._db.table("wa_lid_map").update({"phone": ""}).in_("lid", lids).eq("activo", False).execute()
+        return len(lids)
 
     def list_wa_inbox_publicadas_de(self, numeros: list[str]) -> list[dict]:
         """Lo que esos números hicieron publicar (para que el admin lo mire)."""
