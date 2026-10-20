@@ -43,6 +43,19 @@ class IngestError(Exception):
     """Error recuperable de ingesta."""
 
 
+_RE_NUMERO_SUELTO = re.compile(r"(?<![\w.,])\d{2,6}(?![\w.,])")
+
+
+def _precio_suelto(texto: str | None) -> bool:
+    """«zapatillas 250»: el comerciante escribe el precio sin «Bs». Un número de
+    2 a 6 cifras en un mensaje que NO es una pregunta cuenta como precio para no
+    tomar la oferta por charla (P3). «¿cuánto sale el plan de 140?» sigue siendo
+    charla: lleva signo de pregunta."""
+    if not texto or "?" in texto:
+        return False
+    return bool(_RE_NUMERO_SUELTO.search(texto))
+
+
 def _atar_grupo_por_codigo_propio(repo: Repo, payload) -> str | None:
     """Un número de URUKU mandó URUKU-XXXX en un grupo sin atar: se ata.
     Devuelve el slug del comercio, o None si no había código o ya estaba."""
@@ -667,6 +680,7 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
     if (not payload.es_grupo
             and not (payload.type == "image" or payload.has_media)
             and not parece_oferta(payload.body)
+            and not _precio_suelto(payload.body)
             and not _extract_tiktok(payload.body)):
         motivo = "charla 1-a-1: el Registrador no contesta"
         logger.info("ingest.charla_1a1", comercio=slug)

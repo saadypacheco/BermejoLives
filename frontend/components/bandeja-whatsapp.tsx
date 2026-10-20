@@ -651,13 +651,14 @@ function AsignarPanel({ it, offline, onCancelar, onHecho }: {
     return () => { vivo = false; clearTimeout(h); };
   }, [q]);
 
-  const quien = it.kind === "phone" ? it.phone_masked : `el grupo ${it.group_name || it.group_jid.split("@")[0]}`;
+  const quien = it.kind === "phone" ? (it.phone_masked ?? "número oculto") : `el grupo ${it.group_name || it.group_jid.split("@")[0]}`;
 
   const confirmar = async () => {
     if (!elegido) return;
     setEnviando(true); setError("");
     try {
       if (it.kind === "phone") {
+        if (!it.phone) return;
         const r = await assignNumber(it.phone, elegido.id, label.trim());
         onHecho(
           `Listo: ${it.phone_masked} es de ${elegido.nombre}. ` +
@@ -773,7 +774,7 @@ function FilaSinDueno({ it, offline, abierta, onAbrir, onCerrar, onHecho }: {
   const fotos = it.messages.filter((m) => m.has_media);
   const textos = it.messages.filter((m) => m.body).slice(0, 2);
   const titulo = it.kind === "phone"
-    ? <><Ic n="telefono" s={14} /> <b>{it.phone_masked}</b></>
+    ? <><Ic n="telefono" s={14} /> <b>{it.phone_masked ?? "Número oculto"}</b></>
     : <><Ic n="gente" s={14} /> <b>Grupo sin atar</b> <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--txt-3)" }}>
         {it.group_name || it.group_jid}</span></>;
 
@@ -784,12 +785,18 @@ function FilaSinDueno({ it, offline, abierta, onAbrir, onCerrar, onHecho }: {
         <span style={{ color: "var(--txt-3)", fontSize: 12.5 }}>
           · {it.count} {it.count === 1 ? "mensaje" : "mensajes"} · último {fechaCorta(it.at)}
         </span>
-        {!abierta && (
+        {!abierta && (it.kind === "phone" && !it.phone ? (
+          // Llegó como LID: WhatsApp oculta el número y todavía no lo aprendimos.
+          // Asignarlo sería atar un identificador que mañana puede cambiar.
+          <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--txt-3)" }}>
+            Número oculto por WhatsApp: se podrá asignar cuando escriba en un grupo
+          </span>
+        ) : (
           <button type="button" className="btn btn-sm btn-primary" style={{ marginLeft: "auto", minHeight: 40 }}
                   disabled={offline} onClick={onAbrir}>
             Es de…
           </button>
-        )}
+        ))}
       </div>
 
       {it.messages.length > 0 && (

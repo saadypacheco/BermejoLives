@@ -167,11 +167,20 @@ def test_3_una_charla_1a1_no_crea_una_novedad(repo, conocido):
 
 
 @pytest.mark.parametrize("cuerpo", ["Zapatillas Bs 250", "oferta de la semana",
-                                    "mirá https://www.tiktok.com/@kiosco/video/123"])
+                                    "mirá https://www.tiktok.com/@kiosco/video/123",
+                                    # El precio sin «Bs», como lo escribe el comerciante.
+                                    "zapatillas 250", "jean tiro alto 180"])
 def test_3_con_precio_oferta_o_tiktok_publica_como_siempre(repo, conocido, cuerpo):
     res = ingest.handle_message(_ev("c2", cuerpo), repo)
     assert res["estado"] == "pendiente"
     assert len(repo.publicaciones) == 1
+
+
+def test_3_una_pregunta_con_numero_sigue_siendo_charla(repo, conocido):
+    """«¿cuánto sale el plan de 140?» trae un número pero es una pregunta."""
+    res = ingest.handle_message(_ev("c4", "hola, ¿cuánto sale el plan de 140?"), repo)
+    assert res["publicada"] is False
+    assert repo.publicaciones == []
 
 
 def test_3_con_ubicacion_actualiza_como_siempre(repo, conocido):

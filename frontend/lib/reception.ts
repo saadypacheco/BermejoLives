@@ -23,9 +23,11 @@ type UnknownBase = {
 /** Fotos 1-a-1 de un número que ningún comercio tiene. */
 export type UnknownPhone = UnknownBase & {
   kind: "phone";
-  /** Dígitos completos: es lo que va en la ruta de `assign`. Sólo para el panel. */
-  phone: string;
-  phone_masked: string;
+  /** Dígitos completos: es lo que va en la ruta de `assign`. Sólo para el panel.
+   *  `null` cuando el remitente llegó como LID (identificador oculto de WhatsApp)
+   *  y todavía no se sabe su número: se ve, pero no se puede asignar. */
+  phone: string | null;
+  phone_masked: string | null;
   lid?: string | null;
   count: number;
   messages: UnknownMessage[];
