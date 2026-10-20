@@ -33,6 +33,10 @@ from app.core.config import settings
 
 logger = structlog.get_logger()
 
+#: Filas por lote de la retención y tope de lotes por corrida (no girar para siempre).
+_TAMANO_LOTE = 500
+_MAX_LOTES = 200
+
 
 def _raiz() -> Path:
     return Path(settings.wa_received_dir)
@@ -126,13 +130,50 @@ def purge_expired(repo, dias: int | None = None) -> int:
     dias = settings.wa_received_retention_days if dias is None else dias
     corte = (datetime.now(timezone.utc) - timedelta(days=max(0, dias))).isoformat()
     n = 0
-    for fila in repo.list_wa_inbox_media_vigente(corte, 500):
-        if delete(fila.get("media_path")):
-            repo.marcar_wa_inbox_media_purgada(fila["wa_message_id"])
-            n += 1
+    # POR LOTES, HASTA VACIAR lo vencido: con un solo lote de 500 por día, un atraso
+    # (o una ráfaga de fotos) tardaba semanas en ponerse al día.
+    for _ in range(_MAX_LOTES):
+        lote = repo.list_wa_inbox_media_vigente(corte, _TAMANO_LOTE)
+        if not lote:
+            break
+        avance = 0
+        for fila in lote:
+            ruta = fila.get("media_path")
+            if safe_path(ruta) is None:
+                # Un `media_path` inválido (vacío, adulterado, fuera del directorio) no
+                # tiene archivo que borrar: se marca purgada igual, o la fila volvería
+                # en cada lote para siempre.
+                logger.warning("wa_received.media_path_invalido_purgado", wa_message_id=fila.get("wa_message_id"))
+                repo.marcar_wa_inbox_media_purgada(fila["wa_message_id"])
+                avance += 1
+            elif delete(ruta):
+                repo.marcar_wa_inbox_media_purgada(fila["wa_message_id"])
+                n += 1
+                avance += 1
+        if avance == 0:
+            break                     # todo el lote falló al borrar (disco): se reintenta mañana
     if n:
         logger.info("wa_received.purgadas", n=n, dias=dias)
     return n
+
+
+def purge_events(repo, dias: int | None = None) -> dict:
+    """Retención de los datos personales de WAHA que no son fotos: vacía `raw` y
+    `participants` de `wa_group_events` y el número de los pares LID dados de baja que
+    no se ven hace `WA_EVENTS_RETENTION_DAYS`. Las filas quedan (no hay borrado físico).
+    Por lotes, hasta vaciar lo vencido. Devuelve cuántas vació de cada tabla."""
+    dias = settings.wa_events_retention_days if dias is None else dias
+    corte = (datetime.now(timezone.utc) - timedelta(days=max(0, dias))).isoformat()
+    cuenta = {"events": 0, "lids": 0}
+    for clave, purgar in (("events", repo.purgar_wa_group_events), ("lids", repo.purgar_wa_lid_inactivos)):
+        for _ in range(_MAX_LOTES):
+            hechas = purgar(corte, _TAMANO_LOTE)
+            cuenta[clave] += hechas
+            if hechas < _TAMANO_LOTE:
+                break
+    if cuenta["events"] or cuenta["lids"]:
+        logger.info("wa_received.eventos_purgados", dias=dias, **cuenta)
+    return cuenta
 
 
 def reprocess(repo, filas: list[dict], by: str) -> dict:
@@ -141,30 +182,54 @@ def reprocess(repo, filas: list[dict], by: str) -> dict:
     Reconstruye el evento desde `wa_inbox.raw`, pone la fila sin resultado (si no,
     la ingesta la rechaza como duplicada) y le pasa la foto del disco privado: la
     de WAHA ya no existe. Las más viejas primero, para que la foto y el precio que
-    llegaron en dos mensajes se vuelvan a juntar.
+    llegaron en dos mensajes se vuelvan a juntar (sólo entre ellos: lo que ya estaba
+    publicado no se toca nunca).
+
+    IDEMPOTENTE: `liberar_wa_inbox` sólo libera filas que siguen en `sin_comercio` y
+    avisa si lo logró. Una fila que otro «Es de…» ya tomó, o que ya se resolvió, se
+    saltea: dos pedidos a la vez no duplican ni vuelven a fusionar nada.
+
+    Todo lo reprocesado entra `pendiente`, sin cuota ni cobro (ver
+    `ingest.handle_message(reproceso=…)`). Los mensajes del explorador no se
+    reprocesan: sus fotos se publican sólo por código.
 
     Devuelve `{"reprocessed", "published", "ignored"}`: `published` es lo que
     terminó en `publicada`; el resto (charla, ubicación, sin permiso…) es `ignored`.
     """
-    from app.services import ingest
+    from app.core.config import settings
+    from app.services import ingest, wa_identity
 
     cuenta = {"reprocessed": 0, "published": 0, "ignored": 0}
+    tanda: dict = {"ultima": {}}           # lo que esta tanda va creando, para juntar foto + texto
     for fila in sorted(filas, key=lambda f: str(f.get("created_at") or "")):
         crudo = fila.get("raw") or {}
         wamid = fila.get("wa_message_id")
         if not crudo or not wamid:
             continue
+        numero = wa_identity.number_of_inbox_row(repo, fila)
+        if numero and settings.es_numero_explorador(numero):
+            continue
+        try:
+            if not repo.liberar_wa_inbox(wamid, by):
+                logger.info("wa_received.reproceso_ya_tomada", wa_message_id=wamid)
+                continue
+        except Exception:  # noqa: BLE001
+            logger.warning("wa_received.liberar_fallo", wa_message_id=wamid, exc_info=True)
+            continue
         cuenta["reprocessed"] += 1
         try:
-            repo.liberar_wa_inbox(wamid, by)
             evento = {"event": "message",
                       "session": "cloud" if fila.get("via") == "cloud" else "default",
                       "payload": crudo}
             vigente = None if fila.get("media_purged_at") else fila.get("media_path")
-            ingest.handle_message(evento, repo, media_path=vigente)
+            ingest.handle_message(evento, repo, media_path=vigente, reproceso=tanda)
             resultado = (repo.get_wa_inbox(wamid) or {}).get("resultado")
         except Exception:  # noqa: BLE001 — una fila rota no corta las demás
             logger.warning("wa_received.reproceso_fallo", wa_message_id=wamid, exc_info=True)
             resultado = None
+        if resultado is None:
+            # La ingesta se cortó con la fila liberada: se la devuelve a «Sin dueño»
+            # para que no quede sin resultado (ni visible ni reprocesable).
+            repo.marcar_wa_inbox(wamid, "sin_comercio", "falló el reproceso: probá de nuevo")
         cuenta["published" if resultado == "publicada" else "ignored"] += 1
     return cuenta

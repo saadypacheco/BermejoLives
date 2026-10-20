@@ -10,6 +10,9 @@ Registrador con un URUKU-XXXX válido quedaba AUTORIZADO para ese comercio en
     docker compose -f docker-compose.prod.yml exec -T backend \\
         python -m app.scripts.clean_own_numbers --apply
 
+También lista los comercios cuyo `wa_jid` quedó atado a un número de URUKU (`@c.us` o
+`@s.whatsapp.net`) y, con `--apply`, les suelta ese `wa_jid` (queda NULL).
+
 Con `--apply` pone `activo=false` (baja lógica): NO hay DELETE. Además lista lo que
 esos números hicieron publicar, para que el admin lo mire a mano; las publicaciones
 no se tocan.
@@ -51,6 +54,14 @@ def main(argv: list[str] | None = None, repo: Repo | None = None) -> int:
         print(f"  {f['numero']}  ->  {comercio.get('nombre') or f['comercio_id']}"
               f"  (creado por {f.get('created_by')}, {f.get('created_at')})")
 
+    # El mismo bug también ataba el `wa_jid` del comercio al número de URUKU
+    # (`vincular_wa_jid`): desde ahí todo lo que ese teléfono mandaba lo identificaba.
+    jids = [f"{n}{sufijo}" for n in propios for sufijo in ("@c.us", "@s.whatsapp.net")]
+    con_jid = repo.list_comercios_con_wa_jid_propio(jids)
+    print(f"\nComercios con el wa_jid de un número de URUKU: {len(con_jid)}")
+    for c in con_jid:
+        print(f"  {c['wa_jid']}  ->  {c.get('nombre') or c['id']}")
+
     publicadas = repo.list_wa_inbox_publicadas_de(propios)
     print(f"\nPublicaciones que hicieron esos números (para revisar a mano): {len(publicadas)}")
     for p in publicadas:
@@ -64,7 +75,10 @@ def main(argv: list[str] | None = None, repo: Repo | None = None) -> int:
 
     for f in filas:
         repo.desactivar_numero_comercio(f["id"])
-    print(f"\nListo: {len(filas)} número(s) dados de baja (activo=false).")
+    for c in con_jid:
+        repo.limpiar_wa_jid_comercio(c["id"])
+    print(f"\nListo: {len(filas)} número(s) dados de baja (activo=false) y "
+          f"{len(con_jid)} wa_jid de comercio soltados (queda vacío).")
     return 0
 
 

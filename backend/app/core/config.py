@@ -192,6 +192,13 @@ class Settings(BaseSettings):
     # /fotos, público). Se mira sólo por el endpoint autenticado del admin.
     wa_received_dir: str = "/data/wa_received"
     wa_received_retention_days: int = 30
+    # Tope de fotos que se guardan por remitente desconocido en 24 h: un número que
+    # manda cientos de fotos no puede llenar el disco. Lo que excede se registra en la
+    # bandeja (el crudo queda) pero sin archivo.
+    wa_received_max_per_sender_per_day: int = 30
+    # Retención de los eventos de grupo crudos (`raw`, `participants`) y de los pares LID
+    # inactivos: se VACÍAN los datos personales, la fila queda.
+    wa_events_retention_days: int = 90
     # E1 sólo GUARDA los eventos de grupo de WAHA; actuar sobre ellos (comunidades,
     # atar grupos) se enciende en la entrega siguiente con esta llave.
     wa_events_act: bool = False

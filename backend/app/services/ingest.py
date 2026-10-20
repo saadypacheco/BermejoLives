@@ -126,8 +126,12 @@ def _identificar_por_grupo(repo: Repo, payload) -> tuple[dict | None, str, str |
 NUMERO_POR_CODIGO = "ingest-codigo"
 
 
-def _identificar_comercio(repo: Repo, payload) -> tuple[dict | None, str, str | None]:
+def _identificar_comercio(repo: Repo, payload, numero: str | None = None) -> tuple[dict | None, str, str | None]:
     """Resuelve de qué comercio es este mensaje.
+
+    `numero`: el teléfono REAL del remitente (`wa_identity.sender_number`). Si el
+    mensaje llegó como LID y se sabe su número, es ése; el caller ya descartó el caso
+    de un LID sin número (no se autoriza a nadie por un identificador oculto).
 
     Devuelve (comercio, identidad_origen, codigo_recibido). El comercio es None
     cuando no se sabe de quién es: el caller lo deja como `sin_comercio`.
@@ -143,16 +147,17 @@ def _identificar_comercio(repo: Repo, payload) -> tuple[dict | None, str, str | 
     """
     from app.core.codigo import extraer_codigo
 
+    numero = numero or payload.phone
     wa_jid = payload.from_ or ""
 
-    conocido = repo.get_comercio_by_jid(wa_jid) or repo.get_comercio_por_numero(payload.phone)
+    conocido = repo.get_comercio_by_jid(wa_jid) or repo.get_comercio_por_numero(numero)
     if conocido:
-        if repo.numero_autorizado_por_codigo(payload.phone):
+        if repo.numero_autorizado_por_codigo(numero):
             return conocido, "numero_por_codigo", None
         return conocido, "numero", None
 
     codigo = extraer_codigo(payload.body)
-    if codigo and settings.es_numero_propio(payload.phone):
+    if codigo and settings.es_numero_propio(numero):
         # Doble candado del bug P1 (la guarda principal está en handle_message):
         # un número de URUKU nunca se autoriza para un comercio.
         logger.warning("ingest.codigo_de_numero_propio_ignorado")
@@ -167,9 +172,11 @@ def _identificar_comercio(repo: Repo, payload) -> tuple[dict | None, str, str | 
             # Y no pisa el WhatsApp que el comercio ya tenía atado.
             try:
                 repo.agregar_numero_comercio(
-                    por_codigo["id"], payload.phone, "se identificó con el código", NUMERO_POR_CODIGO)
+                    por_codigo["id"], numero, "se identificó con el código", NUMERO_POR_CODIGO)
                 if not por_codigo.get("wa_jid"):
-                    repo.vincular_wa_jid(por_codigo["id"], wa_jid)
+                    # Con un LID resuelto se ata el teléfono, nunca el identificador oculto.
+                    repo.vincular_wa_jid(
+                        por_codigo["id"], f"{numero}@c.us" if wa_identity.is_lid(wa_jid) else wa_jid)
             except Exception:  # noqa: BLE001 — la publicación importa más que el vínculo
                 logger.warning("ingest.autorizar_numero_fallo", comercio=por_codigo["id"], exc_info=True)
             logger.info("ingest.identificado_por_codigo", comercio=por_codigo["slug"], codigo=codigo)
@@ -220,16 +227,37 @@ def _puede_publicar_por_whatsapp(comercio: dict) -> bool:
 _MINUTOS_MISMA_OFERTA = 10
 
 
-def _fusionar_con_la_anterior(repo: Repo, comercio: dict, row: dict, tipo: str) -> dict | None:
+def _previa_fusionable(repo: Repo, comercio: dict, reproceso: dict | None, ts: int | None) -> dict | None:
+    """La publicación con la que este mensaje podría juntarse, o None.
+
+    Normal: la última del comercio de los últimos 10 minutos.
+
+    REPROCESO («Es de…»): el mensaje es viejo, así que «los últimos 10 minutos de
+    ahora» no significa nada y podría pegarle la foto de hace tres semanas a una
+    publicación de hoy. Sólo se junta con lo que ESTE mismo reproceso acaba de crear
+    para ese comercio, y sólo si los dos mensajes originales están a ≤10 minutos uno
+    del otro. Una publicación que ya existía no se toca nunca."""
+    if reproceso is None:
+        return repo.ultima_publicacion_de(comercio["id"], _MINUTOS_MISMA_OFERTA)
+    previa = (reproceso.setdefault("ultima", {})).get(comercio["id"])
+    if not previa or ts is None or previa.get("ts") is None:
+        return None
+    if abs(ts - previa["ts"]) > _MINUTOS_MISMA_OFERTA * 60:
+        return None
+    return previa["pub"]
+
+
+def _fusionar_con_la_anterior(repo: Repo, comercio: dict, row: dict, tipo: str,
+                              previa: dict | None) -> dict | None:
     """Junta este mensaje con el anterior cuando son las dos mitades de una oferta.
 
     Sólo si se COMPLEMENTAN: una tiene foto y le falta el texto, la otra tiene
     texto y le falta la foto. Si las dos tienen lo mismo son dos publicaciones
     distintas —dos ofertas seguidas, que también pasa— y no se tocan.
 
-    Devuelve la publicación ya completa, o None si no había con qué juntarla.
+    `previa`: lo que decidió `_previa_fusionable`. Devuelve la publicación ya
+    completa, o None si no había con qué juntarla.
     """
-    previa = repo.ultima_publicacion_de(comercio["id"], _MINUTOS_MISMA_OFERTA)
     if not previa:
         return None
 
@@ -365,14 +393,16 @@ def _publicar_del_explorador(payload, event, repo: Repo) -> dict:
     if not codigo:
         logger.info("ingest.explorador_sin_codigo", phone=payload.phone)
         motivo = "el explorador mandó una oferta sin el código del local"
-        repo.marcar_wa_inbox(payload.id, "sin_comercio", motivo)
+        # La foto se guarda (P2): queda en «Sin dueño» para mirarla; se publica
+        # reenviándola con el código, no con un «Es de…».
+        _marcar_sin_comercio(repo, payload, motivo, None, exento_de_tope=True)
         return {"captured": True, "publicada": False, "motivo": motivo}
 
     comercio = repo.get_comercio_por_codigo(codigo)
     if not comercio:
         logger.info("ingest.explorador_codigo_desconocido", codigo=codigo)
         motivo = f"no hay ningún comercio con el código {codigo}"
-        repo.marcar_wa_inbox(payload.id, "sin_comercio", motivo)
+        _marcar_sin_comercio(repo, payload, motivo, None, exento_de_tope=True)
         return {"captured": True, "publicada": False, "motivo": motivo, "codigo": codigo}
 
     slug = comercio.get("slug") or comercio.get("id") or "?"
@@ -464,19 +494,53 @@ def _guardar_foto_recibida(payload, media_path: str | None) -> str | None:
     return wa_received.save(payload)
 
 
-def _marcar_sin_comercio(repo: Repo, payload, motivo: str, media_path: str | None) -> None:
-    """`sin_comercio` + la foto a salvo en el disco privado, para el «Es de…»."""
-    guardada = _guardar_foto_recibida(payload, media_path)
+def _tope_de_fotos_alcanzado(repo: Repo, payload) -> bool:
+    """¿Este remitente ya llegó al tope de fotos guardadas en las últimas 24 h?
+
+    Un número desconocido que manda cientos de fotos no puede llenar el disco: lo que
+    excede se registra en la bandeja (el crudo queda) pero sin archivo. Si no se
+    puede contar, se guarda (perder una foto vale más que un tope mal medido)."""
+    from datetime import datetime, timedelta, timezone
+
+    tope = settings.wa_received_max_per_sender_per_day
+    try:
+        desde = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        return repo.count_wa_inbox_media_desde(payload.phone, desde) >= max(0, tope)
+    except Exception:  # noqa: BLE001
+        logger.warning("ingest.tope_fotos_fallo", exc_info=True)
+        return False
+
+
+def _marcar_sin_comercio(repo: Repo, payload, motivo: str, media_path: str | None,
+                         exento_de_tope: bool = False) -> None:
+    """`sin_comercio` + la foto a salvo en el disco privado, para el «Es de…».
+
+    `exento_de_tope`: el explorador es de URUKU, no un desconocido; el tope diario
+    de fotos por remitente no le aplica."""
+    hay_foto = payload.type == "image" or payload.has_media
+    if hay_foto and not media_path and not exento_de_tope and _tope_de_fotos_alcanzado(repo, payload):
+        logger.warning("ingest.tope_fotos_remitente", tope=settings.wa_received_max_per_sender_per_day)
+        motivo = f"{motivo} · foto no guardada: tope diario de fotos de este remitente"
+        guardada = None
+    else:
+        guardada = _guardar_foto_recibida(payload, media_path)
     repo.marcar_wa_inbox(payload.id, "sin_comercio", motivo)
     if guardada and guardada != media_path:
         repo.set_wa_inbox_media(payload.id, guardada)
 
 
-def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str | None = None) -> dict:
+def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str | None = None,
+                   reproceso: dict | None = None) -> dict:
     """Procesa un evento de mensaje de WAHA (o de Meta, ya traducido).
 
     `media_path`: sólo lo pasa el reproceso («Es de…»): la foto ya está en el disco
-    privado de `wa_received` y es de ahí de donde se copia al publicar."""
+    privado de `wa_received` y es de ahí de donde se copia al publicar.
+
+    `reproceso`: un dict compartido por toda una tanda de «Es de…» (lo crea
+    `wa_received.reprocess`). Su presencia cambia tres cosas, porque el mensaje es
+    VIEJO y lo decide una persona, no el comerciante: (1) entra SIEMPRE `pendiente`,
+    aunque el comercio sea confiable; (2) no consume cuota ni genera cobro extra, y no
+    se le escribe nada al chat; (3) sólo se junta con lo que esta misma tanda creó."""
     repo = repo or get_repo()
     event = WahaEvent.model_validate(event_dict)
 
@@ -558,7 +622,11 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
     #      que siga siendo inofensivo el día que lo agreguen a un grupo de
     #      comerciante), así que si esta rama fuera después, sus fotos se
     #      tirarían como "mensaje de un número de URUKU".
-    if settings.es_numero_explorador(payload.phone):
+    #      El número se resuelve con `wa_identity` y no con `payload.phone`: si el
+    #      explorador llega como LID y el par ya se aprendió, es él (antes caía
+    #      en «propio 1-a-1» y se descartaba).
+    numero = wa_identity.sender_number(repo, payload)      # None = LID sin número conocido
+    if numero and settings.es_numero_explorador(numero):
         return _publicar_del_explorador(payload, event, repo)
 
     propio = wa_identity.sender_is_own(repo, payload)
@@ -598,6 +666,19 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
         repo.marcar_wa_inbox(payload.id, "ignorada", motivo)
         return {"captured": True, "publicada": False, "motivo": motivo}
 
+    if not payload.es_grupo and numero is None:
+        # UN LID SIN NÚMERO NO IDENTIFICA A NADIE (S1). WhatsApp esconde el teléfono y
+        # no se sabe cuál es: autorizar «ese número» por el código sería autorizar los
+        # dígitos del identificador oculto —que no es un teléfono— y atarle ese jid
+        # al comercio. Queda `sin_comercio` con la foto a salvo (P2); cuando el par
+        # se aprenda, el «Es de…» lo resuelve.
+        from app.core.codigo import extraer_codigo
+
+        logger.info("ingest.lid_sin_numero", con_codigo=bool(extraer_codigo(payload.body)))
+        motivo = "remitente con número oculto (LID): no se puede identificar"
+        _marcar_sin_comercio(repo, payload, motivo, media_path)
+        return {"captured": True, "publicada": False, "motivo": motivo}
+
     # 2) Identificar al comercio.
     #    En un GRUPO manda el grupo: está atado a un comercio y no cambia aunque
     #    el comerciante cambie de celular. En un chat 1-a-1 manda el número
@@ -615,7 +696,7 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
             return {"captured": True, "publicada": False, "motivo": motivo,
                     "grupo": payload.grupo_jid}
     else:
-        comercio, identidad_origen, codigo_recibido = _identificar_comercio(repo, payload)
+        comercio, identidad_origen, codigo_recibido = _identificar_comercio(repo, payload, numero)
         if comercio is None:
             # Un número desconocido sin código (o con uno que no existe) no es un
             # comerciante nuevo: no se crea comercio ni publicación. El crudo
@@ -677,16 +758,27 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
     # para publicar. Sin foto, sin precio (u oferta), sin TikTok y sin ubicación
     # no hay nada que publicar. En un grupo no aplica: ahí el texto suelto sí
     # puede ser una novedad del comerciante.
+    #
+    # Se mira el texto SIN el código (S6): «hola URUKU-2345» trae un número de 4 cifras
+    # que es parte del código, no un precio.
+    texto_limpio = _sin_codigo(payload.body)
+    previa = None                        # con qué podría juntarse (se calcula una vez)
     if (not payload.es_grupo
             and not (payload.type == "image" or payload.has_media)
-            and not parece_oferta(payload.body)
-            and not _precio_suelto(payload.body)
+            and not parece_oferta(texto_limpio)
+            and not _precio_suelto(texto_limpio)
             and not _extract_tiktok(payload.body)):
-        motivo = "charla 1-a-1: el Registrador no contesta"
-        logger.info("ingest.charla_1a1", comercio=slug)
-        repo.marcar_wa_inbox(payload.id, "ignorada", motivo, comercio.get("id"))
-        return {"captured": True, "comercio": slug, "publicada": False, "motivo": motivo,
-                "identidad_origen": identidad_origen}
+        # Excepción (B2): «foto y después texto». Si el comercio mandó hace ≤10 min una
+        # foto sin texto, este texto es SU descripción: no es charla, se fusiona.
+        previa = _previa_fusionable(repo, comercio, reproceso, payload.timestamp)
+        es_segunda_mitad = bool(previa and previa.get("imagen_url")
+                                and not (previa.get("descripcion") or "").strip())
+        if not es_segunda_mitad:
+            motivo = "charla 1-a-1: el Registrador no contesta"
+            logger.info("ingest.charla_1a1", comercio=slug)
+            repo.marcar_wa_inbox(payload.id, "ignorada", motivo, comercio.get("id"))
+            return {"captured": True, "comercio": slug, "publicada": False, "motivo": motivo,
+                    "identidad_origen": identidad_origen}
 
     # 2.b) La cuota del plan.
     #
@@ -697,7 +789,13 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
     # cómo se perdían las ofertas antes de la bandeja. Por eso el aviso se manda
     # acá, en el mismo chat donde mandó la foto, y con las DOS salidas: pagar la
     # extra o pasar de plan. Ofrecer una sola es elegir por él.
-    cuota = planes.revisar_antes_de_publicar(repo, comercio)
+    #
+    # En un REPROCESO («Es de…») no hay cuota ni aviso: el mensaje es viejo, lo decide
+    # una persona del equipo y entra a la cola; no se cobra ni se le escribe al chat.
+    if reproceso is not None:
+        cuota = {"puede": True, "consecuencia": None}
+    else:
+        cuota = planes.revisar_antes_de_publicar(repo, comercio)
     avisado = False
     if cuota["consecuencia"]:
         siguiente = planes.plan_siguiente(repo, cuota["plan"])
@@ -729,10 +827,16 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
     # otro celular— pero no se publica solo. Va a moderación, que es donde una
     # persona puede mirar quién es.
     if payload.es_grupo:
-        duenio = repo.get_comercio_por_numero(payload.phone)
+        duenio = repo.get_comercio_por_numero(numero) if numero else None
         if not (duenio and duenio.get("id") == comercio["id"]):
             logger.info("ingest.remitente_ajeno", grupo=payload.grupo_jid, comercio=slug)
             confiable = False
+
+    # Lo reprocesado por «Es de…» (S3) entra SIEMPRE a la cola, aunque el comercio sea
+    # confiable: nadie del comercio mandó esto ahora; lo atribuyó una persona del equipo
+    # a partir de un mensaje de un desconocido, y otra persona tiene que mirarlo.
+    if reproceso is not None:
+        confiable = False
 
     now = datetime.now(timezone.utc).isoformat()
     tipo = _classify_tipo(payload)
@@ -784,11 +888,16 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
     #
     # Si lo último que mandó este comercio hace un rato es la mitad que le
     # falta a esto, se juntan en una sola.
-    fusionada = _fusionar_con_la_anterior(repo, comercio, row, tipo)
+    if previa is None:
+        previa = _previa_fusionable(repo, comercio, reproceso, payload.timestamp)
+    fusionada = _fusionar_con_la_anterior(repo, comercio, row, tipo, previa)
     if fusionada:
         logger.info("ingest.publicacion_fusionada", comercio=slug, pub=fusionada["id"], tipo=fusionada.get("tipo"))
         repo.marcar_wa_inbox(payload.id, "publicada", "se juntó con el mensaje anterior", comercio["id"])
-        _avisar(payload.from_, "✅ Lo sumé a lo que mandaste recién: queda una sola publicación.")
+        if reproceso is None:
+            _avisar(payload.from_, "✅ Lo sumé a lo que mandaste recién: queda una sola publicación.")
+        else:
+            reproceso["ultima"][comercio["id"]]["pub"] = {**previa, **fusionada}
         return {"captured": True, "comercio": slug, "tipo": fusionada.get("tipo"), "estado": fusionada.get("estado"), "fusionada": True}
 
     creada = repo.insert_publicacion(row)
@@ -806,8 +915,15 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
         planes.cobrar_extra(repo, comercio, creada["id"], cuota["plan"])
     # Después de insertar y de encolar: si el tope se pasó, la más vieja se
     # archiva y su foto se borra. Nunca lanza, así que no puede romper esto.
-    if creada.get("id"):
+    # (En un reproceso no: lo viejo que se atribuye a mano no debe sacar de la
+    # lista a publicaciones que ya estaban; el próximo mensaje normal lo hace.)
+    if creada.get("id") and reproceso is None:
         planes.archivar_excedentes(repo, comercio)
+    if reproceso is not None and creada.get("id"):
+        # Lo que esta tanda acaba de crear: lo único con lo que el siguiente mensaje
+        # de la tanda puede juntarse (B1).
+        reproceso.setdefault("ultima", {})[comercio["id"]] = {
+            "pub": {**row, **creada}, "ts": payload.timestamp}
     logger.info("ingest.publicacion", comercio=slug, tipo=tipo, estado=estado)
     repo.marcar_wa_inbox(
         payload.id, "publicada",

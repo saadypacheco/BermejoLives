@@ -167,6 +167,9 @@ async def _wa_received_loop():
         try:
             repo = get_repo()
             await run_in_threadpool(wa_received.purge_expired, repo)
+            # Los eventos de grupo crudos y los pares LID inactivos también traen
+            # teléfonos de terceros: se vacían a los WA_EVENTS_RETENTION_DAYS.
+            await run_in_threadpool(wa_received.purge_events, repo)
         except Exception as exc:  # noqa: BLE001
             logger.warning("wa_received_loop.error", error=str(exc))
         await asyncio.sleep(86400)  # 1 día

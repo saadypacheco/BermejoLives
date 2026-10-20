@@ -581,6 +581,8 @@ class FakeRepo:
         wamid = row["wa_message_id"]
         if wamid in self.wa_inbox:
             return False
+        # Como la base: `created_at` lo pone el insert (y es estrictamente creciente).
+        row.setdefault("created_at", self._tic())
         self.wa_inbox[wamid] = row
         return True
 
@@ -782,7 +784,7 @@ class FakeRepo:
         if fila is not None:
             fila["media_path"] = media_path
 
-    def list_wa_inbox_sin_dueno(self, dias=30, phone=None, con_raw=False):
+    def list_wa_inbox_sin_dueno(self, dias=30, phone=None, con_raw=False, wa_jid=None):
         from datetime import datetime, timedelta, timezone
         desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
         ahora = datetime.now(timezone.utc).isoformat()
@@ -794,6 +796,8 @@ class FakeRepo:
                 continue
             if phone and f.get("phone") != phone:
                 continue
+            if wa_jid and f.get("wa_jid") != wa_jid:
+                continue
             fila = {k: f.get(k) for k in ("wa_message_id", "wa_jid", "phone", "tipo", "body",
                                           "media_path", "media_purged_at", "via")}
             fila["created_at"] = f.get("created_at") or ahora
@@ -803,11 +807,50 @@ class FakeRepo:
         return sorted(salida, key=lambda x: str(x["created_at"]), reverse=True)
 
     def liberar_wa_inbox(self, wa_message_id, by):
+        """Como el real: update condicional, sólo si sigue en `sin_comercio`."""
         from datetime import datetime, timezone
         fila = self.wa_inbox.get(wa_message_id)
-        if fila is not None:
-            fila.update({"resultado": None, "procesado": False, "motivo": None,
-                         "assigned_by": by, "assigned_at": datetime.now(timezone.utc).isoformat()})
+        if fila is None or fila.get("resultado") != "sin_comercio":
+            return False
+        fila.update({"resultado": None, "procesado": False, "motivo": None,
+                     "assigned_by": by, "assigned_at": datetime.now(timezone.utc).isoformat()})
+        return True
+
+    def count_wa_inbox_media_desde(self, phone, desde_iso):
+        from datetime import datetime, timezone
+        ahora = datetime.now(timezone.utc).isoformat()
+        return sum(1 for f in self.wa_inbox.values()
+                   if f.get("phone") == phone and f.get("media_path")
+                   and str(f.get("created_at") or ahora) >= desde_iso)
+
+    def list_comercios_con_wa_jid_propio(self, jids):
+        return [{"id": c["id"], "nombre": c.get("nombre"), "slug": c.get("slug"),
+                 "wa_jid": c.get("wa_jid"), "activo": c.get("activo", True)}
+                for c in self.comercios.values() if c.get("wa_jid") and c["wa_jid"] in jids]
+
+    def limpiar_wa_jid_comercio(self, comercio_id):
+        if comercio_id in self.comercios:
+            self.comercios[comercio_id]["wa_jid"] = None
+
+    def purgar_wa_group_events(self, corte_iso, limite=500):
+        n = 0
+        for e in self.wa_group_events.values():
+            if n >= limite:
+                break
+            if not e.get("purged_at") and str(e.get("created_at") or "") <= corte_iso:
+                e.update({"raw": {}, "participants": None, "purged_at": self._tic()})
+                n += 1
+        return n
+
+    def purgar_wa_lid_inactivos(self, corte_iso, limite=500):
+        n = 0
+        for f in self.wa_lid_map.values():
+            if n >= limite:
+                break
+            if f.get("activo") is False and f.get("phone") and str(f.get("last_seen_at") or "") <= corte_iso:
+                f["phone"] = ""
+                n += 1
+        return n
 
     def list_wa_inbox_media_vigente(self, corte_iso, limite=500):
         from datetime import datetime, timezone
@@ -827,14 +870,19 @@ class FakeRepo:
     def insert_wa_group_event(self, row):
         if row["dedupe_key"] in self.wa_group_events:
             return False
-        self.wa_group_events[row["dedupe_key"]] = {"id": self._id("gev"), **row}
+        self.wa_group_events[row["dedupe_key"]] = {"id": self._id("gev"), "created_at": self._tic(), **row}
         return True
 
     def upsert_wa_lid(self, lid, phone, source):
+        """Como el real: no pisa `source='admin'` ni reactiva una fila de baja."""
         previo = self.wa_lid_map.get(lid)
+        if previo is not None:
+            if previo.get("activo") is False or previo.get("source") == "admin":
+                return
+            previo.update({"phone": phone, "source": source, "last_seen_at": self._tic()})
+            return
         self.wa_lid_map[lid] = {"lid": lid, "phone": phone, "source": source, "activo": True,
-                                "first_seen_at": (previo or {}).get("first_seen_at", self._tic()),
-                                "last_seen_at": self._tic()}
+                                "first_seen_at": self._tic(), "last_seen_at": self._tic()}
 
     def get_wa_lid(self, lid):
         fila = self.wa_lid_map.get(lid)
