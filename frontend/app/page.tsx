@@ -9,6 +9,7 @@ import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import { buscarComercios, getClima, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado, getNovedadesUruku, getVideosPromo } from "@/lib/data";
 import { CarruselNovedades } from "@/components/carrusel-novedades";
 import { sinEmoji } from "@/lib/rubros";
+import { etiquetaHasta, listaNombres, nombreCorto } from "@/lib/turnos-farmacia";
 import { TarjetaTurnoHoy } from "@/components/tarjeta-turno-hoy";
 import { NovedadUrukuCard } from "@/components/novedad-uruku-card";
 import { ciudadActual } from "@/lib/ciudad-server";
@@ -368,6 +369,28 @@ export default async function InicioPage() {
                 </div>
               </Link>
             ))}
+            {/* SERVICIOS: la farmacia de turno (cambia cada día) y los baños cerca.
+                Van entre las novedades y la publicidad. */}
+            {(turnosHoy ?? []).length > 0 && (
+              <Link href="/farmacias-de-turno" className="uk-offer sin-foto uk-offer-servicio">
+                <span className="uk-offer-tag">De turno hoy</span>
+                <span className="uk-offer-emoji"><Ic n="turno_farmacia" s={64} peso="fill" /></span>
+                <div className="uk-offer-body">
+                  <h3>{listaNombres((turnosHoy ?? []).map((t) => t.comercios?.nombre).filter((n): n is string => Boolean(n)).map(nombreCorto))}</h3>
+                  <small>Farmacia de turno · {etiquetaHasta((turnosHoy ?? [])[0].fin)}</small>
+                </div>
+              </Link>
+            )}
+            {conGuia && (
+              <Link href="/buscar?rubro=banos&cerca=1" className="uk-offer sin-foto uk-offer-servicio">
+                <span className="uk-offer-tag">Servicio</span>
+                <span className="uk-offer-emoji"><IcRubro slug="banos" s={64} peso="fill" /></span>
+                <div className="uk-offer-body">
+                  <h3>Baños cerca de vos</h3>
+                  <small>Los más cercanos, en el mapa</small>
+                </div>
+              </Link>
+            )}
             {destacados.map((c) => {
               const foto = c.portada_thumb_url || c.portada_url;
               return (
