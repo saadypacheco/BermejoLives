@@ -15,6 +15,7 @@ Un cliente de Aguas Blancas, Orán, Salta u otra ciudad pide en `uruku.bo/encarg
 ### MVP (primer incremento)
 - Página pública `/encargos`: cómo funciona, garantía de custodia, qué no cubre, formulario. Sin precios mientras estén ocultos. Sin conteos de comercios.
 - Encargo por formulario web **o** cargado por el operador cuando entra por WhatsApp.
+- **Retiro de compras ya pagadas** (pedido del dueño, 20/10): el cliente compró y pagó en un comercio (en persona o por WhatsApp con el comercio) y URUKU pasa a buscar la compra y la guarda. Es un encargo de tipo `pickup`: sin anticipo de productos (ya están pagos), con comprobante del comercio como prueba de pago y foto al retirarla; después sigue igual desde (d). La tarjeta de la portada lo ofrece así: «Retiramos o hacemos tus compras · Te las guardamos en la guardería URUKU».
 - Cotización, anticipo **registrado a mano por el admin** (con comprobante), compra con foto + comprobante del comercio.
 - Depósito: ingreso de paquetes (de encargos y de clientes que traen sus compras), ubicación, vencimientos.
 - Retiro con código de retiro + documento; persona autorizada.
@@ -69,7 +70,10 @@ Un cliente de Aguas Blancas, Orán, Salta u otra ciudad pide en `uruku.bo/encarg
 4. El **admin** registra el pago a mano: monto, moneda, medio (transferencia / efectivo en oficina), referencia y foto del comprobante. Encargo → `paid`. **El operador que compra no cobra** (como «el agente nunca cobra» de los planes).
 5. Si el cliente no paga en **72 h**, el encargo pasa a `expired` (S-05).
 
-### (c) URUKU compra
+### (c) URUKU compra (o retira, si el encargo es `pickup`)
+
+En un `pickup` no se compra: el operador va al comercio con el comprobante que mandó el cliente, verifica que el pedido esté pagado y completo, saca foto del paquete y del comprobante, y pasa a (d). Si el comercio no lo tiene listo o falta algo, se avisa al cliente y el encargo queda `waiting_store`.
+
 1. Compra el operador de encargos, en el comercio, con fondos de la **caja de compras** de URUKU (no con su plata).
 2. Antes de pagar al comercio, si el producto no coincide con la cotización o el precio supera el estimado en **más del 10 %**, consulta al cliente por WhatsApp y espera respuesta (S-06). Si no hay stock: ítem `unavailable`, se ofrece reemplazo o se devuelve esa parte del anticipo.
 3. Registra por ítem: precio real, **foto del producto**, **foto del comprobante/factura del comercio**. Factura a nombre del cliente si dio NIT/CI; si no, sin nombre (S-07).

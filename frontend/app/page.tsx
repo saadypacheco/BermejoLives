@@ -396,13 +396,13 @@ export default async function InicioPage() {
                 guardería de compras, con garantía de custodia. Va al WhatsApp público
                 de URUKU con el mensaje armado. Sin precios: se definen después. */}
             {conGuia && (
-              <a href={waUruku("Hola URUKU, quiero hacer un encargo de compra en Bermejo")}
+              <a href={waUruku("Hola URUKU, quiero que retiren o hagan mis compras en Bermejo y me las guarden en la guardería")}
                  target="_blank" rel="noopener" className="uk-offer sin-foto uk-offer-servicio uk-offer-uruku">
                 <span className="uk-offer-tag">Servicio URUKU</span>
                 <span className="uk-offer-emoji"><Ic n="encargo" s={64} peso="fill" /></span>
                 <div className="uk-offer-body">
-                  <h3>Te compramos y guardamos tus compras</h3>
-                  <small>Pedí desde Argentina · custodia con garantía URUKU · WhatsApp {WA_URUKU_TEXTO}</small>
+                  <h3>Retiramos o hacemos tus compras</h3>
+                  <small>Te las guardamos en la guardería URUKU · custodia garantizada · WhatsApp {WA_URUKU_TEXTO}</small>
                 </div>
               </a>
             )}
