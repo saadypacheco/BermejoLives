@@ -6,7 +6,9 @@ import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { ContactoUruku } from "@/components/contacto-uruku";
 import { AccesosCiudad } from "@/components/accesos-ciudad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
-import { getClima, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado, getNovedadesUruku, getVideosPromo } from "@/lib/data";
+import { buscarComercios, getClima, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado, getNovedadesUruku, getVideosPromo } from "@/lib/data";
+import { CarruselNovedades } from "@/components/carrusel-novedades";
+import { sinEmoji } from "@/lib/rubros";
 import { TarjetaTurnoHoy } from "@/components/tarjeta-turno-hoy";
 import { NovedadUrukuCard } from "@/components/novedad-uruku-card";
 import { ciudadActual } from "@/lib/ciudad-server";
@@ -140,11 +142,14 @@ export default async function InicioPage() {
   const conGuia = (ciudad?.slug ?? "bermejo") === "bermejo";
   // El peso argentino, en cualquier ciudad de frontera.
   const esFrontera = ciudad?.es_frontera ?? true;
-  const [feed, novedadesUruku, videos, frontera, clima, cotizaciones, turnosHoy] = await Promise.all([
+  const [feed, novedadesUruku, videos, frontera, clima, cotizaciones, turnosHoy, comerciosCiudad] = await Promise.all([
     getFeed(12, ciudad?.slug), getNovedadesUruku(ciudad?.id, 4), conGuia ? getVideosPromo(6) : Promise.resolve([]),
     conGuia ? getFronteraEstado(ciudad?.id) : Promise.resolve(null), conGuia ? getClima() : Promise.resolve(null), getCotizaciones(),
     // Las farmacias de turno hoy: la tarjeta sólo aparece si la ciudad tiene turnos cargados.
     getFarmaciasDeTurnoAhora(ciudad?.id),
+    // Sin texto, la búsqueda trae primero a los que tienen plan (estrella): de acá
+    // salen los destacados del carrusel de Novedades.
+    buscarComercios({ ciudad: ciudad?.slug }, 120, 0),
   ]);
   const nombre = ciudad?.nombre ?? "Bermejo";
   // La foto del hero es de la ciudad; sin foto propia, la de Bermejo sólo en
@@ -161,7 +166,17 @@ export default async function InicioPage() {
   // de URUKU dejan al menos un lugar para ellas: la sección es de los dos.
   const novUruku = novedadesUruku.slice(0, novComercios.length > 0 ? 3 : 4);
   const novComerciosVisibles = novComercios.slice(0, 4 - novUruku.length);
-  const hayNovedades = novUruku.length + novComerciosVisibles.length > 0;
+  // PUBLICIDAD: los comercios con plan pago al día (o de cortesía) que tienen
+  // foto, en orden al azar en cada visita para que todos roten parejo. Van en el
+  // carrusel después de las novedades, marcados «Destacado». Nunca se dice
+  // cuántos son ni se muestran precios.
+  const destacados = comerciosCiudad
+    .filter((c) => c.estrella === true && (c.portada_thumb_url || c.portada_url))
+    .map((c) => ({ c, k: Math.random() }))
+    .sort((a, b) => a.k - b.k)
+    .slice(0, 12)
+    .map(({ c }) => c);
+  const hayNovedades = novUruku.length + novComerciosVisibles.length + destacados.length > 0;
   const t = tasasDe(cotizaciones);
   const fechas = [frontera?.actualizado_en, t.actualizado_en].filter(Boolean) as string[];
   const ultima = fechas.length ? fechas.sort()[fechas.length - 1] : null;
@@ -339,7 +354,7 @@ export default async function InicioPage() {
             </h2>
             <Link href="/novedades">Ver todas las novedades →</Link>
           </div>
-          <div className="uk-offers">
+          <CarruselNovedades>
             {novUruku.map((n) => <NovedadUrukuCard key={n.id} n={n} />)}
             {novComerciosVisibles.map((o) => (
               <Link key={o.id} href={`/comercios/${o.comercio_slug}`}
@@ -353,7 +368,21 @@ export default async function InicioPage() {
                 </div>
               </Link>
             ))}
-          </div>
+            {destacados.map((c) => {
+              const foto = c.portada_thumb_url || c.portada_url;
+              return (
+                <Link key={`d-${c.id}`} href={`/comercios/${c.slug}`} className="uk-offer uk-offer-destacado"
+                      style={{ backgroundImage: `url(${JSON.stringify(foto)})`,
+                               ...(c.portada_pos != null ? { backgroundPosition: `center ${c.portada_pos}%` } : {}) }}>
+                  <span className="uk-offer-tag">Destacado</span>
+                  <div className="uk-offer-body">
+                    <h3>{c.nombre}</h3>
+                    {c.rubro_nombre && <small>{sinEmoji(c.rubro_nombre)}</small>}
+                  </div>
+                </Link>
+              );
+            })}
+          </CarruselNovedades>
         </section>
       )}
 

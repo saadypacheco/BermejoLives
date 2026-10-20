@@ -430,6 +430,24 @@
    fondo es el degradé de marca, el velo es suave —no hay foto que tapar— y el
    emoji del rubro ocupa el lugar que ocuparía la foto. */
 .uk-offer.sin-foto { background: var(--uk-green-grad); }
+/* Novedades + destacados en carrusel (components/carrusel-novedades.tsx): la
+   misma tarjeta .uk-offer en una fila que se desliza. 4 a la vista en la compu,
+   2 en tablet y una y pico en el celular (lo que asoma invita a deslizar). */
+.uk-carrusel { position: relative; }
+.uk-carrusel-pista { display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 2px; }
+.uk-carrusel-pista::-webkit-scrollbar { display: none; }
+.uk-carrusel-item { flex: 0 0 calc((100% - 48px) / 4); scroll-snap-align: start; min-width: 0; }
+.uk-carrusel-item > .uk-offer { display: block; height: 100%; }
+@media (max-width: 900px) { .uk-carrusel-item { flex-basis: calc((100% - 16px) / 2); } }
+@media (max-width: 560px) { .uk-carrusel-item { flex-basis: 82%; } }
+.uk-carrusel-flecha { position: absolute; top: 50%; transform: translateY(-50%); z-index: 3; width: 40px; height: 40px;
+  display: grid; place-items: center; border-radius: 999px; border: 0; cursor: pointer;
+  background: rgba(1,14,18,.72); color: #fff; box-shadow: var(--uk-shadow-soft); }
+.uk-carrusel-flecha.izq { left: -12px; }
+.uk-carrusel-flecha.der { right: -12px; }
+@media (hover: none) { .uk-carrusel-flecha { display: none; } }
+.uk-offer-destacado .uk-offer-tag { background: #C9A227; color: #1d1600; }
+
 .uk-offer.sin-foto::after { background: linear-gradient(0deg, rgba(1,14,18,.55), rgba(1,14,18,0)); }
 /* El ícono del rubro cuando la publicación no trae foto: grande, al 22%, de
    adorno. Ya no es un emoji sino un SVG, así que mide por caja y no por
