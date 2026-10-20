@@ -15,20 +15,17 @@ export type UnknownMessage = {
 };
 
 type UnknownBase = {
-  /** Clave estable del renglón (`phone:<dígitos>`, `group:<jid>`, `member:<uuid>`). */
+  /** Clave estable y OPACA del renglón (sólo sirve de `key` de React: no se parsea). */
   key: string;
   at: string;
 };
 
-/** Fotos 1-a-1 de un número que ningún comercio tiene. */
+/** Fotos 1-a-1 de un número que ningún comercio tiene. El teléfono completo nunca llega al panel. */
 export type UnknownPhone = UnknownBase & {
   kind: "phone";
-  /** Dígitos completos: es lo que va en la ruta de `assign`. Sólo para el panel.
-   *  `null` cuando el remitente llegó como LID (identificador oculto de WhatsApp)
-   *  y todavía no se sabe su número: se ve, pero no se puede asignar. */
-  phone: string | null;
   phone_masked: string | null;
-  lid?: string | null;
+  /** `false` cuando WhatsApp oculta el número (LID): se ve, pero no se puede asignar. */
+  assignable: boolean;
   count: number;
   messages: UnknownMessage[];
 };
@@ -37,7 +34,6 @@ export type UnknownPhone = UnknownBase & {
 export type UnknownGroup = UnknownBase & {
   kind: "group";
   group_jid: string;
-  group_name?: string | null;
   count: number;
   messages: UnknownMessage[];
 };
@@ -71,15 +67,17 @@ export async function getInboxMedia(waMessageId: string): Promise<Blob | null> {
 }
 
 export type AssignResult = {
-  numero: string;
+  /** Sólo al asignar un número (ya enmascarado por el backend). */
+  numero_masked?: string;
   /** Mensajes `sin_comercio` de los últimos 30 días que se volvieron a procesar. */
   reprocessed: number;
+  /** Lo reprocesado siempre queda pendiente de moderación, aunque el contador diga "published". */
   published: number;
   ignored: number;
 };
 
 /** Por qué falló «Es de…», ya traducido a algo que se pueda leer. */
-export type AssignErrorKind = "owned_by_other" | "own_number" | "not_found" | "forbidden" | "other";
+export type AssignErrorKind = "owned_by_other" | "not_assignable" | "not_found" | "forbidden" | "invalid" | "other";
 
 export class AssignError extends Error {
   constructor(public kind: AssignErrorKind, message: string) {
@@ -92,44 +90,68 @@ export function statusDe(e: unknown): number | null {
   return typeof s === "number" ? s : null;
 }
 
-function mensajeDe(e: unknown): string | null {
+function detalleDe(e: unknown, campo: "codigo" | "mensaje"): string | null {
   const det = (e as { detail?: unknown } | null)?.detail;
-  if (det && typeof det === "object" && typeof (det as { mensaje?: unknown }).mensaje === "string") {
-    return (det as { mensaje: string }).mensaje;
+  if (det && typeof det === "object") {
+    const v = (det as Record<string, unknown>)[campo];
+    if (typeof v === "string" && v) return v;
   }
   return null;
 }
 
-function codigoDe(e: unknown): string | null {
-  const det = (e as { detail?: unknown } | null)?.detail;
-  if (det && typeof det === "object" && typeof (det as { codigo?: unknown }).codigo === "string") {
-    return (det as { codigo: string }).codigo;
+/** Texto por código, para cuando el backend no manda `mensaje`. */
+const TEXTO_POR_CODIGO: Record<string, string> = {
+  own_number: "Es un número de URUKU",
+  invalid_number: "El número no es válido",
+  lid_not_assignable: "WhatsApp oculta este número: todavía no se puede asignar",
+  explorer_message: "Es del explorador: sus fotos se publican con código",
+  phone_owned_by_other:
+    "Ese número ya es de otro comercio. No se movió nada: primero hay que soltarlo desde la ficha del otro.",
+  group_owned_by_other:
+    "Ese grupo ya es de otro comercio. No se movió nada: primero hay que soltarlo desde la ficha del otro.",
+};
+
+function traducir(e: unknown): AssignError {
+  const st = statusDe(e);
+  const cod = detalleDe(e, "codigo");
+  const msg = detalleDe(e, "mensaje") ?? (cod ? TEXTO_POR_CODIGO[cod] : undefined);
+  if (st === 409 || cod === "phone_owned_by_other" || cod === "group_owned_by_other") {
+    return new AssignError("owned_by_other", msg ?? "Ya es de otro comercio. No se movió nada.");
   }
-  return null;
+  if (st === 400) {
+    const kind: AssignErrorKind = cod === "invalid_number" ? "invalid" : "not_assignable";
+    return new AssignError(kind, msg ?? "No se puede asignar.");
+  }
+  if (st === 404) return new AssignError("not_found", msg ?? "No se encontró el comercio o el mensaje. Actualizá la lista.");
+  if (st === 403) return new AssignError("forbidden", "Tu usuario no tiene el permiso de Recepción.");
+  if (st === 422) return new AssignError("invalid", msg ?? "Los datos no son válidos. Revisá el nombre de «Quién es».");
+  return new AssignError("other", msg ?? (e instanceof Error ? e.message : "No se pudo asignar"));
 }
 
-/** «Este número es de este comercio»: lo autoriza y reprocesa las fotos que estaban sin dueño. */
-export async function assignNumber(phone: string, comercioId: string, label: string): Promise<AssignResult> {
+async function postAssign(ruta: string, cuerpo: Record<string, string>): Promise<AssignResult> {
   try {
-    const res = await authFetch(`/admin/whatsapp/numbers/${encodeURIComponent(phone)}/assign`, {
+    const res = await authFetch(ruta, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ comercio_id: comercioId, label }),
+      body: JSON.stringify(cuerpo),
     });
     return (await res.json()) as AssignResult;
   } catch (e) {
-    const st = statusDe(e);
-    const cod = codigoDe(e);
-    if (st === 409 || cod === "phone_owned_by_other") {
-      throw new AssignError("owned_by_other",
-        "Ese número ya es de otro comercio. No se movió nada: primero hay que soltarlo desde la ficha del otro.");
-    }
-    if (st === 400) {
-      throw new AssignError("own_number",
-        "Es un número de URUKU, no de un comercio. No se puede asignar a ninguno.");
-    }
-    if (st === 404) throw new AssignError("not_found", "No se encontró el comercio. Buscalo de nuevo.");
-    if (st === 403) throw new AssignError("forbidden", "Tu usuario no tiene el permiso de Recepción.");
-    throw new AssignError("other", mensajeDe(e) ?? (e instanceof Error ? e.message : "No se pudo asignar"));
+    throw traducir(e);
   }
+}
+
+/**
+ * «Este número es de este comercio». El número NUNCA viaja al panel: se identifica
+ * por el mensaje más reciente del renglón y el backend resuelve el teléfono.
+ */
+export function assignNumber(waMessageId: string, comercioId: string, label: string): Promise<AssignResult> {
+  return postAssign(`/admin/whatsapp/inbox/${encodeURIComponent(waMessageId)}/assign`,
+    { comercio_id: comercioId, label });
+}
+
+/** «Este grupo es de este comercio»: lo ata y reprocesa lo que estaba sin dueño. */
+export function assignGroup(groupJid: string, comercioId: string): Promise<AssignResult> {
+  return postAssign(`/admin/whatsapp/groups/${encodeURIComponent(groupJid)}/assign`,
+    { comercio_id: comercioId });
 }

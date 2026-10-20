@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Ic } from "@/components/ic";
-import { agregarNumeroAGrupos, atarGrupo, getBandejaWa, probarCloud, reprocesarEntrante,
+import { agregarNumeroAGrupos, getBandejaWa, probarCloud, reprocesarEntrante,
          type AgregarAGrupos, type BandejaWa, type WaEntrante } from "@/lib/api";
 import { buscarComercioPorNombre, type ComercioBusqueda } from "@/lib/comercio";
-import { assignNumber, getInboxMedia, getUnknown,
+import { assignGroup, assignNumber, getInboxMedia, getUnknown,
          type Unknown, type UnknownGroup, type UnknownMessage, type UnknownPhone } from "@/lib/reception";
 
 const ETIQUETA: Record<string, { texto: string; color: string }> = {
@@ -651,25 +651,25 @@ function AsignarPanel({ it, offline, onCancelar, onHecho }: {
     return () => { vivo = false; clearTimeout(h); };
   }, [q]);
 
-  const quien = it.kind === "phone" ? (it.phone_masked ?? "número oculto") : `el grupo ${it.group_name || it.group_jid.split("@")[0]}`;
+  const quien = it.kind === "phone" ? (it.phone_masked ?? "número oculto") : `el grupo ${it.group_jid.split("@")[0]}`;
+  // El número se identifica por su mensaje más reciente: el teléfono no llega al panel.
+  const idMensaje = it.messages[0]?.wa_message_id ?? it.key;
 
   const confirmar = async () => {
     if (!elegido) return;
     setEnviando(true); setError("");
     try {
-      if (it.kind === "phone") {
-        if (!it.phone) return;
-        const r = await assignNumber(it.phone, elegido.id, label.trim());
-        onHecho(
-          `Listo: ${it.phone_masked} es de ${elegido.nombre}. ` +
-          (r.reprocessed > 0
-            ? `Se reprocesaron ${r.reprocessed} ${r.reprocessed === 1 ? "mensaje" : "mensajes"} ` +
-              `(${r.published} publicados, ${r.ignored} ignorados).`
-            : "No había mensajes para reprocesar."));
-      } else {
-        await atarGrupo(elegido.id, it.group_jid, it.group_name ?? undefined);
-        onHecho(`Listo: el grupo quedó atado a ${elegido.nombre}. Lo que mande de ahora en más entra solo.`);
-      }
+      const r = it.kind === "phone"
+        ? await assignNumber(idMensaje, elegido.id, label.trim())
+        : await assignGroup(it.group_jid, elegido.id);
+      // Lo reprocesado siempre queda pendiente: nada se publica sin pasar por moderación.
+      const n = r.reprocessed;
+      const quedo = it.kind === "phone"
+        ? `${it.phone_masked ?? "el número"} es de ${elegido.nombre}`
+        : `el grupo quedó atado a ${elegido.nombre}`;
+      onHecho(`Listo: ${quedo}. ` + (n > 0
+        ? `${n} ${n === 1 ? "mensaje pasó" : "mensajes pasaron"} a moderación.`
+        : "No había mensajes para reprocesar."));
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo asignar");
     } finally { setEnviando(false); }
@@ -715,7 +715,7 @@ function AsignarPanel({ it, offline, onCancelar, onHecho }: {
           <div style={{ fontSize: 13 }}>
             <Ic n="comercios" s={14} />{" "}
             {it.kind === "phone"
-              ? <>Vas a dejar <b>{it.phone_masked}</b> como número de <b>{elegido.nombre}</b> y se van a publicar sus fotos.</>
+              ? <>Vas a dejar <b>{it.phone_masked}</b> como número de <b>{elegido.nombre}</b>; sus fotos pasan a moderación.</>
               : <>Vas a atar este grupo a <b>{elegido.nombre}</b>.</>}
           </div>
           {it.kind === "phone" && (
@@ -776,7 +776,7 @@ function FilaSinDueno({ it, offline, abierta, onAbrir, onCerrar, onHecho }: {
   const titulo = it.kind === "phone"
     ? <><Ic n="telefono" s={14} /> <b>{it.phone_masked ?? "Número oculto"}</b></>
     : <><Ic n="gente" s={14} /> <b>Grupo sin atar</b> <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--txt-3)" }}>
-        {it.group_name || it.group_jid}</span></>;
+        {it.group_jid}</span></>;
 
   return (
     <div className="panel-card glass" style={{ padding: 12 }}>
@@ -785,11 +785,11 @@ function FilaSinDueno({ it, offline, abierta, onAbrir, onCerrar, onHecho }: {
         <span style={{ color: "var(--txt-3)", fontSize: 12.5 }}>
           · {it.count} {it.count === 1 ? "mensaje" : "mensajes"} · último {fechaCorta(it.at)}
         </span>
-        {!abierta && (it.kind === "phone" && !it.phone ? (
-          // Llegó como LID: WhatsApp oculta el número y todavía no lo aprendimos.
-          // Asignarlo sería atar un identificador que mañana puede cambiar.
+        {!abierta && (it.kind === "phone" && !it.assignable ? (
+          // Llegó como LID: WhatsApp oculta el número. Asignarlo sería atar un
+          // identificador que mañana puede cambiar.
           <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--txt-3)" }}>
-            Número oculto por WhatsApp: se podrá asignar cuando escriba en un grupo
+            <Ic n="aviso" s={13} /> Número oculto por WhatsApp: no se puede asignar todavía
           </span>
         ) : (
           <button type="button" className="btn btn-sm btn-primary" style={{ marginLeft: "auto", minHeight: 40 }}
@@ -835,7 +835,7 @@ function SinDueno({ items, cargando, err, dias, setDias, recargar, offline }: {
       <div className="panel-card glass" style={{ padding: "12px 16px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 220, fontSize: 12.5, color: "var(--txt-3)" }}>
           Fotos y grupos que llegaron y no se sabe de quién son. Con <b>Es de…</b> se les pone
-          dueño y lo que estaba guardado se publica.
+          dueño y lo que estaba guardado pasa a moderación.
         </div>
         <label style={{ fontSize: 12.5, color: "var(--txt-3)", display: "flex", gap: 6, alignItems: "center" }}>
           últimos
