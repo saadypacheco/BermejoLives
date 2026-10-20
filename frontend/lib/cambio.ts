@@ -25,10 +25,19 @@ export type Tasas = {
   actualizado_en: string | null;  // la más vieja de las tres: es la que manda
 };
 
+/** Las tasas que usa el conversor. Las demás filas (reales, soles) no cuentan
+ *  para decir de cuándo es la referencia. */
+const USADAS = ["usd_bob", "ars_bob", "usd_ars"];
+
 export function tasasDe(cotizaciones: Cotizacion[]): Tasas {
   const por = new Map(cotizaciones.map((c) => [c.clave, c]));
   const v = (k: string) => { const x = por.get(k)?.valor; return x != null && x > 0 ? Number(x) : null; };
-  const fechas = cotizaciones.map((c) => c.actualizado_en).filter((f): f is string => Boolean(f)).sort();
+  // La fecha es la de las tasas que se USAN y tienen valor. Antes contaban todas
+  // las filas: `brl_bob` y `pen_bob` (vacías, de otras fronteras) quedaron del 22/9
+  // y la página decía «puede estar vieja» con el dólar y el peso cargados hoy.
+  const fechas = cotizaciones
+    .filter((c) => USADAS.includes(c.clave) && c.valor != null && Number(c.valor) > 0)
+    .map((c) => c.actualizado_en).filter((f): f is string => Boolean(f)).sort();
   return {
     usd_bob: v("usd_bob"),
     ars_bob: v("ars_bob") != null ? (v("ars_bob") as number) / 1000 : null,

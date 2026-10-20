@@ -335,7 +335,10 @@ def _tasas(repo) -> dict:
     def v(k):
         x = (por.get(k) or {}).get("valor")
         return float(x) if x else None
-    fechas = sorted(str(c.get("actualizado_en")) for c in por.values() if c.get("actualizado_en"))
+    # Sólo las tasas que se usan y tienen valor: `brl_bob`/`pen_bob` (vacías, de
+    # otras fronteras) quedaban viejas y hacían decir que la cotización era vieja.
+    fechas = sorted(str(c.get("actualizado_en")) for k, c in por.items()
+                    if k in ("usd_bob", "ars_bob", "usd_ars") and c.get("valor") and c.get("actualizado_en"))
     ars = v("ars_bob")   # la tabla lo guarda por 1.000 pesos
     return {"usd_bob": v("usd_bob"), "ars_bob": ars / 1000 if ars else None, "usd_ars": v("usd_ars"),
             "actualizado_en": fechas[0] if fechas else None}
