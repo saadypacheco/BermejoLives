@@ -19,7 +19,7 @@ def test_el_pago_le_crea_la_cuenta_al_comercio(client, repo, admin_token):
     c = repo.seed_comercio(nombre="Ferretería", whatsapp="59170123456", activo=True)
 
     r = client.post(f"/admin/comercio/{c['id']}/pago",
-                    json={"monto": 150, "moneda": "BOB", "metodo": "efectivo", "meses": 1},
+                    json={"monto": 150, "moneda": "BOB", "metodo": "efectivo", "meses": 1, "plan": "publica"},
                     headers={"Authorization": f"Bearer {admin_token}"})
     assert r.status_code == 200, r.text
     assert r.json()["login"] is True
@@ -223,3 +223,38 @@ def test_la_baja_por_vencimiento_se_puede_volver_a_prender(client, repo, admin_t
     r = client.post("/admin/bajas/ejecutar", headers={"Authorization": f"Bearer {admin_token}"})
     assert r.json()["ocultos"] == 1
     assert repo.comercios[c["id"]]["baja_motivo"] == "vencido"
+
+
+# ── El pago tiene que dejar un plan pago (Boutique Tatiana, 20/10/2026) ────────
+def test_pago_sin_plan_sobre_un_comercio_gratis_se_rechaza(client, repo, admin_token):
+    """Pagado hasta 2027 con el plan en «gratis» = sin estrella y sin publicidad."""
+    c = repo.seed_comercio(nombre="Boutique", whatsapp="59170123457", activo=True)
+    r = client.post(f"/admin/comercio/{c['id']}/pago", json={"monto": 70, "meses": 1},
+                    headers={"Authorization": f"Bearer {admin_token}"})
+    assert r.status_code == 400
+    assert "plan" in r.json()["detail"]
+    assert not repo.comercios[c["id"]].get("paga_hasta")          # no se registró nada
+
+
+def test_pago_con_plan_le_asigna_el_plan(client, repo, admin_token):
+    c = repo.seed_comercio(nombre="Boutique", whatsapp="59170123458", activo=True)
+    r = client.post(f"/admin/comercio/{c['id']}/pago", json={"monto": 70, "meses": 1, "plan": "publica"},
+                    headers={"Authorization": f"Bearer {admin_token}"})
+    assert r.status_code == 200, r.text
+    assert repo.comercios[c["id"]]["plan"] == "publica"
+    assert repo.comercios[c["id"]]["paga_hasta"]
+
+
+def test_pago_con_un_plan_sin_precio_se_rechaza(client, repo, admin_token):
+    c = repo.seed_comercio(nombre="Boutique", whatsapp="59170123459", activo=True)
+    r = client.post(f"/admin/comercio/{c['id']}/pago", json={"monto": 70, "meses": 1, "plan": "gratis"},
+                    headers={"Authorization": f"Bearer {admin_token}"})
+    assert r.status_code == 400
+
+
+def test_renovar_un_comercio_que_ya_tiene_plan_pago_no_pide_plan(client, repo, admin_token):
+    c = repo.seed_comercio(nombre="Boutique", whatsapp="59170123460", activo=True, plan="publica")
+    r = client.post(f"/admin/comercio/{c['id']}/pago", json={"monto": 70, "meses": 1},
+                    headers={"Authorization": f"Bearer {admin_token}"})
+    assert r.status_code == 200, r.text
+    assert repo.comercios[c["id"]]["plan"] == "publica"

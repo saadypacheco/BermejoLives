@@ -382,7 +382,7 @@ def test_el_interes_desaparece_tras_un_pago_y_vuelve_con_uno_nuevo(client, repo,
     _interes(client, agente, b, plan="publica")
     assert _suscripciones(client, admin)["Paga"]["interes"]["plan"] == "publica"
 
-    r = client.post(f"/admin/comercio/{a}/pago", headers=_h(admin), json={"monto": 70, "meses": 1})
+    r = client.post(f"/admin/comercio/{a}/pago", headers=_h(admin), json={"monto": 70, "meses": 1, "plan": "publica"})
     assert r.status_code == 200, r.text
     filas = _suscripciones(client, admin)
     assert filas["Paga"]["interes"] is None                     # el pago lo cerró

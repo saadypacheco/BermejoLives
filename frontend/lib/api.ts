@@ -628,6 +628,8 @@ export async function responderReservaloConsulta(id: number, respuesta: string) 
 
 export async function registrarPago(comercioId: string, body: {
   monto: number; moneda: string; metodo: string; referencia?: string; meses: number; notas?: string;
+  /** El plan que pagó (slug). El backend lo exige si el comercio está en un plan sin precio. */
+  plan?: string;
 }) {
   const res = await authFetch(`/admin/comercio/${comercioId}/pago`, {
     method: "POST",

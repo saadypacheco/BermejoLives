@@ -800,6 +800,10 @@ class PagoBody(BaseModel):
     referencia: str | None = None
     meses: int = 1           # cuántos meses cubre este pago
     notas: str | None = None
+    # El plan que pagó. Obligatorio si el comercio está en un plan sin precio:
+    # un pago con el plan en «gratis» extendía `paga_hasta` y el comercio quedaba
+    # SIN estrella (Boutique Tatiana, 20/10/2026: pagado hasta 2027 y sin estrella).
+    plan: str | None = Field(default=None, max_length=60)
 
 
 @router.get("/admin/suscripciones")
@@ -959,7 +963,25 @@ def registrar_pago(
     admin: dict = Depends(require_permiso("pagos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """Registra un pago y extiende paga_hasta. Reactiva si estaba suspendido."""
+    """Registra un pago y extiende paga_hasta. Reactiva si estaba suspendido.
+
+    Con `plan`, además se lo asigna (validado ANTES de tocar nada). Sin `plan`, el
+    comercio tiene que estar ya en un plan pago: si no, 400 y no se registra nada.
+    """
+    plan = (body.plan or "").strip() or None
+    if plan:
+        fila = _exigir_plan_valido(repo, plan)
+        if float(fila.get("precio_mes") or 0) <= 0:
+            raise HTTPException(status_code=400, detail="Un pago es por un plan con precio: elegí cuál pagó.")
+    else:
+        actual = repo.get_comercio(comercio_id)
+        if not actual:
+            raise HTTPException(status_code=404, detail="comercio no encontrado")
+        fila_actual = repo.get_plan(actual.get("plan") or "gratis") or {}
+        if float(fila_actual.get("precio_mes") or 0) <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="El comercio está en un plan sin precio: elegí qué plan pagó. Sin eso no tiene la estrella.")
     result = repo.registrar_pago(comercio_id, {
         "monto": body.monto,
         "moneda": body.moneda,
@@ -969,7 +991,9 @@ def registrar_pago(
         "notas": body.notas,
         "registrado_por": admin["email"],
     })
-    logger.info("suscripcion.pago", comercio=comercio_id, meses=body.meses, by=admin["email"])
+    if plan:
+        repo.asignar_plan_comercio(comercio_id, plan, False)
+    logger.info("suscripcion.pago", comercio=comercio_id, meses=body.meses, plan=plan, by=admin["email"])
     return {
         "ok": True, **result,
         "advertencias": _advertencias_whatsapp(repo, comercio_id),

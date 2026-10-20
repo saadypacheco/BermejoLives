@@ -1627,6 +1627,7 @@ function TabSuscripciones({
       {pagandoId && (
         <ModalPago
           comercio={items.find((c) => c.id === pagandoId)!}
+          planes={planes}
           onClose={() => setPagandoId(null)}
           onDone={() => { setPagandoId(null); onPago(); }}
         />
@@ -3738,7 +3739,12 @@ function ModalPlanComercio({ comercio, planes, planesListos, errPlanes, onClose,
   );
 }
 
-function ModalPago({ comercio, onClose, onDone }: { comercio: ComercioSuscripcion; onClose: () => void; onDone: () => void }) {
+function ModalPago({ comercio, planes, onClose, onDone }: { comercio: ComercioSuscripcion; planes: PlanAdmin[]; onClose: () => void; onDone: () => void }) {
+  // QUÉ PLAN PAGÓ. Antes el pago sólo extendía la fecha: Boutique Tatiana quedó
+  // pagada hasta 2027 con el plan en «gratis», sin estrella y sin publicidad. Sólo
+  // planes con precio; arranca en el que ya tiene si es pago.
+  const pagos = opcionesDePlanes(planes).filter((p) => Number(p.precio_mes) > 0);
+  const [plan, setPlan] = useState(pagos.some((p) => p.slug === comercio.plan) ? (comercio.plan as string) : "");
   const [monto, setMonto] = useState("100");
   const [moneda, setMoneda] = useState("BOB");
   const [metodo, setMetodo] = useState("qr-bolivia");
@@ -3755,15 +3761,16 @@ function ModalPago({ comercio, onClose, onDone }: { comercio: ComercioSuscripcio
   async function guardar(e: React.FormEvent) {
     e.preventDefault();
     if (!monto || isNaN(Number(monto))) { setErr("Ingresá un monto válido"); return; }
+    if (!plan) { setErr("Elegí qué plan pagó: sin plan pago el comercio no tiene la estrella."); return; }
     setSaving(true);
     try {
       const r = await registrarPago(comercio.id, {
-        monto: Number(monto), moneda, metodo, meses: Number(meses),
+        monto: Number(monto), moneda, metodo, meses: Number(meses), plan,
         referencia: referencia || undefined, notas: notas || undefined,
       });
       setResultado({ advertencias: r?.advertencias ?? [], login: !!r?.login });
-    } catch {
-      setErr("No se pudo registrar el pago. Verificá el backend.");
+    } catch (e) {
+      setErr(e instanceof Error && e.message ? e.message : "No se pudo registrar el pago. Verificá el backend.");
     } finally {
       setSaving(false);
     }
@@ -3819,6 +3826,10 @@ function ModalPago({ comercio, onClose, onDone }: { comercio: ComercioSuscripcio
                 <option value="USD">USD</option>
               </select>
             </div>
+            <select className="adm-input" value={plan} onChange={(e) => setPlan(e.target.value)} aria-label="Plan que pagó">
+              <option value="">¿Qué plan pagó?</option>
+              {pagos.map((p) => <option key={p.slug} value={p.slug}>{p.nombre}</option>)}
+            </select>
             <select className="adm-input" value={metodo} onChange={(e) => setMetodo(e.target.value)}>
               <option value="qr-bolivia">QR Bolivia</option>
               <option value="efectivo">Efectivo</option>
