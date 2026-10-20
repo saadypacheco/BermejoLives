@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { GaleriaFoto } from "@/lib/data";
 import { Ic } from "@/components/ic";
 
@@ -24,6 +24,12 @@ export function FichaGaleria({ portada, fotos, nombre, posicion }: {
   posicion: number | null;
 }) {
   const [zoom, setZoom] = useState<string | null>(null);
+  const [prop, setProp] = useState(4 / 3);
+  const medir = useCallback((img: HTMLImageElement) => {
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    const r = Math.min(2, Math.max(1, img.naturalWidth / img.naturalHeight));
+    setProp((p) => (Math.abs(p - r) < 0.01 ? p : r));
+  }, []);
   const principal = portada ?? fotos[0]?.url ?? null;
   if (!principal) return null;
 
@@ -31,13 +37,16 @@ export function FichaGaleria({ portada, fotos, nombre, posicion }: {
     <div className="uk-fgal">
       <div className="uk-fgal-main">
         <button type="button" onClick={() => setZoom(principal)} aria-label="Ampliar foto">
-          {/* Entera adelante y desenfocada atrás: el recorte del panel (`posicion`)
-              sólo encuadra el fondo; la foto no se corta. */}
+          {/* El recuadro toma la forma de la foto: una horizontal se ve entera y
+              llena el cuadro, sin el fondo difuminado que se veía raro. Una
+              vertical va en un cuadrado y se recorta arriba/abajo según el
+              encuadre del panel (`posicion`). Topes: 1 (cuadrado) a 2 (apaisada). */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="fondo" src={principal} alt="" aria-hidden
-               style={portada && posicion != null ? { objectPosition: `center ${posicion}%` } : undefined} />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="frente" src={principal} alt={nombre} />
+          <img src={principal} alt={nombre}
+               ref={(img) => { if (img?.complete) medir(img); }}
+               onLoad={(e) => medir(e.currentTarget)}
+               style={{ aspectRatio: String(prop),
+                        ...(portada && posicion != null ? { objectPosition: `center ${posicion}%` } : {}) }} />
         </button>
       </div>
 
