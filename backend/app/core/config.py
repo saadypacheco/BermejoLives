@@ -79,6 +79,11 @@ class Settings(BaseSettings):
     # un número que no está escuchando.
     wa_contacto_explorador: str = ""
 
+    # El WhatsApp PÚBLICO de URUKU (E.164 sin «+»): el de los encargos y las consultas de
+    # compradores. Es el mismo que `WA_URUKU` en frontend/lib/contacto.ts; si cambia, cambia
+    # en los dos. Lo usa el asistente para ofrecer «buscarlo por vos» cuando no encuentra algo.
+    wa_contacto_publico: str = "59167671888"
+
     # ── Difusión: la oferta aprobada sale también a las redes de URUKU ──────
     #
     # Cada destino se enciende poniendo su credencial. Vacío = apagado, y la

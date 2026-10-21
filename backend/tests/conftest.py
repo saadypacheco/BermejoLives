@@ -1531,6 +1531,25 @@ class FakeRepo:
             c["total"] = len(filas)
         return filas[:limite]
 
+    def list_ofertas_vigentes(self, hoy, ciudad_slug=None, limite=600):
+        """Como la real: aprobadas, activas, de oferta/novedad, sin vencer, de un
+        comercio activo y no suspendido, cada una con su `comercio` adentro."""
+        out = []
+        for p in self.publicaciones:
+            if p.get("estado") != "aprobado" or not p.get("activo", True):
+                continue
+            if p.get("tipo", "oferta") not in ("oferta", "novedad"):
+                continue
+            if p.get("vence_el") and str(p["vence_el"])[:10] < hoy:
+                continue
+            c = self.comercios.get(p.get("comercio_id"))
+            if not c or not c.get("activo", True) or c.get("suspendido"):
+                continue
+            if ciudad_slug and (c.get("ciudad_slug") or "bermejo") != ciudad_slug:
+                continue
+            out.append({**p, "comercio": dict(c)})
+        return out[:limite]
+
     def list_saber_local(self, solo_activos=True, ciudad_slug=None):
         # Como la real: sólo el saber de URUKU, sin las respuestas de un local (0136).
         filas = [s for s in self.saber_local.values()

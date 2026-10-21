@@ -318,6 +318,7 @@ class Repo(Protocol):
     def resumen_contactos_base(self) -> dict: ...
     # Uruku Ayuda (services/asistente.py)
     def buscar_comercios(self, q: str, limite: int = 5, rubro: str | None = None, ciudad: str | None = None) -> list[dict]: ...
+    def list_ofertas_vigentes(self, hoy: str, ciudad_slug: str | None = None, limite: int = 600) -> list[dict]: ...
     def list_saber_local(self, solo_activos: bool = True, ciudad_slug: str | None = None) -> list[dict]: ...
     def upsert_saber_local(self, row: dict) -> dict: ...
     def borrar_saber_local(self, saber_id: str) -> None: ...
@@ -3403,6 +3404,42 @@ class SupabaseRepo:
             "p_limit": max(1, min(int(limite), 100)), "p_offset": 0, "p_subcategoria": None,
         }).execute()
         return res.data or []
+
+    def list_ofertas_vigentes(self, hoy: str, ciudad_slug: str | None = None, limite: int = 600) -> list[dict]:
+        """Las ofertas y novedades que se pueden mostrar HOY, cada una con su
+        comercio adentro (`comercio`), para que el asistente conteste «¿dónde
+        consigo X?» también por lo que un local tiene publicado, no sólo por lo
+        que dice su ficha.
+
+        Vigente = aprobada, activa, de un comercio activo y no suspendido, y sin
+        vencimiento o con `vence_el` de hoy en adelante (`hoy` es la fecha de
+        Bolivia, ISO). Las más nuevas primero, con tope. Columnas explícitas: no
+        sale nada que el asistente no use (nada del código del comercio).
+        """
+        ciudad_id = None
+        if ciudad_slug:
+            ciudad_id = self.get_ciudad_id(ciudad_slug)
+            if not ciudad_id:
+                return []
+        sel = (
+            "id, comercio_id, tipo, titulo, descripcion, precio, moneda, vence_el, terminos_ia, approved_at, "
+            "comercios!inner(id, slug, nombre, whatsapp, direccion, lat, lng, horario, subcategoria, "
+            "descripcion, prod_obs_human, prod_det_ia, sinonimos, activo, suspendido, plan, plan_cortesia, paga_hasta, ciudad_id)"
+        )
+        q = (self._db.table("publicaciones").select(sel)
+             .eq("estado", "aprobado").eq("activo", True).in_("tipo", ["oferta", "novedad"])
+             .eq("comercios.activo", True)
+             .or_(f"vence_el.is.null,vence_el.gte.{hoy}"))
+        if ciudad_id:
+            q = q.eq("comercios.ciudad_id", ciudad_id)
+        filas = q.order("approved_at", desc=True, nullsfirst=False).limit(max(1, min(int(limite), 2000))).execute().data or []
+        salida = []
+        for f in filas:
+            c = f.pop("comercios", None) or {}
+            if c.get("suspendido"):
+                continue
+            salida.append({**f, "comercio": c})
+        return salida
 
     # ── la base de compradores ───────────────────────────────────────────────
 
