@@ -447,6 +447,10 @@
 .uk-carrusel-flecha.der { right: -12px; }
 @media (hover: none) { .uk-carrusel-flecha { display: none; } }
 .uk-offer-destacado .uk-offer-tag { background: #C9A227; color: #1d1600; }
+/* La tarjeta de Dax es un <button>: que se vea igual que las <a>. */
+.uk-offer-dax { width: 100%; border: 0; padding: 0; text-align: left; cursor: pointer; font: inherit; color: #fff; }
+/* Un <h3> no puede ir dentro de un <button>: el título va en un span con su estilo. */
+.uk-offer-dax .uk-offer-tit { display: block; margin: 0 0 6px; font-size: 20px; line-height: 1.1; font-weight: 600; }
 
 .uk-offer.sin-foto::after { background: linear-gradient(0deg, rgba(1,14,18,.55), rgba(1,14,18,0)); }
 /* El ícono del rubro cuando la publicación no trae foto: grande, al 22%, de

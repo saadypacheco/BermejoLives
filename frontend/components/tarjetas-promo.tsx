@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Ic, IcRubro } from "@/components/ic";
+import { TarjetaDax } from "@/components/tarjeta-dax";
 import { buscarComercios, getFotosDeComercios } from "@/lib/data";
 import { WA_URUKU_TEXTO, waUruku } from "@/lib/contacto";
 import { sinEmoji } from "@/lib/rubros";
@@ -89,6 +90,19 @@ export function tarjetasPromo({ promo, turnos, conGuia }: {
             <small>Te las guardamos en la guardería URUKU · custodia garantizada · WhatsApp {WA_URUKU_TEXTO}</small>
           </div>
         </a>,
+  );
+  // CÓMO HACER: encontrar algo (abre a Dax) y, para el que tiene un local,
+  // cómo aparecer acá. Van antes de la publicidad.
+  lista.push(<TarjetaDax key="s-dax" />);
+  lista.push(
+        <Link key="s-tu-comercio" href="/autoregistro" className="uk-offer sin-foto uk-offer-servicio">
+          <span className="uk-offer-tag">¿Tenés un comercio?</span>
+          <span className="uk-offer-emoji"><Ic n="comercios" s={64} peso="fill" /></span>
+          <div className="uk-offer-body">
+            <h3>Aparecé en URUKU</h3>
+            <small>Tu ficha con fotos, WhatsApp y ubicación · los destacados salen acá</small>
+          </div>
+        </Link>,
   );
   lista.push(...orden.flatMap((id) => {
         const c = promo.destacados.find((d) => d.id === id) ?? productosDe.get(id)?.[0]?.comercio;
