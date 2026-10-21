@@ -366,3 +366,18 @@ def test_la_consulta_pide_solo_lo_vigente_y_con_columnas_explicitas(monkeypatch)
 def test_una_ciudad_que_no_existe_no_trae_nada(monkeypatch):
     repo, q = _repo_supabase([{"id": "p1", "comercios": {"id": "c1"}}], monkeypatch)
     assert repo.list_ofertas_vigentes("2026-09-15", "atlantida") == [] and q.llamadas == []
+
+
+# ── País contrario: «a Argentina» no es la entrada de «a Bolivia» (21/10/2026) ──
+def test_traer_a_argentina_no_contesta_el_regimen_boliviano():
+    from app.services import asistente
+    filas = [
+        {"pregunta": "¿Cuánto puedo traer a Bolivia sin pagar impuestos?",
+         "respuesta": "Régimen de viajeros de la Aduana Nacional: hasta 1.000 dólares.", "etiquetas": ["aduana"]},
+        {"pregunta": "¿Cuánto puedo llevar de vuelta a Argentina sin pagar?",
+         "respuesta": "Según ARCA, por tierra la franquicia es de 300 dólares por mes.", "etiquetas": ["franquicia"]},
+    ]
+    fila, _ = asistente._mas_parecido(filas, "¿cuánto puedo traer a Argentina sin pagar impuestos?")
+    assert fila and "ARCA" in fila["respuesta"]
+    fila, _ = asistente._mas_parecido(filas, "¿cuánto puedo traer a Bolivia sin pagar impuestos?")
+    assert fila and "1.000" in fila["respuesta"]

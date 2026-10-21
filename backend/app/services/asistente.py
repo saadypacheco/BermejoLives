@@ -905,6 +905,26 @@ def _saber_local(repo, pregunta: str, minimo: int = 2) -> tuple[dict | None, int
     return _mas_parecido(repo.list_saber_local(True, _ciudad_slug()) or [], pregunta, minimo)
 
 
+# Palabras que se excluyen: «¿cuánto puedo traer A ARGENTINA sin pagar?» compartía
+# casi todo con «¿cuánto puedo traer A BOLIVIA sin pagar?» y Dax contestaba el
+# régimen boliviano (1.000 dólares) a quien volvía a Argentina (21/10/2026).
+_OPUESTOS = (("argentin", "bolivi"),)
+
+
+def _contradice(terms: set[str], pregunta_fila: str) -> bool:
+    """La entrada habla del país contrario al de la pregunta (y no del de ella)."""
+    fila = set(_terminos(pregunta_fila))
+    for a, b in _OPUESTOS:
+        for x, y in ((a, b), (b, a)):
+            q_x = any(t.startswith(x) for t in terms)
+            q_y = any(t.startswith(y) for t in terms)
+            f_x = any(t.startswith(x) for t in fila)
+            f_y = any(t.startswith(y) for t in fila)
+            if q_x and not q_y and f_y and not f_x:
+                return True
+    return False
+
+
 def _mas_parecido(filas: list[dict], pregunta: str, minimo: int = 2,
                   con_respuesta: bool = True) -> tuple[dict | None, int]:
     """El criterio de parecido, aparte de DE DÓNDE salen las filas: lo usan el
@@ -919,6 +939,8 @@ def _mas_parecido(filas: list[dict], pregunta: str, minimo: int = 2,
         return None, 0
     mejor, puntos, mejor_peso = None, 0, -1
     for s in filas:
+        if _contradice(terms, s.get("pregunta", "")):
+            continue
         etiquetas = {_norm(e) for e in (s.get("etiquetas") or [])}
         en_etiquetas = terms & etiquetas
         en_pregunta = terms & set(_terminos(s.get("pregunta", "")))
