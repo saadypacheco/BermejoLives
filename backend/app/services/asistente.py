@@ -5,9 +5,10 @@ ESCALONADO, como pide el plan (docs/uruku-ai-plan.md):
   Nivel 0  Sin modelo. Horario, dirección, teléfono, dólar, clima, "dónde
            consigo X" (la búsqueda del sitio + las ofertas y novedades vigentes
            + apodos y sinónimos; estrella primero, después abiertos; si no hay
-           nada, el encargo de URUKU), mercados y galerías, las
-           preguntas frecuentes de URUKU y el SABER LOCAL que se carga desde el
-           admin. Cubre la mayoría de lo que la gente pregunta, y cuesta cero.
+           nada, el encargo de URUKU; también un producto suelto, «perfumes»),
+           la farmacia de turno de ahora, el servicio de encargos y guardería,
+           mercados y galerías, las preguntas frecuentes de URUKU y el SABER
+           LOCAL que se carga desde el admin. Cubre la mayoría de lo que la gente pregunta, y cuesta cero.
   Nivel 1  Gemini, con los datos de la base adentro del prompt: los comercios
            que encontró la búsqueda, el saber local que se parece a la
            pregunta, las cotizaciones. Nunca el catálogo entero. Y con una
@@ -79,9 +80,22 @@ def _ciudad_slug() -> str | None:
     return (_CIUDAD.get() or {}).get("slug")
 
 
-def _paso() -> str:
-    """Cómo se llama el paso de esta frontera ("Aguas Blancas")."""
-    return ((_CIUDAD.get() or {}).get("paso_nombre") or "la frontera").strip()
+def _paso() -> str | None:
+    """Cómo se llama el paso de esta frontera ("Aguas Blancas"). Sin ciudad es
+    Bermejo, que cruza con Aguas Blancas. Con una ciudad que no lo tiene cargado:
+    None (el que arma la frase decide qué decir; antes salía «la frontera con la
+    frontera»)."""
+    c = _CIUDAD.get()
+    if not c:
+        return "Aguas Blancas"
+    return (c.get("paso_nombre") or "").strip() or None
+
+
+def _encabezado_frontera() -> str:
+    """«Hoy en la frontera con Aguas Blancas:»; sin nombre del paso, «Hoy en el
+    paso de Villazón:». Nunca repite la palabra «frontera» como si fuera un nombre."""
+    paso = _paso()
+    return f"Hoy en la frontera con {paso}:" if paso else f"Hoy en el paso de {_C()}:"
 
 
 class _RepoEnCiudad:
@@ -253,7 +267,7 @@ def _frontera_hoy(repo, ahora: datetime) -> Respuesta:
     if chal and f.get("chalanas") != "suspendidas" and f.get("chalanas_horario"):
         chal += f" ({f['chalanas_horario'].strip()})"
     partes = [_ESTADO_TXT["puente"].get(f.get("puente"), ""), chal, _ESTADO_TXT["rio"].get(f.get("rio"), "")]
-    texto = f"Hoy en la frontera con {_paso()}: " + ", ".join(p for p in partes if p) + "."
+    texto = f"{_encabezado_frontera()} " + ", ".join(p for p in partes if p) + "."
     if f.get("nota"):
         texto += f" {f['nota'].strip().rstrip('.')}."
     cuando = f.get("actualizado_en")
@@ -450,15 +464,38 @@ def _clima(repo) -> str | None:
     return f"En {_C()} ahora hay {round(c['temp_c'])}°{desc}."
 
 
+# Palabras de la frontera que también están en el nombre de algún comercio
+# («Casa de Cambio El Puente», «Despachante Aduana Sur»). Dichas solas son el
+# lugar, no el comercio: «¿a qué hora abre el puente?» es el puente internacional.
+_FRONTERA_PALABRAS = frozenset(
+    "puente paso frontera chalana chalanas aduana migracion migraciones rio puerto".split())
+_ARTICULOS = frozenset("el la los las del de al en un una".split())
+
+
+def _sin_articulos(texto: str) -> str:
+    return " ".join(w for w in _norm(texto).split() if w not in _ARTICULOS)
+
+
+def _es_lugar_de_frontera(nombre: str) -> bool:
+    """¿Lo que se nombró es sólo una palabra de la frontera («el puente», «la
+    aduana»)? Con algo más («casa de cambio el puente») ya es un nombre propio."""
+    palabras = [w for w in _norm(nombre).split() if w not in _ARTICULOS]
+    return bool(palabras) and all(w in _FRONTERA_PALABRAS for w in palabras)
+
+
 def _comercio_por_nombre(repo, nombre: str) -> list[dict]:
     """Los comercios que se LLAMAN así. Por la búsqueda del sitio (que entiende
     acentos: "rustico" encuentra "Rústico") y quedándose con los que tienen el
-    nombre adentro del nombre, no con los que venden algo parecido."""
+    nombre adentro del nombre, no con los que venden algo parecido. Si lo que
+    se nombró es sólo una palabra de la frontera, sólo cuenta el comercio que se
+    llama EXACTAMENTE así."""
     nombre = nombre.strip()
     if len(nombre) < 2:
         return []
     n = _norm(nombre)
     filas = list(repo.buscar_comercios(nombre, 10) or [])
+    if _es_lugar_de_frontera(nombre):
+        return [c for c in filas if _sin_articulos(c.get("nombre", "")) == _sin_articulos(nombre)][:3]
     return [c for c in filas if n in _norm(c.get("nombre", ""))][:3]
 
 
@@ -524,16 +561,57 @@ def _nivel0_comercio_nombrado(repo, pregunta: str, ahora: datetime) -> Respuesta
     return None
 
 
+# Trámites y cosas de la frontera: ninguna de estas palabras es un producto. «¿Qué
+# documentos necesito para cruzar?» tiene «necesito», pero no busca nada en el mapa:
+# lo contesta el saber local (o nadie), nunca la búsqueda de productos.
+_TRAMITE = re.compile(
+    r"\b(documentos?|documentacion|dni|pasaporte|cedula|migracion(es)?|aduana|aduanero|franquicia|"
+    r"feriados?|autorizacion|requisitos?|tramites?|visa|puente|chalanas?|frontera|cruzar|cruce|"
+    r"impuestos?|cruzan)\b")
+
+# Una o dos palabras sueltas que no son producto: saludos, despedidas, relleno.
+_NO_PRODUCTO = frozenset("""hola holis chau adios ayuda menu test prueba listo bueno buenisimo cuando porque
+planes ofertas oferta promos precios precio horario horarios mapa guia hoy ahora cambio cambios dolar dolares
+peso pesos cotizacion clima tiempo
+pagar cambiar llegar viajar volver traer llevar pasar cruzar comer dormir vender publicar registrar buscar reservar
+enviar mandar retirar guardar ayudar saber conseguir encontrar""".split())
+
+
+def _parece_producto(p: str) -> list[str] | None:
+    """«perfumes», «mochilas escolares»: una o dos palabras, todas con contenido, que
+    nombran algo para comprar. Sin interrogativos, verbos sueltos ni palabras de la frontera.
+    Devuelve las palabras o None."""
+    tokens = p.split()
+    if not 1 <= len(tokens) <= 2:
+        return None
+    for t in tokens:
+        if (len(t) < 3 or t.isdigit() or t in _STOP or t in _NO_PRODUCTO or t in _FRONTERA_PALABRAS
+                or t in _GENERICAS_OFERTA):
+            return None
+    if _TRAMITE.search(p):
+        return None
+    return tokens
+
+
 def _nivel0_busqueda(repo, pregunta: str, ahora: datetime, definitivo: bool = True) -> Respuesta | None:
-    """"¿Dónde consigo X?", "busco X". Con `definitivo=False` sólo contesta
+    """"¿Dónde consigo X?", "busco X", y también X a secas si es una o dos
+    palabras de producto ("perfumes"). Con `definitivo=False` sólo contesta
     si encontró algo: "¿qué días hay feria?" también parece una búsqueda, y
     si no hay resultados tiene que poder contestarla el saber local."""
     p = _norm(pregunta)
+    if _TRAMITE.search(p):
+        return None
     m = re.search(r"(?:donde (?:(?:puedo|se|podria|podemos) )?(?:consigo|conseguir|consigue|compro|comprar|compra|venden|vende|hay|encuentro|encontrar|encuentra)"
                   r"|quien (?:vende|tiene)|alguien (?:que )?(?:vende|tiene)|busco|necesito|quiero comprar|hay)\s+(.+)$", p)
-    if not m:
-        return None
-    q = " ".join(t for t in m.group(1).split() if t not in _STOP)
+    if m and re.match(r"para\b", m.group(1)):
+        # «¿qué necesito para ir al río?»: «necesito» es lo que se necesita saber,
+        # no el producto. Lo que viene después de «para» es el motivo.
+        m = None
+    if m:
+        q = " ".join(t for t in m.group(1).split() if t not in _STOP)
+    else:
+        tokens = _parece_producto(p)
+        q = " ".join(tokens) if tokens else ""
     if not q:
         return None
     r = _buscar_y_contestar(repo, q, ahora)
@@ -859,6 +937,112 @@ def _buscar_y_contestar(repo, q: str, ahora: datetime) -> Respuesta | None:
                      sugerencias=[f"Horario de {filas[0].get('nombre')}", f"Dirección de {filas[0].get('nombre')}"])
 
 
+# --------------------------------------------------------------------------- farmacias de turno
+
+URL_FARMACIAS_DE_TURNO = f"{SITIO}/farmacias-de-turno"
+_TURNO = re.compile(r"\bde turno\b|\bde guardia\b|\bturnos?\b.*\bfarmacias?\b|\bfarmacias?\b.*\b(turnos?|guardia)\b")
+
+
+def _en_bolivia(ahora: datetime) -> datetime:
+    """La hora de la pregunta en La Paz. Una hora sin zona (los tests, o quien arma
+    el `ahora` a mano) ya es la de allá: igual que en `horario.abierto_ahora`."""
+    return ahora.replace(tzinfo=TZ) if ahora.tzinfo is None else ahora.astimezone(TZ)
+
+
+def _hasta(fin, ahora: datetime) -> str:
+    """«hasta mañana 08:00»: cuándo termina el turno, en hora de Bolivia (como
+    `etiquetaHasta` de frontend/lib/turnos-farmacia.ts)."""
+    f = datetime.fromisoformat(str(fin).replace("Z", "+00:00")).astimezone(TZ)
+    dias = (f.date() - ahora.date()).days
+    cuando = "hoy" if dias <= 0 else "mañana" if dias == 1 else f"el {f.day}/{f.month}"
+    return f"hasta {cuando} {f:%H:%M}"
+
+
+def _nivel0_turno_farmacia(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
+    """«¿Qué farmacia está de turno?» es la de TURNO ahora (tabla `turnos_farmacia`, turno
+    de 08:00 a 08:00), no la lista de todas las farmacias. Si la ciudad no tiene el rol
+    cargado, se dice y se muestran las farmacias que figuran abiertas hoy."""
+    if not _TURNO.search(_norm(pregunta)):
+        return None
+    hoy = _en_bolivia(ahora)
+    try:
+        turnos = repo.list_turnos_farmacia_ahora(hoy.isoformat(), _ciudad_slug() or "bermejo") or []
+    except Exception as e:  # noqa: BLE001 — sin el rol se contesta igual, con lo de hoy
+        logger.warning("asistente.turnos_farmacia_fallo", error=str(e)[:200])
+        turnos = []
+    sugerencias = ["¿Qué hay abierto ahora?", "¿Hay hospital?"]
+    if turnos:
+        mostrar = turnos[:4]
+        lineas = []
+        for t in mostrar:
+            c = t.get("comercio") or {}
+            extra = [x for x in [c.get("direccion"), (f"Tel. {c['telefono']}" if c.get("telefono") else None)] if x]
+            lineas.append(f"• {c.get('nombre')}" + (f" — {' · '.join(extra)}" if extra else ""))
+        hasta = _hasta(min(str(t["fin"]) for t in mostrar), hoy)
+        return Respuesta(
+            texto=(f"Farmacias de turno ahora en {_C()} ({hasta}):\n" + "\n".join(lineas) +
+                   f"\nLas de los próximos días y cómo llegar: {URL_FARMACIAS_DE_TURNO}"),
+            nivel=0, intent="farmacia_turno", fuentes=[_fuente(t["comercio"]) for t in mostrar if t.get("comercio")],
+            sugerencias=sugerencias)
+    # Sin rol cargado: lo de hoy, o sea las farmacias que figuran abiertas ahora.
+    farmacias = list(repo.buscar_comercios("", 40, rubro="farmacia") or [])
+    abiertas = [c for c in farmacias if c.get("horario") and hor.abierto_ahora(c["horario"], ahora).estado == "abierto"]
+    mostrar = (abiertas or farmacias)[:MAX_COMERCIOS]
+    if not mostrar:
+        return Respuesta(texto=f"Todavía no tengo el rol de farmacias de turno de {_C()}. Mirá las de turno acá: {URL_FARMACIAS_DE_TURNO}",
+                         nivel=0, intent="farmacia_turno", sin_respuesta=True, sugerencias=sugerencias)
+    lineas = []
+    for c in mostrar:
+        et = (hor.etiqueta(hor.abierto_ahora(c["horario"], ahora), ahora) or "").lower() if c.get("horario") else ""
+        extra = [x for x in [c.get("direccion"), et] if x]
+        lineas.append(f"• {c.get('nombre')}" + (f" — {' · '.join(extra)}" if extra else ""))
+    cabeza = (f"Todavía no tengo cargado el rol de turnos de {_C()}. "
+              + ("Estas farmacias figuran abiertas ahora:" if abiertas else "Estas son las farmacias, confirmá el horario por teléfono:"))
+    return Respuesta(texto=cabeza + "\n" + "\n".join(lineas) + f"\nLas de turno, cuando estén cargadas: {URL_FARMACIAS_DE_TURNO}",
+                     nivel=0, intent="farmacia_turno", fuentes=[_fuente(c) for c in mostrar], sugerencias=sugerencias)
+
+
+# --------------------------------------------------------------------------- encargos y guardería
+
+# «¿Me pueden comprar algo y guardármelo?», «¿alguien puede comprar por mí?»: el
+# servicio propio de URUKU (encargos y guardería). Palabras de la gente, no de las
+# etiquetas: «guardármelo» es una sola palabra con dos pronombres pegados.
+_ENCARGO = re.compile(
+    r"\bcompr\w*(me|nos)\b|comprar por mi\b|\bencarg(o|os|ar|arles|arme|arte|uen|ue)\b|\bguarderia\b"
+    r"|\bguard\w*(me|nos)(lo|la|los|las)?\b|\bme (lo |la )?(guardan|guardas|compran|traen|retiran)\b"
+    r"|\b(me|nos) (pueden|puede|podes|podrian|podrias|ayudan)( a)? (comprar|guardar|traer|retirar)\b"
+    r"|\bretir\w+ (por mi|la compra)\b|\balguien que (me )?(compre|compra|traiga|retire)\b")
+
+
+def _nivel0_encargo(repo, pregunta: str) -> Respuesta | None:
+    """El servicio de encargos y guardería de URUKU, con el WhatsApp de URUKU
+    (`wa_contacto_publico`). Si el saber local tiene la entrada, se contesta con ella;
+    si no, con un texto propio. Sólo donde está el servicio (la ciudad con guía)."""
+    p = _norm(pregunta)
+    if not _con_guia() or not _ENCARGO.search(p):
+        return None
+    numero = _numero_publico()
+    link = f"https://wa.me/{numero}?text={quote_plus('Hola, quiero hacer un encargo')}" if numero else None
+    claves = {"encargo", "guarderia", "retirar"}
+    filas = [s for s in (repo.list_saber_local(True, _ciudad_slug()) or [])
+             if claves & _singulares(_norm(e) for e in (s.get("etiquetas") or []))]
+    # Si habla de guardar o retirar, la entrada de la guardería; si no, la del encargo.
+    consulta = "guardar retirar guarderia encargo" if re.search(r"guard|retir", p) else "encargo encargar pedido servicio"
+    s, _ = _mas_parecido(filas, consulta, minimo=1)
+    if s:
+        texto = s["respuesta"]
+        fuentes = [{"tipo": "saber", "nombre": s.get("pregunta"), "url": ""}]
+    else:
+        texto = (f"Sí: URUKU hace encargos y tiene guardería. Compramos por vos lo que necesites en {_C()} "
+                 "(o lo retiramos si ya lo pagaste) y te lo guardamos hasta que lo retires; la compra se confirma con vos antes."
+                 + (f" Escribinos al WhatsApp {_numero_legible(numero)}." if numero else f" Consultanos desde {SITIO}."))
+        fuentes = []
+    if link and link not in texto:
+        texto += f"\nWhatsApp de URUKU: {link}"
+    return Respuesta(texto=texto, nivel=0, intent="encargo", fuentes=fuentes,
+                     sugerencias=["¿URUKU se hace responsable de lo que compro?", "¿Dónde cambio dólares?"])
+
+
 def _nivel0_abierto_ahora(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     p = _norm(pregunta)
     if not re.search(r"(que|cual|cuales|algo|alguno|hay).*abiert|abierto ahora|abre ahora|abierto (hoy|a esta hora)", p):
@@ -880,7 +1064,9 @@ def _nivel0_abierto_ahora(repo, pregunta: str, ahora: datetime) -> Respuesta | N
 
 def _nivel0_lugares(repo, pregunta: str) -> Respuesta | None:
     p = _norm(pregunta)
-    if not re.search(r"mercado|galeria|feria|paseo|shopping|donde (esta|queda) (el|la) (mercado|galeria|feria)", p):
+    # Con límites de palabra: «feria» está dentro de «feriados», y «¿qué feriados
+    # hay?» no es una pregunta por las ferias.
+    if not re.search(r"\b(mercados?|galerias?|ferias?|paseos?|shopping)\b", p):
         return None
     lugares = [l for l in (repo.list_lugares(None) or []) if l.get("activo", True)]
     if not lugares:
@@ -891,7 +1077,7 @@ def _nivel0_lugares(repo, pregunta: str) -> Respuesta | None:
                      sugerencias=["Busco ropa", "Busco zapatillas"])
 
 
-def _saber_local(repo, pregunta: str, minimo: int = 2) -> tuple[dict | None, int]:
+def _saber_local(repo, pregunta: str, minimo: int = 2, impulso: bool = True) -> tuple[dict | None, int]:
     """La entrada de saber local que más se parece a la pregunta, y cuántas
     palabras distintas comparten.
 
@@ -902,7 +1088,7 @@ def _saber_local(repo, pregunta: str, minimo: int = 2) -> tuple[dict | None, int
     # De ESTA ciudad y lo que vale para todas: el saber local de una frontera
     # no sirve en otra (0124). El repo ya deja afuera las respuestas de un
     # local (0136): el asistente del sitio nunca las ve.
-    return _mas_parecido(repo.list_saber_local(True, _ciudad_slug()) or [], pregunta, minimo)
+    return _mas_parecido(repo.list_saber_local(True, _ciudad_slug()) or [], pregunta, minimo, impulso=impulso)
 
 
 # Palabras que se excluyen: «¿cuánto puedo traer A ARGENTINA sin pagar?» compartía
@@ -925,33 +1111,84 @@ def _contradice(terms: set[str], pregunta_fila: str) -> bool:
     return False
 
 
+def _singulares(palabras) -> set[str]:
+    return {_raiz(p) for p in palabras}
+
+
+# Palabras de la pregunta que dicen lo mismo que otras del saber local (ya en
+# singular). «aceptan» no está en ninguna etiqueta, pero «¿aceptan pesos?» es la
+# entrada de «pagar»/«moneda», no la de las casas de cambio que también dicen «pesos».
+_EQUIVALENTES: dict[str, set[str]] = {
+    "aceptan": {"pagar", "pago"}, "acepta": {"pagar", "pago"}, "aceptar": {"pagar", "pago"},
+    "aceptas": {"pagar", "pago"}, "reciben": {"pagar", "pago"}, "pagan": {"pagar", "pago"},
+    "paga": {"pagar", "pago"},
+}
+
+
+_PIDE_HORA = re.compile(r"\b(horas?|horarios?|abre|abren|cierra|cierran|atiende|atienden)\b")
+# Sobre el texto ya normalizado (`_norm`): los «:» no quedan, «8:00» es «8 00».
+_TIENE_HORA = re.compile(r"\b\d{1,2}(?: \d{2})? ?(?:h|hs|hrs|horas)\b|\bde \d{1,2} a \d{1,2}\b|\ba las \d")
+
+
 def _mas_parecido(filas: list[dict], pregunta: str, minimo: int = 2,
-                  con_respuesta: bool = True) -> tuple[dict | None, int]:
+                  con_respuesta: bool = True, impulso: bool = True) -> tuple[dict | None, int]:
     """El criterio de parecido, aparte de DE DÓNDE salen las filas: lo usan el
     saber local del sitio y las respuestas que carga cada comercio, así las dos
     contestan "parecido" de la misma manera.
 
     `con_respuesta=False` compara sólo con la PREGUNTA (y las etiquetas): lo
     usan las respuestas de un local, donde el texto de la respuesta es libre
-    ("de lunes a domingo, a la hora que quieras") y no dice de qué se trata."""
-    terms = set(_terminos(pregunta))
+    ("de lunes a domingo, a la hora que quieras") y no dice de qué se trata.
+
+    `impulso=False` saca los dos empujones a las preguntas cortas (una palabra
+    en una etiqueta o en la pregunta cuenta como dos): para cuando hacen falta
+    dos palabras en común de verdad."""
+    # Las palabras se comparan en singular: «menores» tiene que encontrar la
+    # etiqueta «menor», «perfumes» la de «perfume» (antes sólo coincidían las
+    # idénticas, y una pregunta con otra forma de la palabra quedaba sin match).
+    terms = _singulares(_terminos(pregunta))
     if not terms:
         return None, 0
-    mejor, puntos, mejor_peso = None, 0, -1
+    n_terminos = len(terms)
+    # Palabras que dicen lo mismo que otra de la entrada: «¿aceptan pesos?» es una
+    # pregunta de PAGO aunque no diga «pagar». Suman para buscar, no para contar.
+    buscadas = set(terms)
+    for t in terms:
+        buscadas |= _EQUIVALENTES.get(t, set())
+    # Lo que tiene cada entrada, una sola vez (y cuántas entradas nombran cada palabra).
+    cand = []
     for s in filas:
         if _contradice(terms, s.get("pregunta", "")):
             continue
-        etiquetas = {_norm(e) for e in (s.get("etiquetas") or [])}
-        en_etiquetas = terms & etiquetas
-        en_pregunta = terms & set(_terminos(s.get("pregunta", "")))
-        en_respuesta = terms & set(_terminos(s.get("respuesta", ""))) if con_respuesta else set()
+        etiquetas = buscadas & _singulares(_norm(e) for e in (s.get("etiquetas") or []))
+        en_pregunta = buscadas & _singulares(_terminos(s.get("pregunta", "")))
+        en_respuesta = buscadas & _singulares(_terminos(s.get("respuesta", ""))) if con_respuesta else set()
+        cand.append((s, etiquetas, en_pregunta, en_respuesta))
+    # Entre dos con las mismas palabras en común, gana la que las tiene en la
+    # pregunta o en las etiquetas: "documentos para pasar" es la de documentos aunque
+    # "pasar" sea etiqueta de la de cruzar. Y si la pregunta nombra un lugar de la
+    # frontera («¿a qué hora abre el puente?» comparte «hora» y «abre» con la de los
+    # comercios), gana la entrada que habla de ESE lugar: es de lo que se está hablando.
+    lugar = terms & {_raiz(w) for w in _FRONTERA_PALABRAS}
+    # Y una pregunta por la hora se contesta con una entrada que trae una hora
+    # («atiende las 24 horas», «de 7 a 18»), no con la que sólo habla de «la hora».
+    pide_hora = con_respuesta and bool(_PIDE_HORA.search(_norm(pregunta)))
+    mejor, puntos, mejor_peso = None, 0, -1
+    for s, en_etiquetas, en_pregunta, en_respuesta in cand:
         p = len(en_etiquetas | en_pregunta | en_respuesta)
-        if p == 1 and en_etiquetas and len(terms) <= 2:
+        if impulso and p == 1 and en_etiquetas and n_terminos <= 2:
             p = 2
-        # Entre dos con las mismas palabras en común, gana la que las tiene en
-        # la pregunta o en las etiquetas: "documentos para pasar" es la de
-        # documentos aunque "pasar" sea etiqueta de la de cruzar.
+        # Una pregunta de UNA sola palabra útil («¿cómo me muevo en Bermejo?» son
+        # «muevo» y nada más: lo demás es relleno) que está en la pregunta de la
+        # entrada. Con dos palabras sueltas no: «cambio de aceite» no es «cambio
+        # dólares». Sólo en el saber del sitio: las respuestas de un local se comparan
+        # por el conjunto entero (ver `_respuesta_parecida`).
+        elif impulso and p == 1 and con_respuesta and n_terminos == 1 and en_pregunta:
+            p = 2
         peso = 2 * len(en_etiquetas) + 2 * len(en_pregunta) + len(en_respuesta)
+        peso += 10 * len(lugar & (en_etiquetas | en_pregunta))
+        if pide_hora and _TIENE_HORA.search(_norm(s.get("respuesta", ""))):
+            peso += 3
         if (p, peso) > (puntos, mejor_peso):
             mejor, puntos, mejor_peso = s, p, peso
     return (mejor, puntos) if puntos >= minimo else (None, puntos)
@@ -979,6 +1216,16 @@ def _nivel0_planes(repo) -> Respuesta:
     return Respuesta(texto="Los planes de URUKU:\n" + "\n".join(lineas)
                           + f"\nPara saber cuánto cuesta cada uno y cómo sumarte, consultanos desde {SITIO}/planes",
                      nivel=0, intent="faq_planes", sugerencias=["¿Cómo publico mi negocio?", "¿Cobran comisión?"])
+
+
+# Salud: la entrada del saber local (hospital, médico, posta) vale más que el rubro de
+# emergencias, que sólo trae policía y bomberos.
+_SALUD = re.compile(r"\b(hospital|clinica|medico|doctor|posta|salud|enfermo|me siento mal)\b")
+
+
+def _respuesta_saber(s: dict) -> Respuesta:
+    return Respuesta(texto=s["respuesta"], nivel=0, intent="saber_local",
+                     fuentes=[{"tipo": "saber", "nombre": s.get("pregunta"), "url": ""}])
 
 
 def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
@@ -1020,6 +1267,15 @@ def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
         t = _clima(repo)
         if t:
             return Respuesta(texto=t, nivel=0, intent="clima")
+    # La farmacia de TURNO no es "las farmacias": va antes que el rubro. Y el servicio
+    # de encargos y guardería de URUKU antes que la búsqueda ("comprar algo" no es
+    # un producto).
+    r = _nivel0_turno_farmacia(repo, pregunta, ahora)
+    if r:
+        return r
+    r = _nivel0_encargo(repo, pregunta)
+    if r:
+        return r
     # Los mercados y galerías ANTES que un comercio nombrado: "¿dónde está
     # el mercado?" encontraba al "Comedor Mercado Bolívar" por el nombre.
     r = _nivel0_lugares(repo, pregunta)
@@ -1031,6 +1287,12 @@ def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     r = _nivel0_abierto_ahora(repo, pregunta, ahora)
     if r:
         return r
+    # "¿Hay hospital?": si el saber local tiene la entrada de salud, esa es la
+    # respuesta; el rubro de emergencias sólo sabe los teléfonos de la policía.
+    if _con_guia() and _SALUD.search(_norm(pregunta)):
+        s, _ = _saber_local(repo, pregunta)
+        if s:
+            return _respuesta_saber(s)
     # "busco zapatillas" es una búsqueda, no la nota general sobre qué
     # comprar en Bermejo: la búsqueda va antes que el saber local. Y una
     # pregunta que es un rubro con locales cargados ("¿dónde como?") también.
@@ -1042,10 +1304,18 @@ def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
         return r
     # El saber local es el de Bermejo (aduana, chalanas, tours): en otra
     # ciudad no se contesta con eso.
-    s, _ = _saber_local(repo, pregunta) if _con_guia() else (None, 0)
+    # Dos palabras de producto sueltas («mochilas escolares») comparten UNA con alguna
+    # entrada («escolar»): no alcanza para decir que es esa. Una sola («franquicia») sí.
+    producto_suelto = len(_parece_producto(_norm(pregunta)) or []) == 2
+    s, _ = _saber_local(repo, pregunta, impulso=not producto_suelto) if _con_guia() else (None, 0)
     if s:
-        return Respuesta(texto=s["respuesta"], nivel=0, intent="saber_local",
-                         fuentes=[{"tipo": "saber", "nombre": s.get("pregunta"), "url": ""}])
+        return _respuesta_saber(s)
+    # «¿A qué hora abre el puente?» sin una entrada que lo diga: el estado de hoy del
+    # puente y las chalanas, con el link a los horarios, en vez de no saber.
+    p = _norm(pregunta)
+    if (_con_guia() and re.search(r"\b(puente|chalanas?|paso|frontera)\b", p)
+            and re.search(r"\b(horas?|horarios?|abre|abren|cierra|cierran|atiende|atienden|abierto|abiertos|funciona)\b", p)):
+        return _frontera_hoy(repo, ahora)
     # Sin saber local que la conteste: la búsqueda dice que no encontró (y
     # queda anotada), o el rubro dice que todavía no hay nada cargado.
     r = _nivel0_busqueda(repo, pregunta, ahora, definitivo=True)

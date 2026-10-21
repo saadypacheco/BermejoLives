@@ -853,13 +853,23 @@ class FakeRepo:
         return n
 
     def list_wa_inbox_media_vigente(self, corte_iso, limite=500):
-        from datetime import datetime, timezone
+        from datetime import datetime, timedelta, timezone
         ahora = datetime.now(timezone.utc).isoformat()
+
+        def _vencida(creada) -> bool:
+            # Un segundo de margen: `_tic()` es estrictamente creciente y, con el reloj grueso de
+            # Windows (~15 ms), siete altas seguidas quedan microsegundos DESPUÉS del `corte` de
+            # `purge_expired(repo, 0)`, calculado con el mismo tic de reloj. Sin el margen, el test
+            # de la retención fallaba al azar. Los días de retención son ≫ 1 s: no cambia nada más.
+            try:
+                return datetime.fromisoformat(str(creada)) <= datetime.fromisoformat(corte_iso) + timedelta(seconds=1)
+            except ValueError:
+                return str(creada) <= corte_iso
         return [{"wa_message_id": f["wa_message_id"], "media_path": f["media_path"],
                  "created_at": f.get("created_at") or ahora}
                 for f in self.wa_inbox.values()
                 if f.get("media_path") and not f.get("media_purged_at")
-                and str(f.get("created_at") or ahora) <= corte_iso][:limite]
+                and _vencida(f.get("created_at") or ahora)][:limite]
 
     def marcar_wa_inbox_media_purgada(self, wa_message_id):
         from datetime import datetime, timezone
@@ -1272,6 +1282,22 @@ class FakeRepo:
                 tid = self._id("turno")
                 self.turnos_farmacia[tid] = {"id": tid, "activo": True, **f}
         return len(filas)
+
+    def list_turnos_farmacia_ahora(self, ahora_iso, ciudad_slug=None):
+        """Como el repo real: turnos activos con `inicio <= ahora < fin`, de farmacias activas
+        (y de la ciudad, si se la pide), cada uno con su `comercio`."""
+        from datetime import datetime
+        ahora = datetime.fromisoformat(ahora_iso)
+        salida = []
+        for t in self.turnos_farmacia.values():
+            c = self.comercios.get(t["comercio_id"])
+            if not t.get("activo", True) or not c or not c.get("activo", True) or c.get("suspendido"):
+                continue
+            if ciudad_slug and (c.get("ciudad_slug") or "bermejo") != ciudad_slug:
+                continue
+            if datetime.fromisoformat(t["inicio"]) <= ahora < datetime.fromisoformat(t["fin"]):
+                salida.append({**t, "comercio": dict(c)})
+        return sorted(salida, key=lambda t: t["inicio"])
 
     def contar_fotos_comercios(self, comercio_ids):
         """Como el RPC de la 0151: {comercio_id: n}, sólo los que tienen fotos."""
