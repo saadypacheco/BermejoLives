@@ -229,3 +229,72 @@ def desde_propuesta(valor) -> tuple[str, dict[str, str]]:
         return ", ".join(planos), aportes
 
     return str(valor or "").strip(), {}
+
+
+# ---------------------------------------------------------------------------
+# Cómo se PREGUNTA, no cómo se publica
+#
+# El diccionario de arriba (tabla `producto_sinonimos`) cubre el vocabulario de los
+# comercios: remera/polera. Falta lo que dice el que escribe por WhatsApp: apodos
+# ("zapas", "celu", "compu"). Son pocos, no cambian y no hace falta un modelo para
+# ellos: van acá, a mano, y el asistente los usa SIN modelo.
+
+# Apodo -> la palabra con la que se publica. Una sola dirección a propósito: "zapa" es
+# prefijo de "zapato" y de "zapallo"; buscar "zapatillas" no debe traer eso.
+APODOS: dict[str, str] = {
+    "zapa": "zapatilla", "zapas": "zapatilla", "celu": "celular", "compu": "computadora",
+    "tele": "televisor", "bici": "bicicleta", "auri": "auricular", "auris": "auricular",
+    "refri": "heladera", "cel": "celular", "mochi": "mochila", "pelu": "peluqueria",
+}
+
+# Palabras de publicación que nombran LA MISMA cosa (sin tildes, en singular).
+_EQUIVALENTES = (
+    ("zapatilla", "tenis", "champion"),
+    ("celular", "movil", "smartphone"),
+    ("computadora", "computador", "notebook", "laptop"),
+    ("televisor", "television"),
+    ("remera", "polera", "camiseta"),
+    ("campera", "casaca", "chamarra"),
+    ("pollera", "falda"),
+    ("frazada", "cobija", "manta"),
+    ("heladera", "refrigerador"),
+    ("lavarropa", "lavadora"),
+    ("auricular", "audifono"),
+)
+
+_GRUPO_DE: dict[str, tuple[str, ...]] = {_normalizar_termino(p): g for g in _EQUIVALENTES for p in g}
+
+
+def resolver_apodo(palabra: str) -> str | None:
+    """«zapas» -> «zapatilla»; None si no es un apodo conocido."""
+    return APODOS.get(_normalizar_termino(palabra))
+
+
+def variantes(palabra: str, diccionario: dict[str, str] | None = None) -> list[str]:
+    """Las OTRAS formas de buscar la misma cosa que `palabra`: el apodo resuelto
+    (zapas -> zapatilla), sus equivalentes (zapatilla -> tenis) y las del
+    diccionario de la base (remera -> polera).
+
+    Todo sin tildes, en minúsculas y en singular; sólo palabras sueltas (una
+    variante de dos palabras no se puede buscar palabra por palabra). Sin repetir
+    y sin la propia palabra. Primero lo coloquial, que es lo más seguro.
+    """
+    base = _normalizar_termino(palabra)
+    if not base:
+        return []
+    salida: list[str] = []
+
+    def sumar(v: str) -> None:
+        v = _normalizar_termino(v)
+        if v and " " not in v and v != base and v not in salida:
+            salida.append(v)
+
+    formal = APODOS.get(base) or APODOS.get(sin_tildes(palabra or "").lower().strip()) or base
+    sumar(formal)
+    for v in _GRUPO_DE.get(formal, ()):
+        sumar(v)
+    if diccionario:
+        for clave in {base, formal}:
+            for v in (diccionario.get(clave) or "").split(","):
+                sumar(v)
+    return salida

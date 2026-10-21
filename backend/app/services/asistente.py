@@ -3,7 +3,9 @@
 ESCALONADO, como pide el plan (docs/uruku-ai-plan.md):
 
   Nivel 0  Sin modelo. Horario, dirección, teléfono, dólar, clima, "dónde
-           consigo X" (la misma búsqueda del sitio), mercados y galerías, las
+           consigo X" (la búsqueda del sitio + las ofertas y novedades vigentes
+           + apodos y sinónimos; estrella primero, después abiertos; si no hay
+           nada, el encargo de URUKU), mercados y galerías, las
            preguntas frecuentes de URUKU y el SABER LOCAL que se carga desde el
            admin. Cubre la mayoría de lo que la gente pregunta, y cuesta cero.
   Nivel 1  Gemini, con los datos de la base adentro del prompt: los comercios
@@ -44,6 +46,7 @@ import structlog
 from app.core.config import settings
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp
 from app.services import horario as hor
+from app.services import sinonimos
 
 logger = structlog.get_logger()
 
@@ -90,6 +93,9 @@ class _RepoEnCiudad:
 
     def buscar_comercios(self, q: str, limite: int = 5, rubro: str | None = None, ciudad: str | None = None):
         return self._repo.buscar_comercios(q, limite, rubro, ciudad=ciudad or self._slug)
+
+    def list_ofertas_vigentes(self, hoy: str, ciudad_slug: str | None = None, limite: int = 600):
+        return self._repo.list_ofertas_vigentes(hoy, ciudad_slug or self._slug, limite)
 
     def __getattr__(self, name):
         return getattr(self._repo, name)
@@ -523,7 +529,8 @@ def _nivel0_busqueda(repo, pregunta: str, ahora: datetime, definitivo: bool = Tr
     si encontró algo: "¿qué días hay feria?" también parece una búsqueda, y
     si no hay resultados tiene que poder contestarla el saber local."""
     p = _norm(pregunta)
-    m = re.search(r"(?:donde (?:consigo|compro|venden|hay|encuentro)|quien vende|busco|necesito|quiero comprar|hay)\s+(.+)$", p)
+    m = re.search(r"(?:donde (?:(?:puedo|se|podria|podemos) )?(?:consigo|conseguir|consigue|compro|comprar|compra|venden|vende|hay|encuentro|encontrar|encuentra)"
+                  r"|quien (?:vende|tiene)|alguien (?:que )?(?:vende|tiene)|busco|necesito|quiero comprar|hay)\s+(.+)$", p)
     if not m:
         return None
     q = " ".join(t for t in m.group(1).split() if t not in _STOP)
@@ -589,32 +596,254 @@ def _nivel0_servicio(repo, pregunta: str, ahora: datetime, solo_con_datos: bool)
 _RUBROS_SIN_SUBCATEGORIA = {"banos", "estacionamiento", "cajeros", "wifi", "emergencias"}
 
 
+# «¿Dónde consigo X?»: los comercios Y lo que tienen publicado.
+#
+# El buscador del sitio mira la ficha del comercio. Pero el comprador pregunta por
+# un PRODUCTO ("zapatillas nike"), y lo que un local tiene hoy está en sus ofertas
+# y novedades vigentes y en lo que la IA leyó de sus fotos. Se buscan las dos cosas,
+# sin modelo, con los apodos ("zapas") y sinónimos resueltos, y se ordena así:
+# primero los comercios con estrella (plan pago al día o cortesía), después los
+# abiertos ahora, después el resto.
+
+def _coincide(palabra: str, raiz: str) -> bool:
+    """¿Esta palabra del texto es esa raíz? Las raíces largas entran como prefijo
+    ("zapatilla" encuentra "zapatillas"); las cortas sólo enteras o en plural, así
+    "pan" no trae "panadería" ni "teni" trae "teniente"."""
+    if len(raiz) >= 5:
+        return palabra.startswith(raiz)
+    return palabra in (raiz, raiz + "s", raiz + "es")
+
+
+def _grupos_de(repo, q: str) -> list[list[str]]:
+    """Por cada palabra que se busca, las raíces con las que se la reconoce: ella,
+    su apodo resuelto y sus sinónimos. Una palabra sin raíz útil (menos de 3
+    letras) no se busca."""
+    try:
+        diccionario = repo.get_diccionario_sinonimos() or {}
+    except Exception:  # noqa: BLE001 — el diccionario es un extra, nunca tumba la búsqueda
+        diccionario = {}
+    grupos: list[list[str]] = []
+    for t in _terminos(q):
+        if t in _GENERICAS_OFERTA:
+            continue
+        raices: list[str] = []
+        for forma in [t] + sinonimos.variantes(t, diccionario):
+            r = _raiz(forma)
+            if len(r) >= 3 and r not in raices:
+                raices.append(r)
+        if raices:
+            grupos.append(raices)
+    return grupos
+
+
+def _cumple(texto: str, grupos: list[list[str]], parcial: bool = False) -> bool:
+    """¿El texto nombra TODAS las cosas buscadas? Todas y no alguna: «zapatillas
+    nike» no se contesta con cualquier zapatilla. `parcial` (sólo para darle datos
+    al modelo, que filtra) acepta que nombre al menos una."""
+    if not grupos:
+        return False
+    palabras = _norm(texto).split()
+    esta = [any(_coincide(w, r) for w in palabras for r in g) for g in grupos]
+    return any(esta) if parcial else all(esta)
+
+
+def _texto_de_oferta(o: dict) -> str:
+    ia = o.get("terminos_ia")
+    if isinstance(ia, list):
+        ia = " ".join(str(x) for x in ia)
+    return f"{o.get('titulo') or ''} {o.get('descripcion') or ''} {ia or ''}"
+
+
+def _texto_de_ficha(c: dict) -> str:
+    return " ".join(str(c.get(k) or "") for k in
+                    ("nombre", "subcategoria", "rubro_nombre", "prod_obs_human", "prod_det_ia", "sinonimos", "descripcion"))
+
+
+def _consulta_con_apodos(q: str) -> str:
+    """«zapas nike» → «zapatilla nike», para el buscador del sitio, que no sabe
+    de apodos. Sólo cambia los apodos; el resto de la consulta queda como está."""
+    salida = []
+    for t in q.split():
+        salida.append(sinonimos.resolver_apodo(t) or t)
+    return " ".join(salida)
+
+
+def _estrella_de(c: dict, planes_por_slug: dict, hoy) -> tuple[bool, int]:
+    """(¿tiene estrella?, orden del plan). El buscador del sitio ya lo trae
+    calculado; un comercio que apareció por una oferta no, y se calcula con la
+    misma regla (services/que_hay_aca.estado_plan)."""
+    if c.get("estrella") is not None:
+        return bool(c["estrella"]), int(c.get("plan_orden") or 0)
+    from app.services.que_hay_aca import estado_plan
+
+    plan = planes_por_slug.get(c.get("plan") or "gratis") or {}
+    try:
+        pago = float(plan.get("precio_mes") or 0) > 0
+    except (TypeError, ValueError):
+        pago = False
+    ok = estado_plan(c, pago, hoy) in ("al_dia", "cortesia")
+    return ok, (int(plan.get("orden") or 0) if ok else 0)
+
+
+# Lo que se busca se lee una vez por pregunta: «nivel 0» corre la búsqueda dos veces
+# (primero dejando pasar al saber local, después de forma definitiva).
+_MEMO: contextvars.ContextVar[dict | None] = contextvars.ContextVar("busquedas", default=None)
+
+
+def _candidatos(repo, q: str, ahora: datetime, parcial: bool = False) -> list[dict]:
+    """Los comercios que tienen lo que se busca, ya ordenados y SIN tope.
+    Cada uno: {c, ofertas, en_ficha, estrella, abierto}."""
+    memo = _MEMO.get()
+    clave = (id(repo), q, ahora.date(), parcial)
+    if memo is not None and clave in memo:
+        return memo[clave]
+
+    grupos = _grupos_de(repo, q)
+    cands: dict[str, dict] = {}
+
+    # 1) La misma búsqueda del sitio (nombre, rubro, subcategoría, ficha), con y sin apodos.
+    consultas = [q]
+    con_apodos = _consulta_con_apodos(q)
+    if con_apodos != q:
+        consultas.append(con_apodos)
+    pos = 0
+    for consulta in consultas:
+        for c in list(repo.buscar_comercios(consulta, MAX_COMERCIOS * 3) or []):
+            if c.get("activo") is False or c.get("suspendido") or not c.get("id") or c["id"] in cands:
+                continue
+            cands[c["id"]] = {"c": dict(c), "ofertas": [], "pos": pos}
+            pos += 1
+
+    # 2) Lo que tienen publicado hoy: ofertas y novedades vigentes (con lo que la IA leyó de la foto).
+    try:
+        vigentes = repo.list_ofertas_vigentes(ahora.date().isoformat(), None) or []
+    except Exception as e:  # noqa: BLE001 — sin esto se contesta igual, con la ficha
+        logger.warning("asistente.ofertas_vigentes_fallo", error=str(e)[:200])
+        vigentes = []
+    for o in vigentes:
+        c = o.get("comercio") or {}
+        if not c.get("id") or c.get("activo") is False or c.get("suspendido"):
+            continue
+        if not _cumple(_texto_de_oferta(o), grupos, parcial):
+            continue
+        ent = cands.get(c["id"])
+        if ent is None:
+            ent = cands[c["id"]] = {"c": dict(c), "ofertas": [], "pos": pos}
+            pos += 1
+        else:
+            # El de la búsqueda gana en lo que trae calculado (estrella, plan_orden).
+            ent["c"] = {**c, **ent["c"]}
+        ent["ofertas"].append(o)
+
+    # 3) ¿Lo dice la ficha? Si hay comercios que SÍ lo tienen (por oferta o ficha), los que
+    #    sólo comparten una palabra suelta quedan afuera. Si no hay ninguno, se muestra lo
+    #    que encontró el buscador del sitio: nunca peor que él.
+    for ent in cands.values():
+        ent["en_ficha"] = _cumple(_texto_de_ficha(ent["c"]), grupos, parcial)
+    fuertes = [e for e in cands.values() if e["ofertas"] or e["en_ficha"]]
+    elegidos = list(cands.values()) if parcial else (fuertes or list(cands.values()))
+
+    # 4) Orden: estrella, abiertos ahora, el resto (con oferta primero, después el orden del buscador).
+    try:
+        planes_por_slug = {p["slug"]: p for p in (repo.list_planes() or [])}
+    except Exception:  # noqa: BLE001
+        planes_por_slug = {}
+    hoy = ahora.date()
+    for ent in elegidos:
+        ent["estrella"], ent["plan_orden"] = _estrella_de(ent["c"], planes_por_slug, hoy)
+        h = ent["c"].get("horario")
+        ent["abierto"] = bool(h) and hor.abierto_ahora(h, ahora).estado == "abierto"
+    elegidos.sort(key=lambda e: (not e["estrella"], -e["plan_orden"], not e["abierto"], not e["ofertas"], e["pos"]))
+    if memo is not None:
+        memo[clave] = elegidos
+    return elegidos
+
+
+def _por_que(ent: dict) -> str:
+    """Por qué aparece este comercio, en una frase."""
+    c = ent["c"]
+    if ent["ofertas"]:
+        titulos = []
+        for o in ent["ofertas"]:
+            t = " ".join(str(o.get("titulo") or "").split()) or "una oferta"
+            if t not in titulos:
+                titulos.append(t)
+        if len(titulos) == 1:
+            return f"tiene la oferta «{titulos[0]}»"
+        return f"tiene las ofertas «{titulos[0]}» y «{titulos[1]}»"
+    sub = (c.get("subcategoria") or "").strip()
+    if ent["en_ficha"]:
+        return f"vende {sub.lower()}" if sub else "lo tiene entre sus productos"
+    return f"puede tenerlo ({sub.lower()})" if sub else "puede tenerlo"
+
+
+def _numero_publico() -> str | None:
+    n = re.sub(r"\D", "", settings.wa_contacto_publico or "")
+    return n or None
+
+
+def _numero_legible(n: str) -> str:
+    """59167671888 → «67 671 888», como se lee en voz alta."""
+    return f"{n[3:5]} {n[5:8]} {n[8:]}" if n.startswith("591") and len(n) == 11 else f"+{n}"
+
+
+def _sin_resultados(q: str, url: str) -> Respuesta:
+    """No hay nada: se ofrece el encargo de URUKU, que busca el producto y lo guarda, y el
+    buscador. Queda como sin respuesta (el que llama la anota)."""
+    numero = _numero_publico()
+    encargo = ""
+    if numero:
+        link = f"https://wa.me/{numero}?text={quote_plus(f'Hola, ¿pueden buscarme {q}?')}"
+        encargo = (f" Podemos buscarlo por vos y guardártelo: escribinos al WhatsApp {_numero_legible(numero)}"
+                   f" → {link}")
+    return Respuesta(
+        texto=f"No encontré «{q}» en {_C()} todavía.{encargo}\nO probá en el buscador: {url}",
+        nivel=0, intent="buscar", sin_respuesta=True,
+        sugerencias=["¿Qué hay abierto ahora?", "¿Dónde cambio dólares?"],
+    )
+
+
+def _responder_producto(repo, q: str, ahora: datetime) -> Respuesta:
+    url = f"{SITIO}/buscar?q={quote_plus(q)}"
+    filas = _candidatos(repo, q, ahora)[:MAX_COMERCIOS]
+    if not filas:
+        return _sin_resultados(q, url)
+    lineas = []
+    for ent in filas:
+        c = ent["c"]
+        extra = [_por_que(ent)]
+        et = hor.etiqueta(hor.abierto_ahora(c.get("horario"), ahora), ahora) if c.get("horario") else None
+        if et:
+            extra.append(et.lower())
+        enlaces = [f"Ficha: {_url(c)}"]
+        numero = _whatsapp_de(c)
+        if numero:
+            enlaces.append(f"WhatsApp: {_wa(numero)}")
+        lineas.append(f"• {c.get('nombre')} — {' · '.join(extra)}\n  " + " · ".join(enlaces))
+    # Sin cifras: cuántos locales hay es un dato del panel, no del comprador.
+    return Respuesta(texto=f"Encontré esto para «{q}»:\n" + "\n".join(lineas) + f"\nMás en el buscador: {url}",
+                     nivel=0, intent="buscar", fuentes=[_fuente(e["c"]) for e in filas],
+                     sugerencias=[f"Horario de {filas[0]['c'].get('nombre')}", f"Dirección de {filas[0]['c'].get('nombre')}"])
+
+
 def _buscar_y_contestar(repo, q: str, ahora: datetime) -> Respuesta | None:
     servicio = _servicio_de(q)
-    if servicio:
-        rubro, plural = servicio
-        filas = list(repo.buscar_comercios("", MAX_COMERCIOS, rubro=rubro) or [])
-        url = f"{SITIO}/buscar?rubro={rubro}&vista=mapa"
-        if not filas:
-            return Respuesta(
-                texto=f"Todavía no tengo {plural} de {_C()} cargados en el mapa. Preguntá en cualquier local, y si sabés de uno, contámelo acá y lo agregamos.",
-                nivel=0, intent="buscar", sin_respuesta=True,
-                sugerencias=["¿Dónde cambio dólares?", "¿Qué hay abierto ahora?"],
-            )
-    else:
-        filas = list(repo.buscar_comercios(q, MAX_COMERCIOS) or [])
-        url = f"{SITIO}/buscar?q={q.replace(' ', '+')}"
+    if not servicio:
+        return _responder_producto(repo, q, ahora)
+    rubro, plural = servicio
+    filas = list(repo.buscar_comercios("", MAX_COMERCIOS, rubro=rubro) or [])
+    url = f"{SITIO}/buscar?rubro={rubro}&vista=mapa"
     if not filas:
         return Respuesta(
-            texto=f"No encontré «{q}» en {_C()} todavía. Probá con otra palabra, o mirá el mapa: {url}",
+            texto=f"Todavía no tengo {plural} de {_C()} cargados en el mapa. Preguntá en cualquier local, y si sabés de uno, contámelo acá y lo agregamos.",
             nivel=0, intent="buscar", sin_respuesta=True,
-            sugerencias=["¿Qué hay abierto ahora?", "¿Dónde cambio dólares?"],
+            sugerencias=["¿Dónde cambio dólares?", "¿Qué hay abierto ahora?"],
         )
     total = filas[0].get("total") or len(filas)
     lineas = []
     for c in filas:
         extra = []
-        if c.get("subcategoria") and not (servicio and servicio[0] in _RUBROS_SIN_SUBCATEGORIA):
+        if c.get("subcategoria") and servicio[0] not in _RUBROS_SIN_SUBCATEGORIA:
             extra.append(c["subcategoria"])
         if c.get("direccion"):
             extra.append(c["direccion"])
@@ -623,9 +852,8 @@ def _buscar_y_contestar(repo, q: str, ahora: datetime) -> Respuesta | None:
             extra.append(et.lower())
         lineas.append(f"• {c.get('nombre')}" + (f" — {' · '.join(extra)}" if extra else ""))
     # Sin cifras: cuántos locales hay es un dato del panel, no del comprador.
-    cabeza = ((f"{servicio[1].capitalize()} en {_C()}" if servicio else f"Encontré esto para «{q}»")
-              + (", para empezar:" if total > len(filas) else ":"))
-    pie = f"\nHay más, en el mapa: {url}" if total > len(filas) else (f"\nEn el mapa: {url}" if servicio else "")
+    cabeza = f"{plural.capitalize()} en {_C()}" + (", para empezar:" if total > len(filas) else ":")
+    pie = f"\nHay más, en el mapa: {url}" if total > len(filas) else f"\nEn el mapa: {url}"
     return Respuesta(texto=cabeza + "\n" + "\n".join(lineas) + pie, nivel=0, intent="buscar",
                      fuentes=[_fuente(c) for c in filas],
                      sugerencias=[f"Horario de {filas[0].get('nombre')}", f"Dirección de {filas[0].get('nombre')}"])
@@ -1045,13 +1273,20 @@ _REGLAS = (
 def _nivel1_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     terms = _terminos(pregunta)
     q = " ".join(terms[:4])
-    comercios = list(repo.buscar_comercios(q, MAX_COMERCIOS) or []) if q else []
+    # La misma búsqueda del Nivel 0 (ficha + ofertas vigentes + apodos), así el modelo
+    # ve lo mismo que habría visto la respuesta sin modelo.
+    cands = _candidatos(repo, q, ahora, parcial=True)[:MAX_COMERCIOS] if q else []
+    comercios = [e["c"] for e in cands]
     saber, _ = _saber_local(repo, pregunta, minimo=1)
     datos = []
     if comercios:
-        datos.append("Comercios que coinciden con la consulta (nombre · qué vende · dirección · horario):\n" + "\n".join(
-            f"- {c.get('nombre')} · {c.get('subcategoria') or ''} · {c.get('direccion') or 'sin dirección'} · {c.get('horario') or 'sin horario'} · {_url(c)}"
-            for c in comercios))
+        def _linea(e: dict) -> str:
+            c = e["c"]
+            ofertas = "; ".join(f"oferta vigente: {' '.join(str(o.get('titulo') or '').split())}" for o in e["ofertas"][:3])
+            return (f"- {c.get('nombre')} · {c.get('subcategoria') or ''} · {c.get('direccion') or 'sin dirección'} · "
+                    f"{c.get('horario') or 'sin horario'} · {_url(c)}" + (f" · {ofertas}" if ofertas else ""))
+        datos.append("Comercios que coinciden con la consulta (nombre · qué vende · dirección · horario):\n"
+                     + "\n".join(_linea(e) for e in cands))
     if saber:
         datos.append(f"Saber local (escrito por el equipo de URUKU): P: {saber.get('pregunta')} R: {saber.get('respuesta')}")
     cot = _cotizaciones(repo)
@@ -1177,11 +1412,13 @@ def responder(repo, pregunta: str, comercio: dict | None = None, ahora: datetime
     `asistente_ia` del plan, y sin ella el chatbot del local NUNCA llama al
     modelo (el asistente del sitio no depende de esto)."""
     token = _CIUDAD.set(ciudad)
+    memo = _MEMO.set({})
     try:
         if ciudad and ciudad.get("slug"):
             repo = _RepoEnCiudad(repo, ciudad["slug"])
         return _responder(repo, pregunta, comercio, ahora, con_ia)
     finally:
+        _MEMO.reset(memo)
         _CIUDAD.reset(token)
 
 
