@@ -276,6 +276,7 @@ class Repo(Protocol):
     def get_comercio_por_slug(self, slug: str) -> dict | None: ...
     def get_comercio_por_nombre(self, ciudad_id: str, nombre: str, rubro_id: str) -> dict | None: ...
     def upsert_turnos_farmacia(self, filas: list[dict]) -> int: ...
+    def list_turnos_farmacia_ahora(self, ahora_iso: str, ciudad_slug: str | None = None) -> list[dict]: ...
     def contar_fotos_comercios(self, comercio_ids: list[str]) -> dict[str, int]: ...
     def list_ejemplos_candidatos(self, ciudad_id: str, rubro_id: str | None = None, limite: int = 200) -> list[dict]: ...
     def intereses_de_plan_pendientes(self) -> dict[str, dict]: ...
@@ -3012,6 +3013,32 @@ class SupabaseRepo:
             (self._db.table("turnos_farmacia")
              .upsert(filas[i:i + 200], on_conflict="comercio_id,fecha").execute())
         return len(filas)
+
+    def list_turnos_farmacia_ahora(self, ahora_iso: str, ciudad_slug: str | None = None) -> list[dict]:
+        """Los turnos vigentes en este instante (`inicio <= ahora < fin`, `ahora` en ISO con
+        zona), activos y de farmacias activas, de la ciudad si se la pide. Cada uno trae
+        `inicio`, `fin` y el `comercio` (nombre, dirección, teléfono, WhatsApp, slug) para
+        que el asistente conteste «¿qué farmacia está de turno?» sin pasar por la web."""
+        ciudad_id = None
+        if ciudad_slug:
+            ciudad_id = self.get_ciudad_id(ciudad_slug)
+            if not ciudad_id:
+                return []
+        q = (self._db.table("turnos_farmacia")
+             .select("id, comercio_id, fecha, inicio, fin, "
+                     "comercios!inner(id, slug, nombre, direccion, telefono, whatsapp, activo, suspendido, ciudad_id)")
+             .eq("activo", True).eq("comercios.activo", True)
+             .lte("inicio", ahora_iso).gt("fin", ahora_iso))
+        if ciudad_id:
+            q = q.eq("comercios.ciudad_id", ciudad_id)
+        filas = q.order("inicio").limit(20).execute().data or []
+        salida = []
+        for f in filas:
+            c = f.pop("comercios", None) or {}
+            if c.get("suspendido"):
+                continue
+            salida.append({**f, "comercio": c})
+        return salida
 
     def contar_fotos_comercios(self, comercio_ids: list[str]) -> dict[str, int]:
         """Fotos de galería por comercio, en UNA consulta agrupada (RPC `contar_fotos_comercios`,
