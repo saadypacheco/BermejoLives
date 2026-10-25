@@ -51,3 +51,6 @@ video-1min/
 # Capturas de los manuales: se versiona el WebP (lo que muestra el sitio); los PNG
 # quedan en la máquina para editar videos (scripts/demo/capturas_a_webp.py).
 frontend/public/manuales/capturas/**/*.png
+
+# QR de cobro: se copia al VPS por scp, nunca al repo
+/data/pago/

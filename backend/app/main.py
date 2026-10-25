@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
-from app.api import asistente, auth, calles, campo, comercio, contenido, health, moderacion, observabilidad, reception, usuario, webhook
+from app.api import asistente, auth, calles, campo, comercio, contenido, health, moderacion, observabilidad, pago, reception, usuario, webhook
 from app.core.config import settings
 from app.core.ip import ip_cliente
 from app.core.limite_cuerpo import LimiteCuerpoMiddleware
@@ -183,6 +183,8 @@ async def lifespan(app: FastAPI):
         # permite probar claves. Se arregla poniendo CLAVE_PEPPER en backend/.env.
         logger.warning("config.clave_pepper_vacio",
                        detalle="CLAVE_PEPPER no está configurado: las claves de comercio se guardan sin pepper")
+    from app.services import pago_qr
+    pago_qr.registrar_arranque()  # huella de referencia del QR de cobro
     tareas = []
     if settings.clima_worker:
         tareas.append(asyncio.create_task(_clima_loop()))
@@ -384,6 +386,7 @@ app.include_router(usuario.router, tags=["usuario"])
 app.include_router(observabilidad.router, tags=["observabilidad"])
 app.include_router(contenido.router, tags=["contenido"])
 app.include_router(asistente.router, tags=["asistente"])
+app.include_router(pago.router, tags=["pago"])
 
 # Fotos de comercio: servidas por el propio backend (reemplaza a Supabase
 # Storage en el self-host — ver services/imagenes.py).
