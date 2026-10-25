@@ -84,6 +84,17 @@ class Settings(BaseSettings):
     # en los dos. Lo usa el asistente para ofrecer «buscarlo por vos» cuando no encuentra algo.
     wa_contacto_publico: str = "59167671888"
 
+    # ── QR de cobro (docs/cobro-mensual.md, T7) ─────────────────────────────
+    # El QR es un ARCHIVO del servidor, a propósito NO editable desde el panel:
+    # cambiarlo es cambiar la cuenta donde entra la plata de todos, y una cuenta
+    # de admin robada no debe poder redirigirla. Fuera de `fotos_dir` (lo que está
+    # ahí se sirve entero por /fotos). Vacío o inexistente = no hay QR y no se
+    # muestra nada. Todo opcional.
+    pago_qr_path: str = ""      # p. ej. /data/pago/qr.png (PNG o JPG)
+    pago_titular: str = ""
+    pago_banco: str = ""
+    pago_nota: str = ""         # texto corto, p. ej. «Monto abierto: poné el de tu plan»
+
     # ── Difusión: la oferta aprobada sale también a las redes de URUKU ──────
     #
     # Cada destino se enciende poniendo su credencial. Vacío = apagado, y la

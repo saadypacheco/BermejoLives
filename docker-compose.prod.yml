@@ -185,6 +185,12 @@ services:
       - whisper_models:/models      # cache del modelo de transcripción (persiste entre rebuilds)
       - comercio_fotos:/data/fotos  # fotos de comercio (reemplaza a Supabase Storage)
       - wa_received:/data/wa_received  # fotos de desconocidos: PRIVADO, nunca bajo /data/fotos (se sirve por /fotos)
+      # QR de cobro (PAGO_QR_PATH=/data/pago/qr.png): carpeta del VPS, SOLO LECTURA para el backend.
+      # No se sube desde el panel a propósito (docs/cobro-mensual.md, T7): se copia por scp,
+      #   ssh <vps> "mkdir -p <carpeta del compose>/data/pago"
+      #   scp qr.png <vps>:<carpeta del compose>/data/pago/qr.png
+      # y el backend lo sirve por /pago/qr/imagen (re-codificado). Cambiarlo no pide reinicio.
+      - ./data/pago:/data/pago:ro
     networks: [traefik, internal]
     labels:
       - traefik.enable=true
