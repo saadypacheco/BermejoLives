@@ -60,7 +60,7 @@ export const ICONOS = {
   sol: "Sun", luna: "MoonStars", seguridad: "ShieldCheck", encargo: "Package", ruta: "Path", llama: "Flame",
   explorar: "Compass", telefono: "Phone", video_play: "PlayCircle", videos: "FilmSlate",
   cartel: "Signpost", comunidad: "ChatsCircle", util: "ThumbsUp", inutil: "ThumbsDown",
-  imprimir: "Printer", ciudad: "City", emergencia: "Lifebuoy",
+  imprimir: "Printer", qr: "QrCode", ciudad: "City", emergencia: "Lifebuoy",
   inicio: "House", guardado: "BookmarkSimple", documento: "FileText",
   desplegar: "CaretDown", enviar: "PaperPlaneTilt", web: "GlobeSimple",
   editar: "PencilSimple",

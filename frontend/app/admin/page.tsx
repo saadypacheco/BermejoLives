@@ -54,6 +54,7 @@ import { ContactosPanel } from "@/components/contactos-panel";
 import { EquipoPanel } from "@/components/equipo-panel";
 import { ManualesPanel } from "@/components/admin/manuales-panel";
 import { puedo } from "@/lib/api";
+import { linkWhatsapp, mensajePasarQr, mensajePedirFotos, whatsappValido } from "@/lib/ficha-whatsapp";
 import { GenerarClaveComercio } from "@/components/admin/generar-clave";
 import { RubroRecalcular } from "@/components/rubro-recalcular";
 import { CatalogoPanel } from "@/components/catalogo-panel";
@@ -1562,6 +1563,19 @@ function TabSuscripciones({
                   {c.interes.nota && (
                     <div style={{ fontSize: 12, color: "var(--txt-2)", marginTop: 4, overflowWrap: "anywhere" }}>«{c.interes.nota}»</div>
                   )}
+                </div>
+              )}
+              {/* WhatsApp asistido: abre el chat con el mensaje escrito; lo manda la persona. No se envía nada solo. */}
+              {whatsappValido(c.whatsapp) && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                  <a className="btn btn-ghost btn-sm" href={linkWhatsapp(c.whatsapp ?? "", mensajePasarQr(c.nombre))}
+                    target="_blank" rel="noopener noreferrer" title="Abre WhatsApp con el link del QR de pago">
+                    <Ic n="qr" s={15} /> Pasar QR
+                  </a>
+                  <a className="btn btn-ghost btn-sm" href={linkWhatsapp(c.whatsapp ?? "", mensajePedirFotos(c.nombre))}
+                    target="_blank" rel="noopener noreferrer" title="Abre WhatsApp pidiendo fotos de los productos">
+                    <Ic n="foto" s={15} /> Pedir fotos
+                  </a>
                 </div>
               )}
             </div>

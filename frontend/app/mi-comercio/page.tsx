@@ -1057,6 +1057,9 @@ function SuscripcionTab() {
               target="_blank" rel="noopener" style={{ border: "1px solid var(--stroke)", justifyContent: "center" }}>
               <Ic n="whatsapp" s={16} /> Consultá el monto y cómo pagar
             </a>
+            <Link className="btn" href="/pagar" style={{ border: "1px solid var(--stroke)", justifyContent: "center" }}>
+              <Ic n="qr" s={16} /> Ver el QR de pago
+            </Link>
             <div style={{ fontSize: 13, color: "var(--txt-3)", textAlign: "center" }}>Pagá como te indiquen y subí acá el comprobante.</div>
 
             <select className="adm-input" value={metodo} onChange={(ev) => setMetodo(ev.target.value)}>
