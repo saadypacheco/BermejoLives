@@ -1,0 +1,55 @@
+/* /pagar: el QR de pago. Fondo claro siempre (un QR se lee mejor sobre blanco
+   y en la calle el sol lava los fondos oscuros). Pensado para el celular. */
+body:has(.pg-root) .install-banner,
+body:has(.pg-root) .uk-contesto { display: none !important; }
+body:has(.pg-root) { background: #F9F6ED; color: #214533; }
+
+.pg-root {
+  min-height: 100vh; min-height: 100dvh;
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  padding: 20px 16px 36px; text-align: center;
+  font-family: "Poppins", system-ui, sans-serif; color: #214533; background: #F9F6ED;
+}
+.pg-root > * { width: min(100%, 460px); }
+.pg-titulo { margin: 4px 0 0; font-size: 26px; line-height: 1.2; font-weight: 800; }
+
+.pg-aviso {
+  display: flex; gap: 12px; align-items: flex-start; text-align: left;
+  padding: 14px 16px; border-radius: 16px; background: #FFF3D6; border: 2px solid #C77D00; color: #5A3A00;
+}
+.pg-aviso svg { flex-shrink: 0; margin-top: 2px; }
+.pg-aviso-t { margin: 0; font-size: 17px; font-weight: 800; line-height: 1.3; }
+.pg-aviso-s { margin: 6px 0 0; font-size: 15px; }
+
+.pg-qr { padding: 10px; border-radius: 20px; background: #fff; box-shadow: 0 8px 28px rgba(33,69,51,.14); }
+.pg-qr img { width: 100%; height: auto; aspect-ratio: 1; display: block; image-rendering: pixelated; }
+.pg-guardar { margin: -4px 0 0; display: inline-flex; gap: 6px; align-items: center; justify-content: center; font-size: 14px; color: #4E6053; }
+
+.pg-datos { margin: 0; display: grid; gap: 8px; text-align: left; }
+.pg-datos div { padding: 10px 14px; border-radius: 12px; background: #fff; border: 1px solid #E6E2D6; }
+.pg-datos dt { font-size: 12px; font-weight: 700; color: #4E6053; text-transform: uppercase; letter-spacing: .5px; }
+.pg-datos dd { margin: 2px 0 0; font-size: 17px; font-weight: 700; overflow-wrap: anywhere; }
+.pg-nota { margin: 0; display: flex; gap: 8px; align-items: flex-start; text-align: left; font-size: 14px; color: #4E6053; }
+.pg-nota svg { flex-shrink: 0; margin-top: 2px; }
+
+.pg-pasos { margin: 0; padding: 0; list-style: none; counter-reset: paso; display: grid; gap: 10px; text-align: left; }
+.pg-pasos li {
+  counter-increment: paso; position: relative; padding: 12px 14px 12px 52px;
+  border-radius: 14px; background: #fff; border: 1px solid #E6E2D6; font-size: 15px; line-height: 1.4;
+}
+.pg-pasos li::before {
+  content: counter(paso); position: absolute; left: 12px; top: 10px; width: 28px; height: 28px; border-radius: 50%;
+  background: #1D8D52; color: #fff; font-weight: 800; display: grid; place-items: center;
+}
+
+.pg-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; padding: 10px 16px;
+  border-radius: 14px; background: linear-gradient(135deg, #25d366, #128c4a); color: #fff;
+  font-weight: 700; font-size: 16px; text-decoration: none;
+}
+
+.pg-vacio {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 20px 16px; border-radius: 16px; background: #fff; border: 1px solid #E6E2D6; font-size: 16px; line-height: 1.4;
+}
+.pg-vacio p { margin: 0; }

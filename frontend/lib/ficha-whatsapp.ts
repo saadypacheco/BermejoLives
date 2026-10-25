@@ -38,3 +38,23 @@ export function soloDigitos(n: string | null | undefined): string {
 export function linkWhatsapp(numero: string, texto: string): string {
   return `https://wa.me/${soloDigitos(numero)}?text=${encodeURIComponent(texto)}`;
 }
+
+/** Mensajes del admin para el comercio (Admin › Suscripciones). Los manda la
+ *  persona desde su WhatsApp Web: acá sólo se arma el texto. Sin precios. */
+function saludoNombre(nombre: string): string {
+  const n = nombre.trim();
+  return n && n.toLowerCase() !== "comercio" ? ` ${n}` : "";
+}
+
+export function mensajePasarQr(nombre: string): string {
+  return `Hola${saludoNombre(nombre)}, soy de URUKU. Para activar tu suscripción, pagá con este QR: ${SITIO_PUBLICO}/pagar — y mandanos el comprobante por acá. ¡Gracias!`;
+}
+
+export function mensajePedirFotos(nombre: string): string {
+  return `Hola${saludoNombre(nombre)}, soy de URUKU. ¿Nos mandás fotos de tus productos a tu grupo de WhatsApp con URUKU? Así salen en tu ficha y en la publicidad de la portada.`;
+}
+
+/** El número sirve para abrir un chat: al menos 8 dígitos (con prefijo de país). */
+export function whatsappValido(numero: string | null | undefined): boolean {
+  return soloDigitos(numero).length >= 8;
+}
