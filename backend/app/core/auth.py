@@ -9,13 +9,60 @@ import secrets
 import time
 
 import jwt as pyjwt
+import structlog
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
 from app.core.permisos import es_del_panel, permisos_de_roles, tiene as tiene_permiso
+from app.db.repository import Repo, get_repo
+
+logger = structlog.get_logger()
 
 _bearer = HTTPBearer(auto_error=False)
+
+# Corte de acceso del agente (docs/credencial-agentes.md §4): el JWT dura días, así
+# que un agente dado de baja seguiría entrando hasta que venza. `require_agente`
+# mira si su cuenta sigue activa, con un caché en memoria de 60 s para no ir a la
+# base en cada pedido: el corte tarda como mucho ese minuto.
+ACCESO_TTL_SEGUNDOS = 60
+_ACCESO_MAX = 2000
+_acceso_cache: dict[str, tuple[float, bool | None]] = {}
+
+
+def reiniciar_cache_acceso(email: str | None = None) -> None:
+    """Vacía el caché del corte de acceso (todo, o sólo el de un correo). Se llama
+    al revocar con corte —así ese proceso lo aplica al instante— y en los tests."""
+    if email is None:
+        _acceso_cache.clear()
+    else:
+        _acceso_cache.pop((email or "").strip().lower(), None)
+
+
+def _cuenta_activa(repo: Repo, email: str) -> bool | None:
+    """`True`/`False` según la fila de `usuarios_panel`; `None` si no hay fila (la
+    cuenta del `.env`). Cacheado `ACCESO_TTL_SEGUNDOS`."""
+    clave = (email or "").strip().lower()
+    ahora = time.monotonic()
+    hit = _acceso_cache.get(clave)
+    if hit and hit[0] > ahora:
+        return hit[1]
+    try:
+        activa = repo.is_usuario_panel_activo(clave)
+    except Exception as exc:  # noqa: BLE001
+        # Si la base no contesta no se le cierra la puerta a todos los agentes de la
+        # calle: se deja pasar (sin cachear) y queda en el log.
+        logger.warning("auth.agente_estado_no_disponible", error=str(exc))
+        return True
+    if activa is None:
+        logger.info("auth.agente_sin_fila", email=clave)
+    if len(_acceso_cache) >= _ACCESO_MAX:
+        for k in [k for k, (vence, _) in _acceso_cache.items() if vence <= ahora]:
+            del _acceso_cache[k]
+        if len(_acceso_cache) >= _ACCESO_MAX:
+            _acceso_cache.clear()
+    _acceso_cache[clave] = (ahora + ACCESO_TTL_SEGUNDOS, activa)
+    return activa
 
 
 def hash_password(password: str, salt: str | None = None) -> str:
@@ -168,9 +215,17 @@ def require_admin(creds: HTTPAuthorizationCredentials | None = Depends(_bearer))
     return _con_permiso(creds, "equipo")
 
 
-def require_agente(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
-    """La app de campo: cargar comercios desde la calle."""
-    return _con_permiso(creds, "comercios.cargar")
+def require_agente(creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
+                   repo: Repo = Depends(get_repo)) -> dict:
+    """La app de campo: cargar comercios desde la calle.
+
+    Además del token mira que la cuenta siga activa (corte de acceso). La cuenta
+    del `.env` no tiene fila: pasa."""
+    claims = _con_permiso(creds, "comercios.cargar")
+    email = claims.get("email") or claims.get("sub") or ""
+    if _cuenta_activa(repo, email) is False:
+        raise HTTPException(status_code=401, detail="Tu acceso fue dado de baja")
+    return claims
 
 
 def require_publicador(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:

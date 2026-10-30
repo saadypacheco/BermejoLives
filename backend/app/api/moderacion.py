@@ -10,7 +10,7 @@ import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.auth import hash_password, require_admin, require_alguno, require_moderador, require_panel, require_permiso
+from app.core.auth import hash_password, reiniciar_cache_acceso, require_admin, require_alguno, require_moderador, require_panel, require_permiso
 from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS, tiene as tiene_permiso
 from app.core.config import _numeros_propios, settings
 from starlette.concurrency import run_in_threadpool
@@ -547,6 +547,7 @@ class UsuarioPanelBody(BaseModel):
     email: str
     password: str | None = None      # al crear, obligatoria; al editar, opcional
     nombre: str | None = None
+    apellido: str | None = None      # va en la credencial del agente (0163)
     ciudad_slug: str | None = None
     roles: list[str] = Field(default_factory=list)
     activo: bool = True
@@ -592,6 +593,7 @@ def crear_usuario_panel(body: UsuarioPanelBody, admin: dict = Depends(require_pe
     fila = {
         "email": email, "password_hash": hash_password(body.password),
         "nombre": (body.nombre or "").strip() or None,
+        "apellido": (body.apellido or "").strip() or None,
         "ciudad_id": repo.get_ciudad_id(body.ciudad_slug) if body.ciudad_slug else None,
         "activo": True, "creado_por": admin.get("email"),
     }
@@ -606,6 +608,8 @@ def editar_usuario_panel(usuario_id: str, body: UsuarioPanelBody, admin: dict = 
     patch: dict = {"activo": body.activo}
     if body.nombre is not None:
         patch["nombre"] = body.nombre.strip() or None
+    if body.apellido is not None:
+        patch["apellido"] = body.apellido.strip() or None
     if body.ciudad_slug is not None:
         patch["ciudad_id"] = repo.get_ciudad_id(body.ciudad_slug) if body.ciudad_slug else None
     if body.password:
@@ -617,6 +621,7 @@ def editar_usuario_panel(usuario_id: str, body: UsuarioPanelBody, admin: dict = 
     actualizado = repo.update_usuario_panel(usuario_id, patch, roles)
     if not actualizado:
         raise HTTPException(status_code=404, detail="No existe esa persona")
+    reiniciar_cache_acceso(actualizado.get("email"))     # desactivar a alguien corta su acceso de campo ya
     logger.info("admin.usuario_editado", usuario=usuario_id, campos=list(patch.keys()), by=admin.get("email"))
     return {"ok": True, "usuario": {k: v for k, v in actualizado.items() if k != "password_hash"}}
 

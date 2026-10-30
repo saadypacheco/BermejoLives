@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
-from app.api import asistente, auth, calles, campo, comercio, contenido, health, moderacion, observabilidad, pago, reception, usuario, webhook
+from app.api import agent_credentials, asistente, auth, calles, campo, comercio, contenido, health, moderacion, observabilidad, pago, reception, usuario, webhook
 from app.core.config import settings
 from app.core.ip import ip_cliente
 from app.core.limite_cuerpo import LimiteCuerpoMiddleware
@@ -267,6 +267,12 @@ _RL_RULES: dict[str, int] = {
     # escribe, y menos de lo que un bot gastaría en modelo.
     "/asistente/": 20,
 }
+# Lo mismo para los GET públicos que abre un QR impreso o un curioso: la lista de
+# agentes y la verificación de una credencial (docs/credencial-agentes.md §4).
+# Un prefijo coincide con la ruta exacta o con lo que cuelga de ella.
+_RL_RULES_GET: dict[str, int] = {
+    "/public/agents": 30,
+}
 
 
 # La IP real es el ÚLTIMO valor de X-Forwarded-For (lo agrega el proxy); el primero
@@ -288,9 +294,14 @@ def _barrer_buckets(now: float) -> None:
 
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):
-    if request.method == "POST":
-        for prefix, limite in _RL_RULES.items():
-            if not request.url.path.startswith(prefix):
+    reglas = _RL_RULES if request.method == "POST" else _RL_RULES_GET if request.method == "GET" else {}
+    if reglas:
+        ruta = request.url.path
+        for prefix, limite in reglas.items():
+            if reglas is _RL_RULES_GET:
+                if ruta != prefix and not ruta.startswith(prefix + "/"):
+                    continue
+            elif not ruta.startswith(prefix):
                 continue
             ip = _client_ip(request)
             now = time.time()
@@ -387,6 +398,7 @@ app.include_router(observabilidad.router, tags=["observabilidad"])
 app.include_router(contenido.router, tags=["contenido"])
 app.include_router(asistente.router, tags=["asistente"])
 app.include_router(pago.router, tags=["pago"])
+app.include_router(agent_credentials.router, tags=["credencial-agentes"])
 
 # Fotos de comercio: servidas por el propio backend (reemplaza a Supabase
 # Storage en el self-host — ver services/imagenes.py).

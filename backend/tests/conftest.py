@@ -77,6 +77,16 @@ def _tmp_fotos_dir(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _sin_cache_de_acceso_del_agente():
+    """El caché de 60 s del corte de acceso (core/auth.py) vive en memoria del
+    proceso: sin esto, el estado de un correo en un test le llega al siguiente."""
+    from app.core import auth as _auth
+    _auth.reiniciar_cache_acceso()
+    yield
+    _auth.reiniciar_cache_acceso()
+
+
+@pytest.fixture(autouse=True)
 def _sin_limite_de_subidas_de_catalogo():
     """El tope de subidas de catálogo por hora vive en memoria del proceso: sin
     esto, lo que sube un test le cuenta al siguiente."""
@@ -186,6 +196,7 @@ class FakeRepo:
         self.frontera: dict = {"puente": "normal", "chalanas": "operando", "rio": "normal", "nota": None, "actualizado_en": None}
         self.fronteras: dict[str, dict] = {}     # una por ciudad (0124)
         self.agentes: dict[str, dict] = {}       # el equipo (0126: usuarios_panel)
+        self.credenciales: dict[str, dict] = {}  # agent_credentials (0163): id -> fila
         self.usuario_roles: dict[str, list] = {}
         self.roles: dict[str, dict] = {}
         self.cotizaciones_historial: list[dict] = []
@@ -2293,6 +2304,64 @@ class FakeRepo:
         if roles is not None:
             self.usuario_roles[usuario_id] = list(roles)
         return {**self.agentes[usuario_id], "roles": self.usuario_roles.get(usuario_id, [])}
+
+    # ---- credencial de los agentes (0163) ----
+    def is_usuario_panel_activo(self, email):
+        e = (email or "").strip().lower()
+        u = next((a for a in self.agentes.values() if a["email"] == e), None)
+        return None if u is None else bool(u.get("activo", True))
+
+    def get_usuario_panel_por_id(self, usuario_id):
+        u = self.agentes.get(usuario_id)
+        return {**u, "roles": self.usuario_roles.get(usuario_id, [])} if u else None
+
+    def get_credencial_vigente(self, usuario_id):
+        return next((c for c in self.credenciales.values()
+                     if c["usuario_id"] == usuario_id and c["activo"]), None)
+
+    def get_credencial_por_token(self, token):
+        return next((c for c in self.credenciales.values() if c["token"] == token), None)
+
+    def emitir_credencial(self, usuario_id, token, issued_by):
+        from datetime import datetime, timezone
+        ahora = datetime.now(timezone.utc).isoformat()
+        for c in self.credenciales.values():
+            if c["usuario_id"] == usuario_id and c["activo"]:
+                c.update(activo=False, revoked_by=issued_by, revoked_at=ahora, revoke_reason="reemitida")
+        fila = {"id": self._id("cred"), "usuario_id": usuario_id, "token": token, "activo": True,
+                "issued_by": issued_by, "issued_at": ahora, "revoked_by": None, "revoked_at": None,
+                "revoke_reason": None, "last_scan_at": None, "scan_count": 0}
+        self.credenciales[fila["id"]] = fila
+        return dict(fila)
+
+    def revocar_credencial(self, usuario_id, reason, revoked_by):
+        from datetime import datetime, timezone
+        c = self.get_credencial_vigente(usuario_id)
+        if not c:
+            return None
+        c.update(activo=False, revoked_by=revoked_by, revoked_at=datetime.now(timezone.utc).isoformat(),
+                 revoke_reason=reason)
+        return dict(c)
+
+    def registrar_escaneo_credencial(self, credencial_id):
+        from datetime import datetime, timezone
+        c = self.credenciales.get(credencial_id)
+        if c:
+            c["scan_count"] += 1
+            c["last_scan_at"] = datetime.now(timezone.utc).isoformat()
+
+    def list_agentes_publicos(self):
+        ciudades = {c["id"]: c for c in self.list_ciudades()}
+        salida = []
+        for c in self.credenciales.values():
+            u = self.agentes.get(c["usuario_id"])
+            if not c["activo"] or not u or not u.get("activo", True) or not u.get("photo_url"):
+                continue
+            ciudad = ciudades.get(u.get("ciudad_id")) or {}
+            salida.append({"nombre": u.get("nombre"), "apellido": u.get("apellido"),
+                           "ciudad_nombre": ciudad.get("nombre"), "ciudad_slug": ciudad.get("slug"),
+                           "photo_url": u["photo_url"], "issued_at": c["issued_at"]})
+        return salida
 
     def list_roles(self):
         from app.core.permisos import ROLES_BASE
