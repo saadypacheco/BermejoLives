@@ -11,7 +11,7 @@ import { AgentCredentialCard } from "@/components/agent-credential-card";
 import { Carga, useCarga } from "@/components/admin/estado-seccion";
 import { Ic } from "@/components/ic";
 import { getToken } from "@/lib/api";
-import { getCredencialAdmin, nombreCompleto, type CredencialAdmin } from "@/lib/agent-credentials";
+import { getCredencialAdmin, nombreCompleto, origenQr, type CredencialAdmin } from "@/lib/agent-credentials";
 import "@/app/styles/credencial-agente.css";
 
 export default function CredencialAdminPage({ params }: { params: { id: string } }) {
@@ -71,8 +71,16 @@ function Contenido({ datos }: { datos: CredencialAdmin }) {
     );
   }
 
+  let hostQr = "";
+  try { hostQr = new URL(origenQr()).hostname; } catch { hostQr = ""; }
   return (
     <>
+      {hostQr !== "uruku.bo" && (
+        <div className="acc-estado acc-estado-error acc-oculta-al-imprimir" role="alert">
+          <Ic n="aviso" s={22} />
+          <p>Esta tarjeta apunta a <b>{hostQr || "una dirección desconocida"}</b>: imprimila desde uruku.bo.</p>
+        </div>
+      )}
       {!datos.activo && (
         <div className="acc-estado acc-estado-error acc-oculta-al-imprimir" role="alert">
           <Ic n="aviso" s={22} />

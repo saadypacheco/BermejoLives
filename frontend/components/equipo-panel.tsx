@@ -158,7 +158,8 @@ function FilaPersona({ u, data, ciudades, onCambio }: { u: UsuarioPanel; data: E
   async function guardar(patch: Partial<{ activo: boolean; password: string; nombre: string; apellido: string; ciudad_slug: string; roles: string[] }>) {
     setMsg("");
     try {
-      await editarUsuarioPanel(u.id, { email: u.email, activo: patch.activo ?? u.activo, roles: patch.roles ?? roles, ...patch });
+      // `activo` sólo viaja si se apretó Apagar/Encender: el backend toma su ausencia como «no tocar».
+      await editarUsuarioPanel(u.id, { email: u.email, roles: patch.roles ?? roles, ...patch });
       setClave(""); setMsg("Listo"); onCambio();
     } catch (e) { setMsg(e instanceof Error ? e.message : "no se pudo"); }
   }
@@ -189,6 +190,9 @@ function FilaPersona({ u, data, ciudades, onCambio }: { u: UsuarioPanel; data: E
             </label>
           ))}
         </div>
+        {roles.includes("agente") && (
+          <p style={{ margin: "6px 0 0", fontSize: 11.5, opacity: .75 }}>Si le sacás «Agente», su credencial se revoca sola.</p>
+        )}
       </td>
       <td>
         <select className="adm-input" style={{ width: "auto", fontSize: 12 }} value={u.ciudad_slug ?? ""}
@@ -209,7 +213,7 @@ function FilaPersona({ u, data, ciudades, onCambio }: { u: UsuarioPanel; data: E
     {esAgente && (
       <tr style={{ opacity: u.activo ? 1 : .6 }}>
         <td colSpan={6} style={{ paddingTop: 0 }}>
-          <BloqueCredencial u={u} />
+          <BloqueCredencial u={u} onCambio={onCambio} />
         </td>
       </tr>
     )}
@@ -223,15 +227,16 @@ const fmtFecha = (iso: string) => new Date(iso).toLocaleDateString("es-BO", { da
  *  acciones. Las confirmaciones van inline: un `window.confirm` antes de abrir el
  *  selector de archivos lo bloquea Chrome. Los errores del backend vienen en
  *  español y se muestran tal cual. */
-function BloqueCredencial({ u }: { u: UsuarioPanel }) {
+function BloqueCredencial({ u, onCambio }: { u: UsuarioPanel; onCambio: () => void }) {
   const [info, setInfo] = useState<CredencialAdmin | null>(null);
   const [cargando, setCargando] = useState(true);
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
   const [ocupado, setOcupado] = useState(false);
-  const [modo, setModo] = useState<"" | "reemitir" | "revocar">("");
+  const [modo, setModo] = useState<"" | "emitir" | "reemitir" | "revocar">("");
   const [motivo, setMotivo] = useState("");
   const [cortar, setCortar] = useState(false);
+  const [acepto, setAcepto] = useState(false);
   const archivo = useRef<HTMLInputElement>(null);
 
   const cargar = useCallback(async () => {
@@ -245,7 +250,7 @@ function BloqueCredencial({ u }: { u: UsuarioPanel }) {
 
   async function accion(fn: () => Promise<void>, hecho: string) {
     setErr(""); setOk(""); setOcupado(true);
-    try { await fn(); setOk(hecho); setModo(""); setMotivo(""); setCortar(false); await cargar(); }
+    try { await fn(); setOk(hecho); setModo(""); setMotivo(""); setCortar(false); setAcepto(false); await cargar(); onCambio(); }
     catch (e) { setErr(e instanceof Error ? e.message : "No se pudo completar"); }
     finally { setOcupado(false); }
   }
@@ -296,19 +301,30 @@ function BloqueCredencial({ u }: { u: UsuarioPanel }) {
               <button type="button" className="btn btn-ghost btn-sm" disabled={ocupado} onClick={() => { setModo("revocar"); setErr(""); setOk(""); }}>Revocar…</button>
             </>
           ) : (
-            <button type="button" className="btn btn-primary btn-sm" disabled={ocupado || cargando} onClick={() => void accion(async () => { await emitirCredencial(u.id); }, "Credencial emitida")}>
-              {ocupado ? "Emitiendo…" : "Emitir"}
+            <button type="button" className="btn btn-primary btn-sm" disabled={ocupado || cargando} onClick={() => { setModo("emitir"); setErr(""); setOk(""); }}>
+              Emitir
             </button>
           )}
         </div>
       )}
 
-      {modo === "reemitir" && (
-        <div role="alertdialog" aria-label="Confirmar reemisión" style={{ display: "grid", gap: 8 }}>
-          <span><Ic n="aviso" s={16} /> Al reemitir, la tarjeta impresa vieja <b>deja de valer</b>: quien la tenga va a ver «NO ES AGENTE DE URUKU». Tenés que imprimir la nueva.</span>
+      {(modo === "emitir" || modo === "reemitir") && (
+        <div role="alertdialog" aria-label={modo === "emitir" ? "Confirmar emisión" : "Confirmar reemisión"} style={{ display: "grid", gap: 8 }}>
+          {modo === "reemitir" && (
+            <span><Ic n="aviso" s={16} /> Al reemitir, la tarjeta impresa vieja <b>deja de valer</b>: quien la tenga va a ver «NO ES AGENTE DE URUKU». Tenés que imprimir la nueva.</span>
+          )}
+          {info?.consentimiento_at ? (
+            <span><Ic n="listo" s={16} tono="marca" /> Consentimiento dado el {fmtFecha(info.consentimiento_at)}.</span>
+          ) : (
+            <label style={{ cursor: "pointer", display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <input type="checkbox" checked={acepto} onChange={(e) => setAcepto(e.target.checked)} style={{ marginTop: 3 }} />
+              <span>El agente aceptó que se publiquen su foto y su nombre en uruku.bo</span>
+            </label>
+          )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button type="button" className="btn btn-primary btn-sm" disabled={ocupado} onClick={() => void accion(async () => { await emitirCredencial(u.id); }, "Credencial reemitida")}>
-              {ocupado ? "Reemitiendo…" : "Sí, reemitir"}
+            <button type="button" className="btn btn-primary btn-sm" disabled={ocupado || (!info?.consentimiento_at && !acepto)}
+                    onClick={() => void accion(async () => { await emitirCredencial(u.id, !info?.consentimiento_at && acepto); }, modo === "emitir" ? "Credencial emitida" : "Credencial reemitida")}>
+              {ocupado ? "Emitiendo…" : modo === "emitir" ? "Emitir credencial" : "Sí, reemitir"}
             </button>
             <button type="button" className="btn btn-ghost btn-sm" disabled={ocupado} onClick={() => setModo("")}>Cancelar</button>
           </div>

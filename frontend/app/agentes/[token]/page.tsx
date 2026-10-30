@@ -78,12 +78,12 @@ export default async function CredencialPage({ params }: { params: { token: stri
         <Logo />
         <section className="ag-baja" role="alert">
           <Ic n="aviso" s={48} />
-          <h2>NO ES AGENTE DE URUKU</h2>
+          <h1>NO ES AGENTE DE URUKU</h1>
           <p>Esta credencial se dio de baja. No le pagues nada.</p>
         </section>
         <section className="ag-id" aria-label="Datos de la credencial dada de baja">
           <Foto url={d.photo_url} nombre={nombre} />
-          {nombre && <h1>{nombre}</h1>}
+          {nombre && <h2 className="ag-nom">{nombre}</h2>}
           <p className="ag-rol">Credencial dada de baja</p>
         </section>
         <Ayuda />
@@ -96,7 +96,8 @@ export default async function CredencialPage({ params }: { params: { token: stri
       <Logo />
       <section className="ag-id" aria-label="Credencial de agente">
         <Foto url={d.photo_url} nombre={nombre} />
-        {nombre && <h1>{nombre}</h1>}
+        <p className="ag-comparar" role="note"><Ic n="usuario" s={22} /> Compará la foto con la persona que tenés enfrente. Si no es la misma, no es agente.</p>
+        {nombre && <h1 className="ag-nom">{nombre}</h1>}
         <p className="ag-rol">Agente de URUKU{d.ciudad ? ` · ${d.ciudad}` : ""}</p>
         <p className="ag-sello ag-sello-ok"><Ic n="listo" s={26} /> VIGENTE</p>
         <RelojCredencial checkedAt={d.checked_at} />

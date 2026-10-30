@@ -16,7 +16,7 @@
 import { useEffect, useState } from "react";
 import "@/app/styles/credencial-agente.css";
 import { WA_URUKU_TEXTO } from "@/lib/contacto";
-import { nombreCompleto } from "@/lib/agent-credentials";
+import { nombreCompleto, origenQr } from "@/lib/agent-credentials";
 
 type Props = {
   nombre: string | null;
@@ -31,11 +31,11 @@ type Props = {
 export function AgentCredentialCard({ nombre, apellido, ciudad, photoUrl, token, slotAtras }: Props) {
   const [qr, setQr] = useState<string | null>(null);
   const [fallo, setFallo] = useState(false);
-  const url = typeof window === "undefined" ? "" : `${window.location.origin}/agentes/${token}`;
+  const url = typeof window === "undefined" ? "" : `${origenQr()}/agentes/${token}`;
 
   useEffect(() => {
     let vivo = true;
-    const destino = `${window.location.origin}/agentes/${token}`;
+    const destino = `${origenQr()}/agentes/${token}`;
     setQr(null); setFallo(false);
     import("qrcode")
       .then((m) => m.toDataURL(destino, { width: 520, margin: 1, errorCorrectionLevel: "M", color: { dark: "#000000", light: "#ffffff" } }))
@@ -45,39 +45,45 @@ export function AgentCredentialCard({ nombre, apellido, ciudad, photoUrl, token,
   }, [token]);
 
   const completo = nombreCompleto(nombre, apellido);
+  // El nombre largo achica la letra en vez de cortarse: tiene que entrar en dos renglones.
+  const tamNombre = completo.length <= 18 ? "11pt" : completo.length <= 28 ? "9.5pt" : completo.length <= 40 ? "8.5pt" : "7.5pt";
 
   return (
     <div className="acc-par">
       <article className="acc-cara acc-frente" aria-label="Frente de la credencial">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="acc-logo" src="/logouruku-wordmark.png" alt="URUKU" />
-        {photoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img className="acc-foto" src={photoUrl} alt={`Foto de ${completo}`} />
-        ) : (
-          <div className="acc-foto acc-foto-vacia">Sin foto</div>
-        )}
-        <h2 className="acc-nombre">{completo}</h2>
-        <p className="acc-rol">Agente de URUKU{ciudad ? ` · ${ciudad}` : ""}</p>
-        <div className="acc-qr">
-          {qr ? (
+        <div className="acc-cuerpo">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="acc-logo" src="/logouruku-wordmark.png" alt="URUKU" />
+          {photoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={qr} alt={`QR que abre ${url}`} />
+            <img className="acc-foto" src={photoUrl} alt={`Foto de ${completo}`} />
           ) : (
-            <span className="acc-qr-espera" role="status">{fallo ? "No se pudo armar el QR" : "Armando el QR…"}</span>
+            <div className="acc-foto acc-foto-vacia">Sin foto</div>
           )}
+          <h2 className="acc-nombre" style={{ fontSize: tamNombre }}>{completo}</h2>
+          <p className="acc-rol">Agente de URUKU{ciudad ? ` · ${ciudad}` : ""}</p>
+          <div className="acc-qr">
+            {qr ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={qr} alt={`QR que abre ${url}`} />
+            ) : (
+              <span className="acc-qr-espera" role="status">{fallo ? "No se pudo armar el QR" : "Armando el QR…"}</span>
+            )}
+          </div>
+          <p className="acc-escanea">Escaneá para comprobar que soy agente</p>
         </div>
-        <p className="acc-escanea">Escaneá para comprobar que soy agente</p>
         <p className="acc-pie">Los agentes de URUKU nunca cobran.</p>
       </article>
 
       <article className="acc-cara acc-reverso" aria-label="Reverso de la credencial">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="acc-logo" src="/logouruku-wordmark.png" alt="URUKU" />
-        <p className="acc-aviso">Si alguien te pide plata en nombre de URUKU, <b>no pagues</b> y avisanos.</p>
-        <p className="acc-wa">WhatsApp URUKU<br /><b>{WA_URUKU_TEXTO}</b></p>
-        {slotAtras}
-        <p className="acc-web">uruku.bo/agentes</p>
+        <div className="acc-cuerpo">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="acc-logo" src="/logouruku-wordmark.png" alt="URUKU" />
+          <p className="acc-aviso">Si alguien te pide plata en nombre de URUKU, <b>no pagues</b> y avisanos.</p>
+          <p className="acc-wa">WhatsApp URUKU<br /><b>{WA_URUKU_TEXTO}</b></p>
+          {slotAtras}
+          <p className="acc-web">uruku.bo/agentes</p>
+        </div>
         <p className="acc-pie">Los agentes de URUKU nunca cobran.</p>
       </article>
     </div>
