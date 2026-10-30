@@ -102,6 +102,8 @@ export type CredencialAdmin = {
   apellido: string | null;
   ciudad_nombre: string | null;
   activo: boolean;
+  /** Cuándo el agente aceptó que se publiquen su foto y su nombre; null = todavía no. */
+  consentimiento_at: string | null;
 };
 
 const JSON_H = { "Content-Type": "application/json" };
@@ -111,10 +113,12 @@ export async function getCredencialAdmin(usuarioId: string): Promise<CredencialA
   return (await res.json()) as CredencialAdmin;
 }
 
-/** Emite una credencial nueva; si había una viva la revoca (motivo «reemitida»). */
-export async function emitirCredencial(usuarioId: string): Promise<CredencialAdmin> {
+/** Emite una credencial nueva; si había una viva la revoca (motivo «reemitida»).
+ *  `consiente`: true la primera vez (el agente aceptó que se publiquen su foto y
+ *  su nombre); si el consentimiento ya está dado se manda false. */
+export async function emitirCredencial(usuarioId: string, consiente: boolean): Promise<CredencialAdmin> {
   const res = await authFetch(`/admin/agents/${encodeURIComponent(usuarioId)}/credential`, {
-    method: "POST", headers: JSON_H, body: "{}",
+    method: "POST", headers: JSON_H, body: JSON.stringify({ consiente }),
   });
   return (await res.json()) as CredencialAdmin;
 }
@@ -131,4 +135,12 @@ export async function subirFotoAgente(usuarioId: string, file: File): Promise<st
   fd.append("foto", file);
   const res = await authFetch(`/admin/agents/${encodeURIComponent(usuarioId)}/photo`, { method: "POST", body: fd });
   return ((await res.json()) as { photo_url: string }).photo_url;
+}
+
+/** De dónde sale el QR de la tarjeta: `NEXT_PUBLIC_SITE_URL` si está (así una
+ *  tarjeta se puede imprimir desde QA apuntando a uruku.bo), si no el origen de
+ *  la página. Sólo en el navegador. */
+export function origenQr(): string {
+  const fijo = (process.env.NEXT_PUBLIC_SITE_URL ?? "").trim().replace(/\/+$/, "");
+  return fijo || window.location.origin;
 }
