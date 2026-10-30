@@ -1561,7 +1561,7 @@ export type PlanAdmin = {
 
 // ---- El equipo, los roles y los permisos (Admin › Equipo) ----
 export type UsuarioPanel = {
-  id: string; email: string; nombre: string | null; activo: boolean; roles: string[];
+  id: string; email: string; nombre: string | null; apellido?: string | null; photo_url?: string | null; activo: boolean; roles: string[];
   ciudad_id: string | null; ciudad_slug?: string | null; ciudad_nombre?: string | null;
   created_at?: string; ultimo_acceso?: string | null;
 };
@@ -1577,12 +1577,12 @@ export async function getEquipo(): Promise<EquipoData> {
   const res = await authFetch(`/admin/equipo`);
   return res.json();
 }
-export async function crearUsuarioPanel(body: { email: string; password: string; nombre?: string; ciudad_slug?: string; roles: string[] }): Promise<UsuarioPanel> {
+export async function crearUsuarioPanel(body: { email: string; password: string; nombre?: string; apellido?: string; ciudad_slug?: string; roles: string[] }): Promise<UsuarioPanel> {
   const res = await authFetch(`/admin/equipo`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!res.ok) throw new Error((await res.json()).detail ?? "No se pudo crear");
   return (await res.json()).usuario;
 }
-export async function editarUsuarioPanel(id: string, body: { email: string; activo?: boolean; password?: string; nombre?: string; ciudad_slug?: string; roles?: string[] }): Promise<UsuarioPanel> {
+export async function editarUsuarioPanel(id: string, body: { email: string; activo?: boolean; password?: string; nombre?: string; apellido?: string; ciudad_slug?: string; roles?: string[] }): Promise<UsuarioPanel> {
   const res = await authFetch(`/admin/equipo/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!res.ok) throw new Error((await res.json()).detail ?? "No se pudo guardar");
   return (await res.json()).usuario;

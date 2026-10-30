@@ -9,13 +9,82 @@ import secrets
 import time
 
 import jwt as pyjwt
+import structlog
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
 from app.core.permisos import es_del_panel, permisos_de_roles, tiene as tiene_permiso
+from app.db.repository import Repo, get_repo
+
+logger = structlog.get_logger()
 
 _bearer = HTTPBearer(auto_error=False)
+
+# Corte de acceso (docs/credencial-agentes.md §4): el JWT dura días, así que alguien
+# dado de baja seguiría entrando hasta que venza, y un agente al que le sacaron el rol
+# conservaría los permisos que el token lleva escritos. Cada pedido del panel mira el
+# estado ACTUAL de la cuenta (activa + permisos) con un caché en memoria de 60 s para
+# no ir a la base en cada pedido: el corte tarda como mucho ese minuto.
+ACCESO_TTL_SEGUNDOS = 60
+_ACCESO_MAX = 2000
+#: correo -> (vence, estado). `estado` es None si no hay fila (cuenta del `.env`) o
+#: {"activo": bool, "permisos": list[str]} con los permisos de sus roles HOY.
+_acceso_cache: dict[str, tuple[float, dict | None]] = {}
+
+
+def reiniciar_cache_acceso(email: str | None = None) -> None:
+    """Vacía el caché del corte de acceso (todo, o sólo el de un correo). Se llama
+    al revocar/editar —así ese proceso lo aplica al instante— y en los tests."""
+    if email is None:
+        _acceso_cache.clear()
+    else:
+        _acceso_cache.pop((email or "").strip().lower(), None)
+
+
+def _estado_cuenta(repo: Repo, email: str, evento_sin_fila: str | None = None) -> dict | None:
+    """El estado actual de la cuenta, cacheado `ACCESO_TTL_SEGUNDOS`.
+
+    Si la base no contesta se respeta lo último que se sabía de esa cuenta, aunque el
+    caché esté vencido (stale-if-error): una baja conocida no se reabre por una caída.
+    Sin estado previo se deja pasar (`None`) y no se cachea: no se le cierra la puerta
+    a todos los agentes de la calle por una falla de la base."""
+    clave = (email or "").strip().lower()
+    ahora = time.monotonic()
+    hit = _acceso_cache.get(clave)
+    if hit and hit[0] > ahora:
+        return hit[1]
+    try:
+        fila = repo.get_acceso_usuario_panel(clave)
+        estado = None
+        if fila is not None:
+            catalogo = {r["slug"]: r.get("permisos") or [] for r in (repo.list_roles() or [])}
+            estado = {"activo": bool(fila.get("activo")),
+                      "permisos": permisos_de_roles(fila.get("roles") or [], catalogo)}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("auth.estado_de_cuenta_no_disponible", error=str(exc), con_estado_previo=bool(hit))
+        return hit[1] if hit else None
+    if estado is None and evento_sin_fila:
+        logger.info(evento_sin_fila, email=clave)
+    if len(_acceso_cache) >= _ACCESO_MAX:
+        for k in [k for k, (vence, _) in _acceso_cache.items() if vence <= ahora]:
+            del _acceso_cache[k]
+        if len(_acceso_cache) >= _ACCESO_MAX:
+            _acceso_cache.clear()
+    _acceso_cache[clave] = (ahora + ACCESO_TTL_SEGUNDOS, estado)
+    return estado
+
+
+def _verificar_cuenta(claims: dict, repo: Repo, agente: bool = False) -> None:
+    """401 si la persona fue dada de baja. Para la app de campo (`agente`) además
+    exige que HOY siga teniendo el permiso de cargar comercios. Sin fila en
+    `usuarios_panel` (la cuenta del `.env`) pasa."""
+    email = claims.get("email") or claims.get("sub") or ""
+    estado = _estado_cuenta(repo, email, "auth.agente_sin_fila" if agente else None)
+    if estado is None:
+        return
+    if not estado["activo"] or (agente and not tiene_permiso({"permisos": estado["permisos"]}, "comercios.cargar")):
+        raise HTTPException(status_code=401, detail="Tu acceso fue dado de baja")
 
 
 def hash_password(password: str, salt: str | None = None) -> str:
@@ -122,10 +191,12 @@ def _claims(creds: HTTPAuthorizationCredentials | None) -> dict:
         raise HTTPException(status_code=401, detail="Token inválido o expirado") from exc
 
 
-def _con_permiso(creds: HTTPAuthorizationCredentials | None, permiso: str) -> dict:
+def _con_permiso(creds: HTTPAuthorizationCredentials | None, permiso: str, repo: Repo,
+                 agente: bool = False) -> dict:
     claims = _claims(creds)
     if not tiene_permiso(claims, permiso):
         raise HTTPException(status_code=403, detail="Tu cuenta no tiene permiso para esto")
+    _verificar_cuenta(claims, repo, agente)
     return claims
 
 
@@ -134,8 +205,8 @@ def require_permiso(permiso: str):
 
     Se usa así:  _: dict = Depends(require_permiso("pagos"))
     Quién lo tiene lo decide el rol, y el rol se arma desde el panel."""
-    def dep(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
-        return _con_permiso(creds, permiso)
+    def dep(creds: HTTPAuthorizationCredentials | None = Depends(_bearer), repo: Repo = Depends(get_repo)) -> dict:
+        return _con_permiso(creds, permiso, repo)
     return dep
 
 
@@ -143,15 +214,17 @@ def require_alguno(*permisos: str):
     """La guardia de un endpoint que sirve a más de un rol: «hace falta
     ALGUNO de estos permisos». Ej.: la lista de planes la lee quien modera y
     también quien cobra (Suscripciones asigna planes con `pagos`)."""
-    def dep(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
+    def dep(creds: HTTPAuthorizationCredentials | None = Depends(_bearer), repo: Repo = Depends(get_repo)) -> dict:
         claims = _claims(creds)
         if not any(tiene_permiso(claims, p) for p in permisos):
             raise HTTPException(status_code=403, detail="Tu cuenta no tiene permiso para esto")
+        _verificar_cuenta(claims, repo)
         return claims
     return dep
 
 
-def require_panel(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
+def require_panel(creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
+                  repo: Repo = Depends(get_repo)) -> dict:
     """Cualquier usuario logueado en el panel, sea cual sea su rol.
 
     Para lo que ve TODO el equipo (el tablero de Inicio): no pide un permiso
@@ -160,27 +233,36 @@ def require_panel(creds: HTTPAuthorizationCredentials | None = Depends(_bearer))
     claims = _claims(creds)
     if not es_del_panel(claims):
         raise HTTPException(status_code=403, detail="Tu cuenta no tiene acceso al panel")
+    _verificar_cuenta(claims, repo)
     return claims
 
 
-def require_admin(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
+def require_admin(creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
+                  repo: Repo = Depends(get_repo)) -> dict:
     """Cosas de administración. Hoy es el permiso `equipo`: crear usuarios, cambiar planes, ver la plata."""
-    return _con_permiso(creds, "equipo")
+    return _con_permiso(creds, "equipo", repo)
 
 
-def require_agente(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
-    """La app de campo: cargar comercios desde la calle."""
-    return _con_permiso(creds, "comercios.cargar")
+def require_agente(creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
+                   repo: Repo = Depends(get_repo)) -> dict:
+    """La app de campo: cargar comercios desde la calle.
+
+    Además del token mira que la cuenta siga activa Y que hoy tenga el permiso de
+    cargar comercios (el del token puede estar viejo). La cuenta del `.env` no tiene
+    fila: pasa."""
+    return _con_permiso(creds, "comercios.cargar", repo, agente=True)
 
 
-def require_publicador(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
+def require_publicador(creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
+                       repo: Repo = Depends(get_repo)) -> dict:
     """El contenido del sitio: cotización, frontera, videos, redes."""
-    return _con_permiso(creds, "contenido")
+    return _con_permiso(creds, "contenido", repo)
 
 
-def require_moderador(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
+def require_moderador(creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
+                      repo: Repo = Depends(get_repo)) -> dict:
     """La cola de moderación y lo que la rodea."""
-    return _con_permiso(creds, "moderar")
+    return _con_permiso(creds, "moderar", repo)
 
 
 def require_comercio(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:

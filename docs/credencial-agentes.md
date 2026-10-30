@@ -25,7 +25,7 @@
 
 ## 3. Datos — `selfhost/postgres-init/0163_agent_credentials.sql`
 
-- `usuarios_panel`: `apellido text`, `photo_url text`.
+- `usuarios_panel`: `apellido text`, `photo_url text`, `publicacion_consentida_at timestamptz` (consentimiento para publicar foto y nombre).
 - Tabla `agent_credentials`: `id uuid pk`, `usuario_id uuid not null references usuarios_panel(id)`,
   `token text not null unique check (length(token) >= 22)`, `activo boolean not null default true` (= vigente),
   `issued_by text`, `issued_at timestamptz default now()`, `revoked_by text`, `revoked_at timestamptz`,
@@ -41,18 +41,20 @@ Contrato fijo: el frontend se arma contra esto en paralelo.
 
 | Método y ruta | Permiso | Cuerpo | Respuesta |
 |---|---|---|---|
-| `GET /admin/agents/{usuario_id}/credential` | `equipo` | — | `{"credential": {"token","issued_at","scan_count","last_scan_at"} \| null, "photo_url": str\|null, "nombre": str\|null, "apellido": str\|null, "ciudad_nombre": str\|null, "activo": bool}` |
-| `POST /admin/agents/{usuario_id}/credential` | `equipo` | `{}` | Emite una nueva; si había una viva la revoca con `revoke_reason='reemitida'`. 400 (en español) si no tiene rol `agente` (o un rol con `comercios.cargar`), si no tiene **foto**, **nombre** o **apellido**, o si está inactivo. Devuelve lo mismo que el GET |
+| `GET /admin/agents/{usuario_id}/credential` | `equipo` | — | `{"credential": {"token","issued_at","scan_count","last_scan_at"} \| null, "photo_url": str\|null, "nombre": str\|null, "apellido": str\|null, "ciudad_nombre": str\|null, "activo": bool, "consentimiento_at": str\|null}` |
+| `POST /admin/agents/{usuario_id}/credential` | `equipo` | `{"consiente": bool}` (opcional; sólo hace falta la primera vez) | Emite una nueva; si había una viva la revoca con `revoke_reason='reemitida'`. 400 (en español) si no tiene rol `agente` (o un rol con `comercios.cargar`), si no tiene **foto**, **nombre** o **apellido**, o si está inactivo. Si la persona no tiene consentimiento guardado y `consiente` no es `true` → 400 «Falta el consentimiento del agente para publicar su foto y su nombre»; si es `true` se guarda `usuarios_panel.publicacion_consentida_at = now()`. Emisión simultánea de otra persona → 409 «Otra persona acaba de emitir esta credencial. Recargá.». Devuelve lo mismo que el GET |
 | `POST /admin/agents/{usuario_id}/credential/revoke` | `equipo` | `{"reason": str (obligatorio), "cut_access": bool}` | `{"ok": true}`. `cut_access` además pone `usuarios_panel.activo=false` |
 | `POST /admin/agents/{usuario_id}/photo` | `equipo` | multipart `foto` (jpg/png/webp, ≤ 8 MB) | `{"photo_url": "<base pública>/fotos/agentes/<aleatorio>.jpg"}`. Se re-codifica a JPEG (máx. 800 px de lado, sin EXIF), nombre aleatorio (no el id), en `fotos_dir/agentes/`. La foto anterior no se borra del disco |
-| `GET /public/agents` | público | — | `{"items": [{"nombre","apellido","ciudad_nombre","ciudad_slug","photo_url","desde"}]}`: sólo agentes **activos con credencial vigente y foto**. Orden: ciudad, apellido, nombre. **Sin** token, id, email, teléfono, roles. `Cache-Control: public, max-age=60` |
+| `GET /public/agents` | público | — | `{"items": [{"nombre","apellido","ciudad_nombre","ciudad_slug","photo_url","desde"}]}`: sólo agentes **activos, que hoy siguen siendo agentes, con credencial vigente, foto y consentimiento**. `desde` es `AAAA-MM-DD` en hora de La Paz. Orden: ciudad, apellido, nombre. **Sin** token, id, email, teléfono, roles. `Cache-Control: public, max-age=60` |
 | `GET /public/agents/{token}` | público | — | `{"status": "valid"\|"revoked"\|"inactive", "nombre","apellido","ciudad","photo_url","issued_at","checked_at"}`. `Cache-Control: no-store`. Suma `scan_count` y `last_scan_at`. Token inexistente → **404 `{"detail": "Esta credencial no es de URUKU"}`, siempre el mismo cuerpo** |
 
-- `revoked` = la credencial se dio de baja; `inactive` = la credencial sigue viva pero el usuario está desactivado. Para los dos, la página pública dice «NO ES AGENTE DE URUKU».
-- Limitador (`main.py`, middleware `rate_limit`): `GET /public/agents` y `/public/agents/*`, 30 por minuto por IP.
-- `/admin/equipo` (GET, POST, PUT en `api/moderacion.py`): suman `apellido` (y el GET devuelve `apellido` y `photo_url`). Nunca `password_hash`.
-- **Corte de acceso (T16):** la dependencia que autentica al agente en `/campo/*` (y el login) mira `repo.is_usuario_panel_activo(email)` con caché en memoria de 60 s. `False` → 401 «Tu acceso fue dado de baja». `None` (la cuenta del `.env`, sin fila) → pasa y loguea `auth.agente_sin_fila`.
-- structlog: `credencial.emitida`, `credencial.revocada`, `credencial.revocada_escaneada` (warning), `agente.foto_subida`.
+- `revoked` = la credencial se dio de baja; `inactive` = la credencial sigue viva pero el usuario está desactivado **o ya no es agente** (perdió el rol o el rol perdió `comercios.cargar`). Para los dos, la página pública dice «NO ES AGENTE DE URUKU».
+- **Sin limitador** en `GET /public/agents` ni `/public/agents/*` (decisión de revisión): el backend sólo ve la IP del servidor de Next, así que un tope «por IP» sería un tope global que cualquiera agotaría para tirar todas las verificaciones de QR. El token tiene 128 bits y su forma se valida antes de ir a la base: no hay nada que enumerar. La lista se cachea 60 s.
+- **Sacar el rol de agente revoca** la credencial vigente: `PUT /admin/equipo/{id}` con roles que ya no dan `comercios.cargar` la revoca con `revoke_reason='sin rol de agente'`. `PUT /admin/equipo` ya no toca `activo` si el pedido no lo trae (antes lo reactivaba); `POST` crea activo.
+- Las fotos bajo `/fotos/agentes/` salen con `X-Robots-Tag: noindex`.
+- `/admin/equipo` (GET, POST, PUT en `api/moderacion.py`): suman `apellido` (y el GET devuelve `apellido`, `photo_url` y `publicacion_consentida_at`). Nunca `password_hash`.
+- **Corte de acceso (T16):** TODAS las dependencias del panel (`require_permiso`, `require_alguno`, `require_panel`, `require_admin/moderador/publicador`) y `require_agente` (`/campo/*`) miran el estado actual de la cuenta en `usuarios_panel` (`repo.get_acceso_usuario_panel(email)`, caché en memoria de 60 s). Cuenta desactivada → 401 «Tu acceso fue dado de baja». En `require_agente` además se exige que HOY tenga `comercios.cargar` según sus roles en la base (el JWT puede llevar permisos viejos hasta 7 días). `None` (la cuenta del `.env`, sin fila) → pasa y, en campo, loguea `auth.agente_sin_fila`. Si la base falla se respeta lo último que se sabía de la cuenta, aunque el caché esté vencido (una baja conocida no se reabre); sin estado previo se deja pasar.
+- structlog: `credencial.emitida`, `credencial.revocada`, `credencial.revocada_escaneada` (warning, sin IP), `agente.foto_subida`, `agente.consentimiento_registrado`, `credencial.emision_fallida_tras_revocar` (error; la vigente de antes se reactiva). Los ids de usuario de los endpoints de admin son UUID (si no, 422).
 
 ## 5. Frontend
 

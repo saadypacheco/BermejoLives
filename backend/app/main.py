@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
-from app.api import asistente, auth, calles, campo, comercio, contenido, health, moderacion, observabilidad, pago, reception, usuario, webhook
+from app.api import agent_credentials, asistente, auth, calles, campo, comercio, contenido, health, moderacion, observabilidad, pago, reception, usuario, webhook
 from app.core.config import settings
 from app.core.ip import ip_cliente
 from app.core.limite_cuerpo import LimiteCuerpoMiddleware
@@ -267,6 +267,10 @@ _RL_RULES: dict[str, int] = {
     # escribe, y menos de lo que un bot gastaría en modelo.
     "/asistente/": 20,
 }
+# NO hay regla para `GET /public/agents*` (la lista de agentes y la verificación de una
+# credencial por QR): el backend sólo ve la IP del servidor de Next, así que un tope "por
+# IP" sería un tope global que cualquiera agotaría para tirar todas las verificaciones.
+# El token tiene 128 bits y su forma se valida antes de ir a la base: no hay qué enumerar.
 
 
 # La IP real es el ÚLTIMO valor de X-Forwarded-For (lo agrega el proxy); el primero
@@ -332,6 +336,9 @@ async def timing_middleware(request: Request, call_next):
         # Lo que se sube lo sirve este mismo dominio: sin esto un navegador
         # puede "adivinar" que un archivo es HTML y ejecutarlo.
         response.headers["X-Content-Type-Options"] = "nosniff"
+        if ruta.startswith("/fotos/agentes/"):
+            # Las fotos de las credenciales no se indexan en buscadores de imágenes.
+            response.headers["X-Robots-Tag"] = "noindex"
         if ruta.startswith("/fotos/catalogos/"):
             # Un catálogo se reemplaza y se borra: nada de cache de un año. Se
             # abre en el visor (inline) en vez de bajarse. Sin CSP sandbox: el
@@ -387,6 +394,7 @@ app.include_router(observabilidad.router, tags=["observabilidad"])
 app.include_router(contenido.router, tags=["contenido"])
 app.include_router(asistente.router, tags=["asistente"])
 app.include_router(pago.router, tags=["pago"])
+app.include_router(agent_credentials.router, tags=["credencial-agentes"])
 
 # Fotos de comercio: servidas por el propio backend (reemplaza a Supabase
 # Storage en el self-host — ver services/imagenes.py).

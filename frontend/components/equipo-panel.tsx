@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { Ic } from "@/components/ic";
+import {
+  emitirCredencial, getCredencialAdmin, revocarCredencial, subirFotoAgente, type CredencialAdmin,
+} from "@/lib/agent-credentials";
 import { crearUsuarioPanel, editarUsuarioPanel, getEquipo, guardarRol, borrarRol, type EquipoData, type UsuarioPanel, type RolAdmin } from "@/lib/api";
 import { getCiudades } from "@/lib/data";
 import type { Ciudad } from "@/lib/types";
@@ -40,16 +45,16 @@ export function EquipoPanel() {
 }
 
 function Personas({ data, ciudades, onCambio, setErr }: { data: EquipoData; ciudades: Ciudad[]; onCambio: () => void; setErr: (s: string) => void }) {
-  const [nuevo, setNuevo] = useState({ email: "", password: "", nombre: "", ciudad_slug: "", roles: [] as string[] });
+  const [nuevo, setNuevo] = useState({ email: "", password: "", nombre: "", apellido: "", ciudad_slug: "", roles: [] as string[] });
   const [creando, setCreando] = useState(false);
   const [creado, setCreado] = useState<{ email: string; password: string } | null>(null);
 
   async function crear() {
     setErr(""); setCreando(true);
     try {
-      await crearUsuarioPanel({ ...nuevo, nombre: nuevo.nombre || undefined, ciudad_slug: nuevo.ciudad_slug || undefined });
+      await crearUsuarioPanel({ ...nuevo, nombre: nuevo.nombre || undefined, apellido: nuevo.apellido || undefined, ciudad_slug: nuevo.ciudad_slug || undefined });
       setCreado({ email: nuevo.email.trim().toLowerCase(), password: nuevo.password });
-      setNuevo({ email: "", password: "", nombre: "", ciudad_slug: "", roles: [] });
+      setNuevo({ email: "", password: "", nombre: "", apellido: "", ciudad_slug: "", roles: [] });
       onCambio();
     } catch (e) { setErr(e instanceof Error ? e.message : "No se pudo crear"); }
     finally { setCreando(false); }
@@ -73,6 +78,10 @@ function Personas({ data, ciudades, onCambio, setErr }: { data: EquipoData; ciud
           <label style={{ display: "grid", gap: 3, fontSize: 12 }}>
             <span style={{ opacity: .7 }}>Nombre</span>
             <input className="adm-input" value={nuevo.nombre} onChange={(e) => setNuevo((s) => ({ ...s, nombre: e.target.value }))} placeholder="Ana" />
+          </label>
+          <label style={{ display: "grid", gap: 3, fontSize: 12 }}>
+            <span style={{ opacity: .7 }}>Apellido</span>
+            <input className="adm-input" value={nuevo.apellido} onChange={(e) => setNuevo((s) => ({ ...s, apellido: e.target.value }))} placeholder="Pérez" />
           </label>
           {esAgente && (
             <label style={{ display: "grid", gap: 3, fontSize: 12 }}>
@@ -139,19 +148,35 @@ function FilaPersona({ u, data, ciudades, onCambio }: { u: UsuarioPanel; data: E
   const [clave, setClave] = useState("");
   const [msg, setMsg] = useState("");
   const [roles, setRoles] = useState<string[]>(u.roles ?? []);
+  const [nombre, setNombre] = useState(u.nombre ?? "");
+  const [apellido, setApellido] = useState(u.apellido ?? "");
+  const cambioNombre = nombre.trim() !== (u.nombre ?? "") || apellido.trim() !== (u.apellido ?? "");
+  // Mismo criterio que `agentesDe` (Manuales): rol «agente» o un rol con el permiso de cargar.
+  const rolesQueCargan = new Set(data.roles.filter((r) => (r.permisos ?? []).includes("comercios.cargar")).map((r) => r.slug));
+  const esAgente = roles.some((r) => r === "agente" || rolesQueCargan.has(r));
 
-  async function guardar(patch: Partial<{ activo: boolean; password: string; ciudad_slug: string; roles: string[] }>) {
+  async function guardar(patch: Partial<{ activo: boolean; password: string; nombre: string; apellido: string; ciudad_slug: string; roles: string[] }>) {
     setMsg("");
     try {
-      await editarUsuarioPanel(u.id, { email: u.email, activo: patch.activo ?? u.activo, roles: patch.roles ?? roles, ...patch });
+      // `activo` sólo viaja si se apretó Apagar/Encender: el backend toma su ausencia como «no tocar».
+      await editarUsuarioPanel(u.id, { email: u.email, roles: patch.roles ?? roles, ...patch });
       setClave(""); setMsg("Listo"); onCambio();
     } catch (e) { setMsg(e instanceof Error ? e.message : "no se pudo"); }
   }
 
   return (
+    <>
     <tr style={{ opacity: u.activo ? 1 : .5 }}>
       <td>{u.email}{!u.activo && " · apagado"}</td>
-      <td>{u.nombre ?? "—"}</td>
+      <td>
+        <div style={{ display: "grid", gap: 4, minWidth: 130 }}>
+          <input className="adm-input" style={{ fontSize: 12 }} aria-label="Nombre" placeholder="Nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} />
+          <input className="adm-input" style={{ fontSize: 12 }} aria-label="Apellido" placeholder="Apellido" value={apellido} onChange={(e) => setApellido(e.target.value)} />
+          {cambioNombre && (
+            <button className="btn btn-primary btn-sm" onClick={() => guardar({ nombre: nombre.trim(), apellido: apellido.trim() })}>Guardar nombre</button>
+          )}
+        </div>
+      </td>
       <td>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {data.roles.map((r) => (
@@ -165,6 +190,9 @@ function FilaPersona({ u, data, ciudades, onCambio }: { u: UsuarioPanel; data: E
             </label>
           ))}
         </div>
+        {roles.includes("agente") && (
+          <p style={{ margin: "6px 0 0", fontSize: 11.5, opacity: .75 }}>Si le sacás «Agente», su credencial se revoca sola.</p>
+        )}
       </td>
       <td>
         <select className="adm-input" style={{ width: "auto", fontSize: 12 }} value={u.ciudad_slug ?? ""}
@@ -182,6 +210,149 @@ function FilaPersona({ u, data, ciudades, onCambio }: { u: UsuarioPanel; data: E
         {msg && <span style={{ fontSize: 12, marginLeft: 6 }}>{msg}</span>}
       </td>
     </tr>
+    {esAgente && (
+      <tr style={{ opacity: u.activo ? 1 : .6 }}>
+        <td colSpan={6} style={{ paddingTop: 0 }}>
+          <BloqueCredencial u={u} onCambio={onCambio} />
+        </td>
+      </tr>
+    )}
+    </>
+  );
+}
+
+const fmtFecha = (iso: string) => new Date(iso).toLocaleDateString("es-BO", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "America/La_Paz" });
+
+/** Credencial del agente (docs/credencial-agentes.md §5.3): foto, estado y las
+ *  acciones. Las confirmaciones van inline: un `window.confirm` antes de abrir el
+ *  selector de archivos lo bloquea Chrome. Los errores del backend vienen en
+ *  español y se muestran tal cual. */
+function BloqueCredencial({ u, onCambio }: { u: UsuarioPanel; onCambio: () => void }) {
+  const [info, setInfo] = useState<CredencialAdmin | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [err, setErr] = useState("");
+  const [ok, setOk] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  const [modo, setModo] = useState<"" | "emitir" | "reemitir" | "revocar">("");
+  const [motivo, setMotivo] = useState("");
+  const [cortar, setCortar] = useState(false);
+  const [acepto, setAcepto] = useState(false);
+  const archivo = useRef<HTMLInputElement>(null);
+
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    try { setInfo(await getCredencialAdmin(u.id)); }
+    catch (e) { setErr(e instanceof Error ? e.message : "No se pudo leer la credencial"); }
+    finally { setCargando(false); }
+  }, [u.id]);
+  // Se vuelve a leer si cambia el nombre, el apellido o si lo apagan: de eso depende lo que se puede emitir.
+  useEffect(() => { void cargar(); }, [cargar, u.nombre, u.apellido, u.activo]);
+
+  async function accion(fn: () => Promise<void>, hecho: string) {
+    setErr(""); setOk(""); setOcupado(true);
+    try { await fn(); setOk(hecho); setModo(""); setMotivo(""); setCortar(false); setAcepto(false); await cargar(); onCambio(); }
+    catch (e) { setErr(e instanceof Error ? e.message : "No se pudo completar"); }
+    finally { setOcupado(false); }
+  }
+
+  const cred = info?.credential ?? null;
+  const faltan = [!info?.photo_url && "la foto", !(info?.nombre ?? u.nombre) && "el nombre", !(info?.apellido ?? u.apellido) && "el apellido"].filter(Boolean);
+
+  return (
+    <div style={{ display: "grid", gap: 8, padding: "10px 12px", borderRadius: 10, background: "rgba(0,0,0,.04)", fontSize: 13 }}>
+      <b style={{ display: "flex", gap: 6, alignItems: "center" }}><Ic n="documentos" s={18} /> Credencial</b>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        {info?.photo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={info.photo_url} alt={`Foto de ${u.nombre ?? u.email}`} width={56} height={56} style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover" }} />
+        ) : (
+          <span aria-hidden style={{ width: 56, height: 56, borderRadius: "50%", display: "grid", placeItems: "center", background: "rgba(0,0,0,.08)" }}><Ic n="usuario" s={26} /></span>
+        )}
+        <div style={{ display: "grid", gap: 4 }}>
+          <input ref={archivo} type="file" accept="image/jpeg,image/png,image/webp" hidden
+                 onChange={(e) => {
+                   const f = e.target.files?.[0];
+                   e.target.value = "";
+                   if (f) void accion(async () => { await subirFotoAgente(u.id, f); }, "Foto subida");
+                 }} />
+          <button type="button" className="btn btn-ghost btn-sm" disabled={ocupado} onClick={() => archivo.current?.click()}>
+            <Ic n="foto" s={16} /> {info?.photo_url ? "Cambiar foto" : "Subir foto"}
+          </button>
+        </div>
+        <div style={{ display: "grid", gap: 2, minWidth: 180 }}>
+          {cargando && !info ? <span role="status">Cargando…</span> : cred ? (
+            <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <Ic n="listo" s={18} tono="marca" />
+              <span><b>Vigente</b> desde {fmtFecha(cred.issued_at)} · {cred.scan_count === 0 ? "todavía no la escanearon" : `escaneada ${cred.scan_count} ${cred.scan_count === 1 ? "vez" : "veces"}`}</span>
+            </span>
+          ) : (
+            <span style={{ display: "flex", gap: 6, alignItems: "center" }}><Ic n="dato" s={18} /> Sin credencial</span>
+          )}
+          {!cred && faltan.length > 0 && <span style={{ opacity: .75 }}>Para emitirla falta {faltan.join(", ")}.</span>}
+        </div>
+      </div>
+
+      {modo === "" && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {cred ? (
+            <>
+              <button type="button" className="btn btn-primary btn-sm" disabled={ocupado} onClick={() => { setModo("reemitir"); setErr(""); setOk(""); }}>Reemitir</button>
+              <Link className="btn btn-ghost btn-sm" href={`/admin/credencial/${u.id}`}><Ic n="imprimir" s={16} /> Ver e imprimir</Link>
+              <button type="button" className="btn btn-ghost btn-sm" disabled={ocupado} onClick={() => { setModo("revocar"); setErr(""); setOk(""); }}>Revocar…</button>
+            </>
+          ) : (
+            <button type="button" className="btn btn-primary btn-sm" disabled={ocupado || cargando} onClick={() => { setModo("emitir"); setErr(""); setOk(""); }}>
+              Emitir
+            </button>
+          )}
+        </div>
+      )}
+
+      {(modo === "emitir" || modo === "reemitir") && (
+        <div role="alertdialog" aria-label={modo === "emitir" ? "Confirmar emisión" : "Confirmar reemisión"} style={{ display: "grid", gap: 8 }}>
+          {modo === "reemitir" && (
+            <span><Ic n="aviso" s={16} /> Al reemitir, la tarjeta impresa vieja <b>deja de valer</b>: quien la tenga va a ver «NO ES AGENTE DE URUKU». Tenés que imprimir la nueva.</span>
+          )}
+          {info?.consentimiento_at ? (
+            <span><Ic n="listo" s={16} tono="marca" /> Consentimiento dado el {fmtFecha(info.consentimiento_at)}.</span>
+          ) : (
+            <label style={{ cursor: "pointer", display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <input type="checkbox" checked={acepto} onChange={(e) => setAcepto(e.target.checked)} style={{ marginTop: 3 }} />
+              <span>El agente aceptó que se publiquen su foto y su nombre en uruku.bo</span>
+            </label>
+          )}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" className="btn btn-primary btn-sm" disabled={ocupado || (!info?.consentimiento_at && !acepto)}
+                    onClick={() => void accion(async () => { await emitirCredencial(u.id, !info?.consentimiento_at && acepto); }, modo === "emitir" ? "Credencial emitida" : "Credencial reemitida")}>
+              {ocupado ? "Emitiendo…" : modo === "emitir" ? "Emitir credencial" : "Sí, reemitir"}
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={ocupado} onClick={() => setModo("")}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {modo === "revocar" && (
+        <div role="alertdialog" aria-label="Revocar credencial" style={{ display: "grid", gap: 8 }}>
+          <label style={{ display: "grid", gap: 3 }}>
+            <span style={{ opacity: .75 }}>Motivo (obligatorio)</span>
+            <input className="adm-input" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ej.: dejó de trabajar con URUKU" />
+          </label>
+          <label style={{ cursor: "pointer" }}>
+            <input type="checkbox" checked={cortar} onChange={(e) => setCortar(e.target.checked)} /> Cortarle también el acceso al panel
+          </label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" className="btn btn-primary btn-sm" disabled={ocupado || !motivo.trim()}
+                    onClick={() => void accion(() => revocarCredencial(u.id, motivo.trim(), cortar), cortar ? "Credencial revocada y acceso cortado" : "Credencial revocada")}>
+              {ocupado ? "Revocando…" : "Revocar credencial"}
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={ocupado} onClick={() => setModo("")}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {err && <span role="alert" style={{ color: "#c33", display: "flex", gap: 6, alignItems: "center" }}><Ic n="aviso" s={16} /> {err}</span>}
+      {ok && <span role="status" style={{ display: "flex", gap: 6, alignItems: "center" }}><Ic n="listo" s={16} tono="marca" /> {ok}</span>}
+    </div>
   );
 }
 

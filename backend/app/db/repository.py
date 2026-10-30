@@ -4,6 +4,7 @@ Patrón Protocol como en mentorcomercial para poder testear con un fake.
 """
 import re
 import uuid
+from datetime import datetime, timezone
 from typing import Protocol
 
 import structlog
@@ -45,6 +46,11 @@ def _normalizar_rubro(texto: str) -> str:
 #: `created_by` de un número que se autorizó solo, al mandar el código del local
 #: (mismo valor que `ingest.NUMERO_POR_CODIGO`; acá para no importar el servicio).
 NUMERO_AUTORIZADO_POR_CODIGO = "ingest-codigo"
+
+
+class CredencialDuplicada(Exception):
+    """Dos personas emitieron la credencial del mismo agente a la vez: el índice
+    único parcial dejó pasar a una sola."""
 
 
 class Repo(Protocol):
@@ -156,6 +162,15 @@ class Repo(Protocol):
     def list_usuarios_panel(self) -> list[dict]: ...
     def crear_usuario_panel(self, row: dict, roles: list[str]) -> dict: ...
     def update_usuario_panel(self, usuario_id: str, patch: dict, roles: list[str] | None) -> dict | None: ...
+    def is_usuario_panel_activo(self, email: str) -> bool | None: ...
+    def get_acceso_usuario_panel(self, email: str) -> dict | None: ...
+    def get_usuario_panel_por_id(self, usuario_id: str) -> dict | None: ...
+    def get_credencial_vigente(self, usuario_id: str) -> dict | None: ...
+    def get_credencial_por_token(self, token: str) -> dict | None: ...
+    def emitir_credencial(self, usuario_id: str, token: str, issued_by: str | None) -> dict: ...
+    def revocar_credencial(self, usuario_id: str, reason: str, revoked_by: str | None) -> dict | None: ...
+    def registrar_escaneo_credencial(self, credencial_id: str) -> None: ...
+    def list_agentes_publicos(self) -> list[dict]: ...
     def list_roles(self) -> list[dict]: ...
     def upsert_rol(self, row: dict) -> dict: ...
     def borrar_rol(self, slug: str) -> None: ...
@@ -1434,7 +1449,7 @@ class SupabaseRepo:
     def list_usuarios_panel(self) -> list[dict]:
         """El equipo, sin contraseñas: este listado va al panel."""
         res = (self._db.table("usuarios_panel")
-               .select("id, email, nombre, ciudad_id, activo, created_at, ultimo_acceso, creado_por")
+               .select("id, email, nombre, apellido, photo_url, publicacion_consentida_at, ciudad_id, activo, created_at, ultimo_acceso, creado_por")
                .order("created_at").execute())
         filas = res.data or []
         roles = self._roles_de([f["id"] for f in filas])
@@ -1465,6 +1480,120 @@ class SupabaseRepo:
             self._set_roles(usuario_id, roles)
         fila["roles"] = roles if roles is not None else self._roles_de([usuario_id]).get(usuario_id, [])
         return fila
+
+    # ── credencial de los agentes (0163) ─────────────────────────────────────
+
+    def is_usuario_panel_activo(self, email: str) -> bool | None:
+        """¿La cuenta sigue activa? `None` si no hay fila (la cuenta del `.env`).
+        A diferencia de `get_usuario_panel`, ve también a los desactivados."""
+        res = (self._db.table("usuarios_panel").select("activo")
+               .eq("email", (email or "").strip().lower()).limit(1).execute())
+        if not res.data:
+            return None
+        return bool(res.data[0].get("activo"))
+
+    def get_acceso_usuario_panel(self, email: str) -> dict | None:
+        """Lo que hace falta para el corte de acceso: `{"activo": bool, "roles": [...]}`,
+        o `None` si no hay fila (la cuenta del `.env`). Ve también a los desactivados."""
+        res = (self._db.table("usuarios_panel").select("id, activo")
+               .eq("email", (email or "").strip().lower()).limit(1).execute())
+        if not res.data:
+            return None
+        u = res.data[0]
+        return {"activo": bool(u.get("activo")), "roles": self._roles_de([u["id"]]).get(u["id"], [])}
+
+    def get_usuario_panel_por_id(self, usuario_id: str) -> dict | None:
+        """La persona por id, activa o no, con sus roles. Incluye el hash: quien
+        lo use no debe devolverlo."""
+        res = self._db.table("usuarios_panel").select("*").eq("id", usuario_id).limit(1).execute()
+        if not res.data:
+            return None
+        u = res.data[0]
+        u["roles"] = self._roles_de([u["id"]]).get(u["id"], [])
+        return u
+
+    def get_credencial_vigente(self, usuario_id: str) -> dict | None:
+        res = (self._db.table("agent_credentials").select("*")
+               .eq("usuario_id", usuario_id).eq("activo", True).limit(1).execute())
+        return res.data[0] if res.data else None
+
+    def get_credencial_por_token(self, token: str) -> dict | None:
+        res = self._db.table("agent_credentials").select("*").eq("token", token).limit(1).execute()
+        return res.data[0] if res.data else None
+
+    def emitir_credencial(self, usuario_id: str, token: str, issued_by: str | None) -> dict:
+        """Emite una credencial nueva. Si había una vigente la revoca antes
+        (`reemitida`); el índice único parcial impide que queden dos vivas.
+
+        Sin transacción: si el alta falla DESPUÉS de revocar, la vigente de antes se
+        vuelve a activar (el agente no se queda sin credencial por un error). Si la
+        falla es el índice único, otra persona emitió a la vez: `CredencialDuplicada`."""
+        ahora = datetime.now(timezone.utc).isoformat()
+        revocadas = (self._db.table("agent_credentials")
+                     .update({"activo": False, "revoked_by": issued_by, "revoked_at": ahora,
+                              "revoke_reason": "reemitida"})
+                     .eq("usuario_id", usuario_id).eq("activo", True).execute()).data or []
+        try:
+            res = (self._db.table("agent_credentials")
+                   .insert({"usuario_id": usuario_id, "token": token, "issued_by": issued_by}).execute())
+            return res.data[0]
+        except Exception as exc:  # noqa: BLE001
+            duplicada = "23505" in str(exc) or "duplicate key" in str(exc).lower()
+            if duplicada:
+                raise CredencialDuplicada(usuario_id) from exc
+            logger.error("credencial.emision_fallida_tras_revocar", usuario_id=usuario_id,
+                         revocadas=len(revocadas), error=str(exc))
+            for r in revocadas:
+                try:
+                    (self._db.table("agent_credentials")
+                     .update({"activo": True, "revoked_by": None, "revoked_at": None, "revoke_reason": None})
+                     .eq("id", r["id"]).execute())
+                except Exception as exc2:  # noqa: BLE001
+                    logger.error("credencial.no_se_pudo_reactivar", credencial_id=r.get("id"), error=str(exc2))
+            raise
+
+    def revocar_credencial(self, usuario_id: str, reason: str, revoked_by: str | None) -> dict | None:
+        """Da de baja la vigente. `None` si no había ninguna."""
+        ahora = datetime.now(timezone.utc).isoformat()
+        res = (self._db.table("agent_credentials")
+               .update({"activo": False, "revoked_by": revoked_by, "revoked_at": ahora, "revoke_reason": reason})
+               .eq("usuario_id", usuario_id).eq("activo", True).execute())
+        return res.data[0] if res.data else None
+
+    def registrar_escaneo_credencial(self, credencial_id: str) -> None:
+        """Suma un escaneo. Leer y escribir no es atómico: dos escaneos en el mismo
+        instante pueden contar uno solo, y para un contador informativo alcanza."""
+        res = self._db.table("agent_credentials").select("scan_count").eq("id", credencial_id).limit(1).execute()
+        if not res.data:
+            return
+        (self._db.table("agent_credentials")
+         .update({"scan_count": int(res.data[0].get("scan_count") or 0) + 1,
+                  "last_scan_at": datetime.now(timezone.utc).isoformat()})
+         .eq("id", credencial_id).execute())
+
+    def list_agentes_publicos(self) -> list[dict]:
+        """Agentes activos con credencial vigente y foto, para la página pública.
+        Devuelve lo mínimo: nombre, apellido, ciudad, foto y desde cuándo."""
+        creds = (self._db.table("agent_credentials").select("usuario_id, issued_at")
+                 .eq("activo", True).execute()).data or []
+        if not creds:
+            return []
+        desde = {c["usuario_id"]: c["issued_at"] for c in creds}
+        usuarios = (self._db.table("usuarios_panel").select("id, nombre, apellido, photo_url, ciudad_id, publicacion_consentida_at")
+                    .in_("id", list(desde)).eq("activo", True).execute()).data or []
+        roles = self._roles_de([u["id"] for u in usuarios])
+        ciudades = {c["id"]: c for c in (self.list_ciudades() or [])}
+        salida = []
+        for u in usuarios:
+            if not u.get("photo_url"):
+                continue
+            ciudad = ciudades.get(u.get("ciudad_id")) or {}
+            salida.append({"nombre": u.get("nombre"), "apellido": u.get("apellido"),
+                           "ciudad_nombre": ciudad.get("nombre"), "ciudad_slug": ciudad.get("slug"),
+                           "photo_url": u["photo_url"], "issued_at": desde[u["id"]],
+                           "roles": roles.get(u["id"], []),
+                           "consentimiento_at": u.get("publicacion_consentida_at")})
+        return salida
 
     def list_roles(self) -> list[dict]:
         res = self._db.table("roles").select("*").order("slug").execute()

@@ -1,0 +1,68 @@
+/* La credencial del agente: CR80 vertical (54 × 85,6 mm). En pantalla se ve a escala
+   real y en la hoja A4 entran dos copias (frente + reverso cada una). */
+
+.acc-par { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
+
+.acc-cara {
+  width: 54mm; height: 85.6mm; box-sizing: border-box; overflow: hidden; position: relative;
+  /* Cuerpo flexible arriba y la franja verde pegada abajo: aunque el pie ocupe dos
+     renglones, la franja crece hacia arriba y no se corta. */
+  display: grid; grid-template-rows: minmax(0, 1fr) auto;
+  background: #fff; color: #214533; text-align: center;
+  font-family: "Poppins", system-ui, sans-serif; border: 0.3mm solid #cfdcd6; border-radius: 3mm;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.acc-cuerpo { min-height: 0; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 1.2mm; padding: 2.6mm 3mm 1mm; }
+.acc-logo { height: 6mm; width: auto; flex-shrink: 0; }
+.acc-foto { width: 19mm; height: 19mm; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 0.7mm solid #1D8D52; background: #F1EDE0; }
+.acc-foto-vacia { display: grid; place-items: center; font-size: 6pt; color: #4E6053; }
+.acc-nombre { margin: 0; font-size: 10pt; line-height: 1.1; font-weight: 800; max-height: 2.3em; overflow: hidden; overflow-wrap: anywhere; flex-shrink: 0; }
+.acc-rol { margin: 0; font-size: 7pt; font-weight: 600; color: #214533; line-height: 1.15; flex-shrink: 0; }
+.acc-qr { width: 22mm; height: 22mm; flex-shrink: 0; display: grid; place-items: center; background: #fff; }
+.acc-qr img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.acc-qr-espera { font-size: 6pt; color: #4E6053; }
+/* Un solo color y legible: nada de gris claro sobre blanco. */
+.acc-escanea { margin: 0; font-size: 7pt; font-weight: 600; line-height: 1.15; color: #214533; flex-shrink: 0; }
+
+/* La franja verde de abajo: lo que no puede dejar de leerse. */
+.acc-pie { margin: 0; padding: 2mm 3mm; background: #1D8D52; color: #fff; font-size: 6.6pt; font-weight: 800; line-height: 1.2; }
+
+.acc-reverso .acc-cuerpo { justify-content: flex-start; gap: 3.5mm; padding-top: 3mm; }
+.acc-aviso { margin: 0; font-size: 8pt; line-height: 1.3; font-weight: 600; }
+.acc-wa { margin: 0; font-size: 7pt; line-height: 1.4; }
+.acc-wa b { font-size: 12pt; }
+.acc-web { margin: 0; font-size: 7.5pt; font-weight: 700; }
+
+/* ── La página de impresión (/admin/credencial/<id>) ───────────────────── */
+.acc-pagina { max-width: 760px; margin: 0 auto; padding: 18px 16px 40px; display: grid; gap: 16px; font-family: "Poppins", system-ui, sans-serif; color: #214533; }
+.acc-pagina h1 { margin: 0; font-size: 22px; }
+.acc-pagina p { margin: 0; line-height: 1.45; }
+.acc-barra { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.acc-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 8px 18px;
+  border-radius: 14px; border: 2px solid #1D8D52; background: #1D8D52; color: #fff; font-weight: 700; font-size: 16px;
+  cursor: pointer; text-decoration: none; font-family: inherit;
+}
+.acc-btn-claro { background: #fff; color: #214533; border-color: #214533; }
+.acc-estado { display: flex; gap: 10px; align-items: flex-start; padding: 14px 16px; border-radius: 14px; background: #fff; border: 1px solid #E6E2D6; }
+.acc-estado svg { flex-shrink: 0; margin-top: 2px; }
+.acc-estado-error { border-color: #D92D2D; color: #8F1D1D; }
+.acc-fondo { min-height: 100vh; min-height: 100dvh; background: #F9F6ED; }
+body:has(.acc-fondo) { background: #F9F6ED; }
+body:has(.acc-fondo) .install-banner,
+body:has(.acc-fondo) .uk-contesto { display: none !important; }
+/* Sólo en la impresión: la segunda copia. */
+.acc-copia { display: none; }
+
+@media print {
+  @page { size: A4; margin: 10mm; }
+  body, html { background: #fff !important; }
+  .acc-oculta-al-imprimir { display: none !important; }
+  /* Sólo la hoja: afuera todo lo flotante del sitio (aviso de instalar, «Preguntame», comprobar versión…). */
+  body > *:not(.acc-fondo):not(:has(.acc-fondo)) { display: none !important; }
+  .acc-pagina { max-width: none; padding: 0; gap: 6mm; display: block; }
+  .acc-copia { display: block; margin-top: 6mm; }
+  .acc-par { gap: 4mm; flex-wrap: nowrap; justify-content: flex-start; }
+  /* Línea de corte: borde punteado fino en lugar del borde gris de pantalla. */
+  .acc-cara { border: 0.2mm dashed #888; border-radius: 0; }
+}
