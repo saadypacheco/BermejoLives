@@ -75,6 +75,11 @@ const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "
 /** «octubre 2026», en hora de Bolivia (UTC-4, sin horario de verano). */
 export function mesAnio(iso: string | null | undefined): string | null {
   if (!iso) return null;
+  // `desde` llega como «AAAA-MM-DD» (una fecha, sin hora): se lee como texto.
+  // Pasarla por Date la toma como medianoche UTC y, restando las 4 h de
+  // Bolivia, el día 1 caería en el mes anterior.
+  const soloFecha = /^(\d{4})-(\d{2})-\d{2}$/.exec(iso);
+  if (soloFecha) return `${MESES[Number(soloFecha[2]) - 1]} ${soloFecha[1]}`;
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return null;
   const d = new Date(t - 4 * 3600 * 1000);
