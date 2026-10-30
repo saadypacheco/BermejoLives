@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.core.auth import hash_password, reiniciar_cache_acceso, require_admin, require_alguno, require_moderador, require_panel, require_permiso
 from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS, tiene as tiene_permiso
 from app.core.config import _numeros_propios, settings
+from app.api.agent_credentials import catalogo_de_permisos, es_agente
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp, whatsapp_para_guardar
 from app.services import turnos_farmacia
@@ -550,7 +551,9 @@ class UsuarioPanelBody(BaseModel):
     apellido: str | None = None      # va en la credencial del agente (0163)
     ciudad_slug: str | None = None
     roles: list[str] = Field(default_factory=list)
-    activo: bool = True
+    # Al crear nace activa. Al editar, sólo se toca si viene en el pedido: un PUT que no
+    # lo menciona (cambiar el apellido, por ejemplo) no puede reactivar a quien se dio de baja.
+    activo: bool | None = None
 
 
 class RolBody(BaseModel):
@@ -605,7 +608,9 @@ def crear_usuario_panel(body: UsuarioPanelBody, admin: dict = Depends(require_pe
 @router.put("/admin/equipo/{usuario_id}")
 def editar_usuario_panel(usuario_id: str, body: UsuarioPanelBody, admin: dict = Depends(require_permiso("equipo")),
                          repo: Repo = Depends(get_repo)) -> dict:
-    patch: dict = {"activo": body.activo}
+    patch: dict = {}
+    if body.activo is not None:
+        patch["activo"] = body.activo
     if body.nombre is not None:
         patch["nombre"] = body.nombre.strip() or None
     if body.apellido is not None:
@@ -621,7 +626,12 @@ def editar_usuario_panel(usuario_id: str, body: UsuarioPanelBody, admin: dict = 
     actualizado = repo.update_usuario_panel(usuario_id, patch, roles)
     if not actualizado:
         raise HTTPException(status_code=404, detail="No existe esa persona")
-    reiniciar_cache_acceso(actualizado.get("email"))     # desactivar a alguien corta su acceso de campo ya
+    reiniciar_cache_acceso(actualizado.get("email"))     # desactivar o cambiar roles corta/ajusta el acceso ya
+    if roles is not None and not es_agente(actualizado.get("roles") or [], catalogo_de_permisos(repo)):
+        # Ya no es agente: su credencial deja de valer (la tarjeta impresa dirá «inactive»).
+        if repo.revocar_credencial(usuario_id, "sin rol de agente", admin.get("email")):
+            logger.info("credencial.revocada", usuario_id=usuario_id, by=admin.get("email"),
+                        motivo="sin rol de agente")
     logger.info("admin.usuario_editado", usuario=usuario_id, campos=list(patch.keys()), by=admin.get("email"))
     return {"ok": True, "usuario": {k: v for k, v in actualizado.items() if k != "password_hash"}}
 

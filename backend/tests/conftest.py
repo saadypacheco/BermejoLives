@@ -2292,7 +2292,8 @@ class FakeRepo:
                 for a in self.agentes.values()]
 
     def crear_usuario_panel(self, row, roles):
-        fila = {"id": self._id("usuario"), **row}
+        import uuid as _uuid
+        fila = {"id": str(_uuid.uuid4()), **row}     # uuid, como en la base (los endpoints tipan el id)
         self.agentes[fila["id"]] = fila
         self.usuario_roles[fila["id"]] = list(roles)
         return {**fila, "roles": list(roles)}
@@ -2310,6 +2311,11 @@ class FakeRepo:
         e = (email or "").strip().lower()
         u = next((a for a in self.agentes.values() if a["email"] == e), None)
         return None if u is None else bool(u.get("activo", True))
+
+    def get_acceso_usuario_panel(self, email):
+        e = (email or "").strip().lower()
+        u = next((a for a in self.agentes.values() if a["email"] == e), None)
+        return None if u is None else {"activo": bool(u.get("activo", True)), "roles": list(self.usuario_roles.get(u["id"], []))}
 
     def get_usuario_panel_por_id(self, usuario_id):
         u = self.agentes.get(usuario_id)
@@ -2360,7 +2366,9 @@ class FakeRepo:
             ciudad = ciudades.get(u.get("ciudad_id")) or {}
             salida.append({"nombre": u.get("nombre"), "apellido": u.get("apellido"),
                            "ciudad_nombre": ciudad.get("nombre"), "ciudad_slug": ciudad.get("slug"),
-                           "photo_url": u["photo_url"], "issued_at": c["issued_at"]})
+                           "photo_url": u["photo_url"], "issued_at": c["issued_at"],
+                           "roles": list(self.usuario_roles.get(u["id"], [])),
+                           "consentimiento_at": u.get("publicacion_consentida_at")})
         return salida
 
     def list_roles(self):

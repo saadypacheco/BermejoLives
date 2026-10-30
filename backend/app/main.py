@@ -267,12 +267,10 @@ _RL_RULES: dict[str, int] = {
     # escribe, y menos de lo que un bot gastaría en modelo.
     "/asistente/": 20,
 }
-# Lo mismo para los GET públicos que abre un QR impreso o un curioso: la lista de
-# agentes y la verificación de una credencial (docs/credencial-agentes.md §4).
-# Un prefijo coincide con la ruta exacta o con lo que cuelga de ella.
-_RL_RULES_GET: dict[str, int] = {
-    "/public/agents": 30,
-}
+# NO hay regla para `GET /public/agents*` (la lista de agentes y la verificación de una
+# credencial por QR): el backend sólo ve la IP del servidor de Next, así que un tope "por
+# IP" sería un tope global que cualquiera agotaría para tirar todas las verificaciones.
+# El token tiene 128 bits y su forma se valida antes de ir a la base: no hay qué enumerar.
 
 
 # La IP real es el ÚLTIMO valor de X-Forwarded-For (lo agrega el proxy); el primero
@@ -294,14 +292,9 @@ def _barrer_buckets(now: float) -> None:
 
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):
-    reglas = _RL_RULES if request.method == "POST" else _RL_RULES_GET if request.method == "GET" else {}
-    if reglas:
-        ruta = request.url.path
-        for prefix, limite in reglas.items():
-            if reglas is _RL_RULES_GET:
-                if ruta != prefix and not ruta.startswith(prefix + "/"):
-                    continue
-            elif not ruta.startswith(prefix):
+    if request.method == "POST":
+        for prefix, limite in _RL_RULES.items():
+            if not request.url.path.startswith(prefix):
                 continue
             ip = _client_ip(request)
             now = time.time()
@@ -343,6 +336,9 @@ async def timing_middleware(request: Request, call_next):
         # Lo que se sube lo sirve este mismo dominio: sin esto un navegador
         # puede "adivinar" que un archivo es HTML y ejecutarlo.
         response.headers["X-Content-Type-Options"] = "nosniff"
+        if ruta.startswith("/fotos/agentes/"):
+            # Las fotos de las credenciales no se indexan en buscadores de imágenes.
+            response.headers["X-Robots-Tag"] = "noindex"
         if ruta.startswith("/fotos/catalogos/"):
             # Un catálogo se reemplaza y se borra: nada de cache de un año. Se
             # abre en el visor (inline) en vez de bajarse. Sin CSP sandbox: el

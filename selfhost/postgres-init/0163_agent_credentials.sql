@@ -6,7 +6,8 @@
 -- Cada agente lleva una credencial impresa con su foto, nombre y apellido y un QR.
 -- Quien escanea el QR ve en uruku.bo si esa persona es agente de URUKU o ya no lo es.
 --
---  1. usuarios_panel: `apellido` y `photo_url` (la foto de la credencial).
+--  1. usuarios_panel: `apellido`, `photo_url` (la foto de la credencial) y
+--     `publicacion_consentida_at` (consentimiento para publicar foto y nombre).
 --  2. agent_credentials: una fila por credencial emitida. Revocar = activo=false
 --     más revoked_*; nunca se borra. El índice único parcial garantiza que un
 --     agente no tenga dos credenciales vivas.
@@ -18,8 +19,13 @@ begin;
 
 alter table public.usuarios_panel add column if not exists apellido  text;
 alter table public.usuarios_panel add column if not exists photo_url text;
+-- Cuándo el agente aceptó que se publiquen su foto y su nombre (página /agentes).
+-- Sin esto no figura en la lista pública ni se le emite la credencial.
+alter table public.usuarios_panel add column if not exists publicacion_consentida_at timestamptz;
 
 comment on column public.usuarios_panel.apellido  is 'Apellido de la persona (va en la credencial).';
+comment on column public.usuarios_panel.publicacion_consentida_at is
+  'Cuándo el agente consintió publicar su foto y su nombre en /agentes. NULL = no consintió.';
 comment on column public.usuarios_panel.photo_url is 'URL pública de la foto de la credencial (/fotos/agentes/<aleatorio>.jpg).';
 
 create table if not exists public.agent_credentials (

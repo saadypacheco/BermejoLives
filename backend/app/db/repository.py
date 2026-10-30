@@ -48,6 +48,11 @@ def _normalizar_rubro(texto: str) -> str:
 NUMERO_AUTORIZADO_POR_CODIGO = "ingest-codigo"
 
 
+class CredencialDuplicada(Exception):
+    """Dos personas emitieron la credencial del mismo agente a la vez: el índice
+    único parcial dejó pasar a una sola."""
+
+
 class Repo(Protocol):
     def get_comercio_by_jid(self, wa_jid: str) -> dict | None: ...
     def actualizar_ubicacion_comercio(self, comercio_id: str, lat: float, lng: float, direccion: str | None) -> None: ...
@@ -158,6 +163,7 @@ class Repo(Protocol):
     def crear_usuario_panel(self, row: dict, roles: list[str]) -> dict: ...
     def update_usuario_panel(self, usuario_id: str, patch: dict, roles: list[str] | None) -> dict | None: ...
     def is_usuario_panel_activo(self, email: str) -> bool | None: ...
+    def get_acceso_usuario_panel(self, email: str) -> dict | None: ...
     def get_usuario_panel_por_id(self, usuario_id: str) -> dict | None: ...
     def get_credencial_vigente(self, usuario_id: str) -> dict | None: ...
     def get_credencial_por_token(self, token: str) -> dict | None: ...
@@ -1443,7 +1449,7 @@ class SupabaseRepo:
     def list_usuarios_panel(self) -> list[dict]:
         """El equipo, sin contraseñas: este listado va al panel."""
         res = (self._db.table("usuarios_panel")
-               .select("id, email, nombre, apellido, photo_url, ciudad_id, activo, created_at, ultimo_acceso, creado_por")
+               .select("id, email, nombre, apellido, photo_url, publicacion_consentida_at, ciudad_id, activo, created_at, ultimo_acceso, creado_por")
                .order("created_at").execute())
         filas = res.data or []
         roles = self._roles_de([f["id"] for f in filas])
@@ -1486,6 +1492,16 @@ class SupabaseRepo:
             return None
         return bool(res.data[0].get("activo"))
 
+    def get_acceso_usuario_panel(self, email: str) -> dict | None:
+        """Lo que hace falta para el corte de acceso: `{"activo": bool, "roles": [...]}`,
+        o `None` si no hay fila (la cuenta del `.env`). Ve también a los desactivados."""
+        res = (self._db.table("usuarios_panel").select("id, activo")
+               .eq("email", (email or "").strip().lower()).limit(1).execute())
+        if not res.data:
+            return None
+        u = res.data[0]
+        return {"activo": bool(u.get("activo")), "roles": self._roles_de([u["id"]]).get(u["id"], [])}
+
     def get_usuario_panel_por_id(self, usuario_id: str) -> dict | None:
         """La persona por id, activa o no, con sus roles. Incluye el hash: quien
         lo use no debe devolverlo."""
@@ -1507,14 +1523,34 @@ class SupabaseRepo:
 
     def emitir_credencial(self, usuario_id: str, token: str, issued_by: str | None) -> dict:
         """Emite una credencial nueva. Si había una vigente la revoca antes
-        (`reemitida`); el índice único parcial impide que queden dos vivas."""
+        (`reemitida`); el índice único parcial impide que queden dos vivas.
+
+        Sin transacción: si el alta falla DESPUÉS de revocar, la vigente de antes se
+        vuelve a activar (el agente no se queda sin credencial por un error). Si la
+        falla es el índice único, otra persona emitió a la vez: `CredencialDuplicada`."""
         ahora = datetime.now(timezone.utc).isoformat()
-        (self._db.table("agent_credentials")
-         .update({"activo": False, "revoked_by": issued_by, "revoked_at": ahora, "revoke_reason": "reemitida"})
-         .eq("usuario_id", usuario_id).eq("activo", True).execute())
-        res = (self._db.table("agent_credentials")
-               .insert({"usuario_id": usuario_id, "token": token, "issued_by": issued_by}).execute())
-        return res.data[0]
+        revocadas = (self._db.table("agent_credentials")
+                     .update({"activo": False, "revoked_by": issued_by, "revoked_at": ahora,
+                              "revoke_reason": "reemitida"})
+                     .eq("usuario_id", usuario_id).eq("activo", True).execute()).data or []
+        try:
+            res = (self._db.table("agent_credentials")
+                   .insert({"usuario_id": usuario_id, "token": token, "issued_by": issued_by}).execute())
+            return res.data[0]
+        except Exception as exc:  # noqa: BLE001
+            duplicada = "23505" in str(exc) or "duplicate key" in str(exc).lower()
+            if duplicada:
+                raise CredencialDuplicada(usuario_id) from exc
+            logger.error("credencial.emision_fallida_tras_revocar", usuario_id=usuario_id,
+                         revocadas=len(revocadas), error=str(exc))
+            for r in revocadas:
+                try:
+                    (self._db.table("agent_credentials")
+                     .update({"activo": True, "revoked_by": None, "revoked_at": None, "revoke_reason": None})
+                     .eq("id", r["id"]).execute())
+                except Exception as exc2:  # noqa: BLE001
+                    logger.error("credencial.no_se_pudo_reactivar", credencial_id=r.get("id"), error=str(exc2))
+            raise
 
     def revocar_credencial(self, usuario_id: str, reason: str, revoked_by: str | None) -> dict | None:
         """Da de baja la vigente. `None` si no había ninguna."""
@@ -1543,8 +1579,9 @@ class SupabaseRepo:
         if not creds:
             return []
         desde = {c["usuario_id"]: c["issued_at"] for c in creds}
-        usuarios = (self._db.table("usuarios_panel").select("id, nombre, apellido, photo_url, ciudad_id")
+        usuarios = (self._db.table("usuarios_panel").select("id, nombre, apellido, photo_url, ciudad_id, publicacion_consentida_at")
                     .in_("id", list(desde)).eq("activo", True).execute()).data or []
+        roles = self._roles_de([u["id"] for u in usuarios])
         ciudades = {c["id"]: c for c in (self.list_ciudades() or [])}
         salida = []
         for u in usuarios:
@@ -1553,7 +1590,9 @@ class SupabaseRepo:
             ciudad = ciudades.get(u.get("ciudad_id")) or {}
             salida.append({"nombre": u.get("nombre"), "apellido": u.get("apellido"),
                            "ciudad_nombre": ciudad.get("nombre"), "ciudad_slug": ciudad.get("slug"),
-                           "photo_url": u["photo_url"], "issued_at": desde[u["id"]]})
+                           "photo_url": u["photo_url"], "issued_at": desde[u["id"]],
+                           "roles": roles.get(u["id"], []),
+                           "consentimiento_at": u.get("publicacion_consentida_at")})
         return salida
 
     def list_roles(self) -> list[dict]:

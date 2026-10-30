@@ -7,6 +7,7 @@ Cubre los criterios de terminado §6 del lado del backend:
   4. revocar con corte de acceso -> 401 en /campo/* (con el caché de 60 s);
   5. la lista sólo muestra activos con credencial vigente y foto.
 """
+import uuid
 from io import BytesIO
 from pathlib import Path
 
@@ -25,9 +26,11 @@ def _h(t):
     return {"Authorization": f"Bearer {t}"}
 
 
-def _jpeg(ancho=2000, alto=1500, con_exif=True) -> bytes:
+def _jpeg(ancho=2000, alto=1500, con_exif=True, comentario=b"") -> bytes:
     img = Image.new("RGB", (ancho, alto), (200, 80, 40))
     kw = {}
+    if comentario:
+        kw["comment"] = comentario
     if con_exif:
         exif = Image.Exif()
         exif[0x010F] = "CamaraSecreta"       # Make
@@ -65,8 +68,12 @@ def _agente_listo(client, admin_token, **kw):
     return uid
 
 
-def _emitir(client, admin_token, uid):
-    return client.post(f"/admin/agents/{uid}/credential", headers=_h(admin_token), json={})
+def _emitir(client, admin_token, uid, consiente=True):
+    return client.post(f"/admin/agents/{uid}/credential", headers=_h(admin_token), json={"consiente": consiente})
+
+
+def _desconocido():
+    return str(uuid.uuid4())
 
 
 # ───────────────────────────────────────── 1. emisión, token, reemisión
@@ -76,7 +83,8 @@ def test_emitir_da_un_token_de_22_caracteres_y_la_forma_del_contrato(client, adm
     r = _emitir(client, admin_token, uid)
     assert r.status_code == 200, r.text
     j = r.json()
-    assert set(j) == {"credential", "photo_url", "nombre", "apellido", "ciudad_nombre", "activo"}
+    assert set(j) == {"credential", "photo_url", "nombre", "apellido", "ciudad_nombre", "activo", "consentimiento_at"}
+    assert j["consentimiento_at"]
     assert set(j["credential"]) == {"token", "issued_at", "scan_count", "last_scan_at"}
     assert len(j["credential"]["token"]) >= 22
     assert j["credential"]["scan_count"] == 0 and j["credential"]["last_scan_at"] is None
@@ -142,7 +150,7 @@ def test_emitir_pide_foto_nombre_apellido_rol_y_cuenta_activa(client, repo, admi
     assert r.status_code == 400 and "desactivad" in r.json()["detail"].lower()
     assert repo.credenciales == {}
     # No existe
-    assert _emitir(client, admin_token, "no-existe").status_code == 404
+    assert _emitir(client, admin_token, _desconocido()).status_code == 404
 
 
 def test_un_rol_propio_que_carga_comercios_tambien_puede_tener_credencial(client, admin_token):
@@ -166,11 +174,20 @@ def test_los_endpoints_de_admin_piden_el_permiso_equipo(client, admin_token, age
     assert r.status_code == 403
 
 
+def test_un_id_que_no_es_uuid_da_422_y_no_500(client, admin_token):
+    h = _h(admin_token)
+    assert client.get("/admin/agents/no-es-uuid/credential", headers=h).status_code == 422
+    assert client.post("/admin/agents/no-es-uuid/credential", headers=h, json={}).status_code == 422
+    assert client.post("/admin/agents/no-es-uuid/credential/revoke", headers=h, json={"reason": "x"}).status_code == 422
+    assert client.post("/admin/agents/no-es-uuid/photo", headers=h,
+                       files={"foto": ("f.jpg", _jpeg(), "image/jpeg")}).status_code == 422
+
+
 # ───────────────────────────────────────── foto
 
 def test_la_foto_se_recodifica_a_jpeg_de_800px_sin_exif(client, admin_token):
     uid = _alta(client, admin_token)
-    r = _foto(client, admin_token, uid, _jpeg(2000, 1500))
+    r = _foto(client, admin_token, uid, _jpeg(2000, 1500, comentario=b"texto-secreto-del-comentario"))
     assert r.status_code == 200, r.text
     url = r.json()["photo_url"]
     assert set(r.json()) == {"photo_url"}
@@ -183,7 +200,9 @@ def test_la_foto_se_recodifica_a_jpeg_de_800px_sin_exif(client, admin_token):
         assert img.format == "JPEG"
         assert max(img.size) <= 800 and img.size == (800, 600)
         assert not dict(img.getexif())                              # sin EXIF (ni cámara ni GPS)
+        assert "comment" not in img.info                            # ni el marcador COM
     assert b"CamaraSecreta" not in archivo.read_bytes()
+    assert b"texto-secreto-del-comentario" not in archivo.read_bytes()
 
 
 def test_acepta_png_y_la_foto_anterior_no_se_borra_del_disco(client, repo, admin_token):
@@ -216,7 +235,7 @@ def test_la_foto_de_mas_de_8mb_se_rechaza_y_el_usuario_inexistente_es_404(client
     uid = _alta(client, admin_token)
     r = _foto(client, admin_token, uid, b"\xff\xd8\xff" + b"0" * (8 * 1024 * 1024 + 10))
     assert r.status_code == 413
-    assert _foto(client, admin_token, "no-existe").status_code == 404
+    assert _foto(client, admin_token, _desconocido()).status_code == 404
 
 
 # ───────────────────────────────────────── 2 y 3. página de una credencial
@@ -275,6 +294,7 @@ def test_credencial_revocada_responde_revoked_y_avisa_en_el_log(client, admin_to
     alerta = [e for e in logs if e["event"] == "credencial.revocada_escaneada"]
     assert alerta and alerta[0]["log_level"] == "warning"
     assert token not in str(logs)
+    assert "ip" not in alerta[0]
     # En el panel ya no figura como vigente.
     assert client.get(f"/admin/agents/{uid}/credential", headers=_h(admin_token)).json()["credential"] is None
 
@@ -301,7 +321,7 @@ def test_revocar_pide_motivo_y_una_credencial_vigente(client, admin_token):
     # Ya no hay vigente: sin corte de acceso no hay qué revocar.
     r = client.post(url, headers=_h(admin_token), json={"reason": "otra vez"})
     assert r.status_code == 400 and "credencial" in r.json()["detail"].lower()
-    assert client.post("/admin/agents/no-existe/credential/revoke", headers=_h(admin_token),
+    assert client.post(f"/admin/agents/{_desconocido()}/credential/revoke", headers=_h(admin_token),
                        json={"reason": "x"}).status_code == 404
 
 
@@ -354,8 +374,9 @@ def test_el_corte_se_cachea_60_segundos_y_despues_se_aplica(client, repo, admin_
     repo.agentes[uid]["activo"] = False                  # directo en la base, sin pasar por la API
     assert client.get("/campo/mis-comercios", headers=_h(t)).status_code == 200      # caché vigente
     assert auth.ACCESO_TTL_SEGUNDOS == 60
-    clave, (vence, valor) = next(iter(auth._acceso_cache.items()))
-    assert clave == "ana@uruku.bo" and valor is True and vence > 0
+    clave = "ana@uruku.bo"
+    vence, valor = auth._acceso_cache[clave]
+    assert valor["activo"] is True and "comercios.cargar" in valor["permisos"] and vence > 0
     auth._acceso_cache[clave] = (0.0, valor)            # venció
     assert client.get("/campo/mis-comercios", headers=_h(t)).status_code == 401
 
@@ -380,12 +401,116 @@ def test_la_cuenta_del_env_no_tiene_fila_y_pasa_con_aviso(client, agente_token):
     assert not any(e["event"] == "auth.agente_sin_fila" for e in logs)
 
 
-def test_si_la_base_no_contesta_el_agente_no_se_queda_afuera(client, repo, agente_token, monkeypatch):
+def test_si_la_base_no_contesta_y_no_se_sabe_nada_el_agente_pasa_sin_cachear(client, repo, agente_token, monkeypatch):
     def falla(email):
         raise RuntimeError("base caída")
-    monkeypatch.setattr(repo, "is_usuario_panel_activo", falla, raising=False)
+    monkeypatch.setattr(repo, "get_acceso_usuario_panel", falla)
     assert client.get("/campo/mis-comercios", headers=_h(agente_token)).status_code == 200
-    assert auth._acceso_cache == {}                       # y no se cachea la falla
+    assert "agente@bermejolive.com" not in auth._acceso_cache      # y no se cachea la falla
+
+
+def test_stale_if_error_una_baja_conocida_no_se_reabre_por_una_caida(client, repo, admin_token, monkeypatch):
+    uid = _alta(client, admin_token)
+    t = _entrar_agente(client)
+    assert client.get("/campo/mis-comercios", headers=_h(t)).status_code == 200
+    repo.agentes[uid]["activo"] = False
+    auth.reiniciar_cache_acceso()
+    # El pedido siguiente se entera de la baja y la cachea...
+    assert client.get("/campo/mis-comercios", headers=_h(t)).status_code == 401
+    # ...vence el caché y la base se cae: se respeta la baja que ya se conocía.
+    clave = "ana@uruku.bo"
+    auth._acceso_cache[clave] = (0.0, auth._acceso_cache[clave][1])
+
+    def falla(email):
+        raise RuntimeError("base caída")
+    monkeypatch.setattr(repo, "get_acceso_usuario_panel", falla)
+    assert client.get("/campo/mis-comercios", headers=_h(t)).status_code == 401
+    # Con un estado positivo conocido (o ninguno) la caída deja pasar.
+    repo.agentes[uid]["activo"] = True
+    auth._acceso_cache[clave] = (0.0, {"activo": True, "permisos": ["comercios.cargar"]})
+    assert client.get("/campo/mis-comercios", headers=_h(t)).status_code == 200
+
+
+def test_un_put_sin_activo_no_reactiva_a_quien_se_dio_de_baja(client, repo, admin_token):
+    uid = _agente_listo(client, admin_token)
+    _emitir(client, admin_token, uid)
+    t = _entrar_agente(client)
+    assert client.get("/campo/mis-comercios", headers=_h(t)).status_code == 200
+    client.post(f"/admin/agents/{uid}/credential/revoke", headers=_h(admin_token),
+                json={"reason": "baja", "cut_access": True})
+    r = client.put(f"/admin/equipo/{uid}", headers=_h(admin_token),
+                   json={"email": "ana@uruku.bo", "apellido": "Gómez", "roles": ["agente"]})
+    assert r.status_code == 200 and r.json()["usuario"]["activo"] is False
+    assert repo.agentes[uid]["activo"] is False
+    assert client.get("/campo/mis-comercios", headers=_h(t)).status_code == 401
+    # Y al crear sigue naciendo activo.
+    assert repo.agentes[_alta(client, admin_token, email="nuevo@uruku.bo")]["activo"] is True
+
+
+def test_sacarle_el_rol_de_agente_revoca_la_credencial_y_corta_campo(client, repo, admin_token):
+    uid = _agente_listo(client, admin_token)
+    token = _emitir(client, admin_token, uid).json()["credential"]["token"]
+    t = _entrar_agente(client)
+    assert client.get("/campo/mis-comercios", headers=_h(t)).status_code == 200
+    r = client.put(f"/admin/equipo/{uid}", headers=_h(admin_token),
+                   json={"email": "ana@uruku.bo", "roles": ["moderador"]})
+    assert r.status_code == 200
+    cred = next(iter(repo.credenciales.values()))
+    assert cred["activo"] is False and cred["revoke_reason"] == "sin rol de agente"
+    assert client.get(f"/public/agents/{token}").json()["status"] == "revoked"
+    assert client.get("/public/agents").json() == {"items": []}
+    # El JWT viejo todavía lleva el permiso de campo: el chequeo contra la base lo frena.
+    r = client.get("/campo/mis-comercios", headers=_h(t))
+    assert r.status_code == 401 and r.json()["detail"] == "Tu acceso fue dado de baja"
+
+
+def test_si_el_rol_pierde_el_permiso_la_credencial_viva_dice_inactive_y_sale_de_la_lista(client, repo, admin_token):
+    """Cambiar los permisos del ROL (no los de la persona) tampoco la deja figurando."""
+    client.put("/admin/roles/cargador-sc", headers=_h(admin_token), json={
+        "slug": "cargador-sc", "nombre": "Cargador", "permisos": ["comercios.cargar"]})
+    uid = _agente_listo(client, admin_token, email="luis@uruku.bo", roles=["cargador-sc"])
+    token = _emitir(client, admin_token, uid).json()["credential"]["token"]
+    assert len(client.get("/public/agents").json()["items"]) == 1
+    client.put("/admin/roles/cargador-sc", headers=_h(admin_token), json={
+        "slug": "cargador-sc", "nombre": "Cargador", "permisos": ["lugares"]})
+    assert client.get(f"/public/agents/{token}").json()["status"] == "inactive"
+    assert client.get("/public/agents").json() == {"items": []}
+
+
+def test_un_agente_con_token_viejo_pierde_campo_si_la_base_ya_no_le_da_el_permiso(client, repo, admin_token):
+    uid = _alta(client, admin_token)
+    t = _entrar_agente(client)
+    assert client.get("/campo/mis-comercios", headers=_h(t)).status_code == 200
+    repo.usuario_roles[uid] = ["moderador"]               # cambió en la base, no en el JWT
+    auth.reiniciar_cache_acceso()
+    assert client.get("/campo/mis-comercios", headers=_h(t)).status_code == 401
+
+
+# ───────────────────────────────────────── el corte cubre todo el panel
+
+def test_el_corte_de_acceso_cubre_todo_el_panel_no_solo_campo(client, repo, admin_token):
+    uid = _alta(client, admin_token, email="moni@uruku.bo", roles=["moderador"])
+    t = client.post("/auth/login", json={"email": "moni@uruku.bo", "password": PASS}).json()["access_token"]
+    rutas = ["/moderacion/publicaciones?estado=pendiente",     # require_permiso / require_moderador
+             "/admin/planes"]                                  # require_alguno
+    for ruta in rutas:
+        assert client.get(ruta, headers=_h(t)).status_code == 200, ruta
+    client.put(f"/admin/equipo/{uid}", headers=_h(admin_token),
+               json={"email": "moni@uruku.bo", "activo": False, "roles": ["moderador"]})
+    for ruta in rutas:
+        r = client.get(ruta, headers=_h(t))
+        assert r.status_code == 401 and r.json()["detail"] == "Tu acceso fue dado de baja", ruta
+
+
+def test_el_corte_de_require_panel_y_la_cuenta_del_env_que_sigue_pasando(client, repo, admin_token):
+    uid = _alta(client, admin_token, email="moni@uruku.bo", roles=["moderador"])
+    t = client.post("/auth/login", json={"email": "moni@uruku.bo", "password": PASS}).json()["access_token"]
+    assert client.get("/admin/resumen", headers=_h(t)).status_code == 200
+    repo.agentes[uid]["activo"] = False
+    auth.reiniciar_cache_acceso()
+    assert client.get("/admin/resumen", headers=_h(t)).status_code == 401
+    # La cuenta del `.env` (sin fila) sigue entrando.
+    assert client.get("/admin/resumen", headers=_h(admin_token)).status_code == 200
 
 
 def test_sin_token_sigue_siendo_401_y_con_otro_permiso_403(client, admin_token):
@@ -472,21 +597,161 @@ def test_equipo_maneja_apellido_y_devuelve_la_foto_sin_hash(client, admin_token)
     assert u["apellido"] == "Gómez"
 
 
-# ───────────────────────────────────────── limitador
+# ───────────────────────────────────────── sin limitador por IP
 
-def test_los_get_publicos_de_agentes_se_limitan_a_30_por_minuto_por_ip(client):
-    assert all(client.get("/public/agents").status_code == 200 for _ in range(30))
-    r = client.get("/public/agents")
-    assert r.status_code == 429
-    # Comparten tope la lista y la verificación; otra ruta pública no se toca.
-    assert client.get("/public/agents/" + "a" * 22).status_code == 429
-    assert client.get("/health").status_code == 200
+def test_los_get_publicos_de_agentes_no_tienen_tope_por_ip(client):
+    """El backend sólo ve la IP del servidor de Next: un tope por IP sería global y
+    cualquiera lo agotaría para tirar todas las verificaciones de QR."""
+    assert all(client.get("/public/agents").status_code == 200 for _ in range(80))
+    assert all(client.get("/public/agents/" + "a" * 22).status_code == 404 for _ in range(80))
 
 
-def test_el_limite_de_agentes_no_depende_de_la_ip_de_otro(client):
-    for _ in range(30):
-        client.get("/public/agents")
-    assert client.get("/public/agents", headers={"X-Forwarded-For": "9.9.9.9"}).status_code == 200
+# ───────────────────────────────────────── consentimiento
+
+def test_sin_consentimiento_no_se_emite_la_credencial(client, repo, admin_token):
+    uid = _agente_listo(client, admin_token)
+    for cuerpo in ({}, {"consiente": False}):
+        r = client.post(f"/admin/agents/{uid}/credential", headers=_h(admin_token), json=cuerpo)
+        assert r.status_code == 400
+        assert r.json()["detail"] == "Falta el consentimiento del agente para publicar su foto y su nombre"
+    assert repo.credenciales == {} and not repo.agentes[uid].get("publicacion_consentida_at")
+    # Sin cuerpo tampoco.
+    assert client.post(f"/admin/agents/{uid}/credential", headers=_h(admin_token)).status_code == 400
+    assert client.get(f"/admin/agents/{uid}/credential", headers=_h(admin_token)).json()["consentimiento_at"] is None
+
+
+def test_con_consentimiento_se_guarda_y_la_reemision_no_lo_vuelve_a_pedir(client, repo, admin_token):
+    uid = _agente_listo(client, admin_token)
+    j = _emitir(client, admin_token, uid, consiente=True).json()
+    assert j["consentimiento_at"] and repo.agentes[uid]["publicacion_consentida_at"] == j["consentimiento_at"]
+    r = client.post(f"/admin/agents/{uid}/credential", headers=_h(admin_token), json={})
+    assert r.status_code == 200 and r.json()["consentimiento_at"] == j["consentimiento_at"]
+    assert client.get(f"/admin/agents/{uid}/credential", headers=_h(admin_token)).json()["consentimiento_at"] == j["consentimiento_at"]
+
+
+def test_una_emision_que_falla_no_guarda_el_consentimiento(client, repo, admin_token):
+    uid = _alta(client, admin_token)                         # sin foto: falla antes
+    assert client.post(f"/admin/agents/{uid}/credential", headers=_h(admin_token), json={"consiente": True}).status_code == 400
+    assert not repo.agentes[uid].get("publicacion_consentida_at")
+
+
+def test_la_lista_publica_solo_trae_a_quien_consintio(client, repo, admin_token):
+    uid = _agente_listo(client, admin_token)
+    _emitir(client, admin_token, uid)
+    assert len(client.get("/public/agents").json()["items"]) == 1
+    repo.agentes[uid]["publicacion_consentida_at"] = None    # retiró el consentimiento
+    assert client.get("/public/agents").json() == {"items": []}
+
+
+def test_las_fotos_de_agentes_no_se_indexan(client):
+    """El StaticFiles de main.py se montó con el fotos_dir del import: se escribe ahí y se limpia."""
+    montaje = next(x for x in client.app.routes if getattr(x, "name", None) == "fotos")
+    raiz = Path(montaje.app.directory)
+    creados = [raiz / "agentes" / "prueba-robots.jpg", raiz / "com-x-robots" / "foto.jpg"]
+    try:
+        for f in creados:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_bytes(bytes([0xFF, 0xD8, 0xFF]))
+        r = client.get("/fotos/agentes/prueba-robots.jpg")
+        assert r.status_code == 200 and r.headers["x-robots-tag"] == "noindex"
+        # Las demás fotos no llevan la cabecera.
+        assert "x-robots-tag" not in client.get("/fotos/com-x-robots/foto.jpg").headers
+    finally:
+        for f in creados:
+            f.unlink(missing_ok=True)
+        (raiz / "com-x-robots").rmdir()
+        try:
+            (raiz / "agentes").rmdir()
+        except OSError:
+            pass
+
+
+# ───────────────────────────────────────── fechas y emisión concurrente
+
+def test_desde_se_calcula_en_hora_de_la_paz():
+    from app.api.agent_credentials import _fecha
+    # 22:00 del 31/10 en La Paz ya es 1/11 en UTC: «Agente desde» tiene que decir octubre.
+    assert _fecha("2026-11-01T02:00:00+00:00") == "2026-10-31"
+    assert _fecha("2026-11-01T02:00:00Z") == "2026-10-31"
+    assert _fecha("2026-10-30T15:02:37.123456+00:00") == "2026-10-30"
+    assert _fecha(None) is None
+
+
+def test_dos_emisiones_a_la_vez_dan_409(client, repo, admin_token, monkeypatch):
+    from app.db.repository import CredencialDuplicada
+    uid = _agente_listo(client, admin_token)
+
+    def choca(*a, **k):
+        raise CredencialDuplicada(uid)
+    monkeypatch.setattr(repo, "emitir_credencial", choca)
+    r = _emitir(client, admin_token, uid)
+    assert r.status_code == 409
+    assert r.json()["detail"] == "Otra persona acaba de emitir esta credencial. Recargá."
+    assert not repo.agentes[uid].get("publicacion_consentida_at")
+
+
+class _Consulta:
+    """Un cliente de supabase mínimo para probar `SupabaseRepo.emitir_credencial`."""
+
+    def __init__(self, tabla, falla_insert):
+        self.t, self.falla, self.op, self.patch = tabla, falla_insert, None, None
+
+    def update(self, patch):
+        self.op, self.patch = "update", patch
+        return self
+
+    def insert(self, fila):
+        self.op, self.patch = "insert", fila
+        return self
+
+    def eq(self, col, val):
+        self.filtros = getattr(self, "filtros", []) + [(col, val)]
+        return self
+
+    def execute(self):
+        class R:
+            data = []
+        r = R()
+        if self.op == "insert":
+            if self.falla:
+                raise RuntimeError(self.falla)
+            self.t.append({"id": "nueva", "activo": True, **self.patch})
+            r.data = [self.t[-1]]
+        else:
+            filtros = dict(getattr(self, "filtros", []))
+            for f in self.t:
+                if all(f.get(c) == v for c, v in filtros.items() if c != "id") and \
+                        ("id" not in filtros or f["id"] == filtros["id"]):
+                    f.update(self.patch)
+                    r.data.append(f)
+        return r
+
+
+class _Cliente:
+    def __init__(self, falla_insert):
+        self.filas = [{"id": "vieja", "usuario_id": "u1", "activo": True}]
+        self.falla = falla_insert
+
+    def table(self, nombre):
+        assert nombre == "agent_credentials"
+        return _Consulta(self.filas, self.falla)
+
+
+def test_si_el_alta_falla_despues_de_revocar_se_reactiva_la_vigente():
+    from app.db.repository import SupabaseRepo
+    cli = _Cliente("conexión perdida")
+    with structlog.testing.capture_logs() as logs:
+        with pytest.raises(RuntimeError):
+            SupabaseRepo(cli).emitir_credencial("u1", "t" * 22, "admin@x")
+    assert cli.filas[0]["activo"] is True and cli.filas[0]["revoke_reason"] is None
+    assert any(e["event"] == "credencial.emision_fallida_tras_revocar" for e in logs)
+
+
+def test_el_indice_unico_se_traduce_a_credencial_duplicada():
+    from app.db.repository import CredencialDuplicada, SupabaseRepo
+    cli = _Cliente('duplicate key value violates unique constraint "uq_agent_credentials_vigente" (23505)')
+    with pytest.raises(CredencialDuplicada):
+        SupabaseRepo(cli).emitir_credencial("u1", "t" * 22, "admin@x")
 
 
 # ───────────────────────────────────────── migración
@@ -495,7 +760,7 @@ def test_la_migracion_0163_esta_completa_y_espejada():
     raiz = Path(__file__).resolve().parents[2]
     sql = (raiz / "selfhost" / "postgres-init" / "0163_agent_credentials.sql").read_text(encoding="utf-8")
     assert (raiz / "supabase" / "migrations" / "0163_agent_credentials.sql").read_text(encoding="utf-8") == sql
-    for pedazo in ("apellido  text", "photo_url text", "length(token) >= 22", "token         text not null unique",
+    for pedazo in ("apellido  text", "photo_url text", "publicacion_consentida_at timestamptz", "length(token) >= 22", "token         text not null unique",
                    "enable row level security", "revoke all on public.agent_credentials",
                    "grant all on public.agent_credentials to service_role",
                    "on public.agent_credentials (usuario_id) where activo"):

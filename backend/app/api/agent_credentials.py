@@ -14,18 +14,18 @@ en el panel del admin). Nada se borra: revocar es `activo=false`.
 """
 import re
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
+from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from app.core import auth
 from app.core.auth import require_permiso
-from app.core.ip import ip_cliente
-from app.db.repository import Repo, get_repo
+from app.db.repository import CredencialDuplicada, Repo, get_repo
 from app.services.imagenes import guardar_foto_local, procesar_imagen
 
 router = APIRouter()
@@ -50,8 +50,8 @@ _SIN_CACHE = {"Cache-Control": "no-store"}
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
-def _usuario_o_404(repo: Repo, usuario_id: str) -> dict:
-    u = repo.get_usuario_panel_por_id(usuario_id)
+def _usuario_o_404(repo: Repo, usuario_id: str | UUID) -> dict:
+    u = repo.get_usuario_panel_por_id(str(usuario_id))
     if not u:
         raise HTTPException(status_code=404, detail="No existe esa persona")
     return u
@@ -71,38 +71,62 @@ def _estado(repo: Repo, usuario: dict) -> dict:
         "apellido": usuario.get("apellido") or None,
         "ciudad_nombre": (ciudad or {}).get("nombre"),
         "activo": bool(usuario.get("activo", True)),
+        "consentimiento_at": usuario.get("publicacion_consentida_at") or None,
     }
 
 
-def _es_agente(repo: Repo, roles: list[str]) -> bool:
-    """¿Tiene el rol `agente` o un rol que carga comercios?"""
-    if "agente" in roles:
-        return True
-    catalogo = {r["slug"]: r.get("permisos") or [] for r in (repo.list_roles() or [])}
-    return any(_PERMISO_DE_AGENTE in catalogo.get(r, []) for r in roles)
+def catalogo_de_permisos(repo: Repo) -> dict[str, list[str]]:
+    return {r["slug"]: r.get("permisos") or [] for r in (repo.list_roles() or [])}
+
+
+def es_agente(roles: list[str], catalogo: dict[str, list[str]]) -> bool:
+    """¿Tiene el rol `agente` o un rol que carga comercios? Es el criterio de la
+    credencial: sirve para emitirla, para que valga y para que figure en la lista."""
+    return "agente" in roles or any(_PERMISO_DE_AGENTE in catalogo.get(r, []) for r in roles)
+
+
+#: Bolivia no tiene horario de verano: UTC-4 fijo (America/La_Paz, sin depender de tzdata).
+_LA_PAZ = timezone(timedelta(hours=-4))
 
 
 def _fecha(valor) -> str | None:
-    """`YYYY-MM-DD` de un timestamp ISO (lo único que la lista pública muestra)."""
-    return str(valor)[:10] if valor else None
+    """`YYYY-MM-DD` de un timestamp ISO, en hora de La Paz (a las 22:00 del día 31 en
+    La Paz ya es el 1.º en UTC: la fecha en UTC correría «Agente desde» un mes)."""
+    if not valor:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(valor).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(_LA_PAZ).date().isoformat()
+    except ValueError:
+        return str(valor)[:10]
 
 
 # ── admin ─────────────────────────────────────────────────────────────────────
 @router.get("/admin/agents/{usuario_id}/credential")
-def ver_credencial(usuario_id: str, _: dict = Depends(require_permiso("equipo")),
+def ver_credencial(usuario_id: UUID, _: dict = Depends(require_permiso("equipo")),
                    repo: Repo = Depends(get_repo)) -> dict:
     return _estado(repo, _usuario_o_404(repo, usuario_id))
 
 
+class EmitirBody(BaseModel):
+    #: El agente aceptó que se publiquen su foto y su nombre. Se pide la primera vez
+    #: (queda guardado en `usuarios_panel.publicacion_consentida_at`).
+    consiente: bool = False
+
+
 @router.post("/admin/agents/{usuario_id}/credential")
-def emitir_credencial(usuario_id: str, admin: dict = Depends(require_permiso("equipo")),
+def emitir_credencial(usuario_id: UUID, body: EmitirBody | None = None,
+                      admin: dict = Depends(require_permiso("equipo")),
                       repo: Repo = Depends(get_repo)) -> dict:
     """Emite una credencial nueva. Si había una vigente la revoca (`reemitida`): la
     tarjeta impresa vieja deja de valer."""
+    usuario_id = str(usuario_id)
     u = _usuario_o_404(repo, usuario_id)
     if not u.get("activo", True):
         raise HTTPException(status_code=400, detail="Esta persona está desactivada: no se le puede emitir credencial")
-    if not _es_agente(repo, u.get("roles") or []):
+    if not es_agente(u.get("roles") or [], catalogo_de_permisos(repo)):
         raise HTTPException(status_code=400, detail="Esta persona no es agente: no tiene el rol de agente ni un rol que cargue comercios")
     if not (u.get("nombre") or "").strip():
         raise HTTPException(status_code=400, detail="Falta el nombre: completalo en Equipo antes de emitir la credencial")
@@ -110,10 +134,22 @@ def emitir_credencial(usuario_id: str, admin: dict = Depends(require_permiso("eq
         raise HTTPException(status_code=400, detail="Falta el apellido: completalo en Equipo antes de emitir la credencial")
     if not u.get("photo_url"):
         raise HTTPException(status_code=400, detail="Falta la foto: subila antes de emitir la credencial")
+    if not u.get("publicacion_consentida_at"):
+        if not (body and body.consiente):
+            raise HTTPException(status_code=400, detail="Falta el consentimiento del agente para publicar su foto y su nombre")
 
     previa = repo.get_credencial_vigente(usuario_id)
     token = secrets.token_urlsafe(16)          # 128 bits, 22 caracteres
-    repo.emitir_credencial(usuario_id, token, admin.get("email"))
+    try:
+        repo.emitir_credencial(usuario_id, token, admin.get("email"))
+    except CredencialDuplicada as exc:
+        raise HTTPException(status_code=409, detail="Otra persona acaba de emitir esta credencial. Recargá.") from exc
+    if not u.get("publicacion_consentida_at"):
+        # Recién con la credencial emitida: un consentimiento no se guarda por una emisión que falló.
+        ahora = datetime.now(timezone.utc).isoformat()
+        repo.update_usuario_panel(usuario_id, {"publicacion_consentida_at": ahora}, None)
+        u = {**u, "publicacion_consentida_at": ahora}
+        logger.info("agente.consentimiento_registrado", usuario_id=usuario_id, by=admin.get("email"))
     # Nunca se loguea el token: es la credencial.
     logger.info("credencial.emitida", usuario_id=usuario_id, reemitida=bool(previa), by=admin.get("email"))
     return _estado(repo, u)
@@ -125,10 +161,11 @@ class RevocarBody(BaseModel):
 
 
 @router.post("/admin/agents/{usuario_id}/credential/revoke")
-def revocar_credencial(usuario_id: str, body: RevocarBody, admin: dict = Depends(require_permiso("equipo")),
+def revocar_credencial(usuario_id: UUID, body: RevocarBody, admin: dict = Depends(require_permiso("equipo")),
                        repo: Repo = Depends(get_repo)) -> dict:
     """Da de baja la credencial vigente. Con `cut_access` además desactiva la cuenta
     del panel: el agente recibe 401 en /campo/* a más tardar en un minuto."""
+    usuario_id = str(usuario_id)
     u = _usuario_o_404(repo, usuario_id)
     motivo = (body.reason or "").strip()
     if not motivo:
@@ -169,12 +206,13 @@ def _recodificar_foto(data: bytes) -> bytes:
 
 
 @router.post("/admin/agents/{usuario_id}/photo")
-async def subir_foto_agente(usuario_id: str, foto: UploadFile = File(...),
+async def subir_foto_agente(usuario_id: UUID, foto: UploadFile = File(...),
                             admin: dict = Depends(require_permiso("equipo")),
                             repo: Repo = Depends(get_repo)) -> dict:
     """La foto de la credencial. El nombre del archivo es aleatorio (no el id de la
     persona) y la foto anterior queda en el disco: las tarjetas ya impresas no la usan,
     pero un caché o un enlace viejo no se rompen."""
+    usuario_id = str(usuario_id)
     u = _usuario_o_404(repo, usuario_id)
     data = await foto.read(MAX_FOTO_BYTES + 1)
     if not data:
@@ -196,10 +234,17 @@ async def subir_foto_agente(usuario_id: str, foto: UploadFile = File(...),
 # ── público ───────────────────────────────────────────────────────────────────
 @router.get("/public/agents")
 def listar_agentes(response: Response, repo: Repo = Depends(get_repo)) -> dict:
-    """Los agentes de URUKU: sólo activos, con credencial vigente y foto. Sin token,
-    id, correo, teléfono ni roles. Nunca devuelve cuántos son (no hay total)."""
+    """Los agentes de URUKU: sólo activos, que HOY siguen siendo agentes, con credencial
+    vigente, foto y consentimiento para publicarse. Sin token, id, correo, teléfono ni
+    roles. Nunca devuelve cuántos son (no hay total).
+
+    Sin límite de pedidos por IP, a propósito: el backend sólo ve la IP del servidor de
+    Next, así que un tope por IP sería un tope GLOBAL que cualquiera agotaría para tirar
+    todas las verificaciones de QR. La lista se cachea 60 s y es barata."""
+    catalogo = catalogo_de_permisos(repo)
     filas = [f for f in repo.list_agentes_publicos()
-             if (f.get("nombre") or "").strip() and (f.get("apellido") or "").strip()]
+             if (f.get("nombre") or "").strip() and (f.get("apellido") or "").strip()
+             and f.get("consentimiento_at") and es_agente(f.get("roles") or [], catalogo)]
     filas.sort(key=lambda f: ((f.get("ciudad_nombre") or "").casefold(),
                               (f.get("apellido") or "").casefold(), (f.get("nombre") or "").casefold()))
     response.headers["Cache-Control"] = "public, max-age=60"
@@ -211,13 +256,16 @@ def listar_agentes(response: Response, repo: Repo = Depends(get_repo)) -> dict:
 
 
 @router.get("/public/agents/{token}")
-def verificar_credencial(token: str, request: Request, response: Response,
-                         repo: Repo = Depends(get_repo)) -> dict:
+def verificar_credencial(token: str, response: Response, repo: Repo = Depends(get_repo)) -> dict:
     """Lo que abre el QR: ¿esta persona es agente de URUKU?
 
-    `valid`: credencial vigente y cuenta activa. `revoked`: la credencial se dio de
-    baja. `inactive`: la credencial sigue viva pero la persona está desactivada.
-    Cualquier token que no exista contesta el mismo 404."""
+    `valid`: credencial vigente, cuenta activa y todavía agente. `revoked`: la
+    credencial se dio de baja. `inactive`: la credencial sigue viva pero la persona
+    está desactivada o ya no es agente. Cualquier token que no exista contesta el
+    mismo 404.
+
+    Sin límite de pedidos por IP (ver `listar_agentes`). El token tiene 128 bits y la
+    forma se valida antes de ir a la base: no hay nada que enumerar."""
     no_existe = HTTPException(status_code=404, detail=_NO_ES_DE_URUKU, headers=_SIN_CACHE)
     if not _RE_TOKEN.match(token or ""):
         raise no_existe
@@ -230,9 +278,8 @@ def verificar_credencial(token: str, request: Request, response: Response,
 
     if not cred.get("activo"):
         estado = "revoked"
-        logger.warning("credencial.revocada_escaneada", credencial_id=cred["id"],
-                       usuario_id=cred["usuario_id"], ip=ip_cliente(request))
-    elif not u.get("activo", True):
+        logger.warning("credencial.revocada_escaneada", credencial_id=cred["id"], usuario_id=cred["usuario_id"])
+    elif not u.get("activo", True) or not es_agente(u.get("roles") or [], catalogo_de_permisos(repo)):
         estado = "inactive"
     else:
         estado = "valid"

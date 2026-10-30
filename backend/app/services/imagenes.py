@@ -75,6 +75,9 @@ def procesar_imagen(data: bytes, max_side: int = 1600, quality: int = 82) -> byt
     img = Image.open(BytesIO(data))    # reabrir tras verify()
     img = ImageOps.exif_transpose(img).convert("RGB")
     img.thumbnail((max_side, max_side))
+    # El comentario del JPEG (marcador COM) viaja en `info` y Pillow lo reescribe: puede traer
+    # texto de la cámara o de quien editó la foto. Se saca (el ICC y el resto no se tocan).
+    img.info.pop("comment", None)
     out = BytesIO()
     img.save(out, format="JPEG", quality=quality, optimize=True)
     return out.getvalue()
