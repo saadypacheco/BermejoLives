@@ -1,0 +1,88 @@
+/* /agentes y /agentes/<token>: los agentes de URUKU y la comprobación de su credencial.
+   La lista vive dentro del marco del sitio (variables --uk-*). La comprobación es una
+   pantalla sola, de fondo claro, pensada para el celular de quien acaba de escanear el QR. */
+
+/* ── Lista pública ─────────────────────────────────────────────────────── */
+.ag-lista { padding: 26px 0 40px; max-width: 980px; }
+.ag-lista h1 { font-size: 30px; margin: 0 0 8px; }
+.ag-bajada { margin: 0 0 18px; font-size: 16px; line-height: 1.5; color: var(--uk-ink-soft); max-width: 720px; }
+.ag-bajada b { color: var(--uk-ink); }
+.ag-ciudad { margin: 24px 0 10px; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.ag-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.ag-tarjeta {
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px;
+  padding: 14px 10px 16px; border-radius: var(--uk-radius-sm); background: var(--uk-surface);
+  border: 1px solid var(--uk-line); box-shadow: var(--uk-shadow-soft);
+}
+.ag-tarjeta b { font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }
+.ag-tarjeta span { font-size: 13px; color: var(--uk-ink-soft); }
+.ag-foto { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: var(--uk-surface-2); border: 3px solid var(--uk-green); }
+.ag-foto-vacia { display: grid; place-items: center; color: var(--uk-ink-soft); }
+.ag-estado {
+  display: flex; gap: 10px; align-items: flex-start; margin: 16px 0; padding: 14px 16px; max-width: 720px;
+  border-radius: var(--uk-radius-sm); background: var(--uk-surface); border: 1px solid var(--uk-line); font-size: 15px; line-height: 1.45;
+}
+.ag-estado svg { flex-shrink: 0; margin-top: 2px; }
+.ag-estado p { margin: 0; }
+.ag-aviso-wa { margin-top: 26px; padding: 16px; max-width: 720px; border-radius: var(--uk-radius-sm); background: var(--uk-surface-2); display: grid; gap: 10px; font-size: 15px; }
+.ag-aviso-wa p { margin: 0; }
+
+.ag-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; padding: 10px 16px;
+  border-radius: 14px; background: linear-gradient(135deg, #25d366, #128c4a); color: #fff;
+  font-weight: 700; font-size: 16px; text-decoration: none;
+}
+
+/* ── Comprobación (la que abre el QR) ──────────────────────────────────── */
+body:has(.ag-root) .install-banner,
+body:has(.ag-root) .uk-contesto { display: none !important; }
+body:has(.ag-root) { background: #F9F6ED; color: #214533; }
+body:has(.ag-root.ag-rojo) { background: #8F1D1D; }
+
+.ag-root {
+  min-height: 100vh; min-height: 100dvh;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  padding: 18px 16px 36px; text-align: center;
+  font-family: "Poppins", system-ui, sans-serif; color: #214533; background: #F9F6ED;
+}
+.ag-root > * { width: min(100%, 460px); }
+.ag-root.ag-rojo { background: #8F1D1D; color: #fff; }
+.ag-logo { height: 34px; width: auto; align-self: center; }
+.ag-root > .ag-logo { width: auto; }
+.ag-root.ag-rojo .ag-logo { background: #fff; padding: 6px 12px; border-radius: 10px; height: 46px; }
+
+.ag-id { padding: 20px 16px; border-radius: 20px; background: #fff; border: 1px solid #E6E2D6; box-shadow: 0 8px 28px rgba(33,69,51,.14); display: grid; gap: 6px; justify-items: center; }
+.ag-rojo .ag-id { border: 3px solid #fff; color: #214533; }
+.ag-id .ag-foto-grande { width: 190px; height: 190px; border-radius: 50%; object-fit: cover; background: #F1EDE0; border: 5px solid #1D8D52; display: block; }
+.ag-id .ag-foto-grande.ag-sin { display: grid; place-items: center; color: #4E6053; }
+.ag-rojo .ag-id .ag-foto-grande { border-color: #D92D2D; filter: grayscale(1); }
+.ag-id h1 { margin: 8px 0 0; font-size: 28px; line-height: 1.15; font-weight: 800; overflow-wrap: anywhere; }
+.ag-id .ag-rol { margin: 0; font-size: 17px; font-weight: 600; color: #4E6053; }
+
+.ag-sello { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; padding: 8px 18px; border-radius: 999px; font-size: 22px; font-weight: 800; letter-spacing: .5px; }
+.ag-sello-ok { background: #E6F2EA; color: #10623E; border: 2px solid #1D8D52; }
+.ag-reloj { margin: 6px 0 0; font-size: 15px; color: #4E6053; font-variant-numeric: tabular-nums; }
+.ag-reloj b { font-size: 17px; color: #214533; }
+.ag-reloj-viejo { color: #8F1D1D; font-weight: 700; }
+.ag-pulso { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #1D8D52; margin-right: 6px; animation: ag-pulso 1.2s ease-in-out infinite; }
+@keyframes ag-pulso { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .ag-pulso { animation: none; } }
+
+.ag-baja { padding: 18px 16px; border-radius: 20px; background: #fff; color: #8F1D1D; border: 3px solid #D92D2D; display: grid; gap: 8px; justify-items: center; }
+.ag-baja svg { color: #D92D2D; }
+.ag-baja h2 { margin: 0; font-size: 26px; line-height: 1.15; font-weight: 800; }
+.ag-baja p { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.35; }
+
+.ag-nocobran { padding: 14px 16px; border-radius: 16px; background: #FFF3D6; border: 2px solid #C77D00; color: #5A3A00; display: flex; gap: 12px; align-items: flex-start; text-align: left; }
+.ag-nocobran svg { flex-shrink: 0; margin-top: 2px; }
+.ag-nocobran p { margin: 0; font-size: 16px; line-height: 1.35; }
+.ag-nocobran p + p { margin-top: 6px; font-size: 15px; }
+
+.ag-ayuda { display: grid; gap: 10px; justify-items: center; font-size: 15px; line-height: 1.4; }
+.ag-ayuda p { margin: 0; }
+.ag-rojo .ag-ayuda { color: #fff; }
+.ag-link { color: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; min-height: 44px; display: inline-flex; align-items: center; gap: 6px; }
+
+.ag-vacio { padding: 22px 16px; border-radius: 16px; background: #fff; border: 1px solid #E6E2D6; display: grid; gap: 10px; justify-items: center; font-size: 17px; line-height: 1.4; }
+.ag-vacio h1 { margin: 0; font-size: 24px; font-weight: 800; }
+.ag-vacio p { margin: 0; }
