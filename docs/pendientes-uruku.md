@@ -750,6 +750,54 @@ Reemplaza a Reservalo. Decisión y fundamento en
 - [ ] Sacar del panel de admin el bloque que lee datos de Reservalo (hoy
       muestra ceros).
 
+## 📣 Antes de pagar publicidad — nota del 2/11/2026
+
+> Criterio para anunciar una ciudad: que las búsquedas que se van a comprar
+> devuelvan buenas opciones, que el contacto funcione y que se pueda medir. El
+> total de comercios cargados no alcanza. Orden: **datos confiables → búsqueda
+> útil → contacto fácil → medición → funciones adicionales.** Lo de buscadores e
+> IA (punto 4 de la nota) se trabaja aparte: ver `docs/visibilidad-buscadores-ia.md`.
+
+**Lo primordial antes de pagar anuncios**
+- [ ] Ciudad siempre visible y cambiable sin depender del GPS.
+- [ ] Página estable por ciudad y rubro (`/tarija/restaurantes`) como destino de cada anuncio.
+- [ ] No anunciar rubros vacíos, incompletos o con resultados de otra ciudad.
+- [ ] Buscador por producto/servicio/zona: «zapatillas» encuentra a quien las vende aunque no lo diga el nombre.
+- [ ] Fichas completas: rubro, productos, dirección, ubicación, horario, fotos, contacto. Campo **«Qué podés encontrar acá»** (lista real de productos; «Bazar» es demasiado amplio).
+- [ ] Datos vigentes: fecha de verificación; no mostrar «abierto ahora», precios ni stock sin dato que lo sostenga.
+- [ ] WhatsApp y «Cómo llegar» probados en Android y iPhone, número internacional correcto.
+- [ ] Móvil liviano: imágenes optimizadas, video sin autoplay, mapa que no bloquee la carga.
+- [ ] Consultar y contactar sin cuenta, sin instalar nada y sin pedir ubicación de entrada.
+- [ ] Quién administra URUKU, contacto real, privacidad y «Reportar un error» en cada ficha.
+- [ ] Medición por ciudad, rubro y comercio: clics a WhatsApp y a «Cómo llegar», por campaña (`?ref=` / UTM).
+- [ ] Avisar a los comercios del rubro anunciado: un anuncio que funciona se pierde si nadie contesta.
+
+**Para varias ciudades**
+- [ ] Resultados separados por ciudad; si no hay, ofrecer ampliar diciendo dónde.
+- [ ] Contenido local real por ciudad (no la misma guía con otro nombre).
+- [ ] Un responsable de actualización por ciudad, con rutina (cierres, teléfonos, horarios).
+- [ ] Estado de cobertura honesto por ciudad y «Pedí un comercio» — sin mostrar cifras al público.
+- [ ] Resultados medidos por ciudad, no un promedio nacional.
+
+**Lo adicional (por valor para el usuario)**
+- [ ] «Verificado» = una comprobación real (teléfono, ubicación o visita, con fecha). **Nunca** sinónimo de «paga un plan»: el destacado comercial se rotula como publicidad.
+- [ ] Productos y precios orientativos con moneda, fecha y vencimiento.
+- [ ] Ofertas con precio, vigencia y condiciones claras.
+- [ ] Filtros: zona, rubro, mayorista/minorista, medios de pago, horario (sólo si están comprobados).
+- [ ] Reseñas con moderación, respuesta del comercio y control de falsas.
+- [ ] Compartir ficha por WhatsApp con buena imagen y descripción (Open Graph).
+- [ ] Listas de recorrido además de favoritos, sin registrarse de entrada.
+- [ ] Dax: responder con datos y enlaces; decir cuando no sabe stock, precio u horario.
+- [ ] El comerciante actualiza su ficha; cambios sensibles validados; recordatorios razonables.
+- [ ] Misma marca en web, redes, anuncios y material de calle.
+
+**Primer uso de los USD 100/mes:** una ciudad, una necesidad, uno o dos rubros fuertes.
+1. Completar y comprobar las fichas que van a recibir visitas.
+2. Armar la página de destino de ese anuncio.
+3. Probar búsqueda, WhatsApp y ubicación desde celulares.
+4. Configurar la medición y avisar a los comercios participantes.
+5. Revisar cada semana consultas recibidas y **costo por contacto útil** (contrastado con los comerciantes: un clic a WhatsApp no es una venta).
+
 ## 💡 Ideas para explorar (registrar, pensar después)
 - **Producción de contenido automatizada desde WhatsApp** (ver abajo).
 - **Falloff del mapa (fase 2):** que los negocios que no pagan vayan cayendo del mapa para
