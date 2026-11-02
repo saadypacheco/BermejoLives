@@ -42,20 +42,20 @@ export function SocialConsentToggle() {
 
   return (
     <div className="glass" style={{ padding: "14px 18px", borderRadius: 16, display: "grid", gap: 8 }}>
-      <div style={{ fontSize: 12, color: "var(--txt-3)", fontWeight: 700 }}>REDES DE URUKU</div>
+      <div style={{ fontSize: 12, color: "var(--txt-3)", fontWeight: 700 }}>REDES Y PÁGINA DE URUKU</div>
 
       {cargando && !c && <p style={{ margin: 0, fontSize: 13.5, color: "var(--txt-3)" }}>Cargando…</p>}
 
       {c && (
         <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-          <button type="button" role="switch" aria-checked={activo} aria-label="Autorizo a URUKU a mostrar mi comercio y mis fotos en sus redes"
+          <button type="button" role="switch" aria-checked={activo} aria-label="Autorizo a URUKU a mostrar mi comercio y mis fotos en las redes y la página de URUKU"
                   onClick={() => void cambiar()} disabled={guardando}
                   style={{ flex: "none", width: 58, height: 34, borderRadius: 17, border: "1px solid var(--stroke)", cursor: "pointer", position: "relative", padding: 0,
                            background: activo ? "var(--neon)" : "var(--panel)", transition: "background .15s" }}>
             <span aria-hidden style={{ position: "absolute", top: 3, left: activo ? 27 : 3, width: 26, height: 26, borderRadius: 13, background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.4)", transition: "left .15s" }} />
           </button>
           <div style={{ minWidth: 0 }}>
-            <b style={{ fontSize: 14 }}>Autorizo a URUKU a mostrar mi comercio y mis fotos en sus redes</b>
+            <b style={{ fontSize: 14 }}>Autorizo a URUKU a mostrar mi comercio y mis fotos en las redes y la página de URUKU</b>
             <div style={{ fontSize: 12.5, color: "var(--txt-3)", marginTop: 2 }}>
               {guardando
                 ? "Guardando…"

@@ -8,7 +8,7 @@ import {
   type ContentPostResponse,
 } from "@/lib/content";
 import {
-  horaBo, minutosDesde, minutosRestantes, redLabel, urlApi, validarLinkDeRed, POST_STATUS_LABEL,
+  horaBo, minutosDesde, minutosRestantes, redLabel, urlApi, validarLinkDeRed, POST_STATUS_LABEL, SKIP_REASON_LABEL,
 } from "@/lib/content-pure";
 
 /** Agrega `download=1` a una URL firmada (va FUERA de la firma, §4.2): el
@@ -125,7 +125,7 @@ export function ContentPostRow({ post, pieceId, onCambio }: {
         {post.status === "posted" && !post.post_url && post.posted_without_link && (
           <span style={{ fontSize: 12.5, color: "var(--txt-3)" }}>sin link</span>
         )}
-        {post.status === "skipped" && post.skip_reason && <span style={{ fontSize: 12.5, color: "var(--txt-3)" }}>{post.skip_reason}</span>}
+        {post.status === "skipped" && post.skip_reason && <span style={{ fontSize: 12.5, color: "var(--txt-3)" }}>{SKIP_REASON_LABEL[post.skip_reason] ?? post.skip_reason}</span>}
       </div>
 
       {post.status === "pending" && (

@@ -5,6 +5,7 @@ import { Ic } from "@/components/ic";
 import { Aviso, BTN_GRANDE, EnvioWhatsapp, Insignia } from "@/components/content/content-ui";
 import { mensajeContent } from "@/lib/content";
 import { fechaCorta, fechaCortaBo, linkWhatsappTarea } from "@/lib/content-pure";
+import { ENTREGA_A_MANO, EntregaDescarga } from "@/components/subscribers/entrega-a-mano";
 import { cerrarTarea, saltarTarea, type SubscriberTaskResponse } from "@/lib/subscribers";
 
 /**
@@ -15,6 +16,10 @@ import { cerrarTarea, saltarTarea, type SubscriberTaskResponse } from "@/lib/sub
  *
  * Las tareas de checklist (revisar la ficha, primera oferta…) se cierran solas
  * cuando se cumple la condición; acá se pueden marcar a mano igual.
+ *
+ * `piece_delivery` (§15): al comerciante NO se le escribe por WhatsApp. La tarea es
+ * «Entregar el video a mano»: se descarga el video (URL firmada del panel) y se marca
+ * entregado. Sin texto ni botón de WhatsApp.
  */
 export function SubscriberTaskRow({ t, onCambio, mostrarComercio }: {
   t: SubscriberTaskResponse;
@@ -29,7 +34,8 @@ export function SubscriberTaskRow({ t, onCambio, mostrarComercio }: {
   const abierta = t.status === "open";
   const tieneMensaje = !!t.message_text;
   const hayLink = linkWhatsappTarea(t.whatsapp, t.message_text) !== null;
-  const sinPasos = !tieneMensaje && !t.needs_outcome && !t.call_script;
+  const entregaAMano = t.kind === "piece_delivery";
+  const sinPasos = !entregaAMano && !tieneMensaje && !t.needs_outcome && !t.call_script;
 
   async function cerrar(sent: boolean) {
     if (t.needs_outcome && !outcome.trim()) { setErr("Contá qué te dijo antes de marcarla como hecha"); return; }
@@ -55,7 +61,7 @@ export function SubscriberTaskRow({ t, onCambio, mostrarComercio }: {
         {t.status === "done" && <Insignia tono="ok" icono="listo">HECHA{t.done_at ? ` ${fechaCortaBo(t.done_at)}` : ""}</Insignia>}
         {t.status === "skipped" && <Insignia tono="info" icono="cerrar">SALTADA</Insignia>}
         <b style={{ fontSize: 14 }}>
-          {t.kind_label}{t.message_template ? ` (${t.message_template})` : ""}
+          {entregaAMano ? ENTREGA_A_MANO : t.kind_label}{!entregaAMano && t.message_template ? ` (${t.message_template})` : ""}
           {mostrarComercio ? <span style={{ fontWeight: 400, color: "var(--txt-3)" }}> · {t.comercio_nombre}</span> : null}
         </b>
       </div>
@@ -69,7 +75,9 @@ export function SubscriberTaskRow({ t, onCambio, mostrarComercio }: {
 
       {abierta && (
         <>
-          {tieneMensaje && (
+          {entregaAMano && <EntregaDescarga downloadUrl={t.download_url} />}
+
+          {!entregaAMano && tieneMensaje && (
             <>
               <p style={{ margin: 0, fontSize: 13, color: "var(--txt-2)", lineHeight: 1.45, whiteSpace: "pre-wrap" }}>{t.message_text}</p>
               <EnvioWhatsapp whatsapp={t.whatsapp} texto={t.message_text as string}
@@ -104,6 +112,11 @@ export function SubscriberTaskRow({ t, onCambio, mostrarComercio }: {
           {sinPasos && <p style={{ margin: 0, fontSize: 12.5, color: "var(--txt-3)" }}>Se cierra sola cuando se cumple. Si ya lo hiciste, marcala.</p>}
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {entregaAMano && (
+              <button type="button" className="btn btn-primary btn-sm" style={BTN_GRANDE} disabled={ocupado} onClick={() => void cerrar(true)}>
+                <Ic n="si" s={15} /> {ocupado ? "Guardando…" : "Marcar entregado"}
+              </button>
+            )}
             {(t.needs_outcome || sinPasos) && (
               <button type="button" className="btn btn-primary btn-sm" style={BTN_GRANDE} disabled={ocupado} onClick={() => void cerrar(tieneMensaje)}>
                 <Ic n="si" s={15} /> {ocupado ? "Guardando…" : "Hecha"}

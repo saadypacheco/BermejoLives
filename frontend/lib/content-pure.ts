@@ -67,6 +67,8 @@ export const SKIP_REASON_LABEL: Record<string, string> = {
   merchant_asked: "El comercio lo pidió",
   consent_revoked: "Retiró la autorización",
   unpaid: "No pagó",
+  comercio_inactivo: "El comercio está de baja",
+  asset_removed: "Se quitó una foto",
   other: "Otro motivo",
 };
 

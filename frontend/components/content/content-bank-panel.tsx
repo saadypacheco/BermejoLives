@@ -28,7 +28,7 @@ export function ContentBankPanel() {
         <div className="panel-card glass" style={{ padding: 16 }}>
           <h3 style={{ margin: "0 0 4px", fontSize: 17 }}>Banco de contenido</h3>
           <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--txt-3)", lineHeight: 1.45 }}>
-            Elegí el comercio y sacá o subí todas las fotos que quieras. Con esas fotos se arman los videos para las redes de URUKU.
+            Elegí el comercio y sacá o subí todas las fotos que quieras. Con esas fotos se arman los videos para las redes y la página de URUKU.
           </p>
           <ContentMerchantPicker onElegir={setComercio} />
         </div>
@@ -137,7 +137,7 @@ export function BancoDelComercio({ comercioId, api, titulo, detalle, suscriptor,
       <SocialConsentBox consent={consent} api={api.consent(comercioId)} onChange={setConsent} estadoDesconocido={sinDato} />
 
       {consent.granted !== true && !sinDato && (
-        <Aviso tono="aviso">Se guardan igual, pero las fotos no salen en redes hasta registrar la autorización.</Aviso>
+        <Aviso tono="aviso">Se guardan igual, pero las fotos no salen en las redes ni en la página de URUKU hasta registrar la autorización.</Aviso>
       )}
 
       <ContentBankUploader comercioId={comercioId} api={api} onSubida={alSubir} />
