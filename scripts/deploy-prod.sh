@@ -18,6 +18,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+ARGS=("$@")
 DOMINIO="${DOMINIO:-uruku.bo}"
 COMPOSE=(docker compose -f docker-compose.prod.yml --env-file .env)
 
@@ -32,7 +33,18 @@ done
 [ ${#SERVICIOS[@]} -eq 0 ] && SERVICIOS=(frontend backend)
 
 echo "== git pull =="
-git pull --ff-only
+if [ -z "${DEPLOY_SCRIPT_FRESCO:-}" ]; then
+  ANTES="$(sha1sum scripts/deploy-prod.sh)"
+  git pull --ff-only
+  # bash lee el script a medida que lo ejecuta: si el pull trajo una versión
+  # nueva de este mismo archivo, seguía corriendo la vieja (o un pedazo de cada
+  # una). Pasó el 2/11: la clave de IndexNow no se publicó porque el bloque que
+  # la escribe llegó en ese mismo pull. Se relanza con la versión recién bajada.
+  if [ "$ANTES" != "$(sha1sum scripts/deploy-prod.sh)" ]; then
+    echo "deploy-prod.sh cambió con el pull: se relanza la versión nueva"
+    DEPLOY_SCRIPT_FRESCO=1 exec bash scripts/deploy-prod.sh "${ARGS[@]}"
+  fi
+fi
 SHA="$(git rev-parse --short HEAD)"
 echo "commit: $SHA"
 
