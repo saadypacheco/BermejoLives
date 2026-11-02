@@ -23,8 +23,10 @@ logger = structlog.get_logger()
 
 #: IndexNow acepta hasta 10.000 URLs por pedido.
 MAX_URLS_POR_PEDIDO = 10_000
-#: Páginas que se suman una vez por día (su contenido cambia solo).
-RUTAS_FIJAS = ("/", "/cambio", "/farmacias-de-turno")
+#: Páginas que se suman una vez por día (su contenido cambia solo). Las farmacias de
+#: turno se suman aparte, una por ciudad con turnos (`/{ciudad}/farmacias-de-turno`):
+#: `/farmacias-de-turno` ya canonicaliza ahí.
+RUTAS_FIJAS = ("/", "/cambio")
 
 _CLAVE_VALIDA = re.compile(r"^[A-Za-z0-9-]{8,128}$")
 
@@ -36,7 +38,10 @@ def _vacio(v) -> bool:
 
 def is_business_thin(c: dict) -> bool:
     """Ficha «fina»: sin rubro (o «otros») y sin nada de texto, o «a clasificar»."""
-    sin_rubro = c.get("rubro_slug") in (None, "", "otros")
+    # Mismo criterio que SQL 0180 y `isBusinessThin` (frontend/lib/seo.ts): el rubro
+    # sólo cuenta si está activo (el repo ya lo deja en None si no) y el texto en blanco
+    # incluye el que sólo tiene espacios.
+    sin_rubro = (c.get("rubro_slug") or "").strip() in ("", "otros")
     sin_texto = all(_vacio(c.get(k)) for k in
                     ("subcategoria", "descripcion", "prod_obs_human", "prod_det_ia"))
     a_clasificar = bool(re.search(r"a clasificar", c.get("nombre") or "", re.I))
@@ -64,9 +69,47 @@ def business_urls(comercios: list[dict]) -> list[str]:
     return list(vistas)
 
 
-def fixed_urls() -> list[str]:
+def removed_urls(comercios: list[dict]) -> list[str]:
+    """URLs de las fichas que dejaron de existir para el público (dadas de baja o
+    suspendidas). IndexNow acepta URLs que ahora dan 404: así Bing las saca del índice."""
     sitio = _sitio()
-    return [sitio + r for r in RUTAS_FIJAS]
+    vistas: dict[str, None] = {}
+    for c in comercios:
+        slug = (c.get("slug") or "").strip()
+        if slug and (not c.get("activo", True) or c.get("suspendido")):
+            vistas[f"{sitio}/comercios/{slug}"] = None
+    return list(vistas)
+
+
+def turnos_urls(repo) -> list[str]:
+    """`/{ciudad}/farmacias-de-turno` de cada ciudad activa con turnos vigentes (las
+    demás dan 404). Si una ciudad falla se la saltea: nunca lanza."""
+    sitio = _sitio()
+    ahora = datetime.now(timezone.utc).isoformat()
+    urls: list[str] = []
+    try:
+        ciudades = repo.list_ciudades() or []
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("indexnow_failed", error=str(exc)[:200], etapa="leer_ciudades")
+        return urls
+    for ciu in ciudades:
+        slug = (ciu.get("slug") or "").strip()
+        if not slug or ciu.get("activa") is False:
+            continue
+        try:
+            if repo.list_turnos_farmacia_ahora(ahora, slug):
+                urls.append(f"{sitio}/{slug}/farmacias-de-turno")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("indexnow_failed", error=str(exc)[:200], etapa="leer_turnos", ciudad=slug)
+    return urls
+
+
+def fixed_urls(repo=None) -> list[str]:
+    sitio = _sitio()
+    urls = [sitio + r for r in RUTAS_FIJAS]
+    if repo is not None:
+        urls += turnos_urls(repo)
+    return urls
 
 
 # ── habilitación ─────────────────────────────────────────────────────────────
@@ -82,18 +125,28 @@ def habilitado() -> bool:
 
 
 # ── envío ────────────────────────────────────────────────────────────────────
-def submit(urls: list[str]) -> bool:
-    """Manda las URLs a IndexNow. True si todos los pedidos fueron aceptados
-    (200/202). NUNCA lanza: ante un error loguea `indexnow_failed` y devuelve False."""
+OK, REINTENTAR, RECHAZADO = "ok", "reintentar", "rechazado"
+
+
+def _es_rechazo_definitivo(status: int) -> bool:
+    """4xx (403 la clave no se sirve, 422 URL fuera del host…): reenviar lo mismo no lo
+    arregla. 429 (límite de ritmo) es transitorio y se reintenta como un 5xx."""
+    return 400 <= status < 500 and status != 429
+
+
+def enviar(urls: list[str]) -> str:
+    """Manda las URLs a IndexNow. `OK` si todos los pedidos fueron aceptados (200/202),
+    `RECHAZADO` si hubo un 4xx definitivo (y nada que reintentar), `REINTENTAR` ante
+    5xx, 429 o error de red. NUNCA lanza: loguea `indexnow_failed`."""
     urls = list(dict.fromkeys(u for u in urls if u))
     if not urls:
-        return True
+        return OK
     if not key_is_valid():
         logger.warning("indexnow_failed", motivo="sin_clave_valida", urls=len(urls))
-        return False
+        return REINTENTAR
     sitio = _sitio()
     host = urlsplit(sitio).netloc
-    todo_ok = True
+    estado = OK
     for i in range(0, len(urls), MAX_URLS_POR_PEDIDO):
         lote = urls[i:i + MAX_URLS_POR_PEDIDO]
         cuerpo = {
@@ -109,13 +162,20 @@ def submit(urls: list[str]) -> bool:
                 logger.info("indexnow_submitted", urls=len(lote), status=r.status_code,
                             ejemplo=lote[0])
             else:
-                todo_ok = False
+                definitivo = _es_rechazo_definitivo(r.status_code)
+                if estado != REINTENTAR:
+                    estado = RECHAZADO if definitivo else REINTENTAR
                 logger.warning("indexnow_failed", status=r.status_code, urls=len(lote),
-                               detalle=(r.text or "")[:200])
+                               reintenta=not definitivo, detalle=(r.text or "")[:200])
         except Exception as exc:  # noqa: BLE001
-            todo_ok = False
-            logger.warning("indexnow_failed", error=str(exc)[:200], urls=len(lote))
-    return todo_ok
+            estado = REINTENTAR
+            logger.warning("indexnow_failed", error=str(exc)[:200], urls=len(lote), reintenta=True)
+    return estado
+
+
+def submit(urls: list[str]) -> bool:
+    """True si todos los pedidos fueron aceptados (200/202). NUNCA lanza."""
+    return enviar(urls) == OK
 
 
 def _a_datetime(v) -> datetime | None:
@@ -128,21 +188,27 @@ def _a_datetime(v) -> datetime | None:
 
 
 def run_once(repo, cursor: datetime, incluir_fijas: bool = False) -> tuple[datetime, int]:
-    """Una vuelta: avisa las fichas cambiadas desde `cursor`. Devuelve
-    `(cursor_nuevo, cantidad_enviada)`. Si el envío falla el cursor NO avanza (se
-    reintenta en la vuelta siguiente; repetir es inocuo). Nunca lanza."""
+    """Una vuelta: avisa las fichas cambiadas desde `cursor` (las indexables y las que
+    se dieron de baja o suspendieron, que ahora dan 404). Devuelve
+    `(cursor_nuevo, cantidad_enviada)`. Ante un 5xx o un error de red el cursor NO
+    avanza (se reintenta en la vuelta siguiente; repetir es inocuo). Ante un 4xx sí
+    avanza: reenviar lo mismo cada 15 minutos no lo arregla (queda el log
+    `indexnow_failed` con el status). Nunca lanza."""
     try:
         filas = repo.comercios_para_indexnow(cursor.isoformat())
     except Exception as exc:  # noqa: BLE001
         logger.warning("indexnow_failed", error=str(exc)[:200], etapa="leer_comercios")
         return cursor, 0
-    urls = business_urls(filas)
+    urls = business_urls(filas) + removed_urls(filas)
     if incluir_fijas:
-        urls += fixed_urls()
+        urls += fixed_urls(repo)
     if not urls:
         return _avanzar(cursor, filas), 0
-    if not submit(urls):
+    estado = enviar(urls)
+    if estado == REINTENTAR:
         return cursor, 0
+    if estado == RECHAZADO:
+        return _avanzar(cursor, filas), 0
     return _avanzar(cursor, filas), len(urls)
 
 

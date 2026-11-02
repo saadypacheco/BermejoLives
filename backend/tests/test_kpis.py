@@ -93,3 +93,37 @@ def test_te_contesto_cuenta_por_comercio_y_una_sola_vez(client, repo):
     v = client.post("/lead", json={"comercio_id": "c1", "tipo": "vista"}).json()
     assert client.post(f"/lead/{v['id']}/respondio", json={"respondio": True}).status_code == 404
     assert client.post("/lead/no-existe/respondio", json={"respondio": True}).status_code == 404
+
+
+# ── límites de largo de /lead y /visita ─────────────────────────────────────────
+def test_lead_rechaza_un_origen_enorme(client):
+    r = client.post("/lead", json={"comercio_id": "c1", "tipo": "vista", "origen": "a" * 201})
+    assert r.status_code == 422
+    r = client.post("/lead", json={"comercio_id": "c1", "tipo": "vista", "origen": "a" * 200})
+    assert r.status_code == 200
+
+
+def test_visita_rechaza_origen_y_referido_enormes(client, repo):
+    base = {"ruta": "/", "sesion": "abcdef123456"}
+    assert client.post("/visita", json={**base, "origen": "a" * 201}).status_code == 422
+    assert client.post("/visita", json={**base, "referido": "a" * 501}).status_code == 422
+    assert client.post("/visita", json={**base, "origen": "a" * 200, "referido": "b" * 500}).status_code == 200
+    # `limpiar_ref` sigue igual: minúsculas y tope de 64
+    assert repo.visitas[-1]["origen"] == "a" * 64
+
+
+# ── límites de largo de /lead y /visita ─────────────────────────────────────────
+def test_lead_rechaza_un_origen_enorme(client):
+    r = client.post("/lead", json={"comercio_id": "c1", "tipo": "vista", "origen": "a" * 201})
+    assert r.status_code == 422
+    r = client.post("/lead", json={"comercio_id": "c1", "tipo": "vista", "origen": "a" * 200})
+    assert r.status_code == 200
+
+
+def test_visita_rechaza_origen_y_referido_enormes(client, repo):
+    base = {"ruta": "/", "sesion": "abcdef123456"}
+    assert client.post("/visita", json={**base, "origen": "a" * 201}).status_code == 422
+    assert client.post("/visita", json={**base, "referido": "a" * 501}).status_code == 422
+    assert client.post("/visita", json={**base, "origen": "a" * 200, "referido": "b" * 500}).status_code == 200
+    # `limpiar_ref` sigue igual: minúsculas y tope de 64
+    assert repo.visitas[-1]["origen"] == "a" * 64

@@ -212,6 +212,34 @@ def test_put_perfil_actualiza_solo_whitelist(client, repo):
     assert repo.comercios["com-p"]["instagram_url"] == "ig.com/x"
 
 
+def test_put_perfil_no_deja_cambiar_el_logo_a_una_url_externa(client, repo):
+    repo.seed_comercio(id="com-p", slug="perf", nombre="X", whatsapp="591700",
+                       logo_url="https://uruku.bo/fotos/c/logo.jpg")
+    # solo logo_url: no hay nada editable que guardar
+    r = client.put("/comercio/perfil", headers=_auth(), json={"logo_url": "https://rastreo.example/p.gif"})
+    assert r.status_code == 400
+    # junto con un campo válido: el valor externo se ignora, el resto se guarda
+    r = client.put("/comercio/perfil", headers=_auth(),
+                   json={"nombre": "Nuevo", "logo_url": "https://rastreo.example/p.gif"})
+    assert r.status_code == 200
+    assert repo.comercios["com-p"]["nombre"] == "Nuevo"
+    assert repo.comercios["com-p"]["logo_url"] == "https://uruku.bo/fotos/c/logo.jpg"
+
+
+def test_put_perfil_no_deja_cambiar_el_logo_a_una_url_externa(client, repo):
+    repo.seed_comercio(id="com-p", slug="perf", nombre="X", whatsapp="591700",
+                       logo_url="https://uruku.bo/fotos/c/logo.jpg")
+    # solo logo_url: no hay nada editable que guardar
+    r = client.put("/comercio/perfil", headers=_auth(), json={"logo_url": "https://rastreo.example/p.gif"})
+    assert r.status_code == 400
+    # junto con un campo válido: el valor externo se ignora, el resto se guarda
+    r = client.put("/comercio/perfil", headers=_auth(),
+                   json={"nombre": "Nuevo", "logo_url": "https://rastreo.example/p.gif"})
+    assert r.status_code == 200
+    assert repo.comercios["com-p"]["nombre"] == "Nuevo"
+    assert repo.comercios["com-p"]["logo_url"] == "https://uruku.bo/fotos/c/logo.jpg"
+
+
 def test_put_perfil_modalidad_invalida_400(client, repo):
     repo.seed_comercio(id="com-p", slug="perf", nombre="X", whatsapp="591700")
     r = client.put("/comercio/perfil", headers=_auth(), json={"modalidad": "revendedor"})

@@ -51,9 +51,12 @@ _MODALIDADES = {"mayorista", "minorista", "ambos"}
 # El WhatsApp TAMPOCO: es la identidad del ingreso, y quien entrara indebidamente
 # lo cambiaría y la cuenta quedaría suya para siempre. Se cambia con la solicitud
 # de «Cambié de número» (la aprueba el admin) o lo edita el admin.
+# `logo_url` tampoco: ninguna pantalla lo edita y aceptaba cualquier URL externa
+# (el navegador del visitante la cargaría en la ficha: rastreo, contenido ajeno).
+# Las fotos del comercio se suben por sus endpoints (portada, galería).
 _CAMPOS_EDITABLES = {
     "nombre", "descripcion", "prod_obs_human", "telefono", "email",
-    "facebook_url", "instagram_url", "tiktok_url", "sitio_web", "logo_url",
+    "facebook_url", "instagram_url", "tiktok_url", "sitio_web",
     "direccion", "como_llegar", "horario", "pedido_minimo", "modalidad",
     "lat", "lng", "acepta_reservas",
     # «Lo que suma» en la ficha (docs/ficha-destacados.md).
@@ -602,7 +605,6 @@ class PerfilUpdate(BaseModel):
     instagram_url: str | None = None
     tiktok_url: str | None = None
     sitio_web: str | None = None
-    logo_url: str | None = None
     direccion: str | None = None
     como_llegar: str | None = None
     horario: str | None = None

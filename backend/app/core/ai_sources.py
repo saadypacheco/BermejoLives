@@ -25,6 +25,7 @@ AI_SOURCES: dict[str, list[str]] = {
     "meta_ai": ["meta.ai"],
     "grok": ["grok.com", "x.ai", "x.com/i/grok"],
     "deepseek": ["deepseek.com"],
+    "mistral": ["chat.mistral.ai"],
     "you": ["you.com"],
     "phind": ["phind.com"],
     "duckduckgo_ai": ["duck.ai", "duckduckgo.com/chat"],
@@ -40,6 +41,7 @@ _ALIAS_UTM: dict[str, str] = {
     "meta_ai": "meta_ai", "metaai": "meta_ai", "meta-ai": "meta_ai",
     "grok": "grok",
     "deepseek": "deepseek",
+    "mistral": "mistral",
     "phind": "phind",
     "duck.ai": "duckduckgo_ai",
 }

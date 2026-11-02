@@ -174,13 +174,92 @@ def test_si_el_envio_falla_el_cursor_no_avanza(repo, monkeypatch):
     assert nuevo == cursor and n == 0
 
 
-def test_la_vuelta_diaria_suma_las_paginas_fijas(repo, monkeypatch):
+def test_la_vuelta_diaria_suma_las_paginas_fijas_y_las_farmacias_de_turno_por_ciudad(repo, monkeypatch):
     llamadas = _capturar(monkeypatch)
     cursor = datetime.now(timezone.utc) - timedelta(minutes=1)
+    # Bermejo tiene un turno vigente; Santa Cruz no (su página propia daría 404)
+    repo.seed_comercio(id="farm-1", slug="farm-1", nombre="Farm", ciudad_slug="bermejo")
+    ahora = datetime.now(timezone.utc)
+    repo.turnos_farmacia["t1"] = {"id": "t1", "comercio_id": "farm-1", "activo": True,
+                                  "inicio": (ahora - timedelta(hours=1)).isoformat(),
+                                  "fin": (ahora + timedelta(hours=1)).isoformat()}
     _nuevo, n = indexnow.run_once(repo, cursor, incluir_fijas=True)
     assert llamadas[0]["json"]["urlList"] == [
-        "https://uruku.bo/", "https://uruku.bo/cambio", "https://uruku.bo/farmacias-de-turno"]
+        "https://uruku.bo/", "https://uruku.bo/cambio", "https://uruku.bo/bermejo/farmacias-de-turno"]
     assert n == 3
+    assert "https://uruku.bo/farmacias-de-turno" not in llamadas[0]["json"]["urlList"]
+
+
+def test_sin_turnos_cargados_no_se_avisa_ninguna_farmacias_de_turno(repo):
+    assert indexnow.fixed_urls(repo) == ["https://uruku.bo/", "https://uruku.bo/cambio"]
+    assert indexnow.fixed_urls() == ["https://uruku.bo/", "https://uruku.bo/cambio"]
+
+
+def test_turnos_urls_no_lanza_si_el_repo_falla():
+    class Roto:
+        def list_ciudades(self):
+            raise RuntimeError("caída")
+
+    assert indexnow.turnos_urls(Roto()) == []
+
+
+# ── 4xx avanza el cursor; 5xx / red / 429 lo dejan ────────────────────────────────
+@pytest.mark.parametrize("status", [400, 403, 422])
+def test_un_4xx_avanza_el_cursor_y_loguea_el_status(repo, monkeypatch, status):
+    _capturar(monkeypatch, status=status)
+    avisos = []
+    monkeypatch.setattr(indexnow.logger, "warning", lambda ev, **kw: avisos.append((ev, kw)))
+    cursor = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc)
+    _alta(repo, "editada", "2026-11-02T12:05:00+00:00")
+    nuevo, n = indexnow.run_once(repo, cursor)
+    assert nuevo == datetime(2026, 11, 2, 12, 5, tzinfo=timezone.utc) and n == 0
+    assert avisos and avisos[0][0] == "indexnow_failed" and avisos[0][1]["status"] == status
+
+
+@pytest.mark.parametrize("status", [429, 500, 503])
+def test_un_5xx_o_429_deja_el_cursor_para_reintentar(repo, monkeypatch, status):
+    _capturar(monkeypatch, status=status)
+    cursor = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc)
+    _alta(repo, "editada", "2026-11-02T12:05:00+00:00")
+    assert indexnow.run_once(repo, cursor) == (cursor, 0)
+
+
+def test_un_error_de_red_deja_el_cursor_para_reintentar(repo, monkeypatch):
+    _capturar(monkeypatch, falla=RuntimeError("sin red"))
+    cursor = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc)
+    _alta(repo, "editada", "2026-11-02T12:05:00+00:00")
+    assert indexnow.run_once(repo, cursor) == (cursor, 0)
+
+
+# ── fichas dadas de baja o suspendidas: se avisan para que salgan del índice ─────────
+def test_las_fichas_dadas_de_baja_o_suspendidas_tambien_se_avisan(repo, monkeypatch):
+    llamadas = _capturar(monkeypatch)
+    cursor = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc)
+    _alta(repo, "editada", "2026-11-02T12:05:00+00:00")
+    _alta(repo, "baja", "2026-11-02T12:06:00+00:00", activo=False)
+    _alta(repo, "suspendida", "2026-11-02T12:07:00+00:00", suspendido=True)
+    _alta(repo, "baja-vieja", "2026-11-02T11:00:00+00:00", activo=False)  # anterior al cursor
+    nuevo, n = indexnow.run_once(repo, cursor)
+    assert llamadas[0]["json"]["urlList"] == [
+        "https://uruku.bo/comercios/editada",
+        "https://uruku.bo/comercios/baja",
+        "https://uruku.bo/comercios/suspendida"]
+    assert n == 3 and nuevo == datetime(2026, 11, 2, 12, 7, tzinfo=timezone.utc)
+
+
+def test_removed_urls_solo_incluye_baja_o_suspension():
+    filas = [_c(slug="ok"), _c(slug="baja", activo=False), _c(slug="susp", suspendido=True),
+             _c(slug="baja", activo=False), _c(slug="", activo=False)]
+    assert indexnow.removed_urls(filas) == ["https://uruku.bo/comercios/baja",
+                                            "https://uruku.bo/comercios/susp"]
+
+
+# ── paridad de «ficha fina» con SQL 0180 / frontend ──────────────────────────────────
+def test_texto_solo_con_espacios_cuenta_como_vacio_en_todos_los_campos():
+    assert indexnow.is_business_thin(_c(rubro_slug="otros", subcategoria=" ", descripcion="\t\n",
+                                        prod_obs_human="  ", prod_det_ia=" "))
+    assert indexnow.is_business_thin(_c(rubro_slug="  "))
+    assert not indexnow.is_business_thin(_c(rubro_slug="otros", prod_det_ia=" remeras "))
 
 
 def test_si_el_repo_falla_no_lanza(monkeypatch):
@@ -193,33 +272,83 @@ def test_si_el_repo_falla_no_lanza(monkeypatch):
 
 
 # ── el repo de verdad ───────────────────────────────────────────────────────────
+class _Q:
+    """Un `table()` de juguete con lo que usa el repo: select, gt, or_ (keyset), order, limit."""
+    def __init__(self, filas, pedidos):
+        self._f, self._p, self._orden, self._lim = list(filas), pedidos, [], None
+
+    def select(self, *a, **k): return self
+    def eq(self, *a, **k): self._p.append(("eq", a)); return self
+
+    def gt(self, col, v):
+        self._p.append(("gt", (col, v)))
+        self._f = [f for f in self._f if f[col] > v]
+        return self
+
+    def or_(self, expr):
+        import re
+        self._p.append(("or_", expr))
+        m = re.fullmatch(r"updated_at\.gt\.(.+),and\(updated_at\.eq\.(.+),id\.gt\.(.+)\)", expr)
+        u, u2, i = m.groups()
+        assert u == u2
+        self._f = [f for f in self._f if f["updated_at"] > u or (f["updated_at"] == u and f["id"] > i)]
+        return self
+
+    def order(self, col): self._orden.append(col); return self
+    def limit(self, n): self._lim = n; return self
+
+    def execute(self):
+        filas = sorted(self._f, key=lambda f: tuple(f[c] for c in self._orden))
+        class R: pass
+        r = R(); r.data = filas[:self._lim]; return r
+
+
+class _Db:
+    def __init__(self, comercios, rubros):
+        self.pedidos, self._c, self._r = [], comercios, rubros
+
+    def table(self, nombre):
+        return _Q(self._c if nombre == "comercios" else self._r, self.pedidos)
+
+
 def test_el_repo_real_resuelve_el_rubro_y_filtra_por_fecha():
     from app.db.repository import SupabaseRepo
 
-    pedidos = []
-
-    class Q:
-        def __init__(self, filas): self._f = filas
-        def select(self, *a, **k): return self
-        def eq(self, *a, **k): pedidos.append(("eq", a)); return self
-        def gt(self, *a, **k): pedidos.append(("gt", a)); return self
-        def order(self, *a, **k): return self
-        def limit(self, *a, **k): return self
-        def execute(self):
-            class R: pass
-            r = R(); r.data = self._f; return r
-
-    class Db:
-        def table(self, nombre):
-            if nombre == "comercios":
-                return Q([{"slug": "a", "nombre": "A", "updated_at": "2026-11-02T12:00:00+00:00",
-                           "activo": True, "rubro_id": "r1"}])
-            return Q([{"id": "r1", "slug": "ropa"}])
-
-    filas = SupabaseRepo(Db()).comercios_para_indexnow("2026-11-02T00:00:00+00:00")
+    db = _Db([{"id": "1", "slug": "a", "nombre": "A", "updated_at": "2026-11-02T12:00:00+00:00",
+               "activo": True, "rubro_id": "r1"}],
+             [{"id": "r1", "slug": "ropa", "activo": True}])
+    filas = SupabaseRepo(db).comercios_para_indexnow("2026-11-02T00:00:00+00:00")
     assert filas[0]["rubro_slug"] == "ropa"
-    assert ("gt", ("updated_at", "2026-11-02T00:00:00+00:00")) in pedidos
-    assert ("eq", ("activo", True)) in pedidos
+    assert ("gt", ("updated_at", "2026-11-02T00:00:00+00:00")) in db.pedidos
+    # ya no filtra por activo: las dadas de baja también se avisan
+    assert not [p for p in db.pedidos if p[0] == "eq"]
+
+
+def test_el_repo_real_no_pierde_filas_con_el_mismo_updated_at_mas_alla_del_limite():
+    from app.db.repository import SupabaseRepo
+
+    mismo = "2026-11-02T12:00:00+00:00"
+    comercios = [{"id": f"{i:05d}", "slug": f"c{i}", "nombre": "C", "updated_at": mismo,
+                  "activo": True, "rubro_id": "r1"} for i in range(2500)]
+    comercios.append({"id": "99999", "slug": "ultima", "nombre": "U",
+                      "updated_at": "2026-11-02T12:00:01+00:00", "activo": True, "rubro_id": "r1"})
+    db = _Db(comercios, [{"id": "r1", "slug": "ropa", "activo": True}])
+    filas = SupabaseRepo(db).comercios_para_indexnow("2026-11-02T00:00:00+00:00", limite=1000)
+    assert len(filas) == 2501
+    assert len({f["id"] for f in filas}) == 2501          # sin repetidas
+    assert filas[-1]["slug"] == "ultima"
+
+
+def test_el_repo_real_trata_un_rubro_inactivo_como_sin_rubro():
+    from app.db.repository import SupabaseRepo
+
+    db = _Db([{"id": "1", "slug": "a", "nombre": "A", "updated_at": "2026-11-02T12:00:00+00:00",
+               "activo": True, "rubro_id": "r-viejo"}],
+             [{"id": "r-viejo", "slug": "ropa", "activo": False}])
+    fila = SupabaseRepo(db).comercios_para_indexnow("2026-11-02T00:00:00+00:00")[0]
+    assert fila["rubro_slug"] is None
+    assert indexnow.is_business_thin(fila)          # sin texto: fina, como en SQL 0180 y el front
+    assert indexnow.business_urls([fila]) == []
 
 
 # ── el loop del arranque ────────────────────────────────────────────────────────

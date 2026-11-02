@@ -677,7 +677,7 @@ class FakeRepo:
         rub = {v: k for k, v in self.rubros.items()}
         filas = [{**c, "rubro_slug": rub.get(c.get("rubro_id"))}
                  for c in self.comercios.values()
-                 if c.get("activo", True) and str(c.get("updated_at") or "") > desde_iso]
+                 if str(c.get("updated_at") or "") > desde_iso]
         return sorted(filas, key=lambda c: str(c.get("updated_at")))[:limite]
 
     def ultima_publicacion_de(self, comercio_id, minutos):

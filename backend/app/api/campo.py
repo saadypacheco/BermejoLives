@@ -884,7 +884,7 @@ class _LeadIn(BaseModel):
     busqueda_id: str | None = None
     # De dónde llegó (el `?ref=` de la URL): volante-<slug>, mesa-<slug>,
     # ficha-<slug>, fb, ig. Vacío si entró por el buscador o el mapa.
-    origen: str | None = None
+    origen: str | None = Field(default=None, max_length=200)
 
 
 @router.post("/lead")
@@ -914,10 +914,10 @@ class _VisitaIn(BaseModel):
     recorrida, no para seguir a nadie."""
     ruta: str = Field(max_length=200)
     sesion: str = Field(min_length=6, max_length=40)
-    origen: str | None = None
+    origen: str | None = Field(default=None, max_length=200)
     #: Sólo el host (google.com, facebook.com). La URL entera no hace falta y
     #: puede llevar datos de la otra página.
-    referido: str | None = None
+    referido: str | None = Field(default=None, max_length=500)
     ciudad: str | None = None
     #: Primera página de esta sesión: es lo que hace «personas» sin agrupar.
     primera: bool = False

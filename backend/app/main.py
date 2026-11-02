@@ -180,8 +180,9 @@ async def _indexnow_loop():
 
     Cada `INDEXNOW_CADA_SEG` (15 min) lee los comercios con `updated_at` posterior al
     último aviso (cursor en memoria; al arrancar, ahora - 1 h: repetir es inocuo) y
-    manda sólo las fichas indexables. Una vez por día suma la home, /cambio y
-    /farmacias-de-turno. Sólo arranca con APP_ENV=prod e INDEXNOW_KEY (ver
+    manda las fichas indexables y las dadas de baja (para que salgan del índice). Una vez
+    por día suma la home, /cambio y /{ciudad}/farmacias-de-turno de las ciudades con turnos.
+    Sólo arranca con APP_ENV=prod e INDEXNOW_KEY (ver
     `indexnow.habilitado`). Nunca corta el loop.
     """
     from app.services import indexnow

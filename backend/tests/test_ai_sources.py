@@ -21,6 +21,10 @@ CLAVES_DE_SIEMPRE = {"dias", "visitas", "personas", "por_dia", "top_rutas",
     (None, "grok.com", "grok"),
     (None, "x.ai", "grok"),
     (None, "chat.deepseek.com", "deepseek"),
+    (None, "chat.mistral.ai", "mistral"),
+    ("mistral", None, "mistral"),            # utm_source sin TLD
+    (None, "chat.mistral.ai", "mistral"),
+    ("mistral", None, "mistral"),            # utm_source sin TLD
     (None, "you.com", "you"),
     (None, "phind.com", "phind"),
     (None, "duck.ai", "duckduckgo_ai"),
@@ -56,7 +60,7 @@ def test_el_origen_manda_sobre_el_referido():
 
 def test_cubre_todos_los_asistentes_pedidos():
     assert set(AI_SOURCES) >= {"chatgpt", "perplexity", "gemini", "copilot", "claude",
-                               "meta_ai", "grok", "deepseek", "you", "phind", "duckduckgo_ai"}
+                               "meta_ai", "grok", "deepseek", "mistral", "you", "phind", "duckduckgo_ai"}
 
 
 def test_el_resumen_junta_visitas_personas_fichas_y_rutas():
