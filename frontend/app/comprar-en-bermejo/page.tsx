@@ -5,7 +5,7 @@ import { Ic, IcRubro } from "@/components/ic";
 import { JsonLd } from "@/components/json-ld";
 import { Revisado } from "@/components/revisado";
 import {
-  getCiudades, getCityCategoryPages, getCotizaciones, getFeed, getFronteraEstado, getSaberLocalPorSeccion,
+  getCiudadesReales, getCityCategoryPagesOrNull, getCotizaciones, getFeed, getFronteraEstado, getSaberLocalPorSeccion,
   type FronteraEstado, type SaberLocalPublico,
 } from "@/lib/data";
 import { getSaberRevisado } from "@/lib/saber-revisado";
@@ -15,6 +15,7 @@ import { esFresca, fechaLarga } from "@/lib/seo-paginas";
 import { MARCA, SITE_URL } from "@/lib/marca";
 import { WA_URUKU_TEXTO, waUruku } from "@/lib/contacto";
 import { precioFmt } from "@/lib/types";
+import { hasSupabase } from "@/lib/supabase";
 
 /**
  * /comprar-en-bermejo — para quien viene de Aguas Blancas, Orán, Salta, Jujuy o
@@ -80,13 +81,21 @@ function estadoPaso(f: FronteraEstado): string {
   return partes.join(" · ");
 }
 
+const ES_BUILD = process.env.NEXT_PHASE === "phase-production-build";
+
 export default async function ComprarEnBermejoPage() {
-  const ciudades = await getCiudades();
-  const bermejo = ciudades.find((c) => c.slug === "bermejo");
-  const [saber, revisado, frontera, cotizaciones, feed, pares] = await Promise.all([
+  // ISR: una lectura fallida NO se guarda como «sin rubros» ni con las ciudades demo
+  // (su `id` no es el de Bermejo): se lanza y Next conserva la versión anterior. En
+  // el build no se lanza (no depende de la base): la página sale sin esos bloques.
+  const ciudades = await getCiudadesReales();
+  if (ciudades === null && hasSupabase && !ES_BUILD) throw new Error("/comprar-en-bermejo: falló la lectura de ciudades");
+  const bermejo = (ciudades ?? []).find((c) => c.slug === "bermejo");
+  const [saber, revisado, frontera, cotizaciones, feed, parLeidos] = await Promise.all([
     getSaberLocalPorSeccion(bermejo?.id), getSaberRevisado(bermejo?.id), getFronteraEstado(bermejo?.id),
-    getCotizaciones(), getFeed(12, "bermejo"), getCityCategoryPages(),
+    getCotizaciones(), getFeed(12, "bermejo"), getCityCategoryPagesOrNull(),
   ]);
+  if (parLeidos === null && hasSupabase && !ES_BUILD) throw new Error("/comprar-en-bermejo: falló la lectura de los pares ciudad+rubro");
+  const pares = parLeidos ?? [];
 
   // --- Preguntas de la sección `comercios` (las que se marcan acá) ---
   const comercios = saber.comercios ?? [];

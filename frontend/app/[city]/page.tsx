@@ -9,16 +9,17 @@ import {
   jsonLdGraph, robotsFor,
 } from "@/lib/seo";
 import { BRAND_NAME } from "@/lib/marca";
-import { cargarCiudad, cargarPares, ciudadTieneTurnos, ciudadesConPares } from "./_datos";
+import { cargarCiudad, cargarPares, ciudadTieneTurnos } from "./_datos";
 
 /**
  * /{ciudad} — la página de una ciudad: qué rubros tiene y a dónde seguir.
  *
  * Spec: docs/visibilidad-buscadores-ia.md §3.1 y §3.3 (tarea FB1). ISR: se
- * arma una vez y se reusa una hora. Las ciudades con pares se pre-renderizan;
- * `dynamicParams` deja que una ciudad nueva funcione sin redeploy. Ciudad
- * inexistente o inactiva → 404; activa sin ningún rubro indexable → 200 con
- * `noindex, follow`.
+ * arma una vez y se reusa una hora, a pedido (`generateStaticParams` vacío: el
+ * build no depende de la base). Ciudad inexistente, inactiva o con un slug de forma
+ * inválida → 404 (sin tocar la base); activa sin ningún rubro indexable → 200 con
+ * `noindex, follow`. Si una lectura FALLA la página lanza (ver `_datos.ts`): nunca
+ * se cachea un 404 o un `noindex` nacido de un error.
  *
  * NUNCA un número de comercios acá (ni «12 farmacias», ni `numberOfItems`):
  * sólo nombres de rubro.
@@ -32,8 +33,9 @@ export const dynamicParams = true;
 // `fixedCity` y no lee cookies.
 export const dynamic = "force-static";
 
+// Sin pre-render: el build no puede depender de la base (ya se cayó una vez).
 export async function generateStaticParams(): Promise<{ city: string }[]> {
-  return ciudadesConPares(await cargarPares()).map((city) => ({ city }));
+  return [];
 }
 
 type Props = { params: { city: string } };
@@ -59,6 +61,8 @@ export default async function CiudadPage({ params }: Props) {
   const ciudad = await cargarCiudad(params.city);
   if (!ciudad) notFound();
   const [pares, conTurnos] = await Promise.all([cargarPares(), ciudadTieneTurnos(ciudad.id)]);
+  // `null` = no se pudo leer el rol de turnos: lanza en vez de congelar la hora sin el enlace.
+  if (conTurnos === null) throw new Error(`No se pudo leer el rol de turnos de ${ciudad.slug}`);
 
   // Todos los rubros con comercios en la ciudad (también los que todavía no
   // alcanzan para indexarse: son útiles para la persona), por nombre.

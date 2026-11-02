@@ -9,6 +9,18 @@ const buildTime = new Date().toISOString();
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Caché de ISR en MEMORIA con tope (LRU), no en disco. Con `isrFlushToDisk` (el
+  // valor por defecto) cada ruta distinta que se pide —`/.env`, `/<azar>/<azar>`,
+  // `/comercios/<azar>`, un escáner las genera de a miles— deja un archivo en
+  // `.next/server/app` para siempre: el disco del VPS crece sin límite. Con `false`
+  // las páginas regeneradas viven en un LRU de `cacheMaxMemorySize` bytes (lo más
+  // pedido se queda, lo basura sale) y se pierden al reiniciar el contenedor: se
+  // vuelven a armar en el primer pedido. Las páginas del BUILD siguen en disco.
+  // `cacheMaxMemorySize` es el tope: 64 MB (por defecto 50).
+  cacheMaxMemorySize: 64 * 1024 * 1024,
+  experimental: {
+    isrFlushToDisk: false,
+  },
   // La demo local de los manuales (scripts/demo) compila en su propia carpeta
   // para poder correr al lado de `npm run dev` sin pisarse el `.next`.
   distDir: process.env.NEXT_DIST_DIR || ".next",

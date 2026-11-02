@@ -13,27 +13,20 @@ import { cargarCiudad, cargarTurnos } from "../_datos";
  * /farmacias-de-turno, pero con la ciudad en la URL (la de la cookie no la ve un
  * robot). Sólo existe para una ciudad con turnos cargados: el resto da 404.
  *
- * Los turnos cambian a las 08:00 y se leen igual todo el día: 5 minutos de
- * caché. `dynamicParams` deja que cualquier ciudad se arme a pedido.
+ * DINÁMICA a propósito (`force-dynamic`): «De turno ahora» depende de la hora del
+ * pedido, y bajo ISR quedaba congelado hasta 5 minutos —o, en el borde del cambio
+ * de las 08:00, mostraba la farmacia equivocada—. No lee cookies (la ciudad viene
+ * en la URL y el marco recibe `fixedCity`), así que no hay nada más que la haga
+ * dinámica: es esta directiva. Por eso el título y la descripción NO llevan nombres
+ * de farmacias: son los mismos a cualquier hora y ningún proxy ni caché los puede
+ * dejar viejos. Los nombres están en el cuerpo, calculados en cada pedido.
  */
-export const revalidate = 300;
-export const dynamicParams = true;
-// force-static: el cliente de datos (lib/supabase.ts) pide todo con `cache: "no-store"`
-// y, durante la generación estática (build e ISR), Next lo toma como «página
-// dinámica» y la saca del ISR. Con `force-static` no: la página se arma una vez
-// y se reusa hasta `revalidate`. Es seguro porque el marco recibe la ciudad por
-// `fixedCity` y no lee cookies.
-export const dynamic = "force-static";
-
-export async function generateStaticParams(): Promise<{ city: string }[]> {
-  return [];
-}
+export const dynamic = "force-dynamic";
 
 type Props = { params: { city: string } };
 
-/** Ciudad + turnos. `null` en `turnos` = no se pudo leer: se LANZA (Next no guarda
- *  en caché una página que lanza) en vez de dar un 404 que quedaría fijo 5 minutos
- *  ni un «no hay turnos» que mentiría. */
+/** Ciudad + turnos. `null` en `turnos` = no se pudo leer: se LANZA en vez de dar un
+ *  404 o un «no hay turnos» que mentirían. */
 async function cargar(slug: string) {
   const ciudad = await cargarCiudad(slug);
   if (!ciudad) return null;
@@ -45,7 +38,8 @@ async function cargar(slug: string) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const datos = await cargar(params.city);
   if (!datos || datos.turnos.length === 0) return { title: "No encontrada", robots: { index: false, follow: false } };
-  return metaFarmaciasTurno(datos.ciudad.nombre, datos.turnos, datos.ahora, `/${datos.ciudad.slug}/farmacias-de-turno`);
+  // Sin turnos en la llamada (`[]`): título y descripción genéricos, sin nombres.
+  return metaFarmaciasTurno(datos.ciudad.nombre, [], datos.ahora, `/${datos.ciudad.slug}/farmacias-de-turno`);
 }
 
 export default async function FarmaciasDeTurnoCiudadPage({ params }: Props) {

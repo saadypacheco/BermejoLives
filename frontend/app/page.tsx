@@ -7,7 +7,7 @@ import { ContactoUruku } from "@/components/contacto-uruku";
 import { AccesosCiudad } from "@/components/accesos-ciudad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import {
-  getCiudades, getCityCategoryPages, getClima, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado,
+  getCiudades, getCityCategoryPagesCached, getClima, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado,
   getNovedadesUruku, getRedes, getVideosPromo,
 } from "@/lib/data";
 import { JsonLd } from "@/components/json-ld";
@@ -160,7 +160,9 @@ export default async function InicioPage() {
     // Los destacados (comercios con plan) y sus productos, para el carrusel.
     getPromo(ciudad?.slug),
     // Para «Ciudades» y el JSON-LD de la marca: sólo ciudades con páginas indexables.
-    getCityCategoryPages(), getCiudades(), getRedes(),
+    // Los pares salen de la misma memoria que usa el pie del marco (10 min): la
+    // home es dinámica y no debe pegarle a la RPC en cada pedido.
+    getCityCategoryPagesCached(), getCiudades(), getRedes(),
   ]);
   const ciudadesIndexables = [...new Map(paresCiudad.filter((p) => p.indexable).map((p) => [p.city_slug, p])).values()];
   const datosMarca = jsonLdGraph(conFundador(organizationNodes({

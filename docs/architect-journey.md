@@ -648,9 +648,10 @@ Fallback: cargar sin GPS y completar luego por la ubicación de WhatsApp.
 
 ### Credenciales
 
-Agente de campo: `agente@bermejolive.com` / `campo1234` → **`/bermejo`**
-(la ruta del frontend se renombró de `/campo` a `/bermejo`; los endpoints del
-backend siguen siendo `/campo/*` y `/auth/campo/login`, son internos).
+Agente de campo: `agente@bermejolive.com` / `campo1234` → **`/publicar`**
+(histórico: la herramienta de campo pasó por `/campo` y `/bermejo`; hoy `/bermejo` es la
+página pública de la ciudad. Los endpoints del backend siguen siendo `/campo/*` y
+`/auth/campo/login`, son internos).
 
 ## Sesión 9 — 2026-06-11
 

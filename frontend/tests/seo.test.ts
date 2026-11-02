@@ -6,8 +6,8 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
-  ALLOWED_CRAWLERS, BLOCKED_AI_CRAWLERS, RUBRO_SCHEMA_TYPE, SCHEMA_TYPE_WHITELIST,
-  aboutPageNode, breadcrumbNode, categoryPageState, cityHasIndexablePage, collectionPageNode,
+  ALLOWED_CRAWLERS, BLOCKED_AI_CRAWLERS, JSONLD_INCLUDE_TELEPHONE, PRIVATE_PATHS, RUBRO_SCHEMA_TYPE, SCHEMA_TYPE_WHITELIST,
+  aboutPageNode, breadcrumbNode, esSlugPublico, urlDeImagenPropia, categoryPageState, cityHasIndexablePage, collectionPageNode,
   isBusinessIndexable, isBusinessThin, itemListNode, jsonLdGraph, localBusinessNode,
   openingHoursSpecification, organizationNodes, sameAsFromRedes, schemaTypeForRubro, serializeJsonLd,
   type BusinessSeoFields, type CityCategoryPage,
@@ -86,6 +86,42 @@ test("robots: Bytespider bloqueado; los de IA que quiere el dueño, permitidos",
   }
 });
 
+test("robots: las pantallas privadas de la cuenta no se rastrean", () => {
+  for (const p of ["/guia-venta", "/perfil", "/guardados", "/reservas", "/recuperar-negocio"]) assert.ok(PRIVATE_PATHS.includes(p), p);
+});
+
+test("esSlugPublico: sólo [a-z0-9-] de 2 a 40; el resto no toca la base", () => {
+  for (const ok of ["bermejo", "la-paz", "ropa-americana", "a1"]) assert.equal(esSlugPublico(ok), true, ok);
+  for (const no of [".env", "a", "Bermejo", "wp-login.php", "a/b", "x".repeat(41), "", "ropa_x"]) assert.equal(esSlugPublico(no), false, no);
+});
+
+test("urlDeImagenPropia: sólo hosts propios y https", () => {
+  assert.equal(urlDeImagenPropia("https://uruku.bo/logo.png"), "https://uruku.bo/logo.png");
+  assert.equal(urlDeImagenPropia("https://api.uruku.bo/fotos/x.jpg"), "https://api.uruku.bo/fotos/x.jpg");
+  assert.equal(urlDeImagenPropia("/fotos/x.jpg"), "https://uruku.bo/fotos/x.jpg");
+  for (const no of ["https://evil.example/x.jpg", "http://uruku.bo/x.jpg", "https://uruku.bo.evil.example/x.jpg", "https://evil.example/uruku.bo/x.jpg", "javascript:alert(1)", ""]) {
+    assert.equal(urlDeImagenPropia(no), undefined, no);
+  }
+});
+
+test("localBusinessNode: image sólo de hosts propios; la dirección sigue el orden visible (direccion || calle)", () => {
+  const nodo = localBusinessNode({
+    comercio: {
+      slug: "a", nombre: "A", portada_url: "https://api.uruku.bo/fotos/a.jpg", logo_url: "https://cdn.otro.example/logo.png",
+      direccion: "", calle: "Calle Sucre",
+    },
+    ciudad: { nombre: "Bermejo", departamento: "Tarija" },
+  });
+  assert.deepEqual(nodo.image, ["https://api.uruku.bo/fotos/a.jpg"]);
+  assert.equal((nodo.address as { streetAddress?: string }).streetAddress, "Calle Sucre", "dirección vacía no tapa a la calle");
+  const ambas = localBusinessNode({
+    comercio: { slug: "a", nombre: "A", direccion: "Av. Petrolera 12", calle: "Petrolera" },
+    ciudad: { nombre: "Bermejo", departamento: "Tarija" },
+  });
+  assert.equal((ambas.address as { streetAddress?: string }).streetAddress, "Av. Petrolera 12");
+  assert.ok(!("image" in ambas));
+});
+
 /* ─── JSON-LD y escape ───────────────────────────────────────────────────── */
 
 test("serializeJsonLd: un nombre «</script><b>» no puede cerrar la etiqueta", () => {
@@ -116,7 +152,8 @@ test("localBusinessNode: datos reales, sin rating ni horario estimado, con el @t
   });
   assert.equal(nodo["@type"], "HomeGoodsStore");
   assert.equal(nodo["@id"], "https://uruku.bo/comercios/galeria-cortez#business");
-  assert.equal(nodo.telephone, "+59167671888");
+  assert.equal(JSONLD_INCLUDE_TELEPHONE, false, "el teléfono va apagado por defecto (decide el dueño)");
+  assert.ok(!("telephone" in nodo), "sin telephone mientras el interruptor esté apagado");
   assert.equal(nodo.keywords, "frazada, almohada");
   assert.equal(nodo.paymentAccepted, "BOB, ARS");
   assert.deepEqual(nodo.sameAs, ["https://instagram.com/galeria"]);

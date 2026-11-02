@@ -6,7 +6,7 @@ import { Ic, IcRubro } from "@/components/ic";
 import { JsonLd } from "@/components/json-ld";
 import {
   absoluteUrl, breadcrumbNode, businessPath, categoryPageState, categoryPath, cityPath, collectionPageNode,
-  jsonLdGraph, robotsFor,
+  esSlugPublico, jsonLdGraph, robotsFor,
 } from "@/lib/seo";
 import { BRAND_NAME } from "@/lib/marca";
 import { callesFrecuentes, cortarEnPalabra, enLista, parrafoCategoria, productosFrecuentes } from "@/lib/contenido-categoria";
@@ -18,11 +18,11 @@ import { cargarCiudad, cargarLocales, cargarPares } from "../_datos";
  * HTML del servidor (nombre, calle, qué vende, enlace a la ficha).
  *
  * Spec: docs/visibilidad-buscadores-ia.md §3.1 y §3.3 (tarea FB1). ISR de una
- * hora; los pares que ya existen se pre-renderizan y `dynamicParams` deja que
- * un par nuevo funcione sin redeploy.
- *   - el par no existe (ciudad inactiva, rubro `otros` o inactivo, sin comercios)
- *     → 404; sin `city_category_pages()` (la RPC todavía no está) tampoco hay
- *     pares y todo da 404: nada se indexa a ciegas.
+ * hora, a pedido (`generateStaticParams` vacío: el build no depende de la base).
+ *   - el par no existe (ciudad inactiva, rubro `otros` o inactivo, sin comercios,
+ *     slug de forma inválida) → 404, y un slug inválido ni toca la base. Si la
+ *     lectura de los pares FALLA (RPC caída o sin migrar) la página lanza: nunca
+ *     se cachea un 404 nacido de un error (ver `../_datos.ts`).
  *   - existe pero con menos de 5 comercios → 200 con `noindex, follow`.
  * NUNCA un número de comercios en el HTML ni en el JSON-LD.
  */
@@ -35,17 +35,22 @@ export const dynamicParams = true;
 // `fixedCity` y no lee cookies.
 export const dynamic = "force-static";
 
+// Sin pre-render: el build no puede depender de la base (ya se cayó una vez).
 export async function generateStaticParams(): Promise<{ city: string; category: string }[]> {
-  return (await cargarPares()).map((p) => ({ city: p.city_slug, category: p.category_slug }));
+  return [];
 }
 
 type Props = { params: { city: string; category: string } };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const [ciudad, pares] = await Promise.all([cargarCiudad(params.city), cargarPares()]);
-  const estado = ciudad ? categoryPageState(pares, params.city, params.category) : "missing";
+  if (!esSlugPublico(params.category)) return { title: "No encontrada", robots: { index: false, follow: false } };
+  // La ciudad primero: si no existe no se pide ni la lista de pares.
+  const ciudad = await cargarCiudad(params.city);
+  if (!ciudad) return { title: "No encontrada", robots: { index: false, follow: false } };
+  const pares = await cargarPares();
+  const estado = categoryPageState(pares, params.city, params.category);
   const par = pares.find((p) => p.city_slug === params.city && p.category_slug === params.category);
-  if (!ciudad || estado === "missing" || !par) return { title: "No encontrada", robots: { index: false, follow: false } };
+  if (estado === "missing" || !par) return { title: "No encontrada", robots: { index: false, follow: false } };
 
   const locales = await cargarLocales(ciudad.slug, par.category_slug);
   const productos = productosFrecuentes(locales, 6);
@@ -67,8 +72,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function CategoriaPage({ params }: Props) {
-  const [ciudad, pares] = await Promise.all([cargarCiudad(params.city), cargarPares()]);
-  if (!ciudad || categoryPageState(pares, params.city, params.category) === "missing") notFound();
+  if (!esSlugPublico(params.category)) notFound();
+  const ciudad = await cargarCiudad(params.city);
+  if (!ciudad) notFound();
+  const pares = await cargarPares();
+  if (categoryPageState(pares, params.city, params.category) === "missing") notFound();
   const par = pares.find((p) => p.city_slug === ciudad.slug && p.category_slug === params.category);
   if (!par) notFound();
 
