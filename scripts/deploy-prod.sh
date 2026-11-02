@@ -50,6 +50,16 @@ if [ ${#SQL[@]} -gt 0 ]; then
   "${COMPOSE[@]}" exec -T postgres psql -U postgres -d postgres -c "NOTIFY pgrst, 'reload schema';"
 fi
 
+# IndexNow (docs/visibilidad-buscadores-ia.md §3.12): Bing exige la clave en
+# https://uruku.bo/<clave>.txt. La clave vive sólo en backend/.env; el archivo
+# se escribe acá, antes del build, porque Next sirve `public/` tal cual. Está
+# en .gitignore: nunca se commitea.
+INDEXNOW_KEY="$(grep -E '^INDEXNOW_KEY=' backend/.env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '\r"')"
+if [ -n "$INDEXNOW_KEY" ]; then
+  printf %s "$INDEXNOW_KEY" > "frontend/public/$INDEXNOW_KEY.txt"
+  echo "IndexNow: clave publicada en /$INDEXNOW_KEY.txt"
+fi
+
 echo "== build: ${SERVICIOS[*]} =="
 GIT_SHA="$SHA" APP_ENV=prod "${COMPOSE[@]}" up -d --build "${SERVICIOS[@]}"
 
