@@ -154,6 +154,12 @@ class FakeContentRepo:
             filas = [p for p in filas if p.get("comercio_id") == comercio_id]
         return sorted(filas, key=lambda p: (p["scheduled_for"], p["created_at"]))[:limit]
 
+    def list_published_with_video(self, ciudad_id=None, limit=100):
+        filas = [p for p in self.pieces.values() if p.get("activo", True) and p["status"] == "published"
+                 and p.get("video_path") and p.get("cover_path") and not p.get("files_purged_at")
+                 and (not ciudad_id or p.get("ciudad_id") == ciudad_id)]
+        return sorted(filas, key=lambda p: p.get("published_at") or "", reverse=True)[:limit]
+
     def list_queued_due(self, now_iso, limit=5):
         filas = [p for p in self.pieces.values() if p.get("activo", True) and p["status"] == "queued"
                  and p["render_next_at"] <= now_iso]

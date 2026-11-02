@@ -16,6 +16,7 @@ acá no se publica en ninguna red; una persona lo hace a mano y pega el link.
 from __future__ import annotations
 
 import re
+import uuid
 from datetime import date, datetime, timedelta, timezone
 
 import structlog
@@ -33,7 +34,7 @@ from app.core.sesion_comercio import require_comercio_vigente
 from app.db.content_repository import ContentConflict, ContentRepo, get_content_repo
 from app.db.repository import Repo, get_repo
 from app.services import (cargas, content_captions, content_consent, content_posts, content_present,
-                          content_render, content_selector, content_storage, fotos_galeria)
+                          content_public, content_render, content_selector, content_storage, fotos_galeria)
 from app.services.imagenes import subir_foto_galeria
 
 router = APIRouter()
@@ -94,7 +95,7 @@ class SocialConsentMerchantUpdate(BaseModel):
 def admin_social_consent(comercio_id: str, body: SocialConsentUpdate,
                          claims: dict = Depends(_permiso_consent),
                          crepo: ContentRepo = Depends(get_content_repo)) -> dict:
-    """Registra que el comercio autorizó (o retiró) aparecer en las redes de URUKU. Al retirar, las
+    """Registra que el comercio autorizó (o retiró) aparecer en las redes y la página de URUKU. Al retirar, las
     piezas que no salieron se saltean y se devuelve lo que ya está publicado."""
     _comercio_o_404(crepo, comercio_id)
     if body.via not in content_consent.VIAS_PANEL:
@@ -299,7 +300,7 @@ async def _subir_foto_banco(repo: Repo, crepo: ContentRepo, comercio_id: str, sl
     if min(proc["width"], proc["height"]) < content_storage.LADO_MENOR_MINIMO:
         avisos.append("La foto es chica: se guarda, pero no entra en los videos")
     if not content_consent.esta_autorizado(crepo, comercio_id):
-        avisos.append("Se guarda igual, pero no sale en redes hasta registrar la autorización")
+        avisos.append("Se guarda igual, pero no sale en las redes ni en la página hasta registrar la autorización")
     logger.info("content.banco_foto_subida", comercio=comercio_id, asset=asset_id, source=source, por=actor,
                 bytes=proc["bytes"])
     return respuesta(asset, False, ficha, avisos)
@@ -615,18 +616,15 @@ def admin_download_links(piece_id: str, _claims: dict = Depends(_permiso_difusio
 # ═══════════════════════════════════════════════════════ paquete del día y redes
 
 def _entrega(crepo: ContentRepo, pieza: dict, posts: list[dict], firmante: str | None) -> dict | None:
-    """La tarea de pasarle el video al comerciante (`piece_delivery`), con su mensaje de WhatsApp."""
+    """La tarea de entregar el video a mano (`piece_delivery`): sin WhatsApp (§15), con el link para bajarlo."""
     if not pieza.get("comercio_id") or pieza["status"] != "published":
         return None
     tareas = [t for t in crepo.list_tasks(status="open", comercio_id=pieza["comercio_id"], kinds=["piece_delivery"])
               if t.get("piece_id") == pieza["id"]]
     if not tareas:
         return None
-    c = crepo.get_comercio_ficha(pieza["comercio_id"]) or {}
-    texto = content_present.mensaje_de_tarea(tareas[0], c, crepo.get_profile(pieza["comercio_id"]), firmante,
-                                             pieza=pieza, posts=posts)
-    return {"task_id": tareas[0]["id"], "whatsapp": content_present.whatsapp_valido(c.get("whatsapp")),
-            "message_text": texto}
+    return {"task_id": tareas[0]["id"], "whatsapp": None, "message_text": None,
+            "download_url": content_present.url_de_descarga(pieza)}
 
 
 @router.get("/admin/content/today")
@@ -816,3 +814,47 @@ def public_piece_video(token: str, download: int = Query(default=0), crepo: Cont
 @router.get("/public/pieces/{token}/cover")
 def public_piece_cover(token: str, download: int = Query(default=0), crepo: ContentRepo = Depends(get_content_repo)):
     return _archivo_de_pieza(_pieza_publica(crepo, token), "cover", bool(download))
+
+
+# ═══════════════════════════════════════════════════ videos de URUKU en la home (§15.1)
+
+_CABECERAS_VIDEO_PUBLICO = {"Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff"}
+
+
+@router.get("/public/videos")
+def public_videos(city: str | None = Query(default=None, max_length=60, pattern=r"^[a-z0-9-]*$"),
+                  limit: int = Query(default=12), crepo: ContentRepo = Depends(get_content_repo)) -> dict:
+    """Los videos de URUKU para la franja de la home: los ya publicados, con archivos en el disco y todos
+    sus comercios activos y autorizados. Sin login. `limit` entre 1 y 24."""
+    items = content_public.listar(crepo, city or None, min(max(limit, 1), 24))
+    return {"items": items}
+
+
+def _video_publico_o_404(crepo: ContentRepo, video_id: str) -> dict:
+    try:
+        if str(uuid.UUID(video_id)) != video_id.lower():
+            raise ValueError
+    except ValueError:
+        raise HTTPException(status_code=404, detail="El video no está") from None
+    pieza = crepo.get_piece(video_id.lower())
+    if not pieza or not content_public.es_publica(crepo, pieza):
+        raise HTTPException(status_code=404, detail="El video no está")
+    return pieza
+
+
+def _servir_video_publico(pieza: dict, kind: str) -> FileResponse:
+    rel, media = (pieza["video_path"], "video/mp4") if kind == "video" else (pieza["cover_path"], "image/jpeg")
+    ruta = content_storage.safe_path(rel)
+    if ruta is None or not ruta.is_file():
+        raise HTTPException(status_code=404, detail="El video no está")
+    return FileResponse(ruta, media_type=media, headers=_CABECERAS_VIDEO_PUBLICO)
+
+
+@router.get("/public/videos/{video_id}/video")
+def public_video_file(video_id: str, crepo: ContentRepo = Depends(get_content_repo)):
+    return _servir_video_publico(_video_publico_o_404(crepo, video_id), "video")
+
+
+@router.get("/public/videos/{video_id}/cover")
+def public_video_cover(video_id: str, crepo: ContentRepo = Depends(get_content_repo)):
+    return _servir_video_publico(_video_publico_o_404(crepo, video_id), "cover")

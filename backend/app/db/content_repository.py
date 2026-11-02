@@ -70,6 +70,7 @@ class ContentRepo(Protocol):
     def stuck_rendering(self, cutoff_iso: str) -> list[dict]: ...
     def count_pieces_by_status(self) -> dict[str, int]: ...
     def list_own_pieces_since(self, since: str) -> list[dict]: ...
+    def list_published_with_video(self, ciudad_id: str | None = None, limit: int = 100) -> list[dict]: ...
     def weeks_planned_by_selector(self, since: str) -> set[str]: ...
     def pieces_to_purge(self, published_before_iso: str, dead_before_iso: str, limit: int = 200) -> list[dict]: ...
     # ── fuentes ──
@@ -265,6 +266,15 @@ class SupabaseContentRepo:
         if comercio_id:
             q = q.eq("comercio_id", comercio_id)
         return q.order("scheduled_for").order("created_at").limit(limit).execute().data or []
+
+    def list_published_with_video(self, ciudad_id: str | None = None, limit: int = 100) -> list[dict]:
+        """Piezas publicadas cuyo video y portada siguen en el disco (candidatas a la home), las más
+        nuevas primero. El resto de las condiciones (redes, autorización) las revisa quien llama."""
+        q = (self._db.table("content_pieces").select("*").eq("activo", True).eq("status", "published")
+             .not_.is_("video_path", "null").not_.is_("cover_path", "null").is_("files_purged_at", "null"))
+        if ciudad_id:
+            q = q.eq("ciudad_id", ciudad_id)
+        return q.order("published_at", desc=True).limit(limit).execute().data or []
 
     def list_queued_due(self, now_iso: str, limit: int = 5) -> list[dict]:
         res = (self._db.table("content_pieces").select("id, scheduled_for").eq("activo", True)

@@ -82,7 +82,7 @@ def checklist(repo, crepo, comercio: dict, consentimiento: dict | None) -> list[
         ("whatsapp", "WhatsApp válido", True, len(_digitos(comercio.get("whatsapp"))) >= 8),
         ("rubro", "Rubro distinto de «otros»", True, bool(rubro) and rubro != "otros"),
         ("redes", "Al menos una red cargada", True, redes),
-        ("autorizacion", "Autorización de redes", True, bool(consentimiento and consentimiento.get("granted"))),
+        ("autorizacion", "Autorización de redes y página", True, bool(consentimiento and consentimiento.get("granted"))),
     ]
     auto_cuenta, ok_cuenta = leer(lambda: repo.get_cuenta_comercio(cid))
     auto_grupo, ok_grupo = leer(lambda: repo.list_grupos_comercio(cid))

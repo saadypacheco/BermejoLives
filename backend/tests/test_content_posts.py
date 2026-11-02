@@ -66,7 +66,7 @@ def test_aprobar_sin_autorizacion_vigente_es_409(client, crepo, ana, repo):
     comercio(repo)
     p = pieza(crepo)
     r = client.post(f"/admin/content/pieces/{p['id']}/approve", headers=ana)
-    assert r.status_code == 409 and r.json()["detail"] == "El comercio retiró la autorización para redes"
+    assert r.status_code == 409 and r.json()["detail"] == "El comercio retiró la autorización para las redes y la página de URUKU"
     autorizar(crepo, "com-1", granted=False)
     assert client.post(f"/admin/content/pieces/{p['id']}/approve", headers=ana).status_code == 409
     assert crepo.pieces[p["id"]]["status"] == "ready_for_review"
@@ -342,20 +342,19 @@ def test_paquete_del_dia(client, crepo, repo, ana):
     assert client.get(f"/admin/content/today?date={(hoy() + timedelta(days=30)).isoformat()}", headers=ana).json()["items"] == []
 
 
-def test_paquete_del_dia_trae_el_mensaje_de_entrega_con_whatsapp(client, crepo, repo, ana):
+def test_paquete_del_dia_trae_la_entrega_a_mano_sin_whatsapp_y_con_descarga(client, crepo, repo, ana):
     comercio(repo, whatsapp="59170001234")
     autorizar(crepo, "com-1")
-    p = pieza(crepo, dia=hoy(), status="ready_for_review")
+    p = pieza(crepo, dia=hoy(), status="ready_for_review", video_path="renders/x/video.mp4", cover_path="renders/x/cover.jpg")
     _aprobar(client, ana, p["id"])
     for red in ("tiktok", "instagram", "facebook", "wa_channel"):
         client.post(f"/admin/content/posts/{_post(crepo, p['id'], red)['id']}/posted", headers=ana,
                     json={"post_url": URL[red]})
     item = client.get("/admin/content/today", headers=ana).json()["items"][0]
     d = item["delivery"]
-    assert d["whatsapp"] == "59170001234" and d["task_id"]
-    token = crepo.pieces[p["id"]]["share_token"]
-    assert f"/pieza/{token}" in d["message_text"] and URL["tiktok"] in d["message_text"]
-    assert "TikTok" in d["message_text"] and "Local" in d["message_text"]
+    assert d["task_id"] and d["whatsapp"] is None and d["message_text"] is None
+    assert d["download_url"].startswith(f"/content/files/piece/{p['id']}/video?") and d["download_url"].endswith("&download=1")
+    assert crepo.pieces[p["id"]]["share_token"] not in str(item)         # el link de /pieza no se arma en ningún lado
 
 
 def test_estado_del_render(client, crepo, ana, repo):

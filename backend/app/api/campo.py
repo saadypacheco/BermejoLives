@@ -198,7 +198,7 @@ async def alta_campo(
     lat: float | None = Form(None),
     lng: float | None = Form(None),
     consentimiento: bool = Form(False),  # nunca se presume: el agente tilda la casilla delante del dueño
-    # Segunda casilla: «acepta que usemos fotos de su local en las redes de URUKU». También apagada
+    # Segunda casilla: «acepta que usemos fotos de su local en las redes y la página de URUKU». También apagada
     # por defecto. Si viene tildada queda en la bitácora de autorización (`via = 'agent_signup'`).
     social_consent: bool = Form(False),
     # Campos del diferencial fronterizo

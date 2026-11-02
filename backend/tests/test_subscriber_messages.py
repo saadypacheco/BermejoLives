@@ -28,8 +28,7 @@ def test_las_seis_plantillas_existen_y_dicen_lo_que_dice_la_spec():
     t = todos()
     assert t["welcome"].startswith("Hola Ana, soy Luis de URUKU. Gracias por sumarte con Vidriería Pacheco.")
     assert t["welcome"].endswith("Tu ficha: https://uruku.bo/comercios/vidrieria-pacheco")
-    assert "ya está el video de Vidriería Pacheco en TikTok y Instagram: https://www.tiktok.com/@u/video/1." in t["piece_delivery"]
-    assert f"https://uruku.bo/pieza/{'T' * 22}" in t["piece_delivery"] and t["piece_delivery"].endswith("lo cambiamos.")
+    assert t["piece_delivery"] is None                      # §15: al comerciante no se le escribe; el video va a mano
     assert "30 personas vieron tu ficha y 4 te escribieron por WhatsApp desde ahí." in t["monthly_report"]
     assert "«vidrios» y «espejos»" in t["monthly_report"] and "Tu plan se renueva el 12/11." in t["monthly_report"]
     assert t["photo_refresh"].startswith("Ana, ¿nos mandás 3 o 4 fotos de lo nuevo")
@@ -41,6 +40,8 @@ def test_las_seis_plantillas_existen_y_dicen_lo_que_dice_la_spec():
 
 def test_ninguna_plantilla_lleva_emoji_precio_ni_el_codigo_del_comercio():
     for kind, texto in todos().items():
+        if texto is None:                                    # piece_delivery: sin mensaje (§15)
+            continue
         assert not _EMOJI.search(texto), kind
         assert not re.search(r"Bs\.?\s*\d|\$\s*\d|US\$", texto), kind
         assert CODIGO not in texto and "CONFIRMAR" not in texto, kind
@@ -74,11 +75,10 @@ def test_reporte_sin_palabras_saca_esa_frase_y_con_una_sola_la_adapta():
     assert "Te encontraron buscando «vidrios»." in una
 
 
-def test_entrega_sin_link_de_post_y_sin_token():
-    sin_link = m.mensaje_de_tarea("piece_delivery", persona_="Ana", firmante_="L", comercio="K",
-                                  pieza={"redes": ["instagram"], "link_post": None, "share_token": "T" * 22})
-    assert "ya está el video de K en Instagram. Acá lo podés bajar" in sin_link
-    assert m.mensaje_de_tarea("piece_delivery", persona_="Ana", firmante_="L", comercio="K", pieza=None) is None
+def test_la_entrega_no_arma_mensaje_ni_link_a_la_pagina_de_la_pieza():
+    for pieza in (None, {"redes": ["instagram"], "link_post": None, "share_token": "T" * 22}):
+        assert m.mensaje_de_tarea("piece_delivery", persona_="Ana", firmante_="L", comercio="K", pieza=pieza) is None
+    assert m.ETIQUETA_TAREA["piece_delivery"] == "Entregar el video a mano"
 
 
 def test_las_tareas_sin_mensaje_y_las_etiquetas():
@@ -87,7 +87,7 @@ def test_las_tareas_sin_mensaje_y_las_etiquetas():
     assert set(m.ETIQUETA_TAREA) == {"welcome", "profile_check", "first_offer", "photo_session", "first_piece", "week1_checkin",
                                      "piece_delivery", "photo_refresh", "monthly_report", "renewal_before", "renewal_overdue",
                                      "churn_call"}
-    assert m.PLANTILLA_POR_TAREA == {"welcome": "M1", "piece_delivery": "M2", "monthly_report": "M3", "photo_refresh": "M4",
+    assert m.PLANTILLA_POR_TAREA == {"welcome": "M1", "monthly_report": "M3", "photo_refresh": "M4",
                                      "renewal_before": "M5", "renewal_overdue": "M6"}
     assert m.NECESITAN_RESULTADO == ("week1_checkin", "churn_call") and len(m.GUION_LLAMADA) == 3
     assert not any(_EMOJI.search(x) for x in m.ETIQUETA_TAREA.values())

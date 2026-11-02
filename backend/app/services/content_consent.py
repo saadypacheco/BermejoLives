@@ -1,4 +1,4 @@
-"""La autorización de un comercio para aparecer en las redes de URUKU (§3, T-03).
+"""La autorización de un comercio para aparecer en las redes y la página de URUKU (§3, T-03).
 
 Es una BITÁCORA (`comercio_social_consents`): cada alta o retiro es una fila nueva con la fecha,
 la vía y quién la registró. La vigente de cada comercio sale de la vista
@@ -35,7 +35,7 @@ def _ahora() -> datetime:
 
 #: Qué se le dice a quien intenta aprobar una pieza cuyas fuentes ya no valen (409).
 MENSAJE_DE_BLOQUEO = {
-    "consent_revoked": "El comercio retiró la autorización para redes",
+    "consent_revoked": "El comercio retiró la autorización para las redes y la página de URUKU",
     "comercio_inactivo": "Un comercio de la pieza ya no está activo",
     "asset_unavailable": "Una foto de la pieza ya no se puede usar en redes: cambiala con «Cambiar fotos»",
 }

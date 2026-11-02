@@ -320,7 +320,7 @@ def _sin_gzip(ruta: str) -> bool:
     """Lo que no se comprime: las fotos y los videos (ya vienen comprimidos y el video necesita sus
     pedidos por rangos, que gzip rompe). Incluye los archivos del contenido para redes."""
     return (ruta.startswith(("/fotos", "/content/files"))
-            or (ruta.startswith("/public/pieces/") and ruta.endswith(("/video", "/cover"))))
+            or (ruta.startswith(("/public/pieces/", "/public/videos/")) and ruta.endswith(("/video", "/cover"))))
 
 
 class _GZipDatos:

@@ -86,7 +86,7 @@ def test_aprobar_un_compilado_exige_la_autorizacion_de_cada_comercio(client, rep
     p = _compilado_armado(repo, crepo)
     autorizar(crepo, "s4", granted=False)
     r = client.post(f"/admin/content/pieces/{p['id']}/approve", headers=ana)
-    assert r.status_code == 409 and r.json()["detail"] == "El comercio retiró la autorización para redes"
+    assert r.status_code == 409 and r.json()["detail"] == "El comercio retiró la autorización para las redes y la página de URUKU"
     assert crepo.pieces[p["id"]]["status"] == "ready_for_review"
     autorizar(crepo, "s4")
     assert client.post(f"/admin/content/pieces/{p['id']}/approve", headers=ana).status_code == 200

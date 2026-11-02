@@ -209,7 +209,7 @@ def test_flujo_completo_extremo_a_extremo(client, repo, crepo, ana, luis, monkey
     items = tod["items"]
     assert items and items[0]["delivery"], tod
     dv = items[0]["delivery"]
-    assert dv["whatsapp"] and token in dv["message_text"]
+    assert dv["whatsapp"] is None and dv["message_text"] is None and dv["download_url"].endswith("&download=1")
     # 11) vencido -> 410
     crepo.pieces[pid]["share_expires_at"] = (hoy() - timedelta(days=1)).isoformat() + "T00:00:00+00:00"
     assert client.get(f"/public/pieces/{token}").status_code == 410

@@ -170,21 +170,21 @@ def consent_response(fila: dict | None) -> dict:
 def mensaje_de_tarea(task: dict, comercio: dict, perfil: dict | None, firmante: str | None,
                      reporte: dict | None = None, pieza: dict | None = None, posts: list[dict] | None = None) -> str | None:
     """El texto de una tarea armado con el nombre de quien la abre."""
+    """`piece_delivery` devuelve None (§15): no se le escribe al comerciante, se le entrega el video a mano."""
     kind = task["kind"]
-    datos_pieza = None
-    if kind == "piece_delivery" and pieza and pieza.get("share_token"):
-        posteadas = [x for x in (posts or []) if x.get("status") == "posted"]
-        link = None
-        for red in ("tiktok", "instagram", "facebook"):
-            link = next((x.get("post_url") for x in posteadas if x["network"] == red and x.get("post_url")), None)
-            if link:
-                break
-        datos_pieza = {"redes": [x["network"] for x in posteadas], "link_post": link, "share_token": pieza["share_token"]}
     return subscriber_messages.mensaje_de_tarea(
         kind, persona_=subscriber_messages.persona((perfil or {}).get("contact_person"), comercio.get("nombre")),
         firmante_=subscriber_messages.firmante(firmante), comercio=comercio.get("nombre") or "tu comercio",
         slug=comercio.get("slug"), paga_hasta=comercio.get("paga_hasta"),
-        reporte=(reporte or {}).get("data") if reporte else None, pieza=datos_pieza)
+        reporte=(reporte or {}).get("data") if reporte else None)
+
+
+def url_de_descarga(pieza: dict | None) -> str | None:
+    """El link firmado (15 min) para bajar el video de la pieza, con `download=1`; None si no hay video."""
+    if not pieza or not pieza.get("id"):
+        return None
+    video = _url_de_archivo(pieza, "video")
+    return f"{video}&download=1" if video else None
 
 
 def task_response(task: dict, comercio: dict, perfil: dict | None, firmante: str | None, hoy: date,
@@ -200,6 +200,7 @@ def task_response(task: dict, comercio: dict, perfil: dict | None, firmante: str
         "message_text": texto, "whatsapp": whatsapp_valido(comercio.get("whatsapp")) if texto else None,
         "call_script": subscriber_messages.GUION_LLAMADA if kind == "churn_call" else None,
         "needs_outcome": kind in subscriber_messages.NECESITAN_RESULTADO,
+        "download_url": url_de_descarga(pieza) if kind == "piece_delivery" else None,
         "piece_id": task.get("piece_id"), "report_id": task.get("report_id"), "outcome": task.get("outcome"),
         "done_by": task.get("done_by"), "done_at": task.get("done_at"), "auto_closed": bool(task.get("auto_closed")),
     }

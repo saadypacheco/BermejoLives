@@ -14,13 +14,13 @@ from datetime import date
 from app.core.config import settings
 
 #: Tarea -> plantilla (las que llevan mensaje).
-PLANTILLA_POR_TAREA = {"welcome": "M1", "piece_delivery": "M2", "monthly_report": "M3",
+PLANTILLA_POR_TAREA = {"welcome": "M1", "monthly_report": "M3",
                        "photo_refresh": "M4", "renewal_before": "M5", "renewal_overdue": "M6"}
 
 ETIQUETA_TAREA = {
     "welcome": "Bienvenida", "profile_check": "Revisar la ficha", "first_offer": "Primera oferta",
     "photo_session": "Sesión de fotos", "first_piece": "Primer video", "week1_checkin": "¿Cómo te fue la semana?",
-    "piece_delivery": "Entregar el video", "photo_refresh": "Pedir fotos nuevas", "monthly_report": "Reporte del mes",
+    "piece_delivery": "Entregar el video a mano", "photo_refresh": "Pedir fotos nuevas", "monthly_report": "Reporte del mes",
     "renewal_before": "Renovación: vence mañana", "renewal_overdue": "Pago atrasado", "churn_call": "Llamada: ¿seguimos?",
 }
 
@@ -59,6 +59,8 @@ def m1_bienvenida(persona_: str, firmante_: str, comercio: str, slug: str | None
 
 
 def m2_entrega(persona_: str, comercio: str, redes: list[str], link_post: str | None, share_token: str) -> str:
+    """DORMIDA desde el 2/11 (§15): al comerciante no se le escribe por WhatsApp, así que ninguna tarea
+    arma este texto ni el link a `/pieza/<token>`. Queda por si se retoma la entrega por mensaje."""
     donde = " y ".join(RED_ETIQUETA.get(r, r) for r in redes) or "las redes de URUKU"
     sitio = settings.sitio_url.rstrip("/")
     salio = f"{donde}: {link_post}" if link_post else donde
@@ -109,13 +111,9 @@ def mensaje_de_tarea(kind: str, *, persona_: str, firmante_: str, comercio: str,
                      pieza: dict | None = None) -> str | None:
     """El texto de una tarea, o None si no lleva mensaje (checklist y llamada).
 
-    `pieza`: `{redes: [...], link_post, share_token}` para `piece_delivery`."""
+    `piece_delivery` NO lleva mensaje (§15): el video se entrega a mano, desde la descarga del panel."""
     if kind == "welcome":
         return m1_bienvenida(persona_, firmante_, comercio, slug)
-    if kind == "piece_delivery":
-        if not pieza or not pieza.get("share_token"):
-            return None
-        return m2_entrega(persona_, comercio, pieza.get("redes") or [], pieza.get("link_post"), pieza["share_token"])
     if kind == "monthly_report":
         return m3_reporte(persona_, comercio, reporte or {}, paga_hasta)
     if kind == "photo_refresh":
