@@ -115,6 +115,23 @@ export const DESCRIPTOR = "Guía de comercios y servicios de Bolivia";
 export const ONE_LINER =
   "URUKU es la guía de comercios y servicios de Bolivia, nacida en Bermejo, en la frontera con Argentina: qué vende cada local, dónde queda y cómo llegar. Llevá tu ciudad con vos.";
 
+/** La meta description de la home sin ciudad (≤ 155 caracteres): la frase canónica
+ *  acortada para que Google no la corte. */
+export const META_DESCRIPTION =
+  "Guía de comercios y servicios de Bolivia, nacida en Bermejo: qué vende cada local, dónde queda y cómo llegar. Llevá tu ciudad con vos.";
+
+/** Quién creó URUKU (dato del dueño, 2/11). Va a `Organization.founder`, a
+ *  /que-es-uruku y a llms.txt. Sin credenciales que no haya dicho él. */
+export const FOUNDER = {
+  nombre: "Saady Pacheco",
+  cargo: "Ingeniero de sistemas",
+  /** Desde cuándo se desarrolla (`Organization.foundingDate`). */
+  desde: "2026-05",
+} as const;
+
+/** Lanzamiento público de URUKU. */
+export const LAUNCH_DATE = { iso: "2026-09-28", texto: "28 de septiembre de 2026" } as const;
+
 /** Quién responde por el sitio (para /que-es-uruku y datos de contacto). Por
  *  ahora es el equipo, no una persona: una sola constante para cambiarlo. */
 export const RESPONSIBLE = "Equipo URUKU";

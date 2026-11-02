@@ -6,13 +6,19 @@ import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { ContactoUruku } from "@/components/contacto-uruku";
 import { AccesosCiudad } from "@/components/accesos-ciudad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
-import { getClima, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado, getNovedadesUruku, getVideosPromo } from "@/lib/data";
+import {
+  getCiudades, getCityCategoryPages, getClima, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado,
+  getNovedadesUruku, getRedes, getVideosPromo,
+} from "@/lib/data";
+import { JsonLd } from "@/components/json-ld";
+import { cityPath, jsonLdGraph, organizationNodes, sameAsFromRedes } from "@/lib/seo";
+import { conFundador } from "@/lib/seo-paginas";
 import { CarruselNovedades } from "@/components/carrusel-novedades";
 import { getPromo, tarjetasPromo } from "@/components/tarjetas-promo";
 import { TarjetaTurnoHoy } from "@/components/tarjeta-turno-hoy";
 import { NovedadUrukuCard } from "@/components/novedad-uruku-card";
 import { ciudadActual } from "@/lib/ciudad-server";
-import { titulo, descripcion, MARCA } from "@/lib/marca";
+import { titulo, descripcion, MARCA, META_DESCRIPTION } from "@/lib/marca";
 import { precioFmt } from "@/lib/types";
 import { formatoMonto, tasasDe } from "@/lib/cambio";
 
@@ -114,18 +120,22 @@ export async function generateMetadata(): Promise<Metadata> {
   // «antes de cruzar» en una frontera, «antes de salir» en el resto. Una
   // promesa de cruzar un río en Cochabamba no le habla a nadie.
   const frontera = nombre ? ciudad?.es_frontera ?? conGuia : false;
+  // Sin ciudad elegida (el robot) la descripción es la frase canónica de la marca
+  // (≤ 155 caracteres), no la genérica de `descripcion()`.
+  const desc = nombre ? descripcion(nombre, frontera) : META_DESCRIPTION;
   return {
     // `absolute` para que no se le pegue el « · Uruku» de la plantilla del
     // layout: acá el nombre ya está adentro del título.
     title: { absolute: titulo(nombre) },
-    description: descripcion(nombre, frontera),
+    description: desc,
+    alternates: { canonical: "/" },
     // EL openGraph DE UNA PÁGINA REEMPLAZA AL DEL LAYOUT, no lo completa.
     // Declarando sólo título y descripción, la home se quedaba SIN IMAGEN de
     // vista previa —ni siteName ni locale— mientras /ofertas y /guia, que no
     // lo declaran, la tenían. Y la home es justo la que se comparte: el
     // enlace de uruku.bo por WhatsApp salía sin la tarjeta.
     openGraph: {
-      title: titulo(nombre), description: descripcion(nombre, frontera),
+      title: titulo(nombre), description: desc,
       siteName: MARCA, locale: "es_BO", type: "website",
       url: "https://uruku.bo",
       images: [{ url: "/og-image.png", width: 1200, height: 630 }],
@@ -142,14 +152,24 @@ export default async function InicioPage() {
   const conGuia = (ciudad?.slug ?? "bermejo") === "bermejo";
   // El peso argentino, en cualquier ciudad de frontera.
   const esFrontera = ciudad?.es_frontera ?? true;
-  const [feed, novedadesUruku, videos, frontera, clima, cotizaciones, turnosHoy, promo] = await Promise.all([
+  const [feed, novedadesUruku, videos, frontera, clima, cotizaciones, turnosHoy, promo, paresCiudad, ciudadesTodas, redes] = await Promise.all([
     getFeed(12, ciudad?.slug), getNovedadesUruku(ciudad?.id, 4), conGuia ? getVideosPromo(6) : Promise.resolve([]),
     conGuia ? getFronteraEstado(ciudad?.id) : Promise.resolve(null), conGuia ? getClima() : Promise.resolve(null), getCotizaciones(),
     // Las farmacias de turno hoy: la tarjeta sólo aparece si la ciudad tiene turnos cargados.
     getFarmaciasDeTurnoAhora(ciudad?.id),
     // Los destacados (comercios con plan) y sus productos, para el carrusel.
     getPromo(ciudad?.slug),
+    // Para «Ciudades» y el JSON-LD de la marca: sólo ciudades con páginas indexables.
+    getCityCategoryPages(), getCiudades(), getRedes(),
   ]);
+  const ciudadesIndexables = [...new Map(paresCiudad.filter((p) => p.indexable).map((p) => [p.city_slug, p])).values()];
+  const datosMarca = jsonLdGraph(conFundador(organizationNodes({
+    ciudades: ciudadesIndexables.map((p) => ({
+      nombre: p.city_name, departamento: p.region,
+      pais: ciudadesTodas.find((c) => c.slug === p.city_slug)?.pais ?? null,
+    })),
+    sameAs: sameAsFromRedes(redes),
+  })));
   const nombre = ciudad?.nombre ?? "Bermejo";
   // La foto del hero es de la ciudad; sin foto propia, la de Bermejo sólo en
   // Bermejo. Otra ciudad sin foto va con el fondo liso, no con el río de otra.
@@ -175,6 +195,7 @@ export default async function InicioPage() {
 
   return (
     <UrukuShell activeCat="Todos" activeNav="Inicio">
+      <JsonLd data={datosMarca} />
       {/* ===== Los accesos rápidos, debajo del buscador ===== */}
       <AccesosCiudad conGuia={conGuia} />
 
@@ -265,6 +286,9 @@ export default async function InicioPage() {
               </Link>
             ))}
           </div>
+          <p className="uk-home-nota">
+            <Link href="/comprar-en-bermejo"><Ic n="comprar" s={16} /> Comprar en Bermejo desde Argentina: qué conviene, cómo cruzar y cómo pagar →</Link>
+          </p>
         </div>
         )}
         <div>
@@ -380,6 +404,18 @@ export default async function InicioPage() {
           ))}
         </div>
       </section>
+      )}
+
+      {/* ===== Ciudades (sólo las que tienen páginas para indexar) ===== */}
+      {ciudadesIndexables.length > 0 && (
+        <section className="uk-container uk-home-sec" aria-labelledby="home-ciudades">
+          <div className="uk-section-head"><h2 id="home-ciudades">Ciudades <small>Los comercios de cada ciudad, por rubro.</small></h2></div>
+          <div className="uk-guia-chips">
+            {ciudadesIndexables.map((p) => (
+              <Link key={p.city_slug} href={cityPath(p.city_slug)}><Ic n="ciudad" s={16} /> {p.city_name}</Link>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* ===== Videos ===== */}

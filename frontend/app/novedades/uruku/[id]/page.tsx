@@ -18,8 +18,8 @@ type Props = { params: { id: string } };
 /** Lo que se ve al compartir el link por WhatsApp: título, un pedazo del texto y la portada. */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const n = await getNovedadUruku(params.id);
-  if (!n) return { title: "Novedad no encontrada — URUKU" };
-  const titulo = `${n.titulo} — URUKU`;
+  if (!n) return { title: "Novedad no encontrada", robots: { index: false, follow: false } };
+  const titulo = n.titulo;
   const descripcion = (n.texto?.replace(/\s+/g, " ").trim() || `Novedad de URUKU del ${fechaNovedad(n.fecha)}.`).slice(0, 200);
   const imagen = n.portada_url || n.video_poster_url || n.fotos[0]?.url || "https://uruku.bo/og-image.png";
   const url = `https://uruku.bo/novedades/uruku/${n.id}`;

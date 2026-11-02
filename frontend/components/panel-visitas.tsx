@@ -3,6 +3,17 @@
 import { useEffect, useState } from "react";
 import { getVisitas, type ResumenVisitas } from "@/lib/api";
 
+/** Una fuente de asistentes de IA tal como la suma el backend en `ai_sources`
+ *  (docs/visibilidad-buscadores-ia.md §3.11). El campo puede faltar: el backend
+ *  lo agrega en paralelo y un backend viejo no lo manda. */
+type FuenteIa = { source: string; visits: number; people: number; business_views: number; top_routes?: string[] };
+type ResumenConIa = ResumenVisitas & { ai_sources?: FuenteIa[] };
+
+const NOMBRE_IA: Record<string, string> = {
+  chatgpt: "ChatGPT", perplexity: "Perplexity", gemini: "Gemini", copilot: "Copilot", claude: "Claude",
+  meta_ai: "Meta AI", deepseek: "DeepSeek", grok: "Grok", mistral: "Mistral",
+};
+
 /**
  * Cuánta gente entra a URUKU — y, sobre todo, cuántos terminan escribiéndole
  * a un comercio.
@@ -15,7 +26,7 @@ import { getVisitas, type ResumenVisitas } from "@/lib/api";
  * Estilos inline: el panel no carga `uruku.css`.
  */
 export function PanelVisitas() {
-  const [d, setD] = useState<ResumenVisitas | null>(null);
+  const [d, setD] = useState<ResumenConIa | null>(null);
   const [err, setErr] = useState("");
   const [dias, setDias] = useState(30);
 
@@ -102,6 +113,8 @@ export function PanelVisitas() {
         </>
       )}
 
+      <AsistentesIa fuentes={d.ai_sources} />
+
       <p style={{ color: "var(--txt-3)", fontSize: 11.5, margin: 0 }}>
         Sin cookies, sin IP y sin user-agent: sólo qué página se vio y un número al azar por pestaña.
         No se cuentan el panel, la app de campo ni /mi-comercio.
@@ -125,6 +138,58 @@ function Lista({ titulo, items, vacio }: { titulo: string; items: { k: string; n
           ))}
         </ol>
       )}
+    </div>
+  );
+}
+
+/** «Desde asistentes de IA»: quiénes llegaron desde ChatGPT, Perplexity, Gemini y
+ *  compañía. Es el panel del admin: acá sí van números. Tolera que `ai_sources`
+ *  falte (backend viejo) o venga vacío. */
+function AsistentesIa({ fuentes }: { fuentes: FuenteIa[] | undefined }) {
+  const lista = Array.isArray(fuentes) ? fuentes : [];
+  return (
+    <div className="panel-card glass" style={{ padding: 16 }}>
+      <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Desde asistentes de IA</h4>
+      {fuentes === undefined ? (
+        <p style={{ color: "var(--txt-3)", fontSize: 12.5, margin: 0 }}>
+          Este dato todavía no llega del servidor: aparece cuando se actualice el backend.
+        </p>
+      ) : lista.length === 0 ? (
+        <p style={{ color: "var(--txt-3)", fontSize: 12.5, margin: 0 }}>
+          Ninguna visita llegó desde un asistente de IA en este período.
+        </p>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ textAlign: "left", color: "var(--txt-3)", fontSize: 12 }}>
+                <th style={{ padding: "4px 8px 4px 0" }}>Asistente</th>
+                <th style={{ padding: "4px 8px" }}>Visitas</th>
+                <th style={{ padding: "4px 8px" }}>Personas</th>
+                <th style={{ padding: "4px 8px" }}>Fichas vistas</th>
+                <th style={{ padding: "4px 0 4px 8px" }}>Páginas más vistas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lista.map((f) => (
+                <tr key={f.source} style={{ borderTop: "1px solid var(--line, rgba(128,128,128,.25))" }}>
+                  <td style={{ padding: "6px 8px 6px 0", fontWeight: 700 }}>{NOMBRE_IA[f.source] ?? f.source}</td>
+                  <td style={{ padding: "6px 8px" }}>{f.visits}</td>
+                  <td style={{ padding: "6px 8px" }}>{f.people}</td>
+                  <td style={{ padding: "6px 8px" }}>{f.business_views}</td>
+                  <td style={{ padding: "6px 0 6px 8px", color: "var(--txt-2)", overflowWrap: "anywhere" }}>
+                    {(f.top_routes ?? []).join(" · ") || "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p style={{ color: "var(--txt-3)", fontSize: 11.5, margin: "10px 0 0" }}>
+        Límites: las respuestas de IA de Google (AI Overviews y AI Mode) llegan como google.com y no se pueden
+        distinguir de una búsqueda común. ChatGPT a veces no manda ni referrer ni UTM, y esa visita cae como «directo».
+      </p>
     </div>
   );
 }
