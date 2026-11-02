@@ -84,3 +84,53 @@ export const COLOR = {
   texto: "#214533",
   texto2: "#4E6053",
 } as const;
+
+/* ─── La marca para buscadores y asistentes de IA ───────────────────────────
+ *
+ * Docs: docs/visibilidad-buscadores-ia.md §3.10 (entidad y marca). Estas
+ * constantes se usan IDÉNTICAS en el JSON-LD, las metas de la home, /que-es-uruku,
+ * llms.txt y las bios de las redes: que el nombre, el descriptor y la frase
+ * canónica no varíen es lo que le permite a un buscador (o a un modelo) saber
+ * que todo eso es la misma entidad. Decididas por el dueño el 2/11.
+ *
+ * `MARCA` (arriba) sigue siendo «Uruku» (la plantilla de títulos, que sigue el
+ * manual). En texto corrido y en datos estructurados el nombre es «URUKU». */
+
+/** El nombre en texto y en datos estructurados (`Organization.name`). */
+export const BRAND_NAME = "URUKU";
+
+/** Otras formas con las que se nombra a la marca (`Organization.alternateName`). */
+export const BRAND_ALTERNATE_NAMES: readonly string[] = ["Uruku", "uruku.bo"];
+
+/** El lema de la marca entera (`Organization.slogan`). Fijo para todo el país;
+ *  el tagline de frontera de `tagline()` cambia por ciudad y NO es el slogan. */
+export const SLOGAN = "Llevá tu ciudad con vos.";
+
+/** Qué es URUKU en una frase corta. */
+export const DESCRIPTOR = "Guía de comercios y servicios de Bolivia";
+
+/** La frase canónica: qué es URUKU, dónde nació y qué ofrece. Se usa tal cual en
+ *  `Organization.description`, el primer párrafo de /que-es-uruku, llms.txt y
+ *  las bios. No se reescribe por página. */
+export const ONE_LINER =
+  "URUKU es la guía de comercios y servicios de Bolivia, nacida en Bermejo, en la frontera con Argentina: qué vende cada local, dónde queda y cómo llegar. Llevá tu ciudad con vos.";
+
+/** Quién responde por el sitio (para /que-es-uruku y datos de contacto). Por
+ *  ahora es el equipo, no una persona: una sola constante para cambiarlo. */
+export const RESPONSIBLE = "Equipo URUKU";
+
+/** Dirección pública del sitio, sin barra final. */
+export const SITE_URL = "https://uruku.bo";
+
+/** Contacto (NAP: mismo en todos lados). */
+export const CONTACT = {
+  telefono: "+59167671888",
+  email: "info@uruku.bo",
+  area: "Bermejo, Tarija, Bolivia",
+} as const;
+
+/** Perfiles que identifican a la marca como entidad fuera del sitio (Wikidata,
+ *  Google Business, Bing Places, Apple Business Connect). Van a `sameAs` de la
+ *  Organization junto con las redes de `getRedes()`. VACÍO hasta que existan:
+ *  nunca se inventa un perfil. */
+export const ENTITY_PROFILES: readonly string[] = [];

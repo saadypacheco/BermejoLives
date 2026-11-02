@@ -86,7 +86,7 @@ export function esCatalogoSubido(u: string | null | undefined): boolean {
  *  «mitienda.com»), así que se arman acá; y lo que trae otro esquema
  *  (`javascript:`, `data:`) NUNCA llega a un href: con eso se robaba la sesión
  *  guardada en el navegador de quien tocara «Sitio web». */
-export function enlaceRed(red: "instagram" | "tiktok" | "facebook" | "web", valor: string | null | undefined): string | null {
+export function enlaceRed(red: "instagram" | "tiktok" | "facebook" | "youtube" | "web", valor: string | null | undefined): string | null {
   const t = (valor ?? "").trim();
   if (!t) return null;
   if (/^[a-z][a-z0-9+.-]*:/i.test(t)) return urlHttp(t);     // tiene esquema: sólo http(s)
@@ -94,6 +94,7 @@ export function enlaceRed(red: "instagram" | "tiktok" | "facebook" | "web", valo
   if (red !== "web" && /^[\w.]{1,60}$/.test(usuario)) {
     if (red === "instagram") return `https://instagram.com/${usuario}`;
     if (red === "tiktok") return `https://www.tiktok.com/@${usuario}`;
+    if (red === "youtube") return `https://www.youtube.com/@${usuario}`;
     return `https://facebook.com/${usuario}`;
   }
   return normalizarEnlace(t);

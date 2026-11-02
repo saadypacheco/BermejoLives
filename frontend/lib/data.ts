@@ -1,6 +1,7 @@
 import { supabase, hasSupabase } from "@/lib/supabase";
 import type { Adorno } from "@/lib/adornos";
 import { estaDeTurno, rangoTurnos, turnosAhora, type FarmaciaTurno, type TurnoFarmacia } from "@/lib/turnos-farmacia";
+import { isBusinessIndexable, type BusinessSeoFields, type CityCategoryPage } from "@/lib/seo";
 import type { Comercio, FeedItem, Producto, Zona, Rubro, Ciudad, ResultadoBusqueda, FiltrosBusqueda } from "@/lib/types";
 
 // Diagnóstico temporal (self-host, 2026-07-10): supabase-js a veces no
@@ -974,3 +975,74 @@ export const RUBROS_SERVICIO: [string, string][] = [
   ["cajeros", "Cajeros y bancos"], ["wifi", "Wifi gratis"], ["cambio", "Casas de cambio"],
   ["emergencias", "Policía y emergencias"],
 ];
+
+/* ─── SEO: páginas por ciudad+rubro y mapa del sitio ─────────────────────────
+ * Docs: docs/visibilidad-buscadores-ia.md §3.2, §3.7. Las reglas (qué se indexa)
+ * viven en lib/seo.ts; acá sólo se lee. */
+
+export type { CityCategoryPage };
+
+/**
+ * Los pares ciudad+rubro que existen (ciudad activa, rubro activo y no `otros`,
+ * al menos un comercio activo). Es la fuente de las rutas `/{ciudad}/{rubro}`, de
+ * los enlaces internos y del sitemap. Si la RPC falla o no hay base devuelve `[]`
+ * (la página lo trata como «no hay pares»; nunca rompe el build ni el render).
+ */
+export async function getCityCategoryPages(): Promise<CityCategoryPage[]> {
+  if (!hasSupabase) return [];
+  try {
+    const { data, error } = await supabase.rpc("city_category_pages");
+    if (error) {
+      console.warn("city_category_pages error:", error.message);
+      return [];
+    }
+    return (data ?? []) as CityCategoryPage[];
+  } catch (e) {
+    console.warn("city_category_pages falló:", e);
+    return [];
+  }
+}
+
+/** Una ficha para el sitemap: su dirección y cuándo cambió por última vez. */
+export type NegocioSitemap = { slug: string; updated_at: string | null };
+
+/** Columnas de `comercios` que pide el sitemap. Todas están en `COLUMNAS_COMERCIO`
+ *  (regla 11 de AGENTS.md: con anon nunca `select("*")` sobre `comercios`). */
+const COLUMNAS_SITEMAP = [
+  "slug", "updated_at", "rubro_id", "subcategoria", "descripcion",
+  "prod_obs_human", "prod_det_ia", "nombre", "activo", "suspendido",
+].join(", ");
+
+/**
+ * Las fichas que van al sitemap: sólo las indexables (`isBusinessIndexable`:
+ * activas, no suspendidas y no «vacías»). El filtro está ACÁ para que el sitemap
+ * y la ficha no puedan discrepar. Pagina de a mil (PostgREST corta ahí). Sin base
+ * o ante un error devuelve lo reunido hasta ese punto (`[]` si nada).
+ */
+export async function getBusinessesForSitemap(): Promise<NegocioSitemap[]> {
+  if (!hasSupabase) return [];
+  const out: NegocioSitemap[] = [];
+  try {
+    // rubro_id → slug (incluye rubros inactivos: sólo sirve para saber si es «otros»).
+    const { data: rubros } = await supabase.from("rubros").select("id, slug");
+    const slugDe = new Map<string, string>(((rubros ?? []) as { id: string; slug: string }[]).map((r) => [r.id, r.slug]));
+    const PAGINA = 1000;
+    for (let desde = 0; desde < 50 * PAGINA; desde += PAGINA) {
+      const { data, error } = await supabase.from("comercios").select(COLUMNAS_SITEMAP)
+        .eq("activo", true).order("slug").range(desde, desde + PAGINA - 1);
+      if (error) { console.warn("getBusinessesForSitemap error:", error.message); break; }
+      const filas = (data ?? []) as unknown as (Omit<BusinessSeoFields, "rubro_slug"> & {
+        slug: string; updated_at: string | null; rubro_id: string | null;
+      })[];
+      for (const c of filas) {
+        if (!c.slug) continue;
+        const rubro_slug = c.rubro_id ? slugDe.get(c.rubro_id) ?? null : null;
+        if (isBusinessIndexable({ ...c, rubro_slug })) out.push({ slug: c.slug, updated_at: c.updated_at });
+      }
+      if (filas.length < PAGINA) break;
+    }
+  } catch (e) {
+    console.warn("getBusinessesForSitemap falló:", e);
+  }
+  return out;
+}

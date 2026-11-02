@@ -10,10 +10,16 @@ import { CatNav } from "@/components/catnav";
 import { SocialLinks, money } from "@/components/uruku-ui";
 import { WA_URUKU_TEXTO, waUruku } from "@/lib/contacto";
 import { Ic, climaIcono } from "@/components/ic";
-import { getClima, getCotizaciones, getRedes } from "@/lib/data";
+import { getCiudades, getClima, getCotizaciones, getRedes } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
+import type { Ciudad } from "@/lib/types";
 import { versionLabel } from "@/lib/version";
 import { URUKU_SVG } from "@/lib/adornos";
+
+/** Lo mismo que `ciudadActual()` pero con la ciudad dada y sin tocar cookies. */
+async function ciudadFija(ciudad: Ciudad): Promise<{ ciudad: Ciudad; ciudades: Ciudad[] }> {
+  return { ciudad, ciudades: await getCiudades() };
+}
 
 /**
  * Marco compartido del diseño URUKU: barra social + header (buscador, ciudad,
@@ -31,6 +37,7 @@ export async function UrukuShell({
   fill = false,
   rootClass,
   asistente,
+  fixedCity,
 }: {
   children: React.ReactNode;
   activeCat?: string;
@@ -47,9 +54,17 @@ export async function UrukuShell({
   /** Uruku Ayuda. Por defecto el asistente de URUKU; en la ficha de un local
    *  con el plan que lo incluye, el de ese local; `false` lo esconde. */
   asistente?: { id: string; nombre: string } | false;
+  /** La ciudad del contenido, cuando la página tiene una propia (la ficha de un
+   *  comercio, /{ciudad}, /{ciudad}/{rubro}). Con ella el marco NO lee la
+   *  cookie de ciudad —`ciudadActual()` llama a `cookies()`, que vuelve dinámica
+   *  a toda la página y la saca del ISR— y el encabezado, la cotización y la
+   *  guía son los de esa ciudad: lo mismo para un robot que para una persona
+   *  (antes una ficha de La Paz decía «Bermejo» arriba). El selector de ciudad
+   *  sigue listando todas. */
+  fixedCity?: Ciudad;
 }) {
   const [{ ciudad, ciudades }, clima, cotizaciones, redes] = await Promise.all([
-    ciudadActual(), getClima(), getCotizaciones(), getRedes(),
+    fixedCity ? ciudadFija(fixedCity) : ciudadActual(), getClima(), getCotizaciones(), getRedes(),
   ]);
   const nombre = ciudad?.nombre ?? "tu ciudad";
   // Dos preguntas distintas. `esFrontera` (columna de la ciudad): si el
