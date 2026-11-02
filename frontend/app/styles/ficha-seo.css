@@ -1,0 +1,25 @@
+/* Ficha del comercio: lo que se agregó para buscadores y asistentes de IA
+   (migas, línea «rubro en ciudad», «Qué podés encontrar acá», «Más {rubro} en
+   {Ciudad}»). Docs: docs/visibilidad-buscadores-ia.md §3.5. */
+
+.uk-migas { margin: 0 0 10px; font-size: 13px; color: var(--uk-ink-soft); }
+.uk-migas ol { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; list-style: none; margin: 0; padding: 0; }
+.uk-migas li { display: inline-flex; align-items: center; gap: 6px; }
+.uk-migas li + li::before { content: "›"; color: var(--uk-ink-soft); opacity: .7; }
+.uk-migas a { color: var(--uk-green-ic); text-decoration: none; padding: 4px 0; }
+.uk-migas a:hover, .uk-migas a:focus-visible { text-decoration: underline; }
+.uk-migas [aria-current="page"] { color: var(--uk-ink); font-weight: 600; }
+
+.uk-ficha-donde { margin: -2px 0 0; font-size: 14px; color: var(--uk-ink-soft); }
+
+.uk-ficha-encontrar h2,
+.uk-ficha-mas h2 { font-size: 18px; margin: 0 0 10px; }
+.uk-ficha-encontrar ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+.uk-ficha-encontrar li { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; padding: 5px 11px;
+  border-radius: 999px; background: var(--uk-chip); color: var(--uk-ink); }
+
+.uk-ficha-mas p { margin: 0; }
+.uk-ficha-mas a { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 14px;
+  border-radius: 999px; border: 1px solid var(--uk-line); color: var(--uk-green-ic); font-weight: 700;
+  text-decoration: none; }
+.uk-ficha-mas a:hover, .uk-ficha-mas a:focus-visible { background: var(--uk-green-soft); }
