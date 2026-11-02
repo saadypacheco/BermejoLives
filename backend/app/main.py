@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
-from app.api import agent_credentials, asistente, auth, calles, campo, comercio, contenido, health, moderacion, observabilidad, pago, reception, usuario, webhook
+from app.api import agent_credentials, asistente, auth, calles, campo, comercio, contenido, content, health, moderacion, observabilidad, pago, reception, subscribers, usuario, webhook
 from app.core.config import settings
 from app.core.ip import ip_cliente
 from app.core.limite_cuerpo import LimiteCuerpoMiddleware
@@ -202,6 +202,54 @@ async def _indexnow_loop():
             logger.warning("indexnow_loop.error", error=str(exc))
 
 
+async def _content_planner_loop():
+    """Planifica la semana de piezas para redes y corre el cuidado diario de los suscriptores.
+
+    Cada 15 minutos mira si toca: el domingo desde las 20:00 (Bolivia) arma la semana que arranca
+    mañana; el resto de los días completa lo que faltó. Una vez por día, después de las 07:00, corre el
+    job de cuidado (bienvenida, reporte, renovación, limpieza). Todo es idempotente en la base
+    (docs/contenido-redes-tecnico.md §7). Apagado por defecto: CONTENT_PLANNER_WORKER=true.
+    """
+    from app.db.content_repository import get_content_repo
+    from app.services import content_selector, subscriber_care
+
+    await asyncio.sleep(60)             # el arranque no compite con esta vuelta
+    while True:
+        # Cada tarea en su propio try: si el selector falla, el job diario de cuidado corre igual (y al revés).
+        try:
+            repo, crepo = get_repo(), get_content_repo()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("content_planner_loop.error", paso="repos", error=str(exc))
+            await asyncio.sleep(900)
+            continue
+        try:
+            await run_in_threadpool(content_selector.planner_tick, repo, crepo)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("content_planner_loop.error", paso="planner_tick", error=str(exc))
+        try:
+            await run_in_threadpool(subscriber_care.daily_tick, repo, crepo)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("content_planner_loop.error", paso="daily_tick", error=str(exc))
+        await asyncio.sleep(900)
+
+
+async def _content_render_loop():
+    """Arma los videos de las piezas en cola, DE A UNO, en un subproceso con prioridad baja.
+
+    Cada `CONTENT_RENDER_POLL_SEG` toma la pieza `queued` más vieja (ver `services/content_render.py`).
+    Sin ffmpeg o con poco disco no toma nada. Apagado por defecto: CONTENT_RENDER_WORKER=true.
+    """
+    from app.db.content_repository import get_content_repo
+    from app.services import content_render
+
+    while True:
+        await asyncio.sleep(settings.content_render_poll_seg)
+        try:
+            await run_in_threadpool(content_render.render_tick, get_content_repo())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("content_render_loop.error", error=str(exc))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("api.startup", service="bermejo", environment=settings.environment)
@@ -223,6 +271,16 @@ async def lifespan(app: FastAPI):
     if settings.wa_sesion_vigilar:
         tareas.append(asyncio.create_task(_wa_sesion_loop()))
     tareas.append(asyncio.create_task(_wa_received_loop()))
+    from app.services import content_storage
+    if not content_storage.dir_seguro():
+        # CONTENT_DIR dentro de FOTOS_DIR (o al revés) serviría público lo privado: se apaga el banco y el render.
+        logger.error("content.dir_inseguro", content_dir=settings.content_dir, fotos_dir=settings.fotos_dir)
+    else:
+        content_storage.limpiar_tmp()       # renders a medias de un arranque anterior
+        if settings.content_planner_worker:
+            tareas.append(asyncio.create_task(_content_planner_loop()))
+        if settings.content_render_worker:
+            tareas.append(asyncio.create_task(_content_render_loop()))
     from app.services import indexnow
     if indexnow.habilitado():
         tareas.append(asyncio.create_task(_indexnow_loop()))
@@ -258,6 +316,13 @@ def _cors_origins() -> list[str]:
 app.add_middleware(LimiteCuerpoMiddleware)
 
 
+def _sin_gzip(ruta: str) -> bool:
+    """Lo que no se comprime: las fotos y los videos (ya vienen comprimidos y el video necesita sus
+    pedidos por rangos, que gzip rompe). Incluye los archivos del contenido para redes."""
+    return (ruta.startswith(("/fotos", "/content/files"))
+            or (ruta.startswith(("/public/pieces/", "/public/videos/")) and ruta.endswith(("/video", "/cover"))))
+
+
 class _GZipDatos:
     """Comprime con gzip las respuestas de datos (JSON) de más de 1 KB.
 
@@ -273,7 +338,8 @@ class _GZipDatos:
         self.gz = GZipMiddleware(app, minimum_size=1024)
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] == "http" and not scope.get("path", "").startswith("/fotos"):
+        ruta = scope.get("path", "")
+        if scope["type"] == "http" and not _sin_gzip(ruta):
             await self.gz(scope, receive, send)
         else:
             await self.app(scope, receive, send)
@@ -427,6 +493,8 @@ app.include_router(contenido.router, tags=["contenido"])
 app.include_router(asistente.router, tags=["asistente"])
 app.include_router(pago.router, tags=["pago"])
 app.include_router(agent_credentials.router, tags=["credencial-agentes"])
+app.include_router(content.router, tags=["contenido-redes"])
+app.include_router(subscribers.router, tags=["suscriptores"])
 
 # Fotos de comercio: servidas por el propio backend (reemplaza a Supabase
 # Storage en el self-host — ver services/imagenes.py).

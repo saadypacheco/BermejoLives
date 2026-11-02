@@ -1,0 +1,52 @@
+/* /pieza/<token>: la página que abre el comerciante desde el WhatsApp que le mandamos
+   para ver su video, bajarlo y copiar el texto de su estado. Una pantalla sola, de
+   fondo claro, pensada para el celular (mobile primero: un solo carril de 460 px).
+   Mismos colores que la comprobación de /agentes/<token>. */
+
+body:has(.pz-root) .install-banner,
+body:has(.pz-root) .uk-contesto { display: none !important; }
+body:has(.pz-root) { background: #F9F6ED; color: #214533; }
+
+.pz-root {
+  min-height: 100vh; min-height: 100dvh;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  padding: 18px 16px 36px; text-align: center;
+  font-family: "Poppins", system-ui, sans-serif; color: #214533; background: #F9F6ED;
+}
+.pz-root > * { width: min(100%, 460px); }
+.pz-logo { height: 34px; width: auto; align-self: center; }
+.pz-root > .pz-logo { width: auto; }
+
+.pz-titulo { margin: 0; font-size: 22px; line-height: 1.2; font-weight: 800; overflow-wrap: anywhere; }
+.pz-sub { margin: 0; font-size: 15px; color: #4E6053; }
+
+.pz-video {
+  width: 100%; max-width: 320px; aspect-ratio: 9 / 16; justify-self: center; align-self: center;
+  background: #000; border-radius: 16px; display: block;
+}
+
+.pz-acciones { display: grid; gap: 10px; }
+.pz-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; padding: 10px 16px;
+  border-radius: 14px; border: 2px solid #1D8D52; background: #1D8D52; color: #fff; cursor: pointer;
+  font: inherit; font-weight: 700; font-size: 16px; text-decoration: none;
+}
+.pz-btn-sec { background: #fff; color: #10623E; }
+.pz-btn-wa { background: linear-gradient(135deg, #25d366, #128c4a); border-color: transparent; }
+.pz-btn:focus-visible, .pz-link:focus-visible { outline: 3px solid #2e5f9e; outline-offset: 2px; }
+
+.pz-copiado { margin: 0; font-size: 14px; font-weight: 600; color: #10623E; }
+.pz-fallo { margin: 0; font-size: 14px; color: #8F1D1D; }
+.pz-texto { width: 100%; min-height: 96px; border-radius: 12px; border: 1px solid #E6E2D6; padding: 10px; font: inherit; font-size: 14px; color: #214533; background: #fff; }
+
+.pz-redes { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; font-size: 15px; }
+.pz-redes b { font-weight: 700; }
+.pz-link { color: #10623E; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; min-height: 44px; display: inline-flex; align-items: center; gap: 4px; }
+
+.pz-vence { margin: 0; font-size: 14px; color: #4E6053; }
+.pz-ayuda { display: grid; gap: 8px; justify-items: center; font-size: 15px; line-height: 1.4; }
+.pz-ayuda p { margin: 0; }
+
+.pz-vacio { padding: 22px 16px; border-radius: 16px; background: #fff; border: 1px solid #E6E2D6; display: grid; gap: 10px; justify-items: center; font-size: 17px; line-height: 1.4; }
+.pz-vacio h1 { margin: 0; font-size: 22px; font-weight: 800; }
+.pz-vacio p { margin: 0; }

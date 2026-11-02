@@ -26,6 +26,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - wa_received:/data/wa_received   # fotos de desconocidos: PRIVADO
+      - content_private:/data/content   # banco de fotos y videos para redes: PRIVADO
     networks: [bermejonet]
 
   frontend:
@@ -72,6 +73,7 @@ volumes:
   waha_sessions:
   waha_media:
   wa_received:
+  content_private:
 
 networks:
   bermejonet:

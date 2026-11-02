@@ -693,6 +693,9 @@ function FormCampo({ onLogout, onVerMisComercios, gpsInicial, onVerAca }: {
   const preview = useObjectUrl(previewFile);
   const [comprimiendo,setComprimiendo]= useState(false);
   const [consent,     setConsent]     = useState(false);
+  // Segunda casilla: autoriza usar las fotos del local en las REDES y la PÁGINA de URUKU. Es otra
+  // cosa que aparecer en el sitio (la de arriba) y arranca apagada (docs/contenido-redes-tecnico.md §9.6).
+  const [socialConsent, setSocialConsent] = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [done,        setDone]        = useState<string | null>(null);
   const [doneOffline, setDoneOffline] = useState(false);
@@ -907,6 +910,7 @@ function FormCampo({ onLogout, onVerMisComercios, gpsInicial, onVerAca }: {
     const campos: Record<string, string> = {
       ciudad_slug: ciudadSlug, modalidad: f.modalidad,
       lat: String(coords.lat), lng: String(coords.lng), consentimiento: String(consent),
+      social_consent: String(socialConsent),
       // La hora real del «Guardar», del reloj del celular. Sin esto, lo cargado
       // sin señal llega todo junto y el admin lo ve como si fuera de un solo
       // minuto. Si va a la cola, esta hora viaja con el registro.
@@ -985,7 +989,7 @@ function FormCampo({ onLogout, onVerMisComercios, gpsInicial, onVerAca }: {
 
   function limpiar() {
     setF({ ...EMPTY });
-    setCoords(null); setGeoMsg(""); setFoto(null); setPreviewFile(null); setConsent(true);
+    setCoords(null); setGeoMsg(""); setFoto(null); setPreviewFile(null); setConsent(true); setSocialConsent(false);
     setNuevoLugar(""); setEditMercado(false); setDone(null); setDoneOffline(false); setDoneMotivo(""); setDoneClave(null); setAltaId(null); setAltaSlug(null); setWhatsappCargado(null); setErr("");
   }
   function otro() {
@@ -1246,6 +1250,10 @@ function FormCampo({ onLogout, onVerMisComercios, gpsInicial, onVerAca }: {
         <label style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13.5, color: "var(--txt-2)" }}>
           <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
           El dueño aceptó aparecer en URUKU
+        </label>
+        <label style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13.5, color: "var(--txt-2)", minHeight: 44 }}>
+          <input type="checkbox" checked={socialConsent} onChange={(e) => setSocialConsent(e.target.checked)} />
+          Acepta que usemos fotos de su local en las redes y la página de URUKU
         </label>
 
         {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}

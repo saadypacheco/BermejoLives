@@ -13,6 +13,8 @@ import { GaleriaUploader, type GaleriaApi } from "@/components/galeria-uploader"
 import { EditorHorario, recordarUltimoHorario } from "@/components/editor-horario";
 import { Ic, type NombreIcono } from "@/components/ic";
 import { CatalogoPdf } from "@/components/catalogo-pdf";
+import { BancoDelComercio } from "@/components/content/content-bank-panel";
+import { apiBancoCampo } from "@/lib/content";
 import { TildesSuma, CLAVES_TILDES, type Tildes } from "@/components/tildes-suma";
 import { esCatalogoSubido, normalizarEnlace } from "@/lib/catalogo";
 import { calcularFaltas, type ClaveFalta, type Falta } from "@/lib/faltas";
@@ -548,6 +550,14 @@ export function CompletarComercio({ comercio, rubros, lugares, abrirEn, sinWhats
             onPortada={(p) => onGuardado({ portada_url: p.url, portada_thumb_url: p.thumb_url })} refrescar={refrescoGaleria}
             onFotos={(n) => { setNFotos(n); setFotosSinDato(false); }} onFotosError={() => setFotosSinDato(true)} api={apiGaleriaCampo(comercio.id)} />
         </div>
+      </Seccion>
+
+      {/* 6 bis. FOTOS PARA REDES: el banco de contenido de URUKU (docs/contenido-redes-tecnico.md §9.6).
+          Parado en la puerta del local es el único momento en que se sabe con certeza de quién es
+          cada foto. Se registra que el dueño aceptó aparecer en las redes y la página de URUKU y se suben las fotos;
+          lo que no sube por falta de señal queda en el teléfono y sube solo. */}
+      <Seccion id="cc-redes-contenido" titulo="Fotos para redes y página" icono="foto">
+        <BancoDelComercio comercioId={comercio.id} api={apiBancoCampo} sinTitulo />
       </Seccion>
 
       {/* 7. REDES, CATÁLOGO Y CANAL */}

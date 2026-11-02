@@ -68,6 +68,23 @@ def _tmp_wa_received_dir(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _tmp_content_dir(tmp_path, monkeypatch):
+    """El disco PRIVADO del contenido para redes (banco de fotos y videos), aparte de /fotos y en un tmp.
+    También limpia lo que los servicios guardan en memoria entre vueltas (caché de peso, intentos del
+    selector, día del job de cuidado, estado del render)."""
+    from app.core.config import settings
+    from app.services import content_render, content_selector, content_storage, subscriber_care
+    monkeypatch.setattr(settings, "content_dir", str(tmp_path / "content"))
+    content_storage.reiniciar_cache_peso()
+    content_selector.reiniciar_intentos()
+    subscriber_care.reiniciar_dia()
+    content_render._estado.update({"actual": None, "ultimo": None, "avisado_sin_ffmpeg": False,
+                                   "avisado_dir": False, "avisado_disco": False})
+    yield
+    content_storage.reiniciar_cache_peso()
+
+
+@pytest.fixture(autouse=True)
 def _tmp_fotos_dir(tmp_path, monkeypatch):
     """Apunta el volumen de fotos a un tmp escribible: así las subidas de
     foto/video no fallan por no poder escribir en /data/fotos."""
@@ -2626,8 +2643,17 @@ def repo():
 
 
 @pytest.fixture
-def client(repo):
+def crepo(repo):
+    """El repositorio de contenido para redes, en memoria, apoyado en el mismo FakeRepo."""
+    from tests.content_fakes import FakeContentRepo
+    return FakeContentRepo(repo)
+
+
+@pytest.fixture
+def client(repo, crepo):
+    from app.db.content_repository import get_content_repo
     app.dependency_overrides[get_repo] = lambda: repo
+    app.dependency_overrides[get_content_repo] = lambda: crepo
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()

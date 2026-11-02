@@ -360,6 +360,38 @@ class Settings(BaseSettings):
     def public_photo_url(self, path: str) -> str:
         return f"{self.fotos_public_base_url.rstrip('/')}/{path}"
 
+    # ── Contenido para redes y cuidado de suscriptores (docs/contenido-redes-tecnico.md) ──
+    # El banco de fotos y los videos armados viven en un disco PRIVADO: nunca bajo
+    # `fotos_dir` (ése lo sirve /fotos, público y cacheado un año). Se ven sólo con una
+    # URL firmada que vence a los 15 min, o con el token de la página del comerciante.
+    content_dir: str = "/data/content"
+    # Los dos loops de fondo arrancan APAGADOS: se prenden en el .env cuando el volumen
+    # `content_private` ya está montado y las autorizaciones de redes están cargadas
+    # (docs/contenido-redes-tecnico.md §11.2).
+    content_planner_worker: bool = False
+    content_render_worker: bool = False
+    content_render_poll_seg: int = 30
+    content_render_timeout_seg: int = 300
+    content_render_max_attempts: int = 3
+    content_render_memory_mb: int = 1536
+    content_dir_max_gb: float = 10
+    content_min_free_gb: float = 3
+    content_signed_url_ttl_seg: int = 900
+    content_share_days: int = 60
+    content_render_retention_days: int = 90
+    content_asset_purge_days: int = 30
+    # Redes en las que se publica cada pieza aprobada (modo manual): una fila por red.
+    content_networks: str = "tiktok,instagram,facebook,wa_channel"
+    content_planning_weekday: int = 6          # domingo (lunes = 0)
+    content_planning_hour: int = 20            # hora de Bolivia
+    content_care_hour: int = 7                 # el job diario de cuidado de suscriptores
+    content_grace_days: int = 7                # días de gracia después de vencido el pago
+    content_claim_minutes: int = 20            # cuánto dura «la estoy publicando»
+
+    def content_networks_list(self) -> list[str]:
+        validas = ("tiktok", "instagram", "facebook", "wa_channel")
+        return [n for n in (x.strip() for x in self.content_networks.split(",")) if n in validas]
+
 
 @lru_cache(maxsize=4)
 def _numeros_propios(crudo: str, variable: str = "WA_NUMEROS_PROPIOS") -> frozenset[str]:

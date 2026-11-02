@@ -5,6 +5,7 @@ description = "Bermejo Live Market · API de ingesta WhatsApp + moderación + ca
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.111",
+  "starlette>=0.39",   # FileResponse con Range: el <video> de Safari/iPhone lo exige (contenido para redes)
   "uvicorn[standard]>=0.30",
   "python-multipart>=0.0.9",
   "pydantic>=2.7",

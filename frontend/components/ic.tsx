@@ -64,6 +64,9 @@ export const ICONOS = {
   inicio: "House", guardado: "BookmarkSimple", documento: "FileText",
   desplegar: "CaretDown", enviar: "PaperPlaneTilt", web: "GlobeSimple",
   editar: "PencilSimple",
+  // Contenido para redes (Admin › Banco de contenido y Contenido para redes):
+  // copiar un texto, subir un archivo y pegar un enlace.
+  copiar: "Copy", subir: "UploadSimple", enlace: "LinkSimple",
   // «Lo que suma» en la ficha del comercio: el pasero (quien le cruza la compra
   // al comprador), la factura y el catálogo. Los envíos usan `envios`.
   pasero: "PersonSimpleWalk", factura: "Receipt", catalogo: "BookOpenText",

@@ -49,6 +49,7 @@ import { Ic } from "@/components/ic";
 import { waUruku } from "@/lib/contacto";
 import { LoginComercio } from "@/components/ingresar-comercio";
 import { ClaveDelComercio } from "@/components/clave-del-comercio";
+import { SocialConsentToggle } from "@/components/social-consent-toggle";
 
 export default function MiComercioPage() {
   const [sess, setSess] = useState<ComercioSession | null>(null);
@@ -942,6 +943,9 @@ function PerfilTab() {
         </div>
         <CampoRow label="Pedido mínimo" ph="Ej: 3 docenas, 200 Bs" value={perfil.pedido_minimo ?? ""} onChange={(v) => set("pedido_minimo", v)} />
       </div>
+
+      {/* Autorización para las redes y la página de URUKU: se guarda al instante (no con «Guardar cambios»). */}
+      <SocialConsentToggle />
 
       <label className="glass" style={{ padding: "14px 18px", borderRadius: 16, display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
         <input type="checkbox" checked={perfil.acepta_reservas !== false} onChange={(e) => setPerfil((p) => (p ? { ...p, acepta_reservas: e.target.checked } : p))} />

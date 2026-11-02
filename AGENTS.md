@@ -22,7 +22,7 @@ es por WhatsApp), **no** es directorio.
 | Base | Postgres + PostgREST self-hosted en el VPS (`selfhost/`; migraciones en `supabase/migrations/`). Sin Auth, Storage ni Realtime de Supabase: las fotos van al disco del backend |
 | Bridge WhatsApp | WAHA (Docker, NOWEB) (`infra/`) |
 | Salida WhatsApp | links `wa.me` |
-| Videos | NO se hostean: link a TikTok |
+| Videos | Los de los comercios NO se hostean (link a TikTok); los videos propios de URUKU sí, en el disco privado del backend (`docs/contenido-redes-tecnico.md` §15) |
 
 ## 3. Arquitectura (reparto de responsabilidades)
 

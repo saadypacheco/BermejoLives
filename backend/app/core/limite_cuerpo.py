@@ -82,6 +82,9 @@ TABLA_DE_TOPES: tuple[tuple[re.Pattern, int], ...] = tuple(
         (r"^/campo/lugares/[^/]+/portada$", 15),
         (r"^/campo/mis-comercios/[^/]+/fotos?$", 15),
         (r"^/admin/comercio/[^/]+/fotos?$", 15),
+        # Banco de fotos para redes: 15 MB (api/content.py), desde el panel y desde la app de campo
+        (r"^/admin/content/merchants/[^/]+/assets$", 15),
+        (r"^/campo/mis-comercios/[^/]+/content-assets$", 15),
         # Foto de la credencial del agente: hasta 8 MB (api/agent_credentials.py)
         (r"^/admin/agents/[^/]+/photo$", 8),
         # El Excel de compradores ya leído por el panel: hasta 20.000 filas de JSON.
