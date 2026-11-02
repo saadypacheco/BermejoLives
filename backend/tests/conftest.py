@@ -651,6 +651,7 @@ class FakeRepo:
 
     def resumen_visitas(self, dias: int = 30):
         from collections import Counter
+        from app.core.ai_sources import summarize_ai_sources
         por_dia = {}
         for v in self.visitas:
             d = por_dia.setdefault(v.get("dia", "hoy"), {"dia": v.get("dia", "hoy"), "visitas": 0, "personas": 0})
@@ -666,10 +667,18 @@ class FakeRepo:
             "por_dia": sorted(por_dia.values(), key=lambda d: d["dia"]),
             "top_rutas": [{"ruta": r, "n": n} for r, n in rutas.most_common(12)],
             "top_referidos": [], "top_origenes": [],
+            "ai_sources": summarize_ai_sources(self.visitas),
             "embudo": {"visitas": len(self.visitas), "personas": personas,
                        "fichas_vistas": por_tipo.get("vista", 0), "contactos": contactos,
                        "mapa": por_tipo.get("mapa", 0)},
         }
+
+    def comercios_para_indexnow(self, desde_iso, limite=1000):
+        rub = {v: k for k, v in self.rubros.items()}
+        filas = [{**c, "rubro_slug": rub.get(c.get("rubro_id"))}
+                 for c in self.comercios.values()
+                 if str(c.get("updated_at") or "") > desde_iso]
+        return sorted(filas, key=lambda c: str(c.get("updated_at")))[:limite]
 
     def ultima_publicacion_de(self, comercio_id, minutos):
         """La última de ese comercio. Sin reloj: en las pruebas todo pasa en el

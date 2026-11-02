@@ -210,8 +210,8 @@ Ningún número de comercios se muestra (ni «12 farmacias», ni `numberOfItems`
 
 ### 3.2 Contrato SQL (migración)
 
-`supabase/migrations/0169_city_category_pages.sql` (tomar el siguiente número libre al
-mergear):
+`supabase/migrations/0180_city_category_pages.sql` (espejada en
+`selfhost/postgres-init/`; implementada, firma abajo):
 
 ```sql
 -- Los pares ciudad+rubro que tienen comercios, y si alcanzan para indexarse.
@@ -674,9 +674,19 @@ otros sitios citados · nota`.
 
 ### 3.12 IndexNow (backend, P1)
 
-- Clave: 32 hex al azar. `frontend/public/{key}.txt` con la clave (es pública por
-  diseño del protocolo). Backend: `INDEXNOW_KEY`, `SITE_URL=https://uruku.bo`; sólo corre
-  con `APP_ENV=prod`.
+- Clave: 32 hex al azar (`python -c "import secrets;print(secrets.token_hex(16))"`); es
+  pública por diseño del protocolo, pero **no se commitea**. Backend (`backend/.env`):
+  `INDEXNOW_KEY=<clave>` y `APP_ENV=prod`; el sitio sale de `SITIO_URL` (ya existe,
+  default `https://uruku.bo`). Sólo corre con `APP_ENV=prod` **y** clave válida; sin una
+  de las dos el loop no arranca (log `indexnow_apagado`).
+- **Cómo se sirve la clave** (`https://uruku.bo/<clave>.txt`, contenido = la clave, sin
+  salto de línea): archivo creado **en el deploy**, antes del build del frontend, en el
+  VPS de prod: `printf %s "$INDEXNOW_KEY" > frontend/public/$INDEXNOW_KEY.txt`
+  (Next sirve `public/` tal cual; el `Dockerfile` ya copia `public/`). Agregar a
+  `.gitignore` el patrón `frontend/public/????????????????????????????????.txt`. Requisito
+  del frontend: `middleware.ts` no debe interceptar `*.txt` (FB1 ya lo excluye del
+  `matcher`; hasta entonces, en modo captura `/<clave>.txt` caería en «Próximamente»).
+  Verificar: `curl https://uruku.bo/<clave>.txt` devuelve la clave.
 - `backend/app/services/indexnow.py`: `submit(urls)` → `POST https://api.indexnow.org/indexnow`
   `{host, key, keyLocation, urlList}` (≤ 10.000) con `httpx` (ya es dependencia,
   `pyproject.toml:12`); structlog `indexnow_submitted` / `indexnow_failed`; nunca lanza
@@ -699,7 +709,7 @@ paralelo (archivos distintos). Ningún archivo lo tocan dos tareas.
 | ID | Capa | Qué | Archivos | Criterio de terminado | Esfuerzo |
 |---|---|---|---|---|---|
 | F0 | frontend | Fundaciones: reglas de indexación, mapa rubro→schema, armadores de JSON-LD, componente con escape, marco sin cookie, parser de horario exportado, lectores de datos | nuevos `lib/seo.ts`, `components/json-ld.tsx`; `components/uruku-shell.tsx` (prop `fixedCity`; con ella no llama a `ciudadActual()`), `lib/horario.ts` (exportar `parseOpeningHours`, `abiertoAhora` igual), `lib/data.ts` (`getCityCategoryPages()` → `[]` si la RPC falla; `getBusinessesForSitemap()`), `lib/catalogo.ts` (YouTube en `enlaceRed`), `lib/marca.ts` (`ONE_LINER`, `ENTITY_PROFILES`) | Tests unitarios: `isBusinessThin` con los 4 casos de 3.1; todo `@type` del mapa está en una lista blanca de tipos de schema.org; nombre `</script><b>` sale escapado; `parseOpeningHours("Lun-Sáb 8:00-12:00 y 14:30-20:00")` da 6 días × 2 rangos y `abiertoAhora` no cambia sus tests | M |
-| M1 | migración | `city_category_pages()` | `supabase/migrations/0169_city_category_pages.sql`, `backend/tests/test_city_category_pages_sql.py` | `curl -X POST https://db.uruku.bo/rpc/city_category_pages` con anon devuelve pares de las 5 ciudades activas, sin `otros`, sin ninguna columna de conteo; test verde | S |
+| M1 | migración | `city_category_pages()` | `supabase/migrations/0180_city_category_pages.sql` (+ espejo en `selfhost/postgres-init/`), `backend/tests/test_city_category_pages_sql.py` | `curl -X POST https://db.uruku.bo/rpc/city_category_pages` con anon devuelve pares de las 5 ciudades activas, sin `otros`, sin ninguna columna de conteo; test verde | S |
 | FA | frontend | Ficha: ISR, ciudad correcta, texto visible, título/descr., noindex de vacías, LocalBusiness + BreadcrumbList, sello de turno en cliente | `app/comercios/[slug]/page.tsx`, nuevo `components/pharmacy-duty-badge.tsx` | `next build` lista `/comercios/[slug]` como ISR (no λ); respuesta con `s-maxage`; `curl` a una ficha de La Paz: el HTML dice «La Paz» y no «Bermejo», trae `<h2>Qué podés encontrar acá` (si hay datos), las migas y 1 `application/ld+json` válido en validator.schema.org y Rich Results Test; ficha «Otros (a clasificar)» → `noindex`; título sin «URUKU · Uruku» | M |
 | FB1 | frontend | Rutas por ciudad y ciudad+rubro | nuevos `app/[city]/page.tsx`, `app/[city]/[category]/page.tsx`; borrar `app/bermejo/page.tsx`; `middleware.ts` (fuera `/bermejo` de `PERMITIDAS`, `matcher` excluye `sitemap.xml|llms.txt|*.txt`) | `/bermejo` 200 con lista de rubros; `/bermejo/ropa` 200 indexable con lista server-side de fichas; `/cochabamba` 200 `noindex`; `/yacuiba` y `/bermejo/otros` 404; `grep -E "[0-9]+ (comercios|locales|negocios)"` sobre el HTML = 0; segunda carga servida de caché | M |
 | FB2 | frontend | robots por robot, sitemap, `/buscar` noindex, JSON-LD de la home, canonical y títulos | `app/robots.ts`, `app/sitemap.ts`, `app/buscar/page.tsx` (metadata), `app/page.tsx` (JSON-LD + canonical + bloque «Ciudades» con enlaces a `/{city}` indexables), `app/guia/page.tsx`, `app/ofertas/page.tsx`, `app/novedades/page.tsx`, `app/cambio/page.tsx` (título «hoy» con frescura), `app/comunidad/page.tsx`, `app/agentes/page.tsx`, `app/novedades/uruku/[id]/page.tsx` | `robots.txt` (con O-2 hecho) tiene los 3 grupos de 3.4; sitemap sin `/buscar`, con pares y `lastmod` = `updated_at`, sin fichas vacías; canonical en todas las indexables (en `/ofertas` y `/novedades`, sin query salvo `rubro`); ningún `<title>` con la marca dos veces | M |

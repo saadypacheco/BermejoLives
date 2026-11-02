@@ -175,6 +175,33 @@ async def _wa_received_loop():
         await asyncio.sleep(86400)  # 1 día
 
 
+async def _indexnow_loop():
+    """Avisa a IndexNow (Bing y compañía) las fichas que cambiaron.
+
+    Cada `INDEXNOW_CADA_SEG` (15 min) lee los comercios con `updated_at` posterior al
+    último aviso (cursor en memoria; al arrancar, ahora - 1 h: repetir es inocuo) y
+    manda las fichas indexables y las dadas de baja (para que salgan del índice). Una vez
+    por día suma la home, /cambio y /{ciudad}/farmacias-de-turno de las ciudades con turnos.
+    Sólo arranca con APP_ENV=prod e INDEXNOW_KEY (ver
+    `indexnow.habilitado`). Nunca corta el loop.
+    """
+    from app.services import indexnow
+
+    cursor = indexnow.cursor_inicial()
+    ultimo_dia_fijas = None
+    while True:
+        await asyncio.sleep(settings.indexnow_cada_seg)
+        try:
+            hoy = datetime.now(timezone.utc).date()
+            repo = get_repo()
+            cursor, _n = await run_in_threadpool(
+                indexnow.run_once, repo, cursor, ultimo_dia_fijas != hoy)
+            if ultimo_dia_fijas != hoy and _n:
+                ultimo_dia_fijas = hoy
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("indexnow_loop.error", error=str(exc))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("api.startup", service="bermejo", environment=settings.environment)
@@ -196,6 +223,11 @@ async def lifespan(app: FastAPI):
     if settings.wa_sesion_vigilar:
         tareas.append(asyncio.create_task(_wa_sesion_loop()))
     tareas.append(asyncio.create_task(_wa_received_loop()))
+    from app.services import indexnow
+    if indexnow.habilitado():
+        tareas.append(asyncio.create_task(_indexnow_loop()))
+    else:
+        logger.info("indexnow_apagado", app_env=settings.app_env, con_clave=bool(settings.indexnow_key))
     yield
     for t in tareas:
         t.cancel()

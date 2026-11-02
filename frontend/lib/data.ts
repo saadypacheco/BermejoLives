@@ -1,6 +1,8 @@
 import { supabase, hasSupabase } from "@/lib/supabase";
 import type { Adorno } from "@/lib/adornos";
 import { estaDeTurno, rangoTurnos, turnosAhora, type FarmaciaTurno, type TurnoFarmacia } from "@/lib/turnos-farmacia";
+import { isBusinessIndexable, type BusinessSeoFields, type CityCategoryPage } from "@/lib/seo";
+import { sinEmoji } from "@/lib/rubros";
 import type { Comercio, FeedItem, Producto, Zona, Rubro, Ciudad, ResultadoBusqueda, FiltrosBusqueda } from "@/lib/types";
 
 // Diagnóstico temporal (self-host, 2026-07-10): supabase-js a veces no
@@ -45,7 +47,10 @@ export const COLUMNAS_COMERCIO = [
   "prod_obs_human", "prod_det_ia", "subcategoria", "contacto_ok", "contacto_no", "sin_cartel",
 ].join(", ");
 
-export async function buscarComercios(f: FiltrosBusqueda, limit = 24, offset = 0): Promise<ResultadoBusqueda[]> {
+/** La búsqueda, distinguiendo error (`null`) de «sin resultados» (`[]`). Sin base
+ *  configurada devuelve `[]`. Para páginas con ISR, que no pueden cachear un fallo
+ *  como si fuera una lista vacía. */
+export async function buscarComerciosOrNull(f: FiltrosBusqueda, limit = 24, offset = 0): Promise<ResultadoBusqueda[] | null> {
   if (!hasSupabase) return [];
   const { data, error } = await supabase.rpc("buscar_comercios", {
     q: f.q || null,
@@ -61,9 +66,13 @@ export async function buscarComercios(f: FiltrosBusqueda, limit = 24, offset = 0
   });
   if (error) {
     console.warn("buscar_comercios error:", error.message);
-    return [];
+    return null;
   }
   return (data ?? []) as ResultadoBusqueda[];
+}
+
+export async function buscarComercios(f: FiltrosBusqueda, limit = 24, offset = 0): Promise<ResultadoBusqueda[]> {
+  return (await buscarComerciosOrNull(f, limit, offset)) ?? [];
 }
 
 
@@ -592,6 +601,27 @@ export async function getComercioBySlug(slug: string): Promise<Comercio | null> 
   return DEMO_COMERCIOS.find((c) => c.slug === slug) ?? DEMO_COMERCIOS[0];
 }
 
+/**
+ * La ficha de un comercio para páginas con ISR (`/comercios/[slug]`): `null` sólo
+ * si la base CONFIRMA que no existe; si la lectura falla LANZA. `getComercioBySlug`
+ * ignora el error y devuelve `null`, y la página lo cachearía como un 404 durante
+ * los 5 minutos de `revalidate` (con un `noindex` que los buscadores recuerdan).
+ * Lanzar hace que Next siga sirviendo la versión anterior y no guarde el fallo.
+ */
+export async function getComercioBySlugEstricto(slug: string): Promise<Comercio | null> {
+  if (!hasSupabase) return getComercioBySlug(slug);
+  const { data, error } = await supabase.from("comercios").select(COLUMNAS_COMERCIO).eq("slug", slug).limit(1);
+  if (error) throw new Error(`No se pudo leer el comercio ${slug}: ${error.message}`);
+  const comercio = data?.[0] as unknown as Comercio | undefined;
+  if (!comercio) return null;
+  if (comercio.rubro_id) {
+    const { data: rubro, error: errRubro } = await supabase.from("rubros").select("slug, nombre").eq("id", comercio.rubro_id).limit(1);
+    if (errRubro) throw new Error(`No se pudo leer el rubro del comercio ${slug}: ${errRubro.message}`);
+    if (rubro?.[0]) { comercio.rubro_slug = rubro[0].slug; comercio.rubro_nombre = rubro[0].nombre; }
+  }
+  return comercio;
+}
+
 // Contenido de la home Inicio (migración 0032): cotizaciones, clima, videos promo.
 export type Cotizacion = { clave: string; etiqueta: string; detalle: string | null; valor: number | null; unidad: string | null; actualizado_en?: string | null };
 export type Clima = { temp_c: number | null; descripcion: string | null; icono: string | null };
@@ -974,3 +1004,123 @@ export const RUBROS_SERVICIO: [string, string][] = [
   ["cajeros", "Cajeros y bancos"], ["wifi", "Wifi gratis"], ["cambio", "Casas de cambio"],
   ["emergencias", "Policía y emergencias"],
 ];
+
+/* ─── SEO: páginas por ciudad+rubro y mapa del sitio ─────────────────────────
+ * Docs: docs/visibilidad-buscadores-ia.md §3.2, §3.7. Las reglas (qué se indexa)
+ * viven en lib/seo.ts; acá sólo se lee. */
+
+export type { CityCategoryPage };
+
+/**
+ * Los pares ciudad+rubro que existen (ciudad activa, rubro activo y no `otros`,
+ * al menos un comercio activo). Es la fuente de las rutas `/{ciudad}/{rubro}`, de
+ * los enlaces internos y del sitemap.
+ *
+ * Lectura ESTRICTA: distingue «no hay pares» (`[]`) de «no se pudo leer» (`null`).
+ * Con ISR eso importa: una página que toma un `[]` por error queda fija como 404 o
+ * `noindex` toda la hora de `revalidate`. Quien la use para decidir un 404 o un
+ * `noindex` tiene que LANZAR ante `null` (Next sigue sirviendo la versión anterior
+ * y no guarda en caché un 500). Sin base configurada (desarrollo) devuelve `[]`.
+ *
+ * El nombre del rubro viene de la base con un emoji adelante («👟 Calzado»): se
+ * limpia acá, una sola vez, para que títulos, h1, párrafos, JSON-LD, llms.txt y el
+ * orden alfabético nunca lo vean.
+ */
+export async function getCityCategoryPagesOrNull(): Promise<CityCategoryPage[] | null> {
+  if (!hasSupabase) return [];
+  try {
+    const { data, error } = await supabase.rpc("city_category_pages");
+    if (error) {
+      console.warn("city_category_pages error:", error.message);
+      return null;
+    }
+    return ((data ?? []) as CityCategoryPage[]).map((p) => ({ ...p, category_name: sinEmoji(p.category_name) }));
+  } catch (e) {
+    console.warn("city_category_pages falló:", e);
+    return null;
+  }
+}
+
+/** Lo mismo pero tolerante: ante un error devuelve `[]`. Sólo para lo decorativo
+ *  (pie, enlaces); NO para decidir un 404 ni un `noindex` (ver arriba). */
+export async function getCityCategoryPages(): Promise<CityCategoryPage[]> {
+  return (await getCityCategoryPagesOrNull()) ?? [];
+}
+
+/** Los pares, recordados unos minutos en memoria: el pie del marco y la home los
+ *  piden en casi cada pedido y no valen una consulta a la base cada vez. Si la RPC
+ *  no responde (`[]`) se reintenta al minuto, no a los diez. En el build no se
+ *  recuerda nada: las páginas que Next descarta por dinámicas reciben un error de
+ *  fetch que se traga como `[]`, y ese vacío envenenaría a las que se arman después. */
+let paresMemo: { hasta: number; pares: CityCategoryPage[] } | null = null;
+export async function getCityCategoryPagesCached(): Promise<CityCategoryPage[]> {
+  const enBuild = process.env.NEXT_PHASE === "phase-production-build";
+  const ahora = Date.now();
+  if (!enBuild && paresMemo && ahora < paresMemo.hasta) return paresMemo.pares;
+  const pares = await getCityCategoryPages();
+  if (!enBuild) paresMemo = { hasta: ahora + (pares.length > 0 ? 10 * 60_000 : 60_000), pares };
+  return pares;
+}
+
+/**
+ * Las ciudades activas con un rol de turnos de farmacia cargado (hoy o en el próximo
+ * mes): las que tienen `/{ciudad}/farmacias-de-turno`. `null` si alguna lectura
+ * falla (sitemap y llms.txt no pueden afirmar que una ciudad «no tiene»). Sin base
+ * configurada, `[]`.
+ */
+export async function getCiudadesConTurnos(ahora: Date = new Date()): Promise<Ciudad[] | null> {
+  if (!hasSupabase) return [];
+  const ciudades = await getCiudadesReales();
+  if (ciudades === null) return null;
+  const { desde, hasta } = rangoTurnos(ahora, 30);
+  const activas = ciudades.filter((c) => c.activa);
+  const turnos = await Promise.all(activas.map((c) => getTurnosFarmacia(c.id, desde, hasta)));
+  if (turnos.some((t) => t === null)) return null;
+  return activas.filter((_, i) => (turnos[i]?.length ?? 0) > 0);
+}
+
+/** Una ficha para el sitemap: su dirección y cuándo cambió por última vez. */
+export type NegocioSitemap = { slug: string; updated_at: string | null };
+
+/**
+ * Las fichas que van al sitemap: sólo las indexables (`isBusinessIndexable`:
+ * activas, no suspendidas y no «vacías»). El filtro está ACÁ para que el sitemap
+ * y la ficha no puedan discrepar. Pagina de a mil (PostgREST corta ahí).
+ *
+ * Devuelve `null` si CUALQUIER lectura falla: un sitemap incompleto cacheado una
+ * hora le saca fichas a los buscadores sin avisar, peor que no actualizarse.
+ * Sin base configurada devuelve `[]`.
+ */
+export async function getBusinessesForSitemap(): Promise<NegocioSitemap[] | null> {
+  if (!hasSupabase) return [];
+  const out: NegocioSitemap[] = [];
+  try {
+    // rubro_id → slug (incluye rubros inactivos: sólo sirve para saber si es «otros»).
+    const { data: rubros, error: errRubros } = await supabase.from("rubros").select("id, slug");
+    if (errRubros) { console.warn("getBusinessesForSitemap rubros error:", errRubros.message); return null; }
+    const slugDe = new Map<string, string>(((rubros ?? []) as { id: string; slug: string }[]).map((r) => [r.id, r.slug]));
+    const PAGINA = 1000;
+    for (let desde = 0; desde < 50 * PAGINA; desde += PAGINA) {
+      // Las columnas van como literal (no una constante): el guard de la regla 11
+      // (backend/tests/test_comercios_columnas_publicas.py) sólo acepta un string
+      // literal o COLUMNAS_COMERCIO. Todas están en COLUMNAS_COMERCIO.
+      const { data, error } = await supabase.from("comercios")
+        .select("slug, updated_at, rubro_id, subcategoria, descripcion, prod_obs_human, prod_det_ia, nombre, activo, suspendido")
+        .eq("activo", true).order("slug").range(desde, desde + PAGINA - 1);
+      if (error) { console.warn("getBusinessesForSitemap error:", error.message); return null; }
+      const filas = (data ?? []) as unknown as (Omit<BusinessSeoFields, "rubro_slug"> & {
+        slug: string; updated_at: string | null; rubro_id: string | null;
+      })[];
+      for (const c of filas) {
+        if (!c.slug) continue;
+        const rubro_slug = c.rubro_id ? slugDe.get(c.rubro_id) ?? null : null;
+        if (isBusinessIndexable({ ...c, rubro_slug })) out.push({ slug: c.slug, updated_at: c.updated_at });
+      }
+      if (filas.length < PAGINA) break;
+    }
+  } catch (e) {
+    console.warn("getBusinessesForSitemap falló:", e);
+    return null;
+  }
+  return out;
+}

@@ -10,10 +10,23 @@ import { CatNav } from "@/components/catnav";
 import { SocialLinks, money } from "@/components/uruku-ui";
 import { WA_URUKU_TEXTO, waUruku } from "@/lib/contacto";
 import { Ic, climaIcono } from "@/components/ic";
-import { getClima, getCotizaciones, getRedes } from "@/lib/data";
+import { getCiudades, getCityCategoryPagesCached, getClima, getCotizaciones, getRedes } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
+import type { Ciudad } from "@/lib/types";
 import { versionLabel } from "@/lib/version";
 import { URUKU_SVG } from "@/lib/adornos";
+
+/** Los slugs de las ciudades con alguna página indexable (pie «Ciudades»). Salen de
+ *  `getCityCategoryPagesCached`: el pie está en casi todas las páginas y no vale una
+ *  consulta a la base por cada una (la memoria y su regla del build viven ahí). */
+async function slugsCiudadesIndexables(): Promise<ReadonlySet<string>> {
+  return new Set((await getCityCategoryPagesCached()).filter((p) => p.indexable).map((p) => p.city_slug));
+}
+
+/** Lo mismo que `ciudadActual()` pero con la ciudad dada y sin tocar cookies. */
+async function ciudadFija(ciudad: Ciudad): Promise<{ ciudad: Ciudad; ciudades: Ciudad[] }> {
+  return { ciudad, ciudades: await getCiudades() };
+}
 
 /**
  * Marco compartido del diseño URUKU: barra social + header (buscador, ciudad,
@@ -31,6 +44,7 @@ export async function UrukuShell({
   fill = false,
   rootClass,
   asistente,
+  fixedCity,
 }: {
   children: React.ReactNode;
   activeCat?: string;
@@ -47,10 +61,22 @@ export async function UrukuShell({
   /** Uruku Ayuda. Por defecto el asistente de URUKU; en la ficha de un local
    *  con el plan que lo incluye, el de ese local; `false` lo esconde. */
   asistente?: { id: string; nombre: string } | false;
+  /** La ciudad del contenido, cuando la página tiene una propia (la ficha de un
+   *  comercio, /{ciudad}, /{ciudad}/{rubro}). Con ella el marco NO lee la
+   *  cookie de ciudad —`ciudadActual()` llama a `cookies()`, que vuelve dinámica
+   *  a toda la página y la saca del ISR— y el encabezado, la cotización y la
+   *  guía son los de esa ciudad: lo mismo para un robot que para una persona
+   *  (antes una ficha de La Paz decía «Bermejo» arriba). El selector de ciudad
+   *  sigue listando todas. */
+  fixedCity?: Ciudad;
 }) {
-  const [{ ciudad, ciudades }, clima, cotizaciones, redes] = await Promise.all([
-    ciudadActual(), getClima(), getCotizaciones(), getRedes(),
+  const [{ ciudad, ciudades }, clima, cotizaciones, redes, slugsIndexables] = await Promise.all([
+    fixedCity ? ciudadFija(fixedCity) : ciudadActual(), getClima(), getCotizaciones(), getRedes(),
+    showFooter && !fill ? slugsCiudadesIndexables() : Promise.resolve<ReadonlySet<string>>(new Set()),
   ]);
+  // Pie «Ciudades»: sólo las que tienen una página que se indexa (enlace interno
+  // a /{ciudad}). Sin ninguna, el bloque no aparece.
+  const ciudadesPie = ciudades.filter((c) => c.activa && slugsIndexables.has(c.slug));
   const nombre = ciudad?.nombre ?? "tu ciudad";
   // Dos preguntas distintas. `esFrontera` (columna de la ciudad): si el
   // peso argentino le importa. `conGuia`: si lo que hoy está cargado —la
@@ -172,6 +198,19 @@ export async function UrukuShell({
                 <Link href="/agentes" className="uk-foot-link"><Ic n="seguridad" /><span>Agentes de URUKU</span><i>›</i></Link>
               </div>
             </div>
+
+            {ciudadesPie.length > 0 && (
+              <nav className="uk-foot-col" aria-label="Ciudades" style={{ marginTop: 24 }}>
+                <h4>Ciudades</h4>
+                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexWrap: "wrap", gap: "4px 20px" }}>
+                  {ciudadesPie.map((c) => (
+                    <li key={c.slug}>
+                      <Link href={`/${c.slug}`} className="uk-foot-link"><Ic n="ubicacion" /><span>{c.nombre}</span></Link>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            )}
 
             <div className="uk-foot-cta">
               <span className="uk-foot-cta-ic"><Ic n="comercios" /></span>

@@ -98,8 +98,27 @@ export function ahoraEnBolivia(base: Date = new Date()): Date {
   }
 }
 
-export function abiertoAhora(horario: string | null | undefined, now: Date = ahoraEnBolivia()): EstadoHorario {
-  if (!horario || !horario.trim()) return { estado: "desconocido" };
+// Lo que puede sobrar en un tramo sin que sea un dato que no entendimos:
+// conectores y palabras de relleno («lun a vie de 9 a 13 y de 15 a 19»).
+const RELLENO = /\b(a|y|e|de|del|desde|hasta|todos|los|dias|dia|diario)\b/g;
+const NOMBRES_DIA = new RegExp(`\\b(${Object.keys(DIAS).join("|")})\\b`, "g");
+
+/** ¿Quedó algo del tramo que no es día, hora ni conector? Ej. «dom cerrado»,
+ *  «feriados 10-12» o «previa cita». Si queda, no entendimos TODO el texto. */
+function sobraTexto(seg: string): boolean {
+  const resto = seg
+    .replace(/(\d{1,2}(?::\d{2})?)\s*a\s*(\d{1,2}(?::\d{2})?)/g, "$1-$2")
+    .replace(/(\d{1,2})(?:[:.](\d{2}))?\s*-\s*(\d{1,2})(?:[:.](\d{2}))?/g, " ")
+    .replace(/todos|diario|lun a dom|lunes a domingo/g, " ")
+    .replace(NOMBRES_DIA, " ")
+    .replace(RELLENO, " ");
+  return /[a-z0-9]/.test(resto);
+}
+
+/** El horario ya partido en rangos por día. Lo comparten `abiertoAhora` y
+ *  `parseOpeningHours`: un solo parser, para que lo que dice el badge y lo que
+ *  declara el JSON-LD no puedan contradecirse. */
+function construirRangos(horario: string): { rangos: Rango[]; entendido: boolean } {
   const texto = norm(horario);
 
   // Segmentos por · , ; | + / salto de línea (cada uno con sus días+horas).
@@ -109,10 +128,12 @@ export function abiertoAhora(horario: string | null | undefined, now: Date = aho
   const segmentos = texto.split(/[·;|+\n]+|,(?=\s*[a-z]{3})/).map((x) => x.trim()).filter(Boolean);
 
   const rangos: Rango[] = [];
+  let entendido = segmentos.length > 0;
   let diasAnteriores: Set<number> | null = null;
   for (const seg of segmentos) {
     const horas = rangosHorarios(seg);
-    if (horas.length === 0) continue;
+    if (horas.length === 0) { entendido = false; continue; }
+    if (sobraTexto(seg)) entendido = false;
     // Los días se toman del texto sin las horas. Un tramo sin días hereda los
     // del anterior: «Lun a Sáb 8-12 · 14:30-20» es la tarde de lunes a sábado,
     // no de todos los días (antes el domingo figuraba abierto a la tarde).
@@ -139,6 +160,46 @@ export function abiertoAhora(horario: string | null | undefined, now: Date = aho
     }
   }
 
+  return { rangos, entendido: entendido && rangos.length > 0 };
+}
+
+/** Una franja de apertura de un día: minutos desde medianoche (0–1440). */
+export type FranjaHoraria = { desde: number; hasta: number };
+
+/** El horario en estructura: por cada día (1 = lunes … 7 = domingo) sus franjas. */
+export type HorarioParseado = {
+  /** Sólo los días con alguna franja, de lunes a domingo; las franjas, por hora de apertura. */
+  dias: Array<{ dia: number; franjas: FranjaHoraria[] }>;
+  /** `true` si TODO el texto se interpretó. Con `false` hay partes que no
+   *  entendimos («dom cerrado», «previa cita»): sirve para `abiertoAhora`, que
+   *  es prudente, pero NO para declarar el horario en datos estructurados. */
+  completo: boolean;
+};
+
+/** Interpreta el horario libre (mismo parser que `abiertoAhora`) y devuelve los
+ *  días y franjas, o `null` si no se pudo sacar ninguno. Un horario que cruza la
+ *  medianoche («22-4») se parte: la noche del día que abre y la madrugada del
+ *  siguiente. Quien lo use para JSON-LD debe pedir `completo`. */
+export function parseOpeningHours(horario: string | null | undefined): HorarioParseado | null {
+  if (!horario || !horario.trim()) return null;
+  const { rangos, entendido } = construirRangos(horario);
+  if (rangos.length === 0) return null;
+  const porDia = new Map<number, FranjaHoraria[]>();
+  for (const r of rangos) {
+    for (const d of r.dias) {
+      const lista = porDia.get(d) ?? [];
+      if (!lista.some((f) => f.desde === r.desde && f.hasta === r.hasta)) lista.push({ desde: r.desde, hasta: r.hasta });
+      porDia.set(d, lista);
+    }
+  }
+  const dias = [...porDia.keys()].sort((a, b) => a - b)
+    .map((dia) => ({ dia, franjas: (porDia.get(dia) ?? []).sort((a, b) => a.desde - b.desde) }));
+  return { dias, completo: entendido };
+}
+
+export function abiertoAhora(horario: string | null | undefined, now: Date = ahoraEnBolivia()): EstadoHorario {
+  if (!horario || !horario.trim()) return { estado: "desconocido" };
+  const { rangos } = construirRangos(horario);
   if (rangos.length === 0) return { estado: "desconocido" };
   // ¿Abre en algún momento HOY? Sin esto, un lunes que no abre se leía igual
   // que una siesta: «Cerrado · abre 9:30», y parecía que abría hoy.

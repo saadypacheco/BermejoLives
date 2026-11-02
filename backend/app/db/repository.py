@@ -234,6 +234,7 @@ class Repo(Protocol):
     def kpis_admin(self, dias: int = 30) -> dict: ...
     def insert_visita(self, fila: dict) -> None: ...
     def resumen_visitas(self, dias: int = 30) -> dict: ...
+    def comercios_para_indexnow(self, desde_iso: str, limite: int = 1000) -> list[dict]: ...
     def list_suscripciones(self, ciudad_id: str | None = None) -> list[dict]: ...
     def registrar_pago(self, comercio_id: str, row: dict) -> dict: ...
     def suspender_comercio(self, comercio_id: str) -> None: ...
@@ -3963,6 +3964,8 @@ class SupabaseRepo:
         from collections import Counter
         from datetime import date, timedelta
 
+        from app.core.ai_sources import summarize_ai_sources
+
         # Inclusiva y en hora de Bolivia: `dias=1` es hoy, no hoy y ayer.
         desde = (self._hoy_en_bolivia() - timedelta(days=max(0, dias - 1))).isoformat()
         filas: list[dict] = []
@@ -4005,6 +4008,9 @@ class SupabaseRepo:
             "top_rutas": [{"ruta": r, "n": n} for r, n in rutas.most_common(12)],
             "top_referidos": [{"referido": r, "n": n} for r, n in referidos.most_common(8)],
             "top_origenes": [{"origen": o, "n": n} for o, n in origenes.most_common(8)],
+            # Visitas que vienen de asistentes de IA (ChatGPT, Perplexity, …): sobre las
+            # mismas filas, sin consultas nuevas.
+            "ai_sources": summarize_ai_sources(filas),
             "embudo": {
                 "visitas": len(filas),
                 "personas": personas,
@@ -4013,6 +4019,36 @@ class SupabaseRepo:
                 "mapa": por_tipo.get("mapa", 0),
             },
         }
+
+    def comercios_para_indexnow(self, desde_iso: str, limite: int = 1000) -> list[dict]:
+        """TODAS las fichas modificadas DESPUÉS de `desde_iso` (activas o no, suspendidas o
+        no: las dadas de baja también se avisan para que salgan del índice), de la más
+        vieja a la más nueva, con lo justo para decidir si son indexables (`rubro_slug`
+        incluido; un rubro inactivo cuenta como «sin rubro», igual que en SQL 0180).
+        Pagina por (updated_at, id) de a `limite`: un UPDATE masivo con miles de filas del
+        mismo `updated_at` no deja ninguna afuera. Es lo que lee el loop de IndexNow."""
+        columnas = ("id, slug, nombre, updated_at, activo, suspendido, rubro_id, subcategoria, "
+                    "descripcion, prod_obs_human, prod_det_ia")
+        filas: list[dict] = []
+        ultimo: dict | None = None
+        for _pagina in range(200):  # tope de seguridad: 200 x limite filas
+            q = self._db.table("comercios").select(columnas)
+            if ultimo is None:
+                q = q.gt("updated_at", desde_iso)
+            else:
+                u, i = ultimo["updated_at"], ultimo["id"]
+                q = q.or_(f"updated_at.gt.{u},and(updated_at.eq.{u},id.gt.{i})")
+            lote = q.order("updated_at").order("id").limit(limite).execute().data or []
+            filas += lote
+            if len(lote) < limite:
+                break
+            ultimo = lote[-1]
+        if not filas:
+            return []
+        rubros = {r["id"]: r["slug"] for r in
+                  (self._db.table("rubros").select("id, slug, activo").execute().data or [])
+                  if r.get("activo", True)}
+        return [{**f, "rubro_slug": rubros.get(f.get("rubro_id"))} for f in filas]
 
     def _cuantos_da_hoy(self, query: str) -> int | None:
         """Cuántos comercios devuelve HOY esa búsqueda. Pide uno solo: lo que

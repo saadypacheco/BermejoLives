@@ -12,6 +12,10 @@ import {
 import { cambioFavorable, diasDesde, DIAS_VIEJA, formatoMonto, tasasDe } from "@/lib/cambio";
 import { abiertoAhora, ahoraEnBolivia, etiquetaHorario } from "@/lib/horario";
 import { Ic, IcRubro, climaIcono, type NombreIcono } from "@/components/ic";
+import { JsonLd } from "@/components/json-ld";
+import { breadcrumbNode, faqPageNode, jsonLdGraph } from "@/lib/seo";
+import { Revisado } from "@/components/revisado";
+import { getSaberRevisado } from "@/lib/saber-revisado";
 
 export const dynamic = "force-dynamic";
 
@@ -19,8 +23,9 @@ export async function generateMetadata(): Promise<Metadata> {
   const { ciudad } = await ciudadActual();
   const n = ciudad?.nombre ?? "Bermejo";
   return {
-    title: `Guía para venir a ${n} — URUKU`,
+    title: `Guía para venir a ${n}`,
     description: `Cómo está el paso hoy, documentos, aduana y franquicia, cambio, dónde comprar y a qué hora, transporte, seguridad, chip e internet en ${n}.`,
+    alternates: { canonical: "/guia" },
   };
 }
 
@@ -74,8 +79,8 @@ export default async function GuiaPage() {
   const paso = ciudad?.paso_nombre ?? "Aguas Blancas";
   const monedaVecina = ciudad?.moneda_vecina ?? "ARS";
   const claveVecina = monedaVecina === "BRL" ? "brl_bob" : monedaVecina === "PEN" ? "pen_bob" : "ars_bob";
-  const [saber, frontera, clima, cotizaciones, hist, videos, comercios, turnosHoy, ...servicios] = await Promise.all([
-    getSaberLocalPorSeccion(ciudad?.id), getFronteraEstado(ciudad?.id), getClima(), getCotizaciones(), getCotizacionHistorial(claveVecina, 8),
+  const [revisado, saber, frontera, clima, cotizaciones, hist, videos, comercios, turnosHoy, ...servicios] = await Promise.all([
+    getSaberRevisado(ciudad?.id), getSaberLocalPorSeccion(ciudad?.id), getFronteraEstado(ciudad?.id), getClima(), getCotizaciones(), getCotizacionHistorial(claveVecina, 8),
     getVideosPromo(6), buscarComercios({ ciudad: ciudad?.slug }, 300, 0),
     // Farmacias de turno hoy: la tarjeta sólo aparece si la ciudad tiene turnos cargados.
     getFarmaciasDeTurnoAhora(ciudad?.id),
@@ -98,8 +103,19 @@ export default async function GuiaPage() {
     .map(([slug, titulo], i) => [titulo, slug, (servicios[i] ?? []).filter((c) => c.rubro_slug === slug)] as const)
     .filter(([, , items]) => items.length > 0);
 
+  // FAQPage con EXACTAMENTE las preguntas visibles de las secciones que le tocan a
+  // /guia (§3.8): todas menos `comercios` (la marca /comprar-en-bermejo) y `general`
+  // (la marca /que-es-uruku). Cada pregunta se marca en una sola página.
+  const faq = (["frontera", "documentos", "aduana", "transporte", "seguridad", "conectividad"] as const)
+    .flatMap((k) => (saber[k] ?? []).map((s) => ({ pregunta: s.pregunta, respuesta: s.respuesta })));
+  const datos = jsonLdGraph([
+    breadcrumbNode([{ name: "URUKU", path: "/" }, { name: `Guía para venir a ${nombre}` }]),
+    faq.length > 0 ? faqPageNode(faq) : null,
+  ]);
+
   return (
     <UrukuShell showCatnav={false} activeNav="Guía">
+      <JsonLd data={datos} />
       <div className="uk-container uk-guia">
         <h1>Para el que viene a {nombre}</h1>
         <p className="uk-guia-sub">
@@ -159,6 +175,7 @@ export default async function GuiaPage() {
         {(["frontera", "documentos", "aduana"] as const).map((k) => (
           <section key={k} className="uk-guia-sec" id={k}>
             <h2><Ic n={SECCION[k].icono} s={22} /> {SECCION[k].titulo}</h2>
+            <Revisado iso={revisado[k]} />
             <Preguntas items={saber[k] ?? []} />
           </section>
         ))}
@@ -184,7 +201,12 @@ export default async function GuiaPage() {
                 </ul>
               )}
           </div>
+          <Revisado iso={revisado.comercios} />
           <Preguntas items={saber.comercios ?? []} />
+          {/* Las preguntas de compras las contesta y las marca /comprar-en-bermejo. */}
+          {nombre === "Bermejo" && (
+            <p className="uk-guia-nota"><Ic n="comprar" s={16} /> ¿Venís de Argentina a comprar? Mirá <Link href="/comprar-en-bermejo">Comprar en Bermejo desde Argentina: qué conviene, cómo cruzar y cómo pagar</Link>.</p>
+          )}
         </section>
 
         {/* ---------- MAPA DE SERVICIOS ---------- */}
@@ -243,6 +265,7 @@ export default async function GuiaPage() {
         {(["transporte", "seguridad", "conectividad"] as const).map((k) => (
           <section key={k} className="uk-guia-sec" id={k}>
             <h2><Ic n={SECCION[k].icono} s={22} /> {SECCION[k].titulo}</h2>
+            <Revisado iso={revisado[k]} />
             <Preguntas items={saber[k] ?? []} />
           </section>
         ))}

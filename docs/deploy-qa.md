@@ -77,8 +77,8 @@ GIT_SHA=$(git rev-parse --short HEAD) APP_ENV=qa \
 
 ## 3) Abrir/cerrar el sitio público (modo captura)
 
-`NEXT_PUBLIC_MODO_CAPTURA` en el `.env`: `1` = solo `/bermejo` y `/admin`
-(el resto "Próximamente"); `0` = sitio público abierto. Tras cambiarlo:
+`NEXT_PUBLIC_MODO_CAPTURA` en el `.env`: `1` = solo las rutas de campo y gestión (`/publicar`, `/campo`, `/admin`…:
+la lista `PERMITIDAS` de `frontend/middleware.ts`); el resto "Próximamente"; `0` = sitio público abierto. Tras cambiarlo:
 
 ```bash
 GIT_SHA=$(git rev-parse --short HEAD) APP_ENV=qa \

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { UrukuShell } from "@/components/uruku-shell";
 import { BuscarClient } from "@/components/buscar-client";
@@ -5,6 +6,14 @@ import { ciudadActual } from "@/lib/ciudad-server";
 import { AccesosCiudad } from "@/components/accesos-ciudad";
 
 export const dynamic = "force-dynamic";
+
+// El buscador no se indexa (docs/visibilidad-buscadores-ia.md §3.7): cada consulta
+// es una página casi igual a otra. Se rastrea (`follow`) para que los enlaces a las
+// fichas sigan contando; lo que se indexa son las fichas y las páginas por ciudad y rubro.
+export const metadata: Metadata = {
+  title: "Buscar comercios",
+  robots: { index: false, follow: true },
+};
 
 type Props = { searchParams?: Record<string, string | string[] | undefined> };
 

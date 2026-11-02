@@ -54,3 +54,7 @@ frontend/public/manuales/capturas/**/*.png
 
 # QR de cobro: se copia al VPS por scp, nunca al repo
 /data/pago/
+
+# Clave de IndexNow: la escribe scripts/deploy-prod.sh desde backend/.env (nunca se commitea)
+frontend/public/*.txt
+!frontend/public/robots.txt
