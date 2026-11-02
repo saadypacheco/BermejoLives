@@ -1273,3 +1273,34 @@ En tests: `CONTENT_PLANNER_WORKER` y `CONTENT_RENDER_WORKER` no corren (el `Test
 | 4 | ¿Los planes de arriba (Destacado, Pro) llevan 4 piezas? | **Sí** (lo dice la spec funcional); se cambia en Admin › Planes sin deploy |
 | 5 | ¿Arrancar la bienvenida a los suscriptores que ya pagaban? | **Sólo a mano** y a quienes elijas: si no, les llega una «bienvenida» meses después |
 | 6 | Hashtags por rubro | Arranca con una lista corta en el código (§6.4); pasala si querés otra |
+
+---
+
+## 15. Cambio del 2/11: sólo redes de URUKU + videos en la home
+
+Decidido por el dueño después de la revisión:
+
+1. **Se publica sólo en las redes de URUKU.** Nada se manda a los comercios para que lo publiquen ellos (eso queda para más adelante).
+2. **Al comerciante no se le escribe por WhatsApp** (el dueño no quiere riesgo de baneo, ni siquiera con `wa.me` asistido). La tarea `piece_delivery` pasa a ser **«Entregar el video a mano»**: trae el botón para **descargar** el video (URL firmada del panel) y «Marcar entregado». Sin texto M2 ni link `wa.me`. El `share_token` no se le muestra a nadie en el MVP; la página `/pieza/<token>` queda en el código, dormida (no se arma el link en ningún lado).
+3. **Los videos publicados se ven en la home** (opción C): una franja «Videos de URUKU» con las **portadas**; al tocar una, el video se reproduce ahí mismo (`preload="none"`, sólo baja al tocar) con «Ver en TikTok / Instagram» y «Ver el comercio».
+4. **Autorización:** el texto pasa a «aparecer en las **redes y la página** de URUKU» en todas las pantallas.
+5. **AGENTS.md §2:** «Videos: los de los comercios NO se hostean (link a TikTok); los videos propios de URUKU sí, en el disco privado del backend».
+
+### 15.1 Backend
+
+- `GET /public/videos?city=<slug>&limit=12` (sin auth, `limit` ≤ 24). Devuelve `PublicVideoListResponse { items: PublicVideoResponse[] }`, ordenado por fecha de publicación descendente.
+  `PublicVideoResponse { id, title, comercio: {nombre, slug} | null, city_slug, published_at, duration_s, cover_url, video_url, network_links: {tiktok?, instagram?, facebook?, youtube?} }`.
+  - Entra una pieza sólo si: tiene al menos un `content_posts.status='posted'`, el video y la portada siguen en disco (sin `file_purged_at`), **todos** los comercios de sus fuentes están `activo` y con autorización vigente.
+  - `title`: el nombre del comercio, o «Ofertas de la semana» en un compilado (`comercio` null).
+  - `cover_url` y `video_url` son rutas relativas **estables** `/public/videos/{id}/cover` y `/public/videos/{id}/video` (sin firma: el contenido ya es público). Mismas condiciones; si no se cumplen, 404. Range (206/416), sin gzip, `Cache-Control: public, max-age=3600`, `X-Content-Type-Options: nosniff`. Rate limit por IP como los otros públicos de GET si existe el mecanismo.
+  - `network_links`: el `post_url` de cada red publicada.
+- `piece_delivery`: `mensaje_de_tarea` devuelve `None` para esa tarea (sin `wa.me`); la respuesta de la tarea suma `download_url` (firmada, 15 min, `download=1`) cuando la pieza tiene video. Etiqueta: «Entregar el video a mano».
+- La retención (videos a los 90 días) no cambia: la home sólo lista lo que sigue en disco.
+
+### 15.2 Frontend
+
+- `components/videos-uruku.tsx`: server component en la home (después de las ofertas o donde encaje en el ritmo de la home), lee `GET /public/videos?city=<ciudad actual>` con `next: { revalidate: 300 }`; si falla o viene vacío, **no se muestra nada**. Portadas 9:16 en tira horizontal con scroll, nombre del comercio abajo. Un client component chico para el reproductor (modal o expandido): `<video controls playsInline preload="none" poster>` y los links. Íconos sólo de `ic.tsx`.
+- JSON-LD `VideoObject` por video en el grafo de la home: `name`, `description`, `thumbnailUrl` y `contentUrl` absolutos (base de la API), `uploadDate`, `duration` ISO 8601.
+- Tarea `piece_delivery` en Suscriptores: botón «Descargar video» (`download_url`) + «Marcar entregado» (`POST .../done` con `{sent: true}`), sin botón de WhatsApp.
+- Textos de la autorización: «redes y página de URUKU» (`social-consent-box`, `social-consent-toggle`, `completar-comercio`, `publicar`, `mi-comercio`).
+- Contratos que cambiaron en los arreglos (`166bc5a`): `GET /comercio/social-consent` ya no trae `note` ni `recorded_by` (hacerlos opcionales); `skip_reason` suma `comercio_inactivo` y `asset_removed` (etiquetas «El comercio está de baja» y «Se quitó una foto»).
