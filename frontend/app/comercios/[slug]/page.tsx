@@ -11,9 +11,10 @@ import { GuardarBoton } from "@/components/guardar-boton";
 import { HorarioBadge } from "@/components/horario-badge";
 import { EstrellaVerificado } from "@/components/estrella-verificado";
 import { CompartirBoton } from "@/components/compartir-boton";
+import { JsonLd } from "@/components/json-ld";
+import { PharmacyDutyBadge } from "@/components/pharmacy-duty-badge";
 import QRCode from "qrcode";
-import { getComercioBySlug, getOfertasComercio, getGaleriaComercio, nombreCiudadDe, getFuncionesDePlan, getPlanPublico, getTurnosDeFarmacia } from "@/lib/data";
-import { estaDeTurno, etiquetaHasta, fechaCorta, turnosFuturos } from "@/lib/turnos-farmacia";
+import { cargarFicha } from "@/lib/ficha-data";
 import { FichaGaleria } from "@/components/ficha-galeria";
 import { GaleriaTienda } from "@/components/galeria-tienda";
 import { VistaLogger } from "@/components/vista-logger";
@@ -21,88 +22,105 @@ import { VolverAResultados } from "@/components/volver-a-resultados";
 import { MODALIDAD_LABEL } from "@/lib/types";
 import { enlaceCanal, enlaceRed, urlHttp } from "@/lib/catalogo";
 import {
+  absoluteUrl, breadcrumbNode, businessPath, categoryPath, cityPath, jsonLdGraph, localBusinessNode, robotsFor, type MigaItem,
+} from "@/lib/seo";
+import { tituloFicha } from "@/lib/ficha-seo";
+import {
   WhatsApp, Pin, Phone, Globe, Instagram, Facebook, TikTok,
 } from "@/components/icons";
+import "@/app/styles/ficha-seo.css";
 
-export const dynamic = "force-dynamic"; // el header (ciudad por cookie) es dinámico
+/** ISR (AGENTS.md regla 9; docs/visibilidad-buscadores-ia.md §3.5): la ficha se
+ *  genera en el primer pedido y se renueva cada 5 minutos. Para que sea posible
+ *  NADA acá puede leer cookies, headers ni searchParams: la ciudad es la del
+ *  comercio (`fixedCity`) y el sello de turno de farmacia se decide en el
+ *  navegador (`PharmacyDutyBadge`). */
+export const revalidate = 300;
+/** `force-static`: las lecturas de la base mandan `cache: "no-store"`
+ *  (lib/supabase.ts) y, sin esto, Next tira la ficha a render dinámico en el
+ *  primer pedido. Con esto se leen al regenerar la página, cada 5 minutos. */
+export const dynamic = "force-static";
+export const dynamicParams = true;
+/** Sin fichas pre-generadas: se arman en el primer pedido (son ~6.000). */
+export function generateStaticParams() { return []; }
 
 /** El título y la vista previa de la ficha: es lo que se ve cuando alguien
- *  la comparte por WhatsApp o la encuentra en Google. Sin esto todas las
- *  fichas decían "URUKU — Comercios y ofertas en el mapa" y sin foto: un
- *  enlace compartido que no dice qué local es no se abre. */
+ *  la comparte por WhatsApp o la encuentra en Google. La imagen la dibuja
+ *  `opengraph-image.tsx` (al lado de este archivo): por eso acá no hay `images`. */
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const c = await getComercioBySlug(params.slug);
-  if (!c) return { title: "Comercio no encontrado — URUKU" };
-  const ciudad = await nombreCiudadDe(c.ciudad_id);
-  const que = c.subcategoria || sinEmoji(c.rubro_nombre) || "";
-  const titulo = `${c.nombre.trim()}${que ? ` — ${que}` : ""} en ${ciudad} | URUKU`;
-  const vende = (c.prod_obs_human || c.prod_det_ia || "").split(/[,;·]/).map((t) => t.trim()).filter(Boolean).slice(0, 6).join(", ");
-  const descripcion = (c.descripcion?.trim() || (vende ? `Vende ${vende}.` : `${c.nombre.trim()} en el mapa de ${ciudad}.`))
-    + " Cómo llegar, WhatsApp y ofertas en URUKU.";
-  const imagen = c.portada_url || c.logo_url || "https://uruku.bo/logouruku.png";
+  const f = await cargarFicha(params.slug);
+  if (!f) return { title: { absolute: "Comercio no encontrado | URUKU" }, robots: robotsFor(false) };
+  const { comercio: c, ciudad, que, indexable, descripcion } = f;
+  // `absolute`: el título ya lleva la marca («| URUKU»); sin esto la plantilla
+  // del layout la repite («… | URUKU · Uruku»).
+  const titulo = tituloFicha(c.nombre, que, ciudad.nombre);
+  const url = absoluteUrl(businessPath(c.slug));
   return {
-    title: titulo,
-    description: descripcion.slice(0, 300),
-    alternates: { canonical: `https://uruku.bo/comercios/${c.slug}` },
-    openGraph: { title: titulo, description: descripcion.slice(0, 300), url: `https://uruku.bo/comercios/${c.slug}`,
-                 siteName: "URUKU", type: "website", locale: "es_BO", images: [{ url: imagen }] },
-    twitter: { card: "summary_large_image", title: titulo, description: descripcion.slice(0, 200), images: [imagen] },
+    title: { absolute: titulo },
+    description: descripcion,
+    alternates: { canonical: url },
+    robots: robotsFor(indexable),
+    openGraph: { title: titulo, description: descripcion, url, siteName: "URUKU", type: "website", locale: "es_BO" },
+    twitter: { card: "summary_large_image", title: titulo, description: descripcion },
   };
 }
 
-/** Lo que vende, partido en fichas. Viene como texto separado por comas —lo
- *  escribió el agente o lo leyó la IA de la vidriera— y en una sola línea larga
- *  no se lee. Cortado, contesta de un vistazo "¿tiene lo que busco?". */
-function loQueVende(texto: string | null | undefined): string[] {
-  return (texto ?? "")
-    .split(/[,;·]/)
-    .map((t) => t.trim())
-    .filter((t) => t.length > 1)
-    .slice(0, 12);
-}
-
 export default async function ComercioPage({ params }: { params: { slug: string } }) {
-  const comercio = await getComercioBySlug(params.slug);
+  const ficha = await cargarFicha(params.slug);
   // 404 de verdad (app/not-found.tsx): un slug viejo o mal copiado no es
   // una página que existe, y así lo entienden los buscadores y el navegador.
-  if (!comercio) notFound();
-  const ciudadNombre = await nombreCiudadDe(comercio.ciudad_id);
+  if (!ficha) notFound();
+  const { comercio, ciudad, rubro, productos, que, estadoPar, ciudadConPaginas, descripcion: descripcionMeta,
+          feed, galeria, funcionesPlan, planPublico, turnos: turnosFarmacia } = ficha;
+  const ciudadNombre = ciudad.nombre;
   // Un taxi, remis o chofer sin parada fija: no hay "cómo llegar", se lo llama.
   const sinParada = comercio.rubro_slug === "taxis" && !comercio.direccion && !comercio.lat;
   const responde = (comercio.contacto_ok ?? 0) >= 3 && (comercio.contacto_ok ?? 0) >= 2 * (comercio.contacto_no ?? 0);
   const noResponde = (comercio.contacto_no ?? 0) >= 5 && (comercio.contacto_ok ?? 0) === 0;
+  const urlFicha = absoluteUrl(businessPath(comercio.slug));
   // El QR de la ficha, el mismo que va en el volante y en la tarjeta de mesa.
   // En pantalla sirve para pasar la ficha de una compu a un celular sin
   // tipear, y para que el dueño la muestre desde su teléfono. Se genera acá,
   // en el servidor, por lo mismo que en el volante: la librería no viaja al
-  // navegador.
-  const urlFicha = `https://uruku.bo/comercios/${comercio.slug}`;
-  const ahora = new Date();
-  const [feed, galeria, funcionesPlan, planPublico, turnosFarmacia, qr] = await Promise.all([
-    getOfertasComercio(comercio.id), getGaleriaComercio(comercio.id),
-    // Las funciones del plan (decide si la ficha lleva el chatbot del local):
-    // se leen junto con lo demás, no en serie.
-    getFuncionesDePlan((comercio as { plan?: string | null }).plan),
-    // La estrella «Verificado por URUKU» (plan pago al día o de cortesía). Si
-    // la lectura falla, sin estrella.
-    getPlanPublico(comercio.id),
-    // El rol de turnos, sólo para las farmacias. Sin turnos (o si la lectura
-    // falla) la ficha queda como siempre.
-    comercio.rubro_slug === "farmacia" ? getTurnosDeFarmacia(comercio.id, ahora) : Promise.resolve([]),
-    // Con `?ref=`: la vista que llegue por este QR queda marcada como tal
-    // (0114), distinta de la que llega por el volante o la tarjeta de mesa.
-    QRCode.toDataURL(`${urlFicha}?ref=ficha-${comercio.slug}`, { width: 240, margin: 1, errorCorrectionLevel: "M",
-                                 color: { dark: "#0f2c33", light: "#ffffff" } }),
-  ]);
+  // navegador. Con `?ref=`: la vista que llegue por este QR queda marcada como
+  // tal (0114), distinta de la que llega por el volante o la tarjeta de mesa.
+  const qr = await QRCode.toDataURL(`${urlFicha}?ref=ficha-${comercio.slug}`, { width: 240, margin: 1, errorCorrectionLevel: "M",
+                                 color: { dark: "#0f2c33", light: "#ffffff" } });
 
-  // El sello de turno: «De turno ahora…» si está de turno, si no sus próximos 4.
-  const turnoVigente = turnosFarmacia.find((t) => estaDeTurno(t, ahora)) ?? null;
-  const turnosProximos = turnosFuturos(turnosFarmacia, ahora).slice(0, 4);
+  // El sello de turno lo decide el NAVEGADOR (PharmacyDutyBadge): acá sólo se
+  // pasan los turnos. Calcularlo en el servidor lo congelaba en el ISR.
+  const turnosParaSello = turnosFarmacia.map((t) => ({
+    id: t.id, comercio_id: t.comercio_id, fecha: t.fecha, inicio: t.inicio, fin: t.fin,
+  }));
 
   // Ofertas y novedades van en la vidriera de fotos, con su etiqueta y un
   // filtro por tipo (components/galeria-tienda.tsx). Los videos de TikTok no.
   const publicaciones = feed.filter((p) => p.tipo === "oferta" || p.tipo === "novedad");
-  const vende = loQueVende(comercio.prod_obs_human || comercio.prod_det_ia);
+
+  // Migas: URUKU › Ciudad › Rubro › Comercio. La ciudad y el rubro enlazan sólo
+  // si esa página existe (`city_category_pages()`); si no, quedan como texto.
+  const migas: MigaItem[] = [
+    { name: "Inicio", path: "/" },
+    { name: ciudadNombre, path: ciudadConPaginas ? cityPath(ciudad.slug) : undefined },
+    ...(rubro && ficha.rubroSlug && ficha.rubroSlug !== "otros"
+      ? [{ name: rubro, path: estadoPar !== "missing" ? categoryPath(ciudad.slug, ficha.rubroSlug) : undefined }]
+      : []),
+    { name: comercio.nombre },
+  ];
+  // En el JSON-LD sólo van las migas con dirección (Google exige `item` en todas
+  // menos la última) y la raíz se llama «URUKU».
+  const migasLd: MigaItem[] = migas.filter((m, i) => m.path || i === migas.length - 1)
+    .map((m) => (m.path === "/" ? { ...m, name: "URUKU" } : m));
+  const jsonLd = jsonLdGraph([
+    localBusinessNode({ comercio, ciudad, rubroSlug: ficha.rubroSlug, productos, descripcion: descripcionMeta }),
+    breadcrumbNode(migasLd),
+  ]);
+  // «Más {rubro} en {Ciudad}»: sólo si la página del par es indexable.
+  const masDelRubro = estadoPar === "index" && ficha.rubroSlug && rubro
+    ? { href: categoryPath(ciudad.slug, ficha.rubroSlug), texto: `Más ${rubro.toLowerCase()} en ${ciudadNombre}` }
+    : null;
+  // La calle con la ciudad: «Dónde queda» (§3.5).
+  const dondeQueda = (comercio.direccion || comercio.calle || "").trim();
 
   // Cada enlace pasa por `enlaceRed`: arma «@mitienda» como la dirección de la
   // red y descarta lo que no sea web. Antes iban tal cual al href, y un
@@ -149,12 +167,25 @@ export default async function ComercioPage({ params }: { params: { slug: string 
   // si el plan no lo tuviera: mejor no mostrarlo que mostrar uno que da 403.
   const conChatbot = funcionesPlan?.asistente_24_7 === true;
   return (
-    <UrukuShell showCatnav={false}
+    <UrukuShell showCatnav={false} fixedCity={ciudad}
                 asistente={conChatbot ? { id: comercio.id, nombre: comercio.nombre } : undefined}>
+      <JsonLd data={jsonLd} />
       <VistaLogger comercioId={comercio.id} />
 
       <div className="uk-container uk-ficha">
         <VolverAResultados />
+
+        <nav className="uk-migas" aria-label="Migas de pan">
+          <ol>
+            {migas.map((m, i) => (
+              <li key={`${i}-${m.name}`}>
+                {i === migas.length - 1
+                  ? <span aria-current="page">{m.name}</span>
+                  : m.path ? <Link href={m.path}>{m.name}</Link> : <span>{m.name}</span>}
+              </li>
+            ))}
+          </ol>
+        </nav>
 
         {/* ===== Arriba: la galería y la tarjeta de contacto ===== */}
         <div className="uk-ficha-top">
@@ -177,6 +208,10 @@ export default async function ComercioPage({ params }: { params: { slug: string 
               {planPublico.estrella && <EstrellaVerificado s={20} />}
             </h1>
 
+            <p className="uk-ficha-donde">
+              {que ? `${que} en ` : "En "}{ciudadNombre}{ciudad.departamento && ciudad.departamento !== ciudadNombre ? `, ${ciudad.departamento}` : ""}
+            </p>
+
             <div className="uk-ficha-pills">
               {comercio.rubro_nombre && <span className="uk-pill green">{sinEmoji(comercio.rubro_nombre)}</span>}
               {responde && <span className="uk-pill green" title="Los que le escribieron dicen que contesta"><Ic n="si" s={13} /> Responde</span>}
@@ -187,34 +222,11 @@ export default async function ComercioPage({ params }: { params: { slug: string 
               <HorarioBadge horario={comercio.horario} estimado={comercio.horario_estimado} />
             </div>
 
-            {/* FARMACIA DE TURNO (spec docs/farmacias-de-turno.md). Ícono + texto:
-                el verde solo no alcanza para quien no distingue colores. */}
-            {turnoVigente ? (
-              <p className="uk-ficha-turno">
-                <span className="uk-turno-sello">
-                  <Ic n="turno_farmacia" s={18} peso="fill" />
-                  De turno ahora · {etiquetaHasta(turnoVigente.fin, ahora)} · atiende las 24 h
-                </span>
-              </p>
-            ) : turnosProximos.length > 0 && (
-              <p className="uk-ficha-turno">
-                <span className="uk-turno-sello proximos">
-                  <Ic n="calendario" s={18} />
-                  <span>Próximos turnos: {turnosProximos.map((t) => fechaCorta(t.fecha)).join(", ")}
-                    <Link href="/farmacias-de-turno">Ver quién está hoy</Link></span>
-                </span>
-              </p>
-            )}
+            {/* FARMACIA DE TURNO (spec docs/farmacias-de-turno.md): lo decide el
+                navegador, no el servidor (ISR). Ícono + texto, no sólo color. */}
+            {turnosParaSello.length > 0 && <PharmacyDutyBadge turnos={turnosParaSello} />}
 
             {comercio.descripcion && <p className="uk-ficha-desc">{comercio.descripcion}</p>}
-
-            {/* Lo que vende, en fichas. Es lo que más se mira y muchos locales
-                están cargados sólo con esto. */}
-            {vende.length > 0 && (
-              <div className="uk-ficha-vende">
-                {vende.map((v) => <span key={v}><Ic n="si" s={13} /> {v}</span>)}
-              </div>
-            )}
 
             {/* LO QUE SUMA. Entre lo que vende y el botón de WhatsApp: es lo que
                 decide ir a ESTE local y se tiene que ver sin bajar. Los que abren
@@ -307,6 +319,17 @@ export default async function ComercioPage({ params }: { params: { slug: string 
           </section>
         )}
 
+        {/* Lo que vende, en texto del servidor (lo primero que carga una persona,
+            después lo que leyó la IA de la foto). Sin datos, la sección no está. */}
+        {productos.length > 0 && (
+          <section className="uk-ficha-sec uk-ficha-encontrar" aria-labelledby="ficha-encontrar">
+            <h2 id="ficha-encontrar">Qué podés encontrar acá</h2>
+            <ul>
+              {productos.map((v) => <li key={v}><Ic n="si" s={13} /> {v}</li>)}
+            </ul>
+          </section>
+        )}
+
         {/* Los datos del negocio, a todo el ancho: las ofertas y novedades, que
             iban en la columna de al lado, ahora están en la vidriera. */}
         <div className="uk-ficha-body solo">
@@ -330,13 +353,16 @@ export default async function ComercioPage({ params }: { params: { slug: string 
                   </div>
                 </div>
               )}
-              {/* La calle sale del GPS (0127). Casi ningún comercio tiene
-                  dirección tipeada, así que sin esto la ficha no dice dónde
-                  queda en palabras — sólo un punto en el mapa. */}
-              {!comercio.direccion && comercio.calle && (
+              {/* «Dónde queda» en palabras, con la ciudad. La calle sale del GPS (0127):
+                  casi ningún comercio tiene dirección tipeada, y sin esto la ficha
+                  sólo dice dónde queda con un punto en el mapa. */}
+              {dondeQueda && (
                 <div className="uk-info-row">
                   <span className="ic"><Ic n="ubicacion" s={17} /></span>
-                  <div><b>Dónde queda</b>{comercio.calle}<small className="uk-info-nota">Sin altura: usá «Cómo llegar».</small></div>
+                  <div>
+                    <b>Dónde queda</b>{dondeQueda}, {ciudadNombre}
+                    {!comercio.direccion && <small className="uk-info-nota">Sin altura: usá «Cómo llegar».</small>}
+                  </div>
                 </div>
               )}
               {comercio.whatsapp && (
@@ -349,12 +375,6 @@ export default async function ComercioPage({ params }: { params: { slug: string 
                 <div className="uk-info-row">
                   <span className="ic"><Phone style={{ width: 17, height: 17 }} /></span>
                   <div><b>Teléfono</b><a href={`tel:${comercio.telefono.replace(/[^\d+]/g, "")}`}>{comercio.telefono}</a></div>
-                </div>
-              )}
-              {comercio.direccion && (
-                <div className="uk-info-row">
-                  <span className="ic"><Pin style={{ width: 17, height: 17 }} /></span>
-                  <div><b>Dirección</b>{comercio.direccion}</div>
                 </div>
               )}
               {/* Sólo si el comercio lo cargó. "Formas de pago: efectivo" puesto
@@ -422,6 +442,12 @@ export default async function ComercioPage({ params }: { params: { slug: string 
             </div>
           </aside>
         </div>
+
+        {masDelRubro && (
+          <section className="uk-ficha-sec uk-ficha-mas" aria-label="Más comercios del rubro">
+            <p><Link href={masDelRubro.href}>{masDelRubro.texto} <span aria-hidden="true">›</span></Link></p>
+          </section>
+        )}
 
         {/* Acá iba «Ref. XXXX», el código del comercio. Se sacó: con ese código
             cualquiera podía publicar a nombre del local por WhatsApp. El
