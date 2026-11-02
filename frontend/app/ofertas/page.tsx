@@ -28,13 +28,16 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     const items = await getPublicaciones("oferta", 1, ciudad?.slug, rubro);
     const nom = sinEmoji(items[0]?.rubro_nombre ?? rubro);
     return {
-      title: `Ofertas de ${nom}${en} — URUKU`,
+      title: `Ofertas de ${nom}${en}`,
       description: `Lo que publicaron hoy los comercios de ${nom}${en}, con foto, precio y el WhatsApp de cada local.`,
+      // El rubro es lo único del query que cambia la página: va en el canonical.
+      alternates: { canonical: `/ofertas?rubro=${encodeURIComponent(rubro)}` },
     };
   }
   return {
-    title: n ? `Ofertas de ${n} — URUKU` : "Ofertas de los comercios — URUKU",
+    title: n ? `Ofertas de ${n}` : "Ofertas de los comercios",
     description: "Las ofertas del día de los comercios: precios, liquidaciones y lo que llegó, con la foto y el WhatsApp de cada local.",
+    alternates: { canonical: "/ofertas" },
   };
 }
 

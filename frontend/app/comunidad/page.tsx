@@ -8,8 +8,9 @@ import { Ic } from "@/components/ic";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "La comunidad de los que compran en Bermejo — URUKU",
+  title: "La comunidad de los que compran en Bermejo",
   description: "Cotización de la mañana, ofertas del día, cómo está el paso y un grupo por ciudad para preguntar a los que ya vinieron. Entrás vos: nadie te agrega.",
+  alternates: { canonical: "/comunidad" },
 };
 
 /**

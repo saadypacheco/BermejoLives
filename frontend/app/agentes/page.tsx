@@ -14,8 +14,9 @@ import { getAgentesPublicos, mesAnio, nombreCompleto, type AgentePublico } from 
 export const revalidate = 60;
 
 export const metadata: Metadata = {
-  title: "Agentes de URUKU",
+  title: "Agentes autorizados: quiénes visitan comercios",
   description: "Las únicas personas que visitan comercios en nombre de URUKU. Los agentes de URUKU nunca cobran.",
+  alternates: { canonical: "/agentes" },
 };
 
 /** Agrupa por ciudad conservando el orden del backend (ciudad, apellido, nombre). */
