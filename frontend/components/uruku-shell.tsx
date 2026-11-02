@@ -10,11 +10,28 @@ import { CatNav } from "@/components/catnav";
 import { SocialLinks, money } from "@/components/uruku-ui";
 import { WA_URUKU_TEXTO, waUruku } from "@/lib/contacto";
 import { Ic, climaIcono } from "@/components/ic";
-import { getCiudades, getClima, getCotizaciones, getRedes } from "@/lib/data";
+import { getCiudades, getCityCategoryPages, getClima, getCotizaciones, getRedes } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
 import type { Ciudad } from "@/lib/types";
 import { versionLabel } from "@/lib/version";
 import { URUKU_SVG } from "@/lib/adornos";
+
+/** Los slugs de las ciudades con alguna página indexable (pie «Ciudades»). Se
+ *  recuerda unos minutos en memoria: el pie está en casi todas las páginas y no
+ *  vale una consulta a la base por cada una. Si la RPC no responde (`[]`) se
+ *  reintenta al minuto, no a los diez. */
+let ciudadesIndexablesMemo: { hasta: number; slugs: ReadonlySet<string> } | null = null;
+async function slugsCiudadesIndexables(): Promise<ReadonlySet<string>> {
+  // En el build no se recuerda nada: las páginas que Next descarta por dinámicas
+  // reciben un error de fetch que `getCityCategoryPages` traga como `[]`, y ese
+  // vacío envenenaría a las páginas estáticas que se arman después.
+  const enBuild = process.env.NEXT_PHASE === "phase-production-build";
+  const ahora = Date.now();
+  if (!enBuild && ciudadesIndexablesMemo && ahora < ciudadesIndexablesMemo.hasta) return ciudadesIndexablesMemo.slugs;
+  const slugs = new Set((await getCityCategoryPages()).filter((p) => p.indexable).map((p) => p.city_slug));
+  if (!enBuild) ciudadesIndexablesMemo = { hasta: ahora + (slugs.size > 0 ? 10 * 60_000 : 60_000), slugs };
+  return slugs;
+}
 
 /** Lo mismo que `ciudadActual()` pero con la ciudad dada y sin tocar cookies. */
 async function ciudadFija(ciudad: Ciudad): Promise<{ ciudad: Ciudad; ciudades: Ciudad[] }> {
@@ -63,9 +80,13 @@ export async function UrukuShell({
    *  sigue listando todas. */
   fixedCity?: Ciudad;
 }) {
-  const [{ ciudad, ciudades }, clima, cotizaciones, redes] = await Promise.all([
+  const [{ ciudad, ciudades }, clima, cotizaciones, redes, slugsIndexables] = await Promise.all([
     fixedCity ? ciudadFija(fixedCity) : ciudadActual(), getClima(), getCotizaciones(), getRedes(),
+    showFooter && !fill ? slugsCiudadesIndexables() : Promise.resolve<ReadonlySet<string>>(new Set()),
   ]);
+  // Pie «Ciudades»: sólo las que tienen una página que se indexa (enlace interno
+  // a /{ciudad}). Sin ninguna, el bloque no aparece.
+  const ciudadesPie = ciudades.filter((c) => c.activa && slugsIndexables.has(c.slug));
   const nombre = ciudad?.nombre ?? "tu ciudad";
   // Dos preguntas distintas. `esFrontera` (columna de la ciudad): si el
   // peso argentino le importa. `conGuia`: si lo que hoy está cargado —la
@@ -187,6 +208,19 @@ export async function UrukuShell({
                 <Link href="/agentes" className="uk-foot-link"><Ic n="seguridad" /><span>Agentes de URUKU</span><i>›</i></Link>
               </div>
             </div>
+
+            {ciudadesPie.length > 0 && (
+              <nav className="uk-foot-col" aria-label="Ciudades" style={{ marginTop: 24 }}>
+                <h4>Ciudades</h4>
+                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexWrap: "wrap", gap: "4px 20px" }}>
+                  {ciudadesPie.map((c) => (
+                    <li key={c.slug}>
+                      <Link href={`/${c.slug}`} className="uk-foot-link"><Ic n="ubicacion" /><span>{c.nombre}</span></Link>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            )}
 
             <div className="uk-foot-cta">
               <span className="uk-foot-cta-ic"><Ic n="comercios" /></span>
