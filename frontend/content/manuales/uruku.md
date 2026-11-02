@@ -8,7 +8,7 @@ Entrá a **uruku.bo**. No hace falta descargar nada ni registrarse.
 
 ## Quién hace URUKU
 
-URUKU lo creó **Saady Pacheco**, ingeniero de sistemas con más de 30 años de experiencia y docente desde hace más de 20 años, que en los últimos años se dedicó a los negocios digitales. Empezó a desarrollarlo en **mayo de 2026** y lo sigue mejorando con lo que le piden los comerciantes y los compradores.
+URUKU lo creó **Saady Pacheco**, ingeniero de sistemas con más de 30 años de experiencia y docente desde hace más de 20 años, en los últimos años de negocios digitales. Empezó a desarrollarlo en **mayo de 2026** y lo sigue mejorando con lo que le piden los comerciantes y los compradores.
 
 Lo acompaña un equipo de profesionales que trabajaron junto a él. Quien responde por el sitio es el **Equipo URUKU**.
 
