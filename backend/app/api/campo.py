@@ -18,11 +18,12 @@ from app.core.codigo import sin_codigo
 from app.core.config import settings
 from app.core.telefono import whatsapp_para_guardar
 from app.core.text import limpiar_ref, slug_unico, slugify
+from app.db.content_repository import ContentRepo, get_content_repo
 from app.db.repository import Repo, get_repo
 from app.models.schemas import LoginBody
 from app.services.clasificador import sugerir_rubros
 from app.services.imagenes import subir_foto_comercio, subir_foto_galeria, subir_video_comercio
-from app.services import cargas, planes, que_hay_aca
+from app.services import cargas, content_consent, planes, que_hay_aca
 from app.services import calles_mapa
 from app.services import enlaces
 from app.services import fotos_galeria, portada
@@ -197,6 +198,9 @@ async def alta_campo(
     lat: float | None = Form(None),
     lng: float | None = Form(None),
     consentimiento: bool = Form(False),  # nunca se presume: el agente tilda la casilla delante del dueño
+    # Segunda casilla: «acepta que usemos fotos de su local en las redes de URUKU». También apagada
+    # por defecto. Si viene tildada queda en la bitácora de autorización (`via = 'agent_signup'`).
+    social_consent: bool = Form(False),
     # Campos del diferencial fronterizo
     monedas_aceptadas: list[str] = Form(default=[]),
     envios_internacionales: bool = Form(False),
@@ -218,6 +222,7 @@ async def alta_campo(
     response: Response = None,
     agente: dict = Depends(auth.require_agente),
     repo: Repo = Depends(get_repo),
+    crepo: ContentRepo = Depends(get_content_repo),
 ) -> dict:
     if modalidad not in _MODALIDADES:
         raise HTTPException(status_code=400, detail=f"modalidad inválida: {modalidad}")
@@ -369,6 +374,13 @@ async def alta_campo(
     # se ve, y de ahí sale la categoría.
     aplicar_rubros(repo, comercio, rubro_slugs)
     calles_mapa.invalidar(comercio.get("ciudad_id") or fila.get("ciudad_id"))   # el mapa de calles cuenta este comercio
+    if social_consent:
+        # La autorización para redes queda en su bitácora. Si falla no se cae el alta (el agente está
+        # en la calle): se avisa en el log y la registra el admin o el agente en la segunda visita.
+        try:
+            content_consent.registrar(crepo, comercio["id"], True, content_consent.VIA_AGENTE_ALTA, agente["email"])
+        except Exception:  # noqa: BLE001
+            logger.warning("campo.alta_sin_autorizacion_de_redes", comercio=comercio["id"], exc_info=True)
 
     # La cuenta de Mi comercio, igual que al pagar (`asegurar_comercio_usuario`).
     # Sin esto el comercio cargado en la calle no podía entrar jamás: la

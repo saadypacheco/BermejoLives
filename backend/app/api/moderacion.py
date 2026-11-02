@@ -3119,6 +3119,8 @@ class PlanBody(BaseModel):
     publicaciones_guardadas: int | None = Field(default=None, gt=0, le=100_000)
     # Cuántas fotos de galería admite el plan (0144). Entero 0..1000.
     fotos_max: int | None = Field(default=None, ge=0, le=1000)
+    # Piezas propias para redes por ciclo de cobro (0181, D-01). Entero 0..31; 0 = el plan no incluye.
+    social_pieces_per_month: int | None = Field(default=None, ge=0, le=31)
     activo: bool | None = None
     visible: bool | None = None
 

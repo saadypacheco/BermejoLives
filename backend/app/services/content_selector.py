@@ -1,0 +1,484 @@
+"""El selector semanal de piezas (docs/contenido-redes-tecnico.md §7).
+
+QUÉ HACE
+========
+El domingo a las 20:00 (Bolivia) arma la semana que arranca mañana: martes, miércoles y viernes
+«comercio del día» (un suscriptor, que consume su cuota), jueves «ofertas de la semana» (un
+compilado de hasta 6 ofertas de una ciudad). El lunes y el sábado se suman sólo si lo que se debe
+a los suscriptores lo pide. Sin autorización de redes vigente nadie entra; sin 4 fotos que sirvan
+tampoco (y queda una tarea `photo_refresh` para pedirlas).
+
+IDEMPOTENTE
+===========
+Un lugar del calendario es una pieza viva (`uq_content_pieces_slot`): correrlo dos veces no
+duplica, y lo que quedó sin cubrir se puede completar corriéndolo de nuevo (recuperación). Una
+pieza `skipped` o `failed` no ocupa el lugar y no consume cuota: la semana siguiente se vuelve a ofrecer.
+
+EL CICLO DE LA CUOTA
+====================
+`quota_cycle_start` es el ciclo de cobro al que se imputa la pieza (lección `cuota-snapshot`).
+Sale de `planes.inicio_del_ciclo` cuando el comercio tiene `paga_hasta`. Sin `paga_hasta`
+(cortesía) ese ciclo se movería todos los días y la cuota nunca se agotaría: se usa el mes calendario.
+"""
+from __future__ import annotations
+
+import re
+import time
+from datetime import date, datetime, timedelta, timezone
+
+import structlog
+from fastapi import HTTPException
+
+from app.core.codigo import _RE_CON_PREFIJO
+from app.core.config import settings
+from app.services import cargas, content_captions, content_consent, content_storage, fotos_galeria, planes
+from app.services.difusion import _precio
+
+logger = structlog.get_logger()
+
+MIN_FOTOS = 4
+MAX_FOTOS_COMERCIO = 7
+MAX_OFERTAS = 6
+MIN_OFERTAS = 4
+#: Las fotos que salieron en una pieza no se repiten durante estos días.
+NO_REPETIR_DIAS = 60
+#: Una oferta tiene que ser de los últimos 10 días para entrar al compilado.
+OFERTA_DIAS = 10
+SEPARACION_DIAS = 14
+SEPARACION_URGENTE_DIAS = 5
+#: Un día que se debe tanto como esto abre el sábado (>3) o el lunes (>4).
+UMBRAL_SABADO = 3
+UMBRAL_LUNES = 4
+
+# Lunes = 0. (día, pilar, condición)
+CALENDARIO = ((1, "comercio_del_dia", "siempre"), (2, "comercio_del_dia", "siempre"),
+              (3, "ofertas", "siempre"), (4, "comercio_del_dia", "siempre"),
+              (5, "comercio_del_dia", "sabado"), (0, "comercio_del_dia", "lunes"))
+
+DIAS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+
+
+def lunes_de(d: date) -> date:
+    return d - timedelta(days=d.weekday())
+
+
+# ───────────────────────────────────────────────────── cuándo planificar
+
+def week_to_plan(ahora: datetime | None = None, planned: set[str] | None = None) -> date | None:
+    """El lunes de la semana a planificar AHORA, o None si no toca.
+
+    El domingo desde las 20:00 (hora de Bolivia): la semana que arranca mañana. Cualquier otro
+    momento: la semana actual (recuperación: «los días que faltan desde hoy»), si todavía no tiene
+    piezas creadas por el selector. El domingo antes de las 20:00 no hay lugares de esta semana
+    que planificar."""
+    ahora_bo = (ahora or cargas.ahora_utc()).astimezone(cargas.BOLIVIA)
+    hoy = ahora_bo.date()
+    lunes = lunes_de(hoy)
+    planned = planned or set()
+    if hoy.weekday() == settings.content_planning_weekday and ahora_bo.hour >= settings.content_planning_hour:
+        objetivo = lunes + timedelta(days=7)
+    elif hoy.weekday() == 6:
+        return None
+    else:
+        objetivo = lunes
+    return None if objetivo.isoformat() in planned else objetivo
+
+
+def is_planning_due(ahora: datetime | None = None, planned: set[str] | None = None) -> bool:
+    return week_to_plan(ahora, planned) is not None
+
+
+#: Último intento por semana: el selector puede no crear nada (sin candidatos) y no tiene que
+#: repetir toda la consulta cada 15 minutos.
+_ultimo_intento: dict[str, float] = {}
+ESPERA_ENTRE_INTENTOS_SEG = 3600
+
+
+def planner_tick(repo, crepo, ahora: datetime | None = None) -> dict | None:
+    """Una vuelta del loop de planificación. Devuelve el resumen del plan si corrió."""
+    ahora = ahora or cargas.ahora_utc()
+    hoy = cargas.hoy_bolivia(ahora)
+    planned = crepo.weeks_planned_by_selector((lunes_de(hoy) - timedelta(days=7)).isoformat())
+    semana = week_to_plan(ahora, planned)
+    if semana is None:
+        return None
+    clave = semana.isoformat()
+    if time.monotonic() - _ultimo_intento.get(clave, -1e9) < ESPERA_ENTRE_INTENTOS_SEG:
+        return None
+    _ultimo_intento[clave] = time.monotonic()
+    resumen = plan_week(repo, crepo, semana, "selector", ahora)
+    logger.info("content.planificacion", semana=clave, creadas=resumen["created"],
+                vacios=len(resumen["slots_left_empty"]), tareas=resumen["tasks_created"])
+    return resumen
+
+
+def reiniciar_intentos() -> None:
+    _ultimo_intento.clear()
+
+
+# ─────────────────────────────────────────────────────────── suscriptores
+
+def cuota_del_plan(plan: dict | None) -> int:
+    try:
+        return max(0, int((plan or {}).get("social_pieces_per_month") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def plan_del(comercio: dict, planes_por_slug: dict) -> dict:
+    slug = (comercio.get("plan") or "gratis").strip() or "gratis"
+    return planes_por_slug.get(slug) or planes_por_slug.get("gratis") or {}
+
+
+def en_gracia(comercio: dict, hoy: date) -> bool:
+    """Vencido hace menos de `CONTENT_GRACE_DAYS`: todavía se le arma la pieza del mes."""
+    try:
+        hasta = date.fromisoformat(str(comercio.get("paga_hasta"))[:10])
+    except ValueError:
+        return False
+    return hasta >= hoy - timedelta(days=settings.content_grace_days)
+
+
+def es_suscriptor(comercio: dict, plan: dict, hoy: date) -> bool:
+    """Activo, no suspendido, con piezas en su plan y al día (o dentro de la gracia)."""
+    if comercio.get("activo") is False or comercio.get("suspendido"):
+        return False
+    if cuota_del_plan(plan) <= 0:
+        return False
+    return fotos_galeria.al_dia(comercio, hoy) or en_gracia(comercio, hoy)
+
+
+def ciclo_de(comercio: dict, hoy: date) -> tuple[date, date]:
+    """(inicio, fin) del ciclo de cobro. Ver el docstring del módulo."""
+    if comercio.get("paga_hasta"):
+        inicio = planes.inicio_del_ciclo(comercio, hoy)
+        return inicio, inicio + timedelta(days=30)
+    inicio = hoy.replace(day=1)
+    siguiente = (inicio + timedelta(days=32)).replace(day=1)
+    return inicio, siguiente
+
+
+def evaluar_suscriptores(crepo, hoy: date, autorizados: set[str] | None = None) -> list[dict]:
+    """Todos los suscriptores de hoy con su cuota, lo usado y lo que se debe.
+
+    Cada item: `{comercio, plan, cuota, ciclo_inicio, ciclo_fin, usadas, debe, ultima, dias_restantes,
+    autorizado}`."""
+    por_slug = {p["slug"]: p for p in crepo.list_planes()}
+    con_cuota = [s for s, p in por_slug.items() if cuota_del_plan(p) > 0]
+    if not con_cuota:
+        return []
+    comercios = crepo.list_comercios_activos(planes=con_cuota)
+    propias = crepo.list_own_pieces_since((hoy - timedelta(days=90)).isoformat())
+    out = []
+    for c in comercios:
+        plan = plan_del(c, por_slug)
+        if not es_suscriptor(c, plan, hoy):
+            continue
+        inicio, fin = ciclo_de(c, hoy)
+        mias = [p for p in propias if p["comercio_id"] == c["id"]]
+        usadas = sum(1 for p in mias if p.get("counts_for_quota") and p.get("quota_cycle_start") == inicio.isoformat())
+        ultima = max((p["scheduled_for"] for p in mias), default=None)
+        cuota = cuota_del_plan(plan)
+        out.append({"comercio": c, "plan": plan, "cuota": cuota, "ciclo_inicio": inicio, "ciclo_fin": fin,
+                    "usadas": usadas, "debe": max(0, cuota - usadas), "ultima": ultima,
+                    "dias_restantes": (fin - hoy).days,
+                    "autorizado": True if autorizados is None else c["id"] in autorizados})
+    return out
+
+
+# ───────────────────────────────────────────────────────── elegir fotos
+
+def _clave_de_uso(c: dict) -> tuple:
+    return (c["source_type"], c.get("source_id") or c.get("file_ref"))
+
+
+def claves_usadas(crepo, hoy: date) -> set[tuple]:
+    return {_clave_de_uso({"source_type": s["source_type"], "source_id": s.get("source_id"),
+                           "file_ref": s.get("file_ref")})
+            for s in crepo.recent_sources((hoy - timedelta(days=NO_REPETIR_DIAS)).isoformat())}
+
+
+def elegir_fotos(crepo, comercio: dict, maximo: int, hoy: date, usadas: set[tuple],
+                 excluir: set[tuple] | None = None) -> list[dict]:
+    """Las fotos para una pieza de este comercio, en este orden: portada, banco (más nuevas primero),
+    galería (sin las que son copia de una del banco) y ofertas aprobadas de los últimos 90 días.
+
+    Se descartan las usadas en una pieza viva o publicada en los últimos 60 días y las de lado menor
+    < 720 px (leído del encabezado, sin decodificar). Una foto que no está en el disco no sirve.
+    Cada item: `{source_type, source_id, file_ref, comercio_id}`."""
+    cid = comercio["id"]
+    candidatas: list[dict] = []
+    if comercio.get("portada_url"):
+        candidatas.append({"source_type": "cover", "source_id": None, "file_ref": comercio["portada_url"]})
+    assets = [a for a in crepo.list_assets([cid]) if a.get("usable_for_social")
+              and (not a.get("has_people") or a.get("people_ok"))
+              and min(a.get("width") or 0, a.get("height") or 0) >= content_storage.LADO_MENOR_MINIMO]
+    assets.sort(key=lambda a: str(a.get("created_at") or ""), reverse=True)
+    for a in assets:
+        candidatas.append({"source_type": "asset", "source_id": a["id"], "file_ref": a["file_path"]})
+    copias = {a.get("gallery_photo_id") for a in crepo.list_assets([cid]) if a.get("gallery_photo_id")}
+    for g in sorted(crepo.gallery_photos([cid]), key=lambda x: str(x.get("created_at") or ""), reverse=True):
+        if g["id"] not in copias:
+            candidatas.append({"source_type": "gallery", "source_id": g["id"], "file_ref": g["url"]})
+    desde = (datetime.combine(hoy, datetime.min.time(), tzinfo=timezone.utc) - timedelta(days=90)).isoformat()
+    for o in crepo.list_offers(desde, cid):
+        candidatas.append({"source_type": "offer", "source_id": o["id"], "file_ref": o["imagen_url"]})
+
+    elegidas: list[dict] = []
+    vistos: set = set()
+    prohibidas = (usadas or set()) | (excluir or set())
+    for c in candidatas:
+        if len(elegidas) >= maximo:
+            break
+        if _clave_de_uso(c) in prohibidas or c["file_ref"] in vistos:
+            continue
+        ruta = content_storage.resolver_fuente(c["source_type"], c["file_ref"])
+        if ruta is None:
+            continue
+        if c["source_type"] != "asset":
+            lado = content_storage.lado_menor(ruta)
+            if lado is None or lado < content_storage.LADO_MENOR_MINIMO:
+                continue
+        vistos.add(c["file_ref"])
+        elegidas.append({**c, "comercio_id": cid})
+    return elegidas
+
+
+# ─────────────────────────────────────────────────────────── el plan
+
+def _slots_de_la_semana(week_start: date, hoy: date, deuda_urgente: int) -> list[tuple[date, str]]:
+    slots = []
+    for dia, pilar, condicion in CALENDARIO:
+        if condicion == "sabado" and deuda_urgente <= UMBRAL_SABADO:
+            continue
+        if condicion == "lunes" and deuda_urgente <= UMBRAL_LUNES:
+            continue
+        d = week_start + timedelta(days=dia)
+        if d >= hoy:
+            slots.append((d, pilar))
+    return sorted(slots)
+
+
+def _crear_tarea(crepo, comercio_id: str, kind: str, due_on: date, note: str | None = None) -> bool:
+    return bool(crepo.insert_task({"comercio_id": comercio_id, "kind": kind, "due_on": due_on.isoformat(),
+                                   "note": note}))
+
+
+def _pedir_fotos(crepo, c: dict, ciclo_inicio: date, hoy: date) -> bool:
+    """Una tarea `photo_refresh` por ciclo."""
+    previas = crepo.list_tasks(status=None, due_from=ciclo_inicio.isoformat(), comercio_id=c["id"],
+                               kinds=["photo_refresh"])
+    return False if previas else _crear_tarea(crepo, c["id"], "photo_refresh", hoy)
+
+
+def _guardar_pieza(crepo, row: dict, fuentes: list[dict]) -> dict | None:
+    pieza = crepo.insert_piece(row)
+    if pieza is None:
+        return None
+    crepo.insert_sources([{"piece_id": pieza["id"], "position": i, "source_type": f["source_type"],
+                           "source_id": f.get("source_id"), "comercio_id": f["comercio_id"],
+                           "file_ref": f["file_ref"], "caption_fact": f.get("caption_fact")}
+                          for i, f in enumerate(fuentes)])
+    return pieza
+
+
+def _fila_de_pieza(week_start: date, dia: date, pilar: str, facts: dict, textos: dict, actor: str,
+                   comercio: dict | None = None, ciudad_id: str | None = None,
+                   ciclo_inicio: date | None = None) -> dict:
+    return {
+        "week_start": week_start.isoformat(), "scheduled_for": dia.isoformat(), "pillar": pilar,
+        "comercio_id": comercio["id"] if comercio else None,
+        "ciudad_id": ciudad_id or (comercio or {}).get("ciudad_id"),
+        "counts_for_quota": bool(comercio), "quota_cycle_start": ciclo_inicio.isoformat() if ciclo_inicio else None,
+        "status": "queued", "facts": facts, "template": pilar, "template_version": 1,
+        "caption_tiktok": textos["caption_tiktok"], "caption_ig": textos["caption_ig"],
+        "caption_channel": textos["caption_channel"], "hashtags": textos["hashtags"],
+        "caption_engine": textos["caption_engine"], "caption_checks": textos["caption_checks"],
+        "created_by": actor,
+    }
+
+
+def plan_week(repo, crepo, week_start: date, actor: str = "selector", ahora: datetime | None = None) -> dict:
+    """Arma las piezas de la semana que arranca el lunes `week_start` (desde hoy en adelante).
+
+    Devuelve `{week_start, created, slots_left_empty: [{date, pillar, reason}], tasks_created}`."""
+    ahora = ahora or cargas.ahora_utc()
+    hoy = cargas.hoy_bolivia(ahora)
+    resumen = {"week_start": week_start.isoformat(), "created": 0, "slots_left_empty": [], "tasks_created": 0}
+
+    consentidos = content_consent.autorizados(crepo)
+    suscriptores = evaluar_suscriptores(crepo, hoy, consentidos)
+    candidatos = [s for s in suscriptores if s["autorizado"] and s["debe"] > 0]
+    deuda_urgente = sum(s["debe"] for s in candidatos if s["dias_restantes"] <= 14)
+    slots = _slots_de_la_semana(week_start, hoy, deuda_urgente)
+
+    ocupados = {(p["scheduled_for"], p["pillar"]) for p in crepo.list_pieces(
+        date_from=week_start.isoformat(), date_to=(week_start + timedelta(days=6)).isoformat())
+        if p.get("status") not in ("skipped", "failed")}
+    usadas = claves_usadas(crepo, hoy)
+
+    for dia, pilar in slots:
+        if (dia.isoformat(), pilar) in ocupados:
+            continue
+        if pilar == "ofertas":
+            motivo = _plan_ofertas(repo, crepo, week_start, dia, actor, hoy, consentidos, suscriptores, usadas, resumen)
+        else:
+            motivo = _plan_comercio(crepo, week_start, dia, actor, hoy, candidatos, usadas, resumen)
+        if motivo:
+            resumen["slots_left_empty"].append({"date": dia.isoformat(), "pillar": pilar, "reason": motivo})
+    return resumen
+
+
+def _orden_de_candidatos(candidatos: list[dict]) -> list[dict]:
+    """Los que más se les acaba el ciclo, los que más deben y los que hace más que no salen."""
+    return sorted(candidatos, key=lambda s: (s["dias_restantes"], -s["debe"], s["ultima"] or "0000-00-00"))
+
+
+def _plan_comercio(crepo, week_start: date, dia: date, actor: str, hoy: date, candidatos: list[dict],
+                   usadas: set[tuple], resumen: dict) -> str | None:
+    """Cubre un lugar `comercio_del_dia`. Devuelve el motivo si quedó vacío."""
+    for s in _orden_de_candidatos([c for c in candidatos if c["debe"] > 0]):
+        c = s["comercio"]
+        if s["ultima"]:
+            sep = SEPARACION_URGENTE_DIAS if s["dias_restantes"] <= 10 else SEPARACION_DIAS
+            if abs((dia - date.fromisoformat(str(s["ultima"])[:10])).days) < sep:
+                continue
+        fotos = elegir_fotos(crepo, c, MAX_FOTOS_COMERCIO, hoy, usadas)
+        if len(fotos) < MIN_FOTOS:
+            if _pedir_fotos(crepo, c, s["ciclo_inicio"], hoy):
+                resumen["tasks_created"] += 1
+            continue
+        facts = content_captions.build_facts_comercio(c)
+        textos = content_captions.generate_captions(facts)
+        pieza = _guardar_pieza(
+            crepo, _fila_de_pieza(week_start, dia, "comercio_del_dia", facts, textos, actor, c,
+                                  ciclo_inicio=s["ciclo_inicio"]), fotos)
+        if pieza is None:
+            return None            # alguien ocupó el lugar mientras tanto
+        resumen["created"] += 1
+        s["debe"] -= 1
+        s["usadas"] += 1
+        s["ultima"] = dia.isoformat()
+        usadas.update(_clave_de_uso(f) for f in fotos)
+        return None
+    return "no_candidates"
+
+
+def limpiar_titulo(texto: str | None) -> str:
+    """El título corto de una oferta para la banda del video: sin emojis ni código, hasta 40 caracteres."""
+    t = _RE_CON_PREFIJO.sub("", content_captions.sin_emojis(texto))
+    t = re.sub(r"\s+", " ", t).strip(" -·,.")
+    if len(t) <= 40:
+        return t
+    corte = t[:40].rsplit(" ", 1)[0] if " " in t[:40] else t[:40]
+    return corte.rstrip(" -·,.")
+
+
+def _plan_ofertas(repo, crepo, week_start: date, dia: date, actor: str, hoy: date, consentidos: set[str],
+                  suscriptores: list[dict], usadas: set[tuple], resumen: dict) -> str | None:
+    """Arma el compilado del jueves. Devuelve el motivo si quedó vacío."""
+    desde = (datetime.combine(hoy, datetime.min.time(), tzinfo=timezone.utc) - timedelta(days=OFERTA_DIAS)).isoformat()
+    ofertas = crepo.list_offers(desde)
+    ya_en_compilado = {s["source_id"] for s in crepo.recent_sources(
+        (hoy - timedelta(days=NO_REPETIR_DIAS)).isoformat()) if s["source_type"] == "offer" and s.get("pillar") == "ofertas"}
+    ids = sorted({o["comercio_id"] for o in ofertas if o.get("comercio_id") in consentidos})
+    if not ids:
+        return "not_enough_offers"
+    fichas = {c["id"]: c for c in crepo.list_comercios_activos(ids=ids)}
+    ids_suscriptores = {s["comercio"]["id"] for s in suscriptores}
+    ciudades = {c["id"]: c for c in crepo.list_ciudades()}
+
+    por_ciudad: dict[str, list[dict]] = {}
+    visto: set[str] = set()
+    for o in ofertas:                                    # de la más nueva a la más vieja
+        cid = o.get("comercio_id")
+        c = fichas.get(cid)
+        if not c or cid in visto or o["id"] in ya_en_compilado:
+            continue
+        ruta = content_storage.resolver_fuente("offer", o.get("imagen_url"))
+        lado = content_storage.lado_menor(ruta) if ruta else None
+        if lado is None or lado < content_storage.LADO_MENOR_MINIMO:
+            continue
+        visto.add(cid)
+        por_ciudad.setdefault(c.get("ciudad_id") or "", []).append({"oferta": o, "comercio": c})
+    if not por_ciudad:
+        return "not_enough_offers"
+    ciudad_id = max(por_ciudad, key=lambda k: (len(por_ciudad[k]), k))
+    candidatas = por_ciudad[ciudad_id]
+    subs = [x for x in candidatas if x["comercio"]["id"] in ids_suscriptores][:MAX_OFERTAS]
+    otros = [x for x in candidatas if x["comercio"]["id"] not in ids_suscriptores]
+    elegidas = list(subs)
+    k = 0
+    # No suscriptores <= piso(total / 3), con el total del compilado ya armado.
+    while otros and len(elegidas) < MAX_OFERTAS and (k + 1) <= (len(subs) + k + 1) // 3:
+        elegidas.append(otros.pop(0))
+        k += 1
+    if len(elegidas) < MIN_OFERTAS:
+        return "not_enough_offers"
+
+    items, fuentes = [], []
+    for x in elegidas:
+        o, c = x["oferta"], x["comercio"]
+        item = {"nombre": c.get("nombre"), "precio": _precio(o),
+                "titulo_corto": limpiar_titulo(o.get("titulo") or o.get("descripcion"))}
+        items.append(item)
+    ciudad = ciudades.get(ciudad_id) or (elegidas[0]["comercio"].get("ciudades") or {})
+    facts = content_captions.build_facts_ofertas(ciudad, items)
+    for x, item in zip(elegidas, facts["items"]):
+        o, c = x["oferta"], x["comercio"]
+        fuentes.append({"source_type": "offer", "source_id": o["id"], "comercio_id": c["id"],
+                        "file_ref": o["imagen_url"],
+                        "caption_fact": f"{item.get('nombre', '')} · {item.get('precio', '')}"[:80]})
+    textos = content_captions.generate_captions(facts)
+    pieza = _guardar_pieza(crepo, _fila_de_pieza(week_start, dia, "ofertas", facts, textos, actor,
+                                                 ciudad_id=ciudad_id or None), fuentes)
+    if pieza is None:
+        return None
+    resumen["created"] += 1
+    usadas.update(_clave_de_uso(f) for f in fuentes)
+    return None
+
+
+# ──────────────────────────────────────────────────── cambiar las fotos
+
+def cambiar_fotos(crepo, pieza: dict, remove_positions: list[int], hoy: date | None = None) -> dict:
+    """«Cambiar fotos» desde Revisión: quita las fotos marcadas, busca reemplazos del mismo comercio y
+    deja la pieza en `queued` para rearmarla. 409 `no_more_photos` si no quedan 4 que sirvan."""
+    hoy = hoy or cargas.hoy_bolivia()
+    activas = crepo.list_sources(pieza["id"])
+    quitar = {int(p) for p in remove_positions}
+    if not quitar or not quitar <= {f["position"] for f in activas}:
+        raise HTTPException(status_code=400, detail="Elegí fotos de la pieza para quitar")
+    quedan = [f for f in activas if f["position"] not in quitar]
+    removidas = [f for f in activas if f["position"] in quitar]
+    if pieza.get("comercio_id"):
+        comercio = crepo.get_comercio_ficha(pieza["comercio_id"])
+        # Las que ya se quitaron antes (inactivas) tampoco vuelven.
+        excluir = {_clave_de_uso(f) for f in crepo.list_sources(pieza["id"], only_active=False)}
+        nuevas = elegir_fotos(crepo, comercio, MAX_FOTOS_COMERCIO - len(quedan), hoy,
+                              claves_usadas(crepo, hoy) - {_clave_de_uso(f) for f in activas}, excluir)
+    else:
+        nuevas = []
+    if len(quedan) + len(nuevas) < MIN_FOTOS:
+        pedir_fotos_si_faltan(crepo, pieza, hoy)
+        raise HTTPException(status_code=409, detail={
+            "codigo": "no_more_photos",
+            "mensaje": "No hay más fotos que sirvan de este comercio. Pedile fotos: la tarea quedó creada."})
+    siguiente = max((f["position"] for f in activas), default=-1) + 1
+    for f in removidas:
+        crepo.deactivate_source(pieza["id"], f["position"])
+    crepo.insert_sources([{"piece_id": pieza["id"], "position": siguiente + i, "source_type": n["source_type"],
+                           "source_id": n.get("source_id"), "comercio_id": n["comercio_id"],
+                           "file_ref": n["file_ref"], "caption_fact": n.get("caption_fact")}
+                          for i, n in enumerate(nuevas)])
+    return {"quitadas": len(removidas), "agregadas": len(nuevas)}
+
+
+def pedir_fotos_si_faltan(crepo, pieza: dict, hoy: date | None = None) -> None:
+    """Usado cuando «Cambiar fotos» no encuentra reemplazos: deja la tarea de pedir fotos."""
+    hoy = hoy or cargas.hoy_bolivia()
+    if pieza.get("comercio_id"):
+        c = crepo.get_comercio_ficha(pieza["comercio_id"])
+        if c:
+            inicio, _ = ciclo_de(c, hoy)
+            _pedir_fotos(crepo, c, inicio, hoy)
