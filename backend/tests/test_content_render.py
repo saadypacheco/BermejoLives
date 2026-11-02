@@ -11,7 +11,7 @@ from PIL import Image
 
 from app.core.config import settings
 from app.services import content_render as cr, content_render_job as job, content_storage
-from tests.content_helpers import banco, comercio, jpg, pieza
+from tests.content_helpers import autorizar, banco, comercio, jpg, pieza
 
 HAY_FFMPEG = bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
 FACTS = {"pillar": "comercio_del_dia", "nombre": "Vidriería Pacheco", "rubro": "Vidriería", "calle": "Calle Barrientos",
@@ -168,6 +168,7 @@ def listo(monkeypatch):
 
 def _en_cola(repo, crepo, n=5, **kw):
     comercio(repo)
+    autorizar(crepo, "com-1")
     fotos = banco(crepo, "com-1", n)
     p = pieza(crepo, "com-1", status="queued", **kw)
     crepo.insert_sources([{"piece_id": p["id"], "position": i, "source_type": "asset", "source_id": a["id"],

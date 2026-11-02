@@ -81,7 +81,7 @@ def _resumenes(crepo: ContentRepo, comercios: list[dict], por_slug: dict, hoy: d
             "in_grace": estado == "vencido" and content_selector.en_gracia(c, hoy),
             "social_consent": content_consent.respuesta(consentimientos.get(cid)),
             "pieces": {"quota": content_selector.cuota_del_plan(plan),
-                       "used": sum(1 for p in suyas if p.get("counts_for_quota") and p.get("quota_cycle_start") == inicio.isoformat()),
+                       "used": content_selector.usadas_en_ciclo(suyas, inicio),
                        "cycle_start": inicio.isoformat(), "cycle_end": fin.isoformat(),
                        "next_scheduled_for": proximas[0] if proximas else None},
             "tasks": {"due_today": sum(1 for t in mias if t["due_on"] == hoy.isoformat()),

@@ -101,7 +101,8 @@ def test_las_tareas_automaticas_se_cierran_solas(repo, crepo):
     repo.wa_grupos["g@g.us"] = {"comercio_id": "com-1"}
     care.iniciar_bienvenida(crepo, "com-1", "ana", hoy())
     banco(crepo, "com-1", 8)
-    repo.publicaciones.append({"comercio_id": "com-1", "estado": "aprobado", "created_at": (ahora() + timedelta(minutes=1)).isoformat()})
+    repo.publicaciones.append({"comercio_id": "com-1", "tipo": "oferta", "estado": "aprobado",
+                               "created_at": (ahora() + timedelta(minutes=1)).isoformat()})
     p = pieza(crepo, status="published")
     r = job(repo, crepo)
     assert r["closed"] == 4
@@ -160,7 +161,9 @@ def test_los_datos_del_reporte_salen_de_los_leads_y_solo_de_ese_comercio(repo, c
     repo.leads += [{"comercio_id": "otro", "tipo": "vista", "created_at": hace}] * 50
     repo.leads.append({"comercio_id": "com-1", "tipo": "vista", "created_at": (ahora() - timedelta(days=90)).isoformat()})   # fuera del ciclo
     repo.busqueda_comercios += [{"comercio_id": "com-1", "query": q} for q in ("vidrios", "vidrios", "espejos", "marcos")]
-    repo.publicaciones.append({"comercio_id": "com-1", "estado": "aprobado", "created_at": ahora().isoformat()})
+    repo.publicaciones.append({"comercio_id": "com-1", "tipo": "oferta", "estado": "aprobado", "created_at": ahora().isoformat()})
+    # Una novedad aprobada NO es una oferta: no suma a «ofertas aprobadas» (B7).
+    repo.publicaciones.append({"comercio_id": "com-1", "tipo": "novedad", "estado": "aprobado", "created_at": ahora().isoformat()})
     p = pieza(crepo, status="published", published_at=ahora().isoformat())
     datos = care.datos_del_reporte(repo, crepo, crepo.get_comercio_ficha("com-1"), hoy() - timedelta(days=10), hoy())
     assert datos == {"visits": 13, "whatsapp": 3, "directions": 2, "calls": 1, "from_social": 5, "terms": ["vidrios", "espejos"],

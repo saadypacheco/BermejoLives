@@ -5,7 +5,7 @@ import pytest
 
 from app.core.config import settings
 from app.services import content_storage
-from tests.content_helpers import comercio, hoy, pieza
+from tests.content_helpers import autorizar, comercio, hoy, pieza
 
 TOKEN = "tok_" + "a" * 20 + "bcd"
 VIDEO = b"\x00\x00\x00\x18ftypmp42" + bytes(range(256)) * 40          # 10 KB y pico
@@ -14,6 +14,7 @@ VIDEO = b"\x00\x00\x00\x18ftypmp42" + bytes(range(256)) * 40          # 10 KB y 
 @pytest.fixture
 def publicada(repo, crepo):
     comercio(repo)
+    autorizar(crepo, "com-1")
     content_storage.guardar("renders/2026-11/p1/video.mp4", VIDEO)
     content_storage.guardar("renders/2026-11/p1/cover.jpg", b"\xff\xd8\xff\xe0cover")
     ahora = datetime.now(timezone.utc)

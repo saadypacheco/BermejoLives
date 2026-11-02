@@ -33,7 +33,7 @@ from pathlib import Path
 import structlog
 
 from app.core.config import settings
-from app.services import content_storage
+from app.services import content_consent, content_storage
 
 logger = structlog.get_logger()
 
@@ -116,6 +116,18 @@ def comando_del_job(job_path: Path) -> list[str]:
     return prefijo + cmd
 
 
+#: Lo ÚNICO que el subproceso hereda del entorno: dónde están los programas y el idioma. El render no necesita
+#: ninguna clave (ni de la base ni de Gemini): lo que haya en el entorno del backend no tiene que viajar.
+ENV_PERMITIDAS = ("PATH", "LANG", "LC_ALL", "PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "HOME", "TMPDIR", "TEMP", "TMP",
+                  "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "LD_LIBRARY_PATH")
+
+
+def entorno_del_subproceso() -> dict[str, str]:
+    env = {k: os.environ[k] for k in ENV_PERMITIDAS if k in os.environ}
+    env["PYTHONIOENCODING"] = "utf-8"
+    return env
+
+
 def _correr_subproceso(job_path: Path) -> dict:
     """Corre el job y devuelve su JSON (`{ok, ...}`). Al vencer `CONTENT_RENDER_TIMEOUT_SEG` lo mata
     (el grupo entero) y devuelve una falla reintentable."""
@@ -123,7 +135,7 @@ def _correr_subproceso(job_path: Path) -> dict:
     if os.name == "posix":
         kwargs["start_new_session"] = True
     proc = subprocess.Popen(comando_del_job(job_path), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            text=True, cwd=str(_RAIZ_BACKEND), **kwargs)
+                            text=True, cwd=str(_RAIZ_BACKEND), env=entorno_del_subproceso(), **kwargs)
     try:
         salida, err = proc.communicate(timeout=settings.content_render_timeout_seg)
     except subprocess.TimeoutExpired:
@@ -143,12 +155,32 @@ def _correr_subproceso(job_path: Path) -> dict:
 
 # ───────────────────────────────────────────────────────────── el trabajo
 
+class PiezaBloqueada(Exception):
+    """La pieza no se puede armar: un comercio retiró la autorización o se dio de baja. `motivo` es el
+    `skip_reason` con el que se saltea."""
+
+    def __init__(self, motivo: str):
+        super().__init__(motivo)
+        self.motivo = motivo
+
+
 def _preparar_job(crepo, pieza: dict) -> tuple[Path, dict, list[dict]] | None:
-    """Arma `tmp/<piece_id>/job.json`. None si no quedan fotos suficientes (el caller falla la pieza)."""
+    """Arma `tmp/<piece_id>/job.json`. None si no quedan fotos suficientes (el caller falla la pieza).
+
+    Antes de dibujar nada se relee lo que pudo cambiar desde que se armó la pieza: la autorización y el
+    estado de CADA comercio de las fuentes (si no valen, `PiezaBloqueada`) y cada foto del banco (una que se
+    dio de baja o se marcó «no usar en redes» no entra al video)."""
     fuentes = crepo.list_sources(pieza["id"])
+    motivo = content_consent.motivo_de_comercios(crepo, pieza, fuentes)
+    if motivo:
+        raise PiezaBloqueada(motivo)
+    no_sirven = {id(f) for f in content_consent.fuentes_no_usables(crepo, fuentes)}
     slides = []
     usadas = []
     for f in fuentes:
+        if id(f) in no_sirven:
+            logger.info("content.fuente_ya_no_sirve", pieza=pieza["id"], fuente=f.get("source_id"))
+            continue
         ruta = content_storage.resolver_fuente(f.get("source_type"), f.get("file_ref"))
         if ruta is None:
             logger.info("content.fuente_no_existe", pieza=pieza["id"], tipo=f.get("source_type"))
@@ -292,6 +324,12 @@ def _tick(crepo, ahora: datetime) -> dict | None:
                 logger.warning("content.render_fallo", pieza=pieza["id"], error=error[:200],
                                reintentable=bool(r.get("retryable", True)))
                 resultado = r
+    except PiezaBloqueada as bloqueo:
+        crepo.update_piece(pieza["id"], {"status": "skipped", "skip_reason": bloqueo.motivo, "skipped_by": "sistema",
+                                         "skipped_at": _iso(_ahora()), "render_started_at": None},
+                           if_status="rendering")
+        logger.warning("content.render_pieza_bloqueada", pieza=pieza["id"], motivo=bloqueo.motivo)
+        resultado = {"ok": False, "error": bloqueo.motivo}
     except Exception as exc:  # noqa: BLE001
         logger.warning("content.render_error", pieza=pieza["id"], error=str(exc)[:200], exc_info=True)
         try:

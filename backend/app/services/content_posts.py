@@ -91,8 +91,10 @@ def approve(crepo, piece_id: str, actor: str) -> dict:
     pieza = _pieza_o_404(crepo, piece_id)
     if pieza["status"] != "ready_for_review":
         raise HTTPException(status_code=409, detail="Sólo se aprueba una pieza lista para revisar")
-    if pieza.get("comercio_id") and not content_consent.esta_autorizado(crepo, pieza["comercio_id"]):
-        raise HTTPException(status_code=409, detail="El comercio retiró la autorización para redes")
+    # Autorización vigente, comercio activo y fotos que sirven, de CADA fuente (el compilado trae varios comercios).
+    motivo = content_consent.motivo_de_bloqueo(crepo, pieza)
+    if motivo:
+        raise HTTPException(status_code=409, detail=content_consent.MENSAJE_DE_BLOQUEO[motivo])
     nueva = crepo.update_piece(piece_id, {"status": "approved", "approved_by": actor,
                                           "approved_at": _ahora().isoformat()}, if_status="ready_for_review")
     if not nueva:
@@ -103,6 +105,12 @@ def approve(crepo, piece_id: str, actor: str) -> dict:
                         for n in settings.content_networks_list()])
     logger.info("content.pieza_aprobada", pieza=piece_id, por=actor)
     return nueva
+
+
+def _objeciones_ahora(pieza: dict) -> list[str]:
+    """El validador de hoy sobre los textos guardados (sin «números ajenos»: eso se miró al generarlos)."""
+    return content_captions.validate_piece(pieza.get("facts") or {}, pieza.get("caption_tiktok"), pieza.get("caption_ig"),
+                                           pieza.get("caption_channel"), pieza.get("hashtags"), ignorar_numeros=True)
 
 
 def approve_batch(crepo, ids: list[str], actor: str) -> dict:
@@ -116,6 +124,10 @@ def approve_batch(crepo, ids: list[str], actor: str) -> dict:
             rechazadas.append({"id": pid, "motivo": "El validador tiene objeciones: revisala una por una"})
         elif p.get("caption_edited"):
             rechazadas.append({"id": pid, "motivo": "Tiene textos editados: revisala una por una"})
+        elif _objeciones_ahora(p):
+            # Los textos se vuelven a pasar por el validador de HOY: uno armado con un validador más flojo
+            # (o con datos libres del comercio) no se aprueba en lote.
+            rechazadas.append({"id": pid, "motivo": "El validador tiene objeciones: revisala una por una"})
         else:
             try:
                 approve(crepo, pid, actor)
@@ -140,15 +152,23 @@ def claim(crepo, post_id: str, actor: str) -> dict:
         raise HTTPException(status_code=409, detail={
             "codigo": "claimed",
             "mensaje": f"La está publicando {nombre_de(post.get('claimed_by'))} desde hace {minutos} min"})
-    nueva = crepo.update_post(post_id, {"status": "claimed", "claimed_by": actor, "claimed_at": ahora.isoformat()},
-                              if_status=["pending", "claimed"])
-    if not nueva:
-        raise HTTPException(status_code=409, detail="Esta red ya no se puede reclamar")
-    # Otra persona pudo reclamarla en el mismo instante: gana la que quedó escrita.
-    if (nueva.get("claimed_by") or "").lower() != actor.lower():
+    # La condición va EN el UPDATE: si dos reclamos llegan juntos, la base deja pasar a uno solo.
+    corte = ahora - timedelta(minutes=settings.content_claim_minutes)
+    nueva = crepo.claim_post(post_id, actor, ahora.isoformat(), corte.isoformat())
+    if nueva:
+        return nueva
+    actual = crepo.get_post(post_id) or post
+    if actual["status"] == "posted":
+        raise HTTPException(status_code=409, detail="Esta red ya está publicada")
+    if actual["status"] == "skipped":
+        raise HTTPException(status_code=409, detail="Esta red se salteó")
+    if actual["status"] == "claimed":
+        desde = _parse(actual.get("claimed_at")) or ahora
+        minutos = max(1, int((ahora - desde).total_seconds() // 60))
         raise HTTPException(status_code=409, detail={
-            "codigo": "claimed", "mensaje": f"La está publicando {nombre_de(nueva.get('claimed_by'))} desde hace 1 min"})
-    return nueva
+            "codigo": "claimed",
+            "mensaje": f"La está publicando {nombre_de(actual.get('claimed_by'))} desde hace {minutos} min"})
+    raise HTTPException(status_code=409, detail="Esta red ya no se puede reclamar")
 
 
 def release(crepo, post_id: str, actor: str) -> dict:

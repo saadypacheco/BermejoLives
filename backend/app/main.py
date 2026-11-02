@@ -215,12 +215,21 @@ async def _content_planner_loop():
 
     await asyncio.sleep(60)             # el arranque no compite con esta vuelta
     while True:
+        # Cada tarea en su propio try: si el selector falla, el job diario de cuidado corre igual (y al revés).
         try:
             repo, crepo = get_repo(), get_content_repo()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("content_planner_loop.error", paso="repos", error=str(exc))
+            await asyncio.sleep(900)
+            continue
+        try:
             await run_in_threadpool(content_selector.planner_tick, repo, crepo)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("content_planner_loop.error", paso="planner_tick", error=str(exc))
+        try:
             await run_in_threadpool(subscriber_care.daily_tick, repo, crepo)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("content_planner_loop.error", error=str(exc))
+            logger.warning("content_planner_loop.error", paso="daily_tick", error=str(exc))
         await asyncio.sleep(900)
 
 

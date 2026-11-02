@@ -46,8 +46,7 @@ def asset_response(a: dict) -> dict:
 def sirve_para_video(a: dict) -> bool:
     """Una foto del banco que el selector puede usar: autorizada para redes, sin personas sin
     consentimiento y con lado menor >= 720 px."""
-    return bool(a.get("usable_for_social") and (not a.get("has_people") or a.get("people_ok"))
-                and min(int(a.get("width") or 0), int(a.get("height") or 0)) >= content_storage.LADO_MENOR_MINIMO)
+    return content_storage.asset_sirve(a)
 
 
 def asset_list_response(assets: list[dict]) -> dict:

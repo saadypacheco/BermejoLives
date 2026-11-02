@@ -31,7 +31,8 @@ from fastapi import HTTPException
 
 from app.core.codigo import _RE_CON_PREFIJO
 from app.core.config import settings
-from app.services import cargas, content_captions, content_consent, content_storage, fotos_galeria, planes
+from app.services import (cargas, content_captions, content_consent, content_posts, content_storage, fotos_galeria,
+                          planes)
 from app.services.difusion import _precio
 
 logger = structlog.get_logger()
@@ -77,7 +78,7 @@ def week_to_plan(ahora: datetime | None = None, planned: set[str] | None = None)
     planned = planned or set()
     if hoy.weekday() == settings.content_planning_weekday and ahora_bo.hour >= settings.content_planning_hour:
         objetivo = lunes + timedelta(days=7)
-    elif hoy.weekday() == 6:
+    elif hoy.weekday() == settings.content_planning_weekday:
         return None
     else:
         objetivo = lunes
@@ -132,11 +133,8 @@ def plan_del(comercio: dict, planes_por_slug: dict) -> dict:
 
 def en_gracia(comercio: dict, hoy: date) -> bool:
     """Vencido hace menos de `CONTENT_GRACE_DAYS`: todavía se le arma la pieza del mes."""
-    try:
-        hasta = date.fromisoformat(str(comercio.get("paga_hasta"))[:10])
-    except ValueError:
-        return False
-    return hasta >= hoy - timedelta(days=settings.content_grace_days)
+    hasta = _fecha(comercio.get("paga_hasta"))
+    return hasta is not None and hasta >= hoy - timedelta(days=settings.content_grace_days)
 
 
 def es_suscriptor(comercio: dict, plan: dict, hoy: date) -> bool:
@@ -149,13 +147,43 @@ def es_suscriptor(comercio: dict, plan: dict, hoy: date) -> bool:
 
 
 def ciclo_de(comercio: dict, hoy: date) -> tuple[date, date]:
-    """(inicio, fin) del ciclo de cobro. Ver el docstring del módulo."""
+    """(inicio, fin) del ciclo de cobro. Ver el docstring del módulo.
+
+    En GRACIA (vencido hace menos de `CONTENT_GRACE_DAYS`) el ciclo es el que TERMINA en `paga_hasta`: la
+    pieza que se le está armando es la cuota pendiente del ciclo que ya pagó. Si se usara el ciclo "de
+    hoy" (que arranca el día del vencimiento), la cuota se reiniciaría y se le agendaría otra de más."""
     if comercio.get("paga_hasta"):
+        hasta = _fecha(comercio.get("paga_hasta"))
+        if hasta and hasta < hoy and en_gracia(comercio, hoy) and not comercio.get("plan_cortesia"):
+            return hasta - timedelta(days=30), hasta
         inicio = planes.inicio_del_ciclo(comercio, hoy)
         return inicio, inicio + timedelta(days=30)
     inicio = hoy.replace(day=1)
     siguiente = (inicio + timedelta(days=32)).replace(day=1)
     return inicio, siguiente
+
+
+def _fecha(valor) -> date | None:
+    try:
+        return date.fromisoformat(str(valor)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def usadas_en_ciclo(piezas_propias: list[dict], inicio: date) -> int:
+    """Cuántas piezas del comercio ya consumen la cuota del ciclo que arrancó en `inicio`.
+    `piezas_propias`: las piezas vivas de UN comercio (`list_own_pieces_since`)."""
+    return sum(1 for p in piezas_propias
+               if p.get("counts_for_quota") and p.get("quota_cycle_start") == inicio.isoformat())
+
+
+def ultimo_dia_agendable(comercio: dict) -> date | None:
+    """Hasta cuándo se le puede agendar una pieza: `paga_hasta` + la gracia. None si no tiene vencimiento
+    (cortesía o sin pagar): ahí no hay tope."""
+    if comercio.get("plan_cortesia"):
+        return None
+    hasta = _fecha(comercio.get("paga_hasta"))
+    return hasta + timedelta(days=settings.content_grace_days) if hasta else None
 
 
 def evaluar_suscriptores(crepo, hoy: date, autorizados: set[str] | None = None) -> list[dict]:
@@ -176,7 +204,7 @@ def evaluar_suscriptores(crepo, hoy: date, autorizados: set[str] | None = None) 
             continue
         inicio, fin = ciclo_de(c, hoy)
         mias = [p for p in propias if p["comercio_id"] == c["id"]]
-        usadas = sum(1 for p in mias if p.get("counts_for_quota") and p.get("quota_cycle_start") == inicio.isoformat())
+        usadas = usadas_en_ciclo(mias, inicio)
         ultima = max((p["scheduled_for"] for p in mias), default=None)
         cuota = cuota_del_plan(plan)
         out.append({"comercio": c, "plan": plan, "cuota": cuota, "ciclo_inicio": inicio, "ciclo_fin": fin,
@@ -339,6 +367,9 @@ def _plan_comercio(crepo, week_start: date, dia: date, actor: str, hoy: date, ca
     """Cubre un lugar `comercio_del_dia`. Devuelve el motivo si quedó vacío."""
     for s in _orden_de_candidatos([c for c in candidatos if c["debe"] > 0]):
         c = s["comercio"]
+        tope = ultimo_dia_agendable(c)
+        if tope is not None and dia > tope:
+            continue                      # la pieza saldría después de que se le acabó la gracia
         if s["ultima"]:
             sep = SEPARACION_URGENTE_DIAS if s["dias_restantes"] <= 10 else SEPARACION_DIAS
             if abs((dia - date.fromisoformat(str(s["ultima"])[:10])).days) < sep:
@@ -374,6 +405,19 @@ def limpiar_titulo(texto: str | None) -> str:
     return corte.rstrip(" -·,.")
 
 
+def _compilado_de_ciudad(candidatas: list[dict], ids_suscriptores: set[str]) -> list[dict]:
+    """Hasta `MAX_OFERTAS` ofertas de una ciudad: primero las de suscriptores y, de las demás, las que
+    entren con la regla «no suscriptores <= piso(total / 3)» sobre el compilado ya armado."""
+    subs = [x for x in candidatas if x["comercio"]["id"] in ids_suscriptores][:MAX_OFERTAS]
+    otros = [x for x in candidatas if x["comercio"]["id"] not in ids_suscriptores]
+    elegidas = list(subs)
+    k = 0
+    while otros and len(elegidas) < MAX_OFERTAS and (k + 1) <= (len(subs) + k + 1) // 3:
+        elegidas.append(otros.pop(0))
+        k += 1
+    return elegidas
+
+
 def _plan_ofertas(repo, crepo, week_start: date, dia: date, actor: str, hoy: date, consentidos: set[str],
                   suscriptores: list[dict], usadas: set[tuple], resumen: dict) -> str | None:
     """Arma el compilado del jueves. Devuelve el motivo si quedó vacío."""
@@ -403,18 +447,13 @@ def _plan_ofertas(repo, crepo, week_start: date, dia: date, actor: str, hoy: dat
         por_ciudad.setdefault(c.get("ciudad_id") or "", []).append({"oferta": o, "comercio": c})
     if not por_ciudad:
         return "not_enough_offers"
-    ciudad_id = max(por_ciudad, key=lambda k: (len(por_ciudad[k]), k))
-    candidatas = por_ciudad[ciudad_id]
-    subs = [x for x in candidatas if x["comercio"]["id"] in ids_suscriptores][:MAX_OFERTAS]
-    otros = [x for x in candidatas if x["comercio"]["id"] not in ids_suscriptores]
-    elegidas = list(subs)
-    k = 0
-    # No suscriptores <= piso(total / 3), con el total del compilado ya armado.
-    while otros and len(elegidas) < MAX_OFERTAS and (k + 1) <= (len(subs) + k + 1) // 3:
-        elegidas.append(otros.pop(0))
-        k += 1
-    if len(elegidas) < MIN_OFERTAS:
+    # El compilado de CADA ciudad con el tope de no suscriptores aplicado; gana el más grande que sirva.
+    armados = {cid: _compilado_de_ciudad(cands, ids_suscriptores) for cid, cands in por_ciudad.items()}
+    validos = {cid: e for cid, e in armados.items() if len(e) >= MIN_OFERTAS}
+    if not validos:
         return "not_enough_offers"
+    ciudad_id = max(validos, key=lambda k: (len(validos[k]), k))
+    elegidas = validos[ciudad_id]
 
     items, fuentes = [], []
     for x in elegidas:
@@ -464,13 +503,15 @@ def cambiar_fotos(crepo, pieza: dict, remove_positions: list[int], hoy: date | N
         raise HTTPException(status_code=409, detail={
             "codigo": "no_more_photos",
             "mensaje": "No hay más fotos que sirvan de este comercio. Pedile fotos: la tarea quedó creada."})
-    siguiente = max((f["position"] for f in activas), default=-1) + 1
-    for f in removidas:
-        crepo.deactivate_source(pieza["id"], f["position"])
+    # `unique (piece_id, position)` cuenta TAMBIÉN las fuentes ya dadas de baja: la posición nueva sale de todas.
+    siguiente = max((f["position"] for f in crepo.list_sources(pieza["id"], only_active=False)), default=-1) + 1
+    # Primero se suman los reemplazos y recién después se da de baja lo viejo: si el insert falla, no se pierde nada.
     crepo.insert_sources([{"piece_id": pieza["id"], "position": siguiente + i, "source_type": n["source_type"],
                            "source_id": n.get("source_id"), "comercio_id": n["comercio_id"],
                            "file_ref": n["file_ref"], "caption_fact": n.get("caption_fact")}
                           for i, n in enumerate(nuevas)])
+    for f in removidas:
+        crepo.deactivate_source(pieza["id"], f["position"])
     return {"quitadas": len(removidas), "agregadas": len(nuevas)}
 
 
@@ -482,3 +523,105 @@ def pedir_fotos_si_faltan(crepo, pieza: dict, hoy: date | None = None) -> None:
         if c:
             inicio, _ = ciclo_de(c, hoy)
             _pedir_fotos(crepo, c, inicio, hoy)
+
+
+# ───────────────────────────── cuando una fuente deja de valer (autorización retirada, foto dada de baja)
+
+#: Piezas que todavía se pueden corregir y volver a armar.
+PIEZA_REARMABLE = ("queued", "rendering", "ready_for_review", "approved")
+
+
+def _ya_salio_en_alguna_red(crepo, pieza: dict) -> bool:
+    """Una pieza `approved` con una red ya publicada no se puede rehacer: se cierran las redes que faltan
+    (se saltean) y la pieza queda `published`. True si era ese caso."""
+    if pieza["status"] != "approved":
+        return False
+    posts = crepo.list_posts([pieza["id"]])
+    if not any(p["status"] == "posted" for p in posts):
+        return False
+    for post in posts:
+        if post["status"] in ("pending", "claimed"):
+            crepo.update_post(post["id"], {"status": "skipped", "skip_reason": "fuente retirada", "claimed_by": None,
+                                           "claimed_at": None}, if_status=["pending", "claimed"])
+    content_posts.cerrar_pieza_si_corresponde(crepo, pieza["id"])
+    return True
+
+
+def _volver_a_la_cola(crepo, pieza: dict, extra: dict | None = None) -> dict | None:
+    """La pieza vuelve a `queued` para armar el video de nuevo (se borra el video viejo, que mostraba lo que
+    ya no vale). Sus redes pendientes quedan: al aprobarla otra vez no se duplican."""
+    patch = {"status": "queued", "render_attempts": 0, "render_error": None, "render_started_at": None,
+             "render_next_at": datetime.now(timezone.utc).isoformat(), "video_path": None, "cover_path": None,
+             **(extra or {})}
+    viejos = (pieza.get("video_path"), pieza.get("cover_path"))        # antes del update: el repo puede mutar `pieza`
+    nueva = crepo.update_piece(pieza["id"], patch, if_status=list(PIEZA_REARMABLE))
+    if not nueva:
+        return None
+    for ruta in viejos:
+        content_storage.borrar(ruta)
+    for post in crepo.list_posts([pieza["id"]]):
+        if post["status"] == "claimed":
+            crepo.update_post(post["id"], {"status": "pending", "claimed_by": None, "claimed_at": None},
+                              if_status="claimed")
+    return nueva
+
+
+def quitar_comercio_de_compilado(crepo, pieza: dict, comercio_id: str, actor: str) -> str | None:
+    """Un comercio retiró su autorización y aparece en un compilado de ofertas: se le quita su parte.
+
+    `skipped` si el compilado queda por debajo del mínimo (se saltea entero), `rebuilt` si se rearmó sin
+    ese comercio (textos nuevos de plantilla y el render vuelve a la cola), `closed` si ya había salido en
+    alguna red, None si no había nada que hacer."""
+    activas = crepo.list_sources(pieza["id"])
+    quitar = [f for f in activas if f.get("comercio_id") == comercio_id]
+    if not quitar:
+        return None
+    if _ya_salio_en_alguna_red(crepo, pieza):
+        return "closed"
+    facts = pieza.get("facts") or {}
+    items = facts.get("items") or []
+    alineado = len(items) == len(activas)              # el item i es de la fuente i (así se crea)
+    if len(activas) - len(quitar) < MIN_OFERTAS or not alineado:
+        ahora = datetime.now(timezone.utc).isoformat()
+        return "skipped" if content_consent.saltear_pieza(crepo, pieza, actor, ahora) else None
+    posiciones = {f["position"] for f in quitar}
+    nuevos = [it for f, it in zip(activas, items) if f["position"] not in posiciones]
+    nuevos_facts = content_captions.build_facts_ofertas(
+        {"nombre": facts.get("ciudad"), "departamento": facts.get("departamento")}, nuevos)
+    textos = content_captions.template_captions(nuevos_facts)
+    checks = content_captions.validate_piece(nuevos_facts, textos["caption_tiktok"], textos["caption_ig"],
+                                             textos["caption_channel"], textos["hashtags"])
+    for f in quitar:
+        crepo.deactivate_source(pieza["id"], f["position"])
+    nueva = _volver_a_la_cola(crepo, pieza, {
+        "facts": nuevos_facts, "caption_tiktok": textos["caption_tiktok"], "caption_ig": textos["caption_ig"],
+        "caption_channel": textos["caption_channel"], "hashtags": textos["hashtags"], "caption_engine": "template",
+        "caption_checks": checks, "caption_edited": False})
+    logger.info("content.compilado_rearmado", pieza=pieza["id"], sin_comercio=comercio_id, por=actor)
+    return "rebuilt" if nueva else None
+
+
+def retirar_asset_de_piezas(crepo, asset_id: str, actor: str, hoy: date | None = None) -> dict:
+    """Una foto del banco se dio de baja o se marcó «no usar en redes»: las piezas vivas que la usan buscan
+    un reemplazo y vuelven a la cola; si no hay reemplazo se saltean (y queda la tarea de pedir fotos).
+
+    Devuelve `{replaced, skipped}`."""
+    hoy = hoy or cargas.hoy_bolivia()
+    resumen = {"replaced": 0, "skipped": 0}
+    for pid in crepo.piece_ids_by_source_asset(asset_id):
+        pieza = crepo.get_piece(pid)
+        if not pieza or pieza["status"] not in PIEZA_REARMABLE or _ya_salio_en_alguna_red(crepo, pieza):
+            continue
+        posiciones = [f["position"] for f in crepo.list_sources(pid)
+                      if f.get("source_type") == "asset" and f.get("source_id") == asset_id]
+        try:
+            cambiar_fotos(crepo, pieza, posiciones, hoy)
+        except HTTPException:
+            ahora = datetime.now(timezone.utc).isoformat()
+            if content_consent.saltear_pieza(crepo, pieza, actor, ahora, "asset_removed"):
+                resumen["skipped"] += 1
+            continue
+        if _volver_a_la_cola(crepo, pieza):
+            resumen["replaced"] += 1
+    logger.info("content.asset_retirado", asset=asset_id, por=actor, **resumen)
+    return resumen

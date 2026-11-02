@@ -124,7 +124,10 @@ def campo_social_consent(comercio_id: str, body: SocialConsentAgentUpdate,
 @router.get("/comercio/social-consent")
 def comercio_get_social_consent(claims: dict = Depends(require_comercio_vigente),
                                 crepo: ContentRepo = Depends(get_content_repo)) -> dict:
-    return content_consent.respuesta(content_consent.vigente(crepo, claims["comercio_id"]))
+    """Al comerciante sólo se le devuelve si autorizó, por qué vía y cuándo: la nota y quién la registró
+    son del equipo de URUKU."""
+    r = content_consent.respuesta(content_consent.vigente(crepo, claims["comercio_id"]))
+    return {"granted": r["granted"], "via": r["via"], "recorded_at": r["recorded_at"]}
 
 
 @router.put("/comercio/social-consent")
@@ -366,7 +369,7 @@ def _asset_o_404(crepo: ContentRepo, asset_id: str) -> dict:
 
 
 @router.patch("/admin/content/assets/{asset_id}")
-def admin_update_asset(asset_id: str, body: ContentAssetUpdate, _claims: dict = Depends(_permiso_difusion),
+def admin_update_asset(asset_id: str, body: ContentAssetUpdate, claims: dict = Depends(_permiso_difusion),
                        crepo: ContentRepo = Depends(get_content_repo)) -> dict:
     _asset_o_404(crepo, asset_id)
     pedidos = body.model_fields_set
@@ -378,6 +381,9 @@ def admin_update_asset(asset_id: str, body: ContentAssetUpdate, _claims: dict = 
     nueva = crepo.update_asset(asset_id, patch)
     if not nueva:
         raise HTTPException(status_code=404, detail="Foto no encontrada")
+    if not content_storage.asset_sirve(nueva):
+        # «No usar en redes» (o personas sin confirmar): las piezas vivas que la usan buscan reemplazo o se saltean.
+        content_selector.retirar_asset_de_piezas(crepo, asset_id, _actor(claims))
     return content_present.asset_response(nueva)
 
 
@@ -388,6 +394,7 @@ def admin_delete_asset(asset_id: str, claims: dict = Depends(_permiso_difusion),
     _asset_o_404(crepo, asset_id)
     crepo.update_asset(asset_id, {"activo": False, "deactivated_by": _actor(claims),
                                   "deactivated_at": datetime.now(timezone.utc).isoformat()})
+    content_selector.retirar_asset_de_piezas(crepo, asset_id, _actor(claims))
     return {"ok": True}
 
 
@@ -431,7 +438,8 @@ def admin_plan_week(body: ContentWeekPlanCreate | None = None, claims: dict = De
     hoy = cargas.hoy_bolivia()
     pedida = body.week_start if body else None
     if pedida is None:
-        pedida = content_selector.lunes_de(hoy) + (timedelta(days=7) if hoy.weekday() == 6 else timedelta(0))
+        pedida = content_selector.lunes_de(hoy) + (
+            timedelta(days=7) if hoy.weekday() == settings.content_planning_weekday else timedelta(0))
     if pedida.weekday() != 0:
         raise HTTPException(status_code=400, detail="La fecha tiene que ser un lunes")
     if pedida + timedelta(days=6) < hoy:
@@ -515,12 +523,12 @@ def admin_change_sources(piece_id: str, body: ContentPieceSourcesUpdate, _claims
                          crepo: ContentRepo = Depends(get_content_repo)) -> dict:
     """«Cambiar fotos»: quita las marcadas, busca reemplazos y vuelve a armar el video."""
     pieza = _pieza_o_404(crepo, piece_id)
-    if pieza["status"] not in ("ready_for_review", "failed", "queued"):
-        raise HTTPException(status_code=409, detail="Sólo se cambian las fotos de una pieza que todavía no se aprobó")
+    if pieza["status"] not in ("ready_for_review", "failed"):
+        raise HTTPException(status_code=409, detail="Sólo se cambian las fotos de una pieza lista para revisar o con problemas")
     content_selector.cambiar_fotos(crepo, pieza, body.remove_positions)
     nueva = crepo.update_piece(piece_id, {
         "status": "queued", "render_attempts": 0, "render_error": None, "render_started_at": None,
-        "render_next_at": datetime.now(timezone.utc).isoformat()}, if_status=["ready_for_review", "failed", "queued"])
+        "render_next_at": datetime.now(timezone.utc).isoformat()}, if_status=["ready_for_review", "failed"])
     if not nueva:
         raise HTTPException(status_code=409, detail="La pieza cambió mientras tanto, abrila de nuevo")
     return _devolver(crepo, piece_id)
@@ -775,6 +783,10 @@ def _pieza_publica(crepo: ContentRepo, token: str) -> dict:
         raise HTTPException(status_code=404, detail="Esta pieza no existe")
     vence = content_posts._parse(pieza.get("share_expires_at"))
     if (vence and vence < datetime.now(timezone.utc)) or pieza.get("files_purged_at"):
+        raise HTTPException(status_code=410, detail="Este enlace venció. Pedile uno nuevo a URUKU.")
+    # Aunque el link no haya vencido: si alguien que aparece en el video retiró la autorización o se dio de
+    # baja, deja de abrir.
+    if not content_consent.vigente_para_compartir(crepo, pieza):
         raise HTTPException(status_code=410, detail="Este enlace venció. Pedile uno nuevo a URUKU.")
     return pieza
 

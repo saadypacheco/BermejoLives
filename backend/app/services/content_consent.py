@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 import structlog
 from fastapi import HTTPException
 
+from app.services import content_storage
+
 logger = structlog.get_logger()
 
 #: Quién puede registrarla desde cada lugar.
@@ -29,6 +31,14 @@ PIEZA_ABIERTA = ["queued", "rendering", "ready_for_review", "approved"]
 
 def _ahora() -> datetime:
     return datetime.now(timezone.utc)
+
+
+#: Qué se le dice a quien intenta aprobar una pieza cuyas fuentes ya no valen (409).
+MENSAJE_DE_BLOQUEO = {
+    "consent_revoked": "El comercio retiró la autorización para redes",
+    "comercio_inactivo": "Un comercio de la pieza ya no está activo",
+    "asset_unavailable": "Una foto de la pieza ya no se puede usar en redes: cambiala con «Cambiar fotos»",
+}
 
 
 def respuesta(fila: dict | None) -> dict:
@@ -66,30 +76,120 @@ def registrar(crepo, comercio_id: str, granted: bool, via: str, recorded_by: str
     return fila
 
 
+def comercios_de_pieza(pieza: dict, fuentes: list[dict]) -> set[str]:
+    """Los comercios que aparecen en la pieza: el dueño (si es propia) y el de CADA fuente
+    (el compilado de ofertas no tiene dueño, pero lleva fotos de varios comercios)."""
+    ids = {pieza.get("comercio_id")} | {f.get("comercio_id") for f in fuentes}
+    return {i for i in ids if i}
+
+
+def motivo_de_comercios(crepo, pieza: dict, fuentes: list[dict] | None = None) -> str | None:
+    """`consent_revoked` / `comercio_inactivo` si ALGÚN comercio de la pieza ya no tiene autorización
+    vigente o se dio de baja; None si todos valen."""
+    fuentes = crepo.list_sources(pieza["id"]) if fuentes is None else fuentes
+    ids = sorted(comercios_de_pieza(pieza, fuentes))
+    if not ids:
+        return None
+    vigentes = crepo.current_consents(ids)
+    if any(not (vigentes.get(i) or {}).get("granted") for i in ids):
+        return "consent_revoked"
+    for i in ids:
+        ficha = crepo.get_comercio_ficha(i)
+        if not ficha or ficha.get("activo") is False:
+            return "comercio_inactivo"
+    return None
+
+
+def fuentes_no_usables(crepo, fuentes: list[dict]) -> list[dict]:
+    """Las fuentes del banco que se dieron de baja, se marcaron «no usar en redes» o dejaron de servir
+    para un video DESPUÉS de armar la pieza. Se relee cada foto: lo que se copió al armarla no vale."""
+    malas = []
+    for f in fuentes:
+        if f.get("source_type") != "asset" or not f.get("source_id"):
+            continue
+        a = crepo.get_asset(f["source_id"])
+        if not a or not content_storage.asset_sirve(a):
+            malas.append(f)
+    return malas
+
+
+def motivo_de_bloqueo(crepo, pieza: dict, fuentes: list[dict] | None = None) -> str | None:
+    """Por qué una pieza NO se puede aprobar o renderizar ahora (o None)."""
+    fuentes = crepo.list_sources(pieza["id"]) if fuentes is None else fuentes
+    motivo = motivo_de_comercios(crepo, pieza, fuentes)
+    if motivo:
+        return motivo
+    return "asset_unavailable" if fuentes_no_usables(crepo, fuentes) else None
+
+
+def vigente_para_compartir(crepo, pieza: dict) -> bool:
+    """¿La página pública de la pieza puede seguir abierta? Autorización vigente y comercio activo de cada
+    comercio que aparece en ella."""
+    return motivo_de_comercios(crepo, pieza) is None
+
+
+def saltear_pieza(crepo, p: dict, actor: str, ahora: str, motivo: str = "consent_revoked") -> bool:
+    nueva = crepo.update_piece(p["id"], {"status": "skipped", "skip_reason": motivo,
+                                         "skipped_by": actor, "skipped_at": ahora}, if_status=PIEZA_ABIERTA)
+    if not nueva:
+        return False
+    for post in crepo.list_posts([p["id"]]):
+        if post.get("status") in ("pending", "claimed"):
+            crepo.update_post(post["id"], {"status": "skipped", "claimed_by": None, "claimed_at": None,
+                                           "skip_reason": "autorización retirada" if motivo == "consent_revoked"
+                                           else "foto retirada"}, if_status=["pending", "claimed"])
+    return True
+
+
 def efectos_del_retiro(crepo, comercio_id: str, actor: str) -> dict:
     """Saltea lo que no salió y lista lo que ya está publicado.
 
+    Alcanza a las piezas PROPIAS del comercio y a los COMPILADOS de ofertas (que no tienen dueño pero
+    llevan sus fotos): de un compilado se quita sólo la parte de este comercio; si queda por debajo del
+    mínimo, se saltea entero; si ya estaba renderizada, se vuelve a encolar el render. Las páginas
+    públicas de lo ya publicado dejan de abrir (`share_expires_at`).
+
     Devuelve `{pieces_skipped, published_posts: [{network, post_url}]}`."""
+    from app.services import content_selector            # ciclo: el selector importa este módulo
+
     ahora = _ahora().isoformat()
-    saltadas = 0
-    for p in crepo.list_pieces(statuses=PIEZA_ABIERTA, comercio_id=comercio_id, limit=500):
-        nueva = crepo.update_piece(p["id"], {"status": "skipped", "skip_reason": "consent_revoked",
-                                             "skipped_by": actor, "skipped_at": ahora}, if_status=PIEZA_ABIERTA)
-        if not nueva:
+    saltadas = rearmadas = 0
+    con_posteos_a_listar: list[str] = []              # piezas saltadas que ya salieron en alguna red
+    ids_por_fuente = crepo.piece_ids_by_source_comercio(comercio_id)
+    piezas = {p["id"]: p for p in crepo.list_pieces(statuses=PIEZA_ABIERTA, comercio_id=comercio_id, limit=500)}
+    for pid in ids_por_fuente:
+        p = piezas.get(pid) or crepo.get_piece(pid)
+        if p and p["status"] in PIEZA_ABIERTA:
+            piezas[pid] = p
+    for p in piezas.values():
+        if p.get("comercio_id") == comercio_id:
+            if saltear_pieza(crepo, p, actor, ahora):
+                saltadas += 1
+                con_posteos_a_listar.append(p["id"])
             continue
-        saltadas += 1
-        for post in crepo.list_posts([p["id"]]):
-            if post.get("status") in ("pending", "claimed"):
-                crepo.update_post(post["id"], {"status": "skipped", "skip_reason": "autorización retirada",
-                                               "claimed_by": None, "claimed_at": None},
-                                  if_status=["pending", "claimed"])
+        resultado = content_selector.quitar_comercio_de_compilado(crepo, p, comercio_id, actor)
+        if resultado == "skipped":
+            saltadas += 1
+        elif resultado == "rebuilt":
+            rearmadas += 1
+        if resultado:
+            con_posteos_a_listar.append(p["id"])
     publicados: list[dict] = []
-    publicadas = crepo.list_pieces(statuses=["published"], comercio_id=comercio_id, limit=500)
-    for post in crepo.list_posts([p["id"] for p in publicadas]) if publicadas else []:
+    ya_publicadas = {p["id"]: p for p in crepo.list_pieces(statuses=["published"], comercio_id=comercio_id, limit=500)}
+    for pid in ids_por_fuente:
+        if pid not in ya_publicadas:
+            p = crepo.get_piece(pid)
+            if p and p["status"] == "published":
+                ya_publicadas[pid] = p
+    for p in ya_publicadas.values():
+        if p.get("share_token"):                      # el link que se le dio al comerciante deja de abrir
+            crepo.update_piece(p["id"], {"share_expires_at": ahora})
+    a_listar = list(ya_publicadas) + con_posteos_a_listar
+    for post in crepo.list_posts(a_listar) if a_listar else []:
         if post.get("status") == "posted":
             publicados.append({"network": post.get("network"), "post_url": post.get("post_url")})
     logger.info("content.consent_retirado", comercio=comercio_id, piezas_saltadas=saltadas,
-                publicados=len(publicados), por=actor)
+                piezas_rearmadas=rearmadas, publicados=len(publicados), por=actor)
     return {"pieces_skipped": saltadas, "published_posts": publicados}
 
 
