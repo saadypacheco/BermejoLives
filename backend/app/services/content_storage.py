@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import re
 import shutil
 import time
 import uuid
@@ -37,6 +38,9 @@ THUMB_LADO = 400
 THUMB_CALIDAD = 74
 #: Lado menor mínimo para que una foto entre en un video (se guarda igual).
 LADO_MENOR_MINIMO = 720
+
+#: La firma son 43 caracteres base64url (SHA-256 sin el relleno).
+_RE_FIRMA = re.compile(r"^[A-Za-z0-9_-]{43}$")
 
 SCOPES = {"piece": {"video", "cover"}, "asset": {"file", "thumb"}}
 
@@ -221,6 +225,14 @@ def resolver_fuente(source_type: str, file_ref: str | None) -> Path | None:
     return ruta_local_publica(file_ref)
 
 
+def asset_sirve(a: dict) -> bool:
+    """Una foto del banco que puede entrar en un video: activa, autorizada para redes, sin personas sin
+    consentimiento y con lado menor >= 720 px."""
+    return bool(a.get("activo", True) and a.get("usable_for_social")
+                and (not a.get("has_people") or a.get("people_ok"))
+                and min(int(a.get("width") or 0), int(a.get("height") or 0)) >= LADO_MENOR_MINIMO)
+
+
 def lado_menor(path: Path) -> int | None:
     """El lado menor de una imagen leyendo sólo el encabezado (sin decodificar)."""
     from PIL import Image
@@ -263,7 +275,8 @@ def verificar(scope: str, id_: str, kind: str, exp: int, sig: str,
     firma adulterada nunca dice «vencida»."""
     if scope not in SCOPES or kind not in SCOPES[scope]:
         return "invalida"
-    if not hmac.compare_digest(firmar(scope, id_, kind, exp), sig or ""):
+    # `compare_digest` revienta con caracteres que no son ASCII: una firma mal formada es inválida, nunca un 500.
+    if not _RE_FIRMA.match(sig or "") or not hmac.compare_digest(firmar(scope, id_, kind, exp), sig):
         return "invalida"
     if (ahora if ahora is not None else time.time()) > exp:
         return "vencida"
@@ -335,8 +348,6 @@ def asegurar_dir() -> bool:
 
 def nombre_de_descarga(slug: str | None, fecha: str | None, ext: str = "mp4") -> str:
     """`uruku-<slug>-<fecha>.mp4`, sólo con caracteres seguros para una cabecera."""
-    import re
-
     s = re.sub(r"[^a-z0-9-]+", "-", (slug or "pieza").lower()).strip("-")[:60] or "pieza"
     f = re.sub(r"[^0-9-]+", "", fecha or "")[:10]
     return f"uruku-{s}{'-' + f if f else ''}.{ext}"

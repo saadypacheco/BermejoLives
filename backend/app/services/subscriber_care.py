@@ -118,15 +118,25 @@ def bienvenidas_automaticas(crepo, ahora: datetime, hoy: date) -> int:
     desde = (ahora - timedelta(days=DIAS_PAGO_RECIENTE)).isoformat()
     n = 0
     for pago in crepo.payments_since(desde):
-        cid = pago["comercio_id"]
-        if crepo.count_payments_before(cid, pago["created_at"]) > 0:
-            continue                                  # una renovación no dispara bienvenida
-        perfil = crepo.get_profile(cid)
-        if perfil and perfil.get("onboarding_started_at"):
-            continue
-        iniciar_bienvenida(crepo, cid, f"auto:pago:{pago['id']}", hoy)
-        n += 1
+        # Un pago con problemas no frena a los demás: cada uno en su try.
+        try:
+            cid = pago["comercio_id"]
+            if crepo.count_payments_before(cid, _fecha_del_pago(pago)) > 0:
+                continue                                  # una renovación no dispara bienvenida
+            perfil = crepo.get_profile(cid)
+            if perfil and perfil.get("onboarding_started_at"):
+                continue
+            iniciar_bienvenida(crepo, cid, f"auto:pago:{pago['id']}", hoy)
+            n += 1
+        except Exception:  # noqa: BLE001
+            logger.warning("subscriber.bienvenida_pago_fallo", pago=pago.get("id"), exc_info=True)
     return n
+
+
+def _fecha_del_pago(pago: dict) -> str:
+    """Cuándo se confirmó el pago: `confirmed_at` si la tabla lo trae; si no, `created_at` (hoy `pagos` no
+    guarda la confirmación: un pago self-service confirmado tarde figura con la fecha en que se subió)."""
+    return str(pago.get("confirmed_at") or pago["created_at"])
 
 
 # ───────────────────────────────────────────────────── cierres automáticos
@@ -148,7 +158,7 @@ def cierres_automaticos(repo, crepo, hoy: date, ahora: datetime) -> int:
             lista = checklist(repo, crepo, c, content_consent.vigente(crepo, cid))
             cumple = all(i["auto"] and i["ok"] for i in lista)
         elif t["kind"] == "first_offer":
-            cumple = bool(inicio) and repo.contar_publicaciones_desde(cid, str(inicio)) > 0
+            cumple = bool(inicio) and crepo.count_offers_since(cid, str(inicio)) > 0
         elif t["kind"] == "photo_session":
             buenas = [a for a in crepo.list_assets([cid]) if a.get("usable_for_social")
                       and min(a.get("width") or 0, a.get("height") or 0) >= content_storage.LADO_MENOR_MINIMO]
@@ -179,7 +189,7 @@ def datos_del_reporte(repo, crepo, comercio: dict, inicio: date, hoy: date) -> d
         "from_social": crepo.count_leads(cid, desde, origen_prefixes=ORIGENES_REDES),
         "terms": terminos,
         "pieces_published": len(publicadas),
-        "offers_approved": repo.contar_publicaciones_desde(cid, desde),
+        "offers_approved": crepo.count_offers_since(cid, desde),
     }
 
 

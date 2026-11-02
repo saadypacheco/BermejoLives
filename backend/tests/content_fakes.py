@@ -193,6 +193,9 @@ class FakeContentRepo:
     def insert_sources(self, rows):
         out = []
         for r in rows:
+            # `unique (piece_id, position)` de la 0181: cuenta también las fuentes inactivas.
+            if any(s["piece_id"] == r["piece_id"] and s["position"] == r["position"] for s in self.sources):
+                raise ContentConflict("duplicate key value violates unique constraint (piece_id, position)")
             fila = {"id": str(uuid.uuid4()), "activo": True, "created_at": self._tic(), **r}
             self.sources.append(fila)
             out.append(fila)
@@ -215,6 +218,13 @@ class FakeContentRepo:
                 out.append({"piece_id": s["piece_id"], "source_type": s["source_type"], "source_id": s.get("source_id"),
                             "file_ref": s.get("file_ref"), "comercio_id": s.get("comercio_id"), "pillar": p["pillar"]})
         return out
+
+    def piece_ids_by_source_comercio(self, comercio_id):
+        return sorted({s["piece_id"] for s in self.sources if s.get("comercio_id") == comercio_id and s.get("activo", True)})
+
+    def piece_ids_by_source_asset(self, asset_id):
+        return sorted({s["piece_id"] for s in self.sources if s.get("source_type") == "asset"
+                       and s.get("source_id") == asset_id and s.get("activo", True)})
 
     # ── posteos ──
     def insert_posts(self, rows):
@@ -242,6 +252,19 @@ class FakeContentRepo:
         if not p or (if_status is not None and p["status"] not in _lista(if_status)):
             return None
         p.update(patch)
+        return p
+
+    def claim_post(self, post_id, actor, now_iso, expired_before_iso):
+        """Reclamo atómico: la misma condición que el UPDATE real (pendiente, vencido o del mismo actor)."""
+        p = self.posts.get(post_id)
+        if not p:
+            return None
+        libre = (p["status"] == "pending"
+                 or (p["status"] == "claimed" and (p.get("claimed_at") or "") < expired_before_iso)
+                 or (p["status"] == "claimed" and p.get("claimed_by") == actor))
+        if not libre:
+            return None
+        p.update({"status": "claimed", "claimed_by": actor, "claimed_at": now_iso})
         return p
 
     def release_expired_claims(self, cutoff_iso):
@@ -370,6 +393,11 @@ class FakeContentRepo:
                     and (comercio_id is None or p.get("comercio_id") == comercio_id)):
                 out.append(p)
         return sorted(out, key=lambda p: p.get("approved_at") or "", reverse=True)
+
+    def count_offers_since(self, comercio_id, desde_iso):
+        return sum(1 for p in self.base.publicaciones
+                   if p.get("comercio_id") == comercio_id and p.get("tipo") == "oferta" and p.get("estado") == "aprobado"
+                   and p.get("activo", True) and str(p.get("created_at") or "9999") >= desde_iso)
 
     def payments_since(self, since_iso):
         return sorted([p for p in self.base.pagos.values() if p.get("estado", "confirmado") == "confirmado"

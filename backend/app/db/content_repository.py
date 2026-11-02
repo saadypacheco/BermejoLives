@@ -77,11 +77,14 @@ class ContentRepo(Protocol):
     def list_sources(self, piece_id: str, only_active: bool = True) -> list[dict]: ...
     def deactivate_source(self, piece_id: str, position: int) -> None: ...
     def recent_sources(self, since: str) -> list[dict]: ...
+    def piece_ids_by_source_comercio(self, comercio_id: str) -> list[str]: ...
+    def piece_ids_by_source_asset(self, asset_id: str) -> list[str]: ...
     # ── posteos por red ──
     def insert_posts(self, rows: list[dict]) -> list[dict]: ...
     def list_posts(self, piece_ids: list[str]) -> list[dict]: ...
     def get_post(self, post_id: str) -> dict | None: ...
     def update_post(self, post_id: str, patch: dict, if_status: str | list[str] | None = None) -> dict | None: ...
+    def claim_post(self, post_id: str, actor: str, now_iso: str, expired_before_iso: str) -> dict | None: ...
     def release_expired_claims(self, cutoff_iso: str) -> int: ...
     # ── cuidado de suscriptores ──
     def insert_task(self, row: dict) -> dict | None: ...
@@ -107,6 +110,7 @@ class ContentRepo(Protocol):
     def list_planes(self) -> list[dict]: ...
     def gallery_photos(self, comercio_ids: list[str]) -> list[dict]: ...
     def list_offers(self, since_iso: str, comercio_id: str | None = None) -> list[dict]: ...
+    def count_offers_since(self, comercio_id: str, desde_iso: str) -> int: ...
     def payments_since(self, since_iso: str) -> list[dict]: ...
     def count_payments_before(self, comercio_id: str, before_iso: str) -> int: ...
     def count_leads(self, comercio_id: str, desde_iso: str, tipo: str | None = None,
@@ -335,6 +339,18 @@ class SupabaseContentRepo:
             out += [{**r, "pillar": pilar.get(r["piece_id"])} for r in (res.data or [])]
         return out
 
+    def piece_ids_by_source_comercio(self, comercio_id: str) -> list[str]:
+        """Las piezas que tienen una fuente ACTIVA de este comercio (propias y compilados de ofertas)."""
+        res = (self._db.table("content_piece_sources").select("piece_id").eq("comercio_id", comercio_id)
+               .eq("activo", True).limit(2000).execute())
+        return sorted({r["piece_id"] for r in (res.data or [])})
+
+    def piece_ids_by_source_asset(self, asset_id: str) -> list[str]:
+        """Las piezas que usan esta foto del banco como fuente activa."""
+        res = (self._db.table("content_piece_sources").select("piece_id").eq("source_type", "asset")
+               .eq("source_id", asset_id).eq("activo", True).limit(500).execute())
+        return sorted({r["piece_id"] for r in (res.data or [])})
+
     # ── posteos ──────────────────────────────────────────────────────────────
     def insert_posts(self, rows: list[dict]) -> list[dict]:
         """Una fila por red. Si ya existía (`unique (piece_id, network)`), no se duplica."""
@@ -363,6 +379,17 @@ class SupabaseContentRepo:
         q = self._db.table("content_posts").update(patch).eq("id", post_id)
         if if_status is not None:
             q = q.in_("status", _lista(if_status))
+        res = q.execute()
+        return res.data[0] if res.data else None
+
+    def claim_post(self, post_id: str, actor: str, now_iso: str, expired_before_iso: str) -> dict | None:
+        """Reclamo ATÓMICO: la condición va en el UPDATE, así de dos reclamos simultáneos sólo uno gana.
+        Se puede reclamar si está pendiente, si el reclamo anterior venció o si ya lo tenía este mismo actor."""
+        propio = '"' + actor.replace("\\", "\\\\").replace('"', '\\"') + '"'
+        q = (self._db.table("content_posts")
+             .update({"status": "claimed", "claimed_by": actor, "claimed_at": now_iso}).eq("id", post_id)
+             .or_(f'status.eq.pending,and(status.eq.claimed,claimed_at.lt."{expired_before_iso}"),'
+                  f'and(status.eq.claimed,claimed_by.eq.{propio})'))
         res = q.execute()
         return res.data[0] if res.data else None
 
@@ -519,6 +546,13 @@ class SupabaseContentRepo:
         if comercio_id:
             q = q.eq("comercio_id", comercio_id)
         return q.order("approved_at", desc=True).limit(1000).execute().data or []
+
+    def count_offers_since(self, comercio_id: str, desde_iso: str) -> int:
+        """Ofertas aprobadas del comercio desde esa fecha (sólo `tipo = 'oferta'`: una novedad no cuenta)."""
+        res = (self._db.table("publicaciones").select("id", count="exact").eq("comercio_id", comercio_id)
+               .eq("tipo", "oferta").eq("estado", "aprobado").eq("activo", True)
+               .gte("created_at", desde_iso).limit(1).execute())
+        return res.count or 0
 
     def payments_since(self, since_iso: str) -> list[dict]:
         res = (self._db.table("pagos").select("id, comercio_id, created_at, periodo_hasta")

@@ -467,6 +467,10 @@ PESTANAS_DE_ANTES = {
 }
 
 
+#: Banco y Contenido para redes piden `difusion` (como Difusión); Cuidar suscriptores pide `pagos`.
+SECCIONES_DE_REDES = {"banco": "difusion", "redes": "difusion", "suscriptores": "pagos"}
+
+
 def _secciones_ts():
     src = (FRONT / "components/admin/secciones.ts").read_text(encoding="utf-8")
     out = {}
@@ -484,7 +488,11 @@ def test_el_menu_tiene_las_23_pestanas_de_antes_con_el_mismo_permiso_mas_inicio_
         assert menu[sid] == permiso, f"{sid}: permiso {menu[sid]!r} en vez de {permiso!r}"
     assert menu.get("inicio") is None and menu.get("calles") == "moderar"
     assert menu.get("manuales") is None
-    assert set(menu) == set(PESTANAS_DE_ANTES) | {"inicio", "calles", "manuales"}
+    # Las secciones del contenido para redes (docs/contenido-redes-tecnico.md §9.1) y su permiso en el menú.
+    for sid, permiso in SECCIONES_DE_REDES.items():
+        assert sid in menu, f"falta la sección {sid}"
+        assert menu[sid] == permiso, f"{sid}: permiso {menu[sid]!r} en vez de {permiso!r}"
+    assert set(menu) == set(PESTANAS_DE_ANTES) | {"inicio", "calles", "manuales"} | set(SECCIONES_DE_REDES)
 
 
 def test_el_tipo_SeccionAdmin_y_el_menu_coinciden():
