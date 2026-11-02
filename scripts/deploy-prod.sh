@@ -54,8 +54,15 @@ fi
 # https://uruku.bo/<clave>.txt. La clave vive sólo en backend/.env; el archivo
 # se escribe acá, antes del build, porque Next sirve `public/` tal cual. Está
 # en .gitignore: nunca se commitea.
-INDEXNOW_KEY="$(grep -E '^INDEXNOW_KEY=' backend/.env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '\r"')"
+# `|| true`: sin la clave, el grep no encuentra nada y con `set -e` cortaba el
+# deploy en silencio, con las migraciones ya aplicadas y sin build.
+INDEXNOW_KEY="$(grep -E '^INDEXNOW_KEY=' backend/.env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '\r"' || true)"
 if [ -n "$INDEXNOW_KEY" ]; then
+  # El mismo formato que acepta el backend (indexnow.py): sin `/` ni `..`, el
+  # archivo no puede caer fuera de public/.
+  if ! [[ "$INDEXNOW_KEY" =~ ^[A-Za-z0-9-]{8,128}$ ]]; then
+    echo "INDEXNOW_KEY inválida en backend/.env (sólo letras, números y guiones, 8 a 128)"; exit 1
+  fi
   printf %s "$INDEXNOW_KEY" > "frontend/public/$INDEXNOW_KEY.txt"
   echo "IndexNow: clave publicada en /$INDEXNOW_KEY.txt"
 fi

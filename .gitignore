@@ -56,4 +56,5 @@ frontend/public/manuales/capturas/**/*.png
 /data/pago/
 
 # Clave de IndexNow: la escribe scripts/deploy-prod.sh desde backend/.env (nunca se commitea)
-frontend/public/[0-9a-f]*[0-9a-f].txt
+frontend/public/*.txt
+!frontend/public/robots.txt
