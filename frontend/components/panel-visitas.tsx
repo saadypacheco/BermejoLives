@@ -6,7 +6,7 @@ import { getVisitas, type ResumenVisitas } from "@/lib/api";
 /** Una fuente de asistentes de IA tal como la suma el backend en `ai_sources`
  *  (docs/visibilidad-buscadores-ia.md §3.11). El campo puede faltar: el backend
  *  lo agrega en paralelo y un backend viejo no lo manda. */
-type FuenteIa = { source: string; visits: number; people: number; business_views: number; top_routes?: string[] };
+type FuenteIa = { source: string; visits: number; people: number; business_views: number; top_routes?: { ruta: string; n: number }[] };
 type ResumenConIa = ResumenVisitas & { ai_sources?: FuenteIa[] };
 
 const NOMBRE_IA: Record<string, string> = {
@@ -178,7 +178,7 @@ function AsistentesIa({ fuentes }: { fuentes: FuenteIa[] | undefined }) {
                   <td style={{ padding: "6px 8px" }}>{f.people}</td>
                   <td style={{ padding: "6px 8px" }}>{f.business_views}</td>
                   <td style={{ padding: "6px 0 6px 8px", color: "var(--txt-2)", overflowWrap: "anywhere" }}>
-                    {(f.top_routes ?? []).join(" · ") || "—"}
+                    {(f.top_routes ?? []).map((r) => r.ruta).join(" · ") || "—"}
                   </td>
                 </tr>
               ))}

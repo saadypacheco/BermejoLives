@@ -16,12 +16,12 @@ const OUT = process.argv[3] || "./revision";
 fs.mkdirSync(OUT, { recursive: true });
 
 const RUTAS = [
-  "/", "/buscar", "/buscar?q=rustico", "/buscar?rubro=ropa", "/buscar?rubro=banos&vista=mapa", "/buscar?rubro=cambio",
+  "/", "/bermejo", "/bermejo/ropa", "/buscar", "/buscar?q=rustico", "/buscar?rubro=ropa", "/buscar?rubro=banos&vista=mapa", "/buscar?rubro=cambio",
   "/buscar?of=1", "/buscar?cerca=1", "/buscar?q=zzzzqqq", "/guia", "/cambio", "/planes", "/mapa",
   "/comercios/rustico", "/comercios/vidrieria-pacheco", "/comercios/no-existe-zz",
   "/volante/vidrieria-pacheco", "/volante/vidrieria-pacheco/mesa",
   "/guardados", "/perfil", "/autoregistro", "/autoregistro?modo=registro", "/mi-comercio", "/recuperar-negocio",
-  "/publicar", "/contenido", "/admin", "/campo", "/reservas", "/software", "/guia-venta", "/bermejo",
+  "/publicar", "/contenido", "/admin", "/campo", "/reservas", "/software", "/guia-venta",
   "/proximamente", "/reclamos", "/version", "/ruta-que-no-existe",
 ];
 

@@ -1,4 +1,4 @@
-import { getCityCategoryPages } from "@/lib/data";
+import { getCiudadesConTurnos, getCityCategoryPagesOrNull } from "@/lib/data";
 import { absoluteUrl, categoryPath, cityPath } from "@/lib/seo";
 import { BRAND_NAME, CONTACT, FOUNDER, LAUNCH_DATE, ONE_LINER, RESPONSIBLE } from "@/lib/marca";
 import { WA_URUKU_TEXTO } from "@/lib/contacto";
@@ -12,12 +12,25 @@ import { WA_URUKU_TEXTO } from "@/lib/contacto";
  * Sólo en producción: en QA robots.ts bloquea todo y esto sería una invitación.
  */
 export const revalidate = 86400;
+// force-static: sin esto el fetch `no-store` de lib/supabase.ts cuenta como «uso
+// dinámico» al generar y las lecturas fallan (ver app/sitemap.ts).
+export const dynamic = "force-static";
 
 export async function GET(): Promise<Response> {
   const esProd = (process.env.NEXT_PUBLIC_ENV_LABEL || "").toLowerCase() === "prod";
   if (!esProd) return new Response("No encontrado", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
 
-  const pares = (await getCityCategoryPages()).filter((p) => p.indexable);
+  const [todos, ciudadesTurnos] = await Promise.all([getCityCategoryPagesOrNull(), getCiudadesConTurnos()]);
+  if (todos === null || ciudadesTurnos === null) {
+    // En el build: un 503 hace que Next NO lo pre-renderice (queda dinámico; el build
+    // no depende de la base). Después del build se LANZA: Next conserva el llms.txt
+    // anterior en vez de guardar uno recortado un día entero.
+    if (process.env.NEXT_PHASE === "phase-production-build") {
+      return new Response("Servicio no disponible", { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } });
+    }
+    throw new Error("llms.txt: falló una lectura de la base");
+  }
+  const pares = todos.filter((p) => p.indexable);
   // Las ciudades con al menos un par indexable, en el orden en que llegan.
   const ciudades = [...new Map(pares.map((p) => [p.city_slug, p.city_name])).entries()];
 
@@ -33,7 +46,7 @@ export async function GET(): Promise<Response> {
   l.push(`- [Comprar en Bermejo desde Argentina](${absoluteUrl("/comprar-en-bermejo")}): qué conviene comprar, cómo cruzar y cómo pagar`);
   l.push(`- [Guía para venir a Bermejo](${absoluteUrl("/guia")}): paso fronterizo, documentos, aduana`);
   l.push(`- [Cotización del peso en Bermejo](${absoluteUrl("/cambio")}): cuánto dan por los pesos argentinos`);
-  l.push(`- [Farmacias de turno](${absoluteUrl("/farmacias-de-turno")})`);
+  for (const c of ciudadesTurnos) l.push(`- [Farmacias de turno en ${c.nombre}](${absoluteUrl(`/${c.slug}/farmacias-de-turno`)})`);
   l.push(`- [Ofertas de los comercios](${absoluteUrl("/ofertas")})`);
   l.push(`- [Agentes de URUKU](${absoluteUrl("/agentes")}): quiénes visitan comercios en nombre de la marca`);
   for (const [slug, nombre] of ciudades) l.push(`- [Comercios de ${nombre}](${absoluteUrl(cityPath(slug))})`);

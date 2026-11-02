@@ -14,14 +14,17 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PaginaManualServidor } from "@/components/manual/manual-servidor";
 import { JsonLd } from "@/components/json-ld";
-import { getCiudades, getCityCategoryPages, getRedes, getSaberLocalPorSeccion } from "@/lib/data";
+import { getCiudadesReales, getCityCategoryPagesOrNull, getRedes, getSaberLocalPorSeccion } from "@/lib/data";
 import {
   aboutPageNode, breadcrumbNode, cityPath, faqPageNode, jsonLdGraph, organizationNodes, sameAsFromRedes,
 } from "@/lib/seo";
 import { conFundador } from "@/lib/seo-paginas";
+import { hasSupabase } from "@/lib/supabase";
 import { META_DESCRIPTION, RESPONSIBLE } from "@/lib/marca";
 
 export const dynamic = "force-static";
+// ISR de un día: las ciudades y las preguntas del momento cambian poco.
+export const revalidate = 86400;
 
 export const metadata: Metadata = {
   // `absolute`: el título ya lleva el nombre; sin esto la plantilla le suma « · Uruku».
@@ -32,11 +35,18 @@ export const metadata: Metadata = {
 };
 
 export default async function QueEsUruku() {
-  const [ciudades, pares, redes, saber] = await Promise.all([
-    getCiudades(), getCityCategoryPages(), getRedes(), getSaberLocalPorSeccion(null),
+  const [ciudadesLeidas, paresLeidos, redes, saber] = await Promise.all([
+    getCiudadesReales(), getCityCategoryPagesOrNull(), getRedes(), getSaberLocalPorSeccion(null),
   ]);
-  const activas = ciudades.filter((c) => c.activa);
-  const conPaginas = new Set(pares.filter((p) => p.indexable).map((p) => p.city_slug));
+  // Sin la lista real NO se cae a las ciudades demo (`getCiudades`): «Dónde está
+  // URUKU» saldría con ciudades de mentira. Si la lectura falla, en el build se
+  // omite el bloque (el build no depende de la base) y en una regeneración se
+  // LANZA, para que Next conserve la versión anterior en vez de fijar el hueco un día.
+  if ((ciudadesLeidas === null || paresLeidos === null) && hasSupabase && process.env.NEXT_PHASE !== "phase-production-build") {
+    throw new Error("/que-es-uruku: falló la lectura de ciudades o rubros");
+  }
+  const activas = (ciudadesLeidas ?? []).filter((c) => c.activa);
+  const conPaginas = new Set((paresLeidos ?? []).filter((p) => p.indexable).map((p) => p.city_slug));
   // Sólo las preguntas de la sección `general` se marcan acá (§3.8): cada pregunta, en una sola página.
   const preguntas = (saber.general ?? []).map((s) => ({ pregunta: s.pregunta, respuesta: s.respuesta }));
 

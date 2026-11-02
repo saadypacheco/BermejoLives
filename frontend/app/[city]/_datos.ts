@@ -1,6 +1,6 @@
 import { cache } from "react";
-import { buscarComercios, getCiudades, getCityCategoryPages, getTurnosFarmacia } from "@/lib/data";
-import type { CityCategoryPage } from "@/lib/seo";
+import { buscarComerciosOrNull, getCiudades, getCiudadesReales, getCityCategoryPagesOrNull, getTurnosFarmacia } from "@/lib/data";
+import { esSlugPublico, type CityCategoryPage } from "@/lib/seo";
 import { hasSupabase, supabase } from "@/lib/supabase";
 import { rangoTurnos } from "@/lib/turnos-farmacia";
 import type { Ciudad, ResultadoBusqueda } from "@/lib/types";
@@ -11,19 +11,32 @@ import type { Ciudad, ResultadoBusqueda } from "@/lib/types";
  * página piden lo mismo y se paga una sola consulta por pedido.
  */
 
-/** La ciudad de la URL, o `null` si no existe o no está activa (→ 404). */
+/**
+ * REGLA DE ESTAS LECTURAS (ISR): «no se pudo leer» NUNCA se confunde con «no
+ * existe». Ante un fallo se LANZA: Next sigue sirviendo la versión anterior de la
+ * página y no guarda un 500 en caché. Un `notFound()` o un `noindex` sólo después
+ * de una lectura que salió bien y confirma la ausencia; si no, un corte de la base
+ * de dos segundos dejaba un 404 fijo toda la hora de `revalidate`.
+ */
+
+/** La ciudad de la URL, o `null` si no existe o no está activa (→ 404). Un slug
+ *  con forma inválida (`/.env`, basura de un escáner) da `null` SIN tocar la base.
+ *  Lanza si no se pudo leer la lista de ciudades. */
 export const cargarCiudad = cache(async (slug: string): Promise<Ciudad | null> => {
-  const ciudad = (await getCiudades()).find((c) => c.slug === slug);
+  if (!esSlugPublico(slug)) return null;
+  // Sin base configurada (desarrollo) vale la lista demo; con base, un `null` es un fallo.
+  const ciudades = hasSupabase ? await getCiudadesReales() : await getCiudades();
+  if (ciudades === null) throw new Error("No se pudieron leer las ciudades");
+  const ciudad = ciudades.find((c) => c.slug === slug);
   return ciudad && ciudad.activa ? ciudad : null;
 });
 
-/** Los pares ciudad+rubro (`city_category_pages()`). `[]` si la RPC no está o falla. */
-export const cargarPares = cache((): Promise<CityCategoryPage[]> => getCityCategoryPages());
-
-/** Los slugs de ciudad que tienen algún par: lo que se pre-renderiza. */
-export function ciudadesConPares(pares: readonly CityCategoryPage[]): string[] {
-  return [...new Set(pares.map((p) => p.city_slug))];
-}
+/** Los pares ciudad+rubro (`city_category_pages()`). Lanza si la RPC falla. */
+export const cargarPares = cache(async (): Promise<CityCategoryPage[]> => {
+  const pares = await getCityCategoryPagesOrNull();
+  if (pares === null) throw new Error("No se pudo leer city_category_pages()");
+  return pares;
+});
 
 /** Cuántos locales se listan como máximo en una página de rubro. */
 export const TOPE_LISTA = 500;
@@ -57,8 +70,8 @@ export type LocalDeCategoria = ResultadoBusqueda & { calle: string | null };
  * que una lista vacía quedaría fija toda la hora de ISR.
  */
 export const cargarLocales = cache(async (ciudadSlug: string, rubroSlug: string): Promise<LocalDeCategoria[]> => {
-  const filas = await buscarComercios({ ciudad: ciudadSlug, rubro: rubroSlug }, TOPE_LISTA, 0);
-  if (filas.length === 0) throw new Error(`No se pudieron leer los locales de ${rubroSlug} en ${ciudadSlug}`);
+  const filas = await buscarComerciosOrNull({ ciudad: ciudadSlug, rubro: rubroSlug }, TOPE_LISTA, 0);
+  if (!filas || filas.length === 0) throw new Error(`No se pudieron leer los locales de ${rubroSlug} en ${ciudadSlug}`);
   const calles = await cargarCalles(filas.map((f) => f.id));
   return filas.map((f) => ({ ...f, calle: calles.get(f.id) ?? null }));
 });

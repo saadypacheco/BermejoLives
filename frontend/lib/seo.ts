@@ -55,7 +55,7 @@ import {
 /* ─── Reglas de indexación (§3.1) ─────────────────────────────────────────── */
 
 /** Un par ciudad+rubro con comercios, tal como lo devuelve la RPC
- *  `city_category_pages()` (migración 0169). A propósito NO trae el conteo: el
+ *  `city_category_pages()` (migración 0180). A propósito NO trae el conteo: el
  *  número de comercios no sale al público. `indexable` = el par llega al umbral
  *  (5 comercios) que decide la base. Se lee con `getCityCategoryPages()` (data.ts). */
 export type CityCategoryPage = {
@@ -141,6 +141,12 @@ export function cityHasIndexablePage(pages: readonly CityCategoryPage[], citySlu
 export function absoluteUrl(path = "/"): string {
   return `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
+/** La forma de un slug de ciudad o de rubro en una URL pública. Se comprueba ANTES
+ *  de consultar la base: `/.env`, `/wp-login.php` o `/<azar>/<azar>` no valen una
+ *  lectura ni una entrada en la caché de ISR. */
+export const SLUG_PUBLICO = /^[a-z0-9-]{2,40}$/;
+export const esSlugPublico = (s: string): boolean => SLUG_PUBLICO.test(s);
+
 export const cityPath = (citySlug: string): string => `/${citySlug}`;
 export const categoryPath = (citySlug: string, categorySlug: string): string => `/${citySlug}/${categorySlug}`;
 export const businessPath = (slug: string): string => `/comercios/${slug}`;
@@ -234,9 +240,12 @@ export const BLOCKED_AI_CRAWLERS: readonly string[] = ["Bytespider"];
  *  robots.ts decide si los incluye. */
 export const BLOCKED_SCRAPERS: readonly string[] = ["Diffbot", "omgili", "SemrushBot-SWA"];
 
-/** Lo que ningún robot debe rastrear. */
+/** Lo que ningún robot debe rastrear. Cada una de estas páginas además lleva
+ *  `robots: noindex` en su metadata (robots.txt no impide que Google indexe una URL
+ *  que otro enlaza; el `noindex` sí). */
 export const PRIVATE_PATHS: readonly string[] = [
   "/admin", "/contenido", "/publicar", "/campo", "/mi-comercio", "/volante/",
+  "/guia-venta", "/perfil", "/guardados", "/reservas", "/recuperar-negocio",
 ];
 
 /* ─── JSON-LD ─────────────────────────────────────────────────────────────── */
@@ -479,12 +488,39 @@ export type LocalBusinessInput = {
   descripcion?: string | null;
 };
 
-function absolutaOUndef(u: string | null | undefined): string | undefined {
+/** Los hosts de los que el sitio sirve fotos: `uruku.bo` (y sus subdominios) y el
+ *  host de la API (`NEXT_PUBLIC_API_URL`), que es donde viven las fotos de los
+ *  comercios (`/fotos/...`). Nada más: ni un `logo_url` que apunte a otro sitio. */
+export function esHostPropio(host: string): boolean {
+  const h = host.toLowerCase();
+  const siteHost = new URL(SITE_URL).hostname;
+  if (h === siteHost || h.endsWith(`.${siteHost}`)) return true;
+  try {
+    const api = process.env.NEXT_PUBLIC_API_URL;
+    return Boolean(api) && h === new URL(api as string).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
+/** Una URL absoluta `https` de un host propio (ver `esHostPropio`), o `undefined`.
+ *  Una ruta relativa (`/fotos/x.jpg`) se resuelve contra el sitio. */
+export function urlDeImagenPropia(u: string | null | undefined): string | undefined {
   const t = (u ?? "").trim();
   if (!t) return undefined;
-  if (/^https?:\/\//i.test(t)) return t;
-  return t.startsWith("/") ? absoluteUrl(t) : undefined;
+  let url: URL;
+  try { url = new URL(t, SITE_URL); } catch { return undefined; }
+  if (url.protocol !== "https:" || !esHostPropio(url.hostname)) return undefined;
+  return url.toString();
 }
+
+/** ¿Se publica el teléfono del comercio en el JSON-LD (`telephone`)? APAGADO por
+ *  defecto, a decidir por el dueño. Los números de WhatsApp de los comercios son
+ *  muchas veces personales (el celular del dueño), y el JSON-LD lo leen robots de
+ *  buscadores Y de entrenamiento de IA (decisión D-2): publicarlo en un campo
+ *  estructurado facilita la extracción masiva. El teléfono sigue visible en la
+ *  ficha para las personas. */
+export const JSONLD_INCLUDE_TELEPHONE = false;
 
 /**
  * El nodo `LocalBusiness` (o el subtipo del rubro) de una ficha (§3.6). Sólo
@@ -496,9 +532,13 @@ function absolutaOUndef(u: string | null | undefined): string | undefined {
 export function localBusinessNode(i: LocalBusinessInput): JsonLdNode {
   const c = i.comercio;
   const url = absoluteUrl(businessPath(c.slug));
-  const imagenes = [absolutaOUndef(c.portada_url), absolutaOUndef(c.logo_url)].filter((x): x is string => Boolean(x));
+  // Sólo imágenes de hosts propios: un `logo_url` cargado a mano que apunte a otro
+  // sitio no debe salir como imagen de la ficha en los datos estructurados.
+  const imagenes = [urlDeImagenPropia(c.portada_url), urlDeImagenPropia(c.logo_url)].filter((x): x is string => Boolean(x));
   const descripcion = (i.descripcion ?? c.descripcion ?? "").trim();
-  const calle = (c.calle ?? c.direccion ?? "").trim();
+  // Mismo orden que el texto visible de la ficha (`direccion || calle`): con `??`
+  // una `direccion` vacía ("") ganaba sobre la `calle` y el dato no coincidía.
+  const calle = (c.direccion || c.calle || "").trim();
   const digitos = (c.whatsapp ?? "").replace(/\D/g, "");
   const telefono = digitos ? `+${digitos}` : (c.telefono ?? "").trim();
   const sameAs = [
@@ -525,7 +565,7 @@ export function localBusinessNode(i: LocalBusinessInput): JsonLdNode {
       addressCountry: paisIso(i.ciudad.pais),
     },
     ...(tieneGeo ? { geo: { "@type": "GeoCoordinates", latitude: c.lat, longitude: c.lng } } : {}),
-    ...(telefono ? { telephone: telefono } : {}),
+    ...(JSONLD_INCLUDE_TELEPHONE && telefono ? { telephone: telefono } : {}),
     ...(horario ? { openingHoursSpecification: horario } : {}),
     ...(sameAs.length > 0 ? { sameAs: [...new Set(sameAs)] } : {}),
     ...((c.monedas_aceptadas?.length ?? 0) > 0 ? { paymentAccepted: c.monedas_aceptadas!.join(", ") } : {}),

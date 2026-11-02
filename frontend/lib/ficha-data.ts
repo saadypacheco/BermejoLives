@@ -1,8 +1,9 @@
 import { cache } from "react";
 import {
-  getCiudades, getCityCategoryPages, getComercioBySlug, getFuncionesDePlan, getGaleriaComercio,
+  getCiudades, getCiudadesReales, getCityCategoryPages, getComercioBySlugEstricto, getFuncionesDePlan, getGaleriaComercio,
   getOfertasComercio, getPlanPublico, getTurnosDeFarmacia,
 } from "@/lib/data";
+import { hasSupabase } from "@/lib/supabase";
 import { sinEmoji } from "@/lib/rubros";
 import { categoryPageState, isBusinessIndexable } from "@/lib/seo";
 import { descripcionFicha, productosDeFicha, queEsElComercio } from "@/lib/ficha-seo";
@@ -19,6 +20,11 @@ import type { Ciudad, Comercio } from "@/lib/types";
  * dinámico («Page changed from static to dynamic at runtime»). Con `force-static`
  * las lecturas se hacen al REGENERAR la página (cada `revalidate` segundos), no
  * en cada visita.
+ *
+ * ERROR ≠ NO EXISTE: lo que decide el 404, la ciudad del encabezado y el `noindex`
+ * (el comercio y las ciudades) se lee de forma estricta y, si falla,
+ * LANZA. Next entonces sigue sirviendo la versión anterior y no guarda el fallo; un
+ * `null` o un `[]` por error quedaba fijo 5 minutos como 404 o como «Bermejo».
  */
 
 const CIUDAD_RESPALDO: Ciudad = {
@@ -26,11 +32,21 @@ const CIUDAD_RESPALDO: Ciudad = {
   es_frontera: true, activa: true, orden: 1, pais: "Bolivia",
 };
 
-/** El comercio y las ciudades: lo mínimo para armar título, descripción e imagen. */
+/** Las ciudades; lanza si la base está configurada y la lectura falla (el
+ *  respaldo demo de `getCiudades` pondría «Bermejo» fijo en la ficha de otra ciudad). */
+async function leerCiudades(): Promise<Ciudad[]> {
+  if (!hasSupabase) return getCiudades();
+  const ciudades = await getCiudadesReales();
+  if (ciudades === null) throw new Error("No se pudieron leer las ciudades");
+  return ciudades;
+}
+
+/** El comercio y las ciudades: lo mínimo para armar título, descripción e imagen.
+ *  `null` sólo si la base confirma que el comercio no existe. */
 const leerBasico = cache(async (slug: string) => {
-  const comercio = await getComercioBySlug(slug);
+  const comercio = await getComercioBySlugEstricto(slug);
   if (!comercio) return null;
-  return { comercio, ciudades: await getCiudades() };
+  return { comercio, ciudades: await leerCiudades() };
 });
 
 /** Todo lo que lee la página, una sola vez por render. */
@@ -40,6 +56,9 @@ const leerFicha = cache(async (slug: string) => {
   const { comercio } = basico;
   const ahora = new Date();
   const [pares, feed, galeria, funcionesPlan, planPublico, turnos] = await Promise.all([
+    // Tolerante a propósito: sólo decide si las migas enlazan a /{ciudad} y /{ciudad}/{rubro}
+    // (no el 404 ni el `noindex`, que salen de los datos del propio comercio). Así la
+    // ficha sigue viva aunque la RPC todavía no esté migrada.
     getCityCategoryPages(),
     getOfertasComercio(comercio.id),
     getGaleriaComercio(comercio.id),

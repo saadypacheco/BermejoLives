@@ -10,27 +10,17 @@ import { CatNav } from "@/components/catnav";
 import { SocialLinks, money } from "@/components/uruku-ui";
 import { WA_URUKU_TEXTO, waUruku } from "@/lib/contacto";
 import { Ic, climaIcono } from "@/components/ic";
-import { getCiudades, getCityCategoryPages, getClima, getCotizaciones, getRedes } from "@/lib/data";
+import { getCiudades, getCityCategoryPagesCached, getClima, getCotizaciones, getRedes } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
 import type { Ciudad } from "@/lib/types";
 import { versionLabel } from "@/lib/version";
 import { URUKU_SVG } from "@/lib/adornos";
 
-/** Los slugs de las ciudades con alguna página indexable (pie «Ciudades»). Se
- *  recuerda unos minutos en memoria: el pie está en casi todas las páginas y no
- *  vale una consulta a la base por cada una. Si la RPC no responde (`[]`) se
- *  reintenta al minuto, no a los diez. */
-let ciudadesIndexablesMemo: { hasta: number; slugs: ReadonlySet<string> } | null = null;
+/** Los slugs de las ciudades con alguna página indexable (pie «Ciudades»). Salen de
+ *  `getCityCategoryPagesCached`: el pie está en casi todas las páginas y no vale una
+ *  consulta a la base por cada una (la memoria y su regla del build viven ahí). */
 async function slugsCiudadesIndexables(): Promise<ReadonlySet<string>> {
-  // En el build no se recuerda nada: las páginas que Next descarta por dinámicas
-  // reciben un error de fetch que `getCityCategoryPages` traga como `[]`, y ese
-  // vacío envenenaría a las páginas estáticas que se arman después.
-  const enBuild = process.env.NEXT_PHASE === "phase-production-build";
-  const ahora = Date.now();
-  if (!enBuild && ciudadesIndexablesMemo && ahora < ciudadesIndexablesMemo.hasta) return ciudadesIndexablesMemo.slugs;
-  const slugs = new Set((await getCityCategoryPages()).filter((p) => p.indexable).map((p) => p.city_slug));
-  if (!enBuild) ciudadesIndexablesMemo = { hasta: ahora + (slugs.size > 0 ? 10 * 60_000 : 60_000), slugs };
-  return slugs;
+  return new Set((await getCityCategoryPagesCached()).filter((p) => p.indexable).map((p) => p.city_slug));
 }
 
 /** Lo mismo que `ciudadActual()` pero con la ciudad dada y sin tocar cookies. */

@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { cargarFichaBasica } from "@/lib/ficha-data";
 import { COLOR, SITE_URL } from "@/lib/marca";
+import { esHostPropio } from "@/lib/seo";
 
 /**
  * La imagen que se ve al compartir una ficha (WhatsApp, Facebook, X) y en los
@@ -33,19 +34,28 @@ const FOTO_H = 400;
 
 /** Descarga la portada y la devuelve como `data:` (sólo JPEG/PNG: `next/og` no
  *  lee WebP). Ante cualquier falla —sin foto, lenta, enorme, otro formato— `null`
- *  y la imagen sale sin foto: la vista previa nunca tiene que romperse por esto. */
+ *  y la imagen sale sin foto: la vista previa nunca tiene que romperse por esto.
+ *
+ *  La URL la cargó un comercio, así que acá no se confía en ella (SSRF):
+ *   - sólo hosts propios (uruku.bo y el host de la API: `esHostPropio`), por https;
+ *     `http://localhost` sólo fuera de producción, para trabajar en la máquina;
+ *   - `redirect: "error"`: un 30x hacia otro host (o hacia la red interna) corta;
+ *   - el `content-length` se mira ANTES de leer el cuerpo, y es obligatorio. */
 async function fotoComoDataUri(url: string | null | undefined): Promise<string | null> {
   const u = (url ?? "").trim();
   if (!u) return null;
   let destino: URL;
   try { destino = new URL(u, SITE_URL); } catch { return null; }
-  const local = destino.hostname === "localhost" || destino.hostname === "127.0.0.1";
-  if (destino.protocol !== "https:" && !(local && destino.protocol === "http:")) return null;
+  const enDesarrollo = process.env.NODE_ENV !== "production";
+  const localOk = enDesarrollo && destino.protocol === "http:" && ["localhost", "127.0.0.1"].includes(destino.hostname);
+  if (!localOk && (destino.protocol !== "https:" || !esHostPropio(destino.hostname))) return null;
   try {
-    const res = await fetch(destino, { signal: AbortSignal.timeout(2500) });
+    const res = await fetch(destino, { signal: AbortSignal.timeout(2500), redirect: "error" });
     if (!res.ok) return null;
     const tipo = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
     if (tipo !== "image/jpeg" && tipo !== "image/png") return null;
+    const largo = Number(res.headers.get("content-length"));
+    if (!Number.isFinite(largo) || largo <= 0 || largo > MAX_FOTO_BYTES) { await res.body?.cancel(); return null; }
     const bytes = new Uint8Array(await res.arrayBuffer());
     if (bytes.byteLength === 0 || bytes.byteLength > MAX_FOTO_BYTES) return null;
     let bin = "";
