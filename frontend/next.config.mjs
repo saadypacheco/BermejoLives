@@ -58,6 +58,17 @@ const nextConfig = {
       // "¿hay service worker nuevo?" recibía el viejo. El navegador ya lo pide
       // sin usar su propia caché; faltaba que el proxy hiciera lo mismo.
       { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache" }] },
+      // /pieza/<token> es la página privada del comerciante con su video: nunca se
+      // cachea (ni en el navegador ni en el proxy) y nunca se indexa, ni siquiera en
+      // producción. La metadata de la página dice lo mismo; esto va en la respuesta
+      // HTTP para que ningún proxy lo pise.
+      {
+        source: "/pieza/:path*",
+        headers: [
+          { key: "Cache-Control", value: "private, no-store" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
     ];
     if ((process.env.APP_ENV || "").toLowerCase() !== "prod") {
       reglas.push({

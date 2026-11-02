@@ -31,6 +31,7 @@ function FilaPlan({ p, onGuardado }: { p: PlanAdmin; onGuardado: () => void }) {
     nombre: p.nombre, precio_mes: String(p.precio_mes), publicaciones_mes: p.publicaciones_mes == null ? "" : String(p.publicaciones_mes),
     publicaciones_guardadas: p.publicaciones_guardadas == null ? "" : String(p.publicaciones_guardadas),
     fotos_max: String(p.fotos_max ?? ""),
+    social_pieces_per_month: p.social_pieces_per_month == null ? "" : String(p.social_pieces_per_month),
     precio_publicacion_extra: String(p.precio_publicacion_extra), permite_extras: p.permite_extras,
     publica_meses: p.publica_meses == null ? "" : String(p.publica_meses), descripcion: p.descripcion ?? "",
     incluye: (p.incluye ?? []).join("\n"), visible: p.visible,
@@ -47,6 +48,12 @@ function FilaPlan({ p, onGuardado }: { p: PlanAdmin; onGuardado: () => void }) {
       setEstado("error"); setMsg("Fotos del local (máximo): poné un número entero entre 0 y 1000.");
       return;
     }
+    // Piezas para redes por ciclo: entero de 0 a 31. Vacío = 0 (el backend guarda NULL).
+    const piezas = v.social_pieces_per_month.trim() === "" ? null : Number(v.social_pieces_per_month);
+    if (piezas !== null && (!Number.isInteger(piezas) || piezas < 0 || piezas > 31)) {
+      setEstado("error"); setMsg("Piezas para redes por ciclo: poné un número entero entre 0 y 31.");
+      return;
+    }
     setEstado("guardando");
     try {
       await guardarPlan(p.slug, {
@@ -54,6 +61,7 @@ function FilaPlan({ p, onGuardado }: { p: PlanAdmin; onGuardado: () => void }) {
         publicaciones_mes: v.publicaciones_mes.trim() === "" ? null : Number(v.publicaciones_mes),
         publicaciones_guardadas: v.publicaciones_guardadas.trim() === "" ? null : Number(v.publicaciones_guardadas),
         fotos_max: fotosMax,
+        social_pieces_per_month: piezas,
         precio_publicacion_extra: Number(v.precio_publicacion_extra || 0), permite_extras: v.permite_extras,
         publica_meses: v.publica_meses.trim() === "" ? null : Number(v.publica_meses),
         descripcion: v.descripcion.trim(), incluye: v.incluye.split("\n").map((s) => s.trim()).filter(Boolean),
@@ -82,6 +90,7 @@ function FilaPlan({ p, onGuardado }: { p: PlanAdmin; onGuardado: () => void }) {
         {campo("Publicaciones/mes (vacío = sin límite)", "publicaciones_mes", { type: "number", inputMode: "numeric" })}
         {campo("Publicaciones guardadas (máx.) (vacío = sin tope)", "publicaciones_guardadas", { type: "number", inputMode: "numeric", min: 1 })}
         {campo("Fotos del local (máximo)", "fotos_max", { type: "number", inputMode: "numeric", min: 0, max: 1000, step: 1 })}
+        {campo("Piezas para redes por ciclo (0–31)", "social_pieces_per_month", { type: "number", inputMode: "numeric", min: 0, max: 31, step: 1 })}
         {campo("Extra (Bs c/u)", "precio_publicacion_extra", { type: "number", inputMode: "decimal" })}
         {campo("Meses que puede publicar (vacío = siempre)", "publica_meses", { type: "number", inputMode: "numeric" })}
       </div>
@@ -90,6 +99,8 @@ function FilaPlan({ p, onGuardado }: { p: PlanAdmin; onGuardado: () => void }) {
         y se borra su foto del disco. Es para que el disco no crezca sin control. Vacío = no se archiva nada.
         Fotos del local: al llegar al máximo, el comercio elige entre pagar una foto extra (al precio de
         «Extra») o borrar la más vieja. Si el pago vence, vuelve al máximo del plan gratis.
+        Piezas para redes: videos propios que URUKU arma y publica en sus redes por cada ciclo de cobro
+        (vacío = 0). No se muestra al público.
       </small>
       <label style={{ display: "grid", gap: 3, fontSize: 12 }}>
         <span style={{ opacity: .7 }}>Qué es, en una frase</span>

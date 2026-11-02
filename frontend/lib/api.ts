@@ -1557,6 +1557,9 @@ export type PlanAdmin = {
   fotos_max: number;
   precio_publicacion_extra: number; permite_extras: boolean; publica_meses: number | null;
   descripcion: string | null; incluye: string[]; funciones: Record<string, boolean>; activo: boolean; visible: boolean;
+  /** Piezas propias para redes por ciclo de cobro (0..31; null = 0). No es pública
+   *  (docs/contenido-redes-tecnico.md §3.1). Opcional: el backend viejo no la manda. */
+  social_pieces_per_month?: number | null;
 };
 
 // ---- El equipo, los roles y los permisos (Admin › Equipo) ----

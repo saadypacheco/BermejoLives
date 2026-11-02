@@ -246,6 +246,8 @@ export const BLOCKED_SCRAPERS: readonly string[] = ["Diffbot", "omgili", "Semrus
 export const PRIVATE_PATHS: readonly string[] = [
   "/admin", "/contenido", "/publicar", "/campo", "/mi-comercio", "/volante/",
   "/guia-venta", "/perfil", "/guardados", "/reservas", "/recuperar-negocio",
+  // La página del comerciante con su video (docs/contenido-redes-tecnico.md §9.5): token privado.
+  "/pieza/",
 ];
 
 /* ─── JSON-LD ─────────────────────────────────────────────────────────────── */
