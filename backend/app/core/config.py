@@ -125,6 +125,18 @@ class Settings(BaseSettings):
     # A dónde apunta el enlace de cada oferta que se publica en las redes.
     sitio_url: str = "https://uruku.bo"
 
+    # ── IndexNow (docs/visibilidad-buscadores-ia.md §3.12) ──────────────────
+    # Avisa a Bing y compañía cuando una ficha cambia. Sólo corre con APP_ENV=prod
+    # Y con INDEXNOW_KEY puesta (QA no la tiene, así que no avisa nada). La clave
+    # (8 a 128 caracteres: letras, números y guiones; se recomiendan 32 hex al azar)
+    # es pública por diseño del protocolo: el sitio tiene que servirla en
+    # {SITIO_URL}/{clave}.txt con la clave como contenido. NO se commitea.
+    app_env: str = ""                       # APP_ENV: "prod" | "qa" | "" (el mismo del deploy)
+    indexnow_key: str = ""
+    indexnow_worker: bool = True
+    indexnow_cada_seg: int = 900            # cada 15 min
+    indexnow_endpoint: str = "https://api.indexnow.org/indexnow"
+
     # El worker que manda lo automático. Apagarlo deja todo en la cola, para
     # mandarlo a mano desde el panel.
     difusion_worker: bool = True

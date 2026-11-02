@@ -1,0 +1,145 @@
+"""B1: visitas que llegan desde asistentes de IA (docs/visibilidad-buscadores-ia.md §3.11)."""
+import pytest
+
+from app.core.ai_sources import AI_SOURCES, classify_ai_source, summarize_ai_sources
+
+CLAVES_DE_SIEMPRE = {"dias", "visitas", "personas", "por_dia", "top_rutas",
+                     "top_referidos", "top_origenes", "embudo"}
+
+
+@pytest.mark.parametrize("origen,referido,esperada", [
+    ("chatgpt.com", None, "chatgpt"),
+    (None, "chat.openai.com", "chatgpt"),
+    (None, "perplexity.ai", "perplexity"),
+    (None, "www.perplexity.ai", "perplexity"),
+    (None, "gemini.google.com", "gemini"),
+    (None, "bard.google.com", "gemini"),
+    (None, "copilot.microsoft.com", "copilot"),
+    ("bing.com/chat", None, "copilot"),
+    (None, "claude.ai", "claude"),
+    (None, "meta.ai", "meta_ai"),
+    (None, "grok.com", "grok"),
+    (None, "x.ai", "grok"),
+    (None, "chat.deepseek.com", "deepseek"),
+    (None, "you.com", "you"),
+    (None, "phind.com", "phind"),
+    (None, "duck.ai", "duckduckgo_ai"),
+    ("https://ChatGPT.com/?utm_source=chatgpt.com", None, "chatgpt"),
+    ("chatgpt", None, "chatgpt"),            # utm_source sin TLD
+    ("perplexity", None, "perplexity"),
+])
+def test_reconoce_cada_asistente(origen, referido, esperada):
+    assert classify_ai_source(origen, referido) == esperada
+
+
+@pytest.mark.parametrize("origen,referido", [
+    (None, None),
+    ("", ""),
+    (None, "google.com"),                    # AI Overviews caen acá: indistinguibles
+    (None, "bing.com"),                      # Bing normal no es Copilot
+    (None, "duckduckgo.com"),
+    (None, "facebook.com"),
+    (None, "x.com"),
+    (None, "notchatgpt.com"),                # el sufijo exige límite de punto
+    (None, "wix.ai"),
+    ("volante-x", None),
+    ("volante-x", "google.com"),
+])
+def test_lo_que_no_es_un_asistente_da_none(origen, referido):
+    assert classify_ai_source(origen, referido) is None
+
+
+def test_el_origen_manda_sobre_el_referido():
+    assert classify_ai_source("claude.ai", "perplexity.ai") == "claude"
+    assert classify_ai_source("volante-x", "perplexity.ai") == "perplexity"
+
+
+def test_cubre_todos_los_asistentes_pedidos():
+    assert set(AI_SOURCES) >= {"chatgpt", "perplexity", "gemini", "copilot", "claude",
+                               "meta_ai", "grok", "deepseek", "you", "phind", "duckduckgo_ai"}
+
+
+def test_el_resumen_junta_visitas_personas_fichas_y_rutas():
+    filas = [
+        {"ruta": "/comercios/a", "sesion": "s1", "origen": "chatgpt.com"},
+        {"ruta": "/comercios/b", "sesion": "s1", "origen": "chatgpt.com"},
+        {"ruta": "/", "sesion": "s2", "referido": "chat.openai.com"},
+        {"ruta": "/bermejo/ropa", "sesion": "s3", "referido": "perplexity.ai"},
+        {"ruta": "/", "sesion": "s4", "referido": "google.com"},      # no cuenta
+        {"ruta": "/", "sesion": "s5"},                                # no cuenta
+    ]
+    r = summarize_ai_sources(filas)
+    assert [x["source"] for x in r] == ["chatgpt", "perplexity"]
+    chat = r[0]
+    assert chat["visits"] == 3 and chat["people"] == 2 and chat["business_views"] == 2
+    assert [t["ruta"] for t in chat["top_routes"]] == ["/comercios/a", "/comercios/b", "/"]
+    assert r[1] == {"source": "perplexity", "visits": 1, "people": 1, "business_views": 0,
+                    "top_routes": [{"ruta": "/bermejo/ropa", "n": 1}]}
+
+
+def test_el_resumen_corta_las_rutas_en_tres():
+    filas = [{"ruta": f"/r{i}", "sesion": "s", "origen": "claude.ai"} for i in range(6)]
+    assert len(summarize_ai_sources(filas)[0]["top_routes"]) == 3
+
+
+def test_sin_visitas_de_ia_la_lista_va_vacia():
+    assert summarize_ai_sources([]) == []
+
+
+# ── de punta a punta: /visita -> /admin/visitas (repo de prueba) ────────────────
+def test_endpoint_admin_visitas_trae_ai_sources_y_conserva_las_claves(client, repo, admin_token):
+    h = {"Authorization": f"Bearer {admin_token}"}
+    client.post("/visita", json={"ruta": "/comercios/x", "sesion": "sesion-aaa111",
+                                 "origen": "chatgpt.com", "primera": True})
+    client.post("/visita", json={"ruta": "/", "sesion": "sesion-bbb222",
+                                 "referido": "perplexity.ai", "primera": True})
+    client.post("/visita", json={"ruta": "/", "sesion": "sesion-ccc333", "referido": "google.com"})
+    d = client.get("/admin/visitas", headers=h).json()
+    assert CLAVES_DE_SIEMPRE <= set(d)
+    por_fuente = {x["source"]: x for x in d["ai_sources"]}
+    assert set(por_fuente) == {"chatgpt", "perplexity"}
+    assert por_fuente["chatgpt"]["business_views"] == 1
+    assert d["visitas"] == 3
+
+
+# ── el repo de verdad, con una base de mentira ──────────────────────────────────
+class _Q:
+    def __init__(self, filas):
+        self._filas = filas
+
+    def select(self, *a, **k): return self
+    def gte(self, *a, **k): return self
+    def order(self, *a, **k): return self
+    def limit(self, *a, **k): return self
+
+    def range(self, desde, hasta):
+        self._filas = self._filas[desde:hasta + 1]
+        return self
+
+    def execute(self):
+        class R: pass
+        r = R()
+        r.data = self._filas
+        return r
+
+
+class _Db:
+    def __init__(self, visitas):
+        self._v = visitas
+
+    def table(self, nombre):
+        return _Q(list(self._v) if nombre == "visitas" else [])
+
+
+def test_el_repo_real_suma_ai_sources_sin_tocar_las_claves_de_siempre():
+    from app.db.repository import SupabaseRepo
+    visitas = [
+        {"dia": "2026-11-01", "ruta": "/comercios/a", "sesion": "s1", "origen": "chatgpt.com", "referido": None, "primera": True},
+        {"dia": "2026-11-01", "ruta": "/", "sesion": "s2", "origen": None, "referido": "perplexity.ai", "primera": True},
+        {"dia": "2026-11-02", "ruta": "/", "sesion": "s3", "origen": None, "referido": "google.com", "primera": True},
+    ]
+    r = SupabaseRepo(_Db(visitas)).resumen_visitas(30)
+    assert CLAVES_DE_SIEMPRE <= set(r)
+    assert r["visitas"] == 3 and r["personas"] == 3
+    assert r["top_referidos"] == [{"referido": "perplexity.ai", "n": 1}, {"referido": "google.com", "n": 1}]
+    assert {x["source"]: x["visits"] for x in r["ai_sources"]} == {"chatgpt": 1, "perplexity": 1}
