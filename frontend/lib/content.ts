@@ -25,8 +25,9 @@ export type SocialConsentResponse = {
   granted: boolean | null;
   via: ConsentVia | null;
   recorded_at: string | null;
-  recorded_by: string | null;
-  note: string | null;
+  /** Desde el 2/11 `GET /comercio/social-consent` ya no los trae (§15.2): opcionales. */
+  recorded_by?: string | null;
+  note?: string | null;
 };
 export type SocialConsentUpdate = { granted: boolean; via: "admin" | "whatsapp_reply" | "subscription"; note: string | null };
 export type SocialConsentRevokeResponse = {
@@ -126,8 +127,9 @@ export type ContentWeekPlanResponse = {
 export type ContentDayItem = {
   piece: ContentPieceSummary;
   posts: ContentPostResponse[];
-  /** El mensaje al comerciante (sólo piezas propias de un suscriptor). */
-  delivery: { task_id: string; whatsapp: string | null; message_text: string } | null;
+  /** La entrega del video al comerciante (sólo piezas propias de un suscriptor). Desde §15 es A MANO:
+   *  `message_text` ya no se usa (no se le escribe por WhatsApp) y `download_url` es la ruta firmada. */
+  delivery: { task_id: string; whatsapp?: string | null; message_text?: string | null; download_url?: string | null } | null;
 };
 export type ContentDayPackageResponse = {
   date: string; items: ContentDayItem[]; overdue: ContentDayItem[];

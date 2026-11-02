@@ -37,6 +37,8 @@ export type SubscriberTaskResponse = {
   call_script: string[] | null;
   needs_outcome: boolean;
   piece_id: string | null; report_id: string | null;
+  /** Sólo en `piece_delivery` y si la pieza tiene video: ruta RELATIVA firmada (15 min, `download=1`). */
+  download_url?: string | null;
   outcome: string | null; done_by: string | null; done_at: string | null;
   auto_closed: boolean;
 };

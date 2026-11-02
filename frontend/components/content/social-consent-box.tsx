@@ -21,7 +21,7 @@ const VIAS: { v: SocialConsentUpdate["via"]; t: string }[] = [
 ];
 
 /**
- * La autorización de un comercio para aparecer en las redes de URUKU (§1.6 de la
+ * La autorización de un comercio para aparecer en las redes y la página de URUKU (§1.6 de la
  * spec funcional; es una BITÁCORA: cada alta o retiro queda con fecha y vía).
  *
  * Lo usan el Banco de contenido, el detalle de un suscriptor y «Completar
@@ -65,7 +65,7 @@ export function SocialConsentBox({ consent, api, onChange, compacto, estadoDesco
   }
 
   function retirar() {
-    if (!window.confirm("¿Retirar la autorización de redes de este comercio? Las piezas planificadas o listas pasan a «saltadas» y no se arman más videos suyos.")) return;
+    if (!window.confirm("¿Retirar la autorización de redes y página de este comercio? Las piezas planificadas o listas pasan a «saltadas» y no se arman más videos suyos.")) return;
     void guardar(false);
   }
 
@@ -81,7 +81,7 @@ export function SocialConsentBox({ consent, api, onChange, compacto, estadoDesco
   return (
     <div style={{ display: "grid", gap: 10, ...(compacto ? {} : { padding: 12, border: "1px solid var(--stroke)", borderRadius: 12 }) }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <b style={{ fontSize: 13.5 }}>Redes de URUKU:</b>
+        <b style={{ fontSize: 13.5 }}>Redes y página de URUKU:</b>
         {vigente && (
           <Insignia tono="ok" icono="listo">
             AUTORIZADO {fechaCortaBo(consent.recorded_at)}{consent.via ? ` (${CONSENT_VIA_LABEL[consent.via] ?? consent.via})` : ""}
@@ -94,7 +94,7 @@ export function SocialConsentBox({ consent, api, onChange, compacto, estadoDesco
 
       {!vigente && !abierto && (
         <p style={{ margin: 0, fontSize: 12.5, color: "var(--txt-3)", lineHeight: 1.4 }}>
-          Sin la autorización del comercio no sale ninguna pieza en las redes. Las fotos se guardan igual.
+          Sin la autorización del comercio no sale ninguna pieza en las redes ni en la página de URUKU. Las fotos se guardan igual.
         </p>
       )}
       {consent.note && vigente && <p style={{ margin: 0, fontSize: 12.5, color: "var(--txt-3)" }}>Nota: {consent.note}</p>}

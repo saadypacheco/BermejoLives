@@ -554,9 +554,9 @@ export function CompletarComercio({ comercio, rubros, lugares, abrirEn, sinWhats
 
       {/* 6 bis. FOTOS PARA REDES: el banco de contenido de URUKU (docs/contenido-redes-tecnico.md §9.6).
           Parado en la puerta del local es el único momento en que se sabe con certeza de quién es
-          cada foto. Se registra que el dueño aceptó aparecer en las redes y se suben las fotos;
+          cada foto. Se registra que el dueño aceptó aparecer en las redes y la página de URUKU y se suben las fotos;
           lo que no sube por falta de señal queda en el teléfono y sube solo. */}
-      <Seccion id="cc-redes-contenido" titulo="Fotos para redes" icono="foto">
+      <Seccion id="cc-redes-contenido" titulo="Fotos para redes y página" icono="foto">
         <BancoDelComercio comercioId={comercio.id} api={apiBancoCampo} sinTitulo />
       </Seccion>
 

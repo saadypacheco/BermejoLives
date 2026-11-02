@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Ic } from "@/components/ic";
-import { Aviso, BTN_GRANDE, Cargando, EnvioWhatsapp, ErrorConReintento, Insignia } from "@/components/content/content-ui";
+import { Aviso, BTN_GRANDE, Cargando, ErrorConReintento, Insignia } from "@/components/content/content-ui";
 import { ContentPostRow } from "@/components/content/content-post-row";
 import {
   getPaqueteDelDia, mensajeContent, type ContentDayItem, type ContentDayPackageResponse, type ContentPostResponse,
 } from "@/lib/content";
 import { cerrarTarea } from "@/lib/subscribers";
+import { ENTREGA_A_MANO, EntregaDescarga } from "@/components/subscribers/entrega-a-mano";
 import { fechaConDia, hoyBolivia, sumarDias, urlApiOpt } from "@/lib/content-pure";
 
 /**
@@ -126,14 +127,31 @@ function TarjetaPieza({ it, atrasada, onPost, onEntregada }: {
         {it.posts.length === 0 && <p style={{ margin: 0, fontSize: 13, color: "var(--txt-3)" }}>Esta pieza no tiene redes para publicar.</p>}
       </div>
 
-      {it.delivery && (
-        <div style={{ borderTop: "1px solid var(--stroke)", paddingTop: 10, display: "grid", gap: 6 }}>
-          <b style={{ fontSize: 13.5 }}>Comerciante</b>
-          <EnvioWhatsapp whatsapp={it.delivery.whatsapp} texto={it.delivery.message_text}
-                         etiqueta="Mandarle la pieza por WhatsApp"
-                         onMandado={async () => { await cerrarTarea(it.delivery!.task_id, true, null); onEntregada(); }} />
-        </div>
-      )}
+      {it.delivery && <EntregaPieza delivery={it.delivery} onEntregada={onEntregada} />}
     </article>
+  );
+}
+
+/** El video de un suscriptor se entrega A MANO (§15): se baja y se marca entregado. Sin WhatsApp. */
+function EntregaPieza({ delivery, onEntregada }: { delivery: NonNullable<ContentDayItem["delivery"]>; onEntregada: () => void }) {
+  const [ocupado, setOcupado] = useState(false);
+  const [err, setErr] = useState("");
+  async function marcar() {
+    setOcupado(true); setErr("");
+    try { await cerrarTarea(delivery.task_id, true, null); onEntregada(); }
+    catch (ex) { setErr(mensajeContent(ex, "No se pudo marcar como entregado")); }
+    finally { setOcupado(false); }
+  }
+  return (
+    <div style={{ borderTop: "1px solid var(--stroke)", paddingTop: 10, display: "grid", gap: 8 }}>
+      <b style={{ fontSize: 13.5 }}>{ENTREGA_A_MANO}</b>
+      <EntregaDescarga downloadUrl={delivery.download_url} />
+      <div>
+        <button type="button" className="btn btn-primary btn-sm" style={BTN_GRANDE} disabled={ocupado} onClick={() => void marcar()}>
+          <Ic n="si" s={15} /> {ocupado ? "Guardando…" : "Marcar entregado"}
+        </button>
+      </div>
+      {err && <Aviso tono="error">{err}</Aviso>}
+    </div>
   );
 }

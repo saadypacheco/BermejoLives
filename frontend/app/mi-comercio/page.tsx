@@ -944,7 +944,7 @@ function PerfilTab() {
         <CampoRow label="Pedido mínimo" ph="Ej: 3 docenas, 200 Bs" value={perfil.pedido_minimo ?? ""} onChange={(v) => set("pedido_minimo", v)} />
       </div>
 
-      {/* Autorización para las redes de URUKU: se guarda al instante (no con «Guardar cambios»). */}
+      {/* Autorización para las redes y la página de URUKU: se guarda al instante (no con «Guardar cambios»). */}
       <SocialConsentToggle />
 
       <label className="glass" style={{ padding: "14px 18px", borderRadius: 16, display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>

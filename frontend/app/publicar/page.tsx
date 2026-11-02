@@ -693,7 +693,7 @@ function FormCampo({ onLogout, onVerMisComercios, gpsInicial, onVerAca }: {
   const preview = useObjectUrl(previewFile);
   const [comprimiendo,setComprimiendo]= useState(false);
   const [consent,     setConsent]     = useState(false);
-  // Segunda casilla: autoriza usar las fotos del local en las REDES de URUKU. Es otra
+  // Segunda casilla: autoriza usar las fotos del local en las REDES y la PÁGINA de URUKU. Es otra
   // cosa que aparecer en el sitio (la de arriba) y arranca apagada (docs/contenido-redes-tecnico.md §9.6).
   const [socialConsent, setSocialConsent] = useState(false);
   const [saving,      setSaving]      = useState(false);
@@ -1253,7 +1253,7 @@ function FormCampo({ onLogout, onVerMisComercios, gpsInicial, onVerAca }: {
         </label>
         <label style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13.5, color: "var(--txt-2)", minHeight: 44 }}>
           <input type="checkbox" checked={socialConsent} onChange={(e) => setSocialConsent(e.target.checked)} />
-          Acepta que usemos fotos de su local en las redes de URUKU
+          Acepta que usemos fotos de su local en las redes y la página de URUKU
         </label>
 
         {err && <span style={{ color: "var(--pink)", fontSize: 13 }}>{err}</span>}

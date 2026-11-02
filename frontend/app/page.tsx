@@ -11,6 +11,9 @@ import {
   getNovedadesUruku, getRedes, getVideosPromo,
 } from "@/lib/data";
 import { JsonLd } from "@/components/json-ld";
+import { VideosUruku } from "@/components/videos-uruku";
+import { getVideosUruku } from "@/lib/videos-public";
+import { videoObjectNodes } from "@/lib/videos-pure";
 import { cityPath, jsonLdGraph, organizationNodes, sameAsFromRedes } from "@/lib/seo";
 import { conFundador } from "@/lib/seo-paginas";
 import { CarruselNovedades } from "@/components/carrusel-novedades";
@@ -152,7 +155,7 @@ export default async function InicioPage() {
   const conGuia = (ciudad?.slug ?? "bermejo") === "bermejo";
   // El peso argentino, en cualquier ciudad de frontera.
   const esFrontera = ciudad?.es_frontera ?? true;
-  const [feed, novedadesUruku, videos, frontera, clima, cotizaciones, turnosHoy, promo, paresCiudad, ciudadesTodas, redes] = await Promise.all([
+  const [feed, novedadesUruku, videos, frontera, clima, cotizaciones, turnosHoy, promo, paresCiudad, ciudadesTodas, redes, videosUruku] = await Promise.all([
     getFeed(12, ciudad?.slug), getNovedadesUruku(ciudad?.id, 4), conGuia ? getVideosPromo(6) : Promise.resolve([]),
     conGuia ? getFronteraEstado(ciudad?.id) : Promise.resolve(null), conGuia ? getClima() : Promise.resolve(null), getCotizaciones(),
     // Las farmacias de turno hoy: la tarjeta sólo aparece si la ciudad tiene turnos cargados.
@@ -163,15 +166,21 @@ export default async function InicioPage() {
     // Los pares salen de la misma memoria que usa el pie del marco (10 min): la
     // home es dinámica y no debe pegarle a la RPC en cada pedido.
     getCityCategoryPagesCached(), getCiudades(), getRedes(),
+    // Los videos de las redes de URUKU (§15.2). No tira nunca: si la API no contesta, `[]` y la franja no aparece.
+    getVideosUruku(ciudad?.slug),
   ]);
   const ciudadesIndexables = [...new Map(paresCiudad.filter((p) => p.indexable).map((p) => [p.city_slug, p])).values()];
-  const datosMarca = jsonLdGraph(conFundador(organizationNodes({
-    ciudades: ciudadesIndexables.map((p) => ({
-      nombre: p.city_name, departamento: p.region,
-      pais: ciudadesTodas.find((c) => c.slug === p.city_slug)?.pais ?? null,
+  const datosMarca = jsonLdGraph([
+    ...conFundador(organizationNodes({
+      ciudades: ciudadesIndexables.map((p) => ({
+        nombre: p.city_name, departamento: p.region,
+        pais: ciudadesTodas.find((c) => c.slug === p.city_slug)?.pais ?? null,
+      })),
+      sameAs: sameAsFromRedes(redes),
     })),
-    sameAs: sameAsFromRedes(redes),
-  })));
+    // Un VideoObject por video de la franja (mismos que se ven en la página).
+    ...videoObjectNodes(videosUruku, { ciudad: ciudad?.nombre ?? null }),
+  ]);
   const nombre = ciudad?.nombre ?? "Bermejo";
   // La foto del hero es de la ciudad; sin foto propia, la de Bermejo sólo en
   // Bermejo. Otra ciudad sin foto va con el fondo liso, no con el río de otra.
@@ -390,6 +399,9 @@ export default async function InicioPage() {
           </CarruselNovedades>
         </section>
       )}
+
+      {/* ===== Videos de URUKU (los publicados en las redes; sin videos no dibuja nada) ===== */}
+      <VideosUruku videos={videosUruku} />
 
       {/* ===== Información para tu visita (lo de la guía: sólo en la frontera) ===== */}
       {conGuia && (
