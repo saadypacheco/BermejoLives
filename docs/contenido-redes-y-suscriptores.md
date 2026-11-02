@@ -7,6 +7,8 @@
 > Lo que dependa de las reglas de TikTok, Meta o YouTube está marcado **a confirmar** y lo
 > cierra `docs/investigacion-redes-y-busqueda-ia.md` (researcher, en paralelo).
 > Los supuestos están numerados (S-01…) para confirmarlos de a uno (§6).
+> **Actualizado 02/11:** los videos se arman **en el VPS**, no en las PC (decisión del dueño). La spec
+> técnica del MVP está en `docs/contenido-redes-tecnico.md` y reemplaza el borrador de §3.6.
 
 ## 0. En diez líneas
 
@@ -15,7 +17,7 @@
 3. La IA (Gemini leyendo el cartel) **sólo sugiere** de quién es una foto suelta; siempre confirma un humano.
 4. Ninguna foto sale a redes si el comercio no dio **consentimiento para redes**, registrado en la base con fecha y por dónde llegó.
 5. El suscriptor recibe un beneficio que se puede contar: **2 piezas propias por mes** (video + otra), prioridad en los compilados y **el archivo para que lo suba a su estado**.
-6. La base (VPS) elige, escribe los textos y lleva la cola. **Las PC del dueño y de su hija** arman los videos y acompañan la publicación. Una pieza se publica **una sola vez** aunque haya dos PC.
+6. La base (VPS) elige, escribe los textos, **arma los videos** (de a uno, con prioridad baja) y lleva la cola. Las PC del dueño y de su hija, o el celular, **sólo se usan para publicar**. Una pieza se publica **una sola vez** aunque publiquen dos personas.
 7. Hoy se publica en **modo B o C**: el agente deja el paquete listo y abre la página de subida; **una persona aprieta «Publicar»**. Son unos 30–60 s por pieza.
 8. No se automatiza el clic de «Publicar» en las redes: es el mismo riesgo que llevó a descartar WhatsApp Web.
 9. Retención: los primeros 7 días con lista de tareas, un **«Tu mes en URUKU»** que llega **antes** del vencimiento, un contacto cada 15 días por `wa.me` y una alarma por señales de abandono.
@@ -88,7 +90,7 @@ Error de consentimiento: se puede subir igual, pero el selector no la usa hasta 
 
 ### 1.4 Dónde se guardan las fotos nuevas
 
-- Las del banco van a un disco **privado** (`CONTENT_ASSETS_DIR`, fuera de `/data/fotos`) y se sirven sólo autenticadas (admin y worker). Así una foto de atrás del mostrador no queda pública en `/fotos`.
+- Las del banco van a un disco **privado** (`CONTENT_ASSETS_DIR`, fuera de `/data/fotos`) y se sirven sólo autenticadas (panel y agentes). Así una foto de atrás del mostrador no queda pública en `/fotos`.
 - Si se marca «Mostrar también en la ficha», **además** se copia a la galería como hoy (respeta el tope por plan).
 - Se guarda el **original** (lo pide `analisis-tratamiento-fotos.md` §7) y el `sha256` para no subir dos veces la misma foto.
 
@@ -218,9 +220,9 @@ Los escribe **Gemini sólo con los hechos que le pasa la base** (JSON). El model
 | **Armar los videos** (ffmpeg + Pillow) | **Backend en el VPS** (loop de fondo, de a un video, prioridad baja) | **Decidido por el dueño el 2/11.** La imagen del backend ya trae ffmpeg (por faster-whisper) y Pillow; no depende de que una PC esté prendida y desaparecen los leases entre PC (`content_devices` sale del MVP) |
 | **Publicar** | **Una persona en una de las dos PC** (modo B/C) o desde el celular (modo B) | Hoy ninguna red deja publicar sola a una app sin auditar (a confirmar). Las cuentas ya están abiertas en esas PC |
 | Agente de VS Code | PC del dueño, **cuando él lo abre** | Arma y ajusta las plantillas, importa carpetas, prepara campañas especiales y el análisis mensual. **No es el reloj diario**: un agente de VS Code sólo corre con la sesión abierta |
-| Reloj diario en la PC | Programador de tareas de Windows (`uruku-contenido run` al iniciar sesión y a las 09:00) | Corre aunque nadie abra VS Code |
+| Reloj diario en la PC (sólo modo C1, etapa 2) | Programador de tareas de Windows (`uruku-contenido run` al iniciar sesión y a las 09:00) | Corre aunque nadie abra VS Code |
 
-**S-06.** Si **ninguna** de las dos PC se prende en el día, ese día no se publica. Como el armado es semanal (domingo a la noche o lunes al prender), alcanza con prender una PC una vez para dejar la semana armada.
+**S-06.** Los videos se arman en el VPS aunque ninguna PC esté prendida; lo único que depende de una persona es **publicar**. Si nadie publica un día, la pieza queda en «Atrasadas» del Paquete del día y se publica al siguiente; la cuota del suscriptor no se pierde.
 
 ### 3.2 El circuito
 
@@ -228,7 +230,7 @@ Los escribe **Gemini sólo con los hechos que le pasa la base** (JSON). El model
 flowchart LR
   A[Banco + galería + ofertas] --> S[Selector semanal<br/>VPS, domingo 20:00]
   S --> P[content_pieces<br/>planned]
-  P --> W[Worker en una PC<br/>arma video, lease]
+  P --> W[Armado en el VPS<br/>de a un video, prioridad baja]
   W --> R[ready_for_review]
   P --> G[Gemini: texto con hechos<br/>+ validador]
   G --> R
@@ -242,7 +244,7 @@ flowchart LR
 
 1. **Selector (domingo 20:00).** Arma los 6 lugares de la semana según el calendario (§2.3): primero las piezas que se les deben a los suscriptores del mes, después los compilados. Filtra: autorización de redes, suscripción al día, mínimo de fotos, que no haya salido en los últimos 14 días. Crea `content_pieces` en `planned` y, para los que no llegan al mínimo de fotos, la tarea «Pedir fotos».
 2. **Texto.** Por pieza: JSON de hechos → Gemini → validador → `caption_*` + `hashtags`. Si falla, plantilla fija.
-3. **Armado.** La PC pide trabajo (`lease` de 20 min), baja las fotos por la API autenticada, aplica N1 suave, arma el video con la plantilla y la portada, y lo sube. La pieza pasa a `ready_for_review`.
+3. **Armado.** Un proceso de fondo del backend, en el VPS, toma las piezas de a una (con prioridad baja y un tiempo máximo), lee las fotos del disco del servidor, aplica N1 suave y arma el video con la plantilla y la portada. La pieza pasa a `ready_for_review`. Si falla, reintenta y, si sigue fallando, queda a la vista en Revisión con el motivo.
 4. **Revisión** en Admin › Contenido (§3.5): aprobar, editar el texto, cambiar una foto, saltar con motivo. **Nada sale sin aprobar** (misma regla de `difusion-redes.md`).
 5. **Publicación** por red (§3.3), con reclamo para que no se publique dos veces (§3.4).
 6. **Cierre:** se marca publicada con el link; nace la tarea «Mandarle la pieza a {comercio}» (§4.4) y la fila de métricas.
@@ -275,11 +277,11 @@ flowchart LR
 |---|---|
 | Fuente de verdad | La base. Ninguna PC guarda «ya publiqué» sólo en su disco |
 | Una fila por pieza y red | `content_posts` con `unique (piece_id, network)` (misma idea que `difusion_cola`) |
-| Reclamar antes de publicar | Al tocar «Publicar en TikTok», la PC pide `claim`: la base pone `claimed` + `claimed_by` (dispositivo) + `claimed_at`. Si ya estaba reclamada por otra, contesta 409: «La está publicando la PC de {nombre} desde hace 3 min» |
+| Reclamar antes de publicar | Al tocar «Publicar en TikTok», el panel pide `claim`: la base pone `claimed` + `claimed_by` (la persona logueada) + `claimed_at`. Si ya estaba reclamada por otra, contesta 409: «La está publicando {nombre} desde hace 3 min» |
 | Vencimiento del reclamo | 20 min. Si nadie marca, vuelve a `pending` con aviso «Revisá en la red si salió antes de reintentar» |
 | Marcar publicada | Pegar el link del posteo (o «Salió, no tengo el link»). Si se pega el link de otra red, se rechaza |
-| Ver lo mismo en todos lados | Paquete del día en Admin (celular) y en la consola del worker: los dos leen la misma fila |
-| Identidad de cada PC | Un token por dispositivo (`content_devices`), rol `content_worker`, que se puede revocar. **Nunca** `service_role` |
+| Ver lo mismo en todos lados | Paquete del día en Admin, desde la PC o el celular: todos leen la misma fila |
+| Identidad de quien publica | Su usuario del panel (permiso `difusion`). Sin tokens por dispositivo ni `content_devices`. **Nunca** `service_role` |
 | Carpeta compartida | **No hace falta.** Cada PC baja el paquete de la API a `contenido/salida/<fecha>/`. Se descarta Drive/OneDrive para el estado (dos PC sincronizando = conflictos y doble publicación) |
 
 **Wireframe: Admin › Contenido › Paquete del día** (celular o PC)
@@ -304,7 +306,7 @@ flowchart LR
 «Publicar en TikTok» (PC): reclama → abre la página de subida → carpeta + texto copiado
 → al volver: «¿Salió? Pegá el link» [Pegar] [No salió] [Salió sin link].
 Vacío: «Hoy no hay piezas. La próxima: jueves, Ofertas de la semana».
-Error: pieza sin video armado → «Ninguna PC armó el video todavía. Prendé una PC o [Armar en esta]».
+Error: pieza sin video armado → «El video todavía se está armando en el servidor. Probá en unos minutos».
 ```
 
 ### 3.5 Revisión (Admin › Contenido › Revisión)
@@ -318,6 +320,8 @@ Error: pieza sin video armado → «Ninguna PC armó el video todavía. Prendé 
 | Aprobar todas | Sólo para piezas sin edición y con validador en verde |
 
 ### 3.6 Modelo de datos (borrador para el architect)
+
+> **Superado** por `docs/contenido-redes-tecnico.md` §3 (migración 0181): sin `content_devices` ni leases, y la autorización de redes como bitácora aparte en vez de columnas en `comercios`. Se deja como registro.
 
 Reglas de siempre: RLS activo, `revoke` a anon/authenticated, `grant` a `service_role`, `activo` para baja lógica, archivo idéntico en las dos carpetas de migraciones, número después de la última usada (lo asigna el architect), y ninguna migración con la palabra que nombra al código del comercio.
 
@@ -417,15 +421,15 @@ create table subscriber_reports (
 | Consentimiento: casilla en el alta, interruptor en Mi comercio, registrar en Admin | Back + front | S |
 | Selector semanal + cuota de suscriptores | Back | M |
 | Textos con Gemini + validador + plantilla de respaldo | Back | S |
-| Worker de PC: lease, bajar fotos, N1, video con ffmpeg, portada, subir | Script Python (PC) | M |
-| Plantillas de video (tapa, foto con zoom, cierre) en 9:16 | Script + diseño | S |
+| Armado en el VPS: cola de a un video, N1, video con ffmpeg, portada, reintentos | Back | M |
+| Plantillas de video (tapa, foto con zoom, cierre) en 9:16 | Back + diseño | S |
 | Admin › Contenido: revisión + Paquete del día + reclamo/marcar publicada | Back + front | M |
 | Modo C1 en la PC (abrir subida, carpeta, portapapeles, «¿salió?») | Script | S |
 | Entregar la pieza al comerciante (página de descarga con token + `wa.me`) | Back + front | S |
 | Admin › Suscriptores + tareas + plantillas de mensaje | Back + front | M |
 | «Tu mes en URUKU» v1 (texto) / v2 (imagen) | Back | S / M |
 | Historias automáticas de guía útil (farmacia, cotización) | Back + plantilla | S |
-| Carrusel 4:5 | Script | S |
+| Carrusel 4:5 | Back | S |
 | Importar carpeta `contenido/<slug>/` | Script | S |
 | Fotos del Anfitrión en el grupo → banco | Back (ingesta) | S–M |
 | Sugerencia por IA para fotos sin dueño | Back | M |
@@ -436,7 +440,7 @@ create table subscriber_reports (
 
 | Fase | Plazo | Qué entra | Publicación |
 |---|---|---|---|
-| **MVP** | ~1 semana (backend-dev y frontend-dev en paralelo + el script de la PC) | Migración; banco de contenido; consentimiento; selector semanal; textos con validador; worker de PC con video 9:16; revisión; **Paquete del día** con reclamo y «marcar publicada»; entrega al comerciante por `wa.me`; Admin › Suscriptores con tareas de bienvenida, renovación y reporte en texto | **Modo B** desde cualquiera de las dos PC o el celular |
+| **MVP** | ~1 semana (backend-dev y frontend-dev en paralelo; detalle en `docs/contenido-redes-tecnico.md`) | Migración; banco de contenido; consentimiento; selector semanal; textos con validador; **armado del video 9:16 en el VPS**; revisión; **Paquete del día** con reclamo y «marcar publicada»; entrega al comerciante por `wa.me`; Admin › Suscriptores con tareas de bienvenida, renovación y reporte en texto | **Modo B** desde cualquiera de las dos PC o el celular |
 | **Etapa 2** | Semanas 2–4 | Modo **C1** en las dos PC; «Tu mes en URUKU» en imagen; historias automáticas de farmacia y cotización; carrusel; métricas por pieza; semáforo de abandono; importar carpeta; fotos del Anfitrión al banco | B + C1 |
 | **Etapa 3** | Cuando se decida | Modo A en IG/FB (token de la página, con la hija); A' en TikTok si se confirma; sugerencia por IA para fotos sin dueño; Shorts | A donde se pueda, C1 en el resto |
 | **Excluido** | — | Clic automático en «Publicar»; manejar las redes con un navegador robot; mandar mensajes por WAHA | — |
@@ -564,7 +568,7 @@ Verde 0–1 · amarillo 2–3 · rojo ≥4. **Rojo crea una tarea `churn_call`**
 |---|---|---|
 | D-01 | ¿Cuántas piezas propias por mes incluye «publica»? | **2** (un video + otra pieza); 4 los planes superiores. Se cambia en Admin › Planes |
 | D-02 | ¿Los comercios gratis aparecen en redes? | **Sólo en compilados**, con autorización, hasta un tercio de cada uno y nunca antes que un suscriptor |
-| D-03 | ¿Dónde se arman los videos? | **En las dos PC** (worker que pide trabajo a la base), como pediste. Si un día querés que no dependa de una PC prendida, el mismo worker pasa a un contenedor del VPS |
+| D-03 | ¿Dónde se arman los videos? | **Decidido (2/11): en el VPS.** Un proceso de fondo del backend arma de a un video, con prioridad baja y un tiempo máximo. No depende de que una PC esté prendida; las PC quedan para publicar |
 | D-04 | ¿Modo C1 (abre la subida y vos pegás) o C2 (completa el formulario)? | **C1.** C2 sólo si la investigación dice que el riesgo es bajo, y nunca el clic final |
 | D-05 | ¿Instagram y Facebook por API (modo A) más adelante? | **Sí, en la etapa 3**, cuando tu hija saque el token de la página. Hasta entonces, B/C1 en todas las redes |
 | D-06 | ¿Emojis en los textos de redes? | **No** (misma regla de marca). Si querés excepción en redes, es una variable |
@@ -580,7 +584,7 @@ Verde 0–1 · amarillo 2–3 · rojo ≥4. **Rojo crea una tarea `churn_call`**
 | S-03 | Publicación a las 19:00 hora de Bolivia hasta tener estadística propia |
 | S-04 | Los no suscriptores no tienen piezas propias (sólo compilados) |
 | S-05 | Sin emoji en los textos de redes |
-| S-06 | Si ninguna PC se prende, ese día no se publica; el armado es semanal para que alcance prender una vez |
+| S-06 | Los videos se arman en el VPS sin depender de las PC; si nadie publica un día, la pieza pasa a «Atrasadas» y la cuota no se pierde |
 | S-07 | Publicar a mano desde la PC con la sesión abierta no tiene riesgo; el riesgo es que un programa maneje la página (a confirmar en la investigación) |
 | S-08 | El reporte mensual llega 5 días antes de `paga_hasta` |
 | S-09 | Los mensajes a suscriptores salen del 67671888, de forma asistida |
