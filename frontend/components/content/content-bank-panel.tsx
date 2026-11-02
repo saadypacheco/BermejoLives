@@ -86,7 +86,10 @@ export function BancoDelComercio({ comercioId, api, titulo, detalle, suscriptor,
     setErr("");
     try {
       const r = await api.listar(comercioId);
-      if (vivo.current) setLista(r);
+      if (vivo.current) {
+        setLista(r);
+        if (r.social_consent) setConsent(r.social_consent);
+      }
     } catch (ex) {
       if (vivo.current) setErr(mensajeContent(ex, "No se pudieron cargar las fotos"));
     } finally {
@@ -116,8 +119,8 @@ export function BancoDelComercio({ comercioId, api, titulo, detalle, suscriptor,
   const sirven = lista?.usable_for_video ?? 0;
   const minimo = lista?.min_for_video ?? 4;
   const hayFicha = typeof fotosEnFicha === "number" ? fotosEnFicha : null;
-  // La app de campo no puede leer la autorización: sin dato no se afirma que falte.
-  const sinDato = !consentInicial && consent.granted === null;
+  // Hasta que llega la lista no se sabe si hay autorización: no se afirma que falte.
+  const sinDato = !consentInicial && !lista?.social_consent && consent.granted === null;
 
   return (
     <div style={{ display: "grid", gap: 14 }}>

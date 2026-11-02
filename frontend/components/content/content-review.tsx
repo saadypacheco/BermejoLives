@@ -109,7 +109,7 @@ export function ContentReview({ onCambioCola }: { onCambioCola?: () => void }) {
         <PiezaRevision key={`${p.id}:${p.status}`} pieza={p}
                        onCambio={reemplazar}
                        onAprobada={(x) => quitar(x.id, `Aprobada: ${fechaConDia(x.scheduled_for)} · ${x.comercio?.nombre ?? x.pillar_label}. Ya está en el Paquete del día.`)}
-                       onSaltada={(x) => quitar(x.id, `Saltada: ${fechaConDia(x.scheduled_for)} · ${x.comercio?.nombre ?? x.pillar_label}.`)} />
+                       onSaltada={(x) => quitar(x.id, `Salteada: ${fechaConDia(x.scheduled_for)} · ${x.comercio?.nombre ?? x.pillar_label}.`)} />
       ))}
 
       {enVerde.length > 0 && (
@@ -122,7 +122,7 @@ export function ContentReview({ onCambioCola }: { onCambioCola?: () => void }) {
 
       {conProblemas.map((p) => (
         <PiezaConProblemas key={`${p.id}:${p.status}`} pieza={p} onCambio={reemplazar}
-                           onSaltada={(x) => quitar(x.id, `Saltada: ${fechaConDia(x.scheduled_for)} · ${x.comercio?.nombre ?? x.pillar_label}.`)} />
+                           onSaltada={(x) => quitar(x.id, `Salteada: ${fechaConDia(x.scheduled_for)} · ${x.comercio?.nombre ?? x.pillar_label}.`)} />
       ))}
 
       {enCola.map((p) => (

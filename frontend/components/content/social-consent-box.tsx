@@ -36,9 +36,8 @@ export function SocialConsentBox({ consent, api, onChange, compacto, estadoDesco
   onChange: (c: SocialConsentResponse) => void;
   /** Sin el recuadro (cuando ya va dentro de otra tarjeta). */
   compacto?: boolean;
-  /** La app de campo no puede LEER la autorización (no hay endpoint de lectura
-   *  para el agente): mientras no registre nada en esta sesión, se dice «sin dato»
-   *  en vez de afirmar que falta. */
+  /** Todavía no se leyó la autorización del servidor: se dice «sin dato» en vez
+   *  de afirmar que falta. */
   estadoDesconocido?: boolean;
 }) {
   const [abierto, setAbierto] = useState(false);
@@ -90,7 +89,7 @@ export function SocialConsentBox({ consent, api, onChange, compacto, estadoDesco
         )}
         {retirada && <Insignia tono="error" icono="aviso">RETIRADA {fechaCortaBo(consent.recorded_at)}</Insignia>}
         {consent.granted === null && !estadoDesconocido && <Insignia tono="error" icono="aviso">SIN AUTORIZAR</Insignia>}
-        {consent.granted === null && estadoDesconocido && <Insignia tono="info" icono="dato">SIN DATO EN ESTE TELÉFONO</Insignia>}
+        {consent.granted === null && estadoDesconocido && <Insignia tono="info" icono="dato">SIN DATO TODAVÍA</Insignia>}
       </div>
 
       {!vigente && !abierto && (

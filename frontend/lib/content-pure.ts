@@ -37,7 +37,7 @@ export const PIECE_STATUS_LABEL: Record<ContentPieceStatus, string> = {
   ready_for_review: "Para revisar",
   approved: "Aprobada",
   published: "Publicada",
-  skipped: "Saltada",
+  skipped: "Salteada",
   failed: "Con problemas",
 };
 
@@ -45,7 +45,7 @@ export const POST_STATUS_LABEL: Record<ContentPostStatus, string> = {
   pending: "Pendiente",
   claimed: "Publicándola",
   posted: "Publicada",
-  skipped: "Saltada",
+  skipped: "Salteada",
 };
 
 export const PILLAR_LABEL: Record<ContentPillar, string> = {

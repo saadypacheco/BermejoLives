@@ -57,7 +57,11 @@ export type ContentAssetResponse = {
   thumb_url: string; file_url: string;
   created_at: string; uploaded_by: string;
 };
-export type ContentAssetListResponse = { items: ContentAssetResponse[]; usable_for_video: number; min_for_video: number };
+export type ContentAssetListResponse = {
+  items: ContentAssetResponse[]; usable_for_video: number; min_for_video: number;
+  /** La autorización vigente del comercio (también la ve el agente desde campo). */
+  social_consent?: SocialConsentResponse;
+};
 export type ContentAssetUploadResponse = {
   ok: true; duplicate: boolean; asset: ContentAssetResponse;
   ficha: { requested: boolean; added: boolean; reason: "tope" | "error" | null };
@@ -69,7 +73,9 @@ export type ContentPostResponse = {
   id: string; network: ContentNetwork; network_label: string;
   status: "pending" | "claimed" | "posted" | "skipped";
   ref_tag: string; caption_text: string;
-  claimed_by: string | null; claimed_at: string | null; claim_expires_at: string | null;
+  /** Correo de quien reclamó (para saber si es mío); en pantalla va `claimed_by_name`. */
+  claimed_by: string | null; claimed_by_name: string | null;
+  claimed_at: string | null; claim_expires_at: string | null;
   posted_by: string | null; posted_at: string | null;
   post_url: string | null; posted_without_link: boolean;
   skip_reason: string | null;

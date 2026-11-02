@@ -109,7 +109,7 @@ export function ContentPostRow({ post, pieceId, onCambio }: {
         {post.status === "pending" && <Insignia icono="reloj" tono="info">{POST_STATUS_LABEL.pending.toUpperCase()}</Insignia>}
         {post.status === "claimed" && (
           <Insignia icono="usuario" tono="aviso">
-            PUBLICANDO · {esMia ? "vos" : (post.claimed_by ?? "alguien")} · hace {minutosDesde(post.claimed_at)} min
+            PUBLICANDO · {esMia ? "vos" : (post.claimed_by_name ?? "alguien")} · hace {minutosDesde(post.claimed_at)} min
           </Insignia>
         )}
         {post.status === "posted" && (
