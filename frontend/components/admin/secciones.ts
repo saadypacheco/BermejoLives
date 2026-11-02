@@ -11,10 +11,10 @@ import type { ModoCiudad } from "@/components/admin-ciudad";
 export type SeccionAdmin =
   | "inicio"
   | "negocios" | "calles" | "lugares" | "importados" | "adornos" | "cambio-numero"
-  | "publicaciones" | "whatsapp" | "difusion" | "reclamos"
+  | "publicaciones" | "whatsapp" | "difusion" | "reclamos" | "banco" | "redes"
   | "catalogo" | "rubros" | "revision-rubros"
   | "cargas"
-  | "planes" | "suscripciones" | "pagos" | "vencimientos"
+  | "planes" | "suscripciones" | "pagos" | "vencimientos" | "suscriptores"
   | "monitoreo" | "kpis" | "demanda" | "compradores"
   | "equipo" | "manuales" | "ayuda";
 
@@ -51,6 +51,10 @@ export const MENU: GrupoMenu[] = [
     { id: "whatsapp", label: "Recepción", icono: "whatsapp", permiso: "whatsapp", ciudad: "pendiente" },
     { id: "difusion", label: "Difusión", icono: "novedades", permiso: "difusion", ciudad: "pendiente" },
     { id: "reclamos", label: "Reclamos", icono: "dax", permiso: "panel", ciudad: "pendiente" },
+    // Contenido para las redes de URUKU (docs/contenido-redes-tecnico.md §9.1): las fotos
+    // del banco y las piezas que se revisan y se publican a mano. Mismo permiso que Difusión.
+    { id: "banco", label: "Banco de contenido", icono: "foto", permiso: "difusion", ciudad: "global" },
+    { id: "redes", label: "Contenido para redes", icono: "video", permiso: "difusion", ciudad: "global" },
   ] },
   { titulo: "Catálogo", secciones: [
     { id: "catalogo", label: "Catálogo", icono: "documentos", permiso: "datos", ciudad: "pendiente" },
@@ -65,6 +69,7 @@ export const MENU: GrupoMenu[] = [
     { id: "suscripciones", label: "Suscripciones", icono: "calendario", permiso: "pagos", ciudad: "filtra" },
     { id: "pagos", label: "Pagos", icono: "pagos", permiso: "pagos", ciudad: "pendiente" },
     { id: "vencimientos", label: "Vencimientos", icono: "aviso", permiso: "moderar", ciudad: "global" },
+    { id: "suscriptores", label: "Cuidar suscriptores", icono: "gente", permiso: "pagos", ciudad: "filtra" },
   ] },
   { titulo: "Análisis", secciones: [
     { id: "monitoreo", label: "Monitoreo", icono: "explorar", permiso: "datos", ciudad: "pendiente" },

@@ -52,6 +52,9 @@ import { AsistentePanel } from "@/components/asistente-panel";
 import { PlanesPanel } from "@/components/planes-panel";
 import { ContactosPanel } from "@/components/contactos-panel";
 import { EquipoPanel } from "@/components/equipo-panel";
+import { ContentBankPanel } from "@/components/content/content-bank-panel";
+import { ContentRedesPanel } from "@/components/content/content-redes-panel";
+import { SubscribersPanel } from "@/components/subscribers/subscribers-panel";
 import { ManualesPanel } from "@/components/admin/manuales-panel";
 import { puedo } from "@/lib/api";
 import { linkWhatsapp, mensajePasarQr, mensajePedirFotos, whatsappValido } from "@/lib/ficha-whatsapp";
@@ -524,6 +527,9 @@ function AdminPanel() {
       {permitida && seccion === "cargas" && ciudadLista && <CargasPanel />}
       {permitida && seccion === "importados" && ciudadLista && <ImportadosPanel rubros={rubros} ciudad={ciudad} />}
       {permitida && seccion === "vencimientos" && <VencimientosPanel />}
+      {permitida && seccion === "banco" && <ContentBankPanel />}
+      {permitida && seccion === "redes" && <ContentRedesPanel />}
+      {permitida && seccion === "suscriptores" && ciudadLista && <SubscribersPanel ciudadSlug={slugCiudad} />}
 
       {permitida && seccion === "negocios" && (
         ciudadLista ? (
