@@ -387,6 +387,12 @@ class Settings(BaseSettings):
     content_care_hour: int = 7                 # el job diario de cuidado de suscriptores
     content_grace_days: int = 7                # días de gracia después de vencido el pago
     content_claim_minutes: int = 20            # cuánto dura «la estoy publicando»
+    # Motor del video (docs/contenido-redes-tecnico.md §16): `kit` = el contenedor `reels` (Chromium + ffmpeg,
+    # plantillas v2 del kit) al que el backend le pide el render por HTTP; `pillow` = el motor v1 dentro del
+    # backend (para la PC sin Docker y como respaldo). Con `kit` y sin token, el worker no toma trabajos.
+    content_render_engine: str = "kit"
+    renderer_url: str = "http://buscadonde-reels:8090"
+    renderer_token: str = ""
 
     def content_networks_list(self) -> list[str]:
         validas = ("tiktok", "instagram", "facebook", "wa_channel")

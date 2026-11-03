@@ -34,7 +34,8 @@ from app.core.sesion_comercio import require_comercio_vigente
 from app.db.content_repository import ContentConflict, ContentRepo, get_content_repo
 from app.db.repository import Repo, get_repo
 from app.services import (cargas, content_captions, content_consent, content_posts, content_present,
-                          content_public, content_render, content_selector, content_storage, fotos_galeria)
+                          content_public, content_render, content_selector, content_storage, content_video_texts,
+                          fotos_galeria)
 from app.services.imagenes import subir_foto_galeria
 
 router = APIRouter()
@@ -512,6 +513,104 @@ def admin_edit_piece(piece_id: str, body: ContentPieceUpdate, _claims: dict = De
     nueva = crepo.update_piece(piece_id, patch, if_status=["queued", "rendering", "ready_for_review", "failed"])
     if not nueva:
         raise HTTPException(status_code=409, detail="La pieza ya está aprobada")
+    return _devolver(crepo, piece_id)
+
+
+# ── textos del video v2 (§16.9) ──
+
+#: Estados en los que se pueden cambiar los textos del video (y re-armarlo).
+_ESTADOS_DE_TEXTOS = ["queued", "ready_for_review", "failed"]
+_MSG_NO_EDITABLE = {
+    "rendering": "La pieza se está armando: esperá a que termine para cambiar los textos del video",
+    "approved": "La pieza ya está aprobada",
+    "published": "La pieza ya está publicada",
+    "skipped": "La pieza fue salteada",
+}
+
+
+class VideoTextsChip(BaseModel):
+    """La frase de UNA foto. `source_id` es el `id` de la fuente (`sources[].id` de la pieza)."""
+    source_id: str = Field(max_length=64)
+    text: str | None = Field(default=None, max_length=200)
+
+
+class VideoTextsUpdate(BaseModel):
+    kick: str | None = Field(default=None, max_length=200)
+    title1: str = Field(max_length=200)
+    title2: str = Field(max_length=200)
+    subtitle: str | None = Field(default=None, max_length=200)
+    search_term: str = Field(max_length=200)
+    chips: list[VideoTextsChip] = Field(default_factory=list, max_length=12)
+    photo_flags_ok: bool | None = None
+
+
+def _exigir_pieza_editable(pieza: dict) -> None:
+    """409 si la pieza no admite cambiar los textos del video."""
+    if pieza["status"] not in _ESTADOS_DE_TEXTOS:
+        raise HTTPException(status_code=409, detail=_MSG_NO_EDITABLE.get(pieza["status"], "La pieza no se puede cambiar ahora"))
+
+
+def _volver_a_armar(pieza: dict) -> dict:
+    """El UPDATE que re-encola el video: sólo si estaba lista o con problemas (en `queued` ya está en la cola).
+    El video viejo queda hasta que el nuevo termine bien (§4.4)."""
+    if pieza["status"] in ("ready_for_review", "failed"):
+        return {"status": "queued", "render_attempts": 0, "render_error": None, "render_started_at": None,
+                "render_next_at": datetime.now(timezone.utc).isoformat()}
+    return {}
+
+
+@router.patch("/admin/content/pieces/{piece_id}/video-texts")
+def admin_edit_video_texts(piece_id: str, body: VideoTextsUpdate, _claims: dict = Depends(_permiso_difusion),
+                           crepo: ContentRepo = Depends(get_content_repo)) -> dict:
+    """Guarda los textos del video que corrigió una persona. Pasan por el mismo validador (400 con la objeción)
+    y la pieza vuelve a la cola para armarse de nuevo (en `queued` sólo se guardan). En `ofertas` el chip es el
+    nombre del comercio y no se edita: las frases que lleguen se ignoran."""
+    pieza = _pieza_o_404(crepo, piece_id)
+    _exigir_pieza_editable(pieza)
+    fuentes = crepo.list_sources(piece_id)
+    por_id = {f["id"]: f for f in fuentes}
+    if any(c.source_id not in por_id for c in body.chips):
+        raise HTTPException(status_code=400, detail="Una de las frases no es de una foto de esta pieza")
+    pilar = pieza["pillar"]
+    textos = content_video_texts.normalizar_textos(body.model_dump())
+    nuevos = {} if pilar == "ofertas" else {c.source_id: content_video_texts.limpiar(c.text) for c in body.chips}
+    chips = [nuevos[f["id"]] if f["id"] in nuevos else f.get("chip_text") for f in fuentes]
+    objeciones = content_video_texts.validate_video_texts(textos, chips, pilar)
+    if objeciones:
+        raise HTTPException(status_code=400, detail="; ".join(objeciones))
+    # Si los textos y las frases quedan IGUAL a lo guardado y sólo cambia «revisé las fotos marcadas», se guarda
+    # eso solo: no hay nada que volver a armar, así que no se re-encola ni se toca el estado.
+    guardados = pieza.get("video_texts") or {}
+    iguales = bool(guardados) and all(guardados.get(c) == textos[c] for c in content_video_texts.CAMPOS) and all(
+        texto == por_id[fuente_id].get("chip_text") for fuente_id, texto in nuevos.items())
+    if iguales:
+        if body.photo_flags_ok is not None and body.photo_flags_ok != bool(pieza.get("photo_flags_ok")):
+            if not crepo.update_piece(piece_id, {"photo_flags_ok": body.photo_flags_ok}, if_status=_ESTADOS_DE_TEXTOS):
+                raise HTTPException(status_code=409, detail="La pieza cambió mientras tanto, abrila de nuevo")
+        return _devolver(crepo, piece_id)
+    for fuente_id, texto in nuevos.items():
+        crepo.update_source(fuente_id, {"chip_text": texto})
+    patch = {"video_texts": content_video_texts.armar_textos(textos, pilar, pieza.get("facts") or {}),
+             "video_texts_engine": "human", "video_texts_checks": [], "template_version": 2,
+             **_volver_a_armar(pieza)}
+    if body.photo_flags_ok is not None:
+        patch["photo_flags_ok"] = body.photo_flags_ok
+    if not crepo.update_piece(piece_id, patch, if_status=_ESTADOS_DE_TEXTOS):
+        raise HTTPException(status_code=409, detail="La pieza cambió mientras tanto, abrila de nuevo")
+    return _devolver(crepo, piece_id)
+
+
+@router.post("/admin/content/pieces/{piece_id}/video-texts/propose")
+def admin_propose_video_texts(piece_id: str, _claims: dict = Depends(_permiso_difusion),
+                              crepo: ContentRepo = Depends(get_content_repo)) -> dict:
+    """«Pedir otra propuesta»: vuelve a pedirle a Gemini las frases mirando las fotos y re-encola el video (mismos
+    409 que el PATCH). Sin Gemini, o si falla, salen los textos fijos. Pisa lo que se haya escrito a mano."""
+    pieza = _pieza_o_404(crepo, piece_id)
+    _exigir_pieza_editable(pieza)
+    nueva = content_video_texts.proponer_y_guardar(crepo, pieza, {**_volver_a_armar(pieza), "template_version": 2},
+                                                   if_status=_ESTADOS_DE_TEXTOS)
+    if not nueva:
+        raise HTTPException(status_code=409, detail="La pieza cambió mientras tanto, abrila de nuevo")
     return _devolver(crepo, piece_id)
 
 

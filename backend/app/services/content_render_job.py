@@ -331,7 +331,9 @@ def armar_tramos(facts: dict, slides: list[dict]) -> list[Tramo]:
             raise RenderError(f"No se pudo abrir una foto: {exc}", retryable=False) from exc
         banda = None
         if pillar == "ofertas":
-            banda = next((i for i in items if f"{i.get('nombre')} · {i.get('precio')}" == s.get("caption_fact")), None)
+            # Las piezas nuevas no llevan precio (§16.1): la fuente trae sólo el nombre del comercio.
+            banda = next((i for i in items if s.get("caption_fact") in (f"{i.get('nombre')} · {i.get('precio')}",
+                                                                        i.get("nombre") if not i.get("precio") else None)), None)
             if banda is None:
                 partes = (s.get("caption_fact") or "").split(" · ")
                 banda = {"nombre": partes[0], "precio": partes[1] if len(partes) > 1 else ""}

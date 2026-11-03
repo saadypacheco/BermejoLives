@@ -31,14 +31,14 @@ from fastapi import HTTPException
 
 from app.core.codigo import _RE_CON_PREFIJO
 from app.core.config import settings
-from app.services import (cargas, content_captions, content_consent, content_posts, content_storage, fotos_galeria,
-                          planes)
-from app.services.difusion import _precio
+from app.services import (cargas, content_captions, content_consent, content_posts, content_storage,
+                          content_video_texts, fotos_galeria, planes)
 
 logger = structlog.get_logger()
 
 MIN_FOTOS = 4
-MAX_FOTOS_COMERCIO = 7
+#: El video v2 lleva de 4 a 6 fotos (§16.4).
+MAX_FOTOS_COMERCIO = 6
 MAX_OFERTAS = 6
 MIN_OFERTAS = 4
 #: Las fotos que salieron en una pieza no se repiten durante estos días.
@@ -305,24 +305,28 @@ def _guardar_pieza(crepo, row: dict, fuentes: list[dict]) -> dict | None:
         return None
     crepo.insert_sources([{"piece_id": pieza["id"], "position": i, "source_type": f["source_type"],
                            "source_id": f.get("source_id"), "comercio_id": f["comercio_id"],
-                           "file_ref": f["file_ref"], "caption_fact": f.get("caption_fact")}
+                           "file_ref": f["file_ref"], "caption_fact": f.get("caption_fact"),
+                           "chip_text": f.get("chip_text"), "photo_flags": f.get("photo_flags") or [],
+                           "focus_y": f.get("focus_y")}
                           for i, f in enumerate(fuentes)])
     return pieza
 
 
 def _fila_de_pieza(week_start: date, dia: date, pilar: str, facts: dict, textos: dict, actor: str,
                    comercio: dict | None = None, ciudad_id: str | None = None,
-                   ciclo_inicio: date | None = None) -> dict:
+                   ciclo_inicio: date | None = None, video: dict | None = None) -> dict:
+    """La fila de una pieza nueva. Siempre v2 (`template_version = 2`, §16.5); `video` son las columnas de los
+    textos del video que salen de `content_video_texts.campos_de_pieza`."""
     return {
         "week_start": week_start.isoformat(), "scheduled_for": dia.isoformat(), "pillar": pilar,
         "comercio_id": comercio["id"] if comercio else None,
         "ciudad_id": ciudad_id or (comercio or {}).get("ciudad_id"),
         "counts_for_quota": bool(comercio), "quota_cycle_start": ciclo_inicio.isoformat() if ciclo_inicio else None,
-        "status": "queued", "facts": facts, "template": pilar, "template_version": 1,
+        "status": "queued", "facts": facts, "template": pilar, "template_version": 2,
         "caption_tiktok": textos["caption_tiktok"], "caption_ig": textos["caption_ig"],
         "caption_channel": textos["caption_channel"], "hashtags": textos["hashtags"],
         "caption_engine": textos["caption_engine"], "caption_checks": textos["caption_checks"],
-        "created_by": actor,
+        "created_by": actor, **(video or {}),
     }
 
 
@@ -381,9 +385,13 @@ def _plan_comercio(crepo, week_start: date, dia: date, actor: str, hoy: date, ca
             continue
         facts = content_captions.build_facts_comercio(c)
         textos = content_captions.generate_captions(facts)
+        # Las frases del video, mirando las fotos (§16.5). Nunca frena la cola: sin Gemini salen los textos fijos.
+        prop = content_video_texts.proponer({"pillar": "comercio_del_dia", "facts": facts}, fotos, c)
+        fotos, _ = content_video_texts.aplicar_en_memoria(fotos, prop, "comercio_del_dia")
         pieza = _guardar_pieza(
             crepo, _fila_de_pieza(week_start, dia, "comercio_del_dia", facts, textos, actor, c,
-                                  ciclo_inicio=s["ciclo_inicio"]), fotos)
+                                  ciclo_inicio=s["ciclo_inicio"],
+                                  video=content_video_texts.campos_de_pieza("comercio_del_dia", facts, prop)), fotos)
         if pieza is None:
             return None            # alguien ocupó el lugar mientras tanto
         resumen["created"] += 1
@@ -458,19 +466,24 @@ def _plan_ofertas(repo, crepo, week_start: date, dia: date, actor: str, hoy: dat
     items, fuentes = [], []
     for x in elegidas:
         o, c = x["oferta"], x["comercio"]
-        item = {"nombre": c.get("nombre"), "precio": _precio(o),
-                "titulo_corto": limpiar_titulo(o.get("titulo") or o.get("descripcion"))}
+        # Sin precio (§16.1): ni en el video ni en los textos. «Consulte precio directo con el local».
+        item = {"nombre": c.get("nombre"), "titulo_corto": limpiar_titulo(o.get("titulo") or o.get("descripcion"))}
         items.append(item)
     ciudad = ciudades.get(ciudad_id) or (elegidas[0]["comercio"].get("ciudades") or {})
     facts = content_captions.build_facts_ofertas(ciudad, items)
     for x, item in zip(elegidas, facts["items"]):
         o, c = x["oferta"], x["comercio"]
+        nombre = item.get("nombre", "")
         fuentes.append({"source_type": "offer", "source_id": o["id"], "comercio_id": c["id"],
-                        "file_ref": o["imagen_url"],
-                        "caption_fact": f"{item.get('nombre', '')} · {item.get('precio', '')}"[:80]})
+                        "file_ref": o["imagen_url"], "caption_fact": nombre[:80],
+                        "chip_text": content_video_texts.chip_de_nombre(nombre)})
     textos = content_captions.generate_captions(facts)
-    pieza = _guardar_pieza(crepo, _fila_de_pieza(week_start, dia, "ofertas", facts, textos, actor,
-                                                 ciudad_id=ciudad_id or None), fuentes)
+    # El chip de cada foto es el nombre del comercio (de la base); Gemini propone sólo el gancho y las marcas.
+    prop = content_video_texts.proponer({"pillar": "ofertas", "facts": facts}, fuentes)
+    fuentes, _ = content_video_texts.aplicar_en_memoria(fuentes, prop, "ofertas")
+    pieza = _guardar_pieza(crepo, _fila_de_pieza(
+        week_start, dia, "ofertas", facts, textos, actor, ciudad_id=ciudad_id or None,
+        video=content_video_texts.campos_de_pieza("ofertas", facts, prop)), fuentes)
     if pieza is None:
         return None
     resumen["created"] += 1
@@ -506,12 +519,16 @@ def cambiar_fotos(crepo, pieza: dict, remove_positions: list[int], hoy: date | N
     # `unique (piece_id, position)` cuenta TAMBIÉN las fuentes ya dadas de baja: la posición nueva sale de todas.
     siguiente = max((f["position"] for f in crepo.list_sources(pieza["id"], only_active=False)), default=-1) + 1
     # Primero se suman los reemplazos y recién después se da de baja lo viejo: si el insert falla, no se pierde nada.
-    crepo.insert_sources([{"piece_id": pieza["id"], "position": siguiente + i, "source_type": n["source_type"],
-                           "source_id": n.get("source_id"), "comercio_id": n["comercio_id"],
-                           "file_ref": n["file_ref"], "caption_fact": n.get("caption_fact")}
-                          for i, n in enumerate(nuevas)])
+    insertadas = crepo.insert_sources([
+        {"piece_id": pieza["id"], "position": siguiente + i, "source_type": n["source_type"],
+         "source_id": n.get("source_id"), "comercio_id": n["comercio_id"],
+         "file_ref": n["file_ref"], "caption_fact": n.get("caption_fact")}
+        for i, n in enumerate(nuevas)])
     for f in removidas:
         crepo.deactivate_source(pieza["id"], f["position"])
+    # Sólo la frase, la marca y el encuadre de la foto NUEVA (§16.5); los textos de la pieza no se tocan. Después de
+    # dar de baja las viejas: así la cuenta de «quedan 4 sin marca» es la de verdad. No frena el cambio si falla.
+    content_video_texts.proponer_para_nuevas(crepo, pieza, insertadas)
     return {"quitadas": len(removidas), "agregadas": len(nuevas)}
 
 

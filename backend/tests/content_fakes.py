@@ -123,7 +123,8 @@ class FakeContentRepo:
         fila = {"id": str(uuid.uuid4()), "activo": True, "status": "queued", "render_attempts": 0, "render_next_at": self._now(),
                 "caption_edited": False, "hashtags": [], "caption_checks": [], "created_at": self._tic(),
                 "updated_at": self._now(), "files_purged_at": None, "video_path": None, "cover_path": None,
-                "template_version": 1, **row}
+                "template_version": 1, "video_texts": None, "video_texts_engine": None, "video_texts_checks": [],
+                "photo_flags_ok": False, **row}
         self.pieces[fila["id"]] = fila
         return fila
 
@@ -202,7 +203,8 @@ class FakeContentRepo:
             # `unique (piece_id, position)` de la 0181: cuenta también las fuentes inactivas.
             if any(s["piece_id"] == r["piece_id"] and s["position"] == r["position"] for s in self.sources):
                 raise ContentConflict("duplicate key value violates unique constraint (piece_id, position)")
-            fila = {"id": str(uuid.uuid4()), "activo": True, "created_at": self._tic(), **r}
+            fila = {"id": str(uuid.uuid4()), "activo": True, "created_at": self._tic(), "chip_text": None,
+                    "photo_flags": [], "focus_y": None, **r}
             self.sources.append(fila)
             out.append(fila)
         return out
@@ -215,6 +217,13 @@ class FakeContentRepo:
         for s in self.sources:
             if s["piece_id"] == piece_id and s["position"] == position:
                 s["activo"] = False
+
+    def update_source(self, source_id, patch):
+        for s in self.sources:
+            if s["id"] == source_id:
+                s.update(patch)
+                return s
+        return None
 
     def recent_sources(self, since):
         out = []

@@ -180,8 +180,8 @@ def test_la_posicion_de_un_reemplazo_cuenta_tambien_las_fuentes_dadas_de_baja(re
     assert sel.cambiar_fotos(crepo, p, [6], HOY) == {"quitadas": 1, "agregadas": 0}     # sin reemplazos: queda inactiva la 6
     banco(crepo, "com-1", 3, w=1700)
     r = sel.cambiar_fotos(crepo, p, [0], HOY)                                           # antes: choca con (pieza, 6)
-    assert r == {"quitadas": 1, "agregadas": 2}
-    assert sorted(f["position"] for f in crepo.list_sources(p["id"])) == [1, 2, 3, 4, 5, 7, 8]
+    assert r == {"quitadas": 1, "agregadas": 1}                                         # el video v2 admite hasta 6 fotos
+    assert sorted(f["position"] for f in crepo.list_sources(p["id"])) == [1, 2, 3, 4, 5, 7]
 
 
 def test_si_falla_insertar_el_reemplazo_no_se_da_de_baja_nada(repo, crepo, monkeypatch):
@@ -288,9 +288,9 @@ def test_el_validador_rechaza_links_usuarios_dominios_ajenos_y_numeros_largos(te
 
 
 def test_el_validador_acepta_el_dominio_propio_y_un_texto_normal():
-    ok = "Local com-1 en Bermejo. Abre todos los días. Buscalo en uruku.bo"
+    ok = "Local com-1 en Bermejo. Abre todos los días. Búsquelo en uruku.bo"
     assert content_captions.validate_caption(ok, FACTS, "instagram") == []
-    assert content_captions.validate_caption("Local com-1, calle Sucre 123. Buscalo en uruku.bo.", FACTS, "tiktok") == [
+    assert content_captions.validate_caption("Local com-1, calle Sucre 123. Búsquelo en uruku.bo.", FACTS, "tiktok") == [
         "El número 123 no está en los datos"]
 
 
