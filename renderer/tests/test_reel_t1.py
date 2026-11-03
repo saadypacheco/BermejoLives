@@ -215,6 +215,8 @@ def test_foto_que_es_symlink_afuera_de_la_carpeta(make_job, tmp_path_factory):
 
 
 @pytest.mark.parametrize("campo,valor", [("out_video", "../video.mp4"), ("out_video", "otro.mp4"), ("out_video", "/tmp/x.mp4"),
+                                         ("out_video", "video.mp4"), ("out_cover", "cover.jpg"),
+                                         ("out_video", "out/../video.mp4"),
                                          ("out_cover", "cover.png"), ("out_cover", "../cover.jpg"), ("out_cover", None)])
 def test_nombres_de_salida_fijos(make_job, campo, valor):
     _, _, job_dir = make_job(4, **{campo: valor})
@@ -286,4 +288,35 @@ def test_job_json_gigante(make_job):
     _, _, job_dir = make_job(4)
     (job_dir / "job.json").write_text(" " * (reel_t1.MAX_JOB_BYTES + 1), encoding="utf-8")
     with pytest.raises(JobError, match="demasiado grande"):
+        load_job(job_dir)
+
+def test_piece_id_con_salto_de_linea_final_no_pasa():
+    with pytest.raises(JobError):
+        reel_t1.parse_piece_id("12345678-1234-1234-1234-123456789abc\n")
+
+
+def test_nombre_de_foto_con_salto_de_linea_final_no_pasa(make_job):
+    _, _, job_dir = make_job(4, slides=[{"file": f"s{i}.jpg" + ("\n" if i == 0 else ""), "chip": None, "focus_y": 0.3}
+                                       for i in range(4)])
+    with pytest.raises(JobError, match="inválido"):
+        load_job(job_dir)
+
+
+def test_los_textos_se_normalizan_y_pierden_los_caracteres_invisibles(make_job):
+    _, piece_id, job_dir = make_job(4)
+    data = json.loads((job_dir / "job.json").read_text(encoding="utf-8"))
+    data["texts"]["title1"] = "Cam\u200bperas\u202e \uff46\uff55\uff4c\uff4c"  # ancho cero, bidi y ancho completo
+    data["slides"][0]["chip"] = "Ofer\u2060ta"
+    (job_dir / "job.json").write_text(json.dumps(data), encoding="utf-8")
+    job = load_job(job_dir)
+    assert job.texts["title1"] == "Camperas full"
+    assert job.slides[0].chip == "Oferta"
+
+
+def test_un_texto_obligatorio_que_queda_vacio_tras_limpiar_se_rechaza(make_job):
+    _, _, job_dir = make_job(4)
+    data = json.loads((job_dir / "job.json").read_text(encoding="utf-8"))
+    data["texts"]["title1"] = "\u200b\u200d"
+    (job_dir / "job.json").write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(JobError, match="Falta"):
         load_job(job_dir)

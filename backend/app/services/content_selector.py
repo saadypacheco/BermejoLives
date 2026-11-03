@@ -360,7 +360,7 @@ def plan_week(repo, crepo, week_start: date, actor: str = "selector", ahora: dat
 
     ocupados = {(p["scheduled_for"], p["pillar"]) for p in crepo.list_pieces(
         date_from=week_start.isoformat(), date_to=(week_start + timedelta(days=6)).isoformat())
-        if p.get("status") not in ("skipped", "failed")}
+        if p.get("status") not in ("skipped", "failed") and (p.get("origin") or "selector") == "selector"}
     usadas = claves_usadas(crepo, hoy)
 
     for dia, pilar in slots:
@@ -515,6 +515,8 @@ def cambiar_fotos(crepo, pieza: dict, remove_positions: list[int], hoy: date | N
     quitar = {int(p) for p in remove_positions}
     if not quitar or not quitar <= {f["position"] for f in activas}:
         raise HTTPException(status_code=400, detail="Elegí fotos de la pieza para quitar")
+    if pieza.get("pillar") in content_video_texts.PILARES_CON_NOMBRE:
+        return _cambiar_fotos_de_compilado(crepo, pieza, activas, quitar, hoy)
     quedan = [f for f in activas if f["position"] not in quitar]
     removidas = [f for f in activas if f["position"] in quitar]
     if pieza.get("comercio_id"):
@@ -522,7 +524,7 @@ def cambiar_fotos(crepo, pieza: dict, remove_positions: list[int], hoy: date | N
         # Las que ya se quitaron antes (inactivas) tampoco vuelven.
         excluir = {_clave_de_uso(f) for f in crepo.list_sources(pieza["id"], only_active=False)}
         nuevas = elegir_fotos(crepo, comercio, MAX_FOTOS_COMERCIO - len(quedan), hoy,
-                              claves_usadas(crepo, hoy) - {_clave_de_uso(f) for f in activas}, excluir)
+                              _usadas_para_cambiar(crepo, pieza, activas, hoy), excluir)
     else:
         nuevas = []
     if len(quedan) + len(nuevas) < MIN_FOTOS:
@@ -544,6 +546,101 @@ def cambiar_fotos(crepo, pieza: dict, remove_positions: list[int], hoy: date | N
     # dar de baja las viejas: así la cuenta de «quedan 4 sin marca» es la de verdad. No frena el cambio si falla.
     content_video_texts.proponer_para_nuevas(crepo, pieza, insertadas)
     return {"quitadas": len(removidas), "agregadas": len(nuevas)}
+
+
+def _usadas_para_cambiar(crepo, pieza: dict, activas: list[dict], hoy: date) -> set[tuple]:
+    """Las fotos que NO se pueden ofrecer de reemplazo. Un pedido a mano no mira la regla de «no repetir una foto en
+    60 días» (igual que al pedirlo): sólo vale lo que la pieza misma ya usó (eso va en `excluir`)."""
+    if pieza.get("origin") == "pedido":
+        return set()
+    return claves_usadas(crepo, hoy) - {_clave_de_uso(f) for f in activas}
+
+
+MSG_COMPILADO_CORTO = ("No hay otra foto que sirva de ese comercio y sin él el video quedaría con menos de "
+                       f"{MIN_OFERTAS} comercios")
+
+
+def _cambiar_fotos_de_compilado(crepo, pieza: dict, activas: list[dict], quitar: set[int], hoy: date) -> dict:
+    """«Cambiar fotos» de un video de rubro u ofertas: cada foto es de UN comercio (el chip es su nombre).
+
+    - Rubro: se busca UNA foto de reemplazo del mismo comercio (banco más reciente, portada, galería).
+    - Sin reemplazo —y siempre en ofertas, donde la foto es la de la oferta— se quita el comercio: se rehacen
+      `facts.items`, los textos de la red y los del video (fijos, o la propuesta de Gemini si está prendida), igual que
+      al retirar su autorización (`quitar_comercio_de_compilado`).
+    - Si el video quedaría con menos de `MIN_OFERTAS` comercios: 409 `no_more_photos` (no se crea ninguna tarea).
+
+    Las fotos usadas dentro de la propia pieza no vuelven; un pedido a mano no mira la regla de los 60 días."""
+    facts = pieza.get("facts") or {}
+    items = facts.get("items") or []
+    if len(items) != len(activas):
+        raise HTTPException(status_code=409, detail={
+            "codigo": "no_more_photos", "mensaje": "Esta pieza no se puede cambiar: volvé a pedirla"})
+    pillar = pieza["pillar"]
+    item_de = {f["position"]: it for f, it in zip(activas, items)}
+    excluir = {_clave_de_uso(f) for f in crepo.list_sources(pieza["id"], only_active=False)}
+    usadas = _usadas_para_cambiar(crepo, pieza, activas, hoy)
+    reemplazos: list[tuple[dict, dict]] = []
+    sin_reemplazo: list[dict] = []
+    for f in (f for f in activas if f["position"] in quitar):
+        nueva = []
+        if pillar == "rubro":
+            comercio = crepo.get_comercio_ficha(f["comercio_id"])
+            if comercio and comercio.get("activo") is not False and not comercio.get("suspendido"):
+                nueva = elegir_fotos(crepo, comercio, 1, hoy, usadas, excluir, preferir_banco=True, con_ofertas=False)
+        if nueva:
+            excluir.add(_clave_de_uso(nueva[0]))
+            reemplazos.append((f, nueva[0]))
+        else:
+            sin_reemplazo.append(f)
+    quedan = [f for f in activas if f["position"] not in quitar]
+    if len(quedan) + len(reemplazos) < MIN_OFERTAS:
+        raise HTTPException(status_code=409, detail={"codigo": "no_more_photos", "mensaje": MSG_COMPILADO_CORTO})
+    siguiente = max((f["position"] for f in crepo.list_sources(pieza["id"], only_active=False)), default=-1) + 1
+    filas = []
+    for i, (vieja, nueva) in enumerate(reemplazos):
+        nombre = (item_de.get(vieja["position"]) or {}).get("nombre", "")
+        filas.append({"piece_id": pieza["id"], "position": siguiente + i, "source_type": nueva["source_type"],
+                      "source_id": nueva.get("source_id"), "comercio_id": nueva["comercio_id"],
+                      "file_ref": nueva["file_ref"], "caption_fact": nombre[:80],
+                      "chip_text": content_video_texts.chip_de_nombre(nombre)})
+    # Primero se suman los reemplazos y recién después se da de baja lo viejo: si el insert falla, no se pierde nada.
+    insertadas = crepo.insert_sources(filas) if filas else []
+    for f in [v for v, _ in reemplazos] + sin_reemplazo:
+        crepo.deactivate_source(pieza["id"], f["position"])
+    # Los items siguen el orden de las fuentes: las que quedan y, al final, las de los reemplazos.
+    nuevos_items = [item_de[f["position"]] for f in quedan] + [item_de[v["position"]] for v, _ in reemplazos]
+    if sin_reemplazo:
+        patch = _patch_de_compilado(crepo, pieza, nuevos_items, quedan + (insertadas or []))
+    else:
+        patch = {"facts": {**facts, "items": nuevos_items}}
+    crepo.update_piece(pieza["id"], patch)
+    logger.info("content.compilado_fotos_cambiadas", pieza=pieza["id"], reemplazadas=len(reemplazos),
+                comercios_quitados=len(sin_reemplazo))
+    return {"quitadas": len(quitar), "agregadas": len(reemplazos), "comercios_quitados": len(sin_reemplazo)}
+
+
+def _patch_de_compilado(crepo, pieza: dict, nuevos_items: list[dict], fuentes: list[dict]) -> dict:
+    """Lo que cambia de una pieza `ofertas` o `rubro` cuando se le saca un comercio: `facts` con los `items` que
+    quedan, los textos de las redes (plantilla fija) y los textos del video (fijos, o la propuesta de Gemini si el
+    interruptor está prendido; nunca los de antes, que podían nombrar al comercio quitado)."""
+    facts = pieza.get("facts") or {}
+    pillar = pieza.get("pillar") or facts.get("pillar")
+    if pillar == "rubro":
+        nuevos_facts = content_captions.build_facts_rubro(
+            {"nombre": facts.get("rubro"), "slug": facts.get("rubro_slug")},
+            {"nombre": facts.get("ciudad"), "slug": facts.get("ciudad_slug"), "departamento": facts.get("departamento")},
+            nuevos_items)
+    else:
+        nuevos_facts = content_captions.build_facts_ofertas(
+            {"nombre": facts.get("ciudad"), "departamento": facts.get("departamento")}, nuevos_items)
+    textos = content_captions.template_captions(nuevos_facts)
+    checks = content_captions.validate_piece(nuevos_facts, textos["caption_tiktok"], textos["caption_ig"],
+                                             textos["caption_channel"], textos["hashtags"])
+    prop = content_video_texts.proponer({"pillar": pillar, "facts": nuevos_facts}, fuentes, crepo=crepo)
+    return {"facts": nuevos_facts, "caption_tiktok": textos["caption_tiktok"], "caption_ig": textos["caption_ig"],
+            "caption_channel": textos["caption_channel"], "hashtags": textos["hashtags"], "caption_engine": "template",
+            "caption_checks": checks, "caption_edited": False,
+            **content_video_texts.campos_de_pieza(pillar, nuevos_facts, prop)}
 
 
 def pedir_fotos_si_faltan(crepo, pieza: dict, hoy: date | None = None) -> None:
@@ -617,23 +714,11 @@ def quitar_comercio_de_compilado(crepo, pieza: dict, comercio_id: str, actor: st
         return "skipped" if content_consent.saltear_pieza(crepo, pieza, actor, ahora) else None
     posiciones = {f["position"] for f in quitar}
     nuevos = [it for f, it in zip(activas, items) if f["position"] not in posiciones]
-    if facts.get("pillar") == "rubro":
-        nuevos_facts = content_captions.build_facts_rubro(
-            {"nombre": facts.get("rubro"), "slug": facts.get("rubro_slug")},
-            {"nombre": facts.get("ciudad"), "slug": facts.get("ciudad_slug"), "departamento": facts.get("departamento")},
-            nuevos)
-    else:
-        nuevos_facts = content_captions.build_facts_ofertas(
-            {"nombre": facts.get("ciudad"), "departamento": facts.get("departamento")}, nuevos)
-    textos = content_captions.template_captions(nuevos_facts)
-    checks = content_captions.validate_piece(nuevos_facts, textos["caption_tiktok"], textos["caption_ig"],
-                                             textos["caption_channel"], textos["hashtags"])
+    restantes = [f for f in activas if f["position"] not in posiciones]
+    extra = _patch_de_compilado(crepo, pieza, nuevos, restantes)
     for f in quitar:
         crepo.deactivate_source(pieza["id"], f["position"])
-    nueva = _volver_a_la_cola(crepo, pieza, {
-        "facts": nuevos_facts, "caption_tiktok": textos["caption_tiktok"], "caption_ig": textos["caption_ig"],
-        "caption_channel": textos["caption_channel"], "hashtags": textos["hashtags"], "caption_engine": "template",
-        "caption_checks": checks, "caption_edited": False})
+    nueva = _volver_a_la_cola(crepo, pieza, extra)
     logger.info("content.compilado_rearmado", pieza=pieza["id"], sin_comercio=comercio_id, por=actor)
     return "rebuilt" if nueva else None
 

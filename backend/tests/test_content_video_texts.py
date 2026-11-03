@@ -302,7 +302,7 @@ def test_foto_ilegible_no_se_manda_y_queda_sin_chip(crepo, con_key, monkeypatch)
     llamadas = _gemini(monkeypatch, [{**BUENOS, "slides": _slides(4)}])
     r = cvt.proponer(PIEZA, fuentes, crepo=crepo)
     assert len([p for p in llamadas[0] if "inline_data" in p]) == 4
-    assert r["engine"].startswith("gemini:") and r["slides"][0] == {"chip": None, "flags": [], "focus_y": None}
+    assert r["engine"].startswith("gemini:") and r["slides"][0] == {"chip": None, "flags": [], "focus_y": None, "conservar_marcas": True}
     assert r["slides"][1]["chip"] == "Modelo uno"                               # alineado con la foto que SÍ se mandó
 
 

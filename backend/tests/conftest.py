@@ -83,6 +83,8 @@ def _tmp_content_dir(tmp_path, monkeypatch):
     content_selector.reiniciar_intentos()
     cost_switches.reiniciar_cache()      # el interruptor de Gemini se recuerda 30 s en memoria
     subscriber_care.reiniciar_dia()
+    from app.api import content as content_api
+    content_api.reiniciar_enfriamiento_de_propuestas()     # «pedir otra propuesta»: una por pieza por minuto
     content_render._estado.update({"actual": None, "ultimo": None, "avisado_sin_ffmpeg": False,
                                    "avisado_dir": False, "avisado_disco": False, "avisado_sin_renderer": False})
     yield

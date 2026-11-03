@@ -393,6 +393,9 @@ class Settings(BaseSettings):
     content_render_engine: str = "kit"
     renderer_url: str = "http://buscadonde-reels:8090"
     renderer_token: str = ""
+    # uid con el que corre el contenedor `reels` (`pwuser` en la imagen de Playwright noble: 1001). Es el dueño de
+    # `tmp/<id>/out/` y el único uid del que se aceptan el video y la portada. Configurable por si la imagen cambia.
+    renderer_uid: int = 1001
 
     def content_networks_list(self) -> list[str]:
         validas = ("tiktok", "instagram", "facebook", "wa_channel")

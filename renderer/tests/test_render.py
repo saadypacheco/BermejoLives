@@ -51,7 +51,7 @@ def test_render_real_de_punta_a_punta_por_http(tmp_path):
     texts = dict(TEXTS, title1="Camperas ¿qué tal?", subtitle="Niños, jóvenes y más: ¡consulte!")
     data = {
         "version": 2, "piece_id": piece_id, "template": "t1", "format": "9x16", "fps": 30, "texts": texts,
-        "icons": ["pin", "whatsapp"], "out_video": "video.mp4", "out_cover": "cover.jpg",
+        "icons": ["pin", "whatsapp"], "out_video": "out/video.mp4", "out_cover": "out/cover.jpg",
         "slides": [{"file": f"s{i}.jpg", "chip": "Eco cuero ñandú" if i % 2 == 0 else None, "focus_y": None} for i in range(4)],
     }
     (job_dir / "job.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
@@ -72,7 +72,7 @@ def test_render_real_de_punta_a_punta_por_http(tmp_path):
     assert body["ok"] is True, body
     assert body["frames"] == 420
     assert 13.5 <= body["duration_s"] <= 14.5
-    video, cover = job_dir / "video.mp4", job_dir / "cover.jpg"
+    video, cover = job_dir / "out" / "video.mp4", job_dir / "out" / "cover.jpg"
     assert body["video_bytes"] == video.stat().st_size > 100 * 1024
     assert cover.stat().st_size > 10 * 1024
     info = json.loads(subprocess.run(
@@ -81,5 +81,6 @@ def test_render_real_de_punta_a_punta_por_http(tmp_path):
     kinds = {s["codec_type"]: s for s in info["streams"]}
     assert (kinds["video"]["width"], kinds["video"]["height"]) == (1080, 1920)
     assert kinds["audio"]["codec_name"] == "aac"
-    # el contenedor sólo escribe video.mp4 y cover.jpg en la carpeta del job
-    assert sorted(p.name for p in job_dir.iterdir()) == ["cover.jpg", "job.json", "s0.jpg", "s1.jpg", "s2.jpg", "s3.jpg", "video.mp4"]
+    # el contenedor sólo escribe out/video.mp4 y out/cover.jpg en la carpeta del job
+    assert sorted(p.name for p in job_dir.iterdir()) == ["job.json", "out", "s0.jpg", "s1.jpg", "s2.jpg", "s3.jpg"]
+    assert sorted(p.name for p in (job_dir / "out").iterdir()) == ["cover.jpg", "video.mp4"]

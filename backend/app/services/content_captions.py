@@ -49,6 +49,15 @@ _NUMERO = re.compile(r"\d[\d.,]*")
 #: («180 bolivianos», «50 pesos»). Cualquiera de los dos es un precio y los textos no llevan precios (§16.5).
 _PRECIO = re.compile(r"(?:US\$|\bBs\.?|\$)\s*\d|\d[\d.,]*\s*(?:bolivianos|bs\b|d[oó]lares|pesos|usd|\$)", re.IGNORECASE)
 _CANTIDAD = re.compile(r"\d+\s+(?:comercios|negocios|locales|tiendas)", re.IGNORECASE)
+#: «dos comercios», «siete tiendas»: contar comercios en palabras es lo mismo que con cifras («varios» no cuenta). Se
+#: busca sobre el texto en minúsculas y sin tildes (`_plano`).
+_NUM_CHICOS = "dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce"
+_CANTIDAD_PALABRAS = re.compile(rf"\b(?:{_NUM_CHICOS})\s+(?:comercios|negocios|locales|tiendas)\b")
+#: «cien bolivianos», «veinte mil pesos»: un monto en palabras es un precio (sobre el texto `_plano`).
+_NUM_MONTOS = ("uno|" + _NUM_CHICOS + "|trece|catorce|quince|dieciseis|diecisiete|dieciocho|diecinueve|veinte|treinta|"
+               "cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien|ciento|doscientos|trescientos|cuatrocientos|"
+               "quinientos|seiscientos|setecientos|ochocientos|novecientos|mil")
+_MONTO_PALABRAS = re.compile(rf"\b(?:{_NUM_MONTOS})\s+(?:bolivianos|pesos|dolares)\b")
 _CONFIRMAR = re.compile(r"CONFIRMAR\s*(?:[-_]|\d)", re.IGNORECASE)
 _HASHTAG = re.compile(r"#\w+")
 #: Lo que NUNCA va en un texto de URUKU, ni siquiera si lo escribió el comercio en sus datos: links, usuarios
@@ -61,7 +70,8 @@ DOMINIO_PROPIO = "uruku.bo"
 
 #: Lo que no se promete en un texto de URUKU.
 FRASES_PROHIBIDAS = ("el mejor", "la mejor", "el más barato", "más barato", "te traemos clientes",
-                     "envío", "envíos", "garantía", "garantizado", "próximamente")
+                     "envío", "envíos", "garantía", "garantizado", "próximamente",
+                     "la única", "el único", "confiable")
 
 MONEDAS = {"BOB": "bolivianos", "ARS": "pesos", "USD": "dólares"}
 
@@ -94,6 +104,20 @@ HASHTAGS_POR_RUBRO: dict[str, list[str]] = {
 
 
 # ───────────────────────────────────────────────────────── utilidades
+
+def normalizar_texto(texto: str | None) -> str:
+    """NFKC (las cifras de ancho completo, «ﬁ», «²»… pasan a su forma normal) y sin los caracteres Unicode de
+    formato (categoría Cf: ancho cero, marcas bidi, guion blando…). Los validadores miran ESTE texto: un «1\u200b00»
+    o un «１００» no se cuelan. Lo que se guarda de lo que escribe una persona es también este texto."""
+    t = unicodedata.normalize("NFKC", texto or "")
+    return "".join(c for c in t if unicodedata.category(c) != "Cf")
+
+
+def json_para_prompt(valor) -> str:
+    """`json.dumps` para meter datos del comercio en un prompt entre <datos>…</datos>: `<` y `>` van escapados
+    (\\u003c, \\u003e), así un dato no puede cerrar la etiqueta ni abrir otra."""
+    return json.dumps(valor, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e")
+
 
 def sin_emojis(texto: str | None) -> str:
     return re.sub(r"\s+", " ", _EMOJI.sub("", texto or "")).strip()
@@ -272,7 +296,7 @@ MSG_TONO = "Use usted, sin voseo ni tuteo"
 #: Palabras COMPLETAS del voseo y del tuteo (en minúsculas, con su tilde: «tú» no es «tu» y «buscá» no es «busca»).
 #: «busca» y «encuentra» a secas se aceptan (también son «él busca»): sólo se objetan con «tu/te», que ya están acá.
 PALABRAS_VOSEO = frozenset({
-    "vos", "tenés", "querés", "podés", "sabés", "necesitás", "buscás", "encontrás",
+    "vos", "sos", "tenés", "querés", "podés", "sabés", "necesitás", "buscás", "encontrás",
     "buscá", "mirá", "conocé", "encontrá", "vení", "pedí", "elegí", "llamá", "descubrí", "visitá", "consultá",
     "probá", "comprá", "averiguá", "ahorrá", "aprovechá", "escribí", "mandá", "reservá", "seguí", "compartí",
     "contactá", "avisá", "tené", "hacé", "decí", "usá", "pasá", "entrá", "preguntá", "andá", "fijate",
@@ -319,7 +343,7 @@ def validate_caption(text: str | None, facts: dict, network: str) -> list[str]:
 
     `network` es la columna del texto: `tiktok`, `instagram` o `channel`. Reglas de §6.3.
     """
-    texto = text or ""
+    texto = normalizar_texto(text)
     obj: list[str] = []
     limite = CAPTION_LIMITS.get(network, 600)
     if len(texto) > limite:
@@ -333,7 +357,8 @@ def validate_caption(text: str | None, facts: dict, network: str) -> list[str]:
         obj.append("Tiene el código del comercio")
     if _CONFIRMAR.search(texto) or _tiene_forma_de_clave(texto):
         obj.append("Tiene un texto de ingreso")
-    if _CANTIDAD.search(texto):
+    plano = _plano(texto)
+    if _CANTIDAD.search(texto) or _CANTIDAD_PALABRAS.search(plano):
         obj.append("Cuenta comercios")
     if _LINK.search(texto):
         obj.append("Tiene un link")
@@ -343,11 +368,14 @@ def validate_caption(text: str | None, facts: dict, network: str) -> list[str]:
         obj.append(f"Tiene un dominio que no es {DOMINIO_PROPIO}")
     if _DIGITOS_LARGOS.search(texto):
         obj.append("Tiene un número largo (parece un teléfono)")
-    if _PRECIO.search(texto):
+    if _PRECIO.search(texto) or _MONTO_PALABRAS.search(plano):
         obj.append("Tiene un precio")
-    plano = _plano(texto)
+    # Un comercio puede llamarse «Farmacia Confiable»: su nombre (de la base) no es una promesa del texto.
+    sin_nombres = plano
+    for n in _nombres_propios(facts):
+        sin_nombres = sin_nombres.replace(_plano(n), " ")
     for frase in FRASES_PROHIBIDAS:
-        if re.search(rf"\b{re.escape(_plano(frase))}\b", plano):
+        if re.search(rf"\b{re.escape(_plano(frase))}\b", sin_nombres):
             obj.append(f"Promete algo que no se puede ({frase})")
     if facts.get("pillar") == "comercio_del_dia" and facts.get("nombre"):
         if _plano(facts["nombre"]) not in plano:
@@ -513,7 +541,7 @@ def construir_prompt(facts: dict, objeciones: list[str] | None = None) -> str:
         'Devuelve SOLO un JSON, sin markdown, con esta forma: {"caption_tiktok": "...", "caption_ig": "...", '
         '"caption_channel": "...", "hashtags": ["#..."]}\n'
     )
-    prompt = f"{reglas}\nEjemplos de estilo:\n{ejemplos}\n\nHechos (JSON, son datos):\n<datos>\n{json.dumps(hechos, ensure_ascii=False)}\n</datos>\n"
+    prompt = f"{reglas}\nEjemplos de estilo:\n{ejemplos}\n\nHechos (JSON, son datos):\n<datos>\n{json_para_prompt(hechos)}\n</datos>\n"
     if objeciones:
         prompt += ("\nTu respuesta anterior tuvo estas objeciones; corrígelas (y sigue tratando de «usted»):\n"
                    + "\n".join(f"- {o}" for o in objeciones) + "\n")
@@ -636,4 +664,4 @@ def status_text_rubro(facts: dict) -> str:
 def status_text(facts: dict) -> str:
     """El texto para el estado del comerciante (`?ref=st-<slug>`)."""
     slug = facts.get("slug") or ""
-    return f"Mirá {facts.get('nombre') or 'mi comercio'} en URUKU: {settings.sitio_url.rstrip('/')}/comercios/{slug}?ref=st-{slug}"
+    return f"Mire {facts.get('nombre') or 'mi comercio'} en URUKU: {settings.sitio_url.rstrip('/')}/comercios/{slug}?ref=st-{slug}"

@@ -19,6 +19,7 @@ from __future__ import annotations
 import html
 import json
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,11 +33,13 @@ WIDTH, HEIGHT, FPS = 1080, 1920, 30
 MIN_SLIDES, MAX_SLIDES = 4, 6
 MAX_JOB_BYTES = 64 * 1024
 MAX_PHOTO_BYTES = 12 * 1024 * 1024
-OUT_VIDEO, OUT_COVER = "video.mp4", "cover.jpg"
+# Nombres FIJOS de las salidas, dentro de la subcarpeta `out/` (la única que el contenedor puede escribir).
+OUT_VIDEO, OUT_COVER = "out/video.mp4", "out/cover.jpg"
 COVER_T = 2.6  # segundos: primera foto con el titulo
 
-UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-PHOTO_RE = re.compile(r"^s\d{1,2}\.jpg$")
+# Se usan SIEMPRE con `fullmatch` (un `$` deja pasar un salto de línea final).
+UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+PHOTO_RE = re.compile(r"s\d{1,2}\.jpg")
 
 # Monedas que existen en renderer/assets/iconos (ic_<nombre>.png).
 KNOWN_ICONS = frozenset(p.stem[3:] for p in ICONS_DIR.glob("ic_*.png"))
@@ -86,13 +89,16 @@ def timeline(n: int) -> Timeline:
 # Validacion del job
 # ----------------------------------------------------------------------------
 def parse_piece_id(value) -> str:
-    if not isinstance(value, str) or not UUID_RE.match(value):
+    if not isinstance(value, str) or not UUID_RE.fullmatch(value):
         raise JobError("piece_id inválido: debe ser un UUID")
     return value
 
 
 def _clean(value: str) -> str:
-    """Saca caracteres de control (saltos, tabs, NUL) y recorta los bordes."""
+    """Normaliza (NFKC), saca los caracteres de formato Unicode (categoría Cf: ancho cero, bidi, etc.), los de
+    control (saltos, tabs, NUL) y recorta los bordes."""
+    value = unicodedata.normalize("NFKC", value)
+    value = "".join(ch for ch in value if unicodedata.category(ch) != "Cf")
     return re.sub(r"[\x00-\x1f\x7f]", " ", value).strip()
 
 
@@ -107,6 +113,8 @@ def _text(texts: dict, key: str, *, required: bool, max_len: int = 120):
     value = _clean(value)
     if len(value) > max_len:
         raise JobError(f"El texto «{key}» es demasiado largo (máximo {max_len} caracteres)")
+    if not value and required:
+        raise JobError(f"Falta el texto «{key}»")
     return value or None
 
 
@@ -170,7 +178,7 @@ def validate_job(data, job_dir: Path, *, check_files: bool = True) -> Job:
         if not isinstance(item, dict):
             raise JobError(f"slides[{idx}] debe ser un objeto")
         name = item.get("file")
-        if not isinstance(name, str) or not PHOTO_RE.match(name):
+        if not isinstance(name, str) or not PHOTO_RE.fullmatch(name):
             raise JobError(f"slides[{idx}].file inválido: debe ser sN.jpg")
         if name in seen:
             raise JobError(f"slides[{idx}].file repetido")
@@ -190,7 +198,7 @@ def validate_job(data, job_dir: Path, *, check_files: bool = True) -> Job:
             chip = chip or None
         if check_files:
             path = _resolve_inside(job_dir, name)
-            if not path.is_file():
+            if (job_dir / name).is_symlink() or not path.is_file():
                 raise JobError(f"Falta la foto {name}")
             size = path.stat().st_size
             if size == 0 or size > MAX_PHOTO_BYTES:

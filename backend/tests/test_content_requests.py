@@ -17,6 +17,9 @@ NOMBRES = ("uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho")
 @pytest.fixture(autouse=True)
 def _sin_gemini(monkeypatch):
     monkeypatch.setattr(settings, "gemini_api_key", "")
+    # Los comercios de estos tests tienen ids de mentira («com-1»); la validación de UUID del pedido se prueba en
+    # test_content_hardening.py, sin este parche.
+    monkeypatch.setattr("app.api.content._uuid_de_comercio", lambda v: v)
 
 
 @pytest.fixture

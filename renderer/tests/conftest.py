@@ -34,8 +34,8 @@ def job_data(piece_id: str, n: int = 4, **overrides) -> dict:
         "texts": dict(TEXTS),
         "icons": ["pin", "whatsapp"],
         "slides": [{"file": f"s{i}.jpg", "chip": f"Foto número {i}", "focus_y": 0.3} for i in range(n)],
-        "out_video": "video.mp4",
-        "out_cover": "cover.jpg",
+        "out_video": "out/video.mp4",
+        "out_cover": "out/cover.jpg",
     }
     data.update(overrides)
     return data

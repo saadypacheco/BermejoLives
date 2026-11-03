@@ -72,6 +72,35 @@ def test_servidor_sin_token_configurado_rechaza_todo(tmp_path):
     assert renderer.authorized(None) is False
 
 
+def test_el_handler_tiene_timeout_de_socket():
+    assert srv.Handler.timeout == 30
+
+
+@pytest.mark.parametrize("token", ["", "corto", "x" * 31])
+def test_main_no_arranca_con_token_corto(monkeypatch, token):
+    monkeypatch.setenv("RENDERER_TOKEN", token)
+    with pytest.raises(SystemExit) as exc:
+        srv.main()
+    assert exc.value.code == 1
+
+
+def test_kill_strays_no_toca_nada_fuera_de_linux(monkeypatch):
+    llamadas = []
+    monkeypatch.setattr(srv.sys, "platform", "win32")
+    monkeypatch.setattr(srv.os, "kill", lambda *a: llamadas.append(a))
+    srv.kill_strays()
+    assert llamadas == []
+
+
+def test_kill_strays_salta_el_pid_1_y_el_propio(monkeypatch):
+    matados = []
+    monkeypatch.setattr(srv.sys, "platform", "linux")
+    monkeypatch.setattr(srv.os, "listdir", lambda p: ["1", str(srv.os.getpid()), "4242", "self", "9999"])
+    monkeypatch.setattr(srv.os, "kill", lambda pid, sig: matados.append(pid))
+    srv.kill_strays()
+    assert matados == [4242, 9999]
+
+
 def test_la_comparacion_es_en_tiempo_constante():
     import inspect
 
@@ -153,10 +182,11 @@ def test_al_vencer_el_plazo_mata_el_render_y_es_reintentable(api, make_job):
     content, piece_id, job_dir = make_job(4)
     renderer.content_dir = content
     renderer.deadline_seg = 0.3  # ni alcanza a arrancar el proceso
-    (job_dir / "video.mp4").write_bytes(b"parcial")
+    (job_dir / "out").mkdir()
+    (job_dir / "out" / "video.mp4").write_bytes(b"parcial")
     status, body = post(call, piece_id)
     assert status == 200
     assert body == {"ok": False, "error": "Se venció el plazo del render", "retryable": True}
-    assert not (job_dir / "video.mp4").exists()  # no quedan salidas a medias
+    assert not (job_dir / "out" / "video.mp4").exists()  # no quedan salidas a medias
     assert renderer.lock.locked() is False
     assert renderer.current is None

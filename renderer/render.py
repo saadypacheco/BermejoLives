@@ -147,6 +147,10 @@ def render_job(job_dir: Path, *, deadline: float | None = None) -> dict:
     job = reel_t1.load_job(job_dir)
     tl = reel_t1.timeline(len(job.slides))
     out_video, out_cover = job_dir / OUT_VIDEO, job_dir / OUT_COVER
+    out_dir = out_video.parent
+    if out_dir.is_symlink():
+        raise JobError("out/ no puede ser un enlace")
+    out_dir.mkdir(exist_ok=True)  # en producción la crea el backend (0700, del usuario del contenedor)
     for old in (out_video, out_cover):
         old.unlink(missing_ok=True)
 
