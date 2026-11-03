@@ -36,7 +36,7 @@ def test_la_pagina_publica_trae_todo_lo_que_el_front_necesita(client, publicada,
     assert b["video_url"] == f"/public/pieces/{TOKEN}/video" and b["video_download_url"].endswith("/video?download=1")
     assert b["cover_url"].endswith("/cover") and b["published_at"] and b["expires_at"]
     assert b["posts"] == [{"network": "tiktok", "network_label": "TikTok", "post_url": "https://www.tiktok.com/@u/video/1"}]
-    assert b["status_text"] == "Mirá Local com-1 en URUKU: https://uruku.bo/comercios/local-com-1?ref=st-local-com-1"
+    assert b["status_text"] == "Mire Local com-1 en URUKU: https://uruku.bo/comercios/local-com-1?ref=st-local-com-1"
     assert set(b) == {"comercio_nombre", "comercio_slug", "pillar", "published_at", "expires_at", "video_url",
                       "video_download_url", "cover_url", "posts", "status_text"}
 

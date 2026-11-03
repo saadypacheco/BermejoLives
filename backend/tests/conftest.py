@@ -73,15 +73,23 @@ def _tmp_content_dir(tmp_path, monkeypatch):
     También limpia lo que los servicios guardan en memoria entre vueltas (caché de peso, intentos del
     selector, día del job de cuidado, estado del render)."""
     from app.core.config import settings
-    from app.services import content_render, content_selector, content_storage, subscriber_care
+    from app.services import content_render, content_selector, content_storage, cost_switches, subscriber_care
     monkeypatch.setattr(settings, "content_dir", str(tmp_path / "content"))
+    # Desde la spec §16 el motor por defecto es `kit` (el contenedor `reels`). Los tests viejos prueban el motor v1
+    # (subproceso con Pillow) y no tienen contenedor: arrancan en `pillow`; los del motor `kit` lo prenden a mano.
+    monkeypatch.setattr(settings, "content_render_engine", "pillow")
+    content_render.reiniciar_salud()
     content_storage.reiniciar_cache_peso()
     content_selector.reiniciar_intentos()
+    cost_switches.reiniciar_cache()      # el interruptor de Gemini se recuerda 30 s en memoria
     subscriber_care.reiniciar_dia()
+    from app.api import content as content_api
+    content_api.reiniciar_enfriamiento_de_propuestas()     # «pedir otra propuesta»: una por pieza por minuto
     content_render._estado.update({"actual": None, "ultimo": None, "avisado_sin_ffmpeg": False,
-                                   "avisado_dir": False, "avisado_disco": False})
+                                   "avisado_dir": False, "avisado_disco": False, "avisado_sin_renderer": False})
     yield
     content_storage.reiniciar_cache_peso()
+    cost_switches.reiniciar_cache()
 
 
 @pytest.fixture(autouse=True)

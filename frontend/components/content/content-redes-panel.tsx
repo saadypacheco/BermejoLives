@@ -6,7 +6,10 @@ import { Aviso, BTN_GRANDE, Cargando, Insignia } from "@/components/content/cont
 import { ContentDayPackage } from "@/components/content/content-day-package";
 import { ContentReview } from "@/components/content/content-review";
 import { ContentWeek } from "@/components/content/content-week";
-import { getEstadoContenido, mensajeContent, type ContentStatusResponse } from "@/lib/content";
+import { ContentCostSwitches } from "@/components/content/content-cost-switches";
+import { ContentRequestModal } from "@/components/content/content-request-modal";
+import { insigniaSinGemini } from "@/lib/content-pure";
+import { getEstadoContenido, leerGeminiContent, mensajeContent, type ContentStatusResponse } from "@/lib/content";
 
 type Pestana = "revision" | "dia" | "semana";
 
@@ -34,14 +37,20 @@ function EstadoArmado({ s }: { s: ContentStatusResponse }) {
  */
 export function ContentRedesPanel() {
   const [estado, setEstado] = useState<ContentStatusResponse | null>(null);
+  // Interruptor `gemini_content`: null = todavía no se leyó o no se pudo leer.
+  const [geminiPrendido, setGeminiPrendido] = useState<boolean | null>(null);
   const [errEstado, setErrEstado] = useState("");
   const [pestana, setPestana] = useState<Pestana | null>(null);
+  const [pidiendo, setPidiendo] = useState(false);
+  // Sube al pedir un video: Semana y Paquete del día se vuelven a leer (Revisión se actualiza sola).
+  const [vez, setVez] = useState(0);
 
   const cargarEstado = useCallback(async () => {
     setErrEstado("");
     try {
-      const s = await getEstadoContenido();
+      const [s, gemini] = await Promise.all([getEstadoContenido(), leerGeminiContent()]);
       setEstado(s);
+      setGeminiPrendido(gemini);
       // Sólo la PRIMERA vez decide la pestaña: después manda lo que eligió la persona.
       setPestana((p) => p ?? (s.queue.ready_for_review > 0 ? "revision" : "dia"));
     } catch (ex) {
@@ -52,7 +61,12 @@ export function ContentRedesPanel() {
 
   useEffect(() => { void cargarEstado(); }, [cargarEstado]);
 
+  const cerrarPedido = useCallback(() => setPidiendo(false), []);
+  const alPedirVideo = useCallback(() => { setVez((n) => n + 1); void cargarEstado(); }, [cargarEstado]);
+
   const paraRevisar = estado?.queue.ready_for_review ?? 0;
+  const sinGemini = estado ? insigniaSinGemini(estado.gemini_configured, geminiPrendido) : null;
+  const sinArmador = estado?.render_worker === "no_renderer";
   const tabs: { id: Pestana; label: string; icono: "listo" | "calendario" | "video"; n?: number }[] = [
     { id: "revision", label: "Revisión", icono: "listo", n: paraRevisar },
     { id: "dia", label: "Paquete del día", icono: "video" },
@@ -62,12 +76,18 @@ export function ContentRedesPanel() {
   return (
     <div style={{ display: "grid", gap: 14, maxWidth: 980 }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <button type="button" className="btn btn-primary btn-sm" style={BTN_GRANDE} onClick={() => setPidiendo(true)}>
+          <Ic n="video" s={16} /> Pedir un video
+        </button>
         {estado && <EstadoArmado s={estado} />}
-        {estado && !estado.gemini_configured && (
-          <Insignia tono="info" icono="dato">Sin Gemini: los textos salen de la plantilla fija</Insignia>
-        )}
+        {estado && sinGemini && <Insignia tono="info" icono="dato">{sinGemini}</Insignia>}
       </div>
       {errEstado && <Aviso tono="aviso">{errEstado}</Aviso>}
+      {sinArmador && (
+        <Aviso tono="error">
+          El armador de videos no está disponible. Las piezas quedan en la cola y se arman cuando vuelva; avisale a quien administra el servidor.
+        </Aviso>
+      )}
 
       <div role="tablist" aria-label="Contenido para redes" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {tabs.map((t) => (
@@ -80,9 +100,12 @@ export function ContentRedesPanel() {
       </div>
 
       {pestana === null && <Cargando texto="Cargando…" />}
-      {pestana === "revision" && <ContentReview onCambioCola={() => void cargarEstado()} />}
-      {pestana === "dia" && <ContentDayPackage onIrARevision={() => setPestana("revision")} />}
-      {pestana === "semana" && <ContentWeek onCambioCola={() => void cargarEstado()} />}
+      {pestana === "revision" && <ContentReview sinArmador={sinArmador} onCambioCola={() => void cargarEstado()} />}
+      {pestana === "dia" && <ContentDayPackage key={vez} onIrARevision={() => setPestana("revision")} />}
+      {pestana === "semana" && <ContentWeek key={vez} onCambioCola={() => void cargarEstado()} />}
+
+      <ContentCostSwitches onCambio={() => void cargarEstado()} />
+      {pidiendo && <ContentRequestModal onCerrar={cerrarPedido} onPedido={alPedirVideo} />}
     </div>
   );
 }

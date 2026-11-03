@@ -48,7 +48,7 @@ SAFE = (90, 250, 990, 1450)
 
 DUR_TAPA, DUR_FOTO, DUR_CIERRE, FUNDIDO = 2.0, 2.5, 3.0, 0.3
 MIN_FOTOS = 4
-MAX_FOTOS = {"comercio_del_dia": 7, "ofertas": 6}
+MAX_FOTOS = {"comercio_del_dia": 7, "ofertas": 6, "rubro": 6}
 
 #: Foto entera (contain) en 1080 de ancho y hasta esta altura.
 FOTO_MAX_H = 1500
@@ -210,6 +210,15 @@ def tramo_tapa(facts: dict, primera: Image.Image) -> Lienzo:
     """Tapa de 2 s: la primera foto desenfocada, el logo y los datos del comercio (o el título del compilado)."""
     lz = Lienzo(_fondo_borroso(primera))
     alto_logo = lz.logo(360, 540, 270)
+    if facts.get("pillar") == "rubro":
+        rubro, ciudad = sin_emojis(facts.get("rubro")), sin_emojis(facts.get("ciudad"))
+        titulo = f"{rubro} en {ciudad}" if rubro and ciudad else rubro or "Comercios de la ciudad"
+        px, lineas = ajustar_nombre(titulo, maximo=88)
+        y = 270 + alto_logo + 330
+        for l in lineas:
+            _, h = lz.texto(540, y, l, "bold", px)
+            y += h
+        return lz
     if facts.get("pillar") == "ofertas":
         ciudad = sin_emojis(facts.get("ciudad"))
         px, lineas = ajustar_nombre(f"Ofertas de la semana en {ciudad}" if ciudad else "Ofertas de la semana",
@@ -256,11 +265,9 @@ def tramo_foto(foto: Image.Image, banda: dict | None = None) -> tuple[Lienzo, tu
         b0, b1 = OFERTA_BANDA
         lz.draw.rectangle([0, lz.p(b0), BASE_W, lz.p(b1)], fill=VERDE)
         nombre = _cortar(sin_emojis(banda.get("nombre")), "bold", 46, 940)
-        precio = sin_emojis(banda.get("precio"))
         titulo = _cortar(sin_emojis(banda.get("titulo_corto")), "medium", 36, 940)
         filas = [(nombre, "bold", 46)]
-        if precio:
-            filas.append((precio, "semibold", 62))
+        # Sin precio (§16.1): ni en el video ni en los textos. La banda lleva el nombre y, si hay, el título corto.
         if titulo:
             filas.append((titulo, "medium", 36))
         alto = sum(round(px * 1.25) for _, _, px in filas)
@@ -275,10 +282,12 @@ def tramo_cierre(facts: dict) -> Lienzo:
     """Cierre de 3 s: fondo verde de marca, el logo y la invitación a buscar el comercio en uruku.bo."""
     lz = Lienzo(Image.new("RGB", (BASE_W, BASE_H), VERDE))
     alto = lz.logo(560, 540, 700)
-    if facts.get("pillar") == "ofertas":
-        frase = "Mirá todas las ofertas en uruku.bo"
+    if facts.get("pillar") == "rubro":
+        frase = f'Vea {sin_emojis(facts.get("rubro")).lower() or "los comercios"} en uruku.bo'
+    elif facts.get("pillar") == "ofertas":
+        frase = "Vea todas las ofertas en uruku.bo"
     else:
-        frase = f'Buscá "{sin_emojis(facts.get("nombre"))}" en uruku.bo'
+        frase = f'Busque "{sin_emojis(facts.get("nombre"))}" en uruku.bo'
     px, lineas = ajustar_nombre(frase, "semibold", 64, 40, 900, 3)
     y = 700 + alto + 80
     for l in lineas:
@@ -330,8 +339,10 @@ def armar_tramos(facts: dict, slides: list[dict]) -> list[Tramo]:
         except Exception as exc:  # noqa: BLE001
             raise RenderError(f"No se pudo abrir una foto: {exc}", retryable=False) from exc
         banda = None
-        if pillar == "ofertas":
-            banda = next((i for i in items if f"{i.get('nombre')} · {i.get('precio')}" == s.get("caption_fact")), None)
+        if pillar in ("ofertas", "rubro"):
+            # Las piezas nuevas no llevan precio (§16.1): la fuente trae sólo el nombre del comercio.
+            banda = next((i for i in items if s.get("caption_fact") in (f"{i.get('nombre')} · {i.get('precio')}",
+                                                                        i.get("nombre") if not i.get("precio") else None)), None)
             if banda is None:
                 partes = (s.get("caption_fact") or "").split(" · ")
                 banda = {"nombre": partes[0], "precio": partes[1] if len(partes) > 1 else ""}

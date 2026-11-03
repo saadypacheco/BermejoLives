@@ -7,7 +7,7 @@ import {
   armarSemana, getSemana, mensajeContent, type ContentPieceSummary, type ContentWeekResponse,
 } from "@/lib/content";
 import {
-  fechaCorta, hoyBolivia, lunesDe, PIECE_STATUS_LABEL, resumenDePlan, sumarDias, etiquetaDe,
+  detalleDePieza, esPiezaPedida, etiquetaDePilar, fechaCorta, hoyBolivia, lunesDe, PIECE_STATUS_LABEL, resumenDePlan, sumarDias, etiquetaDe,
 } from "@/lib/content-pure";
 import type { NombreIcono } from "@/components/ic";
 import type { Tono } from "@/components/content/content-ui";
@@ -115,8 +115,9 @@ function PiezaDelDia({ p }: { p: ContentPieceSummary }) {
   const v = ESTADO_VISUAL[p.status] ?? { icono: "dato" as NombreIcono, tono: "info" as Tono };
   return (
     <div style={{ display: "grid", gap: 4, fontSize: 12.5, lineHeight: 1.35 }}>
-      <span style={{ fontWeight: 700 }}>{p.pillar_label}</span>
-      <span style={{ color: "var(--txt-2)", overflowWrap: "anywhere" }}>{p.comercio ? p.comercio.nombre : p.ciudad_nombre ?? "Compilado"}</span>
+      <span style={{ fontWeight: 700 }}>{etiquetaDePilar(p)}</span>
+      <span style={{ color: "var(--txt-2)", overflowWrap: "anywhere" }}>{p.pillar === "rubro" ? detalleDePieza(p) : p.comercio ? p.comercio.nombre : p.ciudad_nombre ?? "Compilado"}</span>
+      {esPiezaPedida(p.origin) && <span><Insignia tono="info" icono="encargo">Pedido</Insignia></span>}
       <span><Insignia tono={v.tono} icono={v.icono}>{p.status_label || etiquetaDe(PIECE_STATUS_LABEL, p.status)}</Insignia></span>
       {p.counts_for_quota && <span style={{ color: "var(--txt-3)" }}>Cuenta para el plan</span>}
       {p.status === "failed" && p.render_error && <span style={{ color: "var(--pink)" }}>{p.render_error}</span>}

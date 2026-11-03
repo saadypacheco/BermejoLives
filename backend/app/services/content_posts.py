@@ -23,7 +23,7 @@ import structlog
 from fastapi import HTTPException
 
 from app.core.config import settings
-from app.services import cargas, content_captions, content_consent
+from app.services import cargas, content_captions, content_consent, content_video_texts
 
 logger = structlog.get_logger()
 
@@ -95,6 +95,10 @@ def approve(crepo, piece_id: str, actor: str) -> dict:
     motivo = content_consent.motivo_de_bloqueo(crepo, pieza)
     if motivo:
         raise HTTPException(status_code=409, detail=content_consent.MENSAJE_DE_BLOQUEO[motivo])
+    # Pieza v2 (§16.9): los textos del video sin objeciones y las fotos marcadas, cambiadas o confirmadas.
+    bloqueo = content_video_texts.bloqueo_de_aprobacion(crepo, pieza)
+    if bloqueo:
+        raise HTTPException(status_code=409, detail=bloqueo)
     nueva = crepo.update_piece(piece_id, {"status": "approved", "approved_by": actor,
                                           "approved_at": _ahora().isoformat()}, if_status="ready_for_review")
     if not nueva:
@@ -258,7 +262,7 @@ def cerrar_pieza_si_corresponde(crepo, piece_id: str) -> dict | None:
         return None
     logger.info("content.pieza_publicada", pieza=piece_id, redes=[p["network"] for p in posts if p["status"] == "posted"])
     cid = pieza.get("comercio_id")
-    if cid:
+    if cid and pieza.get("origin") != "pedido":           # un pedido a mano no crea tareas de suscriptor (§17.3)
         hoy = cargas.hoy_bolivia(ahora)
         crepo.insert_task({"comercio_id": cid, "kind": "piece_delivery", "due_on": hoy.isoformat(),
                            "piece_id": piece_id})

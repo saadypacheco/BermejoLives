@@ -51,7 +51,7 @@ def test_la_lista_trae_el_contrato_de_la_home(client, una):
     (v,) = r.json()["items"]
     assert v == {
         "id": una["id"], "title": "Local com-1", "comercio": {"nombre": "Local com-1", "slug": "local-com-1"},
-        "city_slug": "bermejo", "published_at": una["published_at"], "duration_s": 17.5,
+        "rubro": None, "city_slug": "bermejo", "published_at": una["published_at"], "duration_s": 17.5,
         "cover_url": f"/public/videos/{una['id']}/cover", "video_url": f"/public/videos/{una['id']}/video",
         "network_links": {"tiktok": "https://www.tiktok.com/@uruku/video/1",
                           "instagram": "https://www.instagram.com/reel/1/"}}

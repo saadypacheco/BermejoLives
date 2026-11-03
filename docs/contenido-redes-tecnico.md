@@ -870,7 +870,7 @@ ContentPostSkip            { reason: str (1..200) }
 ContentShareResponse       { comercio_nombre, comercio_slug, pillar, published_at, expires_at,
                              video_url, video_download_url, cover_url,
                              posts: [{network, network_label, post_url}], status_text }
-ContentStatusResponse      { render_worker: "disabled"|"no_ffmpeg"|"idle"|"running"|"paused_disk"|"unsafe_dir",
+ContentStatusResponse      { render_worker: "disabled"|"no_ffmpeg"|"no_renderer"|"idle"|"running"|"paused_disk"|"unsafe_dir",
                              current_piece_id, queue: {queued, rendering, ready_for_review, failed},
                              last_render: {piece_id, at, ms, ok, error}|null,
                              disk: {content_bytes, free_bytes, max_bytes}, gemini_configured: bool }
@@ -1366,7 +1366,11 @@ El contenedor tiene su **propio plazo** (`RENDER_DEADLINE_SEG=280`): al vencer, 
 
 #### Carpeta del job: `CONTENT_DIR/tmp/<piece_id>/`
 
-La arma el backend (`_preparar_job`). El contenedor sólo lee lo que está ahí y sólo escribe `video.mp4` y `cover.jpg` ahí.
+La arma el backend (`_preparar_job`). El contenedor sólo lee lo que está ahí y sólo escribe `out/video.mp4` y `out/cover.jpg`.
+
+- La carpeta `tmp/<piece_id>/` es del backend (`0o755`); `sN.jpg` y `job.json` se crean nuevos (`O_CREAT|O_EXCL|O_NOFOLLOW`; en Windows no existe `O_NOFOLLOW`).
+- `tmp/<piece_id>/out/` la crea el backend, se la entrega al usuario del contenedor (`os.chown(out, RENDERER_UID, -1)`, `RENDERER_UID` = 1001, el `pwuser` de la imagen `mcr.microsoft.com/playwright/python:v1.64.1-noble`; configurable) y queda `0o700`. En Windows no hay `chown`.
+- Al recoger el resultado el backend hace `lstat` de cada salida y exige archivo regular (`S_ISREG`), `st_nlink == 1` y, en POSIX, `st_uid == RENDERER_UID`; después **copia los bytes** a `renders/` (no `rename`: el volumen lo escribe un proceso que no es de confianza).
 
 ```json
 {
@@ -1390,12 +1394,12 @@ La arma el backend (`_preparar_job`). El contenedor sólo lee lo que está ahí 
   },
   "icons": ["pin", "whatsapp"],
   "slides": [{"file": "s0.jpg", "chip": "Eco cuero con cinturón", "focus_y": 0.3}],
-  "out_video": "video.mp4",
-  "out_cover": "cover.jpg"
+  "out_video": "out/video.mp4",
+  "out_cover": "out/cover.jpg"
 }
 ```
 
-- `kick`, `subtitle`, `place_chip` y cada `chip` pueden ser `null` (no se dibujan). `focus_y` null = 0.4. `slides`: 4 a 6. `file` debe calzar `^s\d{1,2}\.jpg$` y `out_video`/`out_cover` son esos nombres fijos (si no → 400). `icons` ⊂ los `ic_*.png` del kit (`pin`, `whatsapp`, `oferta`, `tienda`, `comida`, …).
+- `kick`, `subtitle`, `place_chip` y cada `chip` pueden ser `null` (no se dibujan). `focus_y` null = 0.4. `slides`: 4 a 6. `file` debe calzar `s\d{1,2}\.jpg` (con `re.fullmatch`) y `out_video`/`out_cover` son exactamente `out/video.mp4` y `out/cover.jpg` (si no → 400). `icons` ⊂ los `ic_*.png` del kit (`pin`, `whatsapp`, `oferta`, `tienda`, `comida`, …).
 - Las fotos `sN.jpg` las prepara el backend: `exif_transpose`, RGB, lado mayor 1200 px, N1 suave (§5.1), JPEG q90, sin EXIF.
 - El contenedor arma el HTML **escapando todo texto** (`html.escape`) a partir de la plantilla T1 del kit (`docs/reels-kit/referencias/plantillas/reels_build.py`, parametrizada).
 
@@ -1413,7 +1417,7 @@ Render: cargar, esperar `document.fonts.ready` y `img.decode()`, pausar todas la
 
 ### 16.5 Backend
 
-- **Config:** `content_render_engine: str = "kit"` (`kit | pillow`; `pillow` = el motor v1, para la PC sin Docker y como respaldo), `renderer_url: str = "http://buscadonde-reels:8090"`, `renderer_token: str = ""`. Con `kit` y sin token, el worker no toma trabajos y `estado_del_worker` devuelve `no_renderer` (igual si `/health` no contesta).
+- **Config:** `content_render_engine: str = "kit"` (`kit | pillow`; `pillow` = el motor v1, para la PC sin Docker y como respaldo), `renderer_url: str = "http://buscadonde-reels:8090"`, `renderer_token: str = ""`. Con `kit` y un `RENDERER_TOKEN` de menos de 32 caracteres (o vacío), el worker no toma trabajos (el contenedor tampoco arranca con uno corto); `renderer_uid: int = 1001`; el cliente `httpx` va con `trust_env=False` y `estado_del_worker` devuelve `no_renderer` (igual si `/health` no contesta).
 - **`content_render.py`:** con `kit`, `_preparar_job` arma la carpeta de §16.4 (copia y prepara las fotos) y en lugar del subproceso hace `POST /render` con `httpx` (timeout `content_render_timeout_seg`). 409 y errores de red → reintentable. Lo demás (toma atómica, reintentos, colgadas, mover a `renders/`, contar usos, borrar `tmp/`) no cambia. Las piezas nuevas se crean con `template_version = 2`; las v1 ya armadas no se tocan (si se reintenta una v1 con `kit`, se le proponen textos y pasa a v2).
 - **Textos del video — `services/content_video_texts.py` (nuevo):**
   - `proponer(pieza, fuentes) -> dict`: **una** llamada a Gemini con visión (`vision._post_con_reintentos`, fotos a 768 px) con los hechos **sin datos de contacto** (nombre, rubro, subcategoría, ciudad, `prod_obs_human`, marcados como `<datos>` como en captions) y las fotos. Respuesta JSON: `{kick, title1, title2, subtitle, search_term, slides: [{chip, price_or_code_visible, focus_y}]}`.
@@ -1463,7 +1467,7 @@ Mismo archivo en `supabase/migrations/` y `selfhost/postgres-init/`. Sin GRANTs 
 - `PATCH /admin/content/pieces/{id}/video-texts` (permiso `difusion`). Body `VideoTextsUpdate { kick?, title1, title2, subtitle?, search_term, chips: [{source_id, text|null}], photo_flags_ok? }` (`source_id` = id de `content_piece_sources`, debe ser una fuente activa de esta pieza; si no → 400). Valida (§16.6) → guarda (`video_texts_engine = 'human'`, `video_texts_checks = []`) → si la pieza está en `ready_for_review` o `failed`, vuelve a `queued` (`render_attempts = 0`, `render_next_at = now()`, `render_error = null`); en `queued` sólo guarda; en `rendering`, `approved`, `published` o `skipped` → 409.
 - `POST /admin/content/pieces/{id}/video-texts/propose` (permiso `difusion`): vuelve a pedir a Gemini (§16.5) y re-encola igual que el PATCH (mismos 409).
 - `approve` (y `approve-batch`) de una pieza v2: 409 «Revise los textos del video» si `video_texts_checks` no está vacío; 409 «Hay fotos marcadas: cámbielas o confirme que están bien» si alguna fuente activa tiene `photo_flags` y `photo_flags_ok = false`.
-- `GET /admin/content/status`: `worker` puede valer `no_renderer`.
+- `GET /admin/content/status`: `render_worker` puede valer `no_renderer` o `unsafe_dir` (además de `disabled | no_ffmpeg | idle | running | paused_disk`).
 
 ### 16.10 Frontend (Admin › Contenido para redes › Revisión)
 
@@ -1471,7 +1475,7 @@ Mismo archivo en `supabase/migrations/` y `selfhost/postgres-init/`. Sin GRANTs 
 - Foto con `photo_flags`: insignia «Se ve un precio o un código» + «Cambiar foto» (ya existe). Casilla «Revisé las fotos marcadas: no se ve ningún precio ni código» (`photo_flags_ok`).
 - Botones «Guardar y volver a armar» (PATCH) y «Pedir otra propuesta» (POST propose). Mientras la pieza está `queued`/`rendering`, el video viejo no se muestra: «Armando el video…».
 - Validación en el cliente con una función pura en `lib/content-pure.ts` que replica largos, dígitos y la lista de tono de §16.6 (la del backend manda).
-- `worker = no_renderer` → aviso «El armador de videos no está disponible».
+- `render_worker = no_renderer` → aviso «El armador de videos no está disponible».
 - Íconos sólo de `ic.tsx`; textos del panel en voseo; lo que va al video, en neutro.
 
 ### 16.11 Reparto
@@ -1488,3 +1492,72 @@ Mismo archivo en `supabase/migrations/` y `selfhost/postgres-init/`. Sin GRANTs 
 2. `cd /docker/uruku && bash scripts/deploy-prod.sh --sql selfhost/postgres-init/0182_content_video_texts.sql frontend backend reels`.
 3. Desde el backend: `docker compose -f docker-compose.prod.yml exec backend python -c "import httpx; print(httpx.get('http://buscadonde-reels:8090/health').json())"`.
 4. Con los workers prendidos (§11.2), «Reintentar» una pieza: tiene que llegar a «Lista para revisar» con el diseño nuevo.
+
+---
+
+## 17. Pedir un video a mano + interruptores de costo — 3/11/2026
+
+Decidido por el dueño después de comparar herramientas (fal, ElevenLabs, HeyGen, Postiz, Windsor, CapCut, HyperFrames, Remotion):
+
+1. **Costo cero por defecto.** Todo lo que genera un gasto nuevo queda **apagado** y se prende con un interruptor que avisa que tiene costo. Hoy el único servicio pago del contenido es **Gemini** (textos de redes y del video). Apagado, todo sigue funcionando con los textos fijos (§6.4, §16.7) y la persona los completa en Revisión.
+2. **«Pedir un video»**: además de la semana automática, se puede pedir un video **de un negocio** (por código URUKU-XXXX o nombre) o **de un rubro en una ciudad** («zapatillas en Bermejo», «celulares en Tarija»), que es la T6 del kit armada con la plantilla T1 (una foto por comercio, el chip es su nombre).
+3. Herramientas pagas que **no** se conectan ahora (quedan como opción, con su costo, en la comparación del 3/11): voz ElevenLabs, publicación automática Postiz, métricas Windsor pago, video generado fal/HeyGen. La línea de autor (videos grabados, en la PC del dueño) usa HyperFrames + ffmpeg + Whisper, gratis, fuera de este repo.
+
+### 17.1 Datos — migración `0183_content_requests_and_cost_switches.sql`
+
+```sql
+-- Interruptores de lo que cuesta plata. Una fila por servicio; sin fila = apagado.
+create table if not exists public.cost_switches (
+  key         text primary key check (key in ('gemini_content')),
+  enabled     boolean not null default false,
+  updated_by  text not null,
+  updated_at  timestamptz not null default now()
+);
+-- Pedidos a mano y videos por rubro.
+alter table public.content_pieces
+  add column if not exists origin  text not null default 'selector' check (origin in ('selector', 'pedido')),
+  add column if not exists rubro_id uuid references public.rubros(id);
+-- pillar suma 'rubro' (reemplazar el check de 0181 por nombre); check (pillar <> 'rubro' or (rubro_id is not null and ciudad_id is not null));
+-- uq_content_pieces_slot pasa a valer sólo para origin = 'selector' (drop + create con el mismo nombre).
+```
+
+`cost_switches`: RLS activo, `revoke all` a `public, anon, authenticated`, `grant all` a `service_role` (como 0181). Mismo archivo en `supabase/migrations/` y `selfhost/postgres-init/`.
+
+### 17.2 Interruptores (backend)
+
+- `services/cost_switches.py`: `esta_prendido(crepo, key) -> bool` (cache en memoria 30 s; sin fila o error de lectura → **apagado**), `set(crepo, key, enabled, actor)`.
+- `CATALOGO` (fijo en el código, lo devuelve la API): `gemini_content` → `{label: "Textos con Gemini", what: "Propone los textos de las redes y del video y marca las fotos donde se ve un precio o un código", cost: "Menos de US$ 0,01 por video con el modelo actual (0 si la clave de Gemini es del nivel gratis)", off_means: "Se usan los textos fijos y los completás a mano en Revisión"}`.
+- Apagado `gemini_content`: `content_captions.generate_captions` devuelve `template_captions` (engine `template`) y `content_video_texts.proponer` devuelve los textos fijos sin llamar a Gemini (engine `template`, sin marcas de fotos). Sin `GEMINI_API_KEY` sigue igual que hoy.
+- API:
+  - `GET /admin/cost-switches` (permiso `difusion` o `equipo`) → `{items: [{key, label, what, cost, off_means, enabled, updated_by, updated_at}]}`.
+  - `PUT /admin/cost-switches/{key}` (permiso **`equipo`**, el del dueño) body `{enabled: bool, confirm_cost: bool}`. Prender exige `confirm_cost = true` (si no → 400 «Confirmá que sabés que tiene costo»). Clave desconocida → 404. Log `cost_switch_changed` con actor y valor.
+
+### 17.3 Pedir un video (backend)
+
+`POST /admin/content/pieces/request` (permiso `difusion`; agentes limitados a su ciudad como el resto de contenido).
+
+```
+{"kind": "comercio", "comercio_id": "<uuid>"}
+{"kind": "rubro", "rubro_slug": "zapatillas", "ciudad_slug": "bermejo"}
+→ 201 PieceResponse (status queued)
+```
+
+- **comercio:** activo y con autorización vigente (si no → 422 con el motivo). Fotos con `elegir_fotos` (4 a 6, mismas reglas). Menos de 4 → 422 «Tiene {n} fotos que sirven: subí al menos 4 en Banco de contenido». Pieza `pillar='comercio_del_dia'`, `origin='pedido'`, `counts_for_quota=false`, `scheduled_for=hoy`, `week_start=lunes de hoy`, `created_by=<correo>`.
+- **rubro:** comercios activos de la ciudad con ese rubro (principal o secundario), autorización vigente y **al menos una foto que sirve** (orden de preferencia de la foto: asset del banco más reciente > portada > galería). Orden de comercios: suscriptores primero, después los de foto más reciente; **uno por comercio**, máximo 6. Menos de 4 → 422 «Hay {n} comercios de ese rubro con autorización y foto; hacen falta 4». Pieza `pillar='rubro'`, `comercio_id=null`, `ciudad_id`, `rubro_id`, `origin='pedido'`, `counts_for_quota=false`.
+  - `facts`: `{pillar: 'rubro', rubro, rubro_slug, ciudad, departamento, items: [{nombre, slug}], allowed_numbers: [], hashtags_allowed}`.
+  - Chip de cada foto = nombre del comercio (de la base, como `ofertas`). Gemini (si está prendido) propone `kick/title1/title2/subtitle/search_term` y las marcas de fotos.
+  - Fijos: `kick` «EN {CIUDAD}», `title1` = rubro (≤ 18; si no «Dónde comprar»), `title2` = «en {ciudad}», `search_term` = primera palabra del rubro en minúsculas; cierre `close_title1/2` «Encuéntrelos» / «en Uruku», `place_chip` null, `close_line` «Vea horario y cómo llegar en Uruku», `icons` `["tienda", "pin"]`.
+  - Caption fijo: «Dónde comprar {rubro} en {ciudad}: {nombre1}, {nombre2} y más. Búsquelos en uruku.bo». **Nunca** cuántos comercios (regla del sitio). Link en facebook/canal: `/{ciudad}/{rubro}?ref=`.
+  - Consentimiento, baja de un comercio y quitar un comercio funcionan igual que en los compilados (`content_consent`, `quitar_comercio_de_compilado`); la franja de la home titula «{Rubro} en {ciudad}».
+- Tope: si ya hay **5** piezas `origin='pedido'` en `queued`/`rendering` → 429 «Ya hay 5 videos pedidos armándose; esperá a que terminen».
+- Las piezas pedidas no crean tareas de suscriptores ni cuentan cuota, y **no miran la regla de «no repetir una foto en 60 días»** del selector: si alguien lo pide, es porque quiere ese video ahora.
+
+### 17.4 Frontend (Admin › Contenido para redes)
+
+- Botón **«Pedir un video»** arriba del panel → modal con dos opciones:
+  - **Un negocio**: buscador por código URUKU-XXXX o nombre (reusar el selector de comercio del Banco de contenido), muestra si tiene autorización y cuántas fotos sirven antes de pedir.
+  - **Un rubro**: ciudad (las que el usuario puede ver) + rubro (lista de rubros comerciales de esa ciudad).
+  - Muestra el 422/429 tal cual; al pedir, «Listo: el video se está armando, aparece en Revisión en unos minutos».
+- Tarjeta **«Servicios con costo»** (en el mismo panel): por cada interruptor, estado («Apagado · costo cero» / «Prendido · tiene costo»), qué hace, cuánto cuesta y qué pasa apagado. «Prender» abre una confirmación con el costo y una casilla «Entiendo que tiene costo»; sólo se habilita con permiso `equipo` (los demás lo ven, sin botón). Apagar no pide confirmación.
+- Piezas `pillar='rubro'`: etiqueta «Repaso de rubro», título «{rubro} en {ciudad}»; en Textos del video los chips no se editan (como `ofertas`).
+- Íconos sólo de `ic.tsx`; panel en voseo.

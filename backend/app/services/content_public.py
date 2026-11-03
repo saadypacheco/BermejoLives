@@ -54,14 +54,19 @@ def _fecha_de_publicacion(pieza: dict, posts: list[dict]) -> str | None:
 
 
 def video_response(pieza: dict, posts: list[dict], slug_de_ciudad: dict[str, str]) -> dict:
-    """`PublicVideoResponse` (§15.1). Las URLs de los archivos son rutas relativas estables, sin firma."""
+    """`PublicVideoResponse` (§15.1). Las URLs de los archivos son rutas relativas estables, sin firma.
+
+    Un video de rubro (§17.3) se titula «{Rubro} en {ciudad}» y trae `rubro: {nombre, slug}`: el front arma el link
+    `/{city_slug}/{rubro.slug}`. No lleva cuántos comercios salen (regla del sitio)."""
     f = pieza.get("facts") or {}
     propio = bool(pieza.get("comercio_id")) and bool(f.get("nombre"))
+    es_rubro = pieza.get("pillar") == "rubro" and bool(f.get("rubro"))
     base = f"/public/videos/{pieza['id']}"
     return {
         "id": pieza["id"],
-        "title": f["nombre"] if propio else TITULO_COMPILADO,
+        "title": f["nombre"] if propio else f"{f['rubro']} en {f.get('ciudad') or 'su ciudad'}" if es_rubro else TITULO_COMPILADO,
         "comercio": {"nombre": f["nombre"], "slug": f.get("slug")} if propio else None,
+        "rubro": {"nombre": f["rubro"], "slug": f.get("rubro_slug")} if es_rubro else None,
         "city_slug": slug_de_ciudad.get(pieza.get("ciudad_id") or ""),
         "published_at": _fecha_de_publicacion(pieza, posts),
         "duration_s": float(pieza["duration_s"]) if pieza.get("duration_s") is not None else None,

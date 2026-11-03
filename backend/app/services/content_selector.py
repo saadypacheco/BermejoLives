@@ -31,14 +31,14 @@ from fastapi import HTTPException
 
 from app.core.codigo import _RE_CON_PREFIJO
 from app.core.config import settings
-from app.services import (cargas, content_captions, content_consent, content_posts, content_storage, fotos_galeria,
-                          planes)
-from app.services.difusion import _precio
+from app.services import (cargas, content_captions, content_consent, content_posts, content_storage,
+                          content_video_texts, fotos_galeria, planes)
 
 logger = structlog.get_logger()
 
 MIN_FOTOS = 4
-MAX_FOTOS_COMERCIO = 7
+#: El video v2 lleva de 4 a 6 fotos (§16.4).
+MAX_FOTOS_COMERCIO = 6
 MAX_OFERTAS = 6
 MIN_OFERTAS = 4
 #: Las fotos que salieron en una pieza no se repiten durante estos días.
@@ -227,30 +227,40 @@ def claves_usadas(crepo, hoy: date) -> set[tuple]:
 
 
 def elegir_fotos(crepo, comercio: dict, maximo: int, hoy: date, usadas: set[tuple],
-                 excluir: set[tuple] | None = None) -> list[dict]:
+                 excluir: set[tuple] | None = None, *, preferir_banco: bool = False,
+                 con_ofertas: bool = True) -> list[dict]:
     """Las fotos para una pieza de este comercio, en este orden: portada, banco (más nuevas primero),
     galería (sin las que son copia de una del banco) y ofertas aprobadas de los últimos 90 días.
 
     Se descartan las usadas en una pieza viva o publicada en los últimos 60 días y las de lado menor
     < 720 px (leído del encabezado, sin decodificar). Una foto que no está en el disco no sirve.
-    Cada item: `{source_type, source_id, file_ref, comercio_id}`."""
+    Cada item: `{source_type, source_id, file_ref, comercio_id, created_at}` (`created_at` es de la foto del
+    banco o de la galería; null en la portada y en las ofertas).
+
+    `preferir_banco` y `con_ofertas=False` son del video de rubro (§17.3): el orden pasa a ser banco más
+    reciente, portada, galería, y las ofertas no entran."""
     cid = comercio["id"]
     candidatas: list[dict] = []
-    if comercio.get("portada_url"):
-        candidatas.append({"source_type": "cover", "source_id": None, "file_ref": comercio["portada_url"]})
-    assets = [a for a in crepo.list_assets([cid]) if a.get("usable_for_social")
+    portada = ([{"source_type": "cover", "source_id": None, "file_ref": comercio["portada_url"], "created_at": None}]
+               if comercio.get("portada_url") else [])
+    todos = crepo.list_assets([cid])
+    assets = [a for a in todos if a.get("usable_for_social")
               and (not a.get("has_people") or a.get("people_ok"))
               and min(a.get("width") or 0, a.get("height") or 0) >= content_storage.LADO_MENOR_MINIMO]
     assets.sort(key=lambda a: str(a.get("created_at") or ""), reverse=True)
-    for a in assets:
-        candidatas.append({"source_type": "asset", "source_id": a["id"], "file_ref": a["file_path"]})
-    copias = {a.get("gallery_photo_id") for a in crepo.list_assets([cid]) if a.get("gallery_photo_id")}
-    for g in sorted(crepo.gallery_photos([cid]), key=lambda x: str(x.get("created_at") or ""), reverse=True):
-        if g["id"] not in copias:
-            candidatas.append({"source_type": "gallery", "source_id": g["id"], "file_ref": g["url"]})
-    desde = (datetime.combine(hoy, datetime.min.time(), tzinfo=timezone.utc) - timedelta(days=90)).isoformat()
-    for o in crepo.list_offers(desde, cid):
-        candidatas.append({"source_type": "offer", "source_id": o["id"], "file_ref": o["imagen_url"]})
+    del_banco = [{"source_type": "asset", "source_id": a["id"], "file_ref": a["file_path"],
+                  "created_at": a.get("created_at")} for a in assets]
+    copias = {a.get("gallery_photo_id") for a in todos if a.get("gallery_photo_id")}
+    galeria = [{"source_type": "gallery", "source_id": g["id"], "file_ref": g["url"], "created_at": g.get("created_at")}
+               for g in sorted(crepo.gallery_photos([cid]), key=lambda x: str(x.get("created_at") or ""), reverse=True)
+               if g["id"] not in copias]
+    candidatas += (del_banco + portada) if preferir_banco else (portada + del_banco)
+    candidatas += galeria
+    if con_ofertas:
+        desde = (datetime.combine(hoy, datetime.min.time(), tzinfo=timezone.utc) - timedelta(days=90)).isoformat()
+        for o in crepo.list_offers(desde, cid):
+            candidatas.append({"source_type": "offer", "source_id": o["id"], "file_ref": o["imagen_url"],
+                               "created_at": None})
 
     elegidas: list[dict] = []
     vistos: set = set()
@@ -305,24 +315,32 @@ def _guardar_pieza(crepo, row: dict, fuentes: list[dict]) -> dict | None:
         return None
     crepo.insert_sources([{"piece_id": pieza["id"], "position": i, "source_type": f["source_type"],
                            "source_id": f.get("source_id"), "comercio_id": f["comercio_id"],
-                           "file_ref": f["file_ref"], "caption_fact": f.get("caption_fact")}
+                           "file_ref": f["file_ref"], "caption_fact": f.get("caption_fact"),
+                           "chip_text": f.get("chip_text"), "photo_flags": f.get("photo_flags") or [],
+                           "focus_y": f.get("focus_y")}
                           for i, f in enumerate(fuentes)])
     return pieza
 
 
 def _fila_de_pieza(week_start: date, dia: date, pilar: str, facts: dict, textos: dict, actor: str,
                    comercio: dict | None = None, ciudad_id: str | None = None,
-                   ciclo_inicio: date | None = None) -> dict:
+                   ciclo_inicio: date | None = None, video: dict | None = None,
+                   origin: str = "selector", rubro_id: str | None = None) -> dict:
+    """La fila de una pieza nueva. Siempre v2 (`template_version = 2`, §16.5); `video` son las columnas de los
+    textos del video que salen de `content_video_texts.campos_de_pieza`. Un `origin = 'pedido'` (§17.3) nunca
+    cuenta cuota; `rubro_id` es del pilar `rubro`."""
     return {
         "week_start": week_start.isoformat(), "scheduled_for": dia.isoformat(), "pillar": pilar,
         "comercio_id": comercio["id"] if comercio else None,
         "ciudad_id": ciudad_id or (comercio or {}).get("ciudad_id"),
-        "counts_for_quota": bool(comercio), "quota_cycle_start": ciclo_inicio.isoformat() if ciclo_inicio else None,
-        "status": "queued", "facts": facts, "template": pilar, "template_version": 1,
+        "origin": origin, "rubro_id": rubro_id,
+        "counts_for_quota": bool(comercio) and origin == "selector",
+        "quota_cycle_start": ciclo_inicio.isoformat() if ciclo_inicio else None,
+        "status": "queued", "facts": facts, "template": pilar, "template_version": 2,
         "caption_tiktok": textos["caption_tiktok"], "caption_ig": textos["caption_ig"],
         "caption_channel": textos["caption_channel"], "hashtags": textos["hashtags"],
         "caption_engine": textos["caption_engine"], "caption_checks": textos["caption_checks"],
-        "created_by": actor,
+        "created_by": actor, **(video or {}),
     }
 
 
@@ -342,7 +360,7 @@ def plan_week(repo, crepo, week_start: date, actor: str = "selector", ahora: dat
 
     ocupados = {(p["scheduled_for"], p["pillar"]) for p in crepo.list_pieces(
         date_from=week_start.isoformat(), date_to=(week_start + timedelta(days=6)).isoformat())
-        if p.get("status") not in ("skipped", "failed")}
+        if p.get("status") not in ("skipped", "failed") and (p.get("origin") or "selector") == "selector"}
     usadas = claves_usadas(crepo, hoy)
 
     for dia, pilar in slots:
@@ -380,10 +398,14 @@ def _plan_comercio(crepo, week_start: date, dia: date, actor: str, hoy: date, ca
                 resumen["tasks_created"] += 1
             continue
         facts = content_captions.build_facts_comercio(c)
-        textos = content_captions.generate_captions(facts)
+        textos = content_captions.generate_captions(facts, crepo=crepo)
+        # Las frases del video, mirando las fotos (§16.5). Nunca frena la cola: sin Gemini salen los textos fijos.
+        prop = content_video_texts.proponer({"pillar": "comercio_del_dia", "facts": facts}, fotos, c, crepo=crepo)
+        fotos, _ = content_video_texts.aplicar_en_memoria(fotos, prop, "comercio_del_dia")
         pieza = _guardar_pieza(
             crepo, _fila_de_pieza(week_start, dia, "comercio_del_dia", facts, textos, actor, c,
-                                  ciclo_inicio=s["ciclo_inicio"]), fotos)
+                                  ciclo_inicio=s["ciclo_inicio"],
+                                  video=content_video_texts.campos_de_pieza("comercio_del_dia", facts, prop)), fotos)
         if pieza is None:
             return None            # alguien ocupó el lugar mientras tanto
         resumen["created"] += 1
@@ -458,19 +480,24 @@ def _plan_ofertas(repo, crepo, week_start: date, dia: date, actor: str, hoy: dat
     items, fuentes = [], []
     for x in elegidas:
         o, c = x["oferta"], x["comercio"]
-        item = {"nombre": c.get("nombre"), "precio": _precio(o),
-                "titulo_corto": limpiar_titulo(o.get("titulo") or o.get("descripcion"))}
+        # Sin precio (§16.1): ni en el video ni en los textos. «Consulte precio directo con el local».
+        item = {"nombre": c.get("nombre"), "titulo_corto": limpiar_titulo(o.get("titulo") or o.get("descripcion"))}
         items.append(item)
     ciudad = ciudades.get(ciudad_id) or (elegidas[0]["comercio"].get("ciudades") or {})
     facts = content_captions.build_facts_ofertas(ciudad, items)
     for x, item in zip(elegidas, facts["items"]):
         o, c = x["oferta"], x["comercio"]
+        nombre = item.get("nombre", "")
         fuentes.append({"source_type": "offer", "source_id": o["id"], "comercio_id": c["id"],
-                        "file_ref": o["imagen_url"],
-                        "caption_fact": f"{item.get('nombre', '')} · {item.get('precio', '')}"[:80]})
-    textos = content_captions.generate_captions(facts)
-    pieza = _guardar_pieza(crepo, _fila_de_pieza(week_start, dia, "ofertas", facts, textos, actor,
-                                                 ciudad_id=ciudad_id or None), fuentes)
+                        "file_ref": o["imagen_url"], "caption_fact": nombre[:80],
+                        "chip_text": content_video_texts.chip_de_nombre(nombre)})
+    textos = content_captions.generate_captions(facts, crepo=crepo)
+    # El chip de cada foto es el nombre del comercio (de la base); Gemini propone sólo el gancho y las marcas.
+    prop = content_video_texts.proponer({"pillar": "ofertas", "facts": facts}, fuentes, crepo=crepo)
+    fuentes, _ = content_video_texts.aplicar_en_memoria(fuentes, prop, "ofertas")
+    pieza = _guardar_pieza(crepo, _fila_de_pieza(
+        week_start, dia, "ofertas", facts, textos, actor, ciudad_id=ciudad_id or None,
+        video=content_video_texts.campos_de_pieza("ofertas", facts, prop)), fuentes)
     if pieza is None:
         return None
     resumen["created"] += 1
@@ -488,6 +515,8 @@ def cambiar_fotos(crepo, pieza: dict, remove_positions: list[int], hoy: date | N
     quitar = {int(p) for p in remove_positions}
     if not quitar or not quitar <= {f["position"] for f in activas}:
         raise HTTPException(status_code=400, detail="Elegí fotos de la pieza para quitar")
+    if pieza.get("pillar") in content_video_texts.PILARES_CON_NOMBRE:
+        return _cambiar_fotos_de_compilado(crepo, pieza, activas, quitar, hoy)
     quedan = [f for f in activas if f["position"] not in quitar]
     removidas = [f for f in activas if f["position"] in quitar]
     if pieza.get("comercio_id"):
@@ -495,7 +524,7 @@ def cambiar_fotos(crepo, pieza: dict, remove_positions: list[int], hoy: date | N
         # Las que ya se quitaron antes (inactivas) tampoco vuelven.
         excluir = {_clave_de_uso(f) for f in crepo.list_sources(pieza["id"], only_active=False)}
         nuevas = elegir_fotos(crepo, comercio, MAX_FOTOS_COMERCIO - len(quedan), hoy,
-                              claves_usadas(crepo, hoy) - {_clave_de_uso(f) for f in activas}, excluir)
+                              _usadas_para_cambiar(crepo, pieza, activas, hoy), excluir)
     else:
         nuevas = []
     if len(quedan) + len(nuevas) < MIN_FOTOS:
@@ -506,13 +535,112 @@ def cambiar_fotos(crepo, pieza: dict, remove_positions: list[int], hoy: date | N
     # `unique (piece_id, position)` cuenta TAMBIÉN las fuentes ya dadas de baja: la posición nueva sale de todas.
     siguiente = max((f["position"] for f in crepo.list_sources(pieza["id"], only_active=False)), default=-1) + 1
     # Primero se suman los reemplazos y recién después se da de baja lo viejo: si el insert falla, no se pierde nada.
-    crepo.insert_sources([{"piece_id": pieza["id"], "position": siguiente + i, "source_type": n["source_type"],
-                           "source_id": n.get("source_id"), "comercio_id": n["comercio_id"],
-                           "file_ref": n["file_ref"], "caption_fact": n.get("caption_fact")}
-                          for i, n in enumerate(nuevas)])
+    insertadas = crepo.insert_sources([
+        {"piece_id": pieza["id"], "position": siguiente + i, "source_type": n["source_type"],
+         "source_id": n.get("source_id"), "comercio_id": n["comercio_id"],
+         "file_ref": n["file_ref"], "caption_fact": n.get("caption_fact")}
+        for i, n in enumerate(nuevas)])
     for f in removidas:
         crepo.deactivate_source(pieza["id"], f["position"])
+    # Sólo la frase, la marca y el encuadre de la foto NUEVA (§16.5); los textos de la pieza no se tocan. Después de
+    # dar de baja las viejas: así la cuenta de «quedan 4 sin marca» es la de verdad. No frena el cambio si falla.
+    content_video_texts.proponer_para_nuevas(crepo, pieza, insertadas)
     return {"quitadas": len(removidas), "agregadas": len(nuevas)}
+
+
+def _usadas_para_cambiar(crepo, pieza: dict, activas: list[dict], hoy: date) -> set[tuple]:
+    """Las fotos que NO se pueden ofrecer de reemplazo. Un pedido a mano no mira la regla de «no repetir una foto en
+    60 días» (igual que al pedirlo): sólo vale lo que la pieza misma ya usó (eso va en `excluir`)."""
+    if pieza.get("origin") == "pedido":
+        return set()
+    return claves_usadas(crepo, hoy) - {_clave_de_uso(f) for f in activas}
+
+
+MSG_COMPILADO_CORTO = ("No hay otra foto que sirva de ese comercio y sin él el video quedaría con menos de "
+                       f"{MIN_OFERTAS} comercios")
+
+
+def _cambiar_fotos_de_compilado(crepo, pieza: dict, activas: list[dict], quitar: set[int], hoy: date) -> dict:
+    """«Cambiar fotos» de un video de rubro u ofertas: cada foto es de UN comercio (el chip es su nombre).
+
+    - Rubro: se busca UNA foto de reemplazo del mismo comercio (banco más reciente, portada, galería).
+    - Sin reemplazo —y siempre en ofertas, donde la foto es la de la oferta— se quita el comercio: se rehacen
+      `facts.items`, los textos de la red y los del video (fijos, o la propuesta de Gemini si está prendida), igual que
+      al retirar su autorización (`quitar_comercio_de_compilado`).
+    - Si el video quedaría con menos de `MIN_OFERTAS` comercios: 409 `no_more_photos` (no se crea ninguna tarea).
+
+    Las fotos usadas dentro de la propia pieza no vuelven; un pedido a mano no mira la regla de los 60 días."""
+    facts = pieza.get("facts") or {}
+    items = facts.get("items") or []
+    if len(items) != len(activas):
+        raise HTTPException(status_code=409, detail={
+            "codigo": "no_more_photos", "mensaje": "Esta pieza no se puede cambiar: volvé a pedirla"})
+    pillar = pieza["pillar"]
+    item_de = {f["position"]: it for f, it in zip(activas, items)}
+    excluir = {_clave_de_uso(f) for f in crepo.list_sources(pieza["id"], only_active=False)}
+    usadas = _usadas_para_cambiar(crepo, pieza, activas, hoy)
+    reemplazos: list[tuple[dict, dict]] = []
+    sin_reemplazo: list[dict] = []
+    for f in (f for f in activas if f["position"] in quitar):
+        nueva = []
+        if pillar == "rubro":
+            comercio = crepo.get_comercio_ficha(f["comercio_id"])
+            if comercio and comercio.get("activo") is not False and not comercio.get("suspendido"):
+                nueva = elegir_fotos(crepo, comercio, 1, hoy, usadas, excluir, preferir_banco=True, con_ofertas=False)
+        if nueva:
+            excluir.add(_clave_de_uso(nueva[0]))
+            reemplazos.append((f, nueva[0]))
+        else:
+            sin_reemplazo.append(f)
+    quedan = [f for f in activas if f["position"] not in quitar]
+    if len(quedan) + len(reemplazos) < MIN_OFERTAS:
+        raise HTTPException(status_code=409, detail={"codigo": "no_more_photos", "mensaje": MSG_COMPILADO_CORTO})
+    siguiente = max((f["position"] for f in crepo.list_sources(pieza["id"], only_active=False)), default=-1) + 1
+    filas = []
+    for i, (vieja, nueva) in enumerate(reemplazos):
+        nombre = (item_de.get(vieja["position"]) or {}).get("nombre", "")
+        filas.append({"piece_id": pieza["id"], "position": siguiente + i, "source_type": nueva["source_type"],
+                      "source_id": nueva.get("source_id"), "comercio_id": nueva["comercio_id"],
+                      "file_ref": nueva["file_ref"], "caption_fact": nombre[:80],
+                      "chip_text": content_video_texts.chip_de_nombre(nombre)})
+    # Primero se suman los reemplazos y recién después se da de baja lo viejo: si el insert falla, no se pierde nada.
+    insertadas = crepo.insert_sources(filas) if filas else []
+    for f in [v for v, _ in reemplazos] + sin_reemplazo:
+        crepo.deactivate_source(pieza["id"], f["position"])
+    # Los items siguen el orden de las fuentes: las que quedan y, al final, las de los reemplazos.
+    nuevos_items = [item_de[f["position"]] for f in quedan] + [item_de[v["position"]] for v, _ in reemplazos]
+    if sin_reemplazo:
+        patch = _patch_de_compilado(crepo, pieza, nuevos_items, quedan + (insertadas or []))
+    else:
+        patch = {"facts": {**facts, "items": nuevos_items}}
+    crepo.update_piece(pieza["id"], patch)
+    logger.info("content.compilado_fotos_cambiadas", pieza=pieza["id"], reemplazadas=len(reemplazos),
+                comercios_quitados=len(sin_reemplazo))
+    return {"quitadas": len(quitar), "agregadas": len(reemplazos), "comercios_quitados": len(sin_reemplazo)}
+
+
+def _patch_de_compilado(crepo, pieza: dict, nuevos_items: list[dict], fuentes: list[dict]) -> dict:
+    """Lo que cambia de una pieza `ofertas` o `rubro` cuando se le saca un comercio: `facts` con los `items` que
+    quedan, los textos de las redes (plantilla fija) y los textos del video (fijos, o la propuesta de Gemini si el
+    interruptor está prendido; nunca los de antes, que podían nombrar al comercio quitado)."""
+    facts = pieza.get("facts") or {}
+    pillar = pieza.get("pillar") or facts.get("pillar")
+    if pillar == "rubro":
+        nuevos_facts = content_captions.build_facts_rubro(
+            {"nombre": facts.get("rubro"), "slug": facts.get("rubro_slug")},
+            {"nombre": facts.get("ciudad"), "slug": facts.get("ciudad_slug"), "departamento": facts.get("departamento")},
+            nuevos_items)
+    else:
+        nuevos_facts = content_captions.build_facts_ofertas(
+            {"nombre": facts.get("ciudad"), "departamento": facts.get("departamento")}, nuevos_items)
+    textos = content_captions.template_captions(nuevos_facts)
+    checks = content_captions.validate_piece(nuevos_facts, textos["caption_tiktok"], textos["caption_ig"],
+                                             textos["caption_channel"], textos["hashtags"])
+    prop = content_video_texts.proponer({"pillar": pillar, "facts": nuevos_facts}, fuentes, crepo=crepo)
+    return {"facts": nuevos_facts, "caption_tiktok": textos["caption_tiktok"], "caption_ig": textos["caption_ig"],
+            "caption_channel": textos["caption_channel"], "hashtags": textos["hashtags"], "caption_engine": "template",
+            "caption_checks": checks, "caption_edited": False,
+            **content_video_texts.campos_de_pieza(pillar, nuevos_facts, prop)}
 
 
 def pedir_fotos_si_faltan(crepo, pieza: dict, hoy: date | None = None) -> None:
@@ -567,7 +695,7 @@ def _volver_a_la_cola(crepo, pieza: dict, extra: dict | None = None) -> dict | N
 
 
 def quitar_comercio_de_compilado(crepo, pieza: dict, comercio_id: str, actor: str) -> str | None:
-    """Un comercio retiró su autorización y aparece en un compilado de ofertas: se le quita su parte.
+    """Un comercio retiró su autorización y aparece en un compilado (ofertas o video de rubro): se le quita su parte.
 
     `skipped` si el compilado queda por debajo del mínimo (se saltea entero), `rebuilt` si se rearmó sin
     ese comercio (textos nuevos de plantilla y el render vuelve a la cola), `closed` si ya había salido en
@@ -586,17 +714,11 @@ def quitar_comercio_de_compilado(crepo, pieza: dict, comercio_id: str, actor: st
         return "skipped" if content_consent.saltear_pieza(crepo, pieza, actor, ahora) else None
     posiciones = {f["position"] for f in quitar}
     nuevos = [it for f, it in zip(activas, items) if f["position"] not in posiciones]
-    nuevos_facts = content_captions.build_facts_ofertas(
-        {"nombre": facts.get("ciudad"), "departamento": facts.get("departamento")}, nuevos)
-    textos = content_captions.template_captions(nuevos_facts)
-    checks = content_captions.validate_piece(nuevos_facts, textos["caption_tiktok"], textos["caption_ig"],
-                                             textos["caption_channel"], textos["hashtags"])
+    restantes = [f for f in activas if f["position"] not in posiciones]
+    extra = _patch_de_compilado(crepo, pieza, nuevos, restantes)
     for f in quitar:
         crepo.deactivate_source(pieza["id"], f["position"])
-    nueva = _volver_a_la_cola(crepo, pieza, {
-        "facts": nuevos_facts, "caption_tiktok": textos["caption_tiktok"], "caption_ig": textos["caption_ig"],
-        "caption_channel": textos["caption_channel"], "hashtags": textos["hashtags"], "caption_engine": "template",
-        "caption_checks": checks, "caption_edited": False})
+    nueva = _volver_a_la_cola(crepo, pieza, extra)
     logger.info("content.compilado_rearmado", pieza=pieza["id"], sin_comercio=comercio_id, por=actor)
     return "rebuilt" if nueva else None
 

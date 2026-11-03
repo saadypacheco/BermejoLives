@@ -12,7 +12,9 @@ from datetime import date, datetime, timedelta, timezone
 from app.core.config import settings
 from app.services import cargas, content_captions, content_consent, content_posts, content_storage, subscriber_messages
 
-PILLAR_LABEL = {"comercio_del_dia": "Comercio del día", "ofertas": "Ofertas de la semana"}
+PILLAR_LABEL = {"comercio_del_dia": "Comercio del día", "ofertas": "Ofertas de la semana", "rubro": "Repaso de rubro"}
+#: De dónde salió la pieza: la semana automática o un pedido a mano (§17.3).
+ORIGIN_LABEL = {"selector": "Semana automática", "pedido": "Pedido a mano"}
 STATUS_LABEL = {"queued": "En cola", "rendering": "Armando el video", "ready_for_review": "Para revisar",
                 "approved": "Aprobada", "published": "Publicada", "skipped": "Salteada", "failed": "Con problemas"}
 POST_STATUS_LABEL = {"pending": "Pendiente", "claimed": "Publicando", "posted": "Publicada", "skipped": "Salteada"}
@@ -63,11 +65,31 @@ def _url_de_archivo(p: dict, kind: str) -> str | None:
     return content_storage.ruta_firmada("piece", p["id"], kind)
 
 
+def titulo_de(p: dict) -> str | None:
+    """El título de la pieza para el panel: el comercio, «Ofertas de la semana» o «{Rubro} en {ciudad}»."""
+    f = p.get("facts") or {}
+    if p.get("pillar") == "rubro":
+        return f"{f.get('rubro') or 'Comercios'} en {f.get('ciudad') or 'su ciudad'}"
+    if p.get("pillar") == "ofertas":
+        return "Ofertas de la semana"
+    return f.get("nombre")
+
+
+def rubro_de(p: dict) -> dict | None:
+    """`{nombre, slug}` del rubro de un video de rubro; null en las demás piezas."""
+    if p.get("pillar") != "rubro":
+        return None
+    f = p.get("facts") or {}
+    return {"nombre": f.get("rubro"), "slug": f.get("rubro_slug")}
+
+
 def piece_summary(p: dict) -> dict:
     f = p.get("facts") or {}
     return {
         "id": p["id"], "scheduled_for": p["scheduled_for"], "pillar": p["pillar"],
-        "pillar_label": PILLAR_LABEL.get(p["pillar"], p["pillar"]), "status": p["status"],
+        "pillar_label": PILLAR_LABEL.get(p["pillar"], p["pillar"]), "title": titulo_de(p),
+        "origin": p.get("origin") or "selector", "origin_label": ORIGIN_LABEL.get(p.get("origin") or "selector"),
+        "rubro": rubro_de(p), "status": p["status"],
         "status_label": STATUS_LABEL.get(p["status"], p["status"]),
         "comercio": {"id": p["comercio_id"], "nombre": f.get("nombre"), "slug": f.get("slug")} if p.get("comercio_id") else None,
         "ciudad_nombre": f.get("ciudad"), "counts_for_quota": bool(p.get("counts_for_quota")),
@@ -100,12 +122,15 @@ def source_response(s: dict, facts: dict) -> dict:
         thumb = content_storage.ruta_firmada("asset", s["source_id"], "thumb") if s.get("source_id") else None
     else:
         thumb = s.get("file_ref")
-    if facts.get("pillar") == "ofertas":
+    if facts.get("pillar") in ("ofertas", "rubro"):
         nombre = (s.get("caption_fact") or "").split(" · ")[0] or None
     else:
         nombre = facts.get("nombre")
-    return {"position": s["position"], "source_type": s["source_type"], "thumb_url": thumb,
-            "caption_fact": s.get("caption_fact"), "comercio_nombre": nombre}
+    # `id` es el de la fila de `content_piece_sources`: es el `source_id` que lleva cada frase en
+    # `PATCH /admin/content/pieces/{id}/video-texts` (§16.9). `chip_text`, `photo_flags` y `focus_y` son de la v2.
+    return {"id": s.get("id"), "position": s["position"], "source_type": s["source_type"], "thumb_url": thumb,
+            "caption_fact": s.get("caption_fact"), "comercio_nombre": nombre, "chip_text": s.get("chip_text"),
+            "photo_flags": list(s.get("photo_flags") or []), "focus_y": s.get("focus_y")}
 
 
 def piece_response(p: dict, fuentes: list[dict], posts: list[dict], ahora: datetime | None = None) -> dict:
@@ -122,6 +147,10 @@ def piece_response(p: dict, fuentes: list[dict], posts: list[dict], ahora: datet
                    "started_at": p.get("render_started_at"), "ms": p.get("render_ms")},
         "posts": [post_response(p, x, ahora) for x in posts],
         "approved_by": p.get("approved_by"), "approved_at": p.get("approved_at"),
+        # Textos del video con el diseño del kit (§16.9). `video_texts` es null en las piezas v1.
+        "template_version": int(p.get("template_version") or 1), "video_texts": p.get("video_texts"),
+        "video_texts_engine": p.get("video_texts_engine"), "video_texts_checks": p.get("video_texts_checks") or [],
+        "photo_flags_ok": bool(p.get("photo_flags_ok")),
     }
 
 

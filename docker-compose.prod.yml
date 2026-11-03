@@ -193,7 +193,8 @@ services:
       #   scp qr.png <vps>:<carpeta del compose>/data/pago/qr.png
       # y el backend lo sirve por /pago/qr/imagen (re-codificado). Cambiarlo no pide reinicio.
       - ./data/pago:/data/pago:ro
-    networks: [traefik, internal]
+    # `render`: red interna compartida sólo con el armador de videos (reels).
+    networks: [traefik, internal, render]
     labels:
       - traefik.enable=true
       - traefik.docker.network=traefik
@@ -202,6 +203,38 @@ services:
       - traefik.http.routers.buscadonde-be.tls=true
       - traefik.http.routers.buscadonde-be.tls.certresolver=letsencrypt
       - traefik.http.services.buscadonde-be.loadbalancer.server.port=8000
+
+  # Armador de videos 9:16 (docs/contenido-redes-tecnico.md, 16.4): Chromium fotografía
+  # cada cuadro de una página HTML y ffmpeg arma el mp4. Sin puerto publicado, sin Traefik
+  # y sin salida a internet: sólo está en la red `render` (internal: true), que comparte
+  # únicamente con el backend. El backend lo llama por http://buscadonde-reels:8090.
+  # Del volumen content_private sólo usa tmp/<piece_id>/ (lee las fotos, escribe video.mp4
+  # y cover.jpg). RENDERER_TOKEN va en renderer/.env, igual al de backend/.env.
+  reels:
+    build:
+      context: ./renderer
+    container_name: buscadonde-reels
+    restart: unless-stopped
+    env_file: ./renderer/.env
+    mem_limit: 1536m
+    cpus: 1.5
+    pids_limit: 512
+    read_only: true
+    # Sin capacidades de Linux y sin poder ganar privilegios (setuid): el render corre como pwuser y no necesita ninguna.
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:size=256m
+    init: true
+    volumes:
+      - content_private:/data/content
+    networks: [render]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
 volumes:
   tiles_cache:
@@ -217,3 +250,6 @@ networks:
   traefik:
     external: true
   internal:
+  # Backend <-> reels. `internal: true`: sin salida a internet ni puertos al host.
+  render:
+    internal: true

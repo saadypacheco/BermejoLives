@@ -163,13 +163,34 @@ def guardar_foto(comercio_id: str, asset_id: str, procesada: dict,
     return rel_foto, rel_thumb
 
 
+def _ruta_sin_resolver(rel: str | None) -> Path | None:
+    """La ruta de un archivo bajo `CONTENT_DIR` SIN resolver el último tramo: si es un enlace simbólico se borra el
+    enlace y no lo que apunta (`safe_path` lo seguiría y borraría un archivo de afuera). Sólo se resuelve la carpeta
+    madre, que tiene que quedar dentro de `CONTENT_DIR`."""
+    if not rel or "\x00" in rel:
+        return None
+    try:
+        base = raiz().resolve()
+        candidata = base / rel
+        if candidata.name in ("", ".", ".."):
+            return None
+        madre = candidata.parent.resolve()
+        if madre != base and base not in madre.parents:
+            logger.warning("content.ruta_fuera_del_directorio", ruta=str(rel)[:120])
+            return None
+        return madre / candidata.name
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def borrar(rel: str | None) -> bool:
-    """Borra el archivo (sólo si está bajo `CONTENT_DIR`). True si lo había."""
-    destino = safe_path(rel)
+    """Borra el archivo (sólo si está bajo `CONTENT_DIR`). True si lo había. Un enlace simbólico se borra a él, no
+    a su destino (`unlink` sobre la ruta sin resolver)."""
+    destino = _ruta_sin_resolver(rel)
     if destino is None:
         return False
     try:
-        if destino.is_file():
+        if destino.is_symlink() or destino.is_file():
             destino.unlink()
             return True
     except OSError:

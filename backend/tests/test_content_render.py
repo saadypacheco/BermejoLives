@@ -64,7 +64,7 @@ def test_la_banda_de_la_oferta_va_fuera_de_la_foto_y_el_texto_dentro_de_la_zona_
         lz, caja = job.tramo_foto(_foto(w, h), banda)
         b0, b1 = job.OFERTA_BANDA
         assert caja[3] <= b0 <= b1 and caja[1] >= job.OFERTA_FOTO_Y[0] - 1                      # la foto no se tapa
-        assert [t for t, _ in lz.cajas] == ["Calzados Luz", "Bs 180", "Zapatillas deportivas"]
+        assert [t for t, _ in lz.cajas] == ["Calzados Luz", "Zapatillas deportivas"]               # sin precio (§16.1)
         assert all(dentro(c) and c[1] >= b0 for _, c in lz.cajas), lz.cajas
         # el píxel del medio de la banda es verde de marca
         x, y = lz.p(540), lz.p(b0 + 5)

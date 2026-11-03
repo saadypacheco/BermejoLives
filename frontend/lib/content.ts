@@ -13,8 +13,9 @@ import { getAgenteToken, clearAgente } from "@/lib/campo";
 import { getCToken, clearComercio } from "@/lib/comercio";
 import { subirConProgreso } from "@/lib/upload";
 import {
-  API_BASE, camposSubida,
+  API_BASE, camposSubida, geminiContentPrendido,
   type ConsentVia, type ContentNetwork, type ContentPieceStatus, type ContentPillar, type MetaSubida,
+  type PedidoDeVideo, type PiezaOrigen, type RequestCheck, type RubroOpcion,
 } from "@/lib/content-pure";
 
 export type { ConsentVia, ContentNetwork, ContentPieceStatus, ContentPillar, ContentPostStatus, MetaSubida } from "@/lib/content-pure";
@@ -91,10 +92,35 @@ export type ContentPieceSummary = {
   counts_for_quota: boolean;
   cover_url: string | null; duration_s: number | null;
   skip_reason: string | null; render_error: string | null;
+  /** §17: `pedido` = la pidió una persona a mano; `selector` = la armó la semana automática.
+   *  El rubro sólo viene en las piezas `pillar = 'rubro'`. Opcionales: el backend viejo no los manda. */
+  origin?: PiezaOrigen;
+  rubro?: { nombre: string; slug: string } | null;
 };
 export type ContentPieceSource = {
   position: number; source_type: "asset" | "gallery" | "cover" | "offer";
   thumb_url: string; caption_fact: string | null; comercio_nombre: string | null;
+  /** Plantillas v2 (§16.9). Todo opcional: las piezas v1 no lo traen. `id` es el de
+   *  `content_piece_sources`, que pide `PATCH …/video-texts` en `chips[].source_id`. */
+  id?: string;
+  chip_text?: string | null;
+  photo_flags?: string[];
+  focus_y?: number | null;
+};
+
+/** Los textos que se dibujan dentro del video v2 (§16.4). En neutro («usted»). */
+export type VideoTexts = {
+  kick?: string | null;
+  title1?: string;
+  title2?: string;
+  subtitle?: string | null;
+  close_title1?: string;
+  close_title2?: string;
+  search_term?: string;
+  place_chip?: string | null;
+  close_line?: string;
+  url?: string;
+  lema?: string;
 };
 export type ContentPieceResponse = ContentPieceSummary & {
   facts: Record<string, unknown>;
@@ -106,9 +132,26 @@ export type ContentPieceResponse = ContentPieceSummary & {
   render: { attempts: number; next_at: string | null; started_at: string | null; ms: number | null };
   posts: ContentPostResponse[];
   approved_by: string | null; approved_at: string | null;
+  /** Plantillas v2 (§16.9). Opcionales para no romper con piezas v1. */
+  template_version?: number;
+  video_texts?: VideoTexts | null;
+  /** `gemini:<modelo>` | `template` | `human`. */
+  video_texts_engine?: string | null;
+  video_texts_checks?: string[];
+  photo_flags_ok?: boolean;
 };
 export type ContentPieceUpdate = {
   caption_tiktok?: string | null; caption_ig?: string | null; caption_channel?: string | null; hashtags?: string[] | null;
+};
+/** Body de `PATCH /admin/content/pieces/{id}/video-texts` (§16.9). */
+export type VideoTextsUpdate = {
+  kick?: string | null;
+  title1: string;
+  title2: string;
+  subtitle?: string | null;
+  search_term: string;
+  chips: { source_id: string; text: string | null }[];
+  photo_flags_ok?: boolean;
 };
 export type ContentPieceSkip = { reason: "bad_photos" | "merchant_asked" | "other"; note: string | null };
 export type ContentDownloadLinksResponse = { video_url: string; video_download_url: string; cover_url: string; expires_at: string };
@@ -138,7 +181,7 @@ export type ContentDayPackageResponse = {
 };
 
 export type ContentStatusResponse = {
-  render_worker: "disabled" | "no_ffmpeg" | "idle" | "running" | "paused_disk" | "unsafe_dir";
+  render_worker: "disabled" | "no_ffmpeg" | "no_renderer" | "idle" | "running" | "paused_disk" | "unsafe_dir";
   current_piece_id: string | null;
   queue: { queued: number; rendering: number; ready_for_review: number; failed: number };
   last_render: { piece_id: string; at: string; ms: number | null; ok: boolean; error: string | null } | null;
@@ -364,6 +407,15 @@ export const getPieza = (id: string): Promise<ContentPieceResponse> =>
 export const guardarTextosPieza = (id: string, patch: ContentPieceUpdate): Promise<ContentPieceResponse> =>
   panelJson(`/admin/content/pieces/${encodeURIComponent(id)}`, { method: "PATCH", body: patch }, "No se pudieron guardar los textos");
 
+/** Guarda los textos del video y vuelve a armarlo. 400 = objeción del validador; 409 = la pieza
+ *  no admite el cambio ahora (se está armando, ya se aprobó…). El mensaje es el `detail` del backend. */
+export const guardarTextosVideo = (id: string, body: VideoTextsUpdate): Promise<ContentPieceResponse> =>
+  panelJson(`/admin/content/pieces/${encodeURIComponent(id)}/video-texts`, { method: "PATCH", body }, "No se pudieron guardar los textos del video");
+
+/** Pide a Gemini otra propuesta de textos y vuelve a armar el video (mismos 409 que el PATCH). */
+export const pedirOtraPropuestaVideo = (id: string): Promise<ContentPieceResponse> =>
+  panelJson(`/admin/content/pieces/${encodeURIComponent(id)}/video-texts/propose`, { method: "POST" }, "No se pudo pedir otra propuesta");
+
 export const rearmarPieza = (id: string, removePositions: number[]): Promise<ContentPieceResponse> =>
   panelJson(`/admin/content/pieces/${encodeURIComponent(id)}/sources`, { method: "PUT", body: { remove_positions: removePositions } }, "No se pudo rearmar la pieza");
 
@@ -399,6 +451,43 @@ export const saltarPost = (id: string, reason: string): Promise<ContentPostRespo
 
 export const getEstadoContenido = (): Promise<ContentStatusResponse> =>
   panelJson("/admin/content/status", {}, "No se pudo leer el estado del armado de videos");
+
+/* ─── Pedir un video a mano e interruptores de costo (§17) ───────────────── */
+
+export type { PedidoDeVideo, PiezaOrigen, RequestCheck, RubroOpcion } from "@/lib/content-pure";
+
+export type CostSwitch = {
+  key: string; label: string; what: string; cost: string; off_means: string;
+  enabled: boolean; updated_by: string | null; updated_at: string | null;
+};
+
+export const listarInterruptores = async (): Promise<CostSwitch[]> => {
+  const d = await panelJson<{ items?: CostSwitch[] }>("/admin/cost-switches", {}, "No se pudieron cargar los servicios con costo");
+  return d.items ?? [];
+};
+
+/** ¿Está prendido el interruptor `gemini_content`? `null` si no se pudo leer (no se adivina). */
+export const leerGeminiContent = async (): Promise<boolean | null> => {
+  try { return geminiContentPrendido(await listarInterruptores()); } catch { return null; }
+};
+
+/** Sólo con permiso `equipo`. Prender exige `confirm_cost = true` (400 si no); sin permiso, 403. */
+export const cambiarInterruptor = async (key: string, body: { enabled: boolean; confirm_cost: boolean }): Promise<void> => {
+  await panelJson(`/admin/cost-switches/${encodeURIComponent(key)}`, { method: "PUT", body }, "No se pudo cambiar el servicio");
+};
+
+/** 201 con la pieza en cola; 422 (no se puede armar) y 429 (ya hay 5 armándose) traen el motivo en el `detail`. */
+export const pedirVideo = (body: PedidoDeVideo): Promise<ContentPieceResponse> =>
+  panelJson("/admin/content/pieces/request", { method: "POST", body }, "No se pudo pedir el video");
+
+export const opcionesDePedido = async (ciudadSlug: string): Promise<RubroOpcion[]> => {
+  const d = await panelJson<{ rubros?: RubroOpcion[] }>(
+    `/admin/content/request-options?ciudad_slug=${encodeURIComponent(ciudadSlug)}`, {}, "No se pudieron cargar los rubros");
+  return d.rubros ?? [];
+};
+
+export const chequeoDePedido = (comercioId: string): Promise<RequestCheck> =>
+  panelJson(`/admin/content/merchants/${encodeURIComponent(comercioId)}/request-check`, {}, "No se pudo revisar el comercio");
 
 /* ─── APIs inyectadas en los componentes (panel vs. campo) ───────────────── */
 // El banco del comercio es UN componente que no sabe con qué token habla: el

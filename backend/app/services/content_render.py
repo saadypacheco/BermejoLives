@@ -1,21 +1,30 @@
-"""Lado PADRE del render de las piezas (docs/contenido-redes-tecnico.md §5.4).
+"""Lado PADRE del render de las piezas (docs/contenido-redes-tecnico.md §5.4 y §16.5).
 
-`render_tick` hace UNA vuelta del loop de `main.py`: mira que se pueda renderizar (ffmpeg, disco),
-recupera las piezas colgadas, toma la `queued` más vieja, arma el `job.json`, lanza el
-subproceso (`content_render_job`, con `nice` e `ionice` donde existen), y según lo que
-devuelva deja la pieza lista para revisar o la reintenta.
+`render_tick` hace UNA vuelta del loop de `main.py`: mira que se pueda renderizar, recupera las piezas
+colgadas, toma la `queued` más vieja, arma la carpeta del job y según lo que devuelva el motor deja la pieza
+lista para revisar o la reintenta.
+
+DOS MOTORES (`CONTENT_RENDER_ENGINE`)
+=====================================
+- `kit` (por defecto, §16): el contenedor `reels` (Chromium + ffmpeg) dibuja la plantilla v2 del kit. Acá se
+  arma `tmp/<piece_id>/` con las fotos ya preparadas (`s0.jpg`, `s1.jpg`…) y el `job.json` de §16.4, y se le
+  pide el render por HTTP (`POST /render`, con token). Sin `RENDERER_TOKEN`, o si `/health` no contesta, el
+  worker no toma trabajos y `estado_del_worker` dice `no_renderer`.
+- `pillow` (respaldo, y la PC sin Docker): el motor v1, un subproceso de este mismo backend
+  (`content_render_job`, con `nice` e `ionice` donde existen).
 
 UNO A LA VEZ, EN DOS NIVELES
 ============================
 - En este proceso: un candado en memoria (`_lock`).
 - En la base: la toma es un UPDATE condicional (`... WHERE status = 'queued'`). Aunque alguien
-  levante dos workers de uvicorn, no hay dos renders de la misma pieza.
+  levante dos workers de uvicorn, no hay dos renders de la misma pieza. (El contenedor además contesta 409
+  si ya tiene uno en curso: es reintentable.)
 
 LAS FALLAS
 ==========
-Reintentable (timeout, ffmpeg que murió, memoria): `attempts + 1`; con menos de
+Reintentable (timeout, red caída, contenedor ocupado, memoria): `attempts + 1`; con menos de
 `CONTENT_RENDER_MAX_ATTEMPTS`, vuelve a `queued` esperando 10 min × intento; si no, `failed`.
-No reintentable (faltan fotos, fuente ausente): `failed` directo. Una pieza `failed` no
+No reintentable (faltan fotos, fuente ausente, token rechazado): `failed` directo. Una pieza `failed` no
 consume la cuota del suscriptor: el selector de la semana siguiente la vuelve a ofrecer.
 """
 from __future__ import annotations
@@ -30,21 +39,34 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import httpx
 import structlog
 
 from app.core.config import settings
-from app.services import content_consent, content_storage
+from app.services import content_consent, content_storage, content_video_texts
 
 logger = structlog.get_logger()
 
 _lock = threading.Lock()
 _estado: dict = {"actual": None, "ultimo": None, "avisado_sin_ffmpeg": False, "avisado_dir": False,
-                 "avisado_disco": False}
+                 "avisado_disco": False, "avisado_sin_renderer": False}
 
 #: Mínimo de fotos que sirven para armar el video (las dos plantillas).
 MIN_FOTOS = 4
+#: El video v2 lleva de 4 a 6 fotos (§16.4).
+MAX_FOTOS_KIT = 6
+#: Lado mayor de las fotos que se le pasan al contenedor (§16.4).
+LADO_FOTO_KIT = 1200
+#: Cuánto vale la respuesta de `/health` del contenedor antes de volver a preguntar, y cuánto se espera.
+SALUD_CACHE_SEG = 10
+SALUD_TIMEOUT_SEG = 3
+_salud: dict = {"hasta": 0.0, "ok": False}
+#: Largo mínimo de `RENDERER_TOKEN` (el contenedor tampoco arranca con uno más corto).
+MIN_TOKEN_CHARS = 32
 #: Margen sobre el timeout antes de dar una pieza por colgada.
 MARGEN_COLGADA_SEG = 120
+#: Nombres FIJOS de las salidas del contenedor (contrato §16.4), relativos a la carpeta del job.
+OUT_VIDEO_KIT, OUT_COVER_KIT = "out/video.mp4", "out/cover.jpg"
 #: Un video más pesado que esto se avisa en el log (no falla).
 VIDEO_PESADO_BYTES = 15 * 1024 * 1024
 
@@ -55,13 +77,50 @@ def ffmpeg_disponible() -> bool:
     return bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
 
 
+def motor() -> str:
+    """`kit` (el contenedor `reels`, por defecto) o `pillow` (el motor v1 de este backend)."""
+    return "pillow" if (settings.content_render_engine or "").strip().lower() == "pillow" else "kit"
+
+
+def reiniciar_salud() -> None:
+    _salud.update({"hasta": 0.0, "ok": False})
+
+
+def renderer_vivo() -> bool:
+    """¿El contenedor `reels` contesta `GET /health`? La respuesta se cachea `SALUD_CACHE_SEG` segundos: el loop
+    pregunta cada vuelta y el panel cada vez que se abre el estado; no hay que pegarle al contenedor cada vez."""
+    ahora = time.monotonic()
+    if ahora < _salud["hasta"]:
+        return _salud["ok"]
+    ok = False
+    try:
+        r = httpx.get(f"{settings.renderer_url.rstrip('/')}/health", timeout=SALUD_TIMEOUT_SEG, trust_env=False)
+        datos = r.json() if r.status_code == 200 else {}
+        ok = bool(isinstance(datos, dict) and datos.get("ok") and datos.get("chromium") is not False
+                  and datos.get("ffmpeg") is not False)
+    except Exception:  # noqa: BLE001
+        ok = False
+    _salud.update({"hasta": ahora + SALUD_CACHE_SEG, "ok": ok})
+    return ok
+
+
+def renderer_disponible() -> bool:
+    """Con `kit` hace falta un token de al menos `MIN_TOKEN_CHARS` caracteres y que el contenedor conteste."""
+    return len(settings.renderer_token or "") >= MIN_TOKEN_CHARS and renderer_vivo()
+
+
 def estado_del_worker() -> str:
-    """`disabled | unsafe_dir | no_ffmpeg | paused_disk | running | idle` (GET /admin/content/status)."""
+    """`disabled | unsafe_dir | no_renderer | no_ffmpeg | paused_disk | running | idle`
+    (GET /admin/content/status). `no_renderer`: con el motor `kit`, falta `RENDERER_TOKEN` o `/health` del
+    contenedor `reels` no contesta; `no_ffmpeg` es lo mismo para el motor `pillow`."""
     if not settings.content_render_worker:
         return "disabled"
     if not content_storage.dir_seguro():
         return "unsafe_dir"
-    if not ffmpeg_disponible():
+    if motor() == "kit":
+        if not renderer_disponible():
+            return "no_renderer"
+    elif not ffmpeg_disponible():
         return "no_ffmpeg"
     if _estado["actual"]:
         return "running"
@@ -153,6 +212,78 @@ def _correr_subproceso(job_path: Path) -> dict:
                 "error": f"El render terminó sin respuesta (código {proc.returncode}): {(err or '')[-200:]}"}
 
 
+# ───────────────────────────────────────────────────────────── el contenedor `reels` (motor kit)
+
+def _pedir_render_kit(piece_id: str) -> dict:
+    """`POST /render` al contenedor `reels` (§16.4) y su respuesta como `{ok, ...}` o `{ok: False, error,
+    retryable}`. El token viaja sólo en la cabecera y nunca se loguea.
+
+    Reintentable: 409 (ya hay un render en curso), errores de red, timeout, 5xx y respuestas ilegibles.
+    NO reintentable: 401 (el token no coincide: reintentar no lo arregla) y 400 (el pedido está mal)."""
+    url = f"{settings.renderer_url.rstrip('/')}/render"
+    plazo = settings.content_render_timeout_seg
+    try:
+        r = httpx.post(url, json={"piece_id": piece_id}, headers={"Authorization": f"Bearer {settings.renderer_token}"},
+                       timeout=httpx.Timeout(plazo, connect=10), trust_env=False)
+    except httpx.TimeoutException:
+        return {"ok": False, "error": f"El render pasó de {plazo} s", "retryable": True}
+    except httpx.HTTPError as exc:
+        return {"ok": False, "retryable": True,
+                "error": f"No se pudo hablar con el armador de videos ({type(exc).__name__})"}
+    if r.status_code == 409:
+        return {"ok": False, "error": "El armador de videos está ocupado", "retryable": True}
+    if r.status_code == 401:
+        logger.error("content.renderer_token_rechazado")
+        return {"ok": False, "retryable": False,
+                "error": "El armador de videos rechazó el token: revise RENDERER_TOKEN en el backend y en renderer/.env"}
+    if r.status_code == 400:
+        return {"ok": False, "retryable": False, "error": "El armador de videos rechazó el pedido"}
+    if r.status_code != 200:
+        return {"ok": False, "retryable": True, "error": f"El armador de videos contestó {r.status_code}"}
+    try:
+        datos = r.json()
+    except ValueError:
+        datos = None
+    if not isinstance(datos, dict) or "ok" not in datos:
+        return {"ok": False, "retryable": True, "error": "El armador de videos contestó algo ilegible"}
+    if datos.get("ok"):
+        return datos
+    return {"ok": False, "error": str(datos.get("error") or "Falló el render")[:500],
+            "retryable": bool(datos.get("retryable", True))}
+
+
+def _escribir_exclusivo(ruta: Path, datos: bytes, modo: int = 0o644) -> None:
+    """Crea `ruta` NUEVO (`O_CREAT|O_EXCL`: falla si ya existe, aunque sea un enlace) y sin seguir enlaces
+    (`O_NOFOLLOW`, donde existe; en Windows no existe y se omite)."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    fd = os.open(ruta, flags, modo)
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(datos)
+
+
+def _preparar_foto(origen: Path, destino: Path) -> bool:
+    """Una foto lista para el contenedor (§16.4): reorientada, RGB, lado mayor 1200 px (sólo se reduce), retoque N1
+    suave (el mismo del motor v1), JPEG q90 y SIN EXIF (Pillow no lo copia). False si no se pudo leer."""
+    from io import BytesIO
+
+    from PIL import Image, ImageOps
+
+    from app.services.content_render_job import n1_suave
+
+    try:
+        with Image.open(origen) as im:
+            im = ImageOps.exif_transpose(im).convert("RGB")
+            im.thumbnail((LADO_FOTO_KIT, LADO_FOTO_KIT), Image.LANCZOS)
+            im = n1_suave(im)
+            buf = BytesIO()
+            im.save(buf, format="JPEG", quality=90)
+        _escribir_exclusivo(destino, buf.getvalue(), 0o644)
+        return True
+    except Exception:  # noqa: BLE001
+        logger.warning("content.foto_no_se_pudo_preparar", ruta=str(origen)[-60:], exc_info=True)
+        return False
+
+
 # ───────────────────────────────────────────────────────────── el trabajo
 
 class PiezaBloqueada(Exception):
@@ -164,23 +295,97 @@ class PiezaBloqueada(Exception):
         self.motivo = motivo
 
 
-def _preparar_job(crepo, pieza: dict) -> tuple[Path, dict, list[dict]] | None:
-    """Arma `tmp/<piece_id>/job.json`. None si no quedan fotos suficientes (el caller falla la pieza).
-
-    Antes de dibujar nada se relee lo que pudo cambiar desde que se armó la pieza: la autorización y el
-    estado de CADA comercio de las fuentes (si no valen, `PiezaBloqueada`) y cada foto del banco (una que se
-    dio de baja o se marcó «no usar en redes» no entra al video)."""
+def _fuentes_vigentes(crepo, pieza: dict) -> list[dict]:
+    """Las fuentes de la pieza que todavía valen. Antes de dibujar nada se relee lo que pudo cambiar desde que se
+    armó la pieza: la autorización y el estado de CADA comercio de las fuentes (si no valen, `PiezaBloqueada`) y cada
+    foto del banco (una que se dio de baja o se marcó «no usar en redes» no entra al video)."""
     fuentes = crepo.list_sources(pieza["id"])
     motivo = content_consent.motivo_de_comercios(crepo, pieza, fuentes)
     if motivo:
         raise PiezaBloqueada(motivo)
     no_sirven = {id(f) for f in content_consent.fuentes_no_usables(crepo, fuentes)}
-    slides = []
-    usadas = []
     for f in fuentes:
         if id(f) in no_sirven:
             logger.info("content.fuente_ya_no_sirve", pieza=pieza["id"], fuente=f.get("source_id"))
+    return [f for f in fuentes if id(f) not in no_sirven]
+
+
+def _asegurar_v2(crepo, pieza: dict) -> dict:
+    """Una pieza v1 (o una v2 que quedó sin textos) que se arma con el motor `kit` primero recibe sus textos del
+    video y pasa a v2 (§16.5). Devuelve la pieza actualizada."""
+    if (pieza.get("template_version") or 1) >= 2 and pieza.get("video_texts"):
+        return pieza
+    nueva = content_video_texts.proponer_y_guardar(crepo, pieza, {"template_version": 2}, if_status="rendering")
+    logger.info("content.pieza_pasada_a_v2", pieza=pieza["id"])
+    return nueva or crepo.get_piece(pieza["id"]) or pieza
+
+
+def _preparar_job(crepo, pieza: dict) -> tuple[Path, dict, list[dict]] | None:
+    """Arma la carpeta del job: `tmp/<piece_id>/`. None si no quedan fotos suficientes (el caller falla la pieza).
+    Devuelve (ruta del job.json, el job con las rutas de salida ABSOLUTAS, las fuentes que entraron)."""
+    if motor() == "kit":
+        return _preparar_job_kit(crepo, pieza)
+    return _preparar_job_pillow(crepo, pieza)
+
+
+def _crear_carpeta_out(tmp: Path) -> Path:
+    """`tmp/<id>/out/`: lo ÚNICO que el contenedor puede escribir. La crea este backend, se la entrega al uid del
+    contenedor (`chown`) y queda 0o700: nadie más la toca. En Windows no hay chown (PC de desarrollo)."""
+    out = tmp / "out"
+    out.mkdir(mode=0o700)
+    if os.name == "posix":
+        os.chown(out, settings.renderer_uid, -1)
+    os.chmod(out, 0o700)
+    return out
+
+
+def _preparar_job_kit(crepo, pieza: dict) -> tuple[Path, dict, list[dict]] | None:
+    """El job v2 de §16.4: `job.json` + las fotos `s0.jpg`… ya preparadas. El contenedor sólo lee esa carpeta y
+    sólo escribe `out/video.mp4` y `out/cover.jpg`. Los textos del cierre salen siempre de la base (fijos).
+
+    La carpeta del job es 0o755 y del backend (el contenedor la lee, no la escribe); las fotos y el `job.json` se
+    crean con `O_EXCL|O_NOFOLLOW`; `out/` es del uid del contenedor (0o700)."""
+    vigentes = _fuentes_vigentes(crepo, pieza)
+    tmp = content_storage.carpeta_tmp(pieza["id"])
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(tmp, 0o755)
+    except OSError:
+        pass
+    slides, usadas = [], []
+    for f in vigentes:
+        if len(slides) >= MAX_FOTOS_KIT:
+            break
+        ruta = content_storage.resolver_fuente(f.get("source_type"), f.get("file_ref"))
+        if ruta is None:
+            logger.info("content.fuente_no_existe", pieza=pieza["id"], tipo=f.get("source_type"))
             continue
+        destino = tmp / f"s{len(slides)}.jpg"
+        if not _preparar_foto(ruta, destino):
+            continue
+        slides.append({"file": destino.name, "chip": f.get("chip_text"), "focus_y": f.get("focus_y")})
+        usadas.append(f)
+    if len(slides) < MIN_FOTOS:
+        return None
+    pilar = pieza.get("pillar") or "comercio_del_dia"
+    job_json = {
+        "version": 2, "piece_id": pieza["id"], "template": "t1", "format": "9x16", "fps": 30,
+        "texts": content_video_texts.armar_textos(pieza.get("video_texts") or {}, pilar, pieza.get("facts") or {}),
+        "icons": content_video_texts.iconos_de(pilar), "slides": slides,
+        "out_video": OUT_VIDEO_KIT, "out_cover": OUT_COVER_KIT,
+    }
+    ruta_job = tmp / "job.json"
+    _escribir_exclusivo(ruta_job, json.dumps(job_json, ensure_ascii=False, indent=2).encode("utf-8"), 0o644)
+    out = _crear_carpeta_out(tmp)
+    return ruta_job, {**job_json, "out_video": str(out / "video.mp4"), "out_cover": str(out / "cover.jpg")}, usadas
+
+
+def _preparar_job_pillow(crepo, pieza: dict) -> tuple[Path, dict, list[dict]] | None:
+    """El job del motor v1 (subproceso de este backend): `tmp/<piece_id>/job.json` con las rutas de las fotos."""
+    slides = []
+    usadas = []
+    for f in _fuentes_vigentes(crepo, pieza):
         ruta = content_storage.resolver_fuente(f.get("source_type"), f.get("file_ref"))
         if ruta is None:
             logger.info("content.fuente_no_existe", pieza=pieza["id"], tipo=f.get("source_type"))
@@ -229,16 +434,43 @@ def recuperar_colgadas(crepo, ahora: datetime | None = None) -> int:
     return n
 
 
+def _copiar_salida(origen: str, destino: Path, uid_esperado: int | None) -> None:
+    """COPIA los bytes de lo que dejó el motor (no `rename`: en el volumen compartido lo escribe un proceso que no
+    es de confianza). Exige un archivo regular (no enlace), con un solo nombre (`st_nlink == 1`: no un hardlink a
+    otro archivo) y, en POSIX, del uid del contenedor. La verificación se repite sobre el descriptor abierto con
+    `O_NOFOLLOW`, para que cambiar el archivo entre el `lstat` y la lectura no sirva."""
+    import stat
+
+    def _revisar(st: os.stat_result) -> None:
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+            raise OSError("la salida del render no es un archivo regular")
+        if uid_esperado is not None and os.name == "posix" and st.st_uid != uid_esperado:
+            raise OSError("la salida del render no es del usuario del contenedor")
+
+    _revisar(os.lstat(origen))
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    fd = os.open(origen, flags)
+    with os.fdopen(fd, "rb") as fin:
+        _revisar(os.fstat(fin.fileno()))
+        with open(destino, "wb") as fout:
+            shutil.copyfileobj(fin, fout, 1024 * 1024)
+
+
 def _mover_resultado(pieza: dict, job: dict, ahora: datetime) -> tuple[str, str, int]:
-    """De `tmp/` a `renders/<aaaa-mm>/<piece_id>/`. Devuelve (video, portada, bytes)."""
+    """De `tmp/` a `renders/<aaaa-mm>/<piece_id>/` (copiando los bytes). Devuelve (video, portada, bytes)."""
     carpeta = content_storage.carpeta_de_render(pieza["id"], ahora)
     rel_video, rel_cover = f"{carpeta}/video.mp4", f"{carpeta}/cover.jpg"
+    uid = settings.renderer_uid if motor() == "kit" else None
     for rel, origen in ((rel_video, job["out_video"]), (rel_cover, job["out_cover"])):
         destino = content_storage.safe_path(rel)
         if destino is None:
             raise OSError("ruta de render fuera del directorio")
         destino.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(origen, destino)
+        try:
+            _copiar_salida(origen, destino, uid)
+        except BaseException:
+            destino.unlink(missing_ok=True)
+            raise
     return rel_video, rel_cover, content_storage.safe_path(rel_video).stat().st_size
 
 
@@ -258,9 +490,17 @@ def _tick(crepo, ahora: datetime) -> dict | None:
             logger.error("content.dir_inseguro", detalle="CONTENT_DIR queda dentro de FOTOS_DIR (o al revés)")
             _estado["avisado_dir"] = True
         return None
-    if not ffmpeg_disponible():
+    if motor() == "kit":
+        if not renderer_disponible():
+            if not _estado["avisado_sin_renderer"]:
+                logger.warning("content.render_no_disponible", motor="kit",
+                               detalle="falta RENDERER_TOKEN o el contenedor reels no contesta /health")
+                _estado["avisado_sin_renderer"] = True
+            return None
+        _estado["avisado_sin_renderer"] = False
+    elif not ffmpeg_disponible():
         if not _estado["avisado_sin_ffmpeg"]:
-            logger.warning("content.render_no_disponible", detalle="ffmpeg/ffprobe no están en el PATH")
+            logger.warning("content.render_no_disponible", motor="pillow", detalle="ffmpeg/ffprobe no están en el PATH")
             _estado["avisado_sin_ffmpeg"] = True
         return None
     if content_storage.disco_pausado():
@@ -285,6 +525,8 @@ def _tick(crepo, ahora: datetime) -> dict | None:
     inicio = time.monotonic()
     tmp = content_storage.carpeta_tmp(pieza["id"])
     try:
+        if motor() == "kit":
+            pieza = _asegurar_v2(crepo, pieza)
         preparado = _preparar_job(crepo, pieza)
         if preparado is None:
             crepo.update_piece(pieza["id"], {"status": "failed", "render_error": "no_sources",
@@ -293,7 +535,7 @@ def _tick(crepo, ahora: datetime) -> dict | None:
             resultado = {"ok": False, "error": "no_sources"}
         else:
             ruta_job, job, usadas = preparado
-            r = _correr_subproceso(ruta_job)
+            r = _pedir_render_kit(pieza["id"]) if motor() == "kit" else _correr_subproceso(ruta_job)
             if r.get("ok"):
                 rel_video, rel_cover, peso = _mover_resultado(pieza, job, ahora)
                 previo = (pieza.get("video_path"), pieza.get("cover_path"))

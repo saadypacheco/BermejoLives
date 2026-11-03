@@ -72,12 +72,18 @@ def pieza(crepo, comercio_id="com-1", dia=None, pilar="comercio_del_dia", status
                              "hashtags_allowed": ["#URUKU", "#Bermejo", "#Tarija", "#Bolivia"], "allowed_numbers": []})
     fila = {"week_start": lunes.isoformat(), "scheduled_for": dia.isoformat(), "pillar": pilar,
             "comercio_id": comercio_id if pilar == "comercio_del_dia" else None, "status": status, "facts": facts,
-            "template": pilar, "caption_tiktok": "Local com-1 en Bermejo. Buscalo en uruku.bo",
-            "caption_ig": "Local com-1 en Bermejo. Buscalo en uruku.bo", "caption_channel": "Local com-1. Buscalo en uruku.bo",
-            "hashtags": ["#URUKU", "#Bermejo", "#Tarija"], "caption_engine": "template", "caption_checks": [],
+            "template": pilar, "caption_tiktok": "Local com-1 en Bermejo. Búsquelo en uruku.bo",
+            "caption_ig": "Local com-1 en Bermejo. Búsquelo en uruku.bo", "caption_channel": "Local com-1. Búsquelo en uruku.bo",
+            "hashtags": ["#URUKU", "#Bermejo", "#Tarija", "#Bolivia"], "caption_engine": "template", "caption_checks": [],
             "created_by": "selector", **kw}
     return crepo.insert_piece(fila)
 
 
 def h(token):
     return {"Authorization": f"Bearer {token}"}
+
+
+def gemini_on(crepo):
+    """Prende el interruptor de costo `gemini_content` (§17.2): por defecto está apagado y nada llama a Gemini."""
+    from app.services import cost_switches
+    cost_switches.set(crepo, cost_switches.GEMINI_CONTENT, True, "test@uruku.bo")

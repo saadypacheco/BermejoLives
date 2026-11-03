@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
-from app.api import agent_credentials, asistente, auth, calles, campo, comercio, contenido, content, health, moderacion, observabilidad, pago, reception, subscribers, usuario, webhook
+from app.api import agent_credentials, asistente, auth, calles, campo, comercio, contenido, content, cost_switches, health, moderacion, observabilidad, pago, reception, subscribers, usuario, webhook
 from app.core.config import settings
 from app.core.ip import ip_cliente
 from app.core.limite_cuerpo import LimiteCuerpoMiddleware
@@ -494,6 +494,7 @@ app.include_router(asistente.router, tags=["asistente"])
 app.include_router(pago.router, tags=["pago"])
 app.include_router(agent_credentials.router, tags=["credencial-agentes"])
 app.include_router(content.router, tags=["contenido-redes"])
+app.include_router(cost_switches.router, tags=["interruptores-de-costo"])
 app.include_router(subscribers.router, tags=["suscriptores"])
 
 # Fotos de comercio: servidas por el propio backend (reemplaza a Supabase

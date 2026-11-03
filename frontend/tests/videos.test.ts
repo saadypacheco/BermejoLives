@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  duracionCorta, duracionIso, esLinkWeb, normalizarVideos, videoObjectNode, videoObjectNodes, videoUrl,
+  duracionCorta, duracionIso, esLinkWeb, normalizarVideos, rubroHref, videoObjectNode, videoObjectNodes, videoUrl,
   type PublicVideo,
 } from "../lib/videos-pure";
 import { SKIP_REASON_LABEL, urlApi } from "../lib/content-pure";
@@ -18,6 +18,7 @@ const API = "https://api.uruku.test";
 const VIDEO: PublicVideo = {
   id: "v1", title: "Ferretería Ejemplo",
   comercio: { nombre: "Ferretería Ejemplo", slug: "ferreteria-ejemplo" },
+  rubro: null,
   city_slug: "bermejo", published_at: "2026-11-01T15:30:00Z", duration_s: 45,
   cover_url: "/public/videos/v1/cover", video_url: "/public/videos/v1/video",
   network_links: { tiktok: "https://www.tiktok.com/@uruku/video/1" },
@@ -95,6 +96,17 @@ test("un título con </script> sale escapado en el JSON-LD", () => {
   assert.ok(!s.includes("</script>"));
 });
 
+test("videoObjectNode: un video de rubro NO repite la ciudad (el título ya la trae)", () => {
+  const rubro = { ...VIDEO, title: "Zapatillas en Bermejo", comercio: null, rubro: { nombre: "Zapatillas", slug: "zapatillas" } };
+  const n = videoObjectNode(rubro, { ciudad: "Bermejo", base: API });
+  assert.ok(n);
+  assert.equal(n.description, "Zapatillas en Bermejo: video de URUKU.");
+  assert.ok(!String(n.description).includes("Bermejo en Bermejo"));
+  // Un compilado sin rubro sí lleva la ciudad.
+  const compilado = videoObjectNode({ ...VIDEO, title: "Ofertas de la semana", comercio: null }, { ciudad: "Bermejo", base: API });
+  assert.equal(compilado?.description, "Ofertas de la semana en Bermejo: video de URUKU.");
+});
+
 /* ─── Lectura defensiva de la API ────────────────────────────────────────── */
 
 test("normalizarVideos: lo que no es una lista da []", () => {
@@ -123,6 +135,24 @@ test("normalizarVideos: comercio incompleto pasa a null y la duración rara a nu
   const [v] = normalizarVideos({ items: [{ ...VIDEO, comercio: { nombre: "Sin slug" }, duration_s: "10" }] });
   assert.equal(v.comercio, null);
   assert.equal(v.duration_s, null);
+});
+
+test("normalizarVideos conserva el rubro y lo pasa a null si viene incompleto", () => {
+  const [a, b, c] = normalizarVideos({ items: [
+    { ...VIDEO, id: "r1", comercio: null, rubro: { nombre: "Zapatillas", slug: "zapatillas" } },
+    { ...VIDEO, id: "r2", rubro: { nombre: "Sin slug" } },
+    { ...VIDEO, id: "r3", rubro: null },
+  ] });
+  assert.deepEqual(a.rubro, { nombre: "Zapatillas", slug: "zapatillas" });
+  assert.equal(b.rubro, null);
+  assert.equal(c.rubro, null);
+});
+
+test("rubroHref: /{city_slug}/{rubro.slug}; sin rubro o sin ciudad no hay link", () => {
+  const rubro = { nombre: "Zapatillas", slug: "zapatillas" };
+  assert.equal(rubroHref({ rubro, city_slug: "bermejo" }), "/bermejo/zapatillas");
+  assert.equal(rubroHref({ rubro: null, city_slug: "bermejo" }), null);
+  assert.equal(rubroHref({ rubro, city_slug: null }), null);
 });
 
 /* ─── Etiquetas de los arreglos del 2/11 ─────────────────────────────────── */
