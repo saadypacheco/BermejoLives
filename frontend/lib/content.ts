@@ -13,7 +13,7 @@ import { getAgenteToken, clearAgente } from "@/lib/campo";
 import { getCToken, clearComercio } from "@/lib/comercio";
 import { subirConProgreso } from "@/lib/upload";
 import {
-  API_BASE, camposSubida,
+  API_BASE, camposSubida, geminiContentPrendido,
   type ConsentVia, type ContentNetwork, type ContentPieceStatus, type ContentPillar, type MetaSubida,
   type PedidoDeVideo, type PiezaOrigen, type RequestCheck, type RubroOpcion,
 } from "@/lib/content-pure";
@@ -464,6 +464,11 @@ export type CostSwitch = {
 export const listarInterruptores = async (): Promise<CostSwitch[]> => {
   const d = await panelJson<{ items?: CostSwitch[] }>("/admin/cost-switches", {}, "No se pudieron cargar los servicios con costo");
   return d.items ?? [];
+};
+
+/** ¿Está prendido el interruptor `gemini_content`? `null` si no se pudo leer (no se adivina). */
+export const leerGeminiContent = async (): Promise<boolean | null> => {
+  try { return geminiContentPrendido(await listarInterruptores()); } catch { return null; }
 };
 
 /** Sólo con permiso `equipo`. Prender exige `confirm_cost = true` (400 si no); sin permiso, 403. */

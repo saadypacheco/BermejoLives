@@ -14,11 +14,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Ic } from "@/components/ic";
 import { Aviso, BTN_GRANDE, Insignia } from "@/components/content/content-ui";
 import {
-  guardarTextosVideo, mensajeContent, pedirOtraPropuestaVideo,
+  guardarTextosVideo, leerGeminiContent, mensajeContent, pedirOtraPropuestaVideo,
   type ContentPieceResponse, type ContentPieceSource, type VideoTextsUpdate,
 } from "@/lib/content";
 import {
-  CAMPO_VIDEO_LABEL, chipsEditables, fotoMarcadaPorGemini, origenTextosVideo, urlApiOpt, VIDEO_LIMITES,
+  avisoOtraPropuesta, CAMPO_VIDEO_LABEL, chipsEditables, fotoMarcadaPorGemini, origenTextosVideo, urlApiOpt, VIDEO_LIMITES,
   validateVideoTextsPorCampo, type CampoVideo, type VideoTextsEditable,
 } from "@/lib/content-pure";
 
@@ -145,11 +145,11 @@ export function TextosDelVideo({ pieza, sinArmador, ocupadaAfuera, antesDeGuarda
   }
 
   async function proponer() {
-    const aviso = "¿Pedir otra propuesta a Gemini? Se reemplazan los textos del video"
-      + (origen === "Escrito a mano" || textosCambiaron ? " (incluido lo que escribiste vos)" : "")
-      + " y el video se vuelve a armar: tarda unos minutos.";
-    if (!window.confirm(aviso)) return;
+    // El aviso depende del interruptor `gemini_content`: se lee en el momento, no se adivina.
     setOcupado("proponer"); setErr("");
+    const gemini = await leerGeminiContent();
+    const aviso = avisoOtraPropuesta(gemini, origen === "Escrito a mano" || textosCambiaron);
+    if (!window.confirm(aviso)) { setOcupado(""); return; }
     try {
       await antesDeGuardar?.();
       onCambio(await pedirOtraPropuestaVideo(pieza.id));

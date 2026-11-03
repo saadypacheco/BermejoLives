@@ -8,7 +8,8 @@ import { ContentReview } from "@/components/content/content-review";
 import { ContentWeek } from "@/components/content/content-week";
 import { ContentCostSwitches } from "@/components/content/content-cost-switches";
 import { ContentRequestModal } from "@/components/content/content-request-modal";
-import { getEstadoContenido, mensajeContent, type ContentStatusResponse } from "@/lib/content";
+import { insigniaSinGemini } from "@/lib/content-pure";
+import { getEstadoContenido, leerGeminiContent, mensajeContent, type ContentStatusResponse } from "@/lib/content";
 
 type Pestana = "revision" | "dia" | "semana";
 
@@ -36,6 +37,8 @@ function EstadoArmado({ s }: { s: ContentStatusResponse }) {
  */
 export function ContentRedesPanel() {
   const [estado, setEstado] = useState<ContentStatusResponse | null>(null);
+  // Interruptor `gemini_content`: null = todavía no se leyó o no se pudo leer.
+  const [geminiPrendido, setGeminiPrendido] = useState<boolean | null>(null);
   const [errEstado, setErrEstado] = useState("");
   const [pestana, setPestana] = useState<Pestana | null>(null);
   const [pidiendo, setPidiendo] = useState(false);
@@ -45,8 +48,9 @@ export function ContentRedesPanel() {
   const cargarEstado = useCallback(async () => {
     setErrEstado("");
     try {
-      const s = await getEstadoContenido();
+      const [s, gemini] = await Promise.all([getEstadoContenido(), leerGeminiContent()]);
       setEstado(s);
+      setGeminiPrendido(gemini);
       // Sólo la PRIMERA vez decide la pestaña: después manda lo que eligió la persona.
       setPestana((p) => p ?? (s.queue.ready_for_review > 0 ? "revision" : "dia"));
     } catch (ex) {
@@ -61,6 +65,7 @@ export function ContentRedesPanel() {
   const alPedirVideo = useCallback(() => { setVez((n) => n + 1); void cargarEstado(); }, [cargarEstado]);
 
   const paraRevisar = estado?.queue.ready_for_review ?? 0;
+  const sinGemini = estado ? insigniaSinGemini(estado.gemini_configured, geminiPrendido) : null;
   const sinArmador = estado?.render_worker === "no_renderer";
   const tabs: { id: Pestana; label: string; icono: "listo" | "calendario" | "video"; n?: number }[] = [
     { id: "revision", label: "Revisión", icono: "listo", n: paraRevisar },
@@ -75,9 +80,7 @@ export function ContentRedesPanel() {
           <Ic n="video" s={16} /> Pedir un video
         </button>
         {estado && <EstadoArmado s={estado} />}
-        {estado && !estado.gemini_configured && (
-          <Insignia tono="info" icono="dato">Sin Gemini: los textos salen de la plantilla fija</Insignia>
-        )}
+        {estado && sinGemini && <Insignia tono="info" icono="dato">{sinGemini}</Insignia>}
       </div>
       {errEstado && <Aviso tono="aviso">{errEstado}</Aviso>}
       {sinArmador && (

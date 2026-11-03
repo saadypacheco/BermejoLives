@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Ic } from "@/components/ic";
-import { duracionCorta, VIDEO_NETWORK_LABEL, type PublicVideo, type VideoNetwork } from "@/lib/videos-pure";
+import { duracionCorta, rubroHref, VIDEO_NETWORK_LABEL, type PublicVideo, type VideoNetwork } from "@/lib/videos-pure";
 
 const REDES: readonly VideoNetwork[] = ["tiktok", "instagram", "facebook", "youtube"];
 
@@ -51,6 +51,7 @@ function ReproductorVideo({ video, cover, src, onClose }: { video: PublicVideo; 
   }, [onClose]);
 
   const redes = REDES.filter((r) => video.network_links[r]);
+  const hrefRubro = rubroHref(video);
 
   return (
     <div className="uk-vm-fondo" onClick={onClose}>
@@ -72,7 +73,13 @@ function ReproductorVideo({ video, cover, src, onClose }: { video: PublicVideo; 
               <Ic n={r} s={16} /> Ver en {VIDEO_NETWORK_LABEL[r]}
             </a>
           ))}
-          {video.comercio && (
+          {video.rubro ? (
+            hrefRubro && (
+              <Link className="uk-btn-ghost" href={hrefRubro} onClick={onClose}>
+                <Ic n="comercios" s={16} /> Ver el rubro
+              </Link>
+            )
+          ) : video.comercio && (
             <Link className="uk-btn-ghost" href={`/comercios/${video.comercio.slug}`} onClick={onClose}>
               <Ic n="comercios" s={16} /> Ver el comercio
             </Link>
