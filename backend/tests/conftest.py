@@ -75,11 +75,15 @@ def _tmp_content_dir(tmp_path, monkeypatch):
     from app.core.config import settings
     from app.services import content_render, content_selector, content_storage, subscriber_care
     monkeypatch.setattr(settings, "content_dir", str(tmp_path / "content"))
+    # Desde la spec §16 el motor por defecto es `kit` (el contenedor `reels`). Los tests viejos prueban el motor v1
+    # (subproceso con Pillow) y no tienen contenedor: arrancan en `pillow`; los del motor `kit` lo prenden a mano.
+    monkeypatch.setattr(settings, "content_render_engine", "pillow")
+    content_render.reiniciar_salud()
     content_storage.reiniciar_cache_peso()
     content_selector.reiniciar_intentos()
     subscriber_care.reiniciar_dia()
     content_render._estado.update({"actual": None, "ultimo": None, "avisado_sin_ffmpeg": False,
-                                   "avisado_dir": False, "avisado_disco": False})
+                                   "avisado_dir": False, "avisado_disco": False, "avisado_sin_renderer": False})
     yield
     content_storage.reiniciar_cache_peso()
 

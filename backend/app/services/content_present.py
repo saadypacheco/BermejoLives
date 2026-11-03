@@ -104,8 +104,11 @@ def source_response(s: dict, facts: dict) -> dict:
         nombre = (s.get("caption_fact") or "").split(" · ")[0] or None
     else:
         nombre = facts.get("nombre")
-    return {"position": s["position"], "source_type": s["source_type"], "thumb_url": thumb,
-            "caption_fact": s.get("caption_fact"), "comercio_nombre": nombre}
+    # `id` es el de la fila de `content_piece_sources`: es el `source_id` que lleva cada frase en
+    # `PATCH /admin/content/pieces/{id}/video-texts` (§16.9). `chip_text`, `photo_flags` y `focus_y` son de la v2.
+    return {"id": s.get("id"), "position": s["position"], "source_type": s["source_type"], "thumb_url": thumb,
+            "caption_fact": s.get("caption_fact"), "comercio_nombre": nombre, "chip_text": s.get("chip_text"),
+            "photo_flags": list(s.get("photo_flags") or []), "focus_y": s.get("focus_y")}
 
 
 def piece_response(p: dict, fuentes: list[dict], posts: list[dict], ahora: datetime | None = None) -> dict:
@@ -122,6 +125,10 @@ def piece_response(p: dict, fuentes: list[dict], posts: list[dict], ahora: datet
                    "started_at": p.get("render_started_at"), "ms": p.get("render_ms")},
         "posts": [post_response(p, x, ahora) for x in posts],
         "approved_by": p.get("approved_by"), "approved_at": p.get("approved_at"),
+        # Textos del video con el diseño del kit (§16.9). `video_texts` es null en las piezas v1.
+        "template_version": int(p.get("template_version") or 1), "video_texts": p.get("video_texts"),
+        "video_texts_engine": p.get("video_texts_engine"), "video_texts_checks": p.get("video_texts_checks") or [],
+        "photo_flags_ok": bool(p.get("photo_flags_ok")),
     }
 
 

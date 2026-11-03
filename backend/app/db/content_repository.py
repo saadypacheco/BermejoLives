@@ -29,7 +29,7 @@ COLS_FICHA = (
     "id, slug, nombre, whatsapp, direccion, calle, horario, subcategoria, lat, lng, "
     "portada_url, portada_thumb_url, plan, plan_cortesia, paga_hasta, suspendido, activo, baja_motivo, "
     "ciudad_id, rubro_id, monedas_aceptadas, instagram_url, facebook_url, tiktok_url, sitio_web, "
-    "canal_wa_url, created_at, "
+    "canal_wa_url, created_at, prod_obs_human, "
     "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug, departamento)"
 )
 
@@ -77,6 +77,7 @@ class ContentRepo(Protocol):
     def insert_sources(self, rows: list[dict]) -> list[dict]: ...
     def list_sources(self, piece_id: str, only_active: bool = True) -> list[dict]: ...
     def deactivate_source(self, piece_id: str, position: int) -> None: ...
+    def update_source(self, source_id: str, patch: dict) -> dict | None: ...
     def recent_sources(self, since: str) -> list[dict]: ...
     def piece_ids_by_source_comercio(self, comercio_id: str) -> list[str]: ...
     def piece_ids_by_source_asset(self, asset_id: str) -> list[str]: ...
@@ -334,6 +335,11 @@ class SupabaseContentRepo:
     def deactivate_source(self, piece_id: str, position: int) -> None:
         (self._db.table("content_piece_sources").update({"activo": False})
          .eq("piece_id", piece_id).eq("position", position).execute())
+
+    def update_source(self, source_id: str, patch: dict) -> dict | None:
+        """Cambia la frase (`chip_text`), las marcas (`photo_flags`) o el encuadre (`focus_y`) de UNA fuente (0182)."""
+        res = self._db.table("content_piece_sources").update(patch).eq("id", source_id).execute()
+        return res.data[0] if res.data else None
 
     def recent_sources(self, since: str) -> list[dict]:
         """Las fuentes de piezas vivas desde `since`, con el pilar de la pieza."""

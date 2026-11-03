@@ -250,8 +250,9 @@ def test_compilado_con_4_suscriptores_y_el_tope_de_un_tercio_de_los_demas(repo, 
     assert [f["comercio_id"] for f in fuentes][:4] == ["s0", "s1", "s2", "s3"]          # suscriptores primero
     assert sum(1 for f in fuentes if f["comercio_id"].startswith("n")) == 2             # ≤ piso(6 / 3)
     assert p["facts"]["ciudad"] == "Bermejo" and len(p["facts"]["items"]) == 6
-    assert p["facts"]["items"][0]["precio"] == "Bs 100" and p["facts"]["items"][0]["titulo_corto"] == "Zapatillas 1"
-    assert fuentes[0]["caption_fact"] == "Local s0 · Bs 100"
+    # Sin precios (§16.1): ni en los hechos ni en la fuente. El chip de la foto es el nombre del comercio.
+    assert "precio" not in p["facts"]["items"][0] and p["facts"]["items"][0]["titulo_corto"] == "Zapatillas 1"
+    assert fuentes[0]["caption_fact"] == "Local s0" and fuentes[0]["chip_text"] == "Local s0"
     assert "ofertas" not in [e["pillar"] for e in r["slots_left_empty"]]
 
 
@@ -350,16 +351,16 @@ def test_plan_manual_por_la_api(client, repo, crepo):
 
 def test_cambiar_fotos_quita_busca_reemplazo_y_si_no_hay_da_409(repo, crepo):
     from fastapi import HTTPException
-    suscriptor(repo, crepo, "com-1", fotos=7)
+    suscriptor(repo, crepo, "com-1", fotos=6)               # el video v2 lleva hasta 6 fotos
     plan(repo, crepo)
     p = next(iter(crepo.pieces.values()))
     activas = crepo.list_sources(p["id"])
-    assert len(activas) == 7
+    assert len(activas) == 6
     r = sel.cambiar_fotos(crepo, p, [activas[0]["position"], activas[1]["position"]], HOY)
     assert r == {"quitadas": 2, "agregadas": 0}                  # no hay más fotos que sirvan
-    assert len(crepo.list_sources(p["id"])) == 5
+    assert len(crepo.list_sources(p["id"])) == 4
     with pytest.raises(HTTPException) as e:
         sel.cambiar_fotos(crepo, p, [crepo.list_sources(p["id"])[0]["position"], crepo.list_sources(p["id"])[1]["position"]], HOY)
     assert e.value.status_code == 409 and e.value.detail["codigo"] == "no_more_photos"
     assert any(t["kind"] == "photo_refresh" for t in crepo.tasks.values())
-    assert len(crepo.list_sources(p["id"])) == 5                 # no se quitó nada
+    assert len(crepo.list_sources(p["id"])) == 4                 # no se quitó nada

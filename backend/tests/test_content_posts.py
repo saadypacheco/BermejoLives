@@ -235,7 +235,7 @@ def test_una_pieza_de_ofertas_publicada_no_crea_tarea_de_entrega(client, crepo, 
 
 def test_editar_textos_pasa_por_el_validador_y_marca_editada(client, crepo, ana, base):
     r = client.patch(f"/admin/content/pieces/{base['id']}", headers=ana,
-                     json={"caption_tiktok": "Local com-1 abre de 9 a 17. Buscalo en uruku.bo"})
+                     json={"caption_tiktok": "Local com-1 abre de 9 a 17. Búsquelo en uruku.bo"})
     assert r.status_code == 200, r.text                                      # un número ajeno lo puede querer la persona
     assert r.json()["caption_edited"] is True and r.json()["caption_tiktok"].startswith("Local com-1 abre")
     for malo, frag in (("Local com-1 😀", "emoji"), ("Local com-1 la mejor", "mejor"), ("Hola", "nombre"), ("Local com-1 envío gratis", "envío")):
