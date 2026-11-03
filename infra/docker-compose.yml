@@ -27,7 +27,32 @@ services:
     volumes:
       - wa_received:/data/wa_received   # fotos de desconocidos: PRIVADO
       - content_private:/data/content   # banco de fotos y videos para redes: PRIVADO
-    networks: [bermejonet]
+    networks: [bermejonet, render]
+
+  # Armador de videos 9:16 (docs/contenido-redes-tecnico.md, 16.4). Sin puertos publicados:
+  # sólo el backend lo alcanza, por la red interna `render` (sin salida a internet).
+  # Copiar renderer/.env.example a renderer/.env con el mismo RENDERER_TOKEN del backend.
+  reels:
+    build: ../renderer
+    container_name: buscadonde-reels
+    restart: unless-stopped
+    env_file: ../renderer/.env
+    mem_limit: 1536m
+    cpus: 1.5
+    pids_limit: 512
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    init: true
+    volumes:
+      - content_private:/data/content
+    networks: [render]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   frontend:
     build:
@@ -77,3 +102,6 @@ volumes:
 
 networks:
   bermejonet:
+  # Backend <-> reels. `internal: true`: sin salida a internet ni puertos al host.
+  render:
+    internal: true
