@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Ic } from "@/components/ic";
 import { Aviso, BTN_GRANDE, Cargando, ErrorConReintento, Insignia } from "@/components/content/content-ui";
+import { ResumenTextosVideo, TextosDelVideo } from "@/components/content/content-video-texts";
 import {
   aprobarEnLote, aprobarPieza, getPieza, guardarTextosPieza, listarPiezas, mensajeContent, rearmarPieza,
   reintentarPieza, saltarPieza, type ContentPieceResponse, type ContentPieceSkip, type ContentPieceUpdate,
 } from "@/lib/content";
 import {
-  aprobableEnLote, CAPTION_LABEL, CAPTION_MAX, contadorTexto, fechaConDia, hashtagsDisponibles, normalizarHashtag,
-  piezaEnMovimiento, SKIP_REASON_LABEL, urlApiOpt, type CaptionCampo,
+  aprobableEnLote, CAPTION_LABEL, CAPTION_MAX, contadorTexto, esPiezaV2, fechaConDia, fotoMarcadaPorGemini,
+  hashtagsDisponibles, motivoNoAprobable, normalizarHashtag, piezaEnMovimiento, SKIP_REASON_LABEL, urlApiOpt,
+  type CaptionCampo,
 } from "@/lib/content-pure";
 
 const ESTADOS_REVISION = ["ready_for_review", "failed", "queued", "rendering"] as const;
@@ -22,7 +24,7 @@ const POLL_MS = 20000;
  *
  * Mientras haya piezas en cola o armándose, la pantalla pregunta cada 20 s.
  */
-export function ContentReview({ onCambioCola }: { onCambioCola?: () => void }) {
+export function ContentReview({ onCambioCola, sinArmador }: { onCambioCola?: () => void; sinArmador?: boolean }) {
   const [piezas, setPiezas] = useState<ContentPieceResponse[] | null>(null);
   const [cargando, setCargando] = useState(true);
   const [err, setErr] = useState("");
@@ -106,7 +108,7 @@ export function ContentReview({ onCambioCola }: { onCambioCola?: () => void }) {
       )}
 
       {paraRevisar.map((p) => (
-        <PiezaRevision key={`${p.id}:${p.status}`} pieza={p}
+        <PiezaRevision key={`${p.id}:${p.status}`} pieza={p} sinArmador={sinArmador}
                        onCambio={reemplazar}
                        onAprobada={(x) => quitar(x.id, `Aprobada: ${fechaConDia(x.scheduled_for)} · ${x.comercio?.nombre ?? x.pillar_label}. Ya está en el Paquete del día.`)}
                        onSaltada={(x) => quitar(x.id, `Salteada: ${fechaConDia(x.scheduled_for)} · ${x.comercio?.nombre ?? x.pillar_label}.`)} />
@@ -121,15 +123,27 @@ export function ContentReview({ onCambioCola }: { onCambioCola?: () => void }) {
       )}
 
       {conProblemas.map((p) => (
-        <PiezaConProblemas key={`${p.id}:${p.status}`} pieza={p} onCambio={reemplazar}
+        <PiezaConProblemas key={`${p.id}:${p.status}`} pieza={p} onCambio={reemplazar} sinArmador={sinArmador}
                            onSaltada={(x) => quitar(x.id, `Salteada: ${fechaConDia(x.scheduled_for)} · ${x.comercio?.nombre ?? x.pillar_label}.`)} />
       ))}
 
       {enCola.map((p) => (
-        <div key={p.id} className="panel-card glass" style={{ padding: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <Insignia icono="reloj" tono="info">{p.status === "rendering" ? "ARMANDO EL VIDEO" : "EN COLA"}</Insignia>
-          <span style={{ fontSize: 14 }}>{fechaConDia(p.scheduled_for)} · {p.pillar_label}{p.comercio ? ` · ${p.comercio.nombre}` : ""}</span>
-          <span style={{ fontSize: 12.5, color: "var(--txt-3)" }}>El servidor la está preparando; se actualiza sola.</span>
+        <div key={p.id} className="panel-card glass" style={{ padding: 12, display: "grid", gap: 8 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <Insignia icono="reloj" tono="info">{p.status === "rendering" ? "ARMANDO EL VIDEO" : "EN COLA"}</Insignia>
+            <span style={{ fontSize: 14 }}>{fechaConDia(p.scheduled_for)} · {p.pillar_label}{p.comercio ? ` · ${p.comercio.nombre}` : ""}</span>
+            <span style={{ fontSize: 12.5, color: "var(--txt-3)" }}>El servidor la está preparando; se actualiza sola.</span>
+          </div>
+          {/* En las piezas v2 se ven los textos que se están armando, no el video viejo. */}
+          {esPiezaV2(p) && (
+            <>
+              <div role="status" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14, color: "var(--txt-2)" }}>
+                <Ic n="actualizar" s={16} /> Armando el video…
+              </div>
+              <ResumenTextosVideo pieza={p} />
+              {sinArmador && <Aviso tono="aviso">El armador de videos no está disponible. La pieza espera en la cola hasta que vuelva.</Aviso>}
+            </>
+          )}
         </div>
       ))}
     </div>
@@ -140,8 +154,9 @@ export function ContentReview({ onCambioCola }: { onCambioCola?: () => void }) {
 
 const CAMPOS: CaptionCampo[] = ["caption_tiktok", "caption_ig", "caption_channel"];
 
-function PiezaRevision({ pieza, onCambio, onAprobada, onSaltada }: {
+function PiezaRevision({ pieza, sinArmador, onCambio, onAprobada, onSaltada }: {
   pieza: ContentPieceResponse;
+  sinArmador?: boolean;
   onCambio: (p: ContentPieceResponse) => void;
   onAprobada: (p: ContentPieceResponse) => void;
   onSaltada: (p: ContentPieceResponse) => void;
@@ -158,6 +173,8 @@ function PiezaRevision({ pieza, onCambio, onAprobada, onSaltada }: {
   const [motivo, setMotivo] = useState<ContentPieceSkip["reason"]>("bad_photos");
   const [nota, setNota] = useState("");
   const ultimaRecarga = useRef(0);
+  const [videoSucio, setVideoSucio] = useState(false);
+  const v2 = esPiezaV2(pieza);
 
   const original = {
     caption_tiktok: pieza.caption_tiktok ?? "", caption_ig: pieza.caption_ig ?? "", caption_channel: pieza.caption_channel ?? "",
@@ -192,6 +209,16 @@ function PiezaRevision({ pieza, onCambio, onAprobada, onSaltada }: {
     finally { setOcupado(""); }
   }
 
+  /** Guarda lo que haya a medias en los textos de las redes (lo usa «Guardar y volver a armar»:
+   *  la tarjeta se rehace al re-encolar y se perdería). Si falla, tira el error al que llama. */
+  async function guardarAntes() {
+    if (!sucio) return;
+    const patch: ContentPieceUpdate = {};
+    for (const c of cambiados) patch[c] = textos[c];
+    if (hashCambiaron) patch.hashtags = hashtags;
+    await guardarTextosPieza(pieza.id, patch);
+  }
+
   async function aprobar() {
     if (pieza.caption_checks.length > 0 &&
         !window.confirm(`El validador tiene objeciones:\n- ${pieza.caption_checks.join("\n- ")}\n\n¿Aprobar igual?`)) return;
@@ -218,6 +245,8 @@ function PiezaRevision({ pieza, onCambio, onAprobada, onSaltada }: {
   const disponibles = hashtagsDisponibles(pieza.hashtags_allowed, hashtags);
   const motor = pieza.caption_engine.startsWith("gemini") ? "Gemini" : "plantilla fija";
   const ocupada = ocupado !== "";
+  const noAprobable = v2 ? motivoNoAprobable(pieza) : null;
+  const sinGuardar = sucio || (v2 && videoSucio);
 
   return (
     <article className="panel-card glass" style={{ padding: 14, display: "grid", gap: 12 }}>
@@ -245,7 +274,7 @@ function PiezaRevision({ pieza, onCambio, onAprobada, onSaltada }: {
             const marcada = quitarPos.includes(s.position);
             return (
               <button key={s.position} type="button" aria-pressed={marcada}
-                      aria-label={`Foto ${s.position + 1}${s.caption_fact ? ` (${s.caption_fact})` : ""}${marcada ? ", marcada para quitar" : ""}`}
+                      aria-label={`Foto ${s.position + 1}${s.caption_fact ? ` (${s.caption_fact})` : ""}${fotoMarcadaPorGemini(s.photo_flags) ? ", se ve un precio o un código" : ""}${marcada ? ", marcada para quitar" : ""}`}
                       onClick={() => setQuitarPos((q) => (marcada ? q.filter((x) => x !== s.position) : [...q, s.position]))}
                       style={{ position: "relative", width: 72, height: 72, padding: 0, borderRadius: 10, overflow: "hidden", cursor: "pointer",
                                border: `2px solid ${marcada ? "var(--pink)" : "var(--stroke)"}`, opacity: marcada ? 0.55 : 1 }}>
@@ -254,6 +283,12 @@ function PiezaRevision({ pieza, onCambio, onAprobada, onSaltada }: {
                 <span style={{ position: "absolute", left: 3, top: 3, fontSize: 11, fontWeight: 700, background: "rgba(0,0,0,.65)", color: "#fff", borderRadius: 6, padding: "0 5px" }}>
                   {marcada ? "Quitar" : s.position + 1}
                 </span>
+                {fotoMarcadaPorGemini(s.photo_flags) && (
+                  <span title="Se ve un precio o un código" aria-hidden="true"
+                        style={{ position: "absolute", right: 3, bottom: 3, display: "inline-flex", background: "var(--amber)", color: "#000", borderRadius: 6, padding: 2 }}>
+                    <Ic n="aviso" s={14} />
+                  </span>
+                )}
               </button>
             );
           })}
@@ -264,6 +299,12 @@ function PiezaRevision({ pieza, onCambio, onAprobada, onSaltada }: {
           </button>
         </div>
       </div>
+
+      {/* Textos del video (plantillas v2, §16.10) */}
+      {v2 && (
+        <TextosDelVideo pieza={pieza} sinArmador={sinArmador} ocupadaAfuera={ocupada}
+                        antesDeGuardar={guardarAntes} onCambio={onCambio} onSucio={setVideoSucio} />
+      )}
 
       {/* Textos */}
       <div style={{ display: "grid", gap: 10 }}>
@@ -328,14 +369,19 @@ function PiezaRevision({ pieza, onCambio, onAprobada, onSaltada }: {
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button type="button" className="btn btn-primary" style={{ ...BTN_GRANDE, flex: "1 1 160px" }} onClick={() => void aprobar()} disabled={ocupada || sucio}
-                title={sucio ? "Guardá los cambios antes de aprobar" : undefined}>
-          <Ic n="listo" s={18} /> {ocupado === "aprobar" ? "Aprobando…" : sucio ? "Guardá los cambios para aprobar" : "Aprobar"}
+        <button type="button" className="btn btn-primary" style={{ ...BTN_GRANDE, flex: "1 1 160px" }} onClick={() => void aprobar()}
+                disabled={ocupada || sinGuardar || noAprobable !== null}
+                title={sinGuardar ? "Guardá los cambios antes de aprobar" : (noAprobable ?? undefined)}>
+          <Ic n="listo" s={18} /> {ocupado === "aprobar" ? "Aprobando…" : sinGuardar ? "Guardá los cambios para aprobar" : "Aprobar"}
         </button>
         <button type="button" className="btn btn-ghost" style={{ ...BTN_GRANDE, flex: "1 1 120px" }} onClick={() => setSaltando((s) => !s)} disabled={ocupada}>
           <Ic n="seguir" s={18} /> Saltar
         </button>
       </div>
+
+      {/* El motivo de por qué no se aprueba (o el 409 del backend) va pegado al botón. */}
+      {noAprobable && !err && <Aviso tono="aviso">{noAprobable}</Aviso>}
+      {err && <Aviso tono="error">{err}</Aviso>}
 
       {saltando && (
         <div style={{ display: "grid", gap: 8, padding: 10, border: "1px solid var(--stroke)", borderRadius: 10 }}>
@@ -356,21 +402,21 @@ function PiezaRevision({ pieza, onCambio, onAprobada, onSaltada }: {
           </div>
         </div>
       )}
-
-      {err && <Aviso tono="error">{err}</Aviso>}
     </article>
   );
 }
 
 /* ─── Una pieza con problemas ────────────────────────────────────────────── */
 
-function PiezaConProblemas({ pieza, onCambio, onSaltada }: {
+function PiezaConProblemas({ pieza, sinArmador, onCambio, onSaltada }: {
   pieza: ContentPieceResponse;
+  sinArmador?: boolean;
   onCambio: (p: ContentPieceResponse) => void;
   onSaltada: (p: ContentPieceResponse) => void;
 }) {
   const [ocupado, setOcupado] = useState(false);
   const [err, setErr] = useState("");
+  const [corrigiendo, setCorrigiendo] = useState(false);
 
   async function reintentar() {
     setOcupado(true); setErr("");
@@ -397,9 +443,18 @@ function PiezaConProblemas({ pieza, onCambio, onSaltada }: {
         <button type="button" className="btn btn-primary btn-sm" style={BTN_GRANDE} onClick={() => void reintentar()} disabled={ocupado}>
           <Ic n="actualizar" s={15} /> {ocupado ? "Un momento…" : "Reintentar"}
         </button>
+        {esPiezaV2(pieza) && (
+          <button type="button" className="btn btn-ghost btn-sm" style={BTN_GRANDE} aria-expanded={corrigiendo}
+                  onClick={() => setCorrigiendo((c) => !c)} disabled={ocupado}>
+            <Ic n="editar" s={15} /> {corrigiendo ? "Cerrar los textos del video" : "Corregir los textos del video"}
+          </button>
+        )}
         <button type="button" className="btn btn-ghost btn-sm" style={BTN_GRANDE} onClick={() => void saltar()} disabled={ocupado}>Saltar</button>
       </div>
       {err && <Aviso tono="error">{err}</Aviso>}
+      {corrigiendo && esPiezaV2(pieza) && (
+        <TextosDelVideo pieza={pieza} sinArmador={sinArmador} ocupadaAfuera={ocupado} onCambio={onCambio} />
+      )}
     </article>
   );
 }
