@@ -1546,7 +1546,7 @@ alter table public.content_pieces
   - Caption fijo: «Dónde comprar {rubro} en {ciudad}: {nombre1}, {nombre2} y más. Búsquelos en uruku.bo». **Nunca** cuántos comercios (regla del sitio). Link en facebook/canal: `/{ciudad}/{rubro}?ref=`.
   - Consentimiento, baja de un comercio y quitar un comercio funcionan igual que en los compilados (`content_consent`, `quitar_comercio_de_compilado`); la franja de la home titula «{Rubro} en {ciudad}».
 - Tope: si ya hay **5** piezas `origin='pedido'` en `queued`/`rendering` → 429 «Ya hay 5 videos pedidos armándose; esperá a que terminen».
-- Las piezas pedidas no crean tareas de suscriptores ni cuentan cuota.
+- Las piezas pedidas no crean tareas de suscriptores ni cuentan cuota, y **no miran la regla de «no repetir una foto en 60 días»** del selector: si alguien lo pide, es porque quiere ese video ahora.
 
 ### 17.4 Frontend (Admin › Contenido para redes)
 

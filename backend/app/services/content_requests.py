@@ -74,7 +74,9 @@ def diagnostico_comercio(crepo, comercio: dict, hoy: date, usadas: set[tuple] | 
     `usable_photos` son las fotos que `elegir_fotos` daría hoy (con las mismas reglas que el selector, hasta 6).
     `reason` es el motivo del 422, o None si `ok`."""
     consent = content_consent.esta_autorizado(crepo, comercio["id"])
-    usadas = sel.claves_usadas(crepo, hoy) if usadas is None else usadas
+    # Un pedido a mano no mira la regla de «no repetir una foto en 60 días» del selector: si alguien lo
+    # pide, es porque quiere ese video ahora (pedir dos veces el mismo rubro tiene que funcionar).
+    usadas = set() if usadas is None else usadas
     fotos = sel.elegir_fotos(crepo, comercio, sel.MAX_FOTOS_COMERCIO, hoy, usadas)
     if comercio.get("activo") is False:
         motivo = MSG_INACTIVO
@@ -126,13 +128,13 @@ def _elegibles_de_ciudad(crepo, ciudad_id: str, hoy: date) -> tuple[list[dict], 
     """(comercios activos de la ciudad, los elegibles, rubros de cada elegible).
 
     Un elegible es un comercio activo de la ciudad con autorización vigente y al menos una foto que sirve (banco
-    más reciente > portada > galería; las mismas reglas de tamaño, disco y repetición que el selector). Cada uno:
+    más reciente > portada > galería; las mismas reglas de tamaño y disco que el selector, sin la de repetición). Cada uno:
     `{comercio, foto, suscriptor}`. Los rubros de un comercio son el principal y los secundarios."""
     comercios = crepo.list_comercios_activos(ciudad_id=ciudad_id)
     autorizados = content_consent.autorizados(crepo)
     con_permiso = [c for c in comercios if c["id"] in autorizados]
     pre = _FotosPrecargadas(crepo, [c["id"] for c in con_permiso])
-    usadas = sel.claves_usadas(crepo, hoy)
+    usadas: set[tuple] = set()  # como en diagnostico_comercio: el pedido no mira la regla de 60 días
     planes = {p["slug"]: p for p in crepo.list_planes()}
     elegibles = []
     for c in con_permiso:

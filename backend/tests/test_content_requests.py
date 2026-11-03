@@ -212,7 +212,8 @@ def test_dos_pedidos_del_mismo_dia_no_chocan(repo, crepo, client, ana):
     comercio(repo, "com-2", nombre="Otro"); autorizar(crepo, "com-2"); banco(crepo, "com-2", 6)
     assert pedir_comercio(client, ana, "com-1").status_code == 201
     assert pedir_comercio(client, ana, "com-2").status_code == 201
-    assert pedir_comercio(client, ana, "com-2").status_code == 422        # sus 6 fotos ya están en la pieza viva (60 días)
+    # Un pedido no mira la regla de 60 días: pedir otra vez el mismo negocio arma otro video.
+    assert pedir_comercio(client, ana, "com-2").status_code == 201
 
 
 def test_un_negocio_sin_autorizacion_es_422_con_el_motivo(repo, crepo, client, ana):
@@ -336,9 +337,10 @@ def test_request_options_cuenta_lo_mismo_que_el_pedido(repo, crepo, client, ana)
     opciones = {r["slug"]: r for r in client.get("/admin/content/request-options?ciudad_slug=bermejo", headers=ana).json()["rubros"]}
     assert opciones["zapatillas"]["eligible_count"] == 4 and opciones["zapatillas"]["eligible"] is True
     assert pedir_rubro(client, ana).status_code == 201
-    # sus fotos quedaron en una pieza viva (no se repiten 60 días): ya no alcanza, y el modal lo sabe
+    # Las fotos ya usadas no cuentan para un pedido: el rubro se puede volver a pedir.
     opciones = {r["slug"]: r for r in client.get("/admin/content/request-options?ciudad_slug=bermejo", headers=ana).json()["rubros"]}
-    assert opciones["zapatillas"]["eligible_count"] == 0 and opciones["zapatillas"]["eligible"] is False
+    assert opciones["zapatillas"]["eligible_count"] == 4 and opciones["zapatillas"]["eligible"] is True
+    assert pedir_rubro(client, ana).status_code == 201
 
 
 def test_request_check_dice_consent_fotos_ok_y_motivo(repo, crepo, client, ana):
