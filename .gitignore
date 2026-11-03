@@ -58,3 +58,7 @@ frontend/public/manuales/capturas/**/*.png
 # Clave de IndexNow: la escribe scripts/deploy-prod.sh desde backend/.env (nunca se commitea)
 frontend/public/*.txt
 !frontend/public/robots.txt
+
+# Kit de reels (docs/reels-kit): el zip original y los mp4 de ejemplo no se versionan (19 MB)
+docs/reels-kit/original/
+docs/reels-kit/referencias/ejemplos/*.mp4

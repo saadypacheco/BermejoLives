@@ -1,0 +1,67 @@
+<!doctype html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box;margin:0;padding:0}
+body{width:1080px;height:1920px;overflow:hidden;font-family:Poppins,sans-serif;background:#08110C}
+.stage{position:relative;width:1080px;height:1920px;overflow:hidden;background:radial-gradient(110% 75% at 50% 55%,#0F3423 0%,#0B1E15 45%,#08110C 100%)}
+.sc{position:absolute;inset:0}
+.glow{position:absolute;left:540px;top:1000px;width:1250px;height:1250px;margin:-625px 0 0 -625px;border-radius:50%;
+ background:radial-gradient(closest-side,rgba(38,185,105,.55),rgba(29,141,82,.22) 50%,transparent 74%);filter:blur(24px);animation:pulse 4s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(1.07)}}
+.title{position:absolute;left:0;right:0;text-align:center;padding:0 60px}
+.kick{display:inline-block;font-weight:600;font-size:30px;letter-spacing:3px;color:#04311A;background:#34D27F;border-radius:30px;padding:8px 24px;margin-bottom:22px;animation:rise .6s cubic-bezier(.2,.8,.2,1) both}
+.tl1,.tl2{font-weight:600;font-size:88px;line-height:1.05;letter-spacing:-2.5px;color:#fff;animation:rise .6s cubic-bezier(.2,.8,.2,1) both}
+.tl2{color:#34D27F}
+@keyframes rise{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:none}}
+.sub{position:absolute;left:0;right:0;text-align:center;font-size:38px;line-height:1.35;color:#D2E2D8;padding:0 90px;animation:rise .6s cubic-bezier(.2,.8,.2,1) both}
+.pc{position:absolute;border-radius:44px;overflow:hidden;background:#f2f2f0;
+ box-shadow:0 50px 100px rgba(0,0,0,.6),0 0 0 3px rgba(80,220,140,.45),0 0 80px rgba(52,210,127,.35)}
+.pc img{display:block;width:100%;height:100%;object-fit:cover}
+.chip{position:absolute;font-weight:600;font-size:40px;color:#fff;background:#16211B;border:2px solid #2B4A39;border-radius:44px;padding:16px 34px;display:flex;align-items:center;gap:16px;
+ box-shadow:0 24px 48px rgba(0,0,0,.5);white-space:nowrap}
+.chip i{width:18px;height:18px;border-radius:50%;background:#34D27F;box-shadow:0 0 16px #34D27F;flex:none}
+.coin{position:absolute;filter:drop-shadow(0 24px 30px rgba(0,0,0,.6));animation:cpop .9s cubic-bezier(.2,1.35,.3,1) both, bob 3s ease-in-out infinite}
+@keyframes cpop{from{opacity:0;transform:scale(.15) rotate(-40deg)}}
+@keyframes bob{50%{translate:0 -12px}}
+@keyframes pop{from{opacity:0;transform:scale(.4) rotate(-6deg)}}
+.logoE{position:absolute;width:420px;left:330px;animation:rise .7s cubic-bezier(.2,.8,.2,1) both}
+.url{position:absolute;left:0;right:0;text-align:center;font-weight:700;font-size:80px;color:#34D27F;animation:rise .7s cubic-bezier(.2,.8,.2,1) both}
+.lema{position:absolute;left:0;right:0;text-align:center;font-size:34px;color:#A8BDB1;animation:rise .7s both}
+@keyframes io_a1{0%{opacity:0}3.00%{opacity:1}96.00%{opacity:1}100%{opacity:0}}
+.a1{animation:io_a1 10.0s 0s linear both}
+@keyframes io_a2{0%{opacity:0}9.30%{opacity:1}99.77%{opacity:1}100%{opacity:0}}
+.a2{animation:io_a2 4.300000000000001s 9.7s linear both}
+
+.car{position:absolute;left:150px;top:560px;width:780px;height:980px}
+.slide{position:absolute;inset:0;animation:sin .7s cubic-bezier(.2,.9,.3,1) both, sout .55s cubic-bezier(.6,0,.8,.4) both}
+@keyframes sin{from{opacity:0;transform:translateX(700px) rotate(10deg) scale(.85)}}
+@keyframes sout{to{opacity:0;transform:translateX(-760px) rotate(-10deg) scale(.85)}}
+.slide .pc{left:0;top:0;width:780px;height:980px}
+.slide .chip{left:50%;bottom:-40px;transform:translateX(-50%)}
+.cnt{position:absolute;left:0;right:0;top:1640px;display:flex;justify-content:center;gap:16px}
+.cnt b{width:16px;height:16px;border-radius:50%;background:#2B4A39;animation:on .3s both}
+@keyframes on{to{background:#34D27F;box-shadow:0 0 14px #34D27F;width:46px;border-radius:10px}}
+.search{position:absolute;left:70px;right:70px;top:640px;height:130px;border-radius:32px;background:#16211B;border:2px solid #2B4A39;
+ display:flex;align-items:center;padding-left:36px;gap:24px;box-shadow:0 30px 60px rgba(0,0,0,.55),0 0 50px rgba(52,210,127,.25);animation:rise .6s 10.0s both}
+.mag{width:42px;height:42px;border:5px solid #8FA79A;border-radius:50%;position:relative;flex:none}
+.mag:after{content:"";position:absolute;width:5px;height:18px;background:#8FA79A;right:-10px;bottom:-13px;transform:rotate(-45deg);border-radius:2px}
+.typed{font-size:48px;color:#fff;font-weight:500;white-space:nowrap;overflow:hidden;width:0;animation:type .9s 10.5s steps(8) both}
+@keyframes type{to{width:262px}}
+.btn{margin-left:auto;height:100%;padding:0 46px;display:grid;place-items:center;font-weight:700;font-size:40px;color:#fff;background:#1F9D58;border-radius:0 30px 30px 0}
+.whw{position:absolute;left:0;right:0;top:880px;display:flex;justify-content:center;animation:rise .6s 11.3s both}.whw .chip{position:relative}
+</style></head><body><div class="stage">
+<div class="glow"></div>
+<div class="sc a1">
+ <div class="title" style="top:130px"><div class="kick" style="animation-delay:0.2s">NUEVA TEMPORADA</div><div class="tl1" style="animation-delay:0.30000000000000004s">Camperas que</div><div class="tl2" style="animation-delay:0.45s">ya llegaron</div></div>
+ <div class="car"><div class="slide" style="animation-delay:1.5s,3.5s"><div class="pc"><img src="p_modelo.jpg" style="object-position:50% 20%"></div><div class="chip"><i></i>Eco cuero con cinturón</div></div><div class="slide" style="animation-delay:3.6s,5.6s"><div class="pc"><img src="p_motero_c.jpg" style="object-position:50% 30%"></div><div class="chip"><i></i>Estilo motero</div></div><div class="slide" style="animation-delay:5.7s,7.7s"><div class="pc"><img src="p_corta.jpg" style="object-position:50% 50%"></div><div class="chip"><i></i>Corta, con botones dorados</div></div><div class="slide" style="animation-delay:7.800000000000001s,9.6s"><div class="pc"><img src="p_dobleface.jpg" style="object-position:50% 50%"></div><div class="chip"><i></i>Doble faz, con capucha</div></div></div>
+ <div class="cnt"><b style="animation-delay:1.5s"></b><b style="animation-delay:3.6s"></b><b style="animation-delay:5.7s"></b><b style="animation-delay:7.800000000000001s"></b></div>
+ <div class="sub" style="top:1730px;animation-delay:1.2s">Eco cuero, doble faz y más modelos</div>
+</div>
+<div class="sc a2">
+ <div class="title" style="top:260px"><div class="tl1" style="animation-delay:9.9s">¿Dónde las</div><div class="tl2" style="animation-delay:10.05s">consigue?</div></div>
+ <div class="search"><div class="mag"></div><div class="typed">camperas</div><div class="btn">Buscar</div></div>
+ <div class="whw"><div class="chip"><i></i>Comercio de ejemplo · Bermejo</div></div>
+ <img class="coin" src="ic_pin.png" style="left:85.0px;top:1045.0px;width:170px;animation-delay:11.6s,12.5s"><img class="coin" src="ic_whatsapp.png" style="left:825.0px;top:1045.0px;width:170px;animation-delay:11.9s,12.8s">
+ <div class="sub" style="top:1060px;animation-delay:11.8s;font-size:36px">Consulte precio y talles<br>directo con el local</div>
+ <img class="logoE" src="logo.png" style="top:1360px;animation-delay:12.2s">
+ <div class="url" style="top:1530px;animation-delay:12.4s">uruku.bo</div>
+ <div class="lema" style="top:1660px;animation-delay:12.6s">Si está en Bolivia, está en Uruku.</div>
+</div>
+</div></body></html>

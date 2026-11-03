@@ -1304,3 +1304,187 @@ Decidido por el dueño después de la revisión:
 - Tarea `piece_delivery` en Suscriptores: botón «Descargar video» (`download_url`) + «Marcar entregado» (`POST .../done` con `{sent: true}`), sin botón de WhatsApp.
 - Textos de la autorización: «redes y página de URUKU» (`social-consent-box`, `social-consent-toggle`, `completar-comercio`, `publicar`, `mi-comercio`).
 - Contratos que cambiaron en los arreglos (`166bc5a`): `GET /comercio/social-consent` ya no trae `note` ni `recorded_by` (hacerlos opcionales); `skip_reason` suma `comercio_inactivo` y `asset_removed` (etiquetas «El comercio está de baja» y «Se quitó una foto»).
+
+---
+
+## 16. Videos con el diseño del kit (plantillas v2) — 2/11/2026
+
+El dueño trajo de otro proyecto un kit de reels: `docs/reels-kit/prompt.md` (reglas de contenido y diseño) y `docs/reels-kit/referencias/` (plantillas HTML, código de render, íconos, logo, cuadros de ejemplo). Se adopta **su diseño y su método de render**. Lo que no cambia: banco de fotos, autorizaciones, selector semanal, cola, revisión, Paquete del día, franja de la home.
+
+### 16.1 Decisiones del dueño
+
+1. **Motor = método del kit**: cada video es una página HTML con animaciones CSS; Chromium (Playwright) la fotografía cuadro a cuadro y ffmpeg arma el mp4. Corre en un **contenedor aparte** (`reels`), no dentro del backend.
+2. **Frases sobre las fotos y título**: las **propone Gemini** mirando las fotos; una persona las ve en Revisión, las corrige si hace falta y recién entonces aprueba. Reemplaza la regla anterior «nada de lo que está dentro del video lo escribe un modelo de IA»: ahora sí lo escribe, pero validado (§16.6) y siempre aprobado por un humano antes de publicarse.
+3. **Sin línea mayorista (T2) por ahora.** Sólo videos para el consumidor.
+4. **Español neutro** en el video y en los textos de las redes («usted», «Consulte», «Búsquelo»). Sin voseo ni tuteo. El panel interno sigue con voseo.
+5. **Nunca precios** (kit §3): ni en el video ni en los textos. La plantilla `ofertas` v1 mostraba el precio en una banda: la v2 no. «Consulte precio directo con el local».
+6. Lema de cierre: **«Si está en Bolivia, está en Uruku.»**
+
+### 16.2 Etapas
+
+| Etapa | Qué | Estado |
+|---|---|---|
+| **1** | Contenedor `reels` + plantilla **T1** (carrusel) en **9:16** para `comercio_del_dia` y `ofertas`. Textos propuestos por Gemini + edición en Revisión. Tono neutro en textos de redes. Fotos marcadas por Gemini (precio o código visible) | Esta spec |
+| 2 | 16:9 y 1:1 (`adapt_formatos.js`); T3 restaurante, T4 hotel, T5 servicios según el rubro; T6 repaso por rubro; recorte de fotos en el panel | Después |
+| — | T2 mayorista | No por ahora |
+
+### 16.3 Medición (2/11, PC de desarrollo, 4 núcleos, Chromium headless)
+
+T1 del kit, 1080×1920, 30 fps, 13,5 s = 405 cuadros, captura JPEG → ffmpeg por stdin:
+
+| Variante | ms/cuadro | Total |
+|---|---|---|
+| Kit tal cual | 207 | 89 s |
+| `.glow` **sin** `filter: blur(24px)` | **135** | **55 s** |
+| Además sin sombras | 139 | 58 s (las sombras no pesan) |
+
+Capturar por CDP directo (`Page.captureScreenshot`) en lugar de `page.screenshot` no cambió nada: el costo es pintar el cuadro. El brillo sin desenfoque se ve igual (el `radial-gradient` ya es suave): **la v2 no usa `filter: blur` en el brillo**. Presupuesto en el VPS: p95 ≤ 150 s por video 9:16; timeout del backend 300 s (sin cambio).
+
+### 16.4 Contenedor `reels` (carpeta `renderer/`)
+
+- Imagen `mcr.microsoft.com/playwright/python:v1.64.1-noble` (versión fija) + `ffmpeg` por apt + Poppins (los `.ttf` de `backend/app/assets/content/`, copiados a `renderer/assets/`) + logo e íconos `ic_*.png` del kit. Usuario no root.
+- Servidor HTTP mínimo (stdlib `http.server`; **la única dependencia es `playwright`**, que ya trae la imagen), puerto 8090, **sin puerto publicado y sin Traefik**.
+- Red: una red nueva `render` con `internal: true`, compartida **sólo** con el backend. El contenedor no tiene salida a internet.
+- Compose (`docker-compose.prod.yml` e `infra/docker-compose.yml`): `container_name: buscadonde-reels`, `mem_limit: 1536m`, `cpus: 1.5`, `pids_limit: 512`, `read_only: true` + `tmpfs: /tmp`, `init: true`, `restart: unless-stopped`, volumen `content_private:/data/content` (sólo usa `tmp/`), `env_file: ./renderer/.env` con `RENDERER_TOKEN`. El backend suma la red `render`.
+- Chromium: `--disable-dev-shm-usage`; la página no trae `<script>` (sólo CSS); el controlador usa `evaluate`. `page.route("**/*")` **aborta** todo lo que no sea `file://` dentro de la carpeta del job o de `renderer/assets/`. Meta CSP en la página: `default-src 'none'; img-src file:; style-src 'unsafe-inline'; font-src file:`.
+
+#### Contrato HTTP (backend → reels)
+
+```
+POST http://buscadonde-reels:8090/render
+Authorization: Bearer <RENDERER_TOKEN>          (comparación en tiempo constante; sin token o distinto → 401)
+{"piece_id": "<uuid>"}                          (regex UUID; si no → 400)
+
+200 {"ok": true,  "duration_s": 13.9, "video_bytes": 2600000, "render_ms": 61000, "frames": 417}
+200 {"ok": false, "error": "<motivo en español>", "retryable": true|false}
+409 {"ok": false, "error": "Ocupado", "retryable": true}     (ya hay un render en curso: uno a la vez)
+
+GET /health → {"ok": true, "chromium": true, "ffmpeg": true, "busy": false}   (sin token)
+```
+
+El contenedor tiene su **propio plazo** (`RENDER_DEADLINE_SEG=280`): al vencer, mata Chromium y ffmpeg y contesta `retryable: true`. Así nunca queda un render vivo después del timeout del backend (300 s).
+
+#### Carpeta del job: `CONTENT_DIR/tmp/<piece_id>/`
+
+La arma el backend (`_preparar_job`). El contenedor sólo lee lo que está ahí y sólo escribe `video.mp4` y `cover.jpg` ahí.
+
+```json
+{
+  "version": 2,
+  "piece_id": "…",
+  "template": "t1",
+  "format": "9x16",
+  "fps": 30,
+  "texts": {
+    "kick": "NUEVA TEMPORADA",
+    "title1": "Camperas que",
+    "title2": "ya llegaron",
+    "subtitle": "Eco cuero, doble faz y más modelos",
+    "close_title1": "¿Dónde lo",
+    "close_title2": "consigue?",
+    "search_term": "camperas",
+    "place_chip": "Boutique Andina · Bermejo",
+    "close_line": "Consulte precio directo con el local",
+    "url": "uruku.bo",
+    "lema": "Si está en Bolivia, está en Uruku."
+  },
+  "icons": ["pin", "whatsapp"],
+  "slides": [{"file": "s0.jpg", "chip": "Eco cuero con cinturón", "focus_y": 0.3}],
+  "out_video": "video.mp4",
+  "out_cover": "cover.jpg"
+}
+```
+
+- `kick`, `subtitle`, `place_chip` y cada `chip` pueden ser `null` (no se dibujan). `focus_y` null = 0.4. `slides`: 4 a 6. `file` debe calzar `^s\d{1,2}\.jpg$` y `out_video`/`out_cover` son esos nombres fijos (si no → 400). `icons` ⊂ los `ic_*.png` del kit (`pin`, `whatsapp`, `oferta`, `tienda`, `comida`, …).
+- Las fotos `sN.jpg` las prepara el backend: `exif_transpose`, RGB, lado mayor 1200 px, N1 suave (§5.1), JPEG q90, sin EXIF.
+- El contenedor arma el HTML **escapando todo texto** (`html.escape`) a partir de la plantilla T1 del kit (`docs/reels-kit/referencias/plantillas/reels_build.py`, parametrizada).
+
+#### Plantilla T1 v2 (tiempos con N fotos, N = 4..6)
+
+| Tramo | Tiempo | Contenido |
+|---|---|---|
+| Gancho | 0 – 1,5 s | `kick` + `title1`/`title2` (como el kit) |
+| Carrusel | 1,5 – 1,5 + 2,1·N | cada foto en la tarjeta `.pc` (780×980, `object-position: 50% {focus_y·100}%`), su `chip` abajo, indicador de N puntos, `subtitle` fijo abajo |
+| Cierre | desde 1,4 + 2,1·N, dura 4,2 s | `close_title1`/`close_title2`, buscador que escribe `search_term` (el ancho del tecleo se mide con `evaluate` antes de pausar; `steps(len)`), `place_chip`, monedas `icons`, `close_line`, logo, `url`, `lema` |
+
+Total: 4 fotos ≈ 14 s, 6 fotos ≈ 18 s. Zona segura del kit: lo importante entre y = 220 y y = 1600, 120 px libres a la derecha. Sin `filter: blur` en `.glow` (§16.3). Títulos largos: el tamaño baja de 88 a 72 px si una línea no entra en 960 px (medido con `evaluate`). Pista AAC muda como v1. Portada: el cuadro de t = 2,6 s (primera foto con el título). Verificación con ffprobe: 1080×1920, 12–20 s, pista de audio, > 100 KB.
+
+Render: cargar, esperar `document.fonts.ready` y `img.decode()`, pausar todas las animaciones, por cuadro `a.currentTime = t·1000` y captura JPEG q90 → `ffmpeg -f image2pipe -c:v mjpeg -r 30 -i - -f lavfi -i anullsrc=r=48000:cl=stereo -shortest -c:v libx264 -preset veryfast -crf 21 -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart`.
+
+### 16.5 Backend
+
+- **Config:** `content_render_engine: str = "kit"` (`kit | pillow`; `pillow` = el motor v1, para la PC sin Docker y como respaldo), `renderer_url: str = "http://buscadonde-reels:8090"`, `renderer_token: str = ""`. Con `kit` y sin token, el worker no toma trabajos y `estado_del_worker` devuelve `no_renderer` (igual si `/health` no contesta).
+- **`content_render.py`:** con `kit`, `_preparar_job` arma la carpeta de §16.4 (copia y prepara las fotos) y en lugar del subproceso hace `POST /render` con `httpx` (timeout `content_render_timeout_seg`). 409 y errores de red → reintentable. Lo demás (toma atómica, reintentos, colgadas, mover a `renders/`, contar usos, borrar `tmp/`) no cambia. Las piezas nuevas se crean con `template_version = 2`; las v1 ya armadas no se tocan (si se reintenta una v1 con `kit`, se le proponen textos y pasa a v2).
+- **Textos del video — `services/content_video_texts.py` (nuevo):**
+  - `proponer(pieza, fuentes) -> dict`: **una** llamada a Gemini con visión (`vision._post_con_reintentos`, fotos a 768 px) con los hechos **sin datos de contacto** (nombre, rubro, subcategoría, ciudad, `prod_obs_human`, marcados como `<datos>` como en captions) y las fotos. Respuesta JSON: `{kick, title1, title2, subtitle, search_term, slides: [{chip, price_or_code_visible, focus_y}]}`.
+  - Se valida (§16.6); con objeciones, **un** reintento con las objeciones; si vuelve a fallar, no hay `GEMINI_API_KEY` o Gemini falla → **textos fijos** (§16.7). Nunca frena la cola.
+  - Se llama en el selector al crear la pieza (después de elegir las fuentes), al **reemplazar una foto** (sólo el chip/marca de la nueva) y desde «Pedir otra propuesta».
+  - Fotos con `price_or_code_visible`: en `comercio_del_dia`, si quedan ≥ 4 sin marca, las marcadas se sacan de la pieza (log `content.foto_marcada_descartada`); si no, quedan con la marca. En `ofertas` quedan con la marca.
+- **Textos de cierre** (fijos, no IA): `close_title1/2` = «¿Dónde lo» / «consigue?» (`ofertas`: «¿Dónde las» / «encuentra?»); `place_chip` = «{nombre} · {ciudad}» (si pasa de 34 caracteres, sólo el nombre cortado; `ofertas`: null); `close_line` = «Consulte precio directo con el local» (`ofertas`: «Vea todas las ofertas en Uruku»); `icons` = `["pin", "whatsapp"]` (`ofertas`: `["oferta", "pin"]`).
+- **`ofertas`:** el chip de cada foto es el **nombre del comercio** (de la base, no de Gemini). Gemini propone sólo `kick`/`title1`/`title2`/`subtitle`/`search_term` y las marcas de las fotos. Fallback: «OFERTAS DE LA SEMANA» / «Ofertas en» / «{ciudad}» / `search_term` «ofertas».
+- **Captions (`content_captions.py`):** ejemplos del prompt y plantilla fija **en neutro** («Búsquelo en uruku.bo», «Escríbale desde su ficha»). Los hechos de `ofertas` ya **no** llevan precio y `allowed_numbers` no incluye precios; regla nueva: **cualquier** monto con `Bs`, `$`, `US$` o «bolivianos» → «Tiene un precio». Hashtags: se suman `#Bolivia` y `#ComerciosLocales` a `hashtags_allowed`; entre 4 y 8. La regla de tono de §16.6 también corre sobre los captions (generados y editados).
+
+### 16.6 Validador de textos del video — `validate_video_texts(texts, chips, pillar) -> list[str]` (puro)
+
+| Campo | Regla |
+|---|---|
+| `kick` | ≤ 22 caracteres; se guarda en mayúsculas |
+| `title1`, `title2` | obligatorios, 1 a 4 palabras, ≤ 18 caracteres cada uno |
+| `subtitle` | ≤ 42 caracteres |
+| `search_term` | obligatorio, 1 o 2 palabras, ≤ 16 caracteres; se guarda en minúsculas |
+| `chip` | 2 a 5 palabras, ≤ 30 caracteres |
+| Todos | sin dígitos; sin `Bs`, `$`, `US$`; sin emoji; sin URL, `@` ni dominios; sin el código del comercio ni `CONFIRMAR-` ni forma de clave; sin lo que no se promete (§6.3); **«cuero» sólo como «eco cuero»**; **tono**: rechaza voseo y tuteo con una lista de palabras completas (`vos`, `tenés`, `querés`, `podés`, `buscá`, `mirá`, `escribile`, `conocé`, `encontrá`, `vení`, `tú`, `ti`, `puedes`, `quieres`, `tienes`, `busca`, `encuentra` en imperativo con «tu/te»…) → «Use usted, sin voseo ni tuteo» |
+
+Las mismas reglas se aplican a lo que **edita una persona** (`PATCH` → 400 con la objeción).
+
+### 16.7 Textos fijos (sin Gemini)
+
+`comercio_del_dia`: `kick` = «EN {CIUDAD}»; `title1` = rubro (si pasa de 18, «Lo que busca»); `title2` = «en {ciudad}» (si pasa de 18, «está en Uruku»); `subtitle` = null; `search_term` = primera palabra del rubro en minúsculas; chips = null; `focus_y` = null.
+
+### 16.8 Datos — migración `0182_content_video_texts.sql`
+
+```sql
+alter table public.content_pieces
+  add column if not exists video_texts         jsonb,                          -- §16.4 texts; null en v1
+  add column if not exists video_texts_engine  text,                           -- 'gemini:<modelo>' | 'template' | 'human'
+  add column if not exists video_texts_checks  jsonb not null default '[]'::jsonb,
+  add column if not exists photo_flags_ok      boolean not null default false; -- «revisé las fotos marcadas»
+alter table public.content_piece_sources
+  add column if not exists chip_text   text check (chip_text is null or length(chip_text) <= 40),
+  add column if not exists photo_flags text[] not null default '{}',           -- {'price_or_code_visible'}
+  add column if not exists focus_y     real check (focus_y is null or focus_y between 0 and 1);
+```
+
+Mismo archivo en `supabase/migrations/` y `selfhost/postgres-init/`. Sin GRANTs nuevos si las dos tablas ya son sólo de `service_role` (verificarlo en 0181 y dejarlo dicho en un comentario).
+
+### 16.9 API
+
+- `PieceResponse` suma `video_texts`, `video_texts_engine`, `video_texts_checks`, `photo_flags_ok`; cada fuente suma `chip_text`, `photo_flags`, `focus_y`.
+- `PATCH /admin/content/pieces/{id}/video-texts` (permiso `difusion`). Body `VideoTextsUpdate { kick?, title1, title2, subtitle?, search_term, chips: [{source_id, text|null}], photo_flags_ok? }` (`source_id` = id de `content_piece_sources`, debe ser una fuente activa de esta pieza; si no → 400). Valida (§16.6) → guarda (`video_texts_engine = 'human'`, `video_texts_checks = []`) → si la pieza está en `ready_for_review` o `failed`, vuelve a `queued` (`render_attempts = 0`, `render_next_at = now()`, `render_error = null`); en `queued` sólo guarda; en `rendering`, `approved`, `published` o `skipped` → 409.
+- `POST /admin/content/pieces/{id}/video-texts/propose` (permiso `difusion`): vuelve a pedir a Gemini (§16.5) y re-encola igual que el PATCH (mismos 409).
+- `approve` (y `approve-batch`) de una pieza v2: 409 «Revise los textos del video» si `video_texts_checks` no está vacío; 409 «Hay fotos marcadas: cámbielas o confirme que están bien» si alguna fuente activa tiene `photo_flags` y `photo_flags_ok = false`.
+- `GET /admin/content/status`: `worker` puede valer `no_renderer`.
+
+### 16.10 Frontend (Admin › Contenido para redes › Revisión)
+
+- Bloque **«Textos del video»** en la tarjeta de la pieza v2 (`template_version >= 2`): campos `kick`, título (2 líneas), subtítulo, búsqueda; un campo de **frase por foto** al lado de cada miniatura (en `ofertas` el chip es el nombre del comercio y no se edita); de dónde salió («Propuesto por Gemini» / «Escrito a mano» / «Texto fijo»); objeciones en rojo.
+- Foto con `photo_flags`: insignia «Se ve un precio o un código» + «Cambiar foto» (ya existe). Casilla «Revisé las fotos marcadas: no se ve ningún precio ni código» (`photo_flags_ok`).
+- Botones «Guardar y volver a armar» (PATCH) y «Pedir otra propuesta» (POST propose). Mientras la pieza está `queued`/`rendering`, el video viejo no se muestra: «Armando el video…».
+- Validación en el cliente con una función pura en `lib/content-pure.ts` que replica largos, dígitos y la lista de tono de §16.6 (la del backend manda).
+- `worker = no_renderer` → aviso «El armador de videos no está disponible».
+- Íconos sólo de `ic.tsx`; textos del panel en voseo; lo que va al video, en neutro.
+
+### 16.11 Reparto
+
+| Agente | Archivos |
+|---|---|
+| backend-dev (renderer) | `renderer/**` (nuevo), `docker-compose.prod.yml`, `infra/docker-compose.yml`, `renderer/.env.example`, `scripts/deploy-prod.sh` sólo si hace falta para el servicio nuevo |
+| backend-dev (backend) | `backend/**`, `supabase/migrations/0182_*`, `selfhost/postgres-init/0182_*`, `backend/.env.example` |
+| frontend-dev | `frontend/**` |
+
+### 16.12 Puesta en marcha
+
+1. `renderer/.env` y `backend/.env` con el **mismo** `RENDERER_TOKEN` (`python3 -c "import secrets; print(secrets.token_urlsafe(32))"`); `CONTENT_RENDER_ENGINE=kit` (default).
+2. `cd /docker/uruku && bash scripts/deploy-prod.sh --sql selfhost/postgres-init/0182_content_video_texts.sql frontend backend reels`.
+3. Desde el backend: `docker compose -f docker-compose.prod.yml exec backend python -c "import httpx; print(httpx.get('http://buscadonde-reels:8090/health').json())"`.
+4. Con los workers prendidos (§11.2), «Reintentar» una pieza: tiene que llegar a «Lista para revisar» con el diseño nuevo.
