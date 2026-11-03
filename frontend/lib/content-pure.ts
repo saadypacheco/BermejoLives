@@ -396,7 +396,194 @@ export function piezaEnMovimiento(status: string): boolean {
   return status === "queued" || status === "rendering";
 }
 
-/** ¿Se puede aprobar en lote? Sólo lo que está en verde y nadie tocó (§8.3). */
-export function aprobableEnLote(p: { status: string; caption_checks: readonly string[]; caption_edited: boolean }): boolean {
-  return p.status === "ready_for_review" && p.caption_checks.length === 0 && !p.caption_edited;
+/** ¿Se puede aprobar en lote? Sólo lo que está en verde y nadie tocó (§8.3). En las
+ *  piezas v2 además tienen que estar limpios los textos del video y las fotos
+ *  marcadas (§16.9); en las v1 esos campos no vienen y no cuentan. */
+export function aprobableEnLote(p: {
+  status: string; caption_checks: readonly string[]; caption_edited: boolean;
+  video_texts_checks?: readonly string[] | null;
+  photo_flags_ok?: boolean | null;
+  sources?: readonly { photo_flags?: readonly string[] | null }[] | null;
+}): boolean {
+  return p.status === "ready_for_review" && p.caption_checks.length === 0 && !p.caption_edited
+    && motivoNoAprobable(p) === null;
+}
+
+/* ─── Textos del video (plantillas v2, §16) ──────────────────────────────── */
+
+/** Las piezas v2 traen `template_version >= 2`. Si el backend todavía no manda ese
+ *  campo, `video_texts` con contenido alcanza para reconocerlas. */
+export function esPiezaV2(p: { template_version?: number | null; video_texts?: object | null }): boolean {
+  if (typeof p.template_version === "number") return p.template_version >= 2;
+  return !!p.video_texts;
+}
+
+/** ¿La foto tiene alguna marca de Gemini (precio o código a la vista)? */
+export function fotoMarcadaPorGemini(flags: readonly string[] | null | undefined): boolean {
+  return !!flags && flags.length > 0;
+}
+
+/**
+ * Por qué una pieza v2 no se puede aprobar todavía (los mismos dos 409 de §16.9),
+ * o `null` si no hay nada que lo impida. El backend vuelve a decidir; esto sólo
+ * avisa antes de apretar.
+ */
+export function motivoNoAprobable(p: {
+  video_texts_checks?: readonly string[] | null;
+  photo_flags_ok?: boolean | null;
+  sources?: readonly { photo_flags?: readonly string[] | null }[] | null;
+}): string | null {
+  if ((p.video_texts_checks ?? []).length > 0) return "Revisá los textos del video: el validador tiene objeciones.";
+  const hayMarcadas = (p.sources ?? []).some((s) => fotoMarcadaPorGemini(s.photo_flags));
+  if (hayMarcadas && !p.photo_flags_ok) return "Hay fotos marcadas: cambialas o confirmá que están bien.";
+  return null;
+}
+
+/** De dónde salieron los textos del video (`video_texts_engine`, §16.8). */
+export function origenTextosVideo(engine: string | null | undefined): string {
+  const e = (engine ?? "").trim();
+  if (e.startsWith("gemini:")) return "Propuesto por Gemini";
+  if (e === "human") return "Escrito a mano";
+  if (e === "template") return "Texto fijo";
+  return "";
+}
+
+/** En `ofertas` la frase de cada foto es el nombre del comercio: no se edita (§16.5). */
+export function chipsEditables(pillar: ContentPillar | string): boolean {
+  return pillar !== "ofertas";
+}
+
+/** Los campos del video que escribe o corrige una persona (§16.9). */
+export type VideoTextsEditable = {
+  kick: string | null;
+  title1: string;
+  title2: string;
+  subtitle: string | null;
+  search_term: string;
+};
+export type CampoVideo = keyof VideoTextsEditable;
+
+export const CAMPO_VIDEO_LABEL: Record<CampoVideo, string> = {
+  kick: "Frase de arriba",
+  title1: "Título, línea 1",
+  title2: "Título, línea 2",
+  subtitle: "Subtítulo",
+  search_term: "Búsqueda",
+};
+
+/** Topes de cada campo (§16.6). `palabras` = [mínimo, máximo]. */
+export const VIDEO_LIMITES: Record<CampoVideo | "chip", { max: number; palabras?: readonly [number, number]; obligatorio: boolean }> = {
+  kick: { max: 22, obligatorio: false },
+  title1: { max: 18, palabras: [1, 4], obligatorio: true },
+  title2: { max: 18, palabras: [1, 4], obligatorio: true },
+  subtitle: { max: 42, obligatorio: false },
+  search_term: { max: 16, palabras: [1, 2], obligatorio: true },
+  chip: { max: 30, palabras: [2, 5], obligatorio: false },
+};
+
+// Emoji y pictogramas: los mismos rangos que el validador del backend (§6.3).
+const RE_EMOJI_VIDEO = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/u;
+const RE_ENLACE = /https?:|www\.|@|(?:^|[^\p{L}\d])[\p{L}\d-]+\.(?:com|bo|ar|net|org|store|app|io|me|info|shop|link)(?![\p{L}])/iu;
+const RE_CODIGO = /URUKU-[A-Z0-9]{3,}|CONFIRMAR-/i;
+const RE_FORMA_CLAVE = /(?:^|[^\p{L}])[A-ZÁÉÍÓÚÑ]{3,}-[A-Z0-9]{4,}(?![\p{L}\d])/u;
+const RE_PLATA = /\$|(?:^|[^\p{L}])bs(?![\p{L}])/iu;
+
+/** Lo que no se promete (§6.3). */
+const PROMESAS: readonly string[] = [
+  "el mejor", "la mejor", "el más barato", "más barato", "te traemos clientes",
+  "envío", "envíos", "garantía", "garantizado", "próximamente",
+];
+const RE_PROMESAS = new RegExp(`(?:^|[^\\p{L}])(${PROMESAS.join("|")})(?![\\p{L}])`, "iu");
+
+/** Voseo y tuteo: palabras completas (§16.6). */
+const TONO_PROHIBIDO: ReadonlySet<string> = new Set([
+  "vos", "sos", "tenés", "querés", "podés", "sabés", "buscá", "mirá", "escribile", "escribí", "conocé",
+  "encontrá", "vení", "pedí", "llamá", "tú", "ti", "tu", "tus", "te", "puedes", "quieres", "tienes", "sabes",
+]);
+/** `busca` y `encuentra` sólo son tuteo cuando hay un «tu/te» al lado (imperativo). */
+const TONO_CON_TU: ReadonlySet<string> = new Set(["busca", "encuentra"]);
+
+function cantidadDeCaracteres(t: string): number {
+  return Array.from(t).length;
+}
+function palabrasDe(t: string): string[] {
+  return t.trim().split(/\s+/).filter(Boolean);
+}
+
+/** Las objeciones que valen para TODOS los campos del video (§16.6, fila «Todos»). */
+function objecionesComunes(texto: string): string[] {
+  const o: string[] = [];
+  if (/\d/.test(texto)) o.push("no puede tener números");
+  if (RE_PLATA.test(texto)) o.push("no puede nombrar plata (Bs, $, US$)");
+  if (RE_EMOJI_VIDEO.test(texto)) o.push("no puede tener emoji");
+  if (RE_ENLACE.test(texto)) o.push("no puede tener links, @ ni direcciones web");
+  if (RE_CODIGO.test(texto) || RE_FORMA_CLAVE.test(texto)) o.push("no puede tener códigos ni claves");
+  const promesa = RE_PROMESAS.exec(texto);
+  if (promesa) o.push(`promete algo que no se puede («${promesa[1].toLowerCase()}»)`);
+  for (const m of texto.matchAll(/(^|[^\p{L}])cuero(?![\p{L}])/giu)) {
+    const antes = texto.slice(0, (m.index ?? 0) + m[1].length);
+    if (!/(?:^|[^\p{L}])eco\s+$/iu.test(antes)) { o.push("«cuero» sólo puede decirse «eco cuero»"); break; }
+  }
+  const palabras = texto.toLowerCase().split(/[^\p{L}]+/u).filter(Boolean);
+  const tieneTu = palabras.some((w) => w === "tu" || w === "tus" || w === "te");
+  const mala = palabras.find((w) => TONO_PROHIBIDO.has(w) || (tieneTu && TONO_CON_TU.has(w)));
+  if (mala) o.push(`tiene tuteo o voseo («${mala}»): se escribe de usted`);
+  return o;
+}
+
+/** Objeciones de un campo, sin el nombre del campo adelante. */
+function objecionesDeCampo(clave: CampoVideo | "chip", valor: string | null | undefined): string[] {
+  const texto = (valor ?? "").trim();
+  const lim = VIDEO_LIMITES[clave];
+  if (!texto) return lim.obligatorio ? ["es obligatorio"] : [];
+  const o: string[] = [];
+  const largo = cantidadDeCaracteres(texto);
+  if (largo > lim.max) o.push(`pasa de ${lim.max} caracteres (tiene ${largo})`);
+  if (lim.palabras) {
+    const n = palabrasDe(texto).length;
+    const [min, max] = lim.palabras;
+    if (n < min || n > max) o.push(`tiene que tener de ${min} a ${max} palabras`);
+  }
+  return [...o, ...objecionesComunes(texto)];
+}
+
+export type ObjecionesVideo = {
+  campos: Partial<Record<CampoVideo, string[]>>;
+  /** Una entrada por foto, en el mismo orden que los chips recibidos. */
+  chips: string[][];
+};
+
+/**
+ * Las objeciones de los textos del video, campo por campo: el espejo de
+ * `validate_video_texts` del backend (§16.6). Sirve para avisar mientras se
+ * escribe; el que manda es el backend (devuelve 400 con la objeción).
+ * En `ofertas` los chips no se editan (son el nombre del comercio) y no se validan.
+ */
+export function validateVideoTextsPorCampo(
+  texts: VideoTextsEditable,
+  chips: readonly (string | null)[],
+  pillar: ContentPillar | string,
+): ObjecionesVideo {
+  const campos: Partial<Record<CampoVideo, string[]>> = {};
+  (Object.keys(CAMPO_VIDEO_LABEL) as CampoVideo[]).forEach((c) => {
+    const o = objecionesDeCampo(c, texts[c]);
+    if (o.length > 0) campos[c] = o;
+  });
+  const editables = chipsEditables(pillar);
+  return { campos, chips: chips.map((c) => (editables ? objecionesDeCampo("chip", c) : [])) };
+}
+
+/** La lista plana («Título, línea 1: pasa de 18 caracteres (tiene 21)»). Vacía = en verde. */
+export function validateVideoTexts(
+  texts: VideoTextsEditable,
+  chips: readonly (string | null)[],
+  pillar: ContentPillar | string,
+): string[] {
+  const r = validateVideoTextsPorCampo(texts, chips, pillar);
+  const lista: string[] = [];
+  (Object.keys(CAMPO_VIDEO_LABEL) as CampoVideo[]).forEach((c) => {
+    for (const o of r.campos[c] ?? []) lista.push(`${CAMPO_VIDEO_LABEL[c]}: ${o}`);
+  });
+  r.chips.forEach((os, i) => { for (const o of os) lista.push(`Frase de la foto ${i + 1}: ${o}`); });
+  return lista;
 }

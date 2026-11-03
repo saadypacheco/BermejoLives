@@ -53,6 +53,7 @@ export function ContentRedesPanel() {
   useEffect(() => { void cargarEstado(); }, [cargarEstado]);
 
   const paraRevisar = estado?.queue.ready_for_review ?? 0;
+  const sinArmador = estado?.render_worker === "no_renderer";
   const tabs: { id: Pestana; label: string; icono: "listo" | "calendario" | "video"; n?: number }[] = [
     { id: "revision", label: "Revisión", icono: "listo", n: paraRevisar },
     { id: "dia", label: "Paquete del día", icono: "video" },
@@ -68,6 +69,11 @@ export function ContentRedesPanel() {
         )}
       </div>
       {errEstado && <Aviso tono="aviso">{errEstado}</Aviso>}
+      {sinArmador && (
+        <Aviso tono="error">
+          El armador de videos no está disponible. Las piezas quedan en la cola y se arman cuando vuelva; avisale a quien administra el servidor.
+        </Aviso>
+      )}
 
       <div role="tablist" aria-label="Contenido para redes" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {tabs.map((t) => (
@@ -80,7 +86,7 @@ export function ContentRedesPanel() {
       </div>
 
       {pestana === null && <Cargando texto="Cargando…" />}
-      {pestana === "revision" && <ContentReview onCambioCola={() => void cargarEstado()} />}
+      {pestana === "revision" && <ContentReview sinArmador={sinArmador} onCambioCola={() => void cargarEstado()} />}
       {pestana === "dia" && <ContentDayPackage onIrARevision={() => setPestana("revision")} />}
       {pestana === "semana" && <ContentWeek onCambioCola={() => void cargarEstado()} />}
     </div>
