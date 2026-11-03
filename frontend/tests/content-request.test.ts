@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  armarPedidoDeVideo, bodyDeInterruptor, chipsEditables, detalleDePieza, esPiezaPedida, estadoDeInterruptor,
+  armarPedidoDeVideo, avisoOtraPropuesta, bodyDeInterruptor, geminiContentPrendido, insigniaSinGemini, chipsEditables, detalleDePieza, esPiezaPedida, estadoDeInterruptor,
   etiquetaDePilar, normalizarBusquedaComercio, opcionDeRubro, resumenRequestCheck, tienePermiso, tituloDePieza,
   validateVideoTexts, type VideoTextsEditable,
 } from "../lib/content-pure";
@@ -95,4 +95,34 @@ test("interruptores: estado en palabras y body de la llamada", () => {
   assert.deepEqual(bodyDeInterruptor(true, false), { enabled: true, confirm_cost: false });
   // Apagar nunca pide confirmación: confirm_cost va en false aunque la casilla haya quedado marcada.
   assert.deepEqual(bodyDeInterruptor(false, true), { enabled: false, confirm_cost: false });
+});
+
+/* ─── Gemini y su interruptor (`gemini_content`) ─────────────────────────── */
+
+test("geminiContentPrendido lee el interruptor gemini_content; sin él, null", () => {
+  assert.equal(geminiContentPrendido([{ key: "otro", enabled: true }, { key: "gemini_content", enabled: false }]), false);
+  assert.equal(geminiContentPrendido([{ key: "gemini_content", enabled: true }]), true);
+  assert.equal(geminiContentPrendido([{ key: "otro", enabled: true }]), null);
+  assert.equal(geminiContentPrendido([]), null);
+});
+
+test("avisoOtraPropuesta dice la verdad según el interruptor", () => {
+  assert.equal(
+    avisoOtraPropuesta(false, true),
+    "Gemini está apagado: se vuelven a poner los textos fijos y se pisan las frases que escribiste. ¿Seguir?",
+  );
+  assert.equal(avisoOtraPropuesta(false, false), avisoOtraPropuesta(false, true));
+  assert.match(avisoOtraPropuesta(true, false), /^¿Pedir otra propuesta a Gemini\?/);
+  assert.ok(!avisoOtraPropuesta(true, false).includes("escribiste"));
+  assert.match(avisoOtraPropuesta(true, true), /incluido lo que escribiste vos/);
+  // Si no se pudo leer el interruptor, no se afirma que esté apagado.
+  assert.match(avisoOtraPropuesta(null, false), /^¿Pedir otra propuesta a Gemini\?/);
+});
+
+test("insigniaSinGemini: falta la key, interruptor apagado, o nada", () => {
+  assert.equal(insigniaSinGemini(false, true), "Sin Gemini: los textos salen de la plantilla fija");
+  assert.equal(insigniaSinGemini(false, false), "Sin Gemini: los textos salen de la plantilla fija");
+  assert.equal(insigniaSinGemini(true, false), "Gemini apagado · costo cero");
+  assert.equal(insigniaSinGemini(true, true), null);
+  assert.equal(insigniaSinGemini(true, null), null);
 });

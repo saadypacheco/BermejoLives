@@ -682,6 +682,32 @@ export function estadoDeInterruptor(enabled: boolean): { texto: string; tono: "o
     : { texto: "Apagado · costo cero", tono: "ok", icono: "listo" };
 }
 
+/** La clave del interruptor de Gemini para los textos del contenido (`GET /admin/cost-switches`). */
+export const SWITCH_GEMINI_CONTENT = "gemini_content";
+
+/** ¿Gemini está prendido para el contenido? `null` si el interruptor no vino (no se sabe). */
+export function geminiContentPrendido(items: readonly { key: string; enabled: boolean }[]): boolean | null {
+  const it = items.find((x) => x.key === SWITCH_GEMINI_CONTENT);
+  return it ? it.enabled : null;
+}
+
+/** El texto de la confirmación de «Pedir otra propuesta»: dice la verdad según el interruptor. */
+export function avisoOtraPropuesta(geminiPrendido: boolean | null, huboTextosPropios: boolean): string {
+  if (geminiPrendido === false) {
+    return "Gemini está apagado: se vuelven a poner los textos fijos y se pisan las frases que escribiste. ¿Seguir?";
+  }
+  return "¿Pedir otra propuesta a Gemini? Se reemplazan los textos del video"
+    + (huboTextosPropios ? " (incluido lo que escribiste vos)" : "")
+    + " y el video se vuelve a armar: tarda unos minutos.";
+}
+
+/** La insignia «sin Gemini» del panel: falta la key o el interruptor está apagado; `null` si Gemini trabaja. */
+export function insigniaSinGemini(geminiConfigurado: boolean, geminiPrendido: boolean | null): string | null {
+  if (!geminiConfigurado) return "Sin Gemini: los textos salen de la plantilla fija";
+  if (geminiPrendido === false) return "Gemini apagado · costo cero";
+  return null;
+}
+
 /** Prender manda la casilla; apagar nunca pide confirmación. */
 export function bodyDeInterruptor(enabled: boolean, entiendeCosto: boolean): { enabled: boolean; confirm_cost: boolean } {
   return { enabled, confirm_cost: enabled ? entiendeCosto : false };
