@@ -36,6 +36,9 @@ class FakeContentRepo:
         self.tasks: dict[str, dict] = {}
         self.profiles: dict[str, dict] = {}
         self.reports: dict[str, dict] = {}
+        self.cost_switches: dict[str, dict] = {}
+        self.rubros_tabla: dict[str, dict] = {}          # slug -> fila de `rubros` (0183: lo que lee el pedido por rubro)
+        self.comercio_rubros: list[dict] = []            # [{comercio_id, rubro_id}] (los secundarios)
         self._t = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
     # ── utilidades ──
@@ -117,13 +120,15 @@ class FakeContentRepo:
     # ── piezas ──
     def insert_piece(self, row):
         for p in self.pieces.values():
-            if (p.get("activo", True) and p["scheduled_for"] == row["scheduled_for"] and p["pillar"] == row["pillar"]
+            # `uq_content_pieces_slot` (0183): el lugar del calendario es sólo de las piezas del selector.
+            if (p.get("activo", True) and row.get("origin", "selector") == "selector" and p.get("origin", "selector") == "selector"
+                    and p["scheduled_for"] == row["scheduled_for"] and p["pillar"] == row["pillar"]
                     and p["status"] not in ("skipped", "failed") and row.get("status", "queued") not in ("skipped", "failed")):
                 return None
         fila = {"id": str(uuid.uuid4()), "activo": True, "status": "queued", "render_attempts": 0, "render_next_at": self._now(),
                 "caption_edited": False, "hashtags": [], "caption_checks": [], "created_at": self._tic(),
                 "updated_at": self._now(), "files_purged_at": None, "video_path": None, "cover_path": None,
-                "template_version": 1, "video_texts": None, "video_texts_engine": None, "video_texts_checks": [],
+                "template_version": 1, "origin": "selector", "rubro_id": None, "video_texts": None, "video_texts_engine": None, "video_texts_checks": [],
                 "photo_flags_ok": False, **row}
         self.pieces[fila["id"]] = fila
         return fila
@@ -179,7 +184,7 @@ class FakeContentRepo:
     def list_own_pieces_since(self, since):
         return [{k: p.get(k) for k in ("id", "comercio_id", "scheduled_for", "status", "counts_for_quota", "quota_cycle_start")}
                 for p in self.pieces.values() if p.get("activo", True) and p.get("comercio_id") and p["status"] in VIVA
-                and p["scheduled_for"] >= since]
+                and p.get("origin", "selector") == "selector" and p["scheduled_for"] >= since]
 
     def weeks_planned_by_selector(self, since):
         return {p["week_start"] for p in self.pieces.values()
@@ -382,6 +387,13 @@ class FakeContentRepo:
         return sorted(out, key=lambda c: ((c.get("nombre") or "").lower(), c["id"]))
 
     def search_comercios(self, q, ciudad_id, limit=20):
+        from app.core.codigo import codigo_buscado
+
+        codigo = codigo_buscado(q)
+        if codigo:
+            por_codigo = [c for c in self.list_comercios_activos(ciudad_id) if (c.get("codigo") or "").upper() == codigo]
+            if por_codigo:
+                return por_codigo[:limit]
         texto = (q or "").strip().lower()
         filas = [c for c in self.list_comercios_activos(ciudad_id) if not texto or texto in (c.get("nombre") or "").lower()]
         return filas[:limit]
@@ -433,3 +445,33 @@ class FakeContentRepo:
                 continue
             n += 1
         return n
+
+    # ── pedidos a mano e interruptores de costo (0183) ──
+    def count_pending_requests(self):
+        return sum(1 for p in self.pieces.values() if p.get("activo", True) and p.get("origin") == "pedido"
+                   and p["status"] in ("queued", "rendering"))
+
+    def sembrar_rubro(self, slug, nombre, comercial=True, activo=True, orden=0):
+        """Siembra una fila de `rubros` para el pedido por rubro. Devuelve la fila."""
+        fila = {"id": f"rub-{slug}", "slug": slug, "nombre": nombre, "comercial": comercial, "activo": activo, "orden": orden}
+        self.rubros_tabla[slug] = fila
+        return fila
+
+    def get_rubro_by_slug(self, slug):
+        r = self.rubros_tabla.get(slug)
+        return r if r and r.get("activo", True) else None
+
+    def list_rubros_comerciales(self):
+        return sorted([r for r in self.rubros_tabla.values() if r.get("activo", True) and r.get("comercial", True)],
+                      key=lambda r: (r.get("orden", 0), r["nombre"]))
+
+    def list_comercio_rubros(self, comercio_ids):
+        return [r for r in self.comercio_rubros if r["comercio_id"] in comercio_ids]
+
+    def list_cost_switches(self):
+        return [dict(v) for v in self.cost_switches.values()]
+
+    def upsert_cost_switch(self, key, enabled, actor):
+        fila = {"key": key, "enabled": bool(enabled), "updated_by": actor, "updated_at": self._now()}
+        self.cost_switches[key] = fila
+        return dict(fila)

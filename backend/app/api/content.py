@@ -18,11 +18,12 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from starlette.concurrency import run_in_threadpool
 
 from app.api.campo import _propio_o_404
@@ -34,8 +35,8 @@ from app.core.sesion_comercio import require_comercio_vigente
 from app.db.content_repository import ContentConflict, ContentRepo, get_content_repo
 from app.db.repository import Repo, get_repo
 from app.services import (cargas, content_captions, content_consent, content_posts, content_present,
-                          content_public, content_render, content_selector, content_storage, content_video_texts,
-                          fotos_galeria)
+                          content_public, content_render, content_requests, content_selector, content_storage,
+                          content_video_texts, fotos_galeria)
 from app.services.imagenes import subir_foto_galeria
 
 router = APIRouter()
@@ -516,6 +517,71 @@ def admin_edit_piece(piece_id: str, body: ContentPieceUpdate, _claims: dict = De
     return _devolver(crepo, piece_id)
 
 
+# ── pedir un video a mano (§17.3) ──
+
+_RE_SLUG = r"^[a-z0-9][a-z0-9-]{0,79}$"
+
+
+class ContentPieceRequest(BaseModel):
+    """`{"kind": "comercio", "comercio_id"}` o `{"kind": "rubro", "rubro_slug", "ciudad_slug"}`."""
+    kind: Literal["comercio", "rubro"]
+    comercio_id: str | None = Field(default=None, max_length=64)
+    rubro_slug: str | None = Field(default=None, pattern=_RE_SLUG)
+    ciudad_slug: str | None = Field(default=None, pattern=_RE_SLUG)
+
+    @model_validator(mode="after")
+    def _completo(self):
+        if self.kind == "comercio" and not self.comercio_id:
+            raise ValueError("Falta comercio_id")
+        if self.kind == "rubro" and not (self.rubro_slug and self.ciudad_slug):
+            raise ValueError("Faltan rubro_slug y ciudad_slug")
+        return self
+
+
+def _ciudad_limitada(claims: dict) -> str | None:
+    """La ciudad a la que está limitada quien pregunta: un token de agente la trae (`ciudad`); el resto del
+    equipo ve todas."""
+    return (claims.get("ciudad") or "").strip() or None
+
+
+@router.post("/admin/content/pieces/request", status_code=201)
+def admin_request_piece(body: ContentPieceRequest, claims: dict = Depends(_permiso_difusion),
+                        crepo: ContentRepo = Depends(get_content_repo)) -> dict:
+    """«Pedir un video»: de un negocio o de un rubro en una ciudad. Crea una pieza `queued` (origen `pedido`: sin
+    cuota ni tareas). 422 con el motivo si el comercio o el rubro no alcanzan; 429 con 5 pedidos armándose."""
+    limite = _ciudad_limitada(claims)
+    if body.kind == "comercio":
+        pieza = content_requests.pedir_comercio(crepo, body.comercio_id, _actor(claims), limite)
+    else:
+        pieza = content_requests.pedir_rubro(crepo, body.rubro_slug, body.ciudad_slug, _actor(claims), limite)
+    return content_present.cargar_pieza(crepo, pieza)
+
+
+@router.get("/admin/content/request-options")
+def admin_request_options(ciudad_slug: str = Query(min_length=1, max_length=80, pattern=_RE_SLUG),
+                          claims: dict = Depends(_permiso_difusion),
+                          crepo: ContentRepo = Depends(get_content_repo)) -> dict:
+    """Los rubros que se pueden pedir en una ciudad, con cuántos comercios cumplen las condiciones (`eligible`).
+    Sólo para el panel interno: ese número no se muestra al público."""
+    limite = _ciudad_limitada(claims)
+    if limite and ciudad_slug != limite:
+        raise HTTPException(status_code=403, detail="Sólo podés ver tu ciudad")
+    return {"rubros": content_requests.opciones_de_ciudad(crepo, ciudad_slug)}
+
+
+@router.get("/admin/content/merchants/{comercio_id}/request-check")
+def admin_request_check(comercio_id: str, claims: dict = Depends(_permiso_difusion),
+                        crepo: ContentRepo = Depends(get_content_repo)) -> dict:
+    """Antes de pedir el video de un negocio: ¿tiene autorización?, ¿cuántas fotos sirven hoy? y, si no se puede,
+    el motivo (el mismo texto que daría el 422)."""
+    comercio = crepo.get_comercio_ficha(comercio_id)
+    limite = _ciudad_limitada(claims)
+    if not comercio or (limite and (comercio.get("ciudades") or {}).get("slug") != limite):
+        raise HTTPException(status_code=404, detail="Comercio no encontrado")
+    d = content_requests.diagnostico_comercio(crepo, comercio, cargas.hoy_bolivia())
+    return {"consent": d["consent"], "usable_photos": d["usable_photos"], "ok": d["ok"], "reason": d["reason"]}
+
+
 # ── textos del video v2 (§16.9) ──
 
 #: Estados en los que se pueden cambiar los textos del video (y re-armarlo).
@@ -563,8 +629,8 @@ def _volver_a_armar(pieza: dict) -> dict:
 def admin_edit_video_texts(piece_id: str, body: VideoTextsUpdate, _claims: dict = Depends(_permiso_difusion),
                            crepo: ContentRepo = Depends(get_content_repo)) -> dict:
     """Guarda los textos del video que corrigió una persona. Pasan por el mismo validador (400 con la objeción)
-    y la pieza vuelve a la cola para armarse de nuevo (en `queued` sólo se guardan). En `ofertas` el chip es el
-    nombre del comercio y no se edita: las frases que lleguen se ignoran."""
+    y la pieza vuelve a la cola para armarse de nuevo (en `queued` sólo se guardan). En `ofertas` y `rubro` el chip es
+    el nombre del comercio y no se edita: las frases que lleguen se ignoran."""
     pieza = _pieza_o_404(crepo, piece_id)
     _exigir_pieza_editable(pieza)
     fuentes = crepo.list_sources(piece_id)
@@ -573,7 +639,8 @@ def admin_edit_video_texts(piece_id: str, body: VideoTextsUpdate, _claims: dict 
         raise HTTPException(status_code=400, detail="Una de las frases no es de una foto de esta pieza")
     pilar = pieza["pillar"]
     textos = content_video_texts.normalizar_textos(body.model_dump())
-    nuevos = {} if pilar == "ofertas" else {c.source_id: content_video_texts.limpiar(c.text) for c in body.chips}
+    nuevos = ({} if pilar in content_video_texts.PILARES_CON_NOMBRE
+              else {c.source_id: content_video_texts.limpiar(c.text) for c in body.chips})
     chips = [nuevos[f["id"]] if f["id"] in nuevos else f.get("chip_text") for f in fuentes]
     objeciones = content_video_texts.validate_video_texts(textos, chips, pilar)
     if objeciones:
@@ -829,7 +896,11 @@ def _servir(rel: str | None, media_type: str, descarga: bool, nombre: str) -> Fi
 
 def _nombre_pieza(pieza: dict, ext: str) -> str:
     f = pieza.get("facts") or {}
-    return content_storage.nombre_de_descarga(f.get("slug") or "ofertas", str(pieza.get("scheduled_for") or ""), ext)
+    if pieza.get("pillar") == "rubro" and f.get("rubro_slug"):
+        centro = "-".join(x for x in (f["rubro_slug"], f.get("ciudad_slug")) if x)
+    else:
+        centro = f.get("slug") or "ofertas"
+    return content_storage.nombre_de_descarga(centro, str(pieza.get("scheduled_for") or ""), ext)
 
 
 def _archivo_de_pieza(pieza: dict, kind: str, descarga: bool) -> FileResponse:
@@ -895,8 +966,13 @@ def public_piece(token: str, crepo: ContentRepo = Depends(get_content_repo)) -> 
     f = pieza.get("facts") or {}
     posts = [p for p in crepo.list_posts([pieza["id"]]) if p["status"] == "posted"]
     base = f"/public/pieces/{token}"
-    texto = (content_captions.status_text(f) if pieza.get("comercio_id") else
-             f"Ofertas de la semana en {f.get('ciudad') or 'tu ciudad'} en URUKU: {settings.sitio_url.rstrip('/')}/ofertas?ref=st-ofertas")
+    if pieza.get("comercio_id"):
+        texto = content_captions.status_text(f)
+    elif pieza.get("pillar") == "rubro":
+        texto = content_captions.status_text_rubro(f)
+    else:
+        texto = (f"Ofertas de la semana en {f.get('ciudad') or 'tu ciudad'} en URUKU: "
+                 f"{settings.sitio_url.rstrip('/')}/ofertas?ref=st-ofertas")
     return {"comercio_nombre": f.get("nombre"), "comercio_slug": f.get("slug"), "pillar": pieza["pillar"],
             "published_at": pieza.get("published_at"), "expires_at": pieza.get("share_expires_at"),
             "video_url": f"{base}/video", "video_download_url": f"{base}/video?download=1", "cover_url": f"{base}/cover",

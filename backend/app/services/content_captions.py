@@ -31,6 +31,7 @@ import structlog
 from app.core.codigo import _RE_CON_PREFIJO
 from app.core.clave_comercio import RE_FORMA_DE_CLAVE
 from app.core.config import settings
+from app.services import cost_switches
 
 logger = structlog.get_logger()
 
@@ -217,6 +218,35 @@ def build_facts_ofertas(ciudad: dict, items: list[dict]) -> dict:
     return facts
 
 
+def build_facts_rubro(rubro: dict, ciudad: dict, items: list[dict]) -> dict:
+    """Los hechos de un video de rubro (§17.3): «{Rubro} en {ciudad}». `rubro`: `{nombre, slug}`; `ciudad`:
+    `{nombre, slug, departamento}`; `items`: `[{nombre, slug}]`, los comercios en el orden en que salen.
+
+    No lleva cuántos comercios hay (regla del sitio: nunca cifras al público) ni precios. `allowed_numbers`
+    sólo trae los números que ya estén escritos en el rubro, la ciudad o el nombre de un comercio (normalmente
+    ninguno): un nombre como «Zapatillas 24 Horas» no tiene que trabar el texto fijo."""
+    facts: dict = {
+        "pillar": "rubro",
+        "rubro": sin_emojis(rubro.get("nombre")),
+        "rubro_slug": rubro.get("slug") or "",
+        "ciudad": sin_emojis(ciudad.get("nombre")),
+        "ciudad_slug": ciudad.get("slug") or "",
+        "departamento": sin_emojis(ciudad.get("departamento")),
+        "items": [{k: v for k, v in {"nombre": limpiar_dato(i.get("nombre")), "slug": i.get("slug") or ""}.items() if v}
+                  for i in items],
+    }
+    facts = {k: v for k, v in facts.items() if v not in ("", None, [])}
+    permitidos = _hashtags_fijos(facts.get("ciudad"), facts.get("departamento"))
+    for t in hashtags_del_rubro(rubro.get("slug"), facts.get("rubro")):
+        if t not in permitidos:
+            permitidos.append(t)
+    facts["hashtags_allowed"] = permitidos[:HASHTAGS_MAX]
+    escritos = [facts.get("rubro"), facts.get("ciudad"), facts.get("departamento")]
+    escritos += [i.get("nombre") for i in facts.get("items", [])]
+    facts["allowed_numbers"] = sorted({n for t in escritos if isinstance(t, str) for n in numeros_de(t)})
+    return facts
+
+
 def _numeros_de_hechos(facts: dict) -> set[str]:
     """Todos los números que aparecen en los hechos (sin el slug ni los hashtags)."""
     out: set[str] = set()
@@ -335,7 +365,7 @@ def validate_caption(text: str | None, facts: dict, network: str) -> list[str]:
 def _nombres_propios(facts: dict) -> list[str]:
     """Los nombres de la base que el texto repite tal cual (el comercio, los del compilado y la ciudad): no
     cuentan para el tono, un comercio puede llamarse «Tu Casa»."""
-    nombres = [facts.get("nombre"), facts.get("ciudad"), facts.get("departamento")]
+    nombres = [facts.get("nombre"), facts.get("rubro"), facts.get("ciudad"), facts.get("departamento")]
     nombres += [i.get("nombre") for i in (facts.get("items") or []) if isinstance(i, dict)]
     return [n for n in nombres if isinstance(n, str) and n]
 
@@ -393,6 +423,20 @@ def template_captions(facts: dict) -> dict:
         tags = _hashtags_fijos(facts.get("ciudad"), facts.get("departamento"))
         return {"caption_tiktok": _recortar(base, 300), "caption_ig": _recortar(base, 600),
                 "caption_channel": _recortar(base, 400), "hashtags": _solo_permitidos(tags, facts)}
+    if facts.get("pillar") == "rubro":
+        rubro, ciudad = (facts.get("rubro") or "").lower(), facts.get("ciudad") or ""
+        nombres = [i["nombre"] for i in (facts.get("items") or []) if isinstance(i, dict) and i.get("nombre")][:2]
+        donde = f"Dónde comprar {rubro}".strip() + (f" en {ciudad}" if ciudad else "")
+        if len(nombres) >= 2:
+            base = f"{donde}: {nombres[0]}, {nombres[1]} y más. Búsquelos en uruku.bo"
+        elif nombres:
+            base = f"{donde}: {nombres[0]} y más. Búsquelos en uruku.bo"
+        else:
+            base = f"{donde}. Búsquelos en uruku.bo"
+        fijos = _hashtags_fijos(ciudad, facts.get("departamento"))
+        rubro_tags = [t for t in (facts.get("hashtags_allowed") or []) if t not in fijos][:2]
+        return {"caption_tiktok": _recortar(base, 300), "caption_ig": _recortar(base, 600),
+                "caption_channel": _recortar(base, 400), "hashtags": _solo_permitidos(fijos + rubro_tags, facts)}
     partes = [facts.get("nombre"), facts.get("rubro")]
     donde = ", ".join(x for x in (facts.get("calle"), facts.get("ciudad")) if x)
     partes.append(donde)
@@ -460,6 +504,8 @@ def construir_prompt(facts: dict, objeciones: list[str] | None = None) -> str:
         "- Nunca digas cuántos comercios hay en URUKU.\n"
         "- No prometas: nada de «el mejor», «más barato», envíos, garantías, «próximamente» ni que traemos clientes.\n"
         "- En una pieza de comercio, nombra al comercio tal cual está en `nombre`.\n"
+        "- En una pieza de rubro (`pillar` = rubro), nombra el rubro y la ciudad y, como mucho, dos comercios de "
+        "`items` tal cual están escritos; nunca digas cuántos comercios hay.\n"
         "- Invita a buscarlo o a escribirle desde su ficha en uruku.bo.\n"
         f"- `caption_tiktok` hasta {CAPTION_LIMITS['tiktok']} caracteres, `caption_ig` hasta {CAPTION_LIMITS['instagram']}, "
         f"`caption_channel` hasta {CAPTION_LIMITS['channel']} y sin hashtags.\n"
@@ -514,12 +560,16 @@ def _normalizar_respuesta(data: dict) -> dict:
             "hashtags": [t if t.startswith("#") else f"#{t}" for t in tags]}
 
 
-def generate_captions(facts: dict) -> dict:
+def generate_captions(facts: dict, *, crepo) -> dict:
     """Los textos de una pieza: `{caption_tiktok, caption_ig, caption_channel, hashtags, caption_engine,
-    caption_checks}`. Nunca lanza."""
+    caption_checks}`. Nunca lanza.
+
+    Con el interruptor `gemini_content` apagado (el estado por defecto, §17.2) NO se llama a Gemini: sale la
+    plantilla fija (`caption_engine = 'template'`) y la persona la completa en Revisión."""
     try:
         objeciones: list[str] = []
-        for intento in range(2):
+        prendido = cost_switches.esta_prendido(crepo, cost_switches.GEMINI_CONTENT)
+        for intento in range(2 if prendido else 0):
             data = _llamar_gemini(construir_prompt(facts, objeciones or None))
             if not data:
                 break
@@ -541,7 +591,12 @@ def generate_captions(facts: dict) -> dict:
 
 def ref_tag(network: str, facts: dict, mmdd: str) -> str:
     """`{tt|ig|fb|canal}-{slug}-{mmdd}` (compilado: `{red}-ofertas-{mmdd}`), cortado a 64."""
-    centro = facts.get("slug") if facts.get("pillar") == "comercio_del_dia" and facts.get("slug") else "ofertas"
+    if facts.get("pillar") == "comercio_del_dia" and facts.get("slug"):
+        centro = facts["slug"]
+    elif facts.get("pillar") == "rubro" and facts.get("rubro_slug"):
+        centro = f"r-{facts['rubro_slug']}"            # `r-` para que no choque con el slug de un comercio
+    else:
+        centro = "ofertas"
     return f"{REF_PREFIX[network]}-{centro}-{mmdd}"[:64]
 
 
@@ -549,6 +604,8 @@ def link_de(facts: dict, ref: str) -> str:
     base = settings.sitio_url.rstrip("/")
     if facts.get("pillar") == "comercio_del_dia" and facts.get("slug"):
         return f"{base}/comercios/{facts['slug']}?ref={ref}"
+    if facts.get("pillar") == "rubro" and facts.get("ciudad_slug") and facts.get("rubro_slug"):
+        return f"{base}/{facts['ciudad_slug']}/{facts['rubro_slug']}?ref={ref}"
     return f"{base}/ofertas?ref={ref}"
 
 
@@ -565,6 +622,15 @@ def caption_text(piece: dict, network: str, ref: str) -> str:
     else:
         partes = [piece.get("caption_channel") or "", link_de(facts, ref)]
     return "\n\n".join(p for p in partes if p).strip()
+
+
+def status_text_rubro(facts: dict) -> str:
+    """El texto de la página pública de un video de rubro (`?ref=st-r-<rubro>`)."""
+    base = settings.sitio_url.rstrip("/")
+    titulo = f"{facts.get('rubro') or 'Comercios'} en {facts.get('ciudad') or 'su ciudad'}"
+    if facts.get("ciudad_slug") and facts.get("rubro_slug"):
+        return f"{titulo} en URUKU: {base}/{facts['ciudad_slug']}/{facts['rubro_slug']}?ref=st-r-{facts['rubro_slug']}"
+    return f"{titulo} en URUKU: {base}/ofertas?ref=st-ofertas"
 
 
 def status_text(facts: dict) -> str:

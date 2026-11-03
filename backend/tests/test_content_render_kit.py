@@ -426,3 +426,19 @@ def test_con_pillow_todo_sigue_como_antes(repo, crepo, contenedor, monkeypatch):
     cr.render_tick(crepo)
     assert contenedor["posts"] == [] and "slides" in visto["job"] and "path" in visto["job"]["slides"][0]
     assert visto["job"]["template_version"] == 2 and crepo.pieces[p["id"]]["status"] == "ready_for_review"
+
+
+def test_el_job_de_un_video_de_rubro_lleva_el_cierre_fijo_los_iconos_tienda_y_pin_y_los_nombres_como_frase(repo, crepo, contenedor):
+    from app.services import content_requests
+    from tests.test_content_requests import zapaterias
+    zapaterias(repo, crepo, n=5)
+    p = content_requests.pedir_rubro(crepo, "zapatillas", "bermejo", "ana@uruku.bo")
+    assert cr.render_tick(crepo) == {"piece_id": p["id"], "ok": True, "error": None}
+    job = contenedor["job"]
+    assert job["icons"] == ["tienda", "pin"]
+    assert job["texts"] == {
+        "kick": "EN BERMEJO", "title1": "Zapatillas", "title2": "en Bermejo", "subtitle": None,
+        "close_title1": "Encuéntrelos", "close_title2": "en Uruku", "search_term": "zapatillas", "place_chip": None,
+        "close_line": "Vea horario y cómo llegar en Uruku", "url": "uruku.bo", "lema": "Si está en Bolivia, está en Uruku."}
+    assert sorted(s["chip"] for s in job["slides"]) == sorted(f"Zapatería {n}" for n in ("uno", "dos", "tres", "cuatro", "cinco"))
+    assert crepo.pieces[p["id"]]["status"] == "ready_for_review"

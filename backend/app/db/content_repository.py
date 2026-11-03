@@ -11,6 +11,7 @@ columna del código del comercio.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Protocol
 
 import structlog
@@ -117,6 +118,13 @@ class ContentRepo(Protocol):
     def count_payments_before(self, comercio_id: str, before_iso: str) -> int: ...
     def count_leads(self, comercio_id: str, desde_iso: str, tipo: str | None = None,
                     origen_prefixes: list[str] | None = None) -> int: ...
+    # pedidos a mano e interruptores de costo (0183)
+    def count_pending_requests(self) -> int: ...
+    def get_rubro_by_slug(self, slug: str) -> dict | None: ...
+    def list_rubros_comerciales(self) -> list[dict]: ...
+    def list_comercio_rubros(self, comercio_ids: list[str]) -> list[dict]: ...
+    def list_cost_switches(self) -> list[dict]: ...
+    def upsert_cost_switch(self, key: str, enabled: bool, actor: str) -> dict: ...
 
 
 def _lista(v) -> list:
@@ -297,10 +305,11 @@ class SupabaseContentRepo:
         return out
 
     def list_own_pieces_since(self, since: str) -> list[dict]:
-        """Piezas propias de un comercio, vivas, desde `since` (para cuota y separación)."""
+        """Piezas propias de un comercio, vivas, desde `since` (para cuota y separación). Las pedidas a mano
+        (`origin = 'pedido'`) no entran: no cuentan cuota ni mueven la agenda del selector."""
         res = (self._db.table("content_pieces")
                .select("id, comercio_id, scheduled_for, status, counts_for_quota, quota_cycle_start")
-               .eq("activo", True).not_.is_("comercio_id", "null").in_("status", list(PIEZA_VIVA))
+               .eq("activo", True).eq("origin", "selector").not_.is_("comercio_id", "null").in_("status", list(PIEZA_VIVA))
                .gte("scheduled_for", since).limit(5000).execute())
         return res.data or []
 
@@ -523,11 +532,22 @@ class SupabaseContentRepo:
                 return items
 
     def search_comercios(self, q: str | None, ciudad_id: str | None, limit: int = 20) -> list[dict]:
+        from app.core.codigo import codigo_buscado
         from app.db.repository import limpiar_busqueda
 
         sel = self._db.table("comercios").select(COLS_FICHA).eq("activo", True)
         if ciudad_id:
             sel = sel.eq("ciudad_id", ciudad_id)
+        # `URUKU-XXXX` busca por la columna `codigo` (exacta). La columna sólo se filtra, nunca se devuelve: el
+        # código es del admin. Si no hay ninguno con ese código, se sigue con el nombre.
+        codigo = codigo_buscado(q)
+        if codigo:
+            por_codigo = sel.eq("codigo", codigo).limit(limit).execute().data or []
+            if por_codigo:
+                return por_codigo
+            sel = self._db.table("comercios").select(COLS_FICHA).eq("activo", True)
+            if ciudad_id:
+                sel = sel.eq("ciudad_id", ciudad_id)
         texto = limpiar_busqueda(q)
         if texto:
             sel = sel.ilike("nombre", f"%{texto}%")
@@ -590,6 +610,42 @@ class SupabaseContentRepo:
         if origen_prefixes:
             q = q.or_(",".join(f"origen.like.{p}*" for p in origen_prefixes))
         return q.limit(1).execute().count or 0
+
+    # ── pedidos a mano e interruptores de costo (0183) ───────────────────────
+    def count_pending_requests(self) -> int:
+        """Piezas pedidas a mano que todavía se están armando (`queued` o `rendering`): el tope de §17.3."""
+        res = (self._db.table("content_pieces").select("id", count="exact").eq("activo", True)
+               .eq("origin", "pedido").in_("status", ["queued", "rendering"]).limit(1).execute())
+        return res.count or 0
+
+    def get_rubro_by_slug(self, slug: str) -> dict | None:
+        res = (self._db.table("rubros").select("id, slug, nombre, comercial, orden").eq("slug", slug)
+               .eq("activo", True).limit(1).execute())
+        return res.data[0] if res.data else None
+
+    def list_rubros_comerciales(self) -> list[dict]:
+        """Los rubros activos que son comerciales (no baños, cajeros ni estacionamientos)."""
+        res = (self._db.table("rubros").select("id, slug, nombre, comercial, orden").eq("activo", True)
+               .eq("comercial", True).order("orden").limit(500).execute())
+        return res.data or []
+
+    def list_comercio_rubros(self, comercio_ids: list[str]) -> list[dict]:
+        """Los rubros secundarios (y el principal, que también está) de esos comercios: `[{comercio_id, rubro_id}]`."""
+        out: list[dict] = []
+        for i in range(0, len(comercio_ids), 150):
+            res = (self._db.table("comercio_rubros").select("comercio_id, rubro_id")
+                   .in_("comercio_id", comercio_ids[i:i + 150]).limit(5000).execute())
+            out += res.data or []
+        return out
+
+    def list_cost_switches(self) -> list[dict]:
+        return self._db.table("cost_switches").select("key, enabled, updated_by, updated_at").limit(50).execute().data or []
+
+    def upsert_cost_switch(self, key: str, enabled: bool, actor: str) -> dict:
+        res = (self._db.table("cost_switches")
+               .upsert({"key": key, "enabled": bool(enabled), "updated_by": actor,
+                        "updated_at": datetime.now(timezone.utc).isoformat()}, on_conflict="key").execute())
+        return res.data[0]
 
 
 def get_content_repo() -> ContentRepo:

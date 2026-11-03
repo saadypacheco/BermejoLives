@@ -32,7 +32,7 @@ import structlog
 
 from app.core.codigo import _RE_CON_PREFIJO
 from app.core.config import settings
-from app.services import content_captions as cc, content_storage
+from app.services import content_captions as cc, content_storage, cost_switches
 
 logger = structlog.get_logger()
 
@@ -57,7 +57,10 @@ ETIQUETA = {"kick": "Kick", "title1": "Título, línea 1", "title2": "Título, l
 #: Largos máximos (§16.6).
 MAX_KICK, MAX_TITULO, MAX_SUBTITULO, MAX_BUSQUEDA, MAX_CHIP = 22, 18, 42, 16, 30
 
-ICONOS = {"comercio_del_dia": ["pin", "whatsapp"], "ofertas": ["oferta", "pin"]}
+ICONOS = {"comercio_del_dia": ["pin", "whatsapp"], "ofertas": ["oferta", "pin"], "rubro": ["tienda", "pin"]}
+#: Los pilares de varios comercios: el chip de cada foto es el nombre del comercio, de la base (no lo escribe Gemini
+#: ni se edita), y las fotos marcadas quedan con la marca (no se sacan solas).
+PILARES_CON_NOMBRE = ("ofertas", "rubro")
 
 MSG_REVISE_TEXTOS = "Revise los textos del video"
 MSG_FOTOS_MARCADAS = "Hay fotos marcadas: cámbielas o confirme que están bien"
@@ -169,13 +172,13 @@ def validate_video_texts(texts: dict | None, chips: list[str | None] | None, pil
     """Las objeciones (en español) a los textos del video. Lista vacía = en verde. PURO.
 
     `texts`: `{kick, title1, title2, subtitle, search_term}` (None = no se mira). `chips`: la frase de cada
-    foto, en el orden en que se muestran (None o vacío = sin frase). En `ofertas` los chips son los nombres de
-    los comercios, que vienen de la base: no se validan. Reglas de §16.6."""
+    foto, en el orden en que se muestran (None o vacío = sin frase). En `ofertas` y `rubro` los chips son los
+    nombres de los comercios, que vienen de la base: no se validan. Reglas de §16.6."""
     obj: list[str] = []
     if texts is not None:
         for campo in CAMPOS:
             obj += [f"{ETIQUETA[campo]}: {o}" for o in _de_campo(campo, texts.get(campo))]
-    if chips and pillar != "ofertas":
+    if chips and pillar not in PILARES_CON_NOMBRE:
         for i, chip in enumerate(chips, 1):
             obj += [f"Frase de la foto {i}: {o}" for o in _de_chip(chip)]
     visto: set[str] = set()
@@ -189,6 +192,9 @@ def textos_de_cierre(pillar: str, facts: dict) -> dict:
     if pillar == "ofertas":
         return {"close_title1": "¿Dónde las", "close_title2": "encuentra?", "place_chip": None,
                 "close_line": "Vea todas las ofertas en Uruku"}
+    if pillar == "rubro":
+        return {"close_title1": "Encuéntrelos", "close_title2": "en Uruku", "place_chip": None,
+                "close_line": "Vea horario y cómo llegar en Uruku"}
     nombre, ciudad = limpiar(facts.get("nombre")), limpiar(facts.get("ciudad"))
     chip = None
     if nombre:
@@ -220,6 +226,9 @@ def _genericos(pillar: str, facts: dict) -> dict:
         return {"kick": "OFERTAS DE LA SEMANA", "title1": "Ofertas en",
                 "title2": ciudad if ciudad and not _de_campo("title2", ciudad) else "su ciudad",
                 "subtitle": None, "search_term": "ofertas"}
+    if pillar == "rubro":
+        return {"kick": None, "title1": "Dónde comprar", "title2": "está en Uruku", "subtitle": None,
+                "search_term": "comercios"}
     return {"kick": None, "title1": "Lo que busca", "title2": "está en Uruku", "subtitle": None,
             "search_term": "comercios"}
 
@@ -269,6 +278,10 @@ def _datos(pieza: dict, comercio: dict | None) -> dict:
     """Los hechos que ve Gemini, SIN datos de contacto: nombre, rubro, subcategoría, ciudad y lo que el agente
     vio en el local. Todo pasa por `limpiar_dato` y va marcado como <datos> en el prompt."""
     facts = pieza.get("facts") or {}
+    if pieza.get("pillar") == "rubro":
+        items = [i for i in (facts.get("items") or []) if isinstance(i, dict)]
+        return {"rubro": facts.get("rubro"), "ciudad": facts.get("ciudad"),
+                "comercios": [i.get("nombre") for i in items if i.get("nombre")]}
     if pieza.get("pillar") == "ofertas":
         items = [i for i in (facts.get("items") or []) if isinstance(i, dict)]
         return {"ciudad": facts.get("ciudad"), "comercios": [i.get("nombre") for i in items if i.get("nombre")],
@@ -281,7 +294,7 @@ def _datos(pieza: dict, comercio: dict | None) -> dict:
 def construir_prompt(pieza: dict, comercio: dict | None, n_fotos: int, solo_fotos: bool = False,
                      objeciones: list[str] | None = None) -> str:
     """El prompt de las frases del video. Instrucciones en español neutro (para no contagiar el voseo)."""
-    ofertas = pieza.get("pillar") == "ofertas"
+    ofertas = pieza.get("pillar") in PILARES_CON_NOMBRE
     campos = (
         "- `kick`: gancho en mayúsculas, hasta 22 caracteres (puede ir vacío).\n"
         "- `title1` y `title2`: las dos líneas del título; cada una de 1 a 4 palabras y hasta 18 caracteres.\n"
@@ -294,7 +307,8 @@ def construir_prompt(pieza: dict, comercio: dict | None, n_fotos: int, solo_foto
     forma = ('{"slides": [{"chip": "...", "price_or_code_visible": false, "focus_y": 0.4}]}' if solo_fotos else
              '{"kick": "...", "title1": "...", "title2": "...", "subtitle": "...", "search_term": "...", '
              '"slides": [{"chip": "...", "price_or_code_visible": false, "focus_y": 0.4}]}')
-    contexto = ("un compilado de las ofertas de la semana de varios comercios" if ofertas
+    contexto = ("un repaso de comercios de un mismo rubro en una ciudad" if pieza.get("pillar") == "rubro" else
+                "un compilado de las ofertas de la semana de varios comercios" if ofertas
                 else "la ficha de un comercio")
     reglas = (
         "Eres el redactor de reels de URUKU, la guía de comercios de Bolivia (uruku.bo). Se arma un video vertical "
@@ -356,19 +370,21 @@ def _interpretar(data: dict, n_enviadas: int, solo_fotos: bool) -> tuple[dict | 
 
 
 def _chip_fijo(pillar: str, fuente: dict) -> str | None:
-    """El chip que no depende de Gemini: el nombre del comercio en `ofertas`; nada en `comercio_del_dia`."""
-    if pillar != "ofertas":
+    """El chip que no depende de Gemini: el nombre del comercio en `ofertas` y `rubro`; nada en `comercio_del_dia`."""
+    if pillar not in PILARES_CON_NOMBRE:
         return None
     return chip_de_nombre(fuente.get("chip_text") or (fuente.get("caption_fact") or "").split(" · ")[0])
 
 
-def proponer(pieza: dict, fuentes: list[dict], comercio: dict | None = None, solo_fotos: bool = False) -> dict:
+def proponer(pieza: dict, fuentes: list[dict], comercio: dict | None = None, solo_fotos: bool = False,
+             *, crepo) -> dict:
     """Las frases del video con Gemini (visión), validadas. NUNCA lanza.
 
     `pieza`: la fila (o un dict con `pillar` y `facts`). `fuentes`: las fotos, en orden, con `source_type` y
     `file_ref` (filas de `content_piece_sources` o dicts del selector). `comercio`: la ficha (para lo que el
     agente vio en el local). `solo_fotos`: pedir sólo el chip, la marca y el encuadre de esas fotos (al
-    reemplazar una foto), sin tocar los textos de la pieza.
+    reemplazar una foto), sin tocar los textos de la pieza. `crepo`: para leer el interruptor `gemini_content`
+    (§17.2): apagado —el estado por defecto— NO se llama a Gemini y salen los textos fijos, sin marcas de fotos.
 
     Devuelve `{texts, slides, engine, checks}`: `texts` = los 5 campos editables (None con `solo_fotos`);
     `slides` = una entrada `{chip, flags, focus_y}` por foto de `fuentes`, en el mismo orden; `engine` =
@@ -378,7 +394,7 @@ def proponer(pieza: dict, fuentes: list[dict], comercio: dict | None = None, sol
     marcas_vistas: list[dict] | None = None                  # flags/encuadre de la última respuesta bien formada
     enviadas: list[int] = []
     try:
-        if settings.gemini_api_key and fuentes:
+        if settings.gemini_api_key and fuentes and cost_switches.esta_prendido(crepo, cost_switches.GEMINI_CONTENT):
             imagenes: list[str] = []
             for i, f in enumerate(fuentes):
                 ruta = content_storage.resolver_fuente(f.get("source_type"), f.get("file_ref"))
@@ -427,7 +443,7 @@ def _slides_completos(pillar: str, fuentes: list[dict], enviadas: list[int], sli
     out = []
     for i, f in enumerate(fuentes):
         s = por_indice.get(i) or {"chip": None, "flags": [], "focus_y": None}
-        chip = _chip_fijo(pillar, f) if pillar == "ofertas" else (s["chip"] if con_chips else None)
+        chip = _chip_fijo(pillar, f) if pillar in PILARES_CON_NOMBRE else (s["chip"] if con_chips else None)
         out.append({"chip": chip, "flags": list(s["flags"]), "focus_y": s["focus_y"]})
     return out
 
@@ -491,7 +507,7 @@ def proponer_y_guardar(crepo, pieza: dict, extra_patch: dict | None = None,
     """«Pedir otra propuesta» (y la conversión de una pieza v1): lee fuentes y ficha, propone y guarda."""
     fuentes = crepo.list_sources(pieza["id"])
     comercio = crepo.get_comercio_ficha(pieza["comercio_id"]) if pieza.get("comercio_id") else None
-    prop = proponer(pieza, fuentes, comercio)
+    prop = proponer(pieza, fuentes, comercio, crepo=crepo)
     return guardar_propuesta(crepo, pieza, fuentes, prop, extra_patch, if_status)
 
 
@@ -502,7 +518,7 @@ def proponer_para_nuevas(crepo, pieza: dict, nuevas: list[dict]) -> None:
         return
     try:
         comercio = crepo.get_comercio_ficha(pieza["comercio_id"]) if pieza.get("comercio_id") else None
-        prop = proponer(pieza, nuevas, comercio, solo_fotos=True)
+        prop = proponer(pieza, nuevas, comercio, solo_fotos=True, crepo=crepo)
         guardar_propuesta(crepo, pieza, nuevas, prop)
     except Exception:  # noqa: BLE001
         logger.warning("content.video_texts_nuevas_fallo", pieza=pieza.get("id"), exc_info=True)

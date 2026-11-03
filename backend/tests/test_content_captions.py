@@ -6,12 +6,19 @@ import pytest
 
 from app.core.config import settings
 from app.services import content_captions as cc
+from tests.content_helpers import gemini_on
 
 COMERCIO = {"nombre": "Vidriería Pacheco", "slug": "vidrieria-pacheco", "calle": "Calle Barrientos",
             "horario": "Lunes a sábado de 8 a 19", "subcategoria": "Vidrios y espejos",
             "monedas_aceptadas": ["BOB", "ARS"],
             "rubros": {"nombre": "🪟 Vidriería", "slug": "vidrios"},
             "ciudades": {"nombre": "Bermejo", "slug": "bermejo", "departamento": "Tarija"}}
+
+
+@pytest.fixture(autouse=True)
+def _gemini_prendido(crepo):
+    """Los tests de Gemini de este archivo parten con el interruptor `gemini_content` PRENDIDO (por defecto está apagado, §17.2)."""
+    gemini_on(crepo)
 
 
 @pytest.fixture
@@ -167,44 +174,44 @@ BUENA = {"caption_tiktok": OK, "caption_ig": OK, "caption_channel": OK, "hashtag
 MALA = {**BUENA, "caption_tiktok": "Vidriería Pacheco 🔥 la mejor, con envío"}
 
 
-def test_gemini_valido_queda_como_gemini(facts, monkeypatch):
+def test_gemini_valido_queda_como_gemini(facts, monkeypatch, crepo):
     monkeypatch.setattr(settings, "gemini_model", "gemini-test")
     _gemini(monkeypatch, [BUENA])
-    r = cc.generate_captions(facts)
+    r = cc.generate_captions(facts, crepo=crepo)
     assert r["caption_engine"] == "gemini:gemini-test" and r["caption_checks"] == [] and r["caption_tiktok"] == OK
 
 
-def test_gemini_objetado_se_reintenta_una_vez_con_las_objeciones(facts, monkeypatch):
+def test_gemini_objetado_se_reintenta_una_vez_con_las_objeciones(facts, monkeypatch, crepo):
     llamadas = _gemini(monkeypatch, [MALA, BUENA])
-    r = cc.generate_captions(facts)
+    r = cc.generate_captions(facts, crepo=crepo)
     assert r["caption_engine"].startswith("gemini:") and len(llamadas) == 2
     assert "Tiene un emoji" in llamadas[1] and "corrígelas" in llamadas[1] and "corrígelas" not in llamadas[0]
 
 
-def test_gemini_invalido_dos_veces_cae_a_la_plantilla(facts, monkeypatch):
+def test_gemini_invalido_dos_veces_cae_a_la_plantilla(facts, monkeypatch, crepo):
     llamadas = _gemini(monkeypatch, [MALA, MALA, BUENA])
-    r = cc.generate_captions(facts)
+    r = cc.generate_captions(facts, crepo=crepo)
     assert r["caption_engine"] == "template" and len(llamadas) == 2 and r["caption_checks"] == []
 
 
-def test_sin_key_es_plantilla_y_no_llama_a_nadie(facts, monkeypatch):
+def test_sin_key_es_plantilla_y_no_llama_a_nadie(facts, monkeypatch, crepo):
     monkeypatch.setattr(settings, "gemini_api_key", "")
     monkeypatch.setattr("app.services.vision._post_con_reintentos", lambda *a, **k: pytest.fail("no tiene que llamar"))
-    assert cc.generate_captions(facts)["caption_engine"] == "template"
+    assert cc.generate_captions(facts, crepo=crepo)["caption_engine"] == "template"
 
 
-def test_error_http_de_gemini_cae_a_la_plantilla_sin_filtrar_la_key(facts, monkeypatch, caplog):
+def test_error_http_de_gemini_cae_a_la_plantilla_sin_filtrar_la_key(facts, monkeypatch, caplog, crepo):
     monkeypatch.setattr(settings, "gemini_api_key", "CLAVE-SECRETA")
 
     def roto(url, payload):
         raise httpx.ConnectError(f"fallo en {url}")
     monkeypatch.setattr("app.services.vision._post_con_reintentos", roto)
-    r = cc.generate_captions(facts)
+    r = cc.generate_captions(facts, crepo=crepo)
     assert r["caption_engine"] == "template"
     assert "CLAVE-SECRETA" not in caplog.text
 
 
-def test_gemini_manda_solo_hechos_y_pide_json(facts, monkeypatch):
+def test_gemini_manda_solo_hechos_y_pide_json(facts, monkeypatch, crepo):
     monkeypatch.setattr(settings, "gemini_api_key", "k")
     visto = {}
 
@@ -217,7 +224,7 @@ def test_gemini_manda_solo_hechos_y_pide_json(facts, monkeypatch):
         visto.update(payload=payload, url=url)
         return R()
     monkeypatch.setattr("app.services.vision._post_con_reintentos", post)
-    r = cc.generate_captions(facts)
+    r = cc.generate_captions(facts, crepo=crepo)
     assert r["caption_engine"].startswith("gemini:")
     assert visto["payload"]["generationConfig"]["responseMimeType"] == "application/json"
     prompt = visto["payload"]["contents"][0]["parts"][0]["text"]
@@ -225,14 +232,14 @@ def test_gemini_manda_solo_hechos_y_pide_json(facts, monkeypatch):
     assert prompt.count("\n- ") >= 6
 
 
-def test_respuesta_que_no_es_json_no_lanza(facts, monkeypatch):
+def test_respuesta_que_no_es_json_no_lanza(facts, monkeypatch, crepo):
     monkeypatch.setattr(settings, "gemini_api_key", "k")
 
     class R:
         def raise_for_status(self): pass
         def json(self): return {"candidates": [{"content": {"parts": [{"text": "no soy json"}]}}]}
     monkeypatch.setattr("app.services.vision._post_con_reintentos", lambda u, p: R())
-    assert cc.generate_captions(facts)["caption_engine"] == "template"
+    assert cc.generate_captions(facts, crepo=crepo)["caption_engine"] == "template"
 
 
 # ── texto por red ────────────────────────────────────────────────────────────
@@ -289,11 +296,11 @@ def test_los_ejemplos_del_prompt_y_la_plantilla_estan_en_neutro_y_en_verde(facts
     assert "búsquela en uruku.bo" in prompt and "Buscalo" not in prompt
 
 
-def test_gemini_que_tutea_o_da_un_precio_se_objeta_y_cae_a_la_plantilla(facts, monkeypatch):
+def test_gemini_que_tutea_o_da_un_precio_se_objeta_y_cae_a_la_plantilla(facts, monkeypatch, crepo):
     tutea = {**BUENA, "caption_tiktok": "Vidriería Pacheco. Busca tu vidrio en uruku.bo"}
     con_precio = {**BUENA, "caption_ig": "Vidriería Pacheco, espejos desde Bs 80 en uruku.bo"}
     llamadas = _gemini(monkeypatch, [tutea, con_precio])
-    r = cc.generate_captions(facts)
+    r = cc.generate_captions(facts, crepo=crepo)
     assert r["caption_engine"] == "template" and len(llamadas) == 2
     assert "Use usted, sin voseo ni tuteo" in llamadas[1] or "Tiene un precio" in llamadas[1]
     assert not cc.tiene_voseo_o_tuteo(r["caption_tiktok"], [facts["nombre"]]) and r["caption_checks"] == []

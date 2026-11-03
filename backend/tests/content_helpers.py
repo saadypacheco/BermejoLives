@@ -81,3 +81,9 @@ def pieza(crepo, comercio_id="com-1", dia=None, pilar="comercio_del_dia", status
 
 def h(token):
     return {"Authorization": f"Bearer {token}"}
+
+
+def gemini_on(crepo):
+    """Prende el interruptor de costo `gemini_content` (§17.2): por defecto está apagado y nada llama a Gemini."""
+    from app.services import cost_switches
+    cost_switches.set(crepo, cost_switches.GEMINI_CONTENT, True, "test@uruku.bo")

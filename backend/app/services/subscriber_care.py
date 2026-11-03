@@ -227,7 +227,7 @@ def saltar_por_impago(crepo, hoy: date, ahora: datetime) -> int:
     """A los 8 días sin pago, las piezas propias que no salieron pasan a `skipped` (`unpaid`) y sus
     redes pendientes también."""
     vivas = crepo.list_pieces(statuses=["queued", "rendering", "ready_for_review", "approved"], limit=1000)
-    propias = [p for p in vivas if p.get("comercio_id")]
+    propias = [p for p in vivas if p.get("comercio_id") and p.get("origin", "selector") == "selector"]
     if not propias:
         return 0
     fichas = {c["id"]: c for c in crepo.list_comercios_activos(ids=sorted({p["comercio_id"] for p in propias}))}

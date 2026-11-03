@@ -51,6 +51,15 @@ def normalizar(codigo: str | None) -> str | None:
     return limpio
 
 
+def codigo_buscado(texto: str | None) -> str | None:
+    """El código que alguien tipeó en un BUSCADOR, o None si lo escrito no tiene forma de código.
+
+    A diferencia de `normalizar`, exige el prefijo (`URUKU-K7M2`, `uruku k7m2`, `URUKUK7M2`): sin él, «Casa» o
+    «Mesa» —cuatro letras del alfabeto— se tomarían por un código y no se buscaría por nombre."""
+    m = _RE_CON_PREFIJO.fullmatch((texto or "").strip())
+    return m.group(1).upper() if m else None
+
+
 def extraer_codigo(texto: str | None) -> str | None:
     """Busca un código dentro del texto de un mensaje de WhatsApp.
 

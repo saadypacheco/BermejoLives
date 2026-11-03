@@ -262,7 +262,7 @@ def cerrar_pieza_si_corresponde(crepo, piece_id: str) -> dict | None:
         return None
     logger.info("content.pieza_publicada", pieza=piece_id, redes=[p["network"] for p in posts if p["status"] == "posted"])
     cid = pieza.get("comercio_id")
-    if cid:
+    if cid and pieza.get("origin") != "pedido":           # un pedido a mano no crea tareas de suscriptor (§17.3)
         hoy = cargas.hoy_bolivia(ahora)
         crepo.insert_task({"comercio_id": cid, "kind": "piece_delivery", "due_on": hoy.isoformat(),
                            "piece_id": piece_id})

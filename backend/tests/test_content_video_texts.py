@@ -9,7 +9,7 @@ from app.core import auth
 from app.core.config import settings
 from app.services import (content_captions as cc, content_selector as sel, content_storage,
                           content_video_texts as cvt)
-from tests.content_helpers import autorizar, banco, comercio, h, pieza
+from tests.content_helpers import autorizar, banco, comercio, gemini_on, h, pieza
 
 BUENOS = {"kick": "NUEVA TEMPORADA", "title1": "Camperas que", "title2": "ya llegaron",
           "subtitle": "Eco cuero, doble faz y más modelos", "search_term": "camperas"}
@@ -204,7 +204,9 @@ def _gemini(monkeypatch, respuestas):
 
 
 @pytest.fixture
-def con_key(monkeypatch):
+def con_key(monkeypatch, crepo):
+    """Clave de Gemini puesta Y el interruptor `gemini_content` prendido (por defecto está apagado, §17.2)."""
+    gemini_on(crepo)
     monkeypatch.setattr(settings, "gemini_api_key", "k")
     monkeypatch.setattr(settings, "gemini_model", "gemini-test")
 
@@ -215,7 +217,7 @@ PIEZA = {"pillar": "comercio_del_dia", "facts": {**FACTS, "subcategoria": "Campe
 def test_sin_key_salen_los_textos_fijos_y_no_llama_a_nadie(crepo, monkeypatch):
     monkeypatch.setattr(settings, "gemini_api_key", "")
     monkeypatch.setattr(cvt, "_llamar_gemini", lambda p: pytest.fail("no tiene que llamar"))
-    r = cvt.proponer(PIEZA, _fuentes(crepo))
+    r = cvt.proponer(PIEZA, _fuentes(crepo), crepo=crepo)
     assert r["engine"] == "template" and r["checks"] == [] and r["texts"]["title1"] == "Moda"
     assert [s["chip"] for s in r["slides"]] == [None] * 5 and all(s["flags"] == [] for s in r["slides"])
 
@@ -223,7 +225,7 @@ def test_sin_key_salen_los_textos_fijos_y_no_llama_a_nadie(crepo, monkeypatch):
 def test_gemini_valido_queda_como_gemini_y_manda_las_fotos_a_768(crepo, con_key, monkeypatch):
     llamadas = _gemini(monkeypatch, [{**BUENOS, "slides": _slides(5, {1: {"price_or_code_visible": True}})}])
     comercio_ficha = {"prod_obs_human": "camperas de eco cuero, jeans"}
-    r = cvt.proponer(PIEZA, _fuentes(crepo), comercio_ficha)
+    r = cvt.proponer(PIEZA, _fuentes(crepo), comercio_ficha, crepo=crepo)
     assert r["engine"] == "gemini:gemini-test" and r["checks"] == [] and r["texts"] == BUENOS
     assert r["slides"][1]["flags"] == ["price_or_code_visible"] and r["slides"][0]["flags"] == []
     assert r["slides"][0] == {"chip": "Modelo uno", "flags": [], "focus_y": 0.3}
@@ -239,7 +241,7 @@ def test_las_fotos_se_mandan_reducidas(crepo, con_key, monkeypatch):
 
     from PIL import Image
     llamadas = _gemini(monkeypatch, [{**BUENOS, "slides": _slides(5)}])
-    cvt.proponer(PIEZA, _fuentes(crepo))
+    cvt.proponer(PIEZA, _fuentes(crepo), crepo=crepo)
     imagen = next(p for p in llamadas[0] if "inline_data" in p)["inline_data"]
     with Image.open(BytesIO(base64.b64decode(imagen["data"]))) as im:
         assert max(im.size) <= 768 and imagen["mime_type"] == "image/jpeg"
@@ -248,7 +250,7 @@ def test_las_fotos_se_mandan_reducidas(crepo, con_key, monkeypatch):
 def test_objetado_se_reintenta_una_vez_con_las_objeciones(crepo, con_key, monkeypatch):
     mala = {**BUENOS, "subtitle": "Buscá tu campera", "slides": _slides(5)}
     llamadas = _gemini(monkeypatch, [mala, {**BUENOS, "slides": _slides(5)}])
-    r = cvt.proponer(PIEZA, _fuentes(crepo))
+    r = cvt.proponer(PIEZA, _fuentes(crepo), crepo=crepo)
     assert r["engine"].startswith("gemini:") and len(llamadas) == 2
     assert "Use usted" in llamadas[1][0]["text"] and "objeciones" in llamadas[1][0]["text"]
     assert "objeciones" not in llamadas[0][0]["text"]
@@ -257,7 +259,7 @@ def test_objetado_se_reintenta_una_vez_con_las_objeciones(crepo, con_key, monkey
 def test_objetado_dos_veces_cae_a_textos_fijos_pero_conserva_las_marcas(crepo, con_key, monkeypatch):
     mala = {**BUENOS, "title1": "Hay 5 modelos", "slides": _slides(5, {2: {"price_or_code_visible": True}})}
     llamadas = _gemini(monkeypatch, [mala, mala, {**BUENOS, "slides": _slides(5)}])
-    r = cvt.proponer(PIEZA, _fuentes(crepo))
+    r = cvt.proponer(PIEZA, _fuentes(crepo), crepo=crepo)
     assert r["engine"] == "template" and len(llamadas) == 2 and r["checks"] == []
     assert r["texts"]["title1"] == "Moda"
     assert [s["chip"] for s in r["slides"]] == [None] * 5                           # las frases de Gemini no se usan
@@ -266,14 +268,14 @@ def test_objetado_dos_veces_cae_a_textos_fijos_pero_conserva_las_marcas(crepo, c
 
 def test_gemini_con_otra_cantidad_de_slides_se_objeta(crepo, con_key, monkeypatch):
     llamadas = _gemini(monkeypatch, [{**BUENOS, "slides": _slides(3)}, {**BUENOS, "slides": _slides(5)}])
-    r = cvt.proponer(PIEZA, _fuentes(crepo))
+    r = cvt.proponer(PIEZA, _fuentes(crepo), crepo=crepo)
     assert r["engine"].startswith("gemini:") and "exactamente 5" in llamadas[1][0]["text"]
 
 
 @pytest.mark.parametrize("basura", [None, {}, {"slides": "no"}, {"title1": 5, "slides": [1, 2]}, {"title1": ["x"]}])
 def test_gemini_que_devuelve_basura_cae_a_textos_fijos_sin_lanzar(crepo, con_key, monkeypatch, basura):
     _gemini(monkeypatch, [basura, basura])
-    r = cvt.proponer(PIEZA, _fuentes(crepo))
+    r = cvt.proponer(PIEZA, _fuentes(crepo), crepo=crepo)
     assert r["engine"] == "template" and len(r["slides"]) == 5 and r["checks"] == []
 
 
@@ -283,7 +285,7 @@ def test_error_http_de_gemini_cae_a_textos_fijos_sin_filtrar_la_key(crepo, monke
     def roto(url, payload):
         raise httpx.ConnectError(f"fallo en {url}")
     monkeypatch.setattr("app.services.vision._post_con_reintentos", roto)
-    r = cvt.proponer(PIEZA, _fuentes(crepo))
+    r = cvt.proponer(PIEZA, _fuentes(crepo), crepo=crepo)
     assert r["engine"] == "template" and "CLAVE-SECRETA" not in caplog.text
 
 
@@ -291,14 +293,14 @@ def test_una_excepcion_inesperada_tampoco_frena(crepo, con_key, monkeypatch):
     def explota(partes):
         raise RuntimeError("boom")
     monkeypatch.setattr(cvt, "_llamar_gemini", explota)
-    assert cvt.proponer(PIEZA, _fuentes(crepo))["engine"] == "template"
+    assert cvt.proponer(PIEZA, _fuentes(crepo), crepo=crepo)["engine"] == "template"
 
 
 def test_foto_ilegible_no_se_manda_y_queda_sin_chip(crepo, con_key, monkeypatch):
     fuentes = _fuentes(crepo)
     content_storage.safe_path(fuentes[0]["file_ref"]).write_bytes(b"no es una imagen")
     llamadas = _gemini(monkeypatch, [{**BUENOS, "slides": _slides(4)}])
-    r = cvt.proponer(PIEZA, fuentes)
+    r = cvt.proponer(PIEZA, fuentes, crepo=crepo)
     assert len([p for p in llamadas[0] if "inline_data" in p]) == 4
     assert r["engine"].startswith("gemini:") and r["slides"][0] == {"chip": None, "flags": [], "focus_y": None}
     assert r["slides"][1]["chip"] == "Modelo uno"                               # alineado con la foto que SÍ se mandó
@@ -307,23 +309,23 @@ def test_foto_ilegible_no_se_manda_y_queda_sin_chip(crepo, con_key, monkeypatch)
 def test_focus_y_se_acota_a_0_1_y_lo_invalido_es_none(crepo, con_key, monkeypatch):
     sl = _slides(5, {0: {"focus_y": 7}, 1: {"focus_y": -2}, 2: {"focus_y": "mucho"}, 3: {"focus_y": None}})
     _gemini(monkeypatch, [{**BUENOS, "slides": sl}])
-    r = cvt.proponer(PIEZA, _fuentes(crepo))
+    r = cvt.proponer(PIEZA, _fuentes(crepo), crepo=crepo)
     assert [s["focus_y"] for s in r["slides"]] == [1.0, 0.0, None, None, 0.3]
 
 
 def test_en_ofertas_el_chip_es_el_nombre_del_comercio_aunque_gemini_diga_otra_cosa(crepo, con_key, monkeypatch):
     fuentes = _fuentes(crepo, n=4, pilar_ofertas=True)
     _gemini(monkeypatch, [{**BUENOS, "slides": _slides(4)}])
-    r = cvt.proponer({"pillar": "ofertas", "facts": {"pillar": "ofertas", "ciudad": "Bermejo"}}, fuentes)
+    r = cvt.proponer({"pillar": "ofertas", "facts": {"pillar": "ofertas", "ciudad": "Bermejo"}}, fuentes, crepo=crepo)
     assert [s["chip"] for s in r["slides"]] == ["Local 0", "Local 1", "Local 2", "Local 3"]
     assert r["engine"].startswith("gemini:")
 
 
 def test_solo_fotos_no_toca_los_textos(crepo, con_key, monkeypatch):
     _gemini(monkeypatch, [{"slides": _slides(1, {0: {"price_or_code_visible": True}})}])
-    r = cvt.proponer(PIEZA, _fuentes(crepo, n=1), solo_fotos=True)
+    r = cvt.proponer(PIEZA, _fuentes(crepo, n=1), solo_fotos=True, crepo=crepo)
     assert r["texts"] is None and r["engine"] is None and r["slides"][0]["flags"] == ["price_or_code_visible"]
-    sin = cvt.proponer(PIEZA, _fuentes(crepo, n=1), solo_fotos=True)                # Gemini sin respuesta
+    sin = cvt.proponer(PIEZA, _fuentes(crepo, n=1), solo_fotos=True, crepo=crepo)                # Gemini sin respuesta
     assert sin["texts"] is None and sin["slides"][0]["chip"] is None
 
 
