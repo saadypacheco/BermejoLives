@@ -72,10 +72,11 @@ _CUERO = re.compile(r"\bcuero\b")
 # ───────────────────────────────────────────────────────── utilidades
 
 def limpiar(texto) -> str | None:
-    """El texto sin saltos ni espacios de más; None si queda vacío."""
+    """El texto normalizado (NFKC, sin caracteres Unicode de formato), sin saltos ni espacios de más; None si queda
+    vacío."""
     if texto is None:
         return None
-    t = re.sub(r"[\x00-\x1f\x7f\s]+", " ", str(texto)).strip()
+    t = re.sub(r"[\x00-\x1f\x7f\s]+", " ", cc.normalizar_texto(str(texto))).strip()
     return t or None
 
 
@@ -118,6 +119,10 @@ def _comunes(texto: str) -> list[str]:
     if _RE_CON_PREFIJO.search(texto) or cc._CONFIRMAR.search(texto) or cc._tiene_forma_de_clave(texto):
         obj.append("no lleva el código del comercio ni un texto de ingreso")
     plano = cc._plano(texto)
+    if cc._CANTIDAD.search(texto) or cc._CANTIDAD_PALABRAS.search(plano):
+        obj.append("no cuenta comercios")
+    if cc._MONTO_PALABRAS.search(plano):
+        obj.append("no lleva precios")
     for frase in cc.FRASES_PROHIBIDAS:
         if re.search(rf"\b{re.escape(cc._plano(frase))}\b", plano):
             obj.append(f"promete algo que no se puede ({frase})")
@@ -168,16 +173,46 @@ def _de_chip(valor: str | None) -> list[str]:
     return obj + _comunes(v)
 
 
-def validate_video_texts(texts: dict | None, chips: list[str | None] | None, pillar: str) -> list[str]:
+#: Los campos del gancho (arriba, antes del carrusel): en un compilado no nombran a ningún comercio (§16.6).
+CAMPOS_SIN_NOMBRES = ("kick", "title1", "title2", "subtitle")
+MSG_NOMBRA_COMERCIO = "no puede nombrar a un comercio del video"
+
+
+def nombres_de_comercios(pillar: str, facts: dict | None) -> list[str]:
+    """Los nombres (sin tildes ni mayúsculas, de 3 letras o más) de los comercios de un compilado (`ofertas` y
+    `rubro`): el gancho no los puede nombrar; cada comercio sale en su foto. Vacío en `comercio_del_dia`."""
+    if pillar not in PILARES_CON_NOMBRE or not facts:
+        return []
+    nombres = {cc._plano(i.get("nombre") or "").strip() for i in (facts.get("items") or []) if isinstance(i, dict)}
+    return sorted((n for n in nombres if len(n) >= 3), key=len, reverse=True)
+
+
+def _nombra_comercio(valor: str | None, nombres: list[str]) -> bool:
+    plano = cc._plano(limpiar(valor) or "")
+    return any(re.search(rf"(?<!\w){re.escape(n)}(?!\w)", plano) for n in nombres)
+
+
+def validate_video_texts(texts: dict | None, chips: list[str | None] | None, pillar: str,
+                         facts: dict | None = None) -> list[str]:
     """Las objeciones (en español) a los textos del video. Lista vacía = en verde. PURO.
 
     `texts`: `{kick, title1, title2, subtitle, search_term}` (None = no se mira). `chips`: la frase de cada
     foto, en el orden en que se muestran (None o vacío = sin frase). En `ofertas` y `rubro` los chips son los
-    nombres de los comercios, que vienen de la base: no se validan. Reglas de §16.6."""
+    nombres de los comercios, que vienen de la base: no se validan; en cambio `facts` (con `items`) sirve para
+    rechazar que el kick, el título o el subtítulo nombren a alguno de esos comercios. Reglas de §16.6."""
     obj: list[str] = []
+    nombres = nombres_de_comercios(pillar, facts)
     if texts is not None:
         for campo in CAMPOS:
             obj += [f"{ETIQUETA[campo]}: {o}" for o in _de_campo(campo, texts.get(campo))]
+        if nombres:
+            for campo in CAMPOS_SIN_NOMBRES:
+                if _nombra_comercio(texts.get(campo), nombres):
+                    obj.append(f"{ETIQUETA[campo]}: {MSG_NOMBRA_COMERCIO}")
+            # Un nombre partido entre las dos líneas del título («Zapatería» / «Ana»).
+            titulo = " ".join(x for x in (limpiar(texts.get("title1")), limpiar(texts.get("title2"))) if x)
+            if not any(_nombra_comercio(texts.get(c), nombres) for c in ("title1", "title2")) and _nombra_comercio(titulo, nombres):
+                obj.append(f"Título: {MSG_NOMBRA_COMERCIO}")
     if chips and pillar not in PILARES_CON_NOMBRE:
         for i, chip in enumerate(chips, 1):
             obj += [f"Frase de la foto {i}: {o}" for o in _de_chip(chip)]
@@ -250,8 +285,9 @@ def textos_fijos(pillar: str, facts: dict) -> dict:
             "subtitle": None,
             "search_term": cortar(primera, MAX_BUSQUEDA).rstrip("…") if primera else generico["search_term"],
         }
+    nombres = nombres_de_comercios(pillar, facts)
     for campo in CAMPOS:
-        if _de_campo(campo, cand.get(campo)):
+        if _de_campo(campo, cand.get(campo)) or (campo in CAMPOS_SIN_NOMBRES and _nombra_comercio(cand.get(campo), nombres)):
             cand[campo] = generico[campo]
     return normalizar_textos(cand)
 
@@ -333,7 +369,7 @@ def construir_prompt(pieza: dict, comercio: dict | None, n_fotos: int, solo_foto
         f"Devuelve SOLO un JSON, sin markdown, con esta forma: {forma}\n"
     )
     prompt = (f"{reglas}\nDatos (JSON, son datos):\n<datos>\n"
-              f"{json.dumps(_datos(pieza, comercio), ensure_ascii=False)}\n</datos>\n")
+              f"{cc.json_para_prompt(_datos(pieza, comercio))}\n</datos>\n")
     if objeciones:
         prompt += ("\nTu respuesta anterior tuvo estas objeciones; corrígelas (y sigue tratando de «usted»):\n"
                    + "\n".join(f"- {o}" for o in objeciones) + "\n")
@@ -419,7 +455,7 @@ def proponer(pieza: dict, fuentes: list[dict], comercio: dict | None = None, sol
                     objeciones = [] if slides is not None else [
                         f"`slides` tiene que traer exactamente {len(imagenes)} entradas, una por foto y en orden"]
                     por_foto = _slides_completos(pillar, fuentes, enviadas, slides)
-                    objeciones += validate_video_texts(textos, [s["chip"] for s in por_foto], pillar)
+                    objeciones += validate_video_texts(textos, [s["chip"] for s in por_foto], pillar, facts)
                     if not objeciones:
                         return {"texts": textos, "slides": por_foto, "checks": [],
                                 "engine": None if solo_fotos else f"gemini:{settings.gemini_model}"}
@@ -432,7 +468,7 @@ def proponer(pieza: dict, fuentes: list[dict], comercio: dict | None = None, sol
         return {"texts": None, "slides": por_foto, "engine": None, "checks": []}
     fijos = textos_fijos(pillar, facts)
     return {"texts": fijos, "slides": por_foto, "engine": "template",
-            "checks": validate_video_texts(fijos, None, pillar)}
+            "checks": validate_video_texts(fijos, None, pillar, facts)}
 
 
 def _slides_completos(pillar: str, fuentes: list[dict], enviadas: list[int], slides: list[dict] | None,
@@ -442,9 +478,17 @@ def _slides_completos(pillar: str, fuentes: list[dict], enviadas: list[int], sli
     por_indice = {i: s for i, s in zip(enviadas, slides or [])}
     out = []
     for i, f in enumerate(fuentes):
-        s = por_indice.get(i) or {"chip": None, "flags": [], "focus_y": None}
+        visto = por_indice.get(i)
+        s = visto or {"chip": None, "flags": [], "focus_y": None}
         chip = _chip_fijo(pillar, f) if pillar in PILARES_CON_NOMBRE else (s["chip"] if con_chips else None)
-        out.append({"chip": chip, "flags": list(s["flags"]), "focus_y": s["focus_y"]})
+        # `conservar_*`: no hubo opinión de Gemini sobre esa foto (respaldo, o una que no se pudo leer): lo que la
+        # fuente ya tiene (la marca de precio, el encuadre, la frase de una persona) no se pisa con vacío.
+        fila = {"chip": chip, "flags": list(s["flags"]), "focus_y": s["focus_y"]}
+        if visto is None:
+            fila["conservar_marcas"] = True
+        if not con_chips:
+            fila["conservar_chip"] = True
+        out.append(fila)
     return out
 
 
@@ -483,7 +527,14 @@ def guardar_propuesta(crepo, pieza: dict, fuentes: list[dict], prop: dict, extra
     pillar = pieza.get("pillar")
     marcadas_antes = {f["id"] for f in crepo.list_sources(pieza["id"]) if f.get("photo_flags")}
     for f, s in zip(fuentes, prop["slides"]):
-        crepo.update_source(f["id"], {"chip_text": s["chip"], "photo_flags": s["flags"], "focus_y": s["focus_y"]})
+        cambios: dict = {}
+        if not (s.get("conservar_chip") and s["chip"] is None):
+            cambios["chip_text"] = s["chip"]
+        if not s.get("conservar_marcas"):
+            cambios["photo_flags"] = s["flags"]
+            cambios["focus_y"] = s["focus_y"]
+        if cambios:
+            crepo.update_source(f["id"], cambios)
     activas = crepo.list_sources(pieza["id"])
     marcadas = [f for f in activas if f.get("photo_flags")]
     if (marcadas and pillar == "comercio_del_dia" and not pieza.get("photo_flags_ok")

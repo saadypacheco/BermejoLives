@@ -61,8 +61,12 @@ LADO_FOTO_KIT = 1200
 SALUD_CACHE_SEG = 10
 SALUD_TIMEOUT_SEG = 3
 _salud: dict = {"hasta": 0.0, "ok": False}
+#: Largo mínimo de `RENDERER_TOKEN` (el contenedor tampoco arranca con uno más corto).
+MIN_TOKEN_CHARS = 32
 #: Margen sobre el timeout antes de dar una pieza por colgada.
 MARGEN_COLGADA_SEG = 120
+#: Nombres FIJOS de las salidas del contenedor (contrato §16.4), relativos a la carpeta del job.
+OUT_VIDEO_KIT, OUT_COVER_KIT = "out/video.mp4", "out/cover.jpg"
 #: Un video más pesado que esto se avisa en el log (no falla).
 VIDEO_PESADO_BYTES = 15 * 1024 * 1024
 
@@ -90,7 +94,7 @@ def renderer_vivo() -> bool:
         return _salud["ok"]
     ok = False
     try:
-        r = httpx.get(f"{settings.renderer_url.rstrip('/')}/health", timeout=SALUD_TIMEOUT_SEG)
+        r = httpx.get(f"{settings.renderer_url.rstrip('/')}/health", timeout=SALUD_TIMEOUT_SEG, trust_env=False)
         datos = r.json() if r.status_code == 200 else {}
         ok = bool(isinstance(datos, dict) and datos.get("ok") and datos.get("chromium") is not False
                   and datos.get("ffmpeg") is not False)
@@ -101,8 +105,8 @@ def renderer_vivo() -> bool:
 
 
 def renderer_disponible() -> bool:
-    """Con `kit` hace falta el token y que el contenedor conteste."""
-    return bool(settings.renderer_token) and renderer_vivo()
+    """Con `kit` hace falta un token de al menos `MIN_TOKEN_CHARS` caracteres y que el contenedor conteste."""
+    return len(settings.renderer_token or "") >= MIN_TOKEN_CHARS and renderer_vivo()
 
 
 def estado_del_worker() -> str:
@@ -220,7 +224,7 @@ def _pedir_render_kit(piece_id: str) -> dict:
     plazo = settings.content_render_timeout_seg
     try:
         r = httpx.post(url, json={"piece_id": piece_id}, headers={"Authorization": f"Bearer {settings.renderer_token}"},
-                       timeout=httpx.Timeout(plazo, connect=10))
+                       timeout=httpx.Timeout(plazo, connect=10), trust_env=False)
     except httpx.TimeoutException:
         return {"ok": False, "error": f"El render pasó de {plazo} s", "retryable": True}
     except httpx.HTTPError as exc:
@@ -248,9 +252,20 @@ def _pedir_render_kit(piece_id: str) -> dict:
             "retryable": bool(datos.get("retryable", True))}
 
 
+def _escribir_exclusivo(ruta: Path, datos: bytes, modo: int = 0o644) -> None:
+    """Crea `ruta` NUEVO (`O_CREAT|O_EXCL`: falla si ya existe, aunque sea un enlace) y sin seguir enlaces
+    (`O_NOFOLLOW`, donde existe; en Windows no existe y se omite)."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    fd = os.open(ruta, flags, modo)
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(datos)
+
+
 def _preparar_foto(origen: Path, destino: Path) -> bool:
     """Una foto lista para el contenedor (§16.4): reorientada, RGB, lado mayor 1200 px (sólo se reduce), retoque N1
     suave (el mismo del motor v1), JPEG q90 y SIN EXIF (Pillow no lo copia). False si no se pudo leer."""
+    from io import BytesIO
+
     from PIL import Image, ImageOps
 
     from app.services.content_render_job import n1_suave
@@ -260,8 +275,9 @@ def _preparar_foto(origen: Path, destino: Path) -> bool:
             im = ImageOps.exif_transpose(im).convert("RGB")
             im.thumbnail((LADO_FOTO_KIT, LADO_FOTO_KIT), Image.LANCZOS)
             im = n1_suave(im)
-            im.save(destino, format="JPEG", quality=90)
-        os.chmod(destino, 0o644)
+            buf = BytesIO()
+            im.save(buf, format="JPEG", quality=90)
+        _escribir_exclusivo(destino, buf.getvalue(), 0o644)
         return True
     except Exception:  # noqa: BLE001
         logger.warning("content.foto_no_se_pudo_preparar", ruta=str(origen)[-60:], exc_info=True)
@@ -312,18 +328,29 @@ def _preparar_job(crepo, pieza: dict) -> tuple[Path, dict, list[dict]] | None:
     return _preparar_job_pillow(crepo, pieza)
 
 
+def _crear_carpeta_out(tmp: Path) -> Path:
+    """`tmp/<id>/out/`: lo ÚNICO que el contenedor puede escribir. La crea este backend, se la entrega al uid del
+    contenedor (`chown`) y queda 0o700: nadie más la toca. En Windows no hay chown (PC de desarrollo)."""
+    out = tmp / "out"
+    out.mkdir(mode=0o700)
+    if os.name == "posix":
+        os.chown(out, settings.renderer_uid, -1)
+    os.chmod(out, 0o700)
+    return out
+
+
 def _preparar_job_kit(crepo, pieza: dict) -> tuple[Path, dict, list[dict]] | None:
     """El job v2 de §16.4: `job.json` + las fotos `s0.jpg`… ya preparadas. El contenedor sólo lee esa carpeta y
-    sólo escribe `video.mp4` y `cover.jpg` ahí. Los textos del cierre salen siempre de la base (fijos)."""
+    sólo escribe `out/video.mp4` y `out/cover.jpg`. Los textos del cierre salen siempre de la base (fijos).
+
+    La carpeta del job es 0o755 y del backend (el contenedor la lee, no la escribe); las fotos y el `job.json` se
+    crean con `O_EXCL|O_NOFOLLOW`; `out/` es del uid del contenedor (0o700)."""
     vigentes = _fuentes_vigentes(crepo, pieza)
     tmp = content_storage.carpeta_tmp(pieza["id"])
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True, exist_ok=True)
-    # El contenedor `reels` corre como usuario NO root (pwuser) y este backend como root: la carpeta del job
-    # tiene que ser escribible por cualquiera (0o777, con chmod explícito: el umask del proceso no es de fiar) o
-    # reels no puede dejar `video.mp4` ni `cover.jpg`. Las fotos y el job.json son 0o644 (legibles).
     try:
-        os.chmod(tmp, 0o777)
+        os.chmod(tmp, 0o755)
     except OSError:
         pass
     slides, usadas = [], []
@@ -346,15 +373,12 @@ def _preparar_job_kit(crepo, pieza: dict) -> tuple[Path, dict, list[dict]] | Non
         "version": 2, "piece_id": pieza["id"], "template": "t1", "format": "9x16", "fps": 30,
         "texts": content_video_texts.armar_textos(pieza.get("video_texts") or {}, pilar, pieza.get("facts") or {}),
         "icons": content_video_texts.iconos_de(pilar), "slides": slides,
-        "out_video": "video.mp4", "out_cover": "cover.jpg",
+        "out_video": OUT_VIDEO_KIT, "out_cover": OUT_COVER_KIT,
     }
     ruta_job = tmp / "job.json"
-    ruta_job.write_text(json.dumps(job_json, ensure_ascii=False, indent=2), encoding="utf-8")
-    try:
-        os.chmod(ruta_job, 0o644)
-    except OSError:
-        pass
-    return ruta_job, {**job_json, "out_video": str(tmp / "video.mp4"), "out_cover": str(tmp / "cover.jpg")}, usadas
+    _escribir_exclusivo(ruta_job, json.dumps(job_json, ensure_ascii=False, indent=2).encode("utf-8"), 0o644)
+    out = _crear_carpeta_out(tmp)
+    return ruta_job, {**job_json, "out_video": str(out / "video.mp4"), "out_cover": str(out / "cover.jpg")}, usadas
 
 
 def _preparar_job_pillow(crepo, pieza: dict) -> tuple[Path, dict, list[dict]] | None:
@@ -410,16 +434,43 @@ def recuperar_colgadas(crepo, ahora: datetime | None = None) -> int:
     return n
 
 
+def _copiar_salida(origen: str, destino: Path, uid_esperado: int | None) -> None:
+    """COPIA los bytes de lo que dejó el motor (no `rename`: en el volumen compartido lo escribe un proceso que no
+    es de confianza). Exige un archivo regular (no enlace), con un solo nombre (`st_nlink == 1`: no un hardlink a
+    otro archivo) y, en POSIX, del uid del contenedor. La verificación se repite sobre el descriptor abierto con
+    `O_NOFOLLOW`, para que cambiar el archivo entre el `lstat` y la lectura no sirva."""
+    import stat
+
+    def _revisar(st: os.stat_result) -> None:
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+            raise OSError("la salida del render no es un archivo regular")
+        if uid_esperado is not None and os.name == "posix" and st.st_uid != uid_esperado:
+            raise OSError("la salida del render no es del usuario del contenedor")
+
+    _revisar(os.lstat(origen))
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    fd = os.open(origen, flags)
+    with os.fdopen(fd, "rb") as fin:
+        _revisar(os.fstat(fin.fileno()))
+        with open(destino, "wb") as fout:
+            shutil.copyfileobj(fin, fout, 1024 * 1024)
+
+
 def _mover_resultado(pieza: dict, job: dict, ahora: datetime) -> tuple[str, str, int]:
-    """De `tmp/` a `renders/<aaaa-mm>/<piece_id>/`. Devuelve (video, portada, bytes)."""
+    """De `tmp/` a `renders/<aaaa-mm>/<piece_id>/` (copiando los bytes). Devuelve (video, portada, bytes)."""
     carpeta = content_storage.carpeta_de_render(pieza["id"], ahora)
     rel_video, rel_cover = f"{carpeta}/video.mp4", f"{carpeta}/cover.jpg"
+    uid = settings.renderer_uid if motor() == "kit" else None
     for rel, origen in ((rel_video, job["out_video"]), (rel_cover, job["out_cover"])):
         destino = content_storage.safe_path(rel)
         if destino is None:
             raise OSError("ruta de render fuera del directorio")
         destino.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(origen, destino)
+        try:
+            _copiar_salida(origen, destino, uid)
+        except BaseException:
+            destino.unlink(missing_ok=True)
+            raise
     return rel_video, rel_cover, content_storage.safe_path(rel_video).stat().st_size
 
 

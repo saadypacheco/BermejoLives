@@ -15,7 +15,7 @@ cuántos comercios hay en un rubro: `eligible` es sólo para el panel interno.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime, timezone
 
 import structlog
 from fastapi import HTTPException
@@ -32,6 +32,7 @@ MAX_COMERCIOS_RUBRO = sel.MAX_FOTOS_COMERCIO
 
 MSG_TOPE = "Ya hay 5 videos pedidos armándose; esperá a que terminen"
 MSG_INACTIVO = "El comercio no está activo"
+MSG_SUSPENDIDO = "El comercio está suspendido"
 MSG_SIN_AUTORIZACION = "El comercio no tiene autorización vigente para aparecer en las redes"
 
 
@@ -80,6 +81,8 @@ def diagnostico_comercio(crepo, comercio: dict, hoy: date, usadas: set[tuple] | 
     fotos = sel.elegir_fotos(crepo, comercio, sel.MAX_FOTOS_COMERCIO, hoy, usadas)
     if comercio.get("activo") is False:
         motivo = MSG_INACTIVO
+    elif comercio.get("suspendido"):
+        motivo = MSG_SUSPENDIDO
     elif not consent:
         motivo = MSG_SIN_AUTORIZACION
     elif len(fotos) < sel.MIN_FOTOS:
@@ -92,6 +95,21 @@ def diagnostico_comercio(crepo, comercio: dict, hoy: date, usadas: set[tuple] | 
 def _exigir_cupo(crepo) -> None:
     if crepo.count_pending_requests() >= MAX_ARMANDOSE:
         raise HTTPException(status_code=429, detail=MSG_TOPE)
+
+
+def _recontar_tras_crear(crepo, pieza: dict) -> None:
+    """El tope «de verdad». `_exigir_cupo` mira ANTES y dos pedidos a la vez pueden pasarlo; PostgREST no da un
+    «insertar si hay lugar» atómico, así que se cuenta de nuevo DESPUÉS de insertar: si ya son más de `MAX_ARMANDOSE`,
+    el recién creado se da de baja (`activo = false`, salteado) y se contesta 429. Con una carrera pueden caer los
+    dos: es preferible a pasarse del tope."""
+    if crepo.count_pending_requests() <= MAX_ARMANDOSE:
+        return
+    ahora = datetime.now(timezone.utc).isoformat()
+    crepo.update_piece(pieza["id"], {"activo": False, "status": "skipped", "skip_reason": "other",
+                                     "skip_note": "Tope de pedidos armándose", "skipped_by": "sistema",
+                                     "skipped_at": ahora})
+    logger.warning("content.pedido_sobre_el_tope", pieza=pieza["id"])
+    raise HTTPException(status_code=429, detail=MSG_TOPE)
 
 
 def pedir_comercio(crepo, comercio_id: str, actor: str, ciudad_permitida: str | None = None,
@@ -117,6 +135,7 @@ def pedir_comercio(crepo, comercio_id: str, actor: str, ciudad_permitida: str | 
     pieza = sel._guardar_pieza(crepo, fila, fotos)
     if pieza is None:
         raise HTTPException(status_code=409, detail="No se pudo crear el pedido, probá de nuevo")
+    _recontar_tras_crear(crepo, pieza)
     logger.info("content.pedido_creado", kind="comercio", pieza=pieza["id"], comercio=comercio_id, por=actor,
                 fotos=len(fotos))
     return pieza
@@ -132,7 +151,7 @@ def _elegibles_de_ciudad(crepo, ciudad_id: str, hoy: date) -> tuple[list[dict], 
     `{comercio, foto, suscriptor}`. Los rubros de un comercio son el principal y los secundarios."""
     comercios = crepo.list_comercios_activos(ciudad_id=ciudad_id)
     autorizados = content_consent.autorizados(crepo)
-    con_permiso = [c for c in comercios if c["id"] in autorizados]
+    con_permiso = [c for c in comercios if c["id"] in autorizados and not c.get("suspendido")]
     pre = _FotosPrecargadas(crepo, [c["id"] for c in con_permiso])
     usadas: set[tuple] = set()  # como en diagnostico_comercio: el pedido no mira la regla de 60 días
     planes = {p["slug"]: p for p in crepo.list_planes()}
@@ -221,6 +240,7 @@ def pedir_rubro(crepo, rubro_slug: str, ciudad_slug: str, actor: str, ciudad_per
     pieza = sel._guardar_pieza(crepo, fila, fuentes)
     if pieza is None:
         raise HTTPException(status_code=409, detail="No se pudo crear el pedido, probá de nuevo")
+    _recontar_tras_crear(crepo, pieza)
     logger.info("content.pedido_creado", kind="rubro", pieza=pieza["id"], rubro=rubro_slug, ciudad=ciudad_slug,
                 por=actor, comercios=len(fuentes))
     return pieza

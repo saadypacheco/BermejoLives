@@ -16,6 +16,7 @@ acá no se publica en ninguna red; una persona lo hace a mano y pega el link.
 from __future__ import annotations
 
 import re
+import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
@@ -23,7 +24,7 @@ from typing import Literal
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from starlette.concurrency import run_in_threadpool
 
 from app.api.campo import _propio_o_404
@@ -31,6 +32,7 @@ from app.api.comercio import _comercio_escribe
 from app.core import auth
 from app.core.auth import require_alguno, require_permiso
 from app.core.config import settings
+from app.core.permisos import permisos_de
 from app.core.sesion_comercio import require_comercio_vigente
 from app.db.content_repository import ContentConflict, ContentRepo, get_content_repo
 from app.db.repository import Repo, get_repo
@@ -62,9 +64,57 @@ def _error(status: int, codigo: str, mensaje: str) -> HTTPException:
     return HTTPException(status_code=status, detail={"codigo": codigo, "mensaje": mensaje})
 
 
-def _comercio_o_404(crepo: ContentRepo, comercio_id: str) -> dict:
+#: Roles con alcance sobre todas las ciudades: aunque su cuenta tenga una ciudad asignada, el panel no los limita.
+_ROLES_CON_ALCANCE_GLOBAL = ("admin", "publicador")
+
+
+def _ciudad_limitada(claims: dict) -> str | None:
+    """El slug de la ciudad a la que está LIMITADO quien pregunta, o None si ve todas. Se limita a quien lleva el
+    claim `ciudad` y no tiene alcance global: ni el permiso `*` (admin) ni un rol admin/publicador. Un agente de
+    campo, o un rol del equipo creado para una sola ciudad, ve sólo la suya; el `?ciudad=` del cliente no cuenta."""
+    slug = (claims.get("ciudad") or "").strip()
+    if not slug or "*" in permisos_de(claims):
+        return None
+    roles = set(claims.get("roles") or [])
+    if claims.get("rol"):
+        roles.add(claims["rol"])
+    return None if roles & set(_ROLES_CON_ALCANCE_GLOBAL) else slug
+
+
+class _Alcance:
+    """La ciudad de quien está limitado a una. Todo lo que no sea de ella se contesta como «no existe» (404)."""
+
+    def __init__(self, crepo: ContentRepo, slug: str):
+        self.slug = slug
+        fila = next((c for c in crepo.list_ciudades() if c["slug"] == slug), None)
+        self.id = fila["id"] if fila else None
+
+    def comercio_ok(self, comercio: dict | None) -> bool:
+        if not comercio:
+            return False
+        return (comercio.get("ciudades") or {}).get("slug") == self.slug or (
+            self.id is not None and comercio.get("ciudad_id") == self.id)
+
+    def pieza_ok(self, crepo: ContentRepo, pieza: dict) -> bool:
+        if pieza.get("ciudad_id"):
+            return self.id is not None and pieza["ciudad_id"] == self.id
+        return bool(pieza.get("comercio_id")) and self.comercio_ok(crepo.get_comercio_ficha(pieza["comercio_id"]))
+
+    def piezas(self, crepo: ContentRepo, piezas: list[dict]) -> list[dict]:
+        return [p for p in piezas if self.pieza_ok(crepo, p)]
+
+
+def _alcance(crepo: ContentRepo, claims: dict | None) -> _Alcance | None:
+    slug = _ciudad_limitada(claims or {})
+    return _Alcance(crepo, slug) if slug else None
+
+
+def _comercio_o_404(crepo: ContentRepo, comercio_id: str, claims: dict | None = None) -> dict:
     c = crepo.get_comercio_ficha(comercio_id)
     if not c or c.get("activo") is False:
+        raise HTTPException(status_code=404, detail="Comercio no encontrado")
+    al = _alcance(crepo, claims)
+    if al and not al.comercio_ok(c):
         raise HTTPException(status_code=404, detail="Comercio no encontrado")
     return c
 
@@ -99,16 +149,16 @@ def admin_social_consent(comercio_id: str, body: SocialConsentUpdate,
                          crepo: ContentRepo = Depends(get_content_repo)) -> dict:
     """Registra que el comercio autorizó (o retiró) aparecer en las redes y la página de URUKU. Al retirar, las
     piezas que no salieron se saltean y se devuelve lo que ya está publicado."""
-    _comercio_o_404(crepo, comercio_id)
+    _comercio_o_404(crepo, comercio_id, claims)
     if body.via not in content_consent.VIAS_PANEL:
         raise HTTPException(status_code=400, detail="Vía no válida")
     return content_consent.aplicar(crepo, comercio_id, body.granted, body.via, _actor(claims), body.note)
 
 
 @router.get("/admin/content/merchants/{comercio_id}/social-consent/history")
-def admin_social_consent_history(comercio_id: str, _claims: dict = Depends(_permiso_consent),
+def admin_social_consent_history(comercio_id: str, claims: dict = Depends(_permiso_consent),
                                  crepo: ContentRepo = Depends(get_content_repo)) -> dict:
-    _comercio_o_404(crepo, comercio_id)
+    _comercio_o_404(crepo, comercio_id, claims)
     return {"items": [content_consent.respuesta(f) for f in crepo.list_consents(comercio_id)]}
 
 
@@ -176,9 +226,15 @@ def _merchants(crepo: ContentRepo, fichas: list[dict], hoy: date) -> list[dict]:
 def admin_merchants(q: str | None = Query(default=None, max_length=80), ciudad: str | None = Query(default=None, max_length=60),
                     limit: int = Query(default=20, ge=1, le=50), claims: dict = Depends(_permiso_difusion),
                     crepo: ContentRepo = Depends(get_content_repo)) -> dict:
-    """Busca el comercio al que se le suben fotos. `recent`: los 5 últimos donde subió quien pregunta."""
+    """Busca el comercio al que se le suben fotos. `recent`: los 5 últimos donde subió quien pregunta. Quien está
+    limitado a una ciudad sólo ve la suya: el `?ciudad=` que mande se ignora."""
     ciudad_id = None
-    if ciudad:
+    al = _alcance(crepo, claims)
+    if al:
+        if al.id is None:
+            return {"items": [], "recent": []}
+        ciudad_id = al.id
+    elif ciudad:
         fila = next((c for c in crepo.list_ciudades() if c["slug"] == ciudad), None)
         if not fila:
             raise HTTPException(status_code=400, detail="Ciudad desconocida")
@@ -187,7 +243,7 @@ def admin_merchants(q: str | None = Query(default=None, max_length=80), ciudad: 
     items = _merchants(crepo, crepo.search_comercios(q, ciudad_id, limit), hoy)
     ids = crepo.recent_uploaded_comercios(_actor(claims), 5)
     por_id = {c["id"]: c for c in crepo.list_comercios_activos(ids=ids)} if ids else {}
-    recientes = _merchants(crepo, [por_id[i] for i in ids if i in por_id], hoy)
+    recientes = _merchants(crepo, [por_id[i] for i in ids if i in por_id and (not al or al.comercio_ok(por_id[i]))], hoy)
     return {"items": items, "recent": recientes}
 
 
@@ -219,9 +275,9 @@ def _lista_de_fotos(crepo: ContentRepo, comercio_id: str) -> dict:
 
 
 @router.get("/admin/content/merchants/{comercio_id}/assets")
-def admin_list_assets(comercio_id: str, _claims: dict = Depends(_permiso_difusion),
+def admin_list_assets(comercio_id: str, claims: dict = Depends(_permiso_difusion),
                       crepo: ContentRepo = Depends(get_content_repo)) -> dict:
-    _comercio_o_404(crepo, comercio_id)
+    _comercio_o_404(crepo, comercio_id, claims)
     return _lista_de_fotos(crepo, comercio_id)
 
 
@@ -340,7 +396,7 @@ async def admin_upload_asset(
     people_ok: bool | None = Form(None), claims: dict = Depends(_permiso_difusion),
     repo: Repo = Depends(get_repo), crepo: ContentRepo = Depends(get_content_repo),
 ) -> dict:
-    c = await run_in_threadpool(_comercio_o_404, crepo, comercio_id)
+    c = await run_in_threadpool(_comercio_o_404, crepo, comercio_id, claims)
     return await _subir_foto_banco(repo, crepo, comercio_id, c.get("slug"), foto, "admin_upload", _actor(claims),
                                    source_sha256, taken_at, show_in_ficha, has_people, people_ok)
 
@@ -364,9 +420,12 @@ class ContentAssetUpdate(BaseModel):
     people_ok: bool | None = None
 
 
-def _asset_o_404(crepo: ContentRepo, asset_id: str) -> dict:
+def _asset_o_404(crepo: ContentRepo, asset_id: str, claims: dict | None = None) -> dict:
     a = crepo.get_asset(asset_id)
     if not a or not a.get("activo"):
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+    al = _alcance(crepo, claims)
+    if al and not al.comercio_ok(crepo.get_comercio_ficha(a.get("comercio_id"))):
         raise HTTPException(status_code=404, detail="Foto no encontrada")
     return a
 
@@ -374,7 +433,7 @@ def _asset_o_404(crepo: ContentRepo, asset_id: str) -> dict:
 @router.patch("/admin/content/assets/{asset_id}")
 def admin_update_asset(asset_id: str, body: ContentAssetUpdate, claims: dict = Depends(_permiso_difusion),
                        crepo: ContentRepo = Depends(get_content_repo)) -> dict:
-    _asset_o_404(crepo, asset_id)
+    _asset_o_404(crepo, asset_id, claims)
     pedidos = body.model_fields_set
     patch = {k: getattr(body, k) for k in ("usable_for_social", "has_people") if k in pedidos and getattr(body, k) is not None}
     if "people_ok" in pedidos:
@@ -394,7 +453,7 @@ def admin_update_asset(asset_id: str, body: ContentAssetUpdate, claims: dict = D
 def admin_delete_asset(asset_id: str, claims: dict = Depends(_permiso_difusion),
                        crepo: ContentRepo = Depends(get_content_repo)) -> dict:
     """Baja lógica: la fila queda y el archivo se borra a los `CONTENT_ASSET_PURGE_DAYS` días."""
-    _asset_o_404(crepo, asset_id)
+    _asset_o_404(crepo, asset_id, claims)
     crepo.update_asset(asset_id, {"activo": False, "deactivated_by": _actor(claims),
                                   "deactivated_at": datetime.now(timezone.utc).isoformat()})
     content_selector.retirar_asset_de_piezas(crepo, asset_id, _actor(claims))
@@ -403,9 +462,12 @@ def admin_delete_asset(asset_id: str, claims: dict = Depends(_permiso_difusion),
 
 # ════════════════════════════════════════════════════ semana, piezas y revisión
 
-def _pieza_o_404(crepo: ContentRepo, piece_id: str) -> dict:
+def _pieza_o_404(crepo: ContentRepo, piece_id: str, claims: dict | None = None) -> dict:
     p = crepo.get_piece(piece_id)
     if not p:
+        raise HTTPException(status_code=404, detail="Pieza no encontrada")
+    al = _alcance(crepo, claims)
+    if al and not al.pieza_ok(crepo, p):
         raise HTTPException(status_code=404, detail="Pieza no encontrada")
     return p
 
@@ -414,20 +476,37 @@ def _devolver(crepo: ContentRepo, piece_id: str) -> dict:
     return content_present.cargar_pieza(crepo, _pieza_o_404(crepo, piece_id))
 
 
+def _de_su_ciudad(crepo: ContentRepo, claims: dict, piezas: list[dict]) -> list[dict]:
+    """Las piezas de la lista que quien pregunta puede ver (todas, salvo que esté limitado a una ciudad)."""
+    al = _alcance(crepo, claims)
+    return al.piezas(crepo, piezas) if al else piezas
+
+
 @router.get("/admin/content/week")
-def admin_week(start: str | None = Query(default=None, max_length=10), _claims: dict = Depends(_permiso_difusion),
+def admin_week(start: str | None = Query(default=None, max_length=10), claims: dict = Depends(_permiso_difusion),
                crepo: ContentRepo = Depends(get_content_repo)) -> dict:
     hoy = cargas.hoy_bolivia()
     lunes = content_selector.lunes_de(hoy) if not start else _fecha_o_400(start, "fecha")
     if lunes.weekday() != 0:
         raise HTTPException(status_code=400, detail="La fecha tiene que ser un lunes")
-    piezas = crepo.list_pieces(date_from=lunes.isoformat(), date_to=(lunes + timedelta(days=6)).isoformat())
+    piezas = _de_su_ciudad(crepo, claims, crepo.list_pieces(date_from=lunes.isoformat(),
+                                                             date_to=(lunes + timedelta(days=6)).isoformat()))
     dias = []
     for i in range(7):
         d = lunes + timedelta(days=i)
         dias.append({"date": d.isoformat(), "weekday_label": content_present.WEEKDAY_LABEL[i],
                      "pieces": [content_present.piece_summary(p) for p in piezas if str(p["scheduled_for"])[:10] == d.isoformat()]})
-    return {"week_start": lunes.isoformat(), "days": dias, "queue": crepo.count_pieces_by_status()}
+    return {"week_start": lunes.isoformat(), "days": dias, "queue": _cola(crepo, claims)}
+
+
+def _cola(crepo: ContentRepo, claims: dict) -> dict:
+    """Cuántas piezas hay en cada estado. Para quien está limitado a una ciudad, sólo las de ella."""
+    if not _alcance(crepo, claims):
+        return crepo.count_pieces_by_status()
+    cola: dict[str, int] = {}
+    for p in _de_su_ciudad(crepo, claims, crepo.list_pieces(limit=1000)):
+        cola[p["status"]] = cola.get(p["status"], 0) + 1
+    return cola
 
 
 class ContentWeekPlanCreate(BaseModel):
@@ -437,7 +516,10 @@ class ContentWeekPlanCreate(BaseModel):
 @router.post("/admin/content/week/plan")
 def admin_plan_week(body: ContentWeekPlanCreate | None = None, claims: dict = Depends(_permiso_difusion),
                     repo: Repo = Depends(get_repo), crepo: ContentRepo = Depends(get_content_repo)) -> dict:
-    """Corre el selector a mano (para arrancar sin esperar al domingo). Idempotente."""
+    """Corre el selector a mano (para arrancar sin esperar al domingo). Idempotente. Planifica TODAS las ciudades:
+    quien está limitado a una no lo corre (403)."""
+    if _ciudad_limitada(claims):
+        raise HTTPException(status_code=403, detail="Sólo podés ver tu ciudad")
     hoy = cargas.hoy_bolivia()
     pedida = body.week_start if body else None
     if pedida is None:
@@ -452,17 +534,19 @@ def admin_plan_week(body: ContentWeekPlanCreate | None = None, claims: dict = De
 
 @router.get("/admin/content/pieces")
 def admin_list_pieces(status: str = Query(default=_ESTADOS_DE_REVISION, max_length=200),
-                      _claims: dict = Depends(_permiso_difusion),
+                      claims: dict = Depends(_permiso_difusion),
                       crepo: ContentRepo = Depends(get_content_repo)) -> dict:
     estados = [s.strip() for s in status.split(",") if s.strip()]
     if not estados or any(s not in _STATUS for s in estados):
         raise HTTPException(status_code=400, detail="Estado desconocido")
-    return {"items": content_present.cargar_piezas(crepo, crepo.list_pieces(statuses=estados, limit=200))}
+    piezas = crepo.list_pieces(statuses=estados, limit=200)
+    return {"items": content_present.cargar_piezas(crepo, _de_su_ciudad(crepo, claims, piezas))}
 
 
 @router.get("/admin/content/pieces/{piece_id}")
-def admin_get_piece(piece_id: str, _claims: dict = Depends(_permiso_difusion),
+def admin_get_piece(piece_id: str, claims: dict = Depends(_permiso_difusion),
                     crepo: ContentRepo = Depends(get_content_repo)) -> dict:
+    _pieza_o_404(crepo, piece_id, claims)
     return _devolver(crepo, piece_id)
 
 
@@ -478,10 +562,10 @@ _CAMPO_DE_RED = (("caption_tiktok", "tiktok", "TikTok"), ("caption_ig", "instagr
 
 
 @router.patch("/admin/content/pieces/{piece_id}")
-def admin_edit_piece(piece_id: str, body: ContentPieceUpdate, _claims: dict = Depends(_permiso_difusion),
+def admin_edit_piece(piece_id: str, body: ContentPieceUpdate, claims: dict = Depends(_permiso_difusion),
                      crepo: ContentRepo = Depends(get_content_repo)) -> dict:
     """Edita los textos. Pasan por el mismo validador (menos «números ajenos»: la persona puede querer uno)."""
-    pieza = _pieza_o_404(crepo, piece_id)
+    pieza = _pieza_o_404(crepo, piece_id, claims)
     if pieza["status"] in ("approved", "published"):
         raise HTTPException(status_code=409, detail="La pieza ya está aprobada")
     if pieza["status"] == "skipped":
@@ -492,14 +576,15 @@ def admin_edit_piece(piece_id: str, body: ContentPieceUpdate, _claims: dict = De
     for campo, red, etiqueta in _CAMPO_DE_RED:
         if campo not in body.model_fields_set or getattr(body, campo) is None:
             continue
-        texto = getattr(body, campo).strip()
+        texto = content_captions.normalizar_texto(getattr(body, campo)).strip()      # lo guardado es lo validado
         if not texto:
             raise HTTPException(status_code=400, detail=f"El texto de {etiqueta} no puede quedar vacío")
         objeciones += [f"{etiqueta}: {o}" for o in content_captions.validate_caption(texto, facts, red)
                        if not o.startswith("El número ")]
         patch[campo] = texto
     if "hashtags" in body.model_fields_set and body.hashtags is not None:
-        etiquetas = [t.strip() if t.strip().startswith("#") else f"#{t.strip()}" for t in body.hashtags if t.strip()]
+        limpios = [content_captions.normalizar_texto(t).strip() for t in body.hashtags]
+        etiquetas = [t if t.startswith("#") else f"#{t}" for t in limpios if t]
         objeciones += content_captions.validate_hashtags(etiquetas, facts)
         patch["hashtags"] = etiquetas
     if not patch:
@@ -529,6 +614,12 @@ class ContentPieceRequest(BaseModel):
     rubro_slug: str | None = Field(default=None, pattern=_RE_SLUG)
     ciudad_slug: str | None = Field(default=None, pattern=_RE_SLUG)
 
+    @field_validator("comercio_id")
+    @classmethod
+    def _es_uuid(cls, v: str | None) -> str | None:
+        """El id de un comercio es un UUID: algo distinto llegaba a la base y volvía como 500."""
+        return None if v is None else _uuid_de_comercio(v)
+
     @model_validator(mode="after")
     def _completo(self):
         if self.kind == "comercio" and not self.comercio_id:
@@ -538,10 +629,12 @@ class ContentPieceRequest(BaseModel):
         return self
 
 
-def _ciudad_limitada(claims: dict) -> str | None:
-    """La ciudad a la que está limitada quien pregunta: un token de agente la trae (`ciudad`); el resto del
-    equipo ve todas."""
-    return (claims.get("ciudad") or "").strip() or None
+def _uuid_de_comercio(valor: str) -> str:
+    """El UUID en su forma canónica (minúsculas, con guiones); ValueError (-> 422) si no lo es."""
+    try:
+        return str(uuid.UUID(valor.strip()))
+    except (ValueError, AttributeError) as exc:
+        raise ValueError("comercio_id tiene que ser un UUID") from exc
 
 
 @router.post("/admin/content/pieces/request", status_code=201)
@@ -626,12 +719,12 @@ def _volver_a_armar(pieza: dict) -> dict:
 
 
 @router.patch("/admin/content/pieces/{piece_id}/video-texts")
-def admin_edit_video_texts(piece_id: str, body: VideoTextsUpdate, _claims: dict = Depends(_permiso_difusion),
+def admin_edit_video_texts(piece_id: str, body: VideoTextsUpdate, claims: dict = Depends(_permiso_difusion),
                            crepo: ContentRepo = Depends(get_content_repo)) -> dict:
     """Guarda los textos del video que corrigió una persona. Pasan por el mismo validador (400 con la objeción)
     y la pieza vuelve a la cola para armarse de nuevo (en `queued` sólo se guardan). En `ofertas` y `rubro` el chip es
     el nombre del comercio y no se edita: las frases que lleguen se ignoran."""
-    pieza = _pieza_o_404(crepo, piece_id)
+    pieza = _pieza_o_404(crepo, piece_id, claims)
     _exigir_pieza_editable(pieza)
     fuentes = crepo.list_sources(piece_id)
     por_id = {f["id"]: f for f in fuentes}
@@ -642,7 +735,7 @@ def admin_edit_video_texts(piece_id: str, body: VideoTextsUpdate, _claims: dict 
     nuevos = ({} if pilar in content_video_texts.PILARES_CON_NOMBRE
               else {c.source_id: content_video_texts.limpiar(c.text) for c in body.chips})
     chips = [nuevos[f["id"]] if f["id"] in nuevos else f.get("chip_text") for f in fuentes]
-    objeciones = content_video_texts.validate_video_texts(textos, chips, pilar)
+    objeciones = content_video_texts.validate_video_texts(textos, chips, pilar, pieza.get("facts"))
     if objeciones:
         raise HTTPException(status_code=400, detail="; ".join(objeciones))
     # Si los textos y las frases quedan IGUAL a lo guardado y sólo cambia «revisé las fotos marcadas», se guarda
@@ -651,29 +744,60 @@ def admin_edit_video_texts(piece_id: str, body: VideoTextsUpdate, _claims: dict 
     iguales = bool(guardados) and all(guardados.get(c) == textos[c] for c in content_video_texts.CAMPOS) and all(
         texto == por_id[fuente_id].get("chip_text") for fuente_id, texto in nuevos.items())
     if iguales:
+        solo: dict = {}
         if body.photo_flags_ok is not None and body.photo_flags_ok != bool(pieza.get("photo_flags_ok")):
-            if not crepo.update_piece(piece_id, {"photo_flags_ok": body.photo_flags_ok}, if_status=_ESTADOS_DE_TEXTOS):
-                raise HTTPException(status_code=409, detail="La pieza cambió mientras tanto, abrila de nuevo")
+            solo["photo_flags_ok"] = body.photo_flags_ok
+        if pieza.get("video_texts_checks"):
+            # Pasaron el validador tal como están: las objeciones viejas ya no valen (y una persona los confirmó).
+            solo["video_texts_checks"] = []
+            solo["video_texts_engine"] = "human"
+        if solo and not crepo.update_piece(piece_id, solo, if_status=_ESTADOS_DE_TEXTOS):
+            raise HTTPException(status_code=409, detail="La pieza cambió mientras tanto, abrila de nuevo")
         return _devolver(crepo, piece_id)
-    for fuente_id, texto in nuevos.items():
-        crepo.update_source(fuente_id, {"chip_text": texto})
     patch = {"video_texts": content_video_texts.armar_textos(textos, pilar, pieza.get("facts") or {}),
              "video_texts_engine": "human", "video_texts_checks": [], "template_version": 2,
              **_volver_a_armar(pieza)}
     if body.photo_flags_ok is not None:
         patch["photo_flags_ok"] = body.photo_flags_ok
+    # Primero el UPDATE condicional de la pieza (si cambió de estado mientras tanto, 409 y NO se toca nada más) y
+    # recién después las frases de las fotos.
     if not crepo.update_piece(piece_id, patch, if_status=_ESTADOS_DE_TEXTOS):
         raise HTTPException(status_code=409, detail="La pieza cambió mientras tanto, abrila de nuevo")
+    for fuente_id, texto in nuevos.items():
+        crepo.update_source(fuente_id, {"chip_text": texto})
     return _devolver(crepo, piece_id)
 
 
+#: Cada «pedir otra propuesta» puede llamar a Gemini (con fotos): una por pieza cada `ENFRIAMIENTO_PROPUESTA_SEG`.
+ENFRIAMIENTO_PROPUESTA_SEG = 60
+_ultima_propuesta: dict[str, float] = {}
+
+
+def reiniciar_enfriamiento_de_propuestas() -> None:
+    _ultima_propuesta.clear()
+
+
+def _enfriar_propuesta(piece_id: str) -> None:
+    """429 si ya se pidió otra propuesta de esta pieza hace menos de un minuto (en memoria de este proceso)."""
+    ahora = time.monotonic()
+    espera = ENFRIAMIENTO_PROPUESTA_SEG - (ahora - _ultima_propuesta.get(piece_id, -1e9))
+    if espera > 0:
+        raise HTTPException(status_code=429, detail=f"Esperá {int(espera) + 1} segundos para pedir otra propuesta")
+    if len(_ultima_propuesta) > 2000:
+        for k in [k for k, t in _ultima_propuesta.items() if ahora - t >= ENFRIAMIENTO_PROPUESTA_SEG]:
+            del _ultima_propuesta[k]
+    _ultima_propuesta[piece_id] = ahora
+
+
 @router.post("/admin/content/pieces/{piece_id}/video-texts/propose")
-def admin_propose_video_texts(piece_id: str, _claims: dict = Depends(_permiso_difusion),
+def admin_propose_video_texts(piece_id: str, claims: dict = Depends(_permiso_difusion),
                               crepo: ContentRepo = Depends(get_content_repo)) -> dict:
     """«Pedir otra propuesta»: vuelve a pedirle a Gemini las frases mirando las fotos y re-encola el video (mismos
-    409 que el PATCH). Sin Gemini, o si falla, salen los textos fijos. Pisa lo que se haya escrito a mano."""
-    pieza = _pieza_o_404(crepo, piece_id)
+    409 que el PATCH; 429 si se pidió otra hace menos de 60 s). Sin Gemini, o si falla, salen los textos fijos.
+    Pisa lo que se haya escrito a mano."""
+    pieza = _pieza_o_404(crepo, piece_id, claims)
     _exigir_pieza_editable(pieza)
+    _enfriar_propuesta(piece_id)
     nueva = content_video_texts.proponer_y_guardar(crepo, pieza, {**_volver_a_armar(pieza), "template_version": 2},
                                                    if_status=_ESTADOS_DE_TEXTOS)
     if not nueva:
@@ -686,10 +810,10 @@ class ContentPieceSourcesUpdate(BaseModel):
 
 
 @router.put("/admin/content/pieces/{piece_id}/sources")
-def admin_change_sources(piece_id: str, body: ContentPieceSourcesUpdate, _claims: dict = Depends(_permiso_difusion),
+def admin_change_sources(piece_id: str, body: ContentPieceSourcesUpdate, claims: dict = Depends(_permiso_difusion),
                          crepo: ContentRepo = Depends(get_content_repo)) -> dict:
     """«Cambiar fotos»: quita las marcadas, busca reemplazos y vuelve a armar el video."""
-    pieza = _pieza_o_404(crepo, piece_id)
+    pieza = _pieza_o_404(crepo, piece_id, claims)
     if pieza["status"] not in ("ready_for_review", "failed"):
         raise HTTPException(status_code=409, detail="Sólo se cambian las fotos de una pieza lista para revisar o con problemas")
     content_selector.cambiar_fotos(crepo, pieza, body.remove_positions)
@@ -704,6 +828,7 @@ def admin_change_sources(piece_id: str, body: ContentPieceSourcesUpdate, _claims
 @router.post("/admin/content/pieces/{piece_id}/approve")
 def admin_approve_piece(piece_id: str, claims: dict = Depends(_permiso_difusion),
                         crepo: ContentRepo = Depends(get_content_repo)) -> dict:
+    _pieza_o_404(crepo, piece_id, claims)
     content_posts.approve(crepo, piece_id, _actor(claims))
     return _devolver(crepo, piece_id)
 
@@ -716,6 +841,9 @@ class ContentPieceBatchApprove(BaseModel):
 def admin_approve_batch(body: ContentPieceBatchApprove, claims: dict = Depends(_permiso_difusion),
                         crepo: ContentRepo = Depends(get_content_repo)) -> dict:
     """Aprueba de una vez las que están en verde (sin objeciones y sin editar)."""
+    if _alcance(crepo, claims):
+        for piece_id in body.ids:                       # una de otra ciudad: 404, y no se aprueba ninguna
+            _pieza_o_404(crepo, piece_id, claims)
     return content_posts.approve_batch(crepo, body.ids, _actor(claims))
 
 
@@ -732,7 +860,7 @@ def admin_skip_piece(piece_id: str, body: ContentPieceSkip, claims: dict = Depen
     nota = (body.note or "").strip() or None
     if nota and len(nota) > 300:
         raise HTTPException(status_code=400, detail="La nota admite hasta 300 caracteres")
-    pieza = _pieza_o_404(crepo, piece_id)
+    pieza = _pieza_o_404(crepo, piece_id, claims)
     if pieza["status"] == "published":
         raise HTTPException(status_code=409, detail="Ya está publicada")
     if pieza["status"] == "skipped":
@@ -751,9 +879,9 @@ def admin_skip_piece(piece_id: str, body: ContentPieceSkip, claims: dict = Depen
 
 
 @router.post("/admin/content/pieces/{piece_id}/retry")
-def admin_retry_piece(piece_id: str, _claims: dict = Depends(_permiso_difusion),
+def admin_retry_piece(piece_id: str, claims: dict = Depends(_permiso_difusion),
                       crepo: ContentRepo = Depends(get_content_repo)) -> dict:
-    pieza = _pieza_o_404(crepo, piece_id)
+    pieza = _pieza_o_404(crepo, piece_id, claims)
     if pieza["status"] != "failed":
         raise HTTPException(status_code=409, detail="Sólo se reintenta una pieza con problemas")
     nueva = crepo.update_piece(piece_id, {"status": "queued", "render_attempts": 0, "render_error": None,
@@ -765,10 +893,10 @@ def admin_retry_piece(piece_id: str, _claims: dict = Depends(_permiso_difusion),
 
 
 @router.get("/admin/content/pieces/{piece_id}/download-links")
-def admin_download_links(piece_id: str, _claims: dict = Depends(_permiso_difusion),
+def admin_download_links(piece_id: str, claims: dict = Depends(_permiso_difusion),
                          crepo: ContentRepo = Depends(get_content_repo)) -> dict:
     """Los links para bajar el video y la portada: firmados, vencen a los 15 minutos."""
-    pieza = _pieza_o_404(crepo, piece_id)
+    pieza = _pieza_o_404(crepo, piece_id, claims)
     if pieza["status"] not in content_present.CON_VIDEO or not pieza.get("video_path"):
         raise HTTPException(status_code=404, detail="La pieza todavía no tiene video")
     if pieza.get("files_purged_at"):
@@ -806,16 +934,18 @@ def admin_today(date_: str | None = Query(default=None, alias="date", max_length
                 "posts": [content_present.post_response(p, x, ahora) for x in posts],
                 "delivery": _entrega(crepo, p, posts, firmante)}
 
-    del_dia = [p for p in crepo.list_pieces(date_from=hoy.isoformat(), date_to=hoy.isoformat())]
+    del_dia = _de_su_ciudad(crepo, claims, crepo.list_pieces(date_from=hoy.isoformat(), date_to=hoy.isoformat()))
     aprobadas = [p for p in del_dia if p["status"] in ("approved", "published")]
-    atrasadas = crepo.list_pieces(statuses=["approved"], date_to=(hoy - timedelta(days=1)).isoformat())
+    atrasadas = _de_su_ciudad(crepo, claims, crepo.list_pieces(
+        statuses=["approved"], date_to=(hoy - timedelta(days=1)).isoformat()))
     posts = crepo.list_posts([p["id"] for p in aprobadas + atrasadas]) if (aprobadas or atrasadas) else []
     por_pieza: dict[str, list[dict]] = {}
     for x in posts:
         por_pieza.setdefault(x["piece_id"], []).append(x)
     abiertos = ("pending", "claimed")
-    siguiente = crepo.list_pieces(statuses=["queued", "rendering", "ready_for_review", "approved"],
-                                  date_from=(hoy + timedelta(days=1)).isoformat(), limit=1)
+    siguiente = _de_su_ciudad(crepo, claims, crepo.list_pieces(
+        statuses=["queued", "rendering", "ready_for_review", "approved"],
+        date_from=(hoy + timedelta(days=1)).isoformat(), limit=1 if not _alcance(crepo, claims) else 100))
     return {
         "date": hoy.isoformat(),
         "items": [item(p, por_pieza.get(p["id"], [])) for p in aprobadas],
@@ -834,15 +964,26 @@ def _post_devuelto(crepo: ContentRepo, post: dict) -> dict:
     return content_present.post_response(pieza, post)
 
 
+def _exigir_post_visible(crepo: ContentRepo, post_id: str, claims: dict) -> None:
+    """404 si el posteo es de una pieza de otra ciudad (para quien está limitado a una)."""
+    if not _alcance(crepo, claims):
+        return
+    post = crepo.get_post(post_id)
+    if post:
+        _pieza_o_404(crepo, post["piece_id"], claims)
+
+
 @router.post("/admin/content/posts/{post_id}/claim")
 def admin_claim_post(post_id: str, claims: dict = Depends(_permiso_difusion),
                      crepo: ContentRepo = Depends(get_content_repo)) -> dict:
+    _exigir_post_visible(crepo, post_id, claims)
     return _post_devuelto(crepo, content_posts.claim(crepo, post_id, _actor(claims)))
 
 
 @router.post("/admin/content/posts/{post_id}/release")
 def admin_release_post(post_id: str, claims: dict = Depends(_permiso_difusion),
                        crepo: ContentRepo = Depends(get_content_repo)) -> dict:
+    _exigir_post_visible(crepo, post_id, claims)
     return _post_devuelto(crepo, content_posts.release(crepo, post_id, _actor(claims)))
 
 
@@ -855,6 +996,7 @@ class ContentPostPublish(BaseModel):
 def admin_posted(post_id: str, body: ContentPostPublish, claims: dict = Depends(_permiso_difusion),
                  crepo: ContentRepo = Depends(get_content_repo)) -> dict:
     """«Salió»: con el link de la publicación, o «salió sin link». Si era la última red, la pieza queda publicada."""
+    _exigir_post_visible(crepo, post_id, claims)
     return _post_devuelto(crepo, content_posts.mark_posted(crepo, post_id, _actor(claims), body.post_url, body.without_link))
 
 
@@ -865,6 +1007,7 @@ class ContentPostSkip(BaseModel):
 @router.post("/admin/content/posts/{post_id}/skip")
 def admin_skip_post(post_id: str, body: ContentPostSkip, claims: dict = Depends(_permiso_difusion),
                     crepo: ContentRepo = Depends(get_content_repo)) -> dict:
+    _exigir_post_visible(crepo, post_id, claims)
     return _post_devuelto(crepo, content_posts.skip_post(crepo, post_id, _actor(claims), body.reason))
 
 
@@ -971,7 +1114,7 @@ def public_piece(token: str, crepo: ContentRepo = Depends(get_content_repo)) -> 
     elif pieza.get("pillar") == "rubro":
         texto = content_captions.status_text_rubro(f)
     else:
-        texto = (f"Ofertas de la semana en {f.get('ciudad') or 'tu ciudad'} en URUKU: "
+        texto = (f"Ofertas de la semana en {f.get('ciudad') or 'su ciudad'} en URUKU: "
                  f"{settings.sitio_url.rstrip('/')}/ofertas?ref=st-ofertas")
     return {"comercio_nombre": f.get("nombre"), "comercio_slug": f.get("slug"), "pillar": pieza["pillar"],
             "published_at": pieza.get("published_at"), "expires_at": pieza.get("share_expires_at"),

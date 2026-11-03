@@ -22,7 +22,7 @@ POST /render   Authorization: Bearer <RENDERER_TOKEN>   {"piece_id": "<uuid>"}
 GET  /health → {"ok", "chromium", "ffmpeg", "busy"}   (sin token)
 ```
 
-Lee `CONTENT_DIR/tmp/<piece_id>/job.json` + `sN.jpg` y sólo escribe `video.mp4` y `cover.jpg` ahí.
+Lee `CONTENT_DIR/tmp/<piece_id>/job.json` + `sN.jpg` y sólo escribe `out/video.mp4` y `out/cover.jpg` (la carpeta `out/` la crea el backend, 0700 y del usuario del contenedor).
 
 ## Correr con Docker (compose del repo)
 

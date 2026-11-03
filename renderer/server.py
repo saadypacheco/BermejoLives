@@ -31,6 +31,8 @@ HERE = Path(__file__).resolve().parent
 MAX_BODY = 1024
 DEFAULT_DEADLINE_SEG = 280
 HEALTH_CACHE_SEG = 60
+#: Largo mínimo del token compartido con el backend (`python -c "import secrets; print(secrets.token_urlsafe(32))"`).
+MIN_TOKEN_CHARS = 32
 
 
 def log(event: str, **kw) -> None:
@@ -50,6 +52,27 @@ def kill_tree(proc: subprocess.Popen) -> None:
         proc.kill()
     except OSError:
         pass
+    kill_strays()
+
+
+def kill_strays() -> None:
+    """Sólo Linux (el contenedor): mata todo proceso que no sea el 1 (init) ni este servidor. Chromium lanza hijos
+    que pueden salirse del grupo (setsid) y sobrevivir al `killpg`; con un render a la vez, lo que quede vivo es
+    resto del render que acaba de morir."""
+    if not sys.platform.startswith("linux"):
+        return
+    propio = os.getpid()
+    try:
+        pids = [int(n) for n in os.listdir("/proc") if n.isdigit()]
+    except OSError:
+        return
+    for pid in pids:
+        if pid in (1, propio):
+            continue
+        try:
+            os.kill(pid, getattr(signal, "SIGKILL", 9))
+        except OSError:
+            pass
 
 
 class Renderer:
@@ -147,6 +170,8 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "reels"
     sys_version = ""
     protocol_version = "HTTP/1.1"
+    #: Un cliente que abre la conexión y no manda nada no puede colgar el hilo para siempre.
+    timeout = 30
 
     @property
     def renderer(self) -> Renderer:
@@ -216,8 +241,9 @@ def make_server(host: str, port: int, renderer: Renderer) -> ThreadingHTTPServer
 
 def main() -> None:
     token = os.environ.get("RENDERER_TOKEN", "")
-    if not token:
-        log("server.sin_token", aviso="RENDERER_TOKEN vacío: todo POST /render contestará 401")
+    if len(token) < MIN_TOKEN_CHARS:
+        log("server.token_corto", error=f"RENDERER_TOKEN debe tener al menos {MIN_TOKEN_CHARS} caracteres: no arranco")
+        sys.exit(1)
     renderer = Renderer(
         token=token,
         content_dir=Path(os.environ.get("CONTENT_DIR", "/data/content")),

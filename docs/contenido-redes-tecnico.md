@@ -870,7 +870,7 @@ ContentPostSkip            { reason: str (1..200) }
 ContentShareResponse       { comercio_nombre, comercio_slug, pillar, published_at, expires_at,
                              video_url, video_download_url, cover_url,
                              posts: [{network, network_label, post_url}], status_text }
-ContentStatusResponse      { render_worker: "disabled"|"no_ffmpeg"|"idle"|"running"|"paused_disk"|"unsafe_dir",
+ContentStatusResponse      { render_worker: "disabled"|"no_ffmpeg"|"no_renderer"|"idle"|"running"|"paused_disk"|"unsafe_dir",
                              current_piece_id, queue: {queued, rendering, ready_for_review, failed},
                              last_render: {piece_id, at, ms, ok, error}|null,
                              disk: {content_bytes, free_bytes, max_bytes}, gemini_configured: bool }
@@ -1366,7 +1366,11 @@ El contenedor tiene su **propio plazo** (`RENDER_DEADLINE_SEG=280`): al vencer, 
 
 #### Carpeta del job: `CONTENT_DIR/tmp/<piece_id>/`
 
-La arma el backend (`_preparar_job`). El contenedor sólo lee lo que está ahí y sólo escribe `video.mp4` y `cover.jpg` ahí.
+La arma el backend (`_preparar_job`). El contenedor sólo lee lo que está ahí y sólo escribe `out/video.mp4` y `out/cover.jpg`.
+
+- La carpeta `tmp/<piece_id>/` es del backend (`0o755`); `sN.jpg` y `job.json` se crean nuevos (`O_CREAT|O_EXCL|O_NOFOLLOW`; en Windows no existe `O_NOFOLLOW`).
+- `tmp/<piece_id>/out/` la crea el backend, se la entrega al usuario del contenedor (`os.chown(out, RENDERER_UID, -1)`, `RENDERER_UID` = 1001, el `pwuser` de la imagen `mcr.microsoft.com/playwright/python:v1.64.1-noble`; configurable) y queda `0o700`. En Windows no hay `chown`.
+- Al recoger el resultado el backend hace `lstat` de cada salida y exige archivo regular (`S_ISREG`), `st_nlink == 1` y, en POSIX, `st_uid == RENDERER_UID`; después **copia los bytes** a `renders/` (no `rename`: el volumen lo escribe un proceso que no es de confianza).
 
 ```json
 {
@@ -1390,12 +1394,12 @@ La arma el backend (`_preparar_job`). El contenedor sólo lee lo que está ahí 
   },
   "icons": ["pin", "whatsapp"],
   "slides": [{"file": "s0.jpg", "chip": "Eco cuero con cinturón", "focus_y": 0.3}],
-  "out_video": "video.mp4",
-  "out_cover": "cover.jpg"
+  "out_video": "out/video.mp4",
+  "out_cover": "out/cover.jpg"
 }
 ```
 
-- `kick`, `subtitle`, `place_chip` y cada `chip` pueden ser `null` (no se dibujan). `focus_y` null = 0.4. `slides`: 4 a 6. `file` debe calzar `^s\d{1,2}\.jpg$` y `out_video`/`out_cover` son esos nombres fijos (si no → 400). `icons` ⊂ los `ic_*.png` del kit (`pin`, `whatsapp`, `oferta`, `tienda`, `comida`, …).
+- `kick`, `subtitle`, `place_chip` y cada `chip` pueden ser `null` (no se dibujan). `focus_y` null = 0.4. `slides`: 4 a 6. `file` debe calzar `s\d{1,2}\.jpg` (con `re.fullmatch`) y `out_video`/`out_cover` son exactamente `out/video.mp4` y `out/cover.jpg` (si no → 400). `icons` ⊂ los `ic_*.png` del kit (`pin`, `whatsapp`, `oferta`, `tienda`, `comida`, …).
 - Las fotos `sN.jpg` las prepara el backend: `exif_transpose`, RGB, lado mayor 1200 px, N1 suave (§5.1), JPEG q90, sin EXIF.
 - El contenedor arma el HTML **escapando todo texto** (`html.escape`) a partir de la plantilla T1 del kit (`docs/reels-kit/referencias/plantillas/reels_build.py`, parametrizada).
 
@@ -1413,7 +1417,7 @@ Render: cargar, esperar `document.fonts.ready` y `img.decode()`, pausar todas la
 
 ### 16.5 Backend
 
-- **Config:** `content_render_engine: str = "kit"` (`kit | pillow`; `pillow` = el motor v1, para la PC sin Docker y como respaldo), `renderer_url: str = "http://buscadonde-reels:8090"`, `renderer_token: str = ""`. Con `kit` y sin token, el worker no toma trabajos y `estado_del_worker` devuelve `no_renderer` (igual si `/health` no contesta).
+- **Config:** `content_render_engine: str = "kit"` (`kit | pillow`; `pillow` = el motor v1, para la PC sin Docker y como respaldo), `renderer_url: str = "http://buscadonde-reels:8090"`, `renderer_token: str = ""`. Con `kit` y un `RENDERER_TOKEN` de menos de 32 caracteres (o vacío), el worker no toma trabajos (el contenedor tampoco arranca con uno corto); `renderer_uid: int = 1001`; el cliente `httpx` va con `trust_env=False` y `estado_del_worker` devuelve `no_renderer` (igual si `/health` no contesta).
 - **`content_render.py`:** con `kit`, `_preparar_job` arma la carpeta de §16.4 (copia y prepara las fotos) y en lugar del subproceso hace `POST /render` con `httpx` (timeout `content_render_timeout_seg`). 409 y errores de red → reintentable. Lo demás (toma atómica, reintentos, colgadas, mover a `renders/`, contar usos, borrar `tmp/`) no cambia. Las piezas nuevas se crean con `template_version = 2`; las v1 ya armadas no se tocan (si se reintenta una v1 con `kit`, se le proponen textos y pasa a v2).
 - **Textos del video — `services/content_video_texts.py` (nuevo):**
   - `proponer(pieza, fuentes) -> dict`: **una** llamada a Gemini con visión (`vision._post_con_reintentos`, fotos a 768 px) con los hechos **sin datos de contacto** (nombre, rubro, subcategoría, ciudad, `prod_obs_human`, marcados como `<datos>` como en captions) y las fotos. Respuesta JSON: `{kick, title1, title2, subtitle, search_term, slides: [{chip, price_or_code_visible, focus_y}]}`.
@@ -1463,7 +1467,7 @@ Mismo archivo en `supabase/migrations/` y `selfhost/postgres-init/`. Sin GRANTs 
 - `PATCH /admin/content/pieces/{id}/video-texts` (permiso `difusion`). Body `VideoTextsUpdate { kick?, title1, title2, subtitle?, search_term, chips: [{source_id, text|null}], photo_flags_ok? }` (`source_id` = id de `content_piece_sources`, debe ser una fuente activa de esta pieza; si no → 400). Valida (§16.6) → guarda (`video_texts_engine = 'human'`, `video_texts_checks = []`) → si la pieza está en `ready_for_review` o `failed`, vuelve a `queued` (`render_attempts = 0`, `render_next_at = now()`, `render_error = null`); en `queued` sólo guarda; en `rendering`, `approved`, `published` o `skipped` → 409.
 - `POST /admin/content/pieces/{id}/video-texts/propose` (permiso `difusion`): vuelve a pedir a Gemini (§16.5) y re-encola igual que el PATCH (mismos 409).
 - `approve` (y `approve-batch`) de una pieza v2: 409 «Revise los textos del video» si `video_texts_checks` no está vacío; 409 «Hay fotos marcadas: cámbielas o confirme que están bien» si alguna fuente activa tiene `photo_flags` y `photo_flags_ok = false`.
-- `GET /admin/content/status`: `worker` puede valer `no_renderer`.
+- `GET /admin/content/status`: `render_worker` puede valer `no_renderer` o `unsafe_dir` (además de `disabled | no_ffmpeg | idle | running | paused_disk`).
 
 ### 16.10 Frontend (Admin › Contenido para redes › Revisión)
 
@@ -1471,7 +1475,7 @@ Mismo archivo en `supabase/migrations/` y `selfhost/postgres-init/`. Sin GRANTs 
 - Foto con `photo_flags`: insignia «Se ve un precio o un código» + «Cambiar foto» (ya existe). Casilla «Revisé las fotos marcadas: no se ve ningún precio ni código» (`photo_flags_ok`).
 - Botones «Guardar y volver a armar» (PATCH) y «Pedir otra propuesta» (POST propose). Mientras la pieza está `queued`/`rendering`, el video viejo no se muestra: «Armando el video…».
 - Validación en el cliente con una función pura en `lib/content-pure.ts` que replica largos, dígitos y la lista de tono de §16.6 (la del backend manda).
-- `worker = no_renderer` → aviso «El armador de videos no está disponible».
+- `render_worker = no_renderer` → aviso «El armador de videos no está disponible».
 - Íconos sólo de `ic.tsx`; textos del panel en voseo; lo que va al video, en neutro.
 
 ### 16.11 Reparto

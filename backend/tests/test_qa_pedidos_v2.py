@@ -5,6 +5,7 @@ simulado y se mira lo que salió (piezas, textos, captions, job.json). Un Gemini
 no debían.
 """
 import json
+import os
 import re
 from pathlib import Path
 
@@ -31,10 +32,13 @@ RE_EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿️]")
 @pytest.fixture(autouse=True)
 def _entorno(monkeypatch):
     monkeypatch.setattr(settings, "content_render_engine", "kit")
-    monkeypatch.setattr(settings, "renderer_token", "tok-qa")
+    monkeypatch.setattr(settings, "renderer_token", "tok-qa-" + "x" * 30)
     monkeypatch.setattr(settings, "renderer_url", "http://buscadonde-reels:8090")
     monkeypatch.setattr(settings, "gemini_api_key", "KEY-QA-FALSA")       # hay clave: lo único que frena a Gemini es el interruptor
     monkeypatch.setattr(settings, "gemini_model", "gemini-qa")
+    monkeypatch.setattr("app.api.content._uuid_de_comercio", lambda v: v)     # ids de mentira («com-1»)
+    if os.name == "posix":
+        monkeypatch.setattr(settings, "renderer_uid", os.getuid())
     monkeypatch.setattr(content_storage, "disco_pausado", lambda: False)
     from app.services import cost_switches
     cost_switches.reiniciar_cache()
@@ -326,7 +330,6 @@ def test_d_aprobar_se_bloquea_por_objeciones_en_los_textos_del_video(repo, crepo
     assert r.json()["video_texts_checks"] == [] and r.json()["video_texts_engine"] == "human"
 
 
-@pytest.mark.xfail(strict=True, reason="BUG QA-1: el PATCH con textos idénticos a los guardados no limpia video_texts_checks (§16.9)")
 def test_d_guardar_los_mismos_textos_limpia_las_objeciones_viejas(repo, crepo, client, ana, contenedor, gemini):
     pid = _lista_para_revisar(repo, crepo, client, ana, contenedor)
     crepo.pieces[pid]["video_texts_checks"] = ["Use usted, sin voseo ni tuteo"]
@@ -394,7 +397,7 @@ def _verificar_contrato(contenedor, piece_id, n_esperado):
     assert list(job) == CLAVES_JOB
     assert job["version"] == 2 and job["template"] == "t1" and job["format"] == "9x16" and job["fps"] == 30
     assert job["piece_id"] == piece_id and re.fullmatch(r"[0-9a-f-]{36}", piece_id)
-    assert job["out_video"] == "video.mp4" and job["out_cover"] == "cover.jpg"
+    assert job["out_video"] == "out/video.mp4" and job["out_cover"] == "out/cover.jpg"
     assert set(job["texts"]) == set(CLAVES_TEXTS)
     assert job["texts"]["url"] == "uruku.bo" and job["texts"]["lema"] == "Si está en Bolivia, está en Uruku."
     for campo in ("kick", "subtitle", "place_chip"):
@@ -411,7 +414,7 @@ def _verificar_contrato(contenedor, piece_id, n_esperado):
     assert set(job["icons"]) <= ICONOS_DEL_KIT and job["icons"], (job["icons"], ICONOS_DEL_KIT)
     limpio(job["texts"])
     assert contenedor["posts"][-1]["json"] == {"piece_id": piece_id}
-    assert contenedor["posts"][-1]["headers"] == {"Authorization": "Bearer tok-qa"}
+    assert contenedor["posts"][-1]["headers"] == {"Authorization": "Bearer " + settings.renderer_token}
 
 
 def test_e_job_de_un_negocio_cumple_el_contrato_y_las_fotos_quedan_preparadas(repo, crepo, client, ana, contenedor, gemini):
@@ -421,13 +424,13 @@ def test_e_job_de_un_negocio_cumple_el_contrato_y_las_fotos_quedan_preparadas(re
     visto = {}
     original = cr.httpx.post
 
-    def espia(url, json=None, headers=None, timeout=None):
+    def espia(url, json=None, headers=None, timeout=None, **kw):
         carpeta = content_storage.carpeta_tmp(json["piece_id"])
         for f in sorted(carpeta.glob("s*.jpg")):
             with Image.open(f) as im:
                 visto[f.name] = (im.size, im.mode, bool(im.getexif()), im.format)
         visto["archivos"] = sorted(p.name for p in carpeta.iterdir())
-        return original(url, json=json, headers=headers, timeout=timeout)
+        return original(url, json=json, headers=headers, timeout=timeout, **kw)
     cr.httpx.post = espia
     try:
         assert cr.render_tick(crepo)["ok"] is True
@@ -437,7 +440,7 @@ def test_e_job_de_un_negocio_cumple_el_contrato_y_las_fotos_quedan_preparadas(re
     assert contenedor["job"]["icons"] == ["pin", "whatsapp"]
     assert contenedor["job"]["texts"]["place_chip"] == "Local com-1 · Bermejo"
     assert contenedor["job"]["texts"]["kick"] == "EN BERMEJO"
-    assert visto["archivos"] == ["job.json", "s0.jpg", "s1.jpg", "s2.jpg", "s3.jpg", "s4.jpg"]
+    assert visto["archivos"] == ["job.json", "out", "s0.jpg", "s1.jpg", "s2.jpg", "s3.jpg", "s4.jpg"]
     for n in range(5):
         (w, h_), modo, exif, fmt = visto[f"s{n}.jpg"]
         assert max(w, h_) <= 1200 and modo == "RGB" and fmt == "JPEG" and exif is False

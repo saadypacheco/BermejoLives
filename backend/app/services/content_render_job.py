@@ -265,11 +265,9 @@ def tramo_foto(foto: Image.Image, banda: dict | None = None) -> tuple[Lienzo, tu
         b0, b1 = OFERTA_BANDA
         lz.draw.rectangle([0, lz.p(b0), BASE_W, lz.p(b1)], fill=VERDE)
         nombre = _cortar(sin_emojis(banda.get("nombre")), "bold", 46, 940)
-        precio = sin_emojis(banda.get("precio"))
         titulo = _cortar(sin_emojis(banda.get("titulo_corto")), "medium", 36, 940)
         filas = [(nombre, "bold", 46)]
-        if precio:
-            filas.append((precio, "semibold", 62))
+        # Sin precio (§16.1): ni en el video ni en los textos. La banda lleva el nombre y, si hay, el título corto.
         if titulo:
             filas.append((titulo, "medium", 36))
         alto = sum(round(px * 1.25) for _, _, px in filas)
@@ -287,9 +285,9 @@ def tramo_cierre(facts: dict) -> Lienzo:
     if facts.get("pillar") == "rubro":
         frase = f'Vea {sin_emojis(facts.get("rubro")).lower() or "los comercios"} en uruku.bo'
     elif facts.get("pillar") == "ofertas":
-        frase = "Mirá todas las ofertas en uruku.bo"
+        frase = "Vea todas las ofertas en uruku.bo"
     else:
-        frase = f'Buscá "{sin_emojis(facts.get("nombre"))}" en uruku.bo'
+        frase = f'Busque "{sin_emojis(facts.get("nombre"))}" en uruku.bo'
     px, lineas = ajustar_nombre(frase, "semibold", 64, 40, 900, 3)
     y = 700 + alto + 80
     for l in lineas:

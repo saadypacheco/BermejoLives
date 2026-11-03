@@ -75,16 +75,26 @@ def _estado_cuenta(repo: Repo, email: str, evento_sin_fila: str | None = None) -
     return estado
 
 
-def _verificar_cuenta(claims: dict, repo: Repo, agente: bool = False) -> None:
+def _verificar_cuenta(claims: dict, repo: Repo, agente: bool = False) -> dict | None:
     """401 si la persona fue dada de baja. Para la app de campo (`agente`) además
     exige que HOY siga teniendo el permiso de cargar comercios. Sin fila en
-    `usuarios_panel` (la cuenta del `.env`) pasa."""
+    `usuarios_panel` (la cuenta del `.env`) pasa. Devuelve el estado actual (o None)."""
     email = claims.get("email") or claims.get("sub") or ""
     estado = _estado_cuenta(repo, email, "auth.agente_sin_fila" if agente else None)
     if estado is None:
-        return
+        return None
     if not estado["activo"] or (agente and not tiene_permiso({"permisos": estado["permisos"]}, "comercios.cargar")):
         raise HTTPException(status_code=401, detail="Tu acceso fue dado de baja")
+    return estado
+
+
+def _vigente_tiene(estado: dict | None, permisos: tuple[str, ...]) -> bool:
+    """¿Los permisos de HOY (los de la base, no los que el token trae escritos) alcanzan? Sin estado
+    (cuenta del `.env` o base caída sin dato previo) no hay nada con qué contradecir al token."""
+    if estado is None:
+        return True
+    vigentes = {"permisos": estado["permisos"]}
+    return any(tiene_permiso(vigentes, p) for p in permisos)
 
 
 def hash_password(password: str, salt: str | None = None) -> str:
@@ -196,7 +206,9 @@ def _con_permiso(creds: HTTPAuthorizationCredentials | None, permiso: str, repo:
     claims = _claims(creds)
     if not tiene_permiso(claims, permiso):
         raise HTTPException(status_code=403, detail="Tu cuenta no tiene permiso para esto")
-    _verificar_cuenta(claims, repo, agente)
+    estado = _verificar_cuenta(claims, repo, agente)
+    if not _vigente_tiene(estado, (permiso,)):
+        raise HTTPException(status_code=403, detail="Tu cuenta no tiene permiso para esto")
     return claims
 
 
@@ -218,7 +230,9 @@ def require_alguno(*permisos: str):
         claims = _claims(creds)
         if not any(tiene_permiso(claims, p) for p in permisos):
             raise HTTPException(status_code=403, detail="Tu cuenta no tiene permiso para esto")
-        _verificar_cuenta(claims, repo)
+        estado = _verificar_cuenta(claims, repo)
+        if not _vigente_tiene(estado, permisos):
+            raise HTTPException(status_code=403, detail="Tu cuenta no tiene permiso para esto")
         return claims
     return dep
 

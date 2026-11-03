@@ -41,6 +41,9 @@ services:
     cpus: 1.5
     pids_limit: 512
     read_only: true
+    # Sin capacidades de Linux y sin poder ganar privilegios (setuid): el render corre como pwuser y no necesita ninguna.
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     tmpfs:
       - /tmp:size=256m
     init: true

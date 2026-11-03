@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.services import content_render as cr, content_storage, content_video_texts as cvt
 from tests.content_helpers import autorizar, banco, comercio, jpg, pieza
 
-TOKEN = "token-de-prueba-123"
+TOKEN = "token-de-prueba-" + "x" * 20            # >= 32 caracteres
 FACTS = {"pillar": "comercio_del_dia", "nombre": "Boutique Andina", "rubro": "Moda", "ciudad": "Bermejo",
          "slug": "boutique-andina", "hashtags_allowed": ["#URUKU", "#Bermejo", "#Tarija", "#Bolivia"], "allowed_numbers": []}
 TEXTOS = {"kick": "NUEVA TEMPORADA", "title1": "Camperas que", "title2": "ya llegaron",
@@ -30,6 +30,8 @@ def _motor_kit(monkeypatch):
     monkeypatch.setattr(settings, "renderer_url", "http://buscadonde-reels:8090")
     monkeypatch.setattr(settings, "gemini_api_key", "")
     monkeypatch.setattr(content_storage, "disco_pausado", lambda: False)
+    if os.name == "posix":                      # `out/` se le entrega a este uid y se exige que la salida sea suya
+        monkeypatch.setattr(settings, "renderer_uid", os.getuid())
 
 
 class Resp:
@@ -49,23 +51,26 @@ def contenedor(monkeypatch):
     """El contenedor `reels` simulado: `/health` vivo y `POST /render` que deja video y portada en la carpeta del job."""
     est = {"posts": [], "gets": 0, "job": None, "fotos": [], "modos": None, "respuesta": None, "salud": True}
 
-    def get(url, timeout=None):
+    def get(url, timeout=None, **kw):
+        assert kw == {"trust_env": False}
         est["gets"] += 1
         if not est["salud"]:
             raise httpx.ConnectError("sin contenedor")
         return Resp(200, {"ok": True, "chromium": True, "ffmpeg": True, "busy": False})
 
-    def post(url, json=None, headers=None, timeout=None):
+    def post(url, json=None, headers=None, timeout=None, **kw):
+        assert kw == {"trust_env": False}
         est["posts"].append({"url": url, "json": json, "headers": headers, "timeout": timeout})
         carpeta = content_storage.carpeta_tmp(json["piece_id"])
         est["job"] = jsonlib.loads((carpeta / "job.json").read_text(encoding="utf-8"))
         est["fotos"] = sorted(p.name for p in carpeta.glob("s*.jpg"))
         est["modos"] = {"carpeta": oct(os.stat(carpeta).st_mode & 0o777), "job": oct(os.stat(carpeta / "job.json").st_mode & 0o777),
-                        "foto": oct(os.stat(carpeta / "s0.jpg").st_mode & 0o777)}
+                        "foto": oct(os.stat(carpeta / "s0.jpg").st_mode & 0o777),
+                        "out": oct(os.stat(carpeta / "out").st_mode & 0o777)}
         r = est["respuesta"] or Resp(200, {"ok": True, "duration_s": 14.0, "video_bytes": 200_000, "render_ms": 61000, "frames": 420})
         if r.status_code == 200 and r._datos and r._datos.get("ok"):
-            (carpeta / "video.mp4").write_bytes(b"v" * 200_000)
-            (carpeta / "cover.jpg").write_bytes(b"c" * 1000)
+            (carpeta / "out" / "video.mp4").write_bytes(b"v" * 200_000)
+            (carpeta / "out" / "cover.jpg").write_bytes(b"c" * 1000)
         return r
     monkeypatch.setattr(cr.httpx, "get", get)
     monkeypatch.setattr(cr.httpx, "post", post)
@@ -90,7 +95,7 @@ def _en_cola(repo, crepo, n=5, version=2, texts=True, **kw):
 def _con_post(monkeypatch, respuesta=None, excepcion=None):
     visto = {}
 
-    def post(url, json=None, headers=None, timeout=None):
+    def post(url, json=None, headers=None, timeout=None, **kw):
         visto.update(url=url, json=json, headers=headers, timeout=timeout)
         if excepcion:
             raise excepcion
@@ -181,10 +186,10 @@ def test_el_health_se_cachea_unos_segundos(monkeypatch, contenedor):
 
 
 def test_un_health_con_chromium_caido_cuenta_como_no_disponible(monkeypatch):
-    monkeypatch.setattr(cr.httpx, "get", lambda url, timeout=None: Resp(200, {"ok": True, "chromium": False, "ffmpeg": True}))
+    monkeypatch.setattr(cr.httpx, "get", lambda url, timeout=None, **kw: Resp(200, {"ok": True, "chromium": False, "ffmpeg": True}))
     cr.reiniciar_salud()
     assert cr.renderer_vivo() is False
-    monkeypatch.setattr(cr.httpx, "get", lambda url, timeout=None: Resp(500, {}))
+    monkeypatch.setattr(cr.httpx, "get", lambda url, timeout=None, **kw: Resp(500, {}))
     cr.reiniciar_salud()
     assert cr.renderer_vivo() is False
 
@@ -215,7 +220,7 @@ def test_el_job_json_es_el_del_contrato(repo, crepo, contenedor):
     job = contenedor["job"]
     assert list(job) == ["version", "piece_id", "template", "format", "fps", "texts", "icons", "slides", "out_video", "out_cover"]
     assert (job["version"], job["template"], job["format"], job["fps"]) == (2, "t1", "9x16", 30)
-    assert job["piece_id"] == p["id"] and job["out_video"] == "video.mp4" and job["out_cover"] == "cover.jpg"
+    assert job["piece_id"] == p["id"] and job["out_video"] == "out/video.mp4" and job["out_cover"] == "out/cover.jpg"
     assert job["texts"] == {
         "kick": "NUEVA TEMPORADA", "title1": "Camperas que", "title2": "ya llegaron",
         "subtitle": "Eco cuero, doble faz y más modelos", "close_title1": "¿Dónde lo", "close_title2": "consigue?",
@@ -319,29 +324,31 @@ def test_el_n1_suave_se_aplica_a_la_foto_preparada(tmp_path):
 
 
 @pytest.mark.skipif(os.name != "posix", reason="los modos de archivo de POSIX no aplican en Windows")
-def test_la_carpeta_del_job_es_777_y_los_archivos_644(repo, crepo, contenedor, monkeypatch):
-    """El contenedor corre como pwuser y el backend como root: sin 777 reels no puede escribir el mp4, y no se confía
-    en el umask del proceso."""
+def test_la_carpeta_del_job_es_755_los_archivos_644_y_out_es_700_del_contenedor(repo, crepo, contenedor, monkeypatch):
+    """La carpeta del job es del backend (0o755, el contenedor la lee); `out/` es 0o700 y del uid del contenedor; el
+    umask del proceso no es de fiar."""
     previo = os.umask(0o077)
     try:
         _en_cola(repo, crepo)
         cr.render_tick(crepo)
     finally:
         os.umask(previo)
-    assert contenedor["modos"] == {"carpeta": "0o777", "job": "0o644", "foto": "0o644"}
+    assert contenedor["modos"] == {"carpeta": "0o755", "job": "0o644", "foto": "0o644", "out": "0o700"}
 
 
-def test_la_carpeta_del_job_se_prepara_con_modos_que_dejan_escribir_al_contenedor(repo, crepo):
+def test_la_carpeta_del_job_se_prepara_con_out_para_el_contenedor(repo, crepo):
     """Aunque no se pueda verificar el modo (Windows), la carpeta y los archivos existen donde el contenedor los espera."""
     p, _ = _en_cola(repo, crepo)
     ruta_job, job, usadas = cr._preparar_job(crepo, crepo.get_piece(p["id"]))
     carpeta = content_storage.carpeta_tmp(p["id"])
     assert ruta_job == carpeta / "job.json" and (carpeta / "s0.jpg").is_file() and len(usadas) == 5
-    assert job["out_video"] == str(carpeta / "video.mp4") and job["out_cover"] == str(carpeta / "cover.jpg")
+    assert job["out_video"] == str(carpeta / "out" / "video.mp4") and job["out_cover"] == str(carpeta / "out" / "cover.jpg")
+    assert (carpeta / "out").is_dir()
     # el job.json del disco lleva los nombres fijos, no las rutas absolutas
-    assert json.loads(ruta_job.read_text(encoding="utf-8"))["out_video"] == "video.mp4"
+    on_disk = json.loads(ruta_job.read_text(encoding="utf-8"))
+    assert on_disk["out_video"] == "out/video.mp4" and on_disk["out_cover"] == "out/cover.jpg"
     if os.name == "posix":
-        assert oct(os.stat(carpeta).st_mode & 0o777) == "0o777" and oct(os.stat(ruta_job).st_mode & 0o777) == "0o644"
+        assert oct(os.stat(carpeta).st_mode & 0o777) == "0o755" and oct(os.stat(ruta_job).st_mode & 0o777) == "0o644"
 
 
 # ══════════════════════════════════════════════════════════════ la vuelta completa
@@ -378,7 +385,7 @@ def test_las_fallas_reintentables_vuelven_a_la_cola_con_espera_y_al_tercer_inten
 def test_el_timeout_del_contenedor_es_reintentable(repo, crepo, contenedor, monkeypatch):
     p, _ = _en_cola(repo, crepo)
 
-    def lento(url, json=None, headers=None, timeout=None):
+    def lento(url, json=None, headers=None, timeout=None, **kw):
         raise httpx.ReadTimeout("lento")
     monkeypatch.setattr(cr.httpx, "post", lento)
     cr.render_tick(crepo)
