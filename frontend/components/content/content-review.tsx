@@ -9,8 +9,8 @@ import {
   reintentarPieza, saltarPieza, type ContentPieceResponse, type ContentPieceSkip, type ContentPieceUpdate,
 } from "@/lib/content";
 import {
-  aprobableEnLote, CAPTION_LABEL, CAPTION_MAX, contadorTexto, esPiezaV2, fechaConDia, fotoMarcadaPorGemini,
-  hashtagsDisponibles, motivoNoAprobable, normalizarHashtag, piezaEnMovimiento, SKIP_REASON_LABEL, urlApiOpt,
+  aprobableEnLote, CAPTION_LABEL, CAPTION_MAX, contadorTexto, detalleDePieza, esPiezaPedida, esPiezaV2, fechaConDia, fotoMarcadaPorGemini,
+  hashtagsDisponibles, motivoNoAprobable, normalizarHashtag, piezaEnMovimiento, SKIP_REASON_LABEL, tituloDePieza, urlApiOpt,
   type CaptionCampo,
 } from "@/lib/content-pure";
 
@@ -110,8 +110,8 @@ export function ContentReview({ onCambioCola, sinArmador }: { onCambioCola?: () 
       {paraRevisar.map((p) => (
         <PiezaRevision key={`${p.id}:${p.status}`} pieza={p} sinArmador={sinArmador}
                        onCambio={reemplazar}
-                       onAprobada={(x) => quitar(x.id, `Aprobada: ${fechaConDia(x.scheduled_for)} · ${x.comercio?.nombre ?? x.pillar_label}. Ya está en el Paquete del día.`)}
-                       onSaltada={(x) => quitar(x.id, `Salteada: ${fechaConDia(x.scheduled_for)} · ${x.comercio?.nombre ?? x.pillar_label}.`)} />
+                       onAprobada={(x) => quitar(x.id, `Aprobada: ${fechaConDia(x.scheduled_for)} · ${detalleDePieza(x)}. Ya está en el Paquete del día.`)}
+                       onSaltada={(x) => quitar(x.id, `Salteada: ${fechaConDia(x.scheduled_for)} · ${detalleDePieza(x)}.`)} />
       ))}
 
       {enVerde.length > 0 && (
@@ -124,14 +124,14 @@ export function ContentReview({ onCambioCola, sinArmador }: { onCambioCola?: () 
 
       {conProblemas.map((p) => (
         <PiezaConProblemas key={`${p.id}:${p.status}`} pieza={p} onCambio={reemplazar} sinArmador={sinArmador}
-                           onSaltada={(x) => quitar(x.id, `Salteada: ${fechaConDia(x.scheduled_for)} · ${x.comercio?.nombre ?? x.pillar_label}.`)} />
+                           onSaltada={(x) => quitar(x.id, `Salteada: ${fechaConDia(x.scheduled_for)} · ${detalleDePieza(x)}.`)} />
       ))}
 
       {enCola.map((p) => (
         <div key={p.id} className="panel-card glass" style={{ padding: 12, display: "grid", gap: 8 }}>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <Insignia icono="reloj" tono="info">{p.status === "rendering" ? "ARMANDO EL VIDEO" : "EN COLA"}</Insignia>
-            <span style={{ fontSize: 14 }}>{fechaConDia(p.scheduled_for)} · {p.pillar_label}{p.comercio ? ` · ${p.comercio.nombre}` : ""}</span>
+            <span style={{ fontSize: 14 }}>{fechaConDia(p.scheduled_for)} · {tituloDePieza(p)}</span>
             <span style={{ fontSize: 12.5, color: "var(--txt-3)" }}>El servidor la está preparando; se actualiza sola.</span>
           </div>
           {/* En las piezas v2 se ven los textos que se están armando, no el video viejo. */}
@@ -251,7 +251,8 @@ function PiezaRevision({ pieza, sinArmador, onCambio, onAprobada, onSaltada }: {
   return (
     <article className="panel-card glass" style={{ padding: 14, display: "grid", gap: 12 }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <b style={{ fontSize: 15 }}>{fechaConDia(pieza.scheduled_for)} · {pieza.pillar_label}{pieza.comercio ? ` · ${pieza.comercio.nombre}` : ""}</b>
+        <b style={{ fontSize: 15 }}>{fechaConDia(pieza.scheduled_for)} · {tituloDePieza(pieza)}</b>
+        {esPiezaPedida(pieza.origin) && <Insignia tono="info" icono="encargo">Pedido</Insignia>}
         {pieza.counts_for_quota && <Insignia tono="ok" icono="estrella">Suscriptor</Insignia>}
         {pieza.caption_edited && <Insignia tono="info" icono="editar">Editada</Insignia>}
       </div>
@@ -434,7 +435,7 @@ function PiezaConProblemas({ pieza, sinArmador, onCambio, onSaltada }: {
     <article className="panel-card glass" style={{ padding: 14, display: "grid", gap: 8, border: "1px solid var(--pink)" }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <Insignia tono="error" icono="aviso">CON PROBLEMAS</Insignia>
-        <b style={{ fontSize: 14.5 }}>{fechaConDia(pieza.scheduled_for)} · {pieza.comercio?.nombre ?? pieza.pillar_label}</b>
+        <b style={{ fontSize: 14.5 }}>{fechaConDia(pieza.scheduled_for)} · {detalleDePieza(pieza)}</b>
       </div>
       <p style={{ margin: 0, fontSize: 13.5, color: "var(--txt-2)", lineHeight: 1.45 }}>
         {pieza.render_error ? pieza.render_error : "El servidor no pudo armar el video."}
