@@ -407,6 +407,10 @@ _COLS_EJEMPLO = (
 # tiene que pedir EXACTAMENTE las mismas: escritas dos veces terminan
 # divergiendo, y el síntoma sería que las filas de la página 2 vienen sin algún
 # campo y nadie sabe por qué.
+#: Tope de `list_todos_comercios` para el panel, el catálogo y los rubros automáticos.
+#: Con 5000 el panel se cortó el 2/11/2026 (había 5932 activos, por las importaciones).
+LIMITE_COMERCIOS_TODOS = 50000
+
 _COLS_COMERCIO_ADMIN = (
     "id, slug, nombre, whatsapp, telefono, modalidad, descripcion, prod_obs_human, "
     "prod_det_ia, subcategoria, sinonimos, codigo, direccion, calle, lat, lng, horario, horario_estimado, "
@@ -3065,7 +3069,10 @@ class SupabaseRepo:
         )
         if verificado is not None:
             q = q.eq("verificado", verificado)
-        res = q.order("created_at", desc=True).limit(limit).execute()
+        # `id` desempata: las importaciones crean miles de filas con el mismo
+        # `created_at`, y paginando sólo por fecha una fila podía venir en dos
+        # páginas y otra en ninguna.
+        res = q.order("created_at", desc=True).order("id").limit(limit).execute()
         filas = res.data or []
         # PostgREST corta en 1000 (PGRST_DB_MAX_ROWS) sin avisar: un `limit(5000)`
         # devuelve mil filas y un 200. Con 888 comercios todavía entra, pero
@@ -3077,12 +3084,12 @@ class SupabaseRepo:
                       .eq("activo", True))
                 if verificado is not None:
                     q2 = q2.eq("verificado", verificado)
-                lote = (q2.order("created_at", desc=True)
+                lote = (q2.order("created_at", desc=True).order("id")
                         .range(inicio, inicio + 999).execute().data) or []
                 filas.extend(lote)
                 if len(lote) < 1000:
                     break
-        return filas
+        return filas[:limit]
 
     def list_comercios_de_ciudad(self, ciudad_id: str, limit: int = 4000) -> list[dict]:
         """TODOS los comercios de una ciudad, para la app de campo.

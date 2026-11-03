@@ -14,7 +14,7 @@ from collections import defaultdict
 
 import structlog
 
-from app.db.repository import Repo
+from app.db.repository import LIMITE_COMERCIOS_TODOS, Repo
 
 logger = structlog.get_logger()
 
@@ -69,7 +69,7 @@ def analizar(repo: Repo, solo_rubros: set[str] | None = None,
     con una advertencia adentro: una advertencia se lee por arriba y el número
     grande se cree igual.
     """
-    comercios = {c["id"]: c for c in repo.list_todos_comercios(None, 5000)
+    comercios = {c["id"]: c for c in repo.list_todos_comercios(None, LIMITE_COMERCIOS_TODOS)
                  if c.get("activo", True)}
     relaciones = repo.list_comercio_rubros_todos()
     esperadas = repo.contar("comercio_rubros")

@@ -26,7 +26,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 
-from app.db.repository import Repo
+from app.db.repository import LIMITE_COMERCIOS_TODOS, Repo
 from app.services.normalizar import sin_tildes
 
 SLUG_DESCARTE = "otros"
@@ -64,7 +64,7 @@ def _subcategorias(comercio: dict) -> list[str]:
 
 
 def informe(repo: Repo, limite_productos: int = 120) -> dict:
-    comercios = [c for c in repo.list_todos_comercios(None, 5000) if c.get("activo", True)]
+    comercios = [c for c in repo.list_todos_comercios(None, LIMITE_COMERCIOS_TODOS) if c.get("activo", True)]
     activos = {c["id"] for c in comercios}
     rubros = repo.list_rubros()
     relaciones = repo.list_comercio_rubros_todos()

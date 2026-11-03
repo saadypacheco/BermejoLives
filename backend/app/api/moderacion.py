@@ -24,7 +24,7 @@ from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
 from app.services.sinonimos import desde_propuesta, sinonimos_para
 from app.services.cuentas import nueva_clave_comercio
 from app.services.rubros import SLUG_DESCARTE, aplicar_rubros, resolver_rubros
-from app.db.repository import Repo, get_repo
+from app.db.repository import LIMITE_COMERCIOS_TODOS, Repo, get_repo
 from app.models.schemas import ModerarBody
 from app.services.clasificador import moderar_publicacion
 from app.services.reservalo_sync import ReservaloSyncClient, get_reservalo_sync_client
@@ -259,7 +259,7 @@ def revisar_con_ia(
 
 # ---- Moderación de comercios (alta del agente de campo) ----
 #: Cuántos comercios trae como máximo el listado completo del panel.
-TOPE_LISTADO_COMERCIOS = 5000
+TOPE_LISTADO_COMERCIOS = LIMITE_COMERCIOS_TODOS
 
 
 @router.get("/moderacion/comercios")
