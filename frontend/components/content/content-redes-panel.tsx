@@ -6,6 +6,8 @@ import { Aviso, BTN_GRANDE, Cargando, Insignia } from "@/components/content/cont
 import { ContentDayPackage } from "@/components/content/content-day-package";
 import { ContentReview } from "@/components/content/content-review";
 import { ContentWeek } from "@/components/content/content-week";
+import { ContentCostSwitches } from "@/components/content/content-cost-switches";
+import { ContentRequestModal } from "@/components/content/content-request-modal";
 import { getEstadoContenido, mensajeContent, type ContentStatusResponse } from "@/lib/content";
 
 type Pestana = "revision" | "dia" | "semana";
@@ -36,6 +38,9 @@ export function ContentRedesPanel() {
   const [estado, setEstado] = useState<ContentStatusResponse | null>(null);
   const [errEstado, setErrEstado] = useState("");
   const [pestana, setPestana] = useState<Pestana | null>(null);
+  const [pidiendo, setPidiendo] = useState(false);
+  // Sube al pedir un video: Semana y Paquete del día se vuelven a leer (Revisión se actualiza sola).
+  const [vez, setVez] = useState(0);
 
   const cargarEstado = useCallback(async () => {
     setErrEstado("");
@@ -52,6 +57,9 @@ export function ContentRedesPanel() {
 
   useEffect(() => { void cargarEstado(); }, [cargarEstado]);
 
+  const cerrarPedido = useCallback(() => setPidiendo(false), []);
+  const alPedirVideo = useCallback(() => { setVez((n) => n + 1); void cargarEstado(); }, [cargarEstado]);
+
   const paraRevisar = estado?.queue.ready_for_review ?? 0;
   const sinArmador = estado?.render_worker === "no_renderer";
   const tabs: { id: Pestana; label: string; icono: "listo" | "calendario" | "video"; n?: number }[] = [
@@ -63,6 +71,9 @@ export function ContentRedesPanel() {
   return (
     <div style={{ display: "grid", gap: 14, maxWidth: 980 }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <button type="button" className="btn btn-primary btn-sm" style={BTN_GRANDE} onClick={() => setPidiendo(true)}>
+          <Ic n="video" s={16} /> Pedir un video
+        </button>
         {estado && <EstadoArmado s={estado} />}
         {estado && !estado.gemini_configured && (
           <Insignia tono="info" icono="dato">Sin Gemini: los textos salen de la plantilla fija</Insignia>
@@ -87,8 +98,11 @@ export function ContentRedesPanel() {
 
       {pestana === null && <Cargando texto="Cargando…" />}
       {pestana === "revision" && <ContentReview sinArmador={sinArmador} onCambioCola={() => void cargarEstado()} />}
-      {pestana === "dia" && <ContentDayPackage onIrARevision={() => setPestana("revision")} />}
-      {pestana === "semana" && <ContentWeek onCambioCola={() => void cargarEstado()} />}
+      {pestana === "dia" && <ContentDayPackage key={vez} onIrARevision={() => setPestana("revision")} />}
+      {pestana === "semana" && <ContentWeek key={vez} onCambioCola={() => void cargarEstado()} />}
+
+      <ContentCostSwitches onCambio={() => void cargarEstado()} />
+      {pidiendo && <ContentRequestModal onCerrar={cerrarPedido} onPedido={alPedirVideo} />}
     </div>
   );
 }

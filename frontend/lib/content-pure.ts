@@ -14,7 +14,7 @@ export type ContentNetwork = "tiktok" | "instagram" | "facebook" | "wa_channel";
 export type ContentPieceStatus =
   | "queued" | "rendering" | "ready_for_review" | "approved" | "published" | "skipped" | "failed";
 export type ContentPostStatus = "pending" | "claimed" | "posted" | "skipped";
-export type ContentPillar = "comercio_del_dia" | "ofertas";
+export type ContentPillar = "comercio_del_dia" | "ofertas" | "rubro";
 export type ConsentVia =
   | "agent_signup" | "agent_visit" | "admin" | "merchant_panel" | "whatsapp_reply" | "subscription";
 
@@ -51,6 +51,7 @@ export const POST_STATUS_LABEL: Record<ContentPostStatus, string> = {
 export const PILLAR_LABEL: Record<ContentPillar, string> = {
   comercio_del_dia: "Comercio del día",
   ofertas: "Ofertas de la semana",
+  rubro: "Repaso de rubro",
 };
 
 export const CONSENT_VIA_LABEL: Record<ConsentVia, string> = {
@@ -448,9 +449,9 @@ export function origenTextosVideo(engine: string | null | undefined): string {
   return "";
 }
 
-/** En `ofertas` la frase de cada foto es el nombre del comercio: no se edita (§16.5). */
+/** En `ofertas` y `rubro` la frase de cada foto es el nombre del comercio: no se edita (§16.5, §17.3). */
 export function chipsEditables(pillar: ContentPillar | string): boolean {
-  return pillar !== "ofertas";
+  return pillar !== "ofertas" && pillar !== "rubro";
 }
 
 /** Los campos del video que escribe o corrige una persona (§16.9). */
@@ -557,7 +558,7 @@ export type ObjecionesVideo = {
  * Las objeciones de los textos del video, campo por campo: el espejo de
  * `validate_video_texts` del backend (§16.6). Sirve para avisar mientras se
  * escribe; el que manda es el backend (devuelve 400 con la objeción).
- * En `ofertas` los chips no se editan (son el nombre del comercio) y no se validan.
+ * En `ofertas` y `rubro` los chips no se editan (son el nombre del comercio) y no se validan.
  */
 export function validateVideoTextsPorCampo(
   texts: VideoTextsEditable,
@@ -586,4 +587,102 @@ export function validateVideoTexts(
   });
   r.chips.forEach((os, i) => { for (const o of os) lista.push(`Frase de la foto ${i + 1}: ${o}`); });
   return lista;
+}
+
+/* ─── Pedir un video a mano e interruptores de costo (§17.4) ─────────────── */
+
+/** Cuántos comercios hacen falta para el video de un rubro (el backend es el que manda). */
+export const RUBRO_MIN_COMERCIOS = 4;
+
+export type PiezaOrigen = "selector" | "pedido";
+
+/** Lo mínimo de una pieza que hace falta para ponerle título. */
+export type PiezaTitulable = {
+  pillar: string;
+  pillar_label?: string;
+  comercio?: { nombre: string } | null;
+  rubro?: { nombre: string; slug?: string } | null;
+  ciudad_nombre?: string | null;
+};
+
+/** El tipo de pieza en palabras. `rubro` siempre dice «Repaso de rubro», aunque el backend mande otra cosa. */
+export function etiquetaDePilar(p: Pick<PiezaTitulable, "pillar" | "pillar_label">): string {
+  if (p.pillar === "rubro") return PILLAR_LABEL.rubro;
+  return p.pillar_label || etiquetaDe(PILLAR_LABEL, p.pillar);
+}
+
+/** Lo que identifica a la pieza: «Zapatillas en Bermejo» (rubro), el nombre del comercio o, sin nada, el tipo. */
+export function detalleDePieza(p: PiezaTitulable): string {
+  if (p.pillar === "rubro" || p.rubro) {
+    const rubro = p.rubro?.nombre?.trim();
+    if (rubro) return p.ciudad_nombre ? `${rubro} en ${p.ciudad_nombre}` : rubro;
+  }
+  return p.comercio?.nombre ?? etiquetaDePilar(p);
+}
+
+/** «Repaso de rubro · Zapatillas en Bermejo» / «Comercio del día · Casa Pérez» / «Ofertas de la semana». */
+export function tituloDePieza(p: PiezaTitulable): string {
+  const etiqueta = etiquetaDePilar(p);
+  const detalle = detalleDePieza(p);
+  return detalle && detalle !== etiqueta ? `${etiqueta} · ${detalle}` : etiqueta;
+}
+
+export const esPiezaPedida = (origin: string | null | undefined): boolean => origin === "pedido";
+
+/** `uruku 1234`, `Uruku-ab12` → `URUKU-1234`: el buscador acepta el código como lo escriba la persona. */
+export function normalizarBusquedaComercio(q: string): string {
+  const t = q.trim();
+  const m = /^uruku[-\s_]?([a-z0-9]{3,8})$/i.exec(t);
+  return m ? `URUKU-${m[1].toUpperCase()}` : t;
+}
+
+/** La respuesta de `GET …/merchants/{id}/request-check`. */
+export type RequestCheck = { consent: boolean; usable_photos: number; ok: boolean; reason: string | null };
+
+/** Lo que se le muestra a quien va a pedir el video de un negocio. */
+export function resumenRequestCheck(c: RequestCheck): { tono: "ok" | "error"; texto: string } {
+  const fotos = `${c.usable_photos} ${c.usable_photos === 1 ? "foto que sirve" : "fotos que sirven"}`;
+  if (c.ok) return { tono: "ok", texto: `Tiene autorización y ${fotos}.` };
+  const motivo = (c.reason ?? "").trim();
+  if (motivo) return { tono: "error", texto: motivo };
+  return { tono: "error", texto: c.consent ? `No se puede pedir todavía: tiene ${fotos}.` : "No tiene la autorización para redes vigente." };
+}
+
+export type RubroOpcion = { slug: string; nombre: string; eligible: boolean };
+
+/** Cómo se dibuja un rubro en la lista: si no llega al mínimo de comercios, se deshabilita y lo dice. */
+export function opcionDeRubro(r: RubroOpcion): { texto: string; deshabilitada: boolean; ayuda: string | null } {
+  return r.eligible
+    ? { texto: r.nombre, deshabilitada: false, ayuda: null }
+    : { texto: r.nombre, deshabilitada: true, ayuda: `Hay menos de ${RUBRO_MIN_COMERCIOS} comercios con autorización y foto` };
+}
+
+export type PedidoDeVideo =
+  | { kind: "comercio"; comercio_id: string }
+  | { kind: "rubro"; rubro_slug: string; ciudad_slug: string };
+
+/** El body de `POST /admin/content/pieces/request`, o null si todavía falta elegir algo. */
+export function armarPedidoDeVideo(
+  modo: "comercio" | "rubro",
+  e: { comercioId?: string | null; ciudadSlug?: string | null; rubroSlug?: string | null },
+): PedidoDeVideo | null {
+  if (modo === "comercio") return e.comercioId ? { kind: "comercio", comercio_id: e.comercioId } : null;
+  return e.ciudadSlug && e.rubroSlug ? { kind: "rubro", rubro_slug: e.rubroSlug, ciudad_slug: e.ciudadSlug } : null;
+}
+
+/** ¿Estos permisos incluyen `permiso`? (`*` = admin de todo). Sólo para mostrar u ocultar: el backend decide. */
+export function tienePermiso(permisos: readonly string[], permiso: string): boolean {
+  return permisos.includes("*") || permisos.includes(permiso);
+}
+
+/** El estado de un interruptor, en palabras (nunca sólo color). */
+export function estadoDeInterruptor(enabled: boolean): { texto: string; tono: "ok" | "aviso"; icono: "listo" | "aviso" } {
+  return enabled
+    ? { texto: "Prendido · tiene costo", tono: "aviso", icono: "aviso" }
+    : { texto: "Apagado · costo cero", tono: "ok", icono: "listo" };
+}
+
+/** Prender manda la casilla; apagar nunca pide confirmación. */
+export function bodyDeInterruptor(enabled: boolean, entiendeCosto: boolean): { enabled: boolean; confirm_cost: boolean } {
+  return { enabled, confirm_cost: enabled ? entiendeCosto : false };
 }

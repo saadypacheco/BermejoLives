@@ -192,7 +192,7 @@ export function TextosDelVideo({ pieza, sinArmador, ocupadaAfuera, antesDeGuarda
         <div style={{ display: "grid", gap: 10 }}>
           <b style={{ fontSize: 13.5 }}>Frase de cada foto</b>
           {!editaChips && (
-            <span style={{ fontSize: 12.5, color: "var(--txt-3)" }}>En las ofertas la frase es el nombre del comercio y no se edita.</span>
+            <span style={{ fontSize: 12.5, color: "var(--txt-3)" }}>{pieza.pillar === "rubro" ? "En un repaso de rubro la frase es el nombre del comercio y no se edita." : "En las ofertas la frase es el nombre del comercio y no se edita."}</span>
           )}
           {editaChips && !chipsConId && (
             <span style={{ fontSize: 12.5, color: "var(--txt-3)" }}>Las frases de las fotos no se pueden editar desde acá todavía.</span>

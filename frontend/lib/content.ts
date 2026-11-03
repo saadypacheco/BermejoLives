@@ -15,6 +15,7 @@ import { subirConProgreso } from "@/lib/upload";
 import {
   API_BASE, camposSubida,
   type ConsentVia, type ContentNetwork, type ContentPieceStatus, type ContentPillar, type MetaSubida,
+  type PedidoDeVideo, type PiezaOrigen, type RequestCheck, type RubroOpcion,
 } from "@/lib/content-pure";
 
 export type { ConsentVia, ContentNetwork, ContentPieceStatus, ContentPillar, ContentPostStatus, MetaSubida } from "@/lib/content-pure";
@@ -91,6 +92,10 @@ export type ContentPieceSummary = {
   counts_for_quota: boolean;
   cover_url: string | null; duration_s: number | null;
   skip_reason: string | null; render_error: string | null;
+  /** §17: `pedido` = la pidió una persona a mano; `selector` = la armó la semana automática.
+   *  El rubro sólo viene en las piezas `pillar = 'rubro'`. Opcionales: el backend viejo no los manda. */
+  origin?: PiezaOrigen;
+  rubro?: { nombre: string; slug: string } | null;
 };
 export type ContentPieceSource = {
   position: number; source_type: "asset" | "gallery" | "cover" | "offer";
@@ -446,6 +451,38 @@ export const saltarPost = (id: string, reason: string): Promise<ContentPostRespo
 
 export const getEstadoContenido = (): Promise<ContentStatusResponse> =>
   panelJson("/admin/content/status", {}, "No se pudo leer el estado del armado de videos");
+
+/* ─── Pedir un video a mano e interruptores de costo (§17) ───────────────── */
+
+export type { PedidoDeVideo, PiezaOrigen, RequestCheck, RubroOpcion } from "@/lib/content-pure";
+
+export type CostSwitch = {
+  key: string; label: string; what: string; cost: string; off_means: string;
+  enabled: boolean; updated_by: string | null; updated_at: string | null;
+};
+
+export const listarInterruptores = async (): Promise<CostSwitch[]> => {
+  const d = await panelJson<{ items?: CostSwitch[] }>("/admin/cost-switches", {}, "No se pudieron cargar los servicios con costo");
+  return d.items ?? [];
+};
+
+/** Sólo con permiso `equipo`. Prender exige `confirm_cost = true` (400 si no); sin permiso, 403. */
+export const cambiarInterruptor = async (key: string, body: { enabled: boolean; confirm_cost: boolean }): Promise<void> => {
+  await panelJson(`/admin/cost-switches/${encodeURIComponent(key)}`, { method: "PUT", body }, "No se pudo cambiar el servicio");
+};
+
+/** 201 con la pieza en cola; 422 (no se puede armar) y 429 (ya hay 5 armándose) traen el motivo en el `detail`. */
+export const pedirVideo = (body: PedidoDeVideo): Promise<ContentPieceResponse> =>
+  panelJson("/admin/content/pieces/request", { method: "POST", body }, "No se pudo pedir el video");
+
+export const opcionesDePedido = async (ciudadSlug: string): Promise<RubroOpcion[]> => {
+  const d = await panelJson<{ rubros?: RubroOpcion[] }>(
+    `/admin/content/request-options?ciudad_slug=${encodeURIComponent(ciudadSlug)}`, {}, "No se pudieron cargar los rubros");
+  return d.rubros ?? [];
+};
+
+export const chequeoDePedido = (comercioId: string): Promise<RequestCheck> =>
+  panelJson(`/admin/content/merchants/${encodeURIComponent(comercioId)}/request-check`, {}, "No se pudo revisar el comercio");
 
 /* ─── APIs inyectadas en los componentes (panel vs. campo) ───────────────── */
 // El banco del comercio es UN componente que no sabe con qué token habla: el

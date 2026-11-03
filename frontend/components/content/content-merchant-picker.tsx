@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Ic } from "@/components/ic";
 import { Aviso, BTN_GRANDE, Cargando } from "@/components/content/content-ui";
 import { buscarComerciosBanco, mensajeContent, type ContentMerchantResponse } from "@/lib/content";
+import { normalizarBusquedaComercio } from "@/lib/content-pure";
 
 /**
  * El buscador de comercio del Banco de contenido: se elige UNA vez y se sacan o
@@ -12,7 +13,10 @@ import { buscarComerciosBanco, mensajeContent, type ContentMerchantResponse } fr
  *
  * Busca con una pausa de 300 ms para no pegarle al servidor en cada letra.
  */
-export function ContentMerchantPicker({ onElegir }: { onElegir: (m: ContentMerchantResponse) => void }) {
+export function ContentMerchantPicker({ onElegir, placeholder = "Nombre del comercio…" }: {
+  onElegir: (m: ContentMerchantResponse) => void;
+  placeholder?: string;
+}) {
   const [q, setQ] = useState("");
   const [items, setItems] = useState<ContentMerchantResponse[]>([]);
   const [recientes, setRecientes] = useState<ContentMerchantResponse[]>([]);
@@ -25,7 +29,7 @@ export function ContentMerchantPicker({ onElegir }: { onElegir: (m: ContentMerch
     const n = ++vez.current;
     setCargando(true); setErr("");
     try {
-      const r = await buscarComerciosBanco(texto);
+      const r = await buscarComerciosBanco(normalizarBusquedaComercio(texto));
       if (n !== vez.current) return;
       setItems(r.items); setRecientes(r.recent);
     } catch (ex) {
@@ -47,7 +51,7 @@ export function ContentMerchantPicker({ onElegir }: { onElegir: (m: ContentMerch
         <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Ic n="buscar" s={18} />
           <input className="adm-input" type="search" inputMode="search" autoComplete="off" style={{ flex: 1, minHeight: 48 }}
-                 value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nombre del comercio…" />
+                 value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} />
         </span>
       </label>
 

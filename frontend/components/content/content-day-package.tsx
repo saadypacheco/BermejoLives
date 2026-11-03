@@ -9,7 +9,7 @@ import {
 } from "@/lib/content";
 import { cerrarTarea } from "@/lib/subscribers";
 import { ENTREGA_A_MANO, EntregaDescarga } from "@/components/subscribers/entrega-a-mano";
-import { fechaConDia, hoyBolivia, sumarDias, urlApiOpt } from "@/lib/content-pure";
+import { detalleDePieza, esPiezaPedida, fechaConDia, hoyBolivia, sumarDias, tituloDePieza, urlApiOpt } from "@/lib/content-pure";
 
 /**
  * Admin › Contenido para redes › Paquete del día (§9.3): lo que hay para publicar
@@ -71,7 +71,7 @@ export function ContentDayPackage({ onIrARevision }: { onIrARevision: () => void
       {data && data.pending_review.length > 0 && (
         <Aviso tono="aviso" accion={<button type="button" className="btn btn-ghost btn-sm" style={BTN_GRANDE} onClick={onIrARevision}>Ir a Revisión</button>}>
           Falta aprobar {data.pending_review.length === 1 ? "1 pieza" : `${data.pending_review.length} piezas`} de este día:{" "}
-          {data.pending_review.map((p) => p.comercio?.nombre ?? p.pillar_label).join(", ")}.
+          {data.pending_review.map((p) => detalleDePieza(p)).join(", ")}.
         </Aviso>
       )}
 
@@ -111,11 +111,12 @@ function TarjetaPieza({ it, atrasada, onPost, onEntregada }: {
           <img src={portada} alt="Portada del video" style={{ width: 54, height: 96, objectFit: "cover", borderRadius: 8, flex: "none", background: "var(--panel)" }} />
         )}
         <div style={{ display: "grid", gap: 4, minWidth: 0 }}>
-          <b style={{ fontSize: 15 }}>{piece.pillar_label}{piece.comercio ? ` · ${piece.comercio.nombre}` : ""}</b>
+          <b style={{ fontSize: 15 }}>{tituloDePieza(piece)}</b>
           <span style={{ fontSize: 12.5, color: "var(--txt-3)" }}>
             {fechaConDia(piece.scheduled_for)}{piece.ciudad_nombre ? ` · ${piece.ciudad_nombre}` : ""}{piece.duration_s ? ` · ${piece.duration_s} s` : ""}
           </span>
           <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {esPiezaPedida(piece.origin) && <Insignia tono="info" icono="encargo">Pedido</Insignia>}
             {piece.counts_for_quota && <Insignia tono="ok" icono="estrella">Suscriptor</Insignia>}
             {atrasada && <Insignia tono="aviso" icono="aviso">Atrasada</Insignia>}
           </span>
