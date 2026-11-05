@@ -15,6 +15,7 @@ import { esFresca, fechaLarga } from "@/lib/seo-paginas";
 import { MARCA, SITE_URL } from "@/lib/marca";
 import { WA_URUKU_TEXTO, waUruku } from "@/lib/contacto";
 import { precioFmt } from "@/lib/types";
+import { PrecioArs } from "@/components/precio-ars";
 import { hasSupabase } from "@/lib/supabase";
 
 /**
@@ -266,6 +267,7 @@ export default async function ComprarEnBermejoPage() {
                     <h3>{o.titulo}</h3>
                     <small>{o.comercio_nombre}</small>
                     {o.precio != null && <strong>{precioFmt(o.precio, o.moneda)}</strong>}
+                    <PrecioArs precio={o.precio} moneda={o.moneda} />
                   </div>
                 </Link>
               ))}

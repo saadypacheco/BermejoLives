@@ -2,6 +2,7 @@ import Link from "next/link";
 import { LeadLink } from "@/components/lead-link";
 import { WhatsApp } from "@/components/icons";
 import { contactoDeOferta, precioFmt, vencimientoFmt, type FeedItem } from "@/lib/types";
+import { PrecioArs } from "@/components/precio-ars";
 import { Ic } from "@/components/ic";
 
 /**
@@ -33,7 +34,7 @@ export function PublicacionesGrid({ items, vacio }: { items: FeedItem[]; vacio?:
             </Link>
             <h4>{p.titulo ?? (p.tipo === "novedad" ? "Novedad" : "Oferta")}</h4>
             {p.descripcion && <p className="uk-product-desc">{p.descripcion}</p>}
-            {p.precio != null && <div className="price">{precioFmt(p.precio, p.moneda)}</div>}
+            {p.precio != null && <div className="price">{precioFmt(p.precio, p.moneda)}<PrecioArs precio={p.precio} moneda={p.moneda} /></div>}
             {p.contacto_es_uruku && <span className="uk-marca-uruku">URUKU</span>}
             <div className="foot">
               <span>{p.vence_el ? `Hasta el ${vencimientoFmt(p.vence_el)}` : (p.zona_nombre ?? "")}</span>

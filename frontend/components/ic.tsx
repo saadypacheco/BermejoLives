@@ -64,6 +64,9 @@ export const ICONOS = {
   inicio: "House", guardado: "BookmarkSimple", documento: "FileText",
   desplegar: "CaretDown", enviar: "PaperPlaneTilt", web: "GlobeSimple",
   editar: "PencilSimple",
+  // El «compartir» de iPhone (cuadrado con flecha hacia arriba): lo nombra el
+  // aviso «Instalá URUKU» para que el visitante reconozca el botón de Safari.
+  compartir_ios: "Export",
   // Contenido para redes (Admin › Banco de contenido y Contenido para redes):
   // copiar un texto, subir un archivo y pegar un enlace.
   copiar: "Copy", subir: "UploadSimple", enlace: "LinkSimple",

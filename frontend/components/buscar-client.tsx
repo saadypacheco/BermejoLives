@@ -7,6 +7,7 @@ import Link from "next/link";
 import { MapResults } from "@/components/map-results";
 import { CLAVE_ULTIMA_BUSQUEDA } from "@/components/volver-a-resultados";
 import { APAGADAS, buscarComercios, getFiltrosDisponibles, getOfertasDeComercios, getRefinamientos, getRubros, getZonas, type FiltrosDisponibles } from "@/lib/data";
+import { PrecioArs } from "@/components/precio-ars";
 import { type FeedItem, type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD_LABEL, precioFmt, comoLlegarHref, waLink } from "@/lib/types";
 import { productosDe } from "@/lib/productos";
 import { distanciaMetros, formatDistancia } from "@/lib/distancia";
@@ -911,6 +912,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
                       <Link className="uk-resdesde" href={`/comercios/${r.slug}#ofertas`}>
                         {barata.titulo ? `${barata.titulo} · ` : ""}
                         <b>{precioFmt(barata.precio!, barata.moneda)}</b>
+                        <PrecioArs precio={barata.precio} moneda={barata.moneda} enLinea />
                       </Link>
                     );
                   })()}

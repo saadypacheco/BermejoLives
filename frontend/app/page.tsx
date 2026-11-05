@@ -8,7 +8,7 @@ import { AccesosCiudad } from "@/components/accesos-ciudad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import {
   getCiudades, getCityCategoryPagesCached, getClima, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado,
-  getNovedadesUruku, getRedes, getVideosPromo,
+  getNovedadesUruku, getPublicaciones, getRedes, getVideosPromo,
 } from "@/lib/data";
 import { JsonLd } from "@/components/json-ld";
 import { VideosUruku } from "@/components/videos-uruku";
@@ -17,12 +17,13 @@ import { videoObjectNodes } from "@/lib/videos-pure";
 import { cityPath, jsonLdGraph, organizationNodes, sameAsFromRedes } from "@/lib/seo";
 import { conFundador } from "@/lib/seo-paginas";
 import { CarruselNovedades } from "@/components/carrusel-novedades";
-import { getPromo, tarjetasPromo } from "@/components/tarjetas-promo";
+import { getPromo, tarjetasDestacados, tarjetasServicios } from "@/components/tarjetas-promo";
+import { OfertaCard } from "@/components/oferta-card";
+import { etiquetaVence, ofertasPorVencer, tituloVencen } from "@/lib/precios-pure";
 import { TarjetaTurnoHoy } from "@/components/tarjeta-turno-hoy";
 import { NovedadUrukuCard } from "@/components/novedad-uruku-card";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { titulo, descripcion, MARCA, META_DESCRIPTION } from "@/lib/marca";
-import { precioFmt } from "@/lib/types";
 import { formatoMonto, tasasDe } from "@/lib/cambio";
 
 export const dynamic = "force-dynamic";
@@ -155,8 +156,12 @@ export default async function InicioPage() {
   const conGuia = (ciudad?.slug ?? "bermejo") === "bermejo";
   // El peso argentino, en cualquier ciudad de frontera.
   const esFrontera = ciudad?.es_frontera ?? true;
-  const [feed, novedadesUruku, videos, frontera, clima, cotizaciones, turnosHoy, promo, paresCiudad, ciudadesTodas, redes, videosUruku] = await Promise.all([
-    getFeed(12, ciudad?.slug), getNovedadesUruku(ciudad?.id, 4), conGuia ? getVideosPromo(6) : Promise.resolve([]),
+  const [feed, ofertasVigentes, novedadesUruku, videos, frontera, clima, cotizaciones, turnosHoy, promo, paresCiudad, ciudadesTodas, redes, videosUruku] = await Promise.all([
+    getFeed(12, ciudad?.slug),
+    // Todas las ofertas de la ciudad, para la tira «Vencen hoy»: en los 12 del feed (que
+    // mezcla novedades y videos) casi nunca está la que vence hoy.
+    getPublicaciones("oferta", 60, ciudad?.slug),
+    getNovedadesUruku(ciudad?.id, 4), conGuia ? getVideosPromo(6) : Promise.resolve([]),
     conGuia ? getFronteraEstado(ciudad?.id) : Promise.resolve(null), conGuia ? getClima() : Promise.resolve(null), getCotizaciones(),
     // Las farmacias de turno hoy: la tarjeta sólo aparece si la ciudad tiene turnos cargados.
     getFarmaciasDeTurnoAhora(ciudad?.id),
@@ -197,9 +202,15 @@ export default async function InicioPage() {
   const novUruku = novedadesUruku.slice(0, novComercios.length > 0 ? 3 : 4);
   const novComerciosVisibles = novComercios.slice(0, 4 - novUruku.length);
   // La sección siempre tiene algo en Bermejo (los servicios); en otra ciudad,
-  // si hay novedades, destacados o farmacia de turno.
-  const hayNovedades = conGuia || novUruku.length + novComerciosVisibles.length + promo.destacados.length
-    + promo.productos.length + (turnosHoy ?? []).length > 0;
+  // si hay novedades o farmacia de turno. Los comercios destacados ya NO cuentan
+  // acá: tienen su propio carrusel (más abajo).
+  const hayNovedades = conGuia || novUruku.length + novComerciosVisibles.length + (turnosHoy ?? []).length > 0;
+  const tarjetasDestacadas = tarjetasDestacados(promo);
+  // «Vencen hoy»: las ofertas que vencen hoy o mañana, en hora de Bolivia.
+  const ahora = new Date();
+  const porVencer = ofertasPorVencer(ofertasVigentes, ahora);
+  // El aviso de lanzamiento (si todavía falta) reemplaza a la línea de «no hay ofertas».
+  const muestraLanzamiento = !hayOfertas && !hayNovedades && faltaParaLanzamiento();
   const t = tasasDe(cotizaciones);
   const fechas = [frontera?.actualizado_en, t.actualizado_en].filter(Boolean) as string[];
   const ultima = fechas.length ? fechas.sort()[fechas.length - 1] : null;
@@ -318,7 +329,7 @@ export default async function InicioPage() {
       </section>
 
       {/* ===== El lanzamiento de las ofertas (hasta el lunes 28) ===== */}
-      {!hayOfertas && !hayNovedades && faltaParaLanzamiento() && (
+      {muestraLanzamiento && (
         <section className="uk-container uk-home-sec">
           <div className="uk-lanzamiento">
             <span className="uk-lanzamiento-tag">Nuevo en URUKU</span>
@@ -336,6 +347,20 @@ export default async function InicioPage() {
       )}
 
       {/* ===== Ofertas destacadas ===== */}
+      {/* Sin ofertas la sección NO se esconde: una línea que lo dice y manda al mapa
+          (docs/analisis-avellaneda-al-toque.md §7). Una portada que se saltea las ofertas
+          sin explicar parece rota. */}
+      {!hayOfertas && !muestraLanzamiento && (
+        <section className="uk-container uk-home-sec" aria-labelledby="home-sin-ofertas">
+          <div className="uk-section-head">
+            <h2 id="home-sin-ofertas">Ofertas destacadas <small>De comercios de {nombre}.</small></h2>
+          </div>
+          <p className="uk-home-sin-ofertas">
+            <Ic n="ofertas" s={20} tono="marca" />
+            <span>Todavía no hay ofertas hoy en {nombre}. <Link href="/buscar?vista=mapa">Mirá los comercios en el mapa</Link>.</span>
+          </p>
+        </section>
+      )}
       {hayOfertas && (
         <section className="uk-container uk-home-sec">
           <div className="uk-section-head">
@@ -350,24 +375,34 @@ export default async function InicioPage() {
               leía como un banner, no como la primera de una lista. El tamaño no
               era el problema: era que el texto no se veía. */}
           <div className="uk-offers">
-            {cards.map((o) => {
-              return (
-              <Link key={o.id} href={`/comercios/${o.comercio_slug}`}
-                className={`uk-offer${o.imagen_url ? "" : " sin-foto"}`}
-                style={o.imagen_url ? { backgroundImage: `url('${o.imagen_url}')` } : undefined}>
-                <span className="uk-offer-tag">{o.zona_nombre || o.comercio_nombre}</span>
-                {/* Sin foto, el ícono del rubro ocupa su lugar. */}
-                {!o.imagen_url && <span className="uk-offer-emoji"><IcRubro slug={o.rubro_slug} s={64} peso="fill" /></span>}
-                {o.descuento_pct != null && <span className="uk-offer-disc">-{o.descuento_pct}%</span>}
-                <div className="uk-offer-body">
-                  <h3>{o.titulo}</h3>
-                  <small>{o.comercio_nombre}</small>
-                  {o.precio != null && <strong>{precioFmt(o.precio, o.moneda)}</strong>}
-                </div>
-              </Link>
-              );
-            })}
+            {cards.map((o) => <OfertaCard key={o.id} o={o} />)}
           </div>
+        </section>
+      )}
+
+      {/* ===== Vencen hoy: las ofertas que terminan hoy o mañana (hora de Bolivia) ===== */}
+      {porVencer.length > 0 && (
+        <section className="uk-container uk-home-sec" aria-labelledby="home-vencen">
+          <div className="uk-section-head">
+            <h2 id="home-vencen">{tituloVencen(porVencer, ahora)} <small>Últimos días para aprovecharlas.</small></h2>
+            <Link href="/ofertas">Ver las ofertas →</Link>
+          </div>
+          <CarruselNovedades>
+            {porVencer.map((o) => <OfertaCard key={o.id} o={o} tag={etiquetaVence(o.vence_el, ahora) ?? undefined} />)}
+          </CarruselNovedades>
+        </section>
+      )}
+
+      {/* ===== Comercios destacados: su propio carrusel, fuera de Novedades ===== */}
+      {tarjetasDestacadas.length > 0 && (
+        <section className="uk-container uk-home-sec" aria-labelledby="home-destacados">
+          <div className="uk-section-head">
+            <h2 id="home-destacados">Comercios destacados <small>Locales de {nombre} para conocer.</small></h2>
+            <Link href="/buscar">Ver todos los comercios →</Link>
+          </div>
+          <CarruselNovedades>
+            {tarjetasDestacadas}
+          </CarruselNovedades>
         </section>
       )}
 
@@ -395,13 +430,14 @@ export default async function InicioPage() {
                 </div>
               </Link>
             ))}
-            {tarjetasPromo({ promo, turnos: turnosHoy, conGuia })}
+            {tarjetasServicios({ turnos: turnosHoy, conGuia })}
           </CarruselNovedades>
         </section>
       )}
 
-      {/* ===== Videos de URUKU (los publicados en las redes; sin videos no dibuja nada) ===== */}
-      <VideosUruku videos={videosUruku} />
+      {/* ===== Videos: UNA sola sección, con los de las redes de URUKU y los recorridos de la ciudad
+          (antes eran dos: «Videos de URUKU» y «Recorrimos Bermejo»). Sin ninguno no dibuja nada. ===== */}
+      <VideosUruku videos={videosUruku} recorridos={videos} nombre={nombre} />
 
       {/* ===== Información para tu visita (lo de la guía: sólo en la frontera) ===== */}
       {conGuia && (
@@ -427,21 +463,6 @@ export default async function InicioPage() {
           <div className="uk-guia-chips">
             {ciudadesIndexables.map((p) => (
               <Link key={p.city_slug} href={cityPath(p.city_slug)}><Ic n="ciudad" s={16} /> {p.city_name}</Link>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ===== Videos ===== */}
-      {videos.length > 0 && (
-        <section className="uk-container uk-home-sec">
-          <div className="uk-section-head"><h2><Ic n="videos" s={22} tono="marca" /> Recorrimos {nombre}</h2></div>
-          <div className="uk-rail">
-            {videos.map((v) => (
-              <div key={v.id} className="uk-vid">
-                <video src={v.url} controls preload="metadata" playsInline />
-                {v.titulo && <span>{v.titulo}</span>}
-              </div>
             ))}
           </div>
         </section>

@@ -67,7 +67,11 @@ export function InstallPrompt() {
     <div className="install-banner">
       <div className="install-banner-text">
         <b>Instalá URUKU</b>
-        <span>{ios ? "Tocá compartir (⬆️) y elegí \"Agregar a inicio\"" : "Accedé más rápido desde tu pantalla de inicio"}</span>
+        <span>
+          {ios
+            ? <>Tocá compartir <Ic n="compartir_ios" s={15} /> y elegí &quot;Agregar a inicio&quot;</>
+            : "Accedé más rápido desde tu pantalla de inicio"}
+        </span>
       </div>
       {!ios && <button className="btn btn-primary btn-sm" onClick={instalar}>Instalar</button>}
       <button className="install-banner-close" onClick={dismiss} aria-label="Cerrar"><Ic n="cerrar" s={16} /></button>

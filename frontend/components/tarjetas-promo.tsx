@@ -40,23 +40,19 @@ export async function getPromo(ciudadSlug: string | undefined): Promise<Promo> {
   };
 }
 
-/** Devuelve la LISTA de tarjetas (no un fragmento): el carrusel arma un lugar
+/** Los servicios del carrusel de «Novedades» (farmacia de turno, baños, el
+ *  servicio de URUKU, Dax y «Aparecé en URUKU»), SIN los comercios destacados:
+ *  esos tienen su propio carrusel en la portada (`tarjetasDestacados`).
+ *
+ *  Devuelve la LISTA de tarjetas (no un fragmento): el carrusel arma un lugar
  *  por cada hijo, y un componente contaría como uno solo. Se usa como
- *  `{tarjetasPromo({ ... })}` adentro de `<CarruselNovedades>`. */
-export function tarjetasPromo({ promo, turnos, conGuia }: {
-  promo: Promo;
+ *  `{tarjetasServicios({ ... })}` adentro de `<CarruselNovedades>`. */
+export function tarjetasServicios({ turnos, conGuia }: {
   turnos: TurnoFarmacia[] | null;
   /** Bermejo: baños y el servicio de URUKU (son de acá). */
   conGuia: boolean;
 }): React.ReactElement[] {
   const deTurno = (turnos ?? []).filter((t) => t.comercios?.nombre);
-  // Portada de un local y, al lado, sus productos: se intercalan para que la
-  // publicidad no sean doce frentes de local seguidos.
-  const productosDe = new Map<string, { comercio: ResultadoBusqueda; foto: string }[]>();
-  for (const p of promo.productos) productosDe.set(p.comercio.id, [...(productosDe.get(p.comercio.id) ?? []), p]);
-  const ids = new Set([...promo.destacados.map((c) => c.id), ...promo.productos.map((p) => p.comercio.id)]);
-  const orden = [...ids];
-
   const lista: React.ReactElement[] = [];
   if (deTurno.length > 0) lista.push(
         <Link key="s-turno" href="/farmacias-de-turno" className="uk-offer sin-foto uk-offer-servicio">
@@ -100,11 +96,26 @@ export function tarjetasPromo({ promo, turnos, conGuia }: {
           <span className="uk-offer-emoji"><Ic n="comercios" s={64} peso="fill" /></span>
           <div className="uk-offer-body">
             <h3>Aparecé en URUKU</h3>
-            <small>Tu ficha con fotos, WhatsApp y ubicación · los destacados salen acá</small>
+            <small>Tu ficha con fotos, WhatsApp y ubicación</small>
           </div>
         </Link>,
   );
-  lista.push(...orden.flatMap((id) => {
+  return lista;
+}
+
+/** Los comercios destacados (los de la estrella): su portada y hasta dos fotos
+ *  de su galería, una tarjeta por cada una. Es la vidriera de la portada
+ *  («Comercios destacados») y sale de los MISMOS datos de `getPromo` que antes
+ *  iban mezclados en «Novedades». Sin destacados devuelve `[]`. */
+export function tarjetasDestacados(promo: Promo): React.ReactElement[] {
+  // Portada de un local y, al lado, sus productos: se intercalan para que la
+  // publicidad no sean doce frentes de local seguidos.
+  const productosDe = new Map<string, { comercio: ResultadoBusqueda; foto: string }[]>();
+  for (const p of promo.productos) productosDe.set(p.comercio.id, [...(productosDe.get(p.comercio.id) ?? []), p]);
+  const ids = new Set([...promo.destacados.map((c) => c.id), ...promo.productos.map((p) => p.comercio.id)]);
+  const orden = [...ids];
+
+  return orden.flatMap((id) => {
         const c = promo.destacados.find((d) => d.id === id) ?? productosDe.get(id)?.[0]?.comercio;
         if (!c) return [];
         const tarjetas: React.ReactElement[] = [];
@@ -135,6 +146,15 @@ export function tarjetasPromo({ promo, turnos, conGuia }: {
           );
         }
         return tarjetas;
-      }));
-  return lista;
+      });
+}
+
+/** Servicios y destacados juntos, como los muestra /novedades («Destacados y
+ *  servicios»). La portada, en cambio, los separa: cada uno en su carrusel. */
+export function tarjetasPromo({ promo, turnos, conGuia }: {
+  promo: Promo;
+  turnos: TurnoFarmacia[] | null;
+  conGuia: boolean;
+}): React.ReactElement[] {
+  return [...tarjetasServicios({ turnos, conGuia }), ...tarjetasDestacados(promo)];
 }

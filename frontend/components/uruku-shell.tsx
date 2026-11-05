@@ -12,6 +12,8 @@ import { WA_URUKU_TEXTO, waUruku } from "@/lib/contacto";
 import { Ic, climaIcono } from "@/components/ic";
 import { getCiudades, getCityCategoryPagesCached, getClima, getCotizaciones, getRedes } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
+import { CambioArsProvider } from "@/components/precio-ars";
+import { tasasDe } from "@/lib/cambio";
 import type { Ciudad } from "@/lib/types";
 import { versionLabel } from "@/lib/version";
 import { URUKU_SVG } from "@/lib/adornos";
@@ -93,6 +95,11 @@ export async function UrukuShell({
   const claveVecina = { ARS: "ars_bob", BRL: "brl_bob", PEN: "pen_bob" }[ciudad?.moneda_vecina ?? "ARS"] ?? "ars_bob";
   const cot2 = cotizaciones.filter((c) => c.clave === "usd_bob" || (esFrontera && c.clave === claveVecina)).slice(0, 2);
 
+  // Sin clima ni cotización la tira no se dibuja: vacía, en el celular dejaba un
+  // renglón de aire entre el logo y el buscador.
+  const arsPorBs = esFrontera && (ciudad?.moneda_vecina ?? "ARS") === "ARS" ? tasasDe(cotizaciones).ars_bob : null;
+  const hayTira =(conGuia && clima?.temp_c != null) || cot2.length > 0;
+
   const showFoot = showFooter && !fill;
 
   return (
@@ -113,8 +120,10 @@ export async function UrukuShell({
                 un velo blanco que en modo oscuro se notaba como un recuadro. */}
             <Link href="/" className="uk-brand"><img className="uk-brand-full" src="/uruku-horizontal.svg" alt="Uruku" /></Link>
 
+            {/* Las redes sociales ya NO van acá: viven sólo en el pie. En el
+                celular empujaban todo hacia abajo (docs/analisis-avellaneda-al-toque.md §2). */}
+            {hayTira && (
             <div className="uk-head-strip">
-              <SocialLinks redes={redes} cls="uk-social-links" />
               <div className="uk-topinfo">
                 {conGuia && clima?.temp_c != null && (
                   <span className="uk-top-item"><Ic n={climaIcono(clima.descripcion)} s={15} /> {Math.round(clima.temp_c)}°</span>
@@ -126,6 +135,7 @@ export async function UrukuShell({
                 ))}
               </div>
             </div>
+            )}
 
             {/* En la compu no hay barra de abajo: Mapa, Ofertas y Cambio van
                 acá, entre la cotización y la ciudad. Se esconde en el celular,
@@ -149,7 +159,7 @@ export async function UrukuShell({
           {showSearch && (
           <form className="uk-search" action="/buscar" method="get">
             <Ic n="buscar" />
-            <input name="q" placeholder="¿Qué estás buscando?" aria-label="Buscar" />
+            <input name="q" placeholder="Probá: zapatillas, celulares, farmacia" aria-label="Buscar: por ejemplo zapatillas, celulares o farmacia" />
             <button type="submit">Buscar</button>
           </form>
           )}
@@ -161,7 +171,11 @@ export async function UrukuShell({
         {showCatnav && <Suspense fallback={null}><CatNav active={activeCat} /></Suspense>}
       </header>
 
-      <main className={`${fill ? "uk-fill-main" : ""}${mainClass ? " " + mainClass : ""}`.trim() || undefined}>{children}</main>
+      <main className={`${fill ? "uk-fill-main" : ""}${mainClass ? " " + mainClass : ""}`.trim() || undefined}>
+        {/* «≈ $ ARS» junto a cada precio en Bs: sólo en frontera con el peso argentino
+            y sólo si el cambio del día está cargado (si no, `null` y no se dibuja nada). */}
+        <CambioArsProvider arsPorBs={arsPorBs}>{children}</CambioArsProvider>
+      </main>
 
       {showFoot && (
         <footer className="uk-footer">

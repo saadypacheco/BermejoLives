@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GaleriaFoto, GaleriaVideo } from "@/lib/data";
 import { contactoDeOferta, precioFmt, vencimientoFmt, type FeedItem } from "@/lib/types";
+import { PrecioArs } from "@/components/precio-ars";
 import { Ic } from "@/components/ic";
 import { LeadLink } from "@/components/lead-link";
 import { ReservarBoton } from "@/components/reservar-boton";
@@ -176,6 +177,7 @@ export function GaleriaTienda({ fotos, videos, publicaciones, nombre, comercioId
               <div className="uk-tienda-pie">
                 {it.pub.titulo && <span>{it.pub.titulo}</span>}
                 {it.pub.precio != null && <b>{precioFmt(it.pub.precio, it.pub.moneda)}</b>}
+                <PrecioArs precio={it.pub.precio} moneda={it.pub.moneda} />
               </div>
             )}
           </li>
@@ -268,6 +270,7 @@ function DetallePub({ pub, comercioId, comercioWhatsapp }: {
       {pub.titulo && <b className="tit">{pub.titulo}</b>}
       {pub.descripcion && <p>{pub.descripcion}</p>}
       {pub.precio != null && <b className="precio">{precioFmt(pub.precio, pub.moneda)}</b>}
+      <PrecioArs precio={pub.precio} moneda={pub.moneda} />
       {pub.vence_el && <small>Hasta el {vencimientoFmt(pub.vence_el)}</small>}
       {(pub.tipo === "oferta" || wa) && (
         <div className="acciones">
