@@ -48,6 +48,34 @@ def _normalizar_rubro(texto: str) -> str:
 NUMERO_AUTORIZADO_POR_CODIGO = "ingest-codigo"
 
 
+
+#: «No me contestó» de al menos tantos votantes distintos (30 días) para encender el sello «no responde».
+MIN_VOTANTES_NO = 3
+#: Mientras no hay `MIN_VOTANTES_NO` votantes distintos, `contacto_no` no pasa de acá (el sello exige 5).
+TOPE_NO_SIN_VOTANTES = 4
+
+
+def tapar_no_sin_votantes(no: int, filas: list[dict], ahora) -> tuple[int, int]:
+    """(contacto_no a guardar, votantes distintos de «no» en 30 días). Sin votantes suficientes, el
+    número queda tapado en `TOPE_NO_SIN_VOTANTES`: el sello «no responde» (5 «no») no se enciende."""
+    from datetime import datetime, timedelta
+
+    desde = ahora - timedelta(days=30)
+    votantes = set()
+    for l in filas:
+        if l.get("respondio") is not False or not l.get("respondio_por"):
+            continue
+        en = l.get("respondio_en")
+        try:
+            cuando = en if isinstance(en, datetime) else datetime.fromisoformat(str(en).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if cuando >= desde:
+            votantes.add(l["respondio_por"])
+    if len(votantes) < MIN_VOTANTES_NO:
+        no = min(no, TOPE_NO_SIN_VOTANTES)
+    return no, len(votantes)
+
 class CredencialDuplicada(Exception):
     """Dos personas emitieron la credencial del mismo agente a la vez: el índice
     único parcial dejó pasar a una sola."""
@@ -145,6 +173,7 @@ class Repo(Protocol):
     def reiniciar_fallos_clave(self, tabla: str, numero: str) -> None: ...
     def set_reset_code(self, user_id: str, code: str | None, expira: str | None) -> None: ...
     def confirmar_reset_code_comercio(self, whatsapp: str, codigo: str) -> bool: ...
+    def verificar_alta_de_comercio(self, comercio_id: str) -> bool: ...
     def set_password(self, user_id: str, password_hash: str) -> None: ...
     def gastar_reset_code(self, user_id: str) -> None: ...
     def get_comercio(self, comercio_id: str) -> dict | None: ...
@@ -217,7 +246,8 @@ class Repo(Protocol):
     def list_leads_by_comercio(self, comercio_id: str, dias: int) -> list[dict]: ...
     # «¿Te contestó?» (0120)
     def get_lead(self, lead_id: str) -> dict | None: ...
-    def marcar_lead_respondio(self, lead_id: str, respondio: bool) -> None: ...
+    def marcar_lead_respondio(self, lead_id: str, respondio: bool, votante: str | None = None) -> bool: ...
+    def voto_reciente(self, comercio_id: str, votante: str, dias: int = 30) -> bool: ...
     def recontar_contactos(self, comercio_id: str, dias: int = 90) -> dict: ...
     def list_no_contestan(self, limite: int = 10) -> list[dict]: ...
     def stats_admin(self) -> dict: ...
@@ -263,6 +293,7 @@ class Repo(Protocol):
     def set_comercio_confiable(self, comercio_id: str, valor: bool) -> dict: ...
     def crear_pago_pendiente(self, comercio_id: str, row: dict) -> dict: ...
     def list_pagos_pendientes(self) -> list[dict]: ...
+    def get_pago(self, pago_id: str) -> dict | None: ...
     def confirmar_pago(self, pago_id: str, meses: int, by: str, plan: str | None = None) -> dict: ...
     def asignar_plan_comercio(self, comercio_id: str, plan: str, cortesia: bool) -> dict | None: ...
     def marcar_destacados_cobrados(self, comercio_id: str) -> None: ...
@@ -1174,7 +1205,8 @@ class SupabaseRepo:
         return res.data or []
 
     def list_comercios_por_whatsapp(self, whatsapp: str) -> list[dict]:
-        """Los comercios ACTIVOS cuyo número de la FICHA es éste (no los números
+        """Los comercios ACTIVOS (y los registrados solos que esperan confirmar el número:
+        `baja_motivo = 'sin_verificar'`) cuyo número de la FICHA es éste (no los números
         autorizados a publicar: quien entra a Mi comercio es el dueño). El número
         se normaliza y se miran las dos formas en que puede estar guardado.
 
@@ -1186,8 +1218,12 @@ class SupabaseRepo:
         variantes = variantes_whatsapp(whatsapp)
         if not variantes:
             return []
+        # Los activos y los que se registraron solos y esperan confirmar el número (`sin_verificar`,
+        # ocultos al público): el dueño tiene que poder encontrarse para confirmarlo, y el número no
+        # puede quedar libre para colgarle otro negocio.
         res = (self._db.table("comercios").select("*")
-               .in_("whatsapp", variantes).eq("activo", True)
+               .in_("whatsapp", variantes)
+               .or_("activo.eq.true,baja_motivo.eq.sin_verificar")
                .order("created_at").order("id").execute())
         return res.data or []
 
@@ -1245,7 +1281,17 @@ class SupabaseRepo:
         self._db.table("comercio_usuarios").update(
             {"reset_code_confirmado_at": datetime.now(timezone.utc).isoformat()}
         ).eq("id", user["id"]).execute()
+        # Escribió desde ese número: si el negocio se registró solo y estaba oculto esperando esto,
+        # sale al público.
+        self.verificar_alta_de_comercio(user["comercio_id"])
         return True
+
+    def verificar_alta_de_comercio(self, comercio_id: str) -> bool:
+        """Enciende un comercio que se registró solo (`activo = false`, `baja_motivo = 'sin_verificar'`).
+        No toca ningún otro tipo de baja. Devuelve si lo encendió."""
+        res = (self._db.table("comercios").update({"activo": True, "baja_motivo": None})
+               .eq("id", comercio_id).eq("activo", False).eq("baja_motivo", "sin_verificar").execute())
+        return bool(res.data)
 
     def set_password(self, user_id: str, password_hash: str) -> None:
         self._db.table("comercio_usuarios").update(
@@ -2434,7 +2480,8 @@ class SupabaseRepo:
         """Los comercios dados de baja POR EL ADMIN, los últimos primero.
 
         Trae lo justo para la lista «Dados de baja» del panel. Lista `baja_motivo`
-        `admin` y los viejos sin motivo (null); NO los `vencido` (se reactivan solos
+        `admin`, los viejos sin motivo (null) y los `sin_verificar` (registrados solos, ocultos
+        hasta confirmar el número o hasta que alguien los apruebe con «Reactivar»); NO los `vencido` (se reactivan solos
         al pagar) ni los `borrador` (los enciende aprobar lo que mandaron). Con
         `ciudad_slug` filtra por esa ciudad; si la ciudad no existe, la lista queda vacía.
         """
@@ -2442,7 +2489,7 @@ class SupabaseRepo:
              .select("id, slug, nombre, portada_thumb_url, updated_at, baja_motivo, "
                      "rubros!comercios_rubro_id_fkey(nombre)")
              .eq("activo", False)
-             .or_("baja_motivo.is.null,baja_motivo.eq.admin"))
+             .or_("baja_motivo.is.null,baja_motivo.eq.admin,baja_motivo.eq.sin_verificar"))
         if ciudad_slug:
             ciudad_id = self.get_ciudad_id(ciudad_slug)
             if not ciudad_id:
@@ -2468,22 +2515,45 @@ class SupabaseRepo:
         res = self._db.table("leads").select("id, comercio_id, tipo, created_at, respondio").eq("id", lead_id).limit(1).execute()
         return res.data[0] if res.data else None
 
-    def marcar_lead_respondio(self, lead_id: str, respondio: bool) -> None:
+    def marcar_lead_respondio(self, lead_id: str, respondio: bool, votante: str | None = None) -> bool:
+        """Anota el voto de un contacto. UN solo voto: el UPDATE sólo toca la fila si todavía no
+        tiene respuesta (`respondio is null`), así que dos pedidos a la vez no suman dos. `votante`
+        es el hash de quién votó (`core/firmas.votante_de`). Devuelve si esta llamada fue la que votó."""
         from datetime import datetime, timezone
-        self._db.table("leads").update({"respondio": respondio, "respondio_en": datetime.now(timezone.utc).isoformat()}) \
-            .eq("id", lead_id).execute()
+        patch = {"respondio": respondio, "respondio_en": datetime.now(timezone.utc).isoformat()}
+        if votante:
+            patch["respondio_por"] = votante
+        res = (self._db.table("leads").update(patch).eq("id", lead_id).is_("respondio", "null").execute())
+        return bool(res.data)
+
+    def voto_reciente(self, comercio_id: str, votante: str, dias: int = 30) -> bool:
+        """¿Este votante ya votó sobre este comercio en los últimos `dias`?"""
+        from datetime import datetime, timezone, timedelta
+        desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
+        res = (self._db.table("leads").select("id").eq("comercio_id", comercio_id)
+               .eq("respondio_por", votante).gte("respondio_en", desde).limit(1).execute())
+        return bool(res.data)
 
     def recontar_contactos(self, comercio_id: str, dias: int = 90) -> dict:
         """contacto_ok / contacto_no del comercio: los «sí» y los «no» de los
         últimos `dias`. Se recalcula entero cada vez (son decenas de filas)
         en vez de sumar de a uno: así una respuesta cambiada o un lead
-        borrado no dejan el contador mintiendo."""
+        borrado no dejan el contador mintiendo.
+
+        El sello «no responde» (5 «no» y ningún «sí») necesita «no» de al menos
+        `MIN_VOTANTES_NO` votantes distintos en los últimos 30 días: mientras no los haya,
+        `contacto_no` se muestra tapado en `TOPE_NO_SIN_VOTANTES` y el sello no se enciende.
+        Los «no» de antes de que se guardara el votante (`respondio_por` vacío) no cuentan
+        como votantes."""
         from datetime import datetime, timezone, timedelta
-        desde = (datetime.now(timezone.utc) - timedelta(days=dias)).isoformat()
-        res = (self._db.table("leads").select("respondio").eq("comercio_id", comercio_id)
+        ahora = datetime.now(timezone.utc)
+        desde = (ahora - timedelta(days=dias)).isoformat()
+        res = (self._db.table("leads").select("respondio, respondio_por, respondio_en").eq("comercio_id", comercio_id)
                .gte("created_at", desde).not_.is_("respondio", "null").execute())
-        ok = sum(1 for l in (res.data or []) if l.get("respondio") is True)
-        no = sum(1 for l in (res.data or []) if l.get("respondio") is False)
+        filas = res.data or []
+        ok = sum(1 for l in filas if l.get("respondio") is True)
+        no = sum(1 for l in filas if l.get("respondio") is False)
+        no, _ = tapar_no_sin_votantes(no, filas, ahora)
         self._db.table("comercios").update({"contacto_ok": ok, "contacto_no": no}).eq("id", comercio_id).execute()
         return {"contacto_ok": ok, "contacto_no": no}
 
@@ -2971,6 +3041,10 @@ class SupabaseRepo:
         }).execute()
         return res.data[0]
 
+    def get_pago(self, pago_id: str) -> dict | None:
+        res = self._db.table("pagos").select("id, comercio_id, comprobante_url").eq("id", pago_id).limit(1).execute()
+        return res.data[0] if res.data else None
+
     def list_pagos_pendientes(self) -> list[dict]:
         res = (
             self._db.table("pagos")
@@ -3341,12 +3415,14 @@ class SupabaseRepo:
     def list_producto_refs(self, comercio_id: str) -> list[dict]:
         res = (
             self._db.table("producto_ref").select("*")
-            .eq("comercio_id", comercio_id).order("created_at", desc=True).execute()
+            .eq("comercio_id", comercio_id).neq("estado", "archivado")
+            .order("created_at", desc=True).execute()
         )
         return res.data or []
 
     def get_producto_ref(self, ref_id: str) -> dict | None:
-        res = self._db.table("producto_ref").select("*").eq("id", ref_id).limit(1).execute()
+        res = (self._db.table("producto_ref").select("*").eq("id", ref_id)
+               .neq("estado", "archivado").limit(1).execute())
         return res.data[0] if res.data else None
 
     def update_producto_ref(self, ref_id: str, patch: dict) -> dict:
@@ -3354,7 +3430,8 @@ class SupabaseRepo:
         return self.get_producto_ref(ref_id) or {}
 
     def delete_producto_ref(self, ref_id: str) -> None:
-        self._db.table("producto_ref").delete().eq("id", ref_id).execute()
+        """Baja lógica (B-05): `estado = 'archivado'`. Nunca DELETE físico; los listados y `get` no lo ven."""
+        self._db.table("producto_ref").update({"estado": "archivado"}).eq("id", ref_id).execute()
 
     # ---- reclamos ----
     def crear_reclamo(self, row: dict) -> dict:
@@ -3680,7 +3757,12 @@ class SupabaseRepo:
         return res.data[0]
 
     def borrar_saber_local(self, saber_id: str) -> None:
-        self._db.table("saber_local").delete().eq("id", saber_id).execute()
+        """Baja lógica (B-05): `activo = false`. El asistente deja de usarla; en el panel queda como
+        inactiva (se puede volver a encender). Nunca DELETE físico."""
+        from datetime import datetime, timezone
+        self._db.table("saber_local").update(
+            {"activo": False, "updated_at": datetime.now(timezone.utc).isoformat()}
+        ).eq("id", saber_id).execute()
 
     def list_respuestas_comercio(self, comercio_id: str, limite: int = 200, desde: int = 0) -> list[dict]:
         """Las respuestas ACTIVAS que cargó ese comercio, las últimas primero,
@@ -3779,7 +3861,9 @@ class SupabaseRepo:
         return res.data[0] if res.data else {}
 
     def delete_video_promo(self, video_id: str) -> bool:
-        res = self._db.table("videos_promocionales").delete().eq("id", video_id).execute()
+        """Baja lógica (B-05): `activo = false`. Sólo da True si estaba activo (borrar dos veces es 404)."""
+        res = (self._db.table("videos_promocionales").update({"activo": False})
+               .eq("id", video_id).eq("activo", True).execute())
         return bool(res.data)
 
     # ---- Novedades de URUKU (0150): baja lógica, nunca DELETE ----

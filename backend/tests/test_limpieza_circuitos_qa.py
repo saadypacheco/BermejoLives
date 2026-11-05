@@ -392,6 +392,11 @@ def test_un_codigo_de_comercio_vencido_no_entra(client, repo):
 def test_pedir_un_codigo_nuevo_invalida_el_anterior(client, repo):
     com = _alta_de_campo(client)
     viejo = client.post("/auth/comercio/recuperar", json={"whatsapp": "70002222"}).json()["codigo"]
+    # M-02: un código vigente NO se pisa (409); hay que esperar a que venza para pedir otro.
+    assert client.post("/auth/comercio/recuperar", json={"whatsapp": "70002222"}).status_code == 409
+    from datetime import datetime, timedelta, timezone
+    repo.get_comercio_usuario_por_whatsapp("59170002222")["reset_code_expira"] = (
+        datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
     nuevo = client.post("/auth/comercio/recuperar", json={"whatsapp": "70002222"}).json()["codigo"]
     if viejo == nuevo:
         pytest.skip("códigos iguales por azar")
@@ -423,8 +428,9 @@ def test_recuperar_con_un_numero_que_es_de_un_comprador_pero_no_de_un_negocio_es
 
 def test_el_numero_publicado_del_comercio_sin_cuenta_recibe_una_sola_cuenta_aunque_pida_muchas_veces(client, repo):
     repo.seed_comercio(id="com-s", slug="s", nombre="Sin cuenta", whatsapp="70123456", activo=True)
-    for _ in range(5):
-        assert client.post("/auth/comercio/recuperar", json={"whatsapp": "59170123456"}).status_code == 200
+    estados = [client.post("/auth/comercio/recuperar", json={"whatsapp": "59170123456"}).status_code
+               for _ in range(5)]
+    assert estados == [200, 409, 409, 409, 409]          # un código vigente no se pisa (M-02)
     assert len(repo.usuarios) == 1
 
 
@@ -525,6 +531,9 @@ def test_el_codigo_de_un_comercio_registrado_sirve_para_publicar_desde_un_celula
                     data={"nombre": "Mi Tienda", "whatsapp": "59170001111",
                           "lat": "-22.7361", "lng": "-64.3433"}, files=_foto())
     cf = f"URUKU-{repo.comercios[r.json()['comercio']['id']]['codigo']}"
+    # M-05: el autoregistro nace oculto, y un comercio oculto no publica por código hasta que se
+    # confirma el número o el equipo lo reactiva.
+    repo.verificar_alta_de_comercio(r.json()["comercio"]["id"])
     res = ingest.handle_message(_wh("w-pub", DESCONOCIDO, f"{cf} zapatillas Bs 250"), repo)
     assert res["estado"] == "pendiente"
     assert repo.publicaciones[0]["comercio_id"] == r.json()["comercio"]["id"]

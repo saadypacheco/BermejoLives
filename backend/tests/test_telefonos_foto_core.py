@@ -93,13 +93,14 @@ def test_con_palabras_alrededor(texto):
     ("0387 15 4123456", "+5493874123456", "celular"),
     ("(0387) 15-412-3456", "+5493874123456", "celular"),
     ("3878 15 512345", "+5493878512345", "celular"),
-    ("54 387 4123456", "+543874123456", "fijo"),             # sin 9 ni «15»: no se puede saber, sale fijo
-    ("+54 3878 42-1234", "+543878421234", "fijo"),
-    ("3878 421234", "+543878421234", "fijo"),
-    ("387 4123456", "+543874123456", "fijo"),
-    ("388 4123456", "+543884123456", "fijo"),                # Jujuy
-    ("3885 421234", "+543885421234", "fijo"),                # La Quiaca
-    ("3875 421234", "+543875421234", "fijo"),                # Salvador Mazza
+    # Sin 9 ni «15»: el dueño decidió tratarlos como CELULAR (salen con el 9, como se escribe en WhatsApp).
+    ("54 387 4123456", "+5493874123456", "celular"),
+    ("+54 3878 42-1234", "+5493878421234", "celular"),
+    ("3878 421234", "+5493878421234", "celular"),
+    ("387 4123456", "+5493874123456", "celular"),
+    ("388 4123456", "+5493884123456", "celular"),            # Jujuy
+    ("3885 421234", "+5493885421234", "celular"),            # La Quiaca
+    ("3875 421234", "+5493875421234", "celular"),            # Salvador Mazza
 ])
 def test_numeros_argentinos_de_la_region(escrito, esperado, tipo):
     tel = extraer(escrito)

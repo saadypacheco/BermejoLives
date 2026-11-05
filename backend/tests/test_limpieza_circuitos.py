@@ -224,7 +224,10 @@ def test_el_autoregistro_ya_no_devuelve_el_codigo_uruku(client, repo):
     (guardado,) = repo.comercios.values()
     assert guardado["codigo"] and len(guardado["codigo"]) == 4          # existe, sólo que no se muestra
     assert guardado["codigo"] not in r.text and f"URUKU-{guardado['codigo']}" not in r.text
-    # Y sigue sirviendo por la ingesta.
+    # Y sigue sirviendo por la ingesta... en cuanto el negocio sale (M-05: el autoregistro nace oculto
+    # hasta confirmar el número, y un comercio oculto no publica por código).
+    assert repo.get_comercio_por_codigo(f"URUKU-{guardado['codigo']}") is None
+    repo.verificar_alta_de_comercio(com["id"])
     assert repo.get_comercio_por_codigo(f"URUKU-{guardado['codigo']}")["id"] == com["id"]
 
 
@@ -691,7 +694,7 @@ def test_el_enlace_precarga_para_que_es_y_el_webhook_lo_reconoce(client, repo):
     repo.seed_comercio(nombre="Ferretería", whatsapp="59170123456", activo=True)
     r = client.post("/auth/comercio/recuperar", json={"whatsapp": "70123456"}).json()
     texto = parse_qs(urlparse(r["wa_link"]).query)["text"][0]
-    assert texto == f"CONFIRMAR-{r['codigo']} para entrar a Mi comercio de URUKU"
+    assert texto == f"CONFIRMAR-{r['codigo']}. Quiero ENTRAR a mi cuenta de URUKU desde otro teléfono"
     # El webhook confirma con ESE texto exacto.
     res = ingest.handle_message({"event": "message", "session": "obs@c.us",
                                  "payload": {"id": "wa-x", "from": "59170123456@c.us", "fromMe": False,
@@ -700,7 +703,7 @@ def test_el_enlace_precarga_para_que_es_y_el_webhook_lo_reconoce(client, repo):
 
     u = client.post("/auth/usuario/solicitar-codigo", json={"whatsapp": "70000001"}).json()
     texto_u = parse_qs(urlparse(u["wa_link"]).query)["text"][0]
-    assert texto_u == f"CONFIRMAR-{u['codigo']} para entrar a URUKU"
+    assert texto_u == f"CONFIRMAR-{u['codigo']}. Quiero ENTRAR a mi cuenta de URUKU desde otro teléfono"
 
 
 @pytest.mark.parametrize("cuerpo,vale", [
@@ -708,6 +711,7 @@ def test_el_enlace_precarga_para_que_es_y_el_webhook_lo_reconoce(client, repo):
     ("confirmar-123456 para entrar a Mi comercio de URUKU", True),
     ("  CONFIRMAR-123456 para entrar a URUKU\n", True),
     ("CONFIRMAR-123456.", True),
+    ("CONFIRMAR-123456. Quiero ENTRAR a mi cuenta de URUKU desde otro teléfono", True),
     ("CONFIRMAR-1234567 para entrar", False),
     ("CONFIRMAR-12345 para entrar", False),
     ("hola CONFIRMAR-123456", False),

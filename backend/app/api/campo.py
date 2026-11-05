@@ -8,15 +8,17 @@ confirme. La foto va a Supabase Storage (bucket público 'comercios').
 import httpx
 import structlog
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, Request
 from pydantic import BaseModel, Field, StringConstraints
 from starlette.concurrency import run_in_threadpool
 
-from app.core import auth
+from app.core import auth, firmas
+from app.core.clave import VentanaPorClave
 from app.core.codigo import sin_codigo
 from app.core.config import settings
+from app.core.ip import ip_cliente
 from app.core.telefono import whatsapp_para_guardar
 from app.core.text import limpiar_ref, slug_unico, slugify
 from app.db.content_repository import ContentRepo, get_content_repo
@@ -47,7 +49,7 @@ _TIPOS_LEAD  = {"whatsapp", "telefono", "email", "web", "vista", "mapa", "reserv
 
 
 @router.post("/auth/campo/login")
-def campo_login(body: LoginBody, repo: Repo = Depends(get_repo)) -> dict:
+def campo_login(body: LoginBody, request: Request, repo: Repo = Depends(get_repo)) -> dict:
     """Entra un agente de campo.
 
     La misma puerta que el panel (0126): la cuenta está en `usuarios_panel`
@@ -55,7 +57,7 @@ def campo_login(body: LoginBody, repo: Repo = Depends(get_repo)) -> dict:
     es la que está en los teléfonos desde el principio."""
     from app.api.auth import entrar
 
-    r = entrar(repo, body.email, body.password, "agente")
+    r = entrar(repo, body.email, body.password, "agente", ip_cliente(request))
     if not r:
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     return {**r, "agente": r["user"]}
@@ -250,6 +252,8 @@ async def alta_campo(
     try:
         enlaces.validar_redes({"tiktok_url": tiktok_url, "facebook_url": facebook_url,
                                "instagram_url": instagram_url, "sitio_web": sitio_web})
+        # El video de la oferta también termina en un enlace de la home (B-02).
+        video_url = enlaces.validar_red(video_url, "El enlace del video")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     # ¿Es el reintento de un alta que ya se cargó? Se mira ANTES de subir la foto.
@@ -520,7 +524,9 @@ async def lugar_video(
     data = await video.read()
     if not data:
         raise HTTPException(status_code=400, detail="Falta el video")
-    url = subir_video_comercio(f"lugares/{lugar_id}", data, video.content_type)
+    url = await run_in_threadpool(subir_video_comercio, f"lugares/{lugar_id}", data, video.content_type)
+    if not url:
+        raise HTTPException(status_code=502, detail="No se pudo subir el video, probá de nuevo")
     return {"ok": True, "lugar": repo.update_lugar(lugar_id, {"video_url": url})}
 
 
@@ -898,12 +904,29 @@ class _LeadIn(BaseModel):
     # De dónde llegó (el `?ref=` de la URL): volante-<slug>, mesa-<slug>,
     # ficha-<slug>, fb, ig. Vacío si entró por el buscador o el mapa.
     origen: str | None = Field(default=None, max_length=200)
+    # El id al azar de la sesión del navegador (el mismo que va en /visita). Si viene, el token que
+    # devuelve este endpoint queda atado a ella y el «¿te contestó?» tiene que reenviarla.
+    sesion: str | None = Field(default=None, max_length=40, pattern=r"^[A-Za-z0-9-]*$")
+
+
+#: Contactos que una misma IP puede registrar sobre un mismo comercio por hora. Pasado el tope no se
+#: guardan (la respuesta es la misma, sin id): nadie arma una pila de «contactos» falsos con un script.
+leads_por_ip_y_comercio = VentanaPorClave(maximo=20, ventana_seg=3600)
+#: Votos «¿te contestó?» por IP y por día (la clave lleva el día: el contador no cruza la medianoche).
+votos_por_ip = VentanaPorClave(maximo=10, ventana_seg=86400)
 
 
 @router.post("/lead")
-def registrar_lead(body: _LeadIn, repo: Repo = Depends(get_repo)) -> dict:
-    """Registra un click de contacto (WhatsApp, teléfono, email…) o una vista de ficha."""
+def registrar_lead(body: _LeadIn, request: Request, repo: Repo = Depends(get_repo)) -> dict:
+    """Registra un click de contacto (WhatsApp, teléfono, email…) o una vista de ficha.
+
+    Devuelve `id` y `token`: el token es el HMAC del id del contacto y la sesión que lo creó, y es
+    lo que hay que reenviar en `POST /lead/{id}/respondio` (sin él, cualquiera que adivine o consiga
+    un id podría votar por otro)."""
     tipo = body.tipo if body.tipo in _TIPOS_LEAD else "whatsapp"
+    if not leads_por_ip_y_comercio.permitir(f"{ip_cliente(request)}|{body.comercio_id}"):
+        logger.info("lead.tope_por_ip_y_comercio", comercio=body.comercio_id)
+        return {"ok": True, "id": None}
     fila = {"comercio_id": body.comercio_id, "tipo": tipo}
     # Si el contacto salió de una búsqueda, se guarda cuál. Es lo que permite
     # medir después si el buscador acertó: qué se mostró contra qué se eligió.
@@ -914,8 +937,10 @@ def registrar_lead(body: _LeadIn, repo: Repo = Depends(get_repo)) -> dict:
     if origen:
         fila["origen"] = origen
     creado = repo.insert_lead(fila) or {}
-    # El id vuelve para que el sitio pueda preguntar después «¿te contestó?».
-    return {"ok": True, "id": creado.get("id")}
+    # El id vuelve para que el sitio pueda preguntar después «¿te contestó?», con su token.
+    lead_id = creado.get("id")
+    return {"ok": True, "id": lead_id,
+            "token": firmas.token_de_lead(str(lead_id), body.sesion) if lead_id else None}
 
 
 # ── Visitas al sitio (0130) ──────────────────────────────────────────────────
@@ -964,31 +989,79 @@ def registrar_visita(body: _VisitaIn, repo: Repo = Depends(get_repo)) -> dict:
 
 class _RespondioIn(BaseModel):
     respondio: bool
+    # El `token` que devolvió `POST /lead` para este contacto. OPCIONAL hasta el
+    # `LEAD_TOKEN_OBLIGATORIO_DESDE` (7 días de gracia para el frontend viejo, con aviso en el log);
+    # después es obligatorio.
+    token: str | None = Field(default=None, max_length=128)
+    # La misma `sesion` que se mandó en `POST /lead` (si se mandó).
+    sesion: str | None = Field(default=None, max_length=40, pattern=r"^[A-Za-z0-9-]*$")
+
+
+#: Un contacto tiene que tener al menos esta antigüedad para poder votar sobre él: nadie sabe si le
+#: contestaron a los pocos segundos de tocar el botón, y un script sí vota al instante.
+ANTIGUEDAD_MINIMA_PARA_VOTAR = timedelta(minutes=2)
+#: Los votos que cuentan para el contador de un comercio (y el cupo de un mismo votante por comercio).
+VENTANA_DE_VOTOS_DIAS = 30
+
+
+def _token_de_lead_es_obligatorio() -> bool:
+    try:
+        desde = date.fromisoformat((settings.lead_token_obligatorio_desde or "").strip())
+    except ValueError:
+        return True                      # una fecha mal escrita no deja la puerta abierta
+    return datetime.now(timezone.utc).date() >= desde
 
 
 @router.post("/lead/{lead_id}/respondio")
-def lead_respondio(lead_id: str, body: _RespondioIn, repo: Repo = Depends(get_repo)) -> dict:
+def lead_respondio(lead_id: str, body: _RespondioIn, request: Request, repo: Repo = Depends(get_repo)) -> dict:
     """«¿Te contestó?»: el comprador dice sí o no sobre un contacto suyo.
 
-    Sólo sobre un contacto de WhatsApp de la última semana y una sola vez:
-    el id es un uuid que sólo tiene quien hizo el clic, y con eso alcanza
-    para que nadie pueda hundir a un comercio a fuerza de «no». Después se
-    recuentan los contadores del comercio (últimos 90 días)."""
-    from datetime import datetime, timezone, timedelta
+    Reglas (para que nadie pueda hundir a un comercio a fuerza de «no»):
+    - Sólo sobre un contacto de WhatsApp/teléfono de la última semana, con al menos 2 minutos.
+    - Un solo voto por contacto.
+    - El `token` del contacto (HMAC del id + la sesión que lo creó) tiene que ser el que devolvió
+      `POST /lead`.
+    - Un mismo votante (IP + sesión) vota una vez por comercio cada 30 días, y a lo sumo 10 veces por día.
+    - El sello «no responde» necesita «no» de al menos 3 votantes distintos (en `recontar_contactos`).
+    Después se recuentan los contadores del comercio (últimos 90 días)."""
     lead = repo.get_lead(lead_id)
     if not lead or lead.get("tipo") not in ("whatsapp", "telefono"):
         raise HTTPException(status_code=404, detail="contacto no encontrado")
+
+    # El token: el que devolvió /lead para ESTE contacto y esta sesión.
+    if body.token:
+        if not firmas.coincide(body.token, firmas.token_de_lead(lead_id, body.sesion)):
+            logger.info("lead.respondio_token_invalido", lead=lead_id)
+            raise HTTPException(status_code=403, detail="no se puede votar sobre este contacto")
+    elif _token_de_lead_es_obligatorio():
+        raise HTTPException(status_code=403, detail="no se puede votar sobre este contacto")
+    else:
+        logger.warning("lead.respondio_sin_token", lead=lead_id)   # el frontend viejo: sólo hasta la fecha
+
     if lead.get("respondio") is not None:
         return {"ok": True, "ya": True}
+
     creado = lead.get("created_at")
     if isinstance(creado, str):
         try:
             hace = datetime.now(timezone.utc) - datetime.fromisoformat(creado.replace("Z", "+00:00"))
+        except ValueError:
+            hace = None
+        if hace is not None:
             if hace > timedelta(days=7):
                 raise HTTPException(status_code=410, detail="ese contacto es de hace más de una semana")
-        except ValueError:
-            pass
-    repo.marcar_lead_respondio(lead_id, body.respondio)
+            if hace < ANTIGUEDAD_MINIMA_PARA_VOTAR:
+                raise HTTPException(status_code=425, detail="todavía es pronto para decir si te contestaron")
+
+    ip = ip_cliente(request)
+    hoy = datetime.now(timezone.utc).date().isoformat()
+    if not votos_por_ip.permitir(f"{hoy}|{ip}"):
+        raise HTTPException(status_code=429, detail="Demasiados intentos, probá mañana")
+    votante = firmas.votante_de(ip, body.sesion)
+    if repo.voto_reciente(lead["comercio_id"], votante, VENTANA_DE_VOTOS_DIAS):
+        return {"ok": True, "ya": True}          # ya votó sobre este comercio: no suma otra vez
+    if not repo.marcar_lead_respondio(lead_id, body.respondio, votante):
+        return {"ok": True, "ya": True}          # otro pedido se le adelantó: un solo voto por contacto
     conteo = repo.recontar_contactos(lead["comercio_id"])
     return {"ok": True, **conteo}
 
@@ -1113,7 +1186,7 @@ async def agregar_video(
         raise HTTPException(status_code=400, detail="Falta el video")
     if len(data) > _MAX_VIDEO_BYTES:
         raise HTTPException(status_code=413, detail="El video supera los 50 MB")
-    url = subir_video_comercio(comercio["slug"], data, video.content_type)
+    url = await run_in_threadpool(subir_video_comercio, comercio["slug"], data, video.content_type)
     if not url:
         raise HTTPException(status_code=502, detail="No se pudo subir el video, probá de nuevo")
     row = repo.add_video_comercio({

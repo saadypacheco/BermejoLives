@@ -136,12 +136,54 @@ def subir_foto_galeria(slug: str, data: bytes) -> tuple[str | None, str | None]:
     return url, thumb
 
 
-# Videos: se guardan tal cual (sin procesar) en el mismo volumen, servidos por
-# /fotos/... — son material crudo para redes, no se reproducen en la ficha aún.
+# Videos: se guardan en el mismo volumen, servidos por /fotos/... — son material crudo para redes.
+# Antes de guardarlos se les SACAN los metadatos (GPS, modelo del celular, fechas) con
+# `ffmpeg -map_metadata -1 -c copy`: no re-codifica (no pierde calidad ni tarda) y el video que sirve el
+# sitio público ya no dice dónde se grabó. Es lo mismo que se hace con las fotos (EXIF).
 _VIDEO_EXT = {"video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov", "video/3gpp": "3gp"}
+_FFMPEG_TIMEOUT_SEG = 180
+
+
+def sin_metadatos_video(data: bytes, ext: str) -> bytes | None:
+    """Los mismos bytes de video sin metadatos (`ffmpeg -map_metadata -1 -c copy`), o None si no se pudo.
+
+    Falla CERRADA: si ffmpeg no está, falla o no devuelve nada, NO se guarda el original (que podría
+    llevar la ubicación del local o de la casa del comerciante)."""
+    return _limpiar_con_ffmpeg(data, ext)
+
+
+def _limpiar_con_ffmpeg(data: bytes, ext: str) -> bytes | None:
+    import shutil
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        logger.error("video.sin_ffmpeg")
+        return None
+    try:
+        with tempfile.TemporaryDirectory(prefix="uruku-video-") as tmp:
+            entrada, salida = Path(tmp) / f"in.{ext}", Path(tmp) / f"out.{ext}"
+            entrada.write_bytes(data)
+            r = subprocess.run(
+                [ffmpeg, "-nostdin", "-v", "error", "-y", "-i", str(entrada),
+                 "-map_metadata", "-1", "-map_chapters", "-1", "-c", "copy", str(salida)],
+                capture_output=True, timeout=_FFMPEG_TIMEOUT_SEG, check=False)
+            if r.returncode != 0 or not salida.is_file() or salida.stat().st_size == 0:
+                logger.warning("video.ffmpeg_fallo", codigo=r.returncode,
+                               error=(r.stderr or b"")[-300:].decode("utf-8", "replace"))
+                return None
+            return salida.read_bytes()
+    except Exception:  # noqa: BLE001 - timeout, disco lleno…: no se guarda el crudo
+        logger.warning("video.ffmpeg_excepcion", exc_info=True)
+        return None
 
 
 def subir_video_comercio(slug: str, data: bytes, content_type: str | None) -> str | None:
     ext = _VIDEO_EXT.get((content_type or "").lower(), "mp4")
+    limpio = sin_metadatos_video(data, ext)
+    if limpio is None:
+        return None
     path = f"{slug}/videos/{secrets.token_hex(8)}.{ext}"
-    return guardar_foto_local(path, data)
+    return guardar_foto_local(path, limpio)

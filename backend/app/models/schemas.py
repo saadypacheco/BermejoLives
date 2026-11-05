@@ -1,5 +1,7 @@
 """Schemas de la API (snake_case, patrón Create/Update/Response — pattern KB)."""
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from app.services import enlaces
 
 
 class LoginBody(BaseModel):
@@ -39,7 +41,17 @@ class PublicarBody(BaseModel):
     descripcion: str | None = None
     precio: float | None = None
     moneda: str = "BOB"
-    imagen_url: str | None = None
-    tiktok_url: str | None = None
+    imagen_url: str | None = None         # sólo una foto subida a URUKU (B-02): se valida abajo
+    tiktok_url: str | None = None         # sólo http(s) (enlaces.validar_red)
     descuento_pct: int | None = None      # 1..99, para el badge "-20%"
     vence_el: str | None = None           # "YYYY-MM-DD"
+
+    @field_validator("imagen_url")
+    @classmethod
+    def _imagen_propia(cls, v):
+        return enlaces.validar_imagen_propia(v, "La imagen de la publicación")
+
+    @field_validator("tiktok_url")
+    @classmethod
+    def _enlace_tiktok(cls, v):
+        return enlaces.validar_red(v, "El enlace de TikTok") or None

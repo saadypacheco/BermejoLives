@@ -10,10 +10,10 @@ from datetime import date, datetime, timedelta, timezone
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from starlette.concurrency import run_in_threadpool
 
-from app.core import auth
+from app.core import auth, firmas
 from app.core import clave as claves
 from app.core import clave_comercio
 from app.core.config import settings
@@ -32,7 +32,7 @@ from app.services.imagenes import (
 )
 from app.services import enlaces
 from app.services import ficha_catalogo as catalogo_svc
-from app.services import fotos_galeria, portada
+from app.services import archivos_privados, fotos_galeria, portada
 from app.services import planes
 from app.services import ingreso_clave
 from app.services.cuentas import cuentas_de_numero, nueva_clave_comercio
@@ -64,6 +64,11 @@ _CAMPOS_EDITABLES = {
 }
 
 
+AVISO_ALTA_OCULTA = (
+    "Tu negocio quedó registrado, pero todavía no se ve en URUKU. Se publica cuando confirmes tu "
+    "número por WhatsApp (en «Mi comercio», Confirmar por WhatsApp) o cuando alguien de nuestro "
+    "equipo lo revise."
+)
 MSG_BAJA_ADMIN = "Tu comercio fue dado de baja por URUKU. Escribinos para volver."
 
 
@@ -155,6 +160,11 @@ async def comercio_registro(
             "plan": "gratis",
             "confiable": False,            # nuevo comercio NO publica directo hasta ser verificado
             "verificado": False,
+            # M-05: el número NO se verificó (nadie probó que sea suyo), así que el negocio nace OCULTO al
+            # público (`activo = false`). Sale cuando el dueño lo confirma por WhatsApp (CONFIRMAR) o
+            # cuando alguien del equipo lo aprueba (Reactivar). Ver `baja_motivo = 'sin_verificar'` (0187).
+            "activo": False,
+            "baja_motivo": "sin_verificar",
         }
     )
     if rubro_ids:
@@ -168,7 +178,8 @@ async def comercio_registro(
 
     token = auth.make_comercio_token(comercio["id"], whatsapp.strip(), cuenta["id"],
                                      cuenta.get("credenciales_version"))
-    logger.info("comercio.registro", slug=slug, con_gps=True, con_foto=bool(portada_url), lugar=lugar_id)
+    logger.info("comercio.registro", slug=slug, con_gps=True, con_foto=bool(portada_url), lugar=lugar_id,
+                oculto_hasta_confirmar=True)
     # La respuesta lleva una clave: que ningún navegador ni proxy la guarde.
     if response is not None:
         response.headers["Cache-Control"] = "no-store"
@@ -177,6 +188,10 @@ async def comercio_registro(
     return {
         "access_token": token,
         "clave_inicial": clave_inicial,
+        # El negocio todavía NO se ve en URUKU: sale al confirmar el número por WhatsApp o cuando el
+        # equipo lo apruebe. El frontend muestra `aviso`.
+        "oculto_hasta_confirmar": True,
+        "aviso": AVISO_ALTA_OCULTA,
         "comercio": {
             "id": comercio["id"],
             "nombre": comercio["nombre"],
@@ -248,10 +263,14 @@ async def solicitar_cambio_numero(
     data = await foto.read()
     if not data:
         raise HTTPException(status_code=400, detail="Falta la foto del local")
+    # M-11: la foto del trámite va al disco PRIVADO (se ve sólo desde el panel, con permiso).
     try:
-        foto_url = await run_in_threadpool(subir_foto_comercio, f"cambio-numero-{comercio['slug']}", data)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        procesada = await run_in_threadpool(procesar_imagen, data)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="El archivo no es una imagen válida") from exc
+    foto_url = await run_in_threadpool(archivos_privados.guardar, "cambio_numero", str(comercio["id"]), procesada)
+    if not foto_url:
+        raise HTTPException(status_code=502, detail="No se pudo guardar la foto, probá de nuevo")
 
     repo.crear_solicitud_cambio_numero({
         "comercio_id": comercio_id,
@@ -393,6 +412,17 @@ def comercio_recuperar(body: RecuperarBody, repo: Repo = Depends(get_repo)):
         negocio = negocios[0]
     user = repo.asegurar_comercio_usuario(negocio["id"])
 
+    # M-02: un código vigente NO se pisa. Quien pide uno nuevo mientras hay otro en curso no puede
+    # cancelarle la confirmación al dueño ni quedarse con la solicitud: ese código y su token ya los
+    # tiene quien lo pidió primero. Se espera a que venza (15 minutos) o se gaste.
+    if _codigo_vigente(user):
+        logger.info("comercio.recuperar.ya_hay_una_en_curso")
+        raise HTTPException(
+            status_code=409,
+            detail=("Ya hay una confirmación en curso para este negocio. Terminala desde el mismo "
+                    "navegador o esperá unos minutos y pedí otra."),
+        )
+
     # Que el código no coincida con uno pendiente de otra cuenta del mismo número:
     # el webhook busca la cuenta POR el código, y dos iguales serían ambiguas.
     ocupados = {u.get("reset_code") for u in cuentas_de_numero(repo, numero) if u["id"] != user["id"]}
@@ -402,30 +432,55 @@ def comercio_recuperar(body: RecuperarBody, repo: Repo = Depends(get_repo)):
     expira = (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()
     repo.set_reset_code(user["id"], code, expira)
     logger.info("comercio.recuperar.solicitado")
-    return {"ok": True, "codigo": code, "wa_link": settings.wa_link_confirmar(code, para="comercio")}
+    # `token`: se devuelve SÓLO acá, a quien pidió el código. Sin él no se puede consultar el estado
+    # (`/recuperar/estado`) ni cerrar la confirmación (`/recuperar/confirmar`): el código de 6 números
+    # solo ya no abre nada.
+    return {"ok": True, "codigo": code, "wa_link": settings.wa_link_confirmar(code, para="comercio"),
+            "token": firmas.token_de_recuperacion(user["id"], code, expira)}
 
 
-def _cuenta_con_codigo(repo: Repo, whatsapp: str, codigo: str) -> dict | None:
-    """La cuenta de ese número que tiene ESE código pendiente (el número puede
-    tener varias cuentas: el código dice cuál)."""
-    if not codigo:
+def _codigo_vigente(user: dict) -> bool:
+    """¿Esta cuenta tiene un código de recuperación todavía válido (no vencido ni gastado)?"""
+    if not user.get("reset_code"):
+        return False
+    expira = user.get("reset_code_expira")
+    try:
+        return bool(expira) and datetime.fromisoformat(str(expira)) > datetime.now(timezone.utc)
+    except ValueError:
+        return False
+
+
+def _cuenta_con_codigo(repo: Repo, whatsapp: str, codigo: str, token: str | None) -> dict | None:
+    """La cuenta de ese número que tiene ESE código pendiente (el número puede tener varias cuentas: el
+    código dice cuál) Y cuyo `token` de solicitud es el que se entregó a quien pidió el código. Sin el
+    token correcto es None, igual que un código que no existe: no hay forma de probar códigos a ciegas."""
+    if not codigo or not token:
         return None
-    return next((u for u in cuentas_de_numero(repo, whatsapp)
-                 if u.get("reset_code") and u["reset_code"] == codigo), None)
+    cuenta = next((u for u in cuentas_de_numero(repo, whatsapp)
+                   if u.get("reset_code") and u["reset_code"] == codigo), None)
+    if not cuenta:
+        return None
+    esperado = firmas.token_de_recuperacion(cuenta["id"], codigo, cuenta.get("reset_code_expira"))
+    return cuenta if firmas.coincide(token, esperado) else None
 
 
 @router.get("/auth/comercio/recuperar/estado")
-def comercio_recuperar_estado(whatsapp: str = Query(max_length=40), codigo: str = Query(max_length=40), repo: Repo = Depends(get_repo)) -> dict:
+def comercio_recuperar_estado(whatsapp: str = Query(max_length=40), codigo: str = Query(max_length=40),
+                              token: str = Query(max_length=128), repo: Repo = Depends(get_repo)) -> dict:
     """Polling: el frontend consulta esto después de mostrar el botón
-    "Confirmar por WhatsApp", antes de pedir la contraseña nueva. Sólo recibe
-    número + código: con un número de varios comercios, el código dice cuál."""
-    user = _cuenta_con_codigo(repo, whatsapp, codigo)
+    "Confirmar por WhatsApp", antes de pedir la contraseña nueva. Recibe número + código +
+    el `token` que devolvió `POST /auth/comercio/recuperar`. Con un token que no corresponde
+    contesta igual que con un código que no existe (`confirmado: false`): no se puede usar
+    para averiguar qué códigos hay."""
+    user = _cuenta_con_codigo(repo, whatsapp, codigo, token)
     return {"confirmado": bool(user and user.get("reset_code_confirmado_at"))}
 
 
 class RecuperarConfirmarBody(BaseModel):
     whatsapp: str
     codigo: str
+    # El `token` que devolvió `POST /auth/comercio/recuperar` (obligatorio).
+    token: str = Field(max_length=128)
     # Opcional: el comerciante entra con su WhatsApp, y obligarlo a inventar una
     # contraseña que nunca va a usar era un paso de más en el único camino que
     # tiene para entrar. Si la manda, se guarda; si no, entra igual.
@@ -443,7 +498,7 @@ def comercio_recuperar_confirmar(body: RecuperarConfirmarBody, request: Request,
     response.headers["Cache-Control"] = "no-store"
     if body.nueva_password is not None and len(body.nueva_password) < 6:
         raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
-    user = _cuenta_con_codigo(repo, body.whatsapp, body.codigo)
+    user = _cuenta_con_codigo(repo, body.whatsapp, body.codigo, body.token)
     if not user:
         raise HTTPException(status_code=400, detail="Código incorrecto")
     expira = user.get("reset_code_expira")
@@ -519,6 +574,17 @@ class PublicacionUpdate(BaseModel):
     tiktok_url: str | None = None
     descuento_pct: int | None = None
     vence_el: str | None = None
+
+    # B-02: la imagen sólo puede ser una foto subida a URUKU y el enlace sólo http(s).
+    @field_validator("imagen_url")
+    @classmethod
+    def _imagen_propia(cls, v):
+        return enlaces.validar_imagen_propia(v, "La imagen de la publicación")
+
+    @field_validator("tiktok_url")
+    @classmethod
+    def _enlace_tiktok(cls, v):
+        return enlaces.validar_red(v, "El enlace de TikTok") or None
 
 
 @router.patch("/comercio/publicaciones/{pub_id}")
@@ -1117,13 +1183,13 @@ _METODOS_PAGO = {"transferencia", "efectivo", "otro", "qr-bolivia", "qr-argentin
 
 
 def _subir_comprobante(comercio_id: str, data: bytes) -> str | None:
-    """Procesa y sube el comprobante (foto) al bucket. No bloquea si falla el storage."""
+    """Procesa el comprobante (foto) y lo guarda en el disco PRIVADO (M-11): se ve sólo desde el panel,
+    con el permiso `pagos`. Devuelve la referencia `privado:…` que va a la base. No bloquea si falla."""
     try:
         procesada = procesar_imagen(data)
     except Exception:  # noqa: BLE001
         raise HTTPException(status_code=400, detail="El comprobante no es una imagen válida")
-    path = f"comprobantes/{comercio_id}/{secrets.token_hex(8)}.jpg"
-    return guardar_foto_local(path, procesada)
+    return archivos_privados.guardar("comprobantes", str(comercio_id), procesada)
 
 
 @router.post("/comercio/pago")
@@ -1278,7 +1344,7 @@ async def agregar_mi_video(
         raise HTTPException(status_code=400, detail="Falta el video")
     if len(data) > _GAL_MAX_VIDEO_BYTES:
         raise HTTPException(status_code=413, detail="El video supera los 50 MB")
-    url = subir_video_comercio(_mi_comercio(repo, claims)["slug"], data, video.content_type)
+    url = await run_in_threadpool(subir_video_comercio, _mi_comercio(repo, claims)["slug"], data, video.content_type)
     if not url:
         raise HTTPException(status_code=502, detail="No se pudo subir el video, probá de nuevo")
     row = repo.add_video_comercio({"comercio_id": cid, "url": url, "duracion_seg": duracion_seg, "orden": repo.count_videos_comercio(cid)})

@@ -114,3 +114,22 @@ def validar_redes(patch: dict) -> None:
     for campo, etiqueta in CAMPOS_RED.items():
         if campo in patch:
             patch[campo] = validar_red(patch[campo], etiqueta)
+
+
+def validar_imagen_propia(valor: str | None, etiqueta: str = "La imagen") -> str | None:
+    """La URL de una imagen de una publicación: sólo las NUESTRAS (las que el backend guardó al subir
+    la foto: bajo `FOTOS_PUBLIC_BASE_URL`). Una imagen de otro dominio se carga en el navegador de cada
+    visitante de la home: un píxel de rastreo o contenido ajeno. Vacío/None pasa (sin imagen).
+    ValueError con el mensaje en español si no."""
+    from app.core.config import settings
+
+    if valor is None:
+        return None
+    limpio = str(valor).strip()
+    if not limpio:
+        return None
+    base = settings.fotos_public_base_url.rstrip("/") + "/"
+    validar_http(limpio, etiqueta)
+    if not limpio.startswith(base) or ".." in limpio[len(base):].split("/"):
+        raise ValueError(f"{etiqueta} tiene que ser una foto subida a URUKU (no un enlace de otro sitio).")
+    return limpio

@@ -5,6 +5,12 @@ from urllib.parse import quote
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+#: Lo que dice el mensaje precargado de «Confirmar por WhatsApp». Tiene que ser CLARO para quien lo manda:
+#: antes decía «para entrar a Mi comercio de URUKU» y alguien podía pasarle el enlace a un dueño para que
+#: confirmara el código de otro sin saber qué firmaba.
+TEXTO_CONFIRMAR = "Quiero ENTRAR a mi cuenta de URUKU desde otro teléfono"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -14,6 +20,10 @@ class Settings(BaseSettings):
     supabase_url: str = ""                 # cómo lo alcanza el backend (host.docker.internal en Docker)
     supabase_public_url: str = ""          # cómo lo alcanza el navegador (localhost) — para URLs de fotos
     supabase_service_role_key: str = ""
+    # Base por la red interna del compose (ej. http://buscadonde-postgrest:3000, SIN /rest/v1):
+    # el backend le habla directo a PostgREST y no pasa por db.<dominio>. Vacío = el
+    # comportamiento de siempre (supabase_url + /rest/v1).
+    postgrest_internal_url: str = ""
 
     # Envío de OTP por WhatsApp — proveedor intercambiable (ver services/whatsapp_client.py)
     whatsapp_provider: str = "waha"     # "waha" | "cloud_api"
@@ -43,12 +53,12 @@ class Settings(BaseSettings):
     def wa_link_confirmar(self, codigo: str, para: str = "usuario") -> str:
         """El enlace que abre WhatsApp con el «CONFIRMAR-XXXXXX» ya escrito.
 
-        El mensaje aclara PARA QUÉ es («para entrar a Mi comercio de URUKU»):
-        sin eso alguien podía pasarle el enlace a un dueño y hacerle mandar el
-        código de otro sin saber qué confirmaba. El webhook reconoce el código
-        con ese texto alrededor (`ingest._RE_CONFIRMAR`)."""
-        destino = "Mi comercio de URUKU" if para == "comercio" else "URUKU"
-        texto = quote(f"CONFIRMAR-{codigo} para entrar a {destino}")
+        El mensaje dice PARA QUÉ es («Quiero ENTRAR a mi cuenta de URUKU desde otro teléfono»): sin
+        eso alguien podía pasarle el enlace a un dueño y hacerle mandar el código de otro sin saber
+        qué confirmaba. El código va primero porque el webhook reconoce el mensaje por él, con el
+        texto de al lado (`ingest._RE_CONFIRMAR`). `para` ('usuario' / 'comercio') no cambia el
+        texto: la cuenta es la que pidió el código."""
+        texto = quote(f"CONFIRMAR-{codigo}. {TEXTO_CONFIRMAR}")
         return f"https://wa.me/{self.bot_whatsapp_numero}?text={texto}"
 
     # Los números de URUKU que están dentro de los grupos de comerciantes,
@@ -219,6 +229,10 @@ class Settings(BaseSettings):
     # guarda acá: disco PRIVADO del backend, NUNCA bajo `fotos_dir` (ése lo sirve
     # /fotos, público). Se mira sólo por el endpoint autenticado del admin.
     wa_received_dir: str = "/data/wa_received"
+    # Comprobantes de pago y fotos del trámite «Cambié de número» (services/archivos_privados.py): disco
+    # PRIVADO, nunca bajo `fotos_dir`. Vacío = la subcarpeta `privados/` de `wa_received_dir` (que ya es
+    # un volumen privado; no hace falta montar otro).
+    privados_dir: str = ""
     wa_received_retention_days: int = 30
     # Tope de fotos que se guardan por remitente desconocido en 24 h: un número que
     # manda cientos de fotos no puede llenar el disco. Lo que excede se registra en la
@@ -264,6 +278,17 @@ class Settings(BaseSettings):
     # Auth del panel (JWT self-contained, igual patrón que mentorcomercial)
     jwt_secret: str = "bermejo-dev-secret-change-in-prod"
     jwt_ttl_hours: int = 168           # 7 días
+
+    # Claves HMAC propias de dos tokens públicos (core/firmas.py). Cada una firma una sola cosa y NO es
+    # la del JWT: una filtración de una no abre las demás. Vacías = se derivan de JWT_SECRET con una
+    # etiqueta distinta (sigue funcionando; en producción conviene fijarlas: `openssl rand -hex 32`).
+    #  - LEAD_TOKEN_SECRET: ata el «¿te contestó?» al contacto y a la sesión que lo creó (POST /lead).
+    #  - RECUPERAR_TOKEN_SECRET: ata la confirmación de «recuperar cuenta» a quien pidió el código.
+    lead_token_secret: str = ""
+    # Hasta esta fecha (ISO) `POST /lead/{id}/respondio` acepta votos sin `token` (con aviso en el log):
+    # es el plazo para que el frontend nuevo llegue. Desde ahí el token es obligatorio.
+    lead_token_obligatorio_desde: str = "2026-11-13"
+    recuperar_token_secret: str = ""
 
     # Pepper de las claves de comercio: HMAC-SHA256(pepper, clave) antes de PBKDF2
     # (core/clave_comercio.py). Es un secreto del backend, NO va en la base: con la

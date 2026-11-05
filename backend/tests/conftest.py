@@ -21,6 +21,9 @@ def _reset_rate_limit():
     _BUCKETS.clear()
     from app.core.clave import pedidos_de_clave
     pedidos_de_clave.limpiar()       # los 3 pedidos de clave por hora también son de módulo
+    from app.api import campo as _campo
+    _campo.leads_por_ip_y_comercio.limpiar()   # los topes de /lead y del «¿te contestó?» también
+    _campo.votos_por_ip.limpiar()
     yield
 
 
@@ -46,6 +49,15 @@ def _sin_pepper(monkeypatch):
     cambiar el formato de los hashes. Los tests del pepper lo ponen a propósito."""
     from app.core.config import settings
     monkeypatch.setattr(settings, "clave_pepper", "")
+    yield
+
+
+@pytest.fixture(autouse=True)
+def _videos_sin_ffmpeg(monkeypatch):
+    """Los tests de subida de videos mandan bytes de mentira: no hay nada que limpiar con ffmpeg. Los
+    tests de `sin_metadatos_video` lo prueban aparte, con su propio ffmpeg o un subprocess falso."""
+    from app.services import imagenes
+    monkeypatch.setattr(imagenes, "sin_metadatos_video", lambda data, ext: data)
     yield
 
 
@@ -1116,7 +1128,7 @@ class FakeRepo:
         # Sólo las bajas del admin y las viejas sin motivo (no `vencido` ni `borrador`).
         out = [c for c in self.comercios.values()
                if c.get("activo", True) is False
-               and c.get("baja_motivo") in (None, "admin")
+               and c.get("baja_motivo") in (None, "admin", "sin_verificar")
                and (ciudad_id is None or c.get("ciudad_id") == ciudad_id)]
         out.sort(key=lambda c: str(c.get("updated_at") or ""), reverse=True)
         return [
@@ -1142,7 +1154,8 @@ class FakeRepo:
             return []
         # El orden de inserción hace de «el más antiguo primero» del real.
         return [c for c in self.comercios.values()
-                if c.get("whatsapp") in variantes and c.get("activo", True)]
+                if c.get("whatsapp") in variantes
+                and (c.get("activo", True) or c.get("baja_motivo") == "sin_verificar")]
 
     def get_comercio_por_whatsapp(self, whatsapp):
         filas = self.list_comercios_por_whatsapp(whatsapp)
@@ -1269,7 +1282,15 @@ class FakeRepo:
         if not expira or datetime.fromisoformat(expira) < datetime.now(timezone.utc):
             return False
         user["reset_code_confirmado_at"] = datetime.now(timezone.utc).isoformat()
+        self.verificar_alta_de_comercio(user["comercio_id"])
         return True
+
+    def verificar_alta_de_comercio(self, comercio_id):
+        c = self.comercios.get(comercio_id)
+        if c and c.get("activo", True) is False and c.get("baja_motivo") == "sin_verificar":
+            c["activo"], c["baja_motivo"] = True, None
+            return True
+        return False
 
     def set_password(self, user_id, password_hash):
         for u in self.usuarios.values():
@@ -1651,7 +1672,8 @@ class FakeRepo:
         return self.saber_local[row["id"]]
 
     def borrar_saber_local(self, saber_id):
-        self.saber_local.pop(saber_id, None)
+        if saber_id in self.saber_local:
+            self.saber_local[saber_id]["activo"] = False       # baja lógica, como el real
 
     def list_respuestas_comercio(self, comercio_id, limite=200, desde=0):
         filas = [s for s in self.saber_local.values()
@@ -1734,9 +1756,11 @@ class FakeRepo:
         return full
 
     def delete_video_promo(self, video_id):
-        antes = len(self.videos_promo)
-        self.videos_promo = [v for v in self.videos_promo if v["id"] != video_id]
-        return len(self.videos_promo) < antes
+        for v in self.videos_promo:
+            if v["id"] == video_id and v.get("activo", True):
+                v["activo"] = False                            # baja lógica, como el real
+                return True
+        return False
 
     # ---- Novedades de URUKU (0150) ----
     def list_novedades_uruku(self):
@@ -2449,21 +2473,39 @@ class FakeRepo:
 
     # ---- leads ----
     def insert_lead(self, row):
-        fila = {"id": self._id("lead"), **row}
+        from datetime import datetime, timezone
+        # `created_at` lo pone la base (default now()): los tests de «¿te contestó?» lo retroceden a mano.
+        fila = {"id": self._id("lead"), "created_at": datetime.now(timezone.utc).isoformat(), **row}
         self.leads.append(fila)
         return fila
 
     def get_lead(self, lead_id):
         return next((l for l in self.leads if l["id"] == lead_id), None)
 
-    def marcar_lead_respondio(self, lead_id, respondio):
+    def marcar_lead_respondio(self, lead_id, respondio, votante=None):
+        from datetime import datetime, timezone
         for l in self.leads:
-            if l["id"] == lead_id:
+            if l["id"] == lead_id and l.get("respondio") is None:
                 l["respondio"] = respondio
+                l["respondio_en"] = datetime.now(timezone.utc).isoformat()
+                if votante:
+                    l["respondio_por"] = votante
+                return True
+        return False
+
+    def voto_reciente(self, comercio_id, votante, dias=30):
+        from datetime import datetime, timedelta, timezone
+        desde = datetime.now(timezone.utc) - timedelta(days=dias)
+        return any(l.get("comercio_id") == comercio_id and l.get("respondio_por") == votante
+                   and l.get("respondio_en") and datetime.fromisoformat(l["respondio_en"]) >= desde
+                   for l in self.leads)
 
     def recontar_contactos(self, comercio_id, dias=90):
+        from datetime import datetime, timezone
+        from app.db.repository import tapar_no_sin_votantes
         mios = [l for l in self.leads if l.get("comercio_id") == comercio_id and l.get("respondio") is not None]
         ok = sum(1 for l in mios if l["respondio"]); no = len(mios) - ok
+        no, _ = tapar_no_sin_votantes(no, mios, datetime.now(timezone.utc))
         if comercio_id in self.comercios:
             self.comercios[comercio_id].update({"contacto_ok": ok, "contacto_no": no})
         return {"contacto_ok": ok, "contacto_no": no}
@@ -2533,10 +2575,12 @@ class FakeRepo:
         return full
 
     def list_producto_refs(self, comercio_id):
-        return [p for p in self.producto_refs.values() if p.get("comercio_id") == comercio_id]
+        return [p for p in self.producto_refs.values()
+                if p.get("comercio_id") == comercio_id and p.get("estado") != "archivado"]
 
     def get_producto_ref(self, ref_id):
-        return self.producto_refs.get(ref_id)
+        p = self.producto_refs.get(ref_id)
+        return p if p and p.get("estado") != "archivado" else None
 
     def update_producto_ref(self, ref_id, patch):
         p = self.producto_refs.get(ref_id)
@@ -2546,7 +2590,8 @@ class FakeRepo:
         return p
 
     def delete_producto_ref(self, ref_id):
-        self.producto_refs.pop(ref_id, None)
+        if ref_id in self.producto_refs:
+            self.producto_refs[ref_id]["estado"] = "archivado"      # baja lógica, como el real
 
     # ---- pagos self-service ----
     def crear_pago_pendiente(self, comercio_id, row):
@@ -2554,6 +2599,9 @@ class FakeRepo:
         full = {"id": pid, "comercio_id": comercio_id, "estado": "pendiente", **row}
         self.pagos[pid] = full
         return full
+
+    def get_pago(self, pago_id):
+        return self.pagos.get(pago_id)
 
     def list_pagos_pendientes(self):
         return [p for p in self.pagos.values() if p.get("estado") == "pendiente"]
@@ -2674,12 +2722,40 @@ def _telefonos_repo_en_memoria(trepo):
     app.dependency_overrides.pop(get_telefonos_repo, None)
 
 
+class _ClienteConTokenDeRecuperacion(TestClient):
+    """El TestClient de siempre, que además completa el `token` de la solicitud de «recuperar cuenta».
+
+    `/auth/comercio/recuperar/estado` y `/recuperar/confirmar` exigen el `token` que sólo recibe quien pidió
+    el código (M-02). Los tests viejos de la recuperación ejercen OTRAS cosas (la clave nueva, el bloqueo, las
+    sesiones…) y llaman con `{whatsapp, codigo}`: acá se les agrega el token que corresponde al código
+    vigente de esa cuenta, o uno inválido si ese código no existe. Los tests del token mismo apagan esto con
+    `client.auto_token = False` y mandan (o no) el token a mano."""
+
+    auto_token = True
+    repo_de_prueba = None
+
+    def request(self, method, url, **kw):
+        if self.auto_token and isinstance(url, str) and url.split("?")[0] in (
+                "/auth/comercio/recuperar/estado", "/auth/comercio/recuperar/confirmar"):
+            dato = kw.get("params") if method.upper() == "GET" else kw.get("json")
+            if isinstance(dato, dict) and "token" not in dato and dato.get("codigo"):
+                from app.core import firmas
+                from app.services.cuentas import cuentas_de_numero
+                cuenta = next((u for u in cuentas_de_numero(self.repo_de_prueba, dato.get("whatsapp"))
+                               if u.get("reset_code") == dato["codigo"]), None)
+                token = (firmas.token_de_recuperacion(cuenta["id"], dato["codigo"], cuenta.get("reset_code_expira"))
+                         if cuenta else "0" * 32)
+                kw["params" if method.upper() == "GET" else "json"] = {**dato, "token": token}
+        return super().request(method, url, **kw)
+
+
 @pytest.fixture
 def client(repo, crepo):
     from app.db.content_repository import get_content_repo
     app.dependency_overrides[get_repo] = lambda: repo
     app.dependency_overrides[get_content_repo] = lambda: crepo
-    with TestClient(app) as c:
+    with _ClienteConTokenDeRecuperacion(app) as c:
+        c.repo_de_prueba = repo
         yield c
     app.dependency_overrides.clear()
 

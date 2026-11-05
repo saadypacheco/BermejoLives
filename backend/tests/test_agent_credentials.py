@@ -19,7 +19,7 @@ from app.core import auth
 from app.core.config import settings
 
 NO_ES_DE_URUKU = {"detail": "Esta credencial no es de URUKU"}
-PASS = "campo2026"
+PASS = "campo-2026-larga"
 
 
 def _h(t):
