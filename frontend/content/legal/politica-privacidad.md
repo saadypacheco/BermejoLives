@@ -103,6 +103,7 @@ De agentes y equipo guardamos email, nombre, ciudad, permisos, último ingreso y
 - **Google (Gemini):** le mandamos fotos de ofertas y de locales, textos de publicaciones y las preguntas al asistente, para describirlos, clasificarlos y revisar que no sean estafas. Usamos el **plan pago**: Google no usa estos datos para entrenar sus sistemas.
 - **WhatsApp (Meta):** todo lo que escribís en WhatsApp pasa por WhatsApp, con sus propias reglas.
 - **Facebook, Instagram, TikTok y el canal de WhatsApp de URUKU:** publicamos ahí, a mano y en las cuentas de URUKU, ofertas y videos de los comercios que lo autorizaron. No les mandamos otros datos.
+- **Cloudflare:** protege el sitio y lo hace más rápido. También cuenta cuántas páginas se ven (Web Analytics), **sin cookies** y sin guardar quién sos.
 - **Hostinger:** guarda nuestro servidor, en **Brasil**. Hacemos copias de seguridad que se reemplazan cada 14 días.
 - **Cloudflare:** el tráfico del sitio pasa por su red para protegerlo.
 - **Mapas:** tu navegador baja los mapas de nuestro servidor o, si falla, de OpenStreetMap, y la librería del mapa de unpkg; esos servicios ven tu IP.
