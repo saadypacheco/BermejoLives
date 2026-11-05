@@ -101,6 +101,10 @@ const MOTIVOS_LOTE: Record<string, string> = {
   comercio_inactivo: "El comercio está dado de baja",
   sin_permiso: "No tenés permiso para ese comercio",
   fuera_de_ciudad: "Es de una ciudad que no te toca",
+  otra_ciudad: "Es de una ciudad que no te toca",
+  no_existe: "Ya no existe en la lista o el comercio está de baja",
+  numero_en_uso: "Ese número ya es de otro negocio",
+  whatsapp_invalido: "No es un WhatsApp válido",
   error: "No se pudo guardar",
 };
 
