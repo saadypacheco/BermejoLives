@@ -10,7 +10,7 @@ import type { ModoCiudad } from "@/components/admin-ciudad";
 
 export type SeccionAdmin =
   | "inicio"
-  | "negocios" | "calles" | "lugares" | "importados" | "adornos" | "cambio-numero"
+  | "negocios" | "calles" | "lugares" | "importados" | "adornos" | "cambio-numero" | "telefonos-fotos"
   | "publicaciones" | "whatsapp" | "difusion" | "reclamos" | "banco" | "redes"
   | "catalogo" | "rubros" | "revision-rubros"
   | "cargas"
@@ -45,6 +45,9 @@ export const MENU: GrupoMenu[] = [
     { id: "importados", label: "Importados", icono: "descargar", permiso: "datos", ciudad: "filtra" },
     { id: "adornos", label: "Adornos", icono: "destacado", permiso: "lugares", ciudad: "filtra" },
     { id: "cambio-numero", label: "Cambios de número", icono: "telefono", permiso: "panel", ciudad: "pendiente" },
+    // Números leídos en las portadas (docs/telefonos-en-fotos.md). Mismo permiso que «Editar negocio»:
+    // aplicar un número escribe en la ficha por el mismo camino.
+    { id: "telefonos-fotos", label: "Teléfonos en fotos", icono: "foto", permiso: "moderar", ciudad: "filtra" },
   ] },
   { titulo: "Contenido", secciones: [
     { id: "publicaciones", label: "Publicaciones", icono: "ofertas", permiso: "moderar", ciudad: "pendiente" },

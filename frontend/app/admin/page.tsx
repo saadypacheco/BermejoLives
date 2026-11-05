@@ -54,6 +54,7 @@ import { ContactosPanel } from "@/components/contactos-panel";
 import { EquipoPanel } from "@/components/equipo-panel";
 import { ContentBankPanel } from "@/components/content/content-bank-panel";
 import { ContentRedesPanel } from "@/components/content/content-redes-panel";
+import { TelefonosFotosPanel } from "@/components/admin/telefonos-fotos-panel";
 import { SubscribersPanel } from "@/components/subscribers/subscribers-panel";
 import { ManualesPanel } from "@/components/admin/manuales-panel";
 import { puedo } from "@/lib/api";
@@ -529,6 +530,7 @@ function AdminPanel() {
       {permitida && seccion === "vencimientos" && <VencimientosPanel />}
       {permitida && seccion === "banco" && <ContentBankPanel />}
       {permitida && seccion === "redes" && <ContentRedesPanel />}
+      {permitida && seccion === "telefonos-fotos" && ciudadLista && <TelefonosFotosPanel ciudadSlug={slugCiudad} ciudadNombre={ciudad?.nombre ?? null} />}
       {permitida && seccion === "suscriptores" && ciudadLista && <SubscribersPanel ciudadSlug={slugCiudad} />}
 
       {permitida && seccion === "negocios" && (
