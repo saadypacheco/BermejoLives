@@ -347,6 +347,14 @@ def test_la_migracion_0143_es_la_misma_en_las_dos_carpetas_y_ninguna_posterior_l
             if p.name[:4] <= "0143":
                 continue
             sin_comentarios = chr(10).join(l.split("--")[0] for l in p.read_text(encoding="utf-8").splitlines())
+            if p.name.startswith("0186_"):
+                # La 0186 reemplaza `buscar_comercios` SOLO para cambiar el tope de filas: conserva el
+                # cuerpo de la 0143 (lo prueba test_comercios_columnas_publicas.py) y por lo tanto la
+                # estrella y el orden del plan.
+                assert "plan_orden" in sin_comentarios and "estrella" in sin_comentarios
+                otras = re.compile(r"create\s+(or\s+replace\s+)?function\s+(public\.)?(plan_orden_de|plan_publico|planes_orden|admin_resumen)\b", re.I)
+                assert not otras.search(sin_comentarios), p.name
+                continue
             assert not redefine.search(sin_comentarios), p.name
 
 

@@ -37,17 +37,19 @@ function logSupaError(tag: string, error: unknown) {
  * `fotos_extra`. Cada columna de acá tiene que estar en el `grant select (...)`
  * de esa migración (lo vigila backend/tests/test_comercios_columnas_publicas.py).
  * Una columna nueva de la ficha: primero el grant en una migración, después acá.
+ * Desde la 0186 tampoco se leen `email`, `origen_importacion`, `ia_analizado_at`,
+ * `rubro_revisado_at`, `sinonimos`, `subcategoria_norm` ni `busqueda`: son internas.
  *
  * La estrella y el orden del plan NO salen de esta lista: los da
  * `plan_publico()` / `buscar_comercios()` sin exponer fechas ni precios.
  */
 export const COLUMNAS_COMERCIO = [
   "id", "slug", "nombre", "descripcion", "logo_url", "portada_url", "portada_thumb_url", "portada_pos",
-  "whatsapp", "telefono", "email", "tiktok_url", "facebook_url", "instagram_url", "sitio_web",
+  "whatsapp", "telefono", "tiktok_url", "facebook_url", "instagram_url", "sitio_web",
   "canal_wa_url", "catalogo_url", "zona_id", "direccion", "calle", "lat", "lng", "como_llegar",
   "plan", "verificado", "rating", "destacado", "activo", "suspendido", "confiable", "fuente",
   "created_at", "updated_at", "modalidad", "rubro_id", "ciudad_id", "lugar_id", "puesto",
-  "monedas_aceptadas", "envios_internacionales", "origen_importacion", "pedido_minimo", "tiene_factura",
+  "monedas_aceptadas", "envios_internacionales", "pedido_minimo", "tiene_factura",
   "horario", "horario_estimado", "tiene_stock", "acepta_reservas", "tiene_pasero", "talles_especiales",
   "prod_obs_human", "prod_det_ia", "subcategoria", "contacto_ok", "contacto_no", "sin_cartel",
 ].join(", ");

@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta, timezone
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from app.core import auth
@@ -201,9 +201,10 @@ def comercio_login(body: LoginBody, repo: Repo = Depends(get_repo)) -> dict:
 
 
 class GenerarDescripcionBody(BaseModel):
-    nombre: str
-    que_vende: str
-    rubros: list[dict]
+    # Endpoint público que llama al modelo: el texto va acotado (el costo crece con él).
+    nombre: str = Field(max_length=200)
+    que_vende: str = Field(max_length=1500)
+    rubros: list[dict] = Field(max_length=100)
 
 
 @router.post("/comercio/generar-descripcion")
@@ -228,10 +229,10 @@ def comercio_buscar(q: str = Query(..., min_length=2), repo: Repo = Depends(get_
 @router.post("/comercio/{comercio_id}/solicitar-cambio-numero")
 async def solicitar_cambio_numero(
     comercio_id: str,
-    whatsapp_nuevo: str = Form(...),
-    lat: float = Form(...),
-    lng: float = Form(...),
-    mensaje: str | None = Form(None),
+    whatsapp_nuevo: str = Form(..., max_length=40),
+    lat: float = Form(..., ge=-90, le=90),
+    lng: float = Form(..., ge=-180, le=180),
+    mensaje: str | None = Form(None, max_length=500),
     foto: UploadFile = File(...),
     repo: Repo = Depends(get_repo),
 ) -> dict:
@@ -414,7 +415,7 @@ def _cuenta_con_codigo(repo: Repo, whatsapp: str, codigo: str) -> dict | None:
 
 
 @router.get("/auth/comercio/recuperar/estado")
-def comercio_recuperar_estado(whatsapp: str, codigo: str, repo: Repo = Depends(get_repo)) -> dict:
+def comercio_recuperar_estado(whatsapp: str = Query(max_length=40), codigo: str = Query(max_length=40), repo: Repo = Depends(get_repo)) -> dict:
     """Polling: el frontend consulta esto después de mostrar el botón
     "Confirmar por WhatsApp", antes de pedir la contraseña nueva. Sólo recibe
     número + código: con un número de varios comercios, el código dice cuál."""

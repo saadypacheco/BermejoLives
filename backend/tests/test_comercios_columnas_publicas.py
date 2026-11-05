@@ -35,12 +35,17 @@ PRIVADAS = ("plan_cortesia", "paga_hasta", "cargado_por", "capturado_en")
 # calculó desde la dirección y las dudas internas del equipo sobre la ficha; nacen privadas.
 PRIVADAS_EXTRA = ("consentimiento_dueno", "consentimiento_dueno_en", "fotos_extra", "wa_jid", "rubro_revisado_por", "baja_motivo", "codigo",
                   "codigo_anterior", "alta_uid", "ubicacion_aproximada", "nota_interna")
-NO_VAN_EN_LA_LISTA = PRIVADAS + PRIVADAS_EXTRA
+# Internas que la 0145 sí dio y la 0186 (paso 0 de la revisión de seguridad de noviembre) le quita a
+# anon y authenticated: el sitio público no las usa. El backend (service_role) las sigue leyendo.
+CERRADAS_POR_0186 = ("email", "origen_importacion", "ia_analizado_at", "rubro_revisado_at",
+                     "sinonimos", "subcategoria_norm", "busqueda")
+NO_VAN_EN_LA_LISTA = PRIVADAS + PRIVADAS_EXTRA + CERRADAS_POR_0186
 # `codigo` (URUKU-XXXX) estaba en la lista de la 0145 (la ficha pública lo leía). La
 # 0148 (docs/clave-automatica.md) se lo quita a anon: desde ahí es privada. La 0145 ya
 # está aplicada y no se toca, así que su lista conserva `codigo` y se descuenta acá.
 CERRADAS_POR_0148 = ("codigo",)
-NO_VAN_EN_LA_0145 = tuple(c for c in NO_VAN_EN_LA_LISTA if c not in CERRADAS_POR_0148)
+NO_VAN_EN_LA_0145 = tuple(c for c in NO_VAN_EN_LA_LISTA
+                         if c not in CERRADAS_POR_0148 and c not in CERRADAS_POR_0186)
 
 
 def _0145(carpeta="supabase/migrations") -> str:
@@ -64,8 +69,8 @@ def _columnas_dadas() -> list[str]:
 
 
 def _columnas_publicas() -> list[str]:
-    """Lo que anon puede leer HOY: la lista de la 0145 menos lo que cierra la 0148."""
-    return [c for c in _columnas_dadas() if c not in CERRADAS_POR_0148]
+    """Lo que anon puede leer HOY: la lista de la 0145 menos lo que cierran la 0148 y la 0186."""
+    return [c for c in _columnas_dadas() if c not in CERRADAS_POR_0148 and c not in CERRADAS_POR_0186]
 
 
 # ───────────────────────────────────────────────────── la migración 0145
@@ -408,6 +413,69 @@ def test_ninguna_vista_ni_funcion_publica_expone_codigo():
         sql = _sin_comentarios_sql(f.read_text(encoding="utf-8"))
         if re.search(r"\bcodigo\b", sql) and f.name not in permitidas:
             pytest.fail(f"{f.name} nombra `codigo`: ¿lo expone a anon? Revisalo y, si es del panel, agregalo a la lista")
+
+
+# ───────────────────────────────────────────────────── la migración 0186 (paso 0 de seguridad)
+
+def _0186(carpeta="supabase/migrations") -> str:
+    return (RAIZ / carpeta / "0186_cierre_lectura_publica.sql").read_text(encoding="utf-8")
+
+
+def test_la_0186_esta_igual_en_supabase_y_en_selfhost():
+    a = (RAIZ / "supabase/migrations/0186_cierre_lectura_publica.sql").read_bytes()
+    b = (RAIZ / "selfhost/postgres-init/0186_cierre_lectura_publica.sql").read_bytes()
+    assert a == b and a
+
+
+def test_la_0186_cierra_columnas_leads_visitas_y_pone_el_tiempo_maximo():
+    sql = _sin_comentarios_sql(_0186())
+    compacto = re.sub(r"\s+", " ", sql)
+    assert "alter role anon set statement_timeout = '3s';" in compacto
+    assert "alter role authenticated set statement_timeout = '3s';" in compacto
+    assert "revoke insert, select on public.leads from anon, authenticated;" in compacto
+    assert "revoke insert, select on public.visitas from anon, authenticated;" in compacto
+    m = re.search(r"revoke select \((.*?)\)\s+on public\.comercios\s+from anon, authenticated;", sql, re.S)
+    assert m, "la 0186 no cierra columnas de comercios"
+    cerradas = {c.strip() for c in m.group(1).split(",") if c.strip()}
+    assert cerradas == set(CERRADAS_POR_0186)
+    # Sólo se cierra: no vuelve a dar nada a anon ni a authenticated.
+    assert not re.search(r"grant[^;]*(anon|authenticated)(?![^;]*execute)", re.sub(r"grant\s+execute[^;]*;", "", sql, flags=re.I), re.I)
+    assert "begin;" in sql and "commit;" in sql
+    assert sql.index("begin;") < sql.index("revoke insert") < sql.index("commit;")
+    assert sql.rstrip().endswith("notify pgrst, 'reload schema';")
+    assert "raise exception" in sql                  # con comprobación
+    assert not re.search(r"create table(?! if not exists)", sql)
+
+
+def test_la_0186_buscar_comercios_no_tiene_sin_limite_y_es_el_mismo_cuerpo_que_la_0143():
+    nueva = _sin_comentarios_sql(_0186())
+    assert "p_limit <= 0 then null" not in nueva
+    assert re.search(r"limit greatest\(1, least\(case when coalesce\(p_limit, 0\) <= 0 then 24 else p_limit end, 500\)\)", nueva)
+    # Mismo cuerpo que la 0143: sólo cambia la línea del limit.
+    vieja = _sin_comentarios_sql((RAIZ / "supabase/migrations/0143_estrella_y_cortesia.sql").read_text(encoding="utf-8"))
+
+    def cuerpo(sql: str) -> str:
+        i = sql.index("as $$", sql.index("buscar_comercios("))
+        j = sql.index("$$;", i + 5)
+        lineas = [l.strip() for l in sql[i:j].splitlines()
+                  if l.strip() and not l.strip().startswith("limit ")]
+        return chr(10).join(lineas)
+    assert cuerpo(nueva) == cuerpo(vieja)
+    # Sigue siendo SECURITY DEFINER con search_path fijo (lee `busqueda` por dentro sin exponerla).
+    assert re.search(r"security definer\s+set search_path = public, pg_temp", nueva)
+
+
+def test_el_frontend_no_inserta_ni_lee_leads_ni_visitas_directo():
+    for f in _archivos_anon():
+        texto = f.read_text(encoding="utf-8")
+        assert not re.search(r"""\.from\(\s*["'](leads|visitas)["']""", texto),             f"{f.relative_to(RAIZ)}: la 0186 le quita a anon leads y visitas (las escribe el backend)"
+
+
+def test_columnas_comercio_del_frontend_no_pide_las_internas():
+    texto = (FRONT / "lib/data.ts").read_text(encoding="utf-8")
+    m = re.search(r"export const COLUMNAS_COMERCIO = \[(.*?)\]\.join", texto, re.S)
+    cols = set(re.findall(r'"(\w+)"', m.group(1)))
+    assert not (cols & set(CERRADAS_POR_0186)), sorted(cols & set(CERRADAS_POR_0186))
 
 
 def test_0148_en_postgres_cierra_codigo_y_deja_el_resto(pg):

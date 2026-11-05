@@ -31,6 +31,7 @@ from datetime import datetime, timezone
 
 import structlog
 
+from app.core import gemini
 from app.core.config import settings
 from app.services import difusion
 from app.services.clasificador import moderar_publicacion
@@ -53,7 +54,7 @@ def revisar_pendientes(repo, limite: int = 10) -> dict:
             # `moderar_publicacion` ya no lanza —devuelve "dudoso"— pero el
             # worker no puede depender de eso: una excepción acá cortaría el
             # loop entero y dejaría la cola sin revisar hasta el próximo reinicio.
-            logger.warning("revision_ia.error", pub=pub.get("id"), error=str(exc))
+            logger.warning("revision_ia.error", pub=pub.get("id"), error=gemini.sin_secretos(str(exc)))
             hechos["fallidas"] += 1
             continue
 

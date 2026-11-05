@@ -27,6 +27,7 @@ import re
 
 import structlog
 
+from app.core import gemini
 from app.core.config import settings
 from app.services.normalizar import sin_tildes, singular
 
@@ -183,9 +184,7 @@ def gemini_post(prompt: str) -> str:
     if not settings.gemini_api_key:
         raise RuntimeError("GEMINI_API_KEY no configurada")
 
-    url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-           f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}")
-    r = _post_con_reintentos(url, {"contents": [{"parts": [{"text": prompt}]}]})
+    r = _post_con_reintentos(gemini.url_generar(), {"contents": [{"parts": [{"text": prompt}]}]})
     if r.status_code >= 400:
         raise RuntimeError(_sin_secretos(f"HTTP {r.status_code}: {r.text[:300]}"))
 

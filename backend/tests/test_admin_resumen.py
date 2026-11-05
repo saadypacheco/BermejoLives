@@ -383,7 +383,7 @@ def test_los_certificados_se_miden_una_vez_y_se_recuerdan(api, repo, _sin_red_ni
     resumen(api)
     resumen(api)
     resumen(api)
-    assert len(_sin_red_ni_cache) == len(vencimientos.HOSTS_TLS)       # cinco hosts, una sola vuelta
+    assert len(_sin_red_ni_cache) == len(vencimientos.HOSTS_TLS)       # cuatro hosts, una sola vuelta
 
 
 def test_un_host_que_no_responde_no_suma_alertas(api, repo, monkeypatch):

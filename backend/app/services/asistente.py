@@ -44,6 +44,7 @@ from zoneinfo import ZoneInfo
 import httpx
 import structlog
 
+from app.core import gemini
 from app.core.config import settings
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp
 from app.services import horario as hor
@@ -1529,8 +1530,8 @@ def _gemini(prompt: str) -> str | None:
         return None
     try:
         r = httpx.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}",
+            gemini.url_generar(),
+            headers=gemini.cabeceras(),
             json={"contents": [{"parts": [{"text": prompt}]}],
                   "generationConfig": {"temperature": 0.2, "maxOutputTokens": 400}},
             timeout=settings.asistente_timeout_seg,
@@ -1538,7 +1539,7 @@ def _gemini(prompt: str) -> str | None:
         r.raise_for_status()
         return r.json()["candidates"][0]["content"]["parts"][0]["text"]
     except Exception as e:  # noqa: BLE001 — cualquier falla del modelo es "sin modelo"
-        logger.warning("asistente.gemini_fallo", error=str(e)[:200])
+        logger.warning("asistente.gemini_fallo", error=gemini.sin_secretos(str(e))[:200])
         return None
 
 

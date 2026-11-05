@@ -78,13 +78,10 @@ const nextConfig = {
     }
     return reglas;
   },
-  images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "picsum.photos" },
-      { protocol: "https", hostname: "i.pravatar.cc" },
-      { protocol: "https", hostname: "images.unsplash.com" },
-    ],
-  },
+  // El sitio usa <img> común (no next/image): sin optimizador de imágenes del
+  // servidor, que además queda sin superficie de ataque. Tampoco hay dominios
+  // remotos que autorizar.
+  images: { unoptimized: true },
 };
 
 export default nextConfig;
