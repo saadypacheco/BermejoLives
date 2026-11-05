@@ -45,7 +45,7 @@ def sin_llamadas(monkeypatch):
 def test_sin_fila_esta_apagado_y_una_clave_desconocida_tambien(crepo):
     assert cost_switches.esta_prendido(crepo, GEMINI) is False
     assert cost_switches.esta_prendido(crepo, "otra") is False
-    assert [i["enabled"] for i in cost_switches.listar(crepo)] == [False]
+    assert [i["enabled"] for i in cost_switches.listar(crepo)] == [False, False]   # gemini_content y gemini_phone_scan
 
 
 def test_set_prende_y_apaga_y_guarda_quien(crepo):

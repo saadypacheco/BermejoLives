@@ -4,7 +4,7 @@ COSTO CERO POR DEFECTO
 ======================
 Todo lo que genera un gasto queda APAGADO hasta que el dueño lo prende, sabiendo que tiene costo. Hoy el único
 servicio pago del contenido para redes es Gemini (`gemini_content`: los textos de las redes y del video y las
-marcas de las fotos). Apagado, todo sigue funcionando con los textos fijos y la persona los completa en Revisión.
+marcas de las fotos); `gemini_phone_scan` (docs/telefonos-en-fotos.md) lee los teléfonos de las portadas con Gemini. Apagado, todo sigue funcionando con los textos fijos y la persona los completa en Revisión.
 
 Sin fila en `cost_switches` = apagado. Un error al leer la base = apagado (ante la duda, no se gasta).
 
@@ -23,6 +23,7 @@ import structlog
 logger = structlog.get_logger()
 
 GEMINI_CONTENT = "gemini_content"
+GEMINI_PHONE_SCAN = "gemini_phone_scan"
 
 #: Lo que se puede prender o apagar. Fijo en el código: lo devuelve la API para que el panel lo muestre.
 CATALOGO: dict[str, dict] = {
@@ -31,6 +32,13 @@ CATALOGO: dict[str, dict] = {
         "what": "Propone los textos de las redes y del video y marca las fotos donde se ve un precio o un código",
         "cost": "Menos de US$ 0,01 por video con el modelo actual (0 si la clave de Gemini es del nivel gratis)",
         "off_means": "Se usan los textos fijos y los completás a mano en Revisión",
+    },
+    # docs/telefonos-en-fotos.md: leer los teléfonos de las portadas.
+    GEMINI_PHONE_SCAN: {
+        "label": "Leer teléfonos en las fotos con Gemini",
+        "what": "Lee con Gemini los teléfonos que se ven en la portada de cada comercio",
+        "cost": "Estimado: menos de US$ 5 para todas las portadas (unas 6000); 0 si la clave es del nivel gratis",
+        "off_means": "Se usa el lector gratis (Tesseract), que se pierde algunos números en carteles chicos o torcidos",
     },
 }
 

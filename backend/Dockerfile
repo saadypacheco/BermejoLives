@@ -1,7 +1,8 @@
 FROM python:3.12-slim
 
-# ffmpeg para decodificar el audio del navegador (faster-whisper)
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+# ffmpeg para decodificar el audio del navegador (faster-whisper) y tesseract-ocr para leer los teléfonos de las
+# portadas (OCR local gratis, docs/telefonos-en-fotos.md; con los datos del inglés alcanza: sólo se leen dígitos)
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg tesseract-ocr \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

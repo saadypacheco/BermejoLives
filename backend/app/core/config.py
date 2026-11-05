@@ -397,6 +397,15 @@ class Settings(BaseSettings):
     # `tmp/<id>/out/` y el único uid del que se aceptan el video y la portada. Configurable por si la imagen cambia.
     renderer_uid: int = 1001
 
+    # ── Teléfonos en las fotos de los comercios (docs/telefonos-en-fotos.md) ──
+    # El worker lee la portada de cada comercio activo con OCR local (Tesseract, gratis) y deja los números como
+    # PROPUESTAS que una persona aplica o descarta. APAGADO por defecto. Con el interruptor de costo
+    # `gemini_phone_scan` prendido (y GEMINI_API_KEY puesta) las lee Gemini en vez de Tesseract.
+    telefonos_foto_worker: bool = False
+    telefonos_foto_por_tanda: int = 20         # portadas por vuelta, procesadas de a una
+    telefonos_foto_cada_seg: int = 30          # pausa entre tandas mientras haya trabajo
+    telefonos_foto_ocioso_seg: int = 600       # pausa cuando no queda ninguna portada por leer
+
     def content_networks_list(self) -> list[str]:
         validas = ("tiktok", "instagram", "facebook", "wa_channel")
         return [n for n in (x.strip() for x in self.content_networks.split(",")) if n in validas]

@@ -203,6 +203,7 @@ Devolvé SOLO un JSON, sin markdown, con esta forma exacta:
   "sinonimos": {{"producto": "otra forma, otra forma mas"}},
   "rubro_slugs": ["slug1", "slug2"],
   "categoria_sugerida": "",
+  "telefonos": ["70123456"],
   "confianza": 0.0
 }}
 
@@ -230,6 +231,11 @@ Reglas:
   ("ROPA", "BAZAR", "MODA Y ROPA" son lo que vende, no cómo se llama).
   Un nombre inventado es peor que ninguno: queda escrito como si fuera cierto y
   nadie vuelve a revisarlo. Ante la duda, vacío.
+- `telefonos`: los teléfonos o celulares que se LEEN escritos en un cartel, la
+  vidriera, un sticker o un papel, tal cual están escritos (con espacios, guiones
+  o el +591 si los tienen). Un número por elemento. Sólo teléfonos: nada de
+  precios, fechas, horarios, años, NIT ni códigos. Si no se lee ninguno, [].
+  Un dígito dudoso es peor que ningún número: ante la duda, no lo pongas.
 - `productos`: SOLO lo que se ve en las fotos. No completes con lo que "suele"
   vender un negocio así.
 {regla_sinonimos}
@@ -385,6 +391,105 @@ def analizar_oferta(url: str) -> dict:
     }
 
 
+MAX_TELEFONOS_POR_FOTO = 20
+MAX_LARGO_TELEFONO = 40
+
+
+def _lista_de_telefonos(crudo) -> list[str]:
+    """Lo que el modelo puso en `telefonos`, a una lista de textos cortos. Si vino otra cosa (un texto suelto,
+    un objeto, números sin comillas) se acomoda lo que se pueda y el resto se ignora: nunca rompe."""
+    if isinstance(crudo, (str, int)) and not isinstance(crudo, bool):
+        crudo = [crudo]
+    if not isinstance(crudo, list):
+        return []
+    out: list[str] = []
+    for t in crudo:
+        if isinstance(t, (str, int)) and not isinstance(t, bool):
+            texto = str(t).strip()[:MAX_LARGO_TELEFONO]
+            if texto and texto not in out:
+                out.append(texto)
+        if len(out) >= MAX_TELEFONOS_POR_FOTO:
+            break
+    return out
+
+
+# ── Leer sólo los teléfonos de UNA foto (docs/telefonos-en-fotos.md) ─────────────────────────────────────────
+# Es lo que corre el worker con el interruptor `gemini_phone_scan` prendido: una foto chica, un prompt que sólo
+# pide los números y nada más. El relevamiento (`analizar_fotos`) ya trae `telefonos` sin costo extra.
+LADO_FOTO_TELEFONOS = 1024
+
+PROMPT_TELEFONOS = """Mirás la foto de un comercio (fachada, vidriera, cartel, sticker). Tu única tarea es
+leer los números de teléfono o celular que estén ESCRITOS en la imagen.
+
+Devolvé SOLO un JSON, sin markdown, con esta forma exacta:
+{"telefonos": ["70123456", "+591 4 661 2345"]}
+
+Reglas:
+- Cada elemento es un número tal como está escrito (con sus espacios, guiones o el +591 si los tiene).
+- SOLO teléfonos y celulares. Nada de precios, fechas, horarios, años, NIT, códigos de producto ni numeración
+  de la calle.
+- Si un dígito no se lee con claridad, no pongas ese número: un número equivocado es peor que ninguno.
+- Si no hay ningún teléfono escrito, devolvé {"telefonos": []}.
+"""
+
+
+class LectorTransitorio(RuntimeError):
+    """El modelo no pudo contestar ahora (cuota, saturación, clave): la foto NO se marca como leída."""
+
+
+class LectorFallo(RuntimeError):
+    """La foto o la respuesta del modelo no sirven para ESTA foto: se marca con el error y se reintenta más adelante."""
+
+
+def _chica(data: bytes) -> bytes:
+    """La foto a `LADO_FOTO_TELEFONOS` px de lado mayor, en JPEG: menos tokens y casi siempre alcanza para leer
+    un cartel. Si no se puede abrir como imagen, es un `LectorFallo`."""
+    from io import BytesIO
+
+    from PIL import Image, ImageOps
+
+    try:
+        im = ImageOps.exif_transpose(Image.open(BytesIO(data)))
+        im.thumbnail((LADO_FOTO_TELEFONOS, LADO_FOTO_TELEFONOS))
+        buf = BytesIO()
+        im.convert("RGB").save(buf, format="JPEG", quality=85)
+        return buf.getvalue()
+    except Exception:  # noqa: BLE001
+        raise LectorFallo("La foto no se pudo abrir como imagen") from None
+
+
+def leer_telefonos_foto(data: bytes) -> list[str]:
+    """Los teléfonos que Gemini lee en una foto, como textos tal cual están escritos.
+
+    Lanza `VisionNoConfigurada` sin GEMINI_API_KEY, `LectorTransitorio` si el modelo no pudo contestar ahora
+    (la foto se reintenta sola en la próxima tanda) y `LectorFallo` si la foto o la respuesta no sirven."""
+    if not settings.gemini_api_key:
+        raise VisionNoConfigurada("Falta GEMINI_API_KEY")
+    foto = _chica(data)
+    url_api = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+               f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}")
+    payload = {"contents": [{"parts": [
+        {"text": PROMPT_TELEFONOS},
+        {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(foto).decode()}}]}]}
+    try:
+        r = _post_con_reintentos(url_api, payload)
+    except Exception as exc:  # noqa: BLE001
+        raise LectorTransitorio(_sin_secretos(str(exc))) from None
+    if r.status_code == 400:
+        raise LectorFallo(f"El modelo rechazó la foto: {_sin_secretos(str(r.text))[:200]}")
+    if r.status_code >= 400:
+        raise LectorTransitorio(f"El modelo contestó {r.status_code}")
+    try:
+        cuerpo = r.json()
+        texto = cuerpo["candidates"][0]["content"]["parts"][0]["text"]
+        out = _parsear(texto)
+    except Exception:  # noqa: BLE001
+        raise LectorFallo("El modelo no devolvió un JSON legible") from None
+    uso = cuerpo.get("usageMetadata") or {}
+    logger.info("vision.uso_telefonos", tokens=uso.get("totalTokenCount"), modelo=settings.gemini_model)
+    return _lista_de_telefonos(out.get("telefonos") if isinstance(out, dict) else None)
+
+
 def analizar_fotos(urls: list[str], rubros: list[dict], ciudad: dict | None = None) -> dict:
     """Analiza hasta MAX_FOTOS y devuelve la propuesta.
 
@@ -409,7 +514,7 @@ def analizar_fotos(urls: list[str], rubros: list[dict], ciudad: dict | None = No
 
     if usadas == 0:
         return {"productos": "", "descripcion": "", "subcategoria": "", "sinonimos": "",
-                "nombre_cartel": "",
+                "nombre_cartel": "", "telefonos": [],
                 "rubro_slugs": [], "confianza": 0.0, "fotos_analizadas": 0,
                 "error": "No se pudo descargar ninguna foto"}
 
@@ -451,7 +556,7 @@ def analizar_fotos(urls: list[str], rubros: list[dict], ciudad: dict | None = No
             ayuda = (f" — el modelo '{settings.gemini_model}' no existe para esta API key. "
                      "Verificá GEMINI_MODEL contra los modelos que la key tiene habilitados.")
         return {"productos": "", "descripcion": "", "subcategoria": "", "sinonimos": "",
-                "nombre_cartel": "",
+                "nombre_cartel": "", "telefonos": [],
                 "rubro_slugs": [], "confianza": 0.0, "fotos_analizadas": usadas,
                 "error": f"El modelo falló: {detalle}{ayuda}", "crudo": crudo}
 
@@ -495,6 +600,8 @@ def analizar_fotos(urls: list[str], rubros: list[dict], ciudad: dict | None = No
         # Se pasa tal cual (objeto o texto): lo interpreta desde_propuesta().
         "sinonimos": out.get("sinonimos") or "",
         "categoria_sugerida": (out.get("categoria_sugerida") or "").strip(),
+        # Lo que el modelo leyó, TAL CUAL: la normalización y los filtros son de core/telefonos_foto.py.
+        "telefonos": _lista_de_telefonos(out.get("telefonos")),
         "rubro_slugs": propuestos,
         "confianza": float(out.get("confianza") or 0),
         "fotos_analizadas": usadas,

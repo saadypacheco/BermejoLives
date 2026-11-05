@@ -15,6 +15,7 @@ dependencies = [
   "pyjwt>=2.8",
   "pillow>=10.3",
   "faster-whisper>=1.0",
+  "pytesseract>=0.3.10",   # OCR local sin costo para leer teléfonos en las portadas (docs/telefonos-en-fotos.md)
   "structlog>=24.1",
 ]
 
