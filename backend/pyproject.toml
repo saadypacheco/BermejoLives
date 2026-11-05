@@ -12,6 +12,7 @@ dependencies = [
   "pydantic-settings>=2.3",
   "httpx>=0.27",
   "supabase>=2.5",
+  "postgrest>=0.16.9",   # lo trae supabase-py; el backend lo usa directo por la red interna (app/db/session.py)
   "pyjwt>=2.8",
   "pillow>=10.3",
   "faster-whisper>=1.0",

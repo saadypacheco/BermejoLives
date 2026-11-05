@@ -65,7 +65,6 @@ def descargar_media(url: str | None) -> bytes | None:
     """Trae el archivo de WAHA. Devuelve None si no se puede (nunca lanza)."""
     if not url:
         return None
-    import httpx
 
     # La API oficial no manda una URL: manda un identificador que hay que
     # canjear con el token. Sin esta rama, una foto que llega por Meta se
@@ -81,17 +80,38 @@ def descargar_media(url: str | None) -> bytes | None:
         # La API key va igual que en whatsapp_client.py: WAHA protege /api y
         # también los archivos que sirve.
         headers = {"X-Api-Key": settings.waha_api_key} if settings.waha_api_key else {}
-        with httpx.Client(timeout=_TIMEOUT, follow_redirects=True) as client:
-            resp = client.get(url, headers=headers)
-            resp.raise_for_status()
-            data = resp.content
-        if len(data) > _MAX_BYTES:
-            logger.warning("wa_media.demasiado_grande", url=url, bytes=len(data))
-            return None
-        return data
+        # SIN redirecciones (B-12): con `follow_redirects` una respuesta 302 podía mandar el pedido
+        # —con la X-Api-Key puesta— a cualquier otro host. Y EN STREAM con tope: se corta al pasar
+        # `_MAX_BYTES` en vez de bajar entero un archivo enorme a memoria.
+        with _cliente() as client:
+            with client.stream("GET", url, headers=headers) as resp:
+                if resp.is_redirect:
+                    logger.warning("wa_media.redireccion_rechazada", url=url, status=resp.status_code)
+                    return None
+                resp.raise_for_status()
+                declarado = resp.headers.get("content-length")
+                if declarado and declarado.isdigit() and int(declarado) > _MAX_BYTES:
+                    logger.warning("wa_media.demasiado_grande", url=url, bytes=int(declarado))
+                    return None
+                partes: list[bytes] = []
+                total = 0
+                for trozo in resp.iter_bytes():
+                    total += len(trozo)
+                    if total > _MAX_BYTES:
+                        logger.warning("wa_media.demasiado_grande", url=url, bytes=total)
+                        return None
+                    partes.append(trozo)
+        return b"".join(partes)
     except Exception as exc:  # noqa: BLE001 — la publicación importa más que la foto
         logger.warning("wa_media.descarga_fallo", url=url, error=str(exc))
         return None
+
+
+def _cliente():
+    """El cliente HTTP de la descarga (aparte para poder probarlo): sin seguir redirecciones."""
+    import httpx
+
+    return httpx.Client(timeout=_TIMEOUT, follow_redirects=False)
 
 
 def guardar_imagen_publicacion(slug: str, media_url: str | None,

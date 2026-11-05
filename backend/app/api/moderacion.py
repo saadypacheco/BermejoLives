@@ -10,13 +10,13 @@ import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.auth import hash_password, reiniciar_cache_acceso, require_admin, require_alguno, require_moderador, require_panel, require_permiso
+from app.core.auth import MIN_LARGO_CLAVE_PANEL, hash_password_panel, reiniciar_cache_acceso, require_admin, require_alguno, require_moderador, require_panel, require_permiso
 from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS, tiene as tiene_permiso
 from app.core.config import _numeros_propios, settings
 from app.api.agent_credentials import catalogo_de_permisos, es_agente
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp, whatsapp_para_guardar
-from app.services import turnos_farmacia
+from app.services import archivos_privados, turnos_farmacia
 from app.services import calles_mapa, enlaces, ficha_catalogo as catalogo_svc, fotos_galeria, portada, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
@@ -587,8 +587,9 @@ def crear_usuario_panel(body: UsuarioPanelBody, admin: dict = Depends(require_pe
     email = (body.email or "").strip().lower()
     if "@" not in email:
         raise HTTPException(status_code=400, detail="Poné un correo")
-    if not body.password or len(body.password) < 6:
-        raise HTTPException(status_code=400, detail="La contraseña necesita al menos 6 caracteres")
+    if not body.password or len(body.password) < MIN_LARGO_CLAVE_PANEL:
+        raise HTTPException(status_code=400,
+                            detail=f"La contraseña necesita al menos {MIN_LARGO_CLAVE_PANEL} caracteres")
     if repo.get_usuario_panel(email):
         raise HTTPException(status_code=409, detail="Ya hay alguien con ese correo")
     validos = {r["slug"] for r in (repo.list_roles() or [])}
@@ -596,7 +597,7 @@ def crear_usuario_panel(body: UsuarioPanelBody, admin: dict = Depends(require_pe
     if not roles:
         raise HTTPException(status_code=400, detail="Elegí al menos un rol")
     fila = {
-        "email": email, "password_hash": hash_password(body.password),
+        "email": email, "password_hash": hash_password_panel(body.password),
         "nombre": (body.nombre or "").strip() or None,
         "apellido": (body.apellido or "").strip() or None,
         "ciudad_id": repo.get_ciudad_id(body.ciudad_slug) if body.ciudad_slug else None,
@@ -620,9 +621,10 @@ def editar_usuario_panel(usuario_id: str, body: UsuarioPanelBody, admin: dict = 
     if body.ciudad_slug is not None:
         patch["ciudad_id"] = repo.get_ciudad_id(body.ciudad_slug) if body.ciudad_slug else None
     if body.password:
-        if len(body.password) < 6:
-            raise HTTPException(status_code=400, detail="La contraseña necesita al menos 6 caracteres")
-        patch["password_hash"] = hash_password(body.password)
+        if len(body.password) < MIN_LARGO_CLAVE_PANEL:
+            raise HTTPException(status_code=400,
+                                detail=f"La contraseña necesita al menos {MIN_LARGO_CLAVE_PANEL} caracteres")
+        patch["password_hash"] = hash_password_panel(body.password)
     validos = {r["slug"] for r in (repo.list_roles() or [])}
     roles = [r for r in body.roles if r in validos] if body.roles else None
     actualizado = repo.update_usuario_panel(usuario_id, patch, roles)
@@ -1096,9 +1098,43 @@ def listar_pagos_pendientes(
     _admin: dict = Depends(require_permiso("pagos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """Pagos QR que los comercios subieron y esperan confirmación."""
-    items = repo.list_pagos_pendientes()
+    """Pagos QR que los comercios subieron y esperan confirmación.
+
+    `comprobante_url` de un comprobante guardado en el disco privado sale como la RUTA del endpoint
+    que lo sirve (`/admin/pagos/{id}/comprobante`, con Bearer): no es una imagen pública. Los
+    comprobantes viejos todavía con URL pública se muestran como estaban hasta que corra
+    `python -m app.scripts.mover_privados`."""
+    items = []
+    for p in repo.list_pagos_pendientes():
+        p = dict(p)
+        if archivos_privados.es_referencia(p.get("comprobante_url")):
+            p["comprobante_url"] = archivos_privados.ruta_api_pago(p["id"])
+        items.append(p)
     return {"items": items, "total": len(items)}
+
+
+def _imagen_privada(ref: str | None) -> Response:
+    datos = archivos_privados.leer(ref) if archivos_privados.es_referencia(ref) else None
+    if not datos:
+        raise HTTPException(status_code=404, detail="Esa imagen no está")
+    return Response(content=datos, media_type="image/jpeg", headers={
+        # Un documento privado: ni caché compartida ni sniffing.
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+    })
+
+
+@router.get("/admin/pagos/{pago_id}/comprobante")
+def comprobante_de_pago(
+    pago_id: str,
+    _admin: dict = Depends(require_permiso("pagos")),
+    repo: Repo = Depends(get_repo),
+) -> Response:
+    """La imagen del comprobante de un pago (disco privado). Pide el permiso `pagos`."""
+    pago = repo.get_pago(pago_id)
+    if not pago:
+        raise HTTPException(status_code=404, detail="pago no encontrado")
+    return _imagen_privada(pago.get("comprobante_url"))
 
 
 @router.post("/admin/pagos/{pago_id}/confirmar")
@@ -1157,8 +1193,27 @@ def listar_solicitudes_cambio_numero(
     _admin: dict = Depends(require_permiso("panel")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    items = repo.list_solicitudes_cambio_numero(estado)
+    items = []
+    for sol in repo.list_solicitudes_cambio_numero(estado):
+        sol = dict(sol)
+        if archivos_privados.es_referencia(sol.get("foto_url")):
+            # La foto del trámite es privada: sale la ruta del endpoint que la sirve (con Bearer).
+            sol["foto_url"] = archivos_privados.ruta_api_cambio(sol["id"])
+        items.append(sol)
     return {"items": items, "total": len(items)}
+
+
+@router.get("/admin/solicitudes-cambio-numero/{solicitud_id}/foto")
+def foto_de_solicitud_cambio_numero(
+    solicitud_id: str,
+    # La foto es la PRUEBA con la que se decide entregar una cuenta: la ve quien puede aprobar.
+    _admin: dict = Depends(require_permiso("comercios.cuenta")),
+    repo: Repo = Depends(get_repo),
+) -> Response:
+    sol = repo.get_solicitud_cambio_numero(solicitud_id)
+    if not sol:
+        raise HTTPException(status_code=404, detail="solicitud no encontrada")
+    return _imagen_privada(sol.get("foto_url"))
 
 
 @router.post("/admin/solicitudes-cambio-numero/{solicitud_id}/aprobar")

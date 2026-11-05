@@ -77,21 +77,32 @@ def test_llegadas_salen_de_visitas_y_contactos_de_leads(client, repo, admin_toke
     assert d["contactos_origen_top"] == [{"origen": "volante-x", "count": 1}]
 
 
+def _envejecer(repo, lead_id, minutos=5):
+    """El contacto «se hizo hace `minutos`» (el voto exige al menos 2 minutos de antigüedad)."""
+    from datetime import datetime, timedelta, timezone
+    for l in repo.leads:
+        if l["id"] == lead_id:
+            l["created_at"] = (datetime.now(timezone.utc) - timedelta(minutes=minutos)).isoformat()
+
+
 def test_te_contesto_cuenta_por_comercio_y_una_sola_vez(client, repo):
-    """El clic devuelve un id; con ese id el comprador dice si le contestaron.
+    """El clic devuelve un id y un token; con eso el comprador dice si le contestaron.
     Una sola vez por contacto, y el comercio suma sí/no."""
     repo.comercios["c1"] = {"id": "c1", "slug": "c1", "nombre": "C1", "activo": True}
     r = client.post("/lead", json={"comercio_id": "c1", "tipo": "whatsapp"}).json()
-    assert r["id"]
-    ok = client.post(f"/lead/{r['id']}/respondio", json={"respondio": False}).json()
+    assert r["id"] and r["token"]
+    _envejecer(repo, r["id"])
+    ok = client.post(f"/lead/{r['id']}/respondio", json={"respondio": False, "token": r["token"]}).json()
     assert ok == {"ok": True, "contacto_ok": 0, "contacto_no": 1}
     assert repo.comercios["c1"]["contacto_no"] == 1
     # Otra vez el mismo contacto: no suma.
-    assert client.post(f"/lead/{r['id']}/respondio", json={"respondio": False}).json()["ya"] is True
+    assert client.post(f"/lead/{r['id']}/respondio",
+                       json={"respondio": False, "token": r["token"]}).json()["ya"] is True
     assert repo.comercios["c1"]["contacto_no"] == 1
     # Una vista no es un contacto: no se pregunta.
     v = client.post("/lead", json={"comercio_id": "c1", "tipo": "vista"}).json()
-    assert client.post(f"/lead/{v['id']}/respondio", json={"respondio": True}).status_code == 404
+    assert client.post(f"/lead/{v['id']}/respondio",
+                       json={"respondio": True, "token": v["token"]}).status_code == 404
     assert client.post("/lead/no-existe/respondio", json={"respondio": True}).status_code == 404
 
 

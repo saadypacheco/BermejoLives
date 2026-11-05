@@ -5,12 +5,13 @@ import secrets
 from datetime import date, datetime, timedelta, timezone
 
 import structlog
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from app.core import auth
 from app.core.config import settings
+from app.core.ip import ip_cliente
 from app.db.repository import Repo, get_repo
 from app.models.schemas import LoginBody
 from app.services import novedades_uruku as novedades_svc
@@ -27,11 +28,11 @@ _VIDEOS_NOVEDAD = {"video/mp4", "video/webm", "video/quicktime"}
 
 
 @router.post("/auth/publicador/login")
-def publicador_login(body: LoginBody, repo: Repo = Depends(get_repo)) -> dict:
+def publicador_login(body: LoginBody, request: Request, repo: Repo = Depends(get_repo)) -> dict:
     """La misma puerta que el panel, con la cuenta del `.env` de respaldo
     (0126). Lo que puede hacer adentro lo deciden sus permisos."""
     from app.api.auth import entrar
-    r = entrar(repo, body.email, body.password, "publicador")
+    r = entrar(repo, body.email, body.password, "publicador", ip_cliente(request))
     if not r:
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     return {**r, "publicador": r["user"]}
@@ -131,7 +132,7 @@ async def refrescar_clima(_pub: dict = Depends(auth.require_publicador), repo: R
 # ---- Videos promocionales ("Recorrimos Bermejo") ----
 @router.get("/contenido/videos-promo")
 def listar_videos_promo(_pub: dict = Depends(auth.require_publicador), repo: Repo = Depends(get_repo)) -> dict:
-    return {"items": repo.list_videos_promo()}
+    return {"items": repo.list_videos_promo(solo_activos=True)}
 
 
 @router.post("/contenido/videos-promo")
@@ -148,10 +149,10 @@ async def subir_video_promo(
         raise HTTPException(status_code=400, detail="Falta el video")
     if len(data) > _MAX_VIDEO_BYTES:
         raise HTTPException(status_code=413, detail="El video supera los 100 MB")
-    url = subir_video_comercio("promocionales", data, video.content_type)
+    url = await run_in_threadpool(subir_video_comercio, "promocionales", data, video.content_type)
     if not url:
         raise HTTPException(status_code=502, detail="No se pudo subir el video")
-    row = repo.add_video_promo({"titulo": titulo or None, "url": url, "orden": len(repo.list_videos_promo())})
+    row = repo.add_video_promo({"titulo": titulo or None, "url": url, "orden": len(repo.list_videos_promo(solo_activos=True))})
     logger.info("contenido.video_promo_add")
     return {"ok": True, "video": row}
 
@@ -417,7 +418,7 @@ async def subir_video_novedad_uruku(
     patch: dict = {}
     nuevos: list[str] = []
     if video_data is not None:
-        url_video = subir_video_comercio(novedades_svc.carpeta(novedad_id), video_data, video.content_type)
+        url_video = await run_in_threadpool(subir_video_comercio, novedades_svc.carpeta(novedad_id), video_data, video.content_type)
         if not url_video:
             raise HTTPException(status_code=502, detail="No se pudo subir el video")
         nuevos.append(url_video)

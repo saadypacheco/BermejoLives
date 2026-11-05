@@ -18,9 +18,11 @@ QUÉ ENTRA
   Un número de 7 dígitos sin código de área NO entra: no se sabe de qué ciudad es.
 - Argentina (ciudades de frontera): `54` + 10 dígitos, o 10 dígitos que empiezan con un código de área de
   la región. El 9 de celular se normaliza: `+549…` es celular y `+54…` no marca nada.
-  UN NÚMERO ARGENTINO SIN EL 9 NI EL «15» SALE COMO `fijo`: los celulares y los fijos de Salta o Orán
-  comparten rango (387 4xx-xxxx existe de los dos lados), así que no hay forma de adivinarlo; `fijo` es lo
-  conservador porque no entra en el lote automático (la persona lo puede usar como WhatsApp a mano).
+  UN NÚMERO ARGENTINO SIN EL 9 NI EL «15» SE TRATA COMO `celular` (decisión del dueño, 5/11/2026): 10
+  dígitos con el área de la región (`387 4123456`, `54 387 4123456`). Los celulares y los fijos de Salta u
+  Orán comparten rango y no hay forma de distinguirlos, pero el comercio que pone un número en su cartel
+  casi siempre lo atiende por WhatsApp. Sale normalizado con el 9 (`+549…`), que es como se escribe un
+  celular argentino en WhatsApp.
 
 QUÉ SE TIRA
 ===========
@@ -199,12 +201,11 @@ def normalizar(valor: str | None) -> Telefono | None:
         return Telefono("+591" + nacional_bo, "celular" if nacional_bo[0] in "67" else "fijo", texto)
 
     # ── Argentina ──
-    explicito = False                       # escribió el 9 (o el 15): es celular
     ar = None
     if digitos.startswith(PREFIJO_AR) and len(digitos) in (12, 13):
         resto = digitos[2:]
         if len(resto) == 11 and resto[0] == "9":
-            explicito, resto = True, resto[1:]
+            resto = resto[1:]
         ar = resto if len(resto) == 10 else None
     elif len(digitos) == 11 and digitos[0] == "0":
         ar = digitos[1:]                    # (0387) 412 3456: el 0 de discado nacional
@@ -215,15 +216,16 @@ def normalizar(valor: str | None) -> Telefono | None:
         sin_cero = digitos[1:]
         area = _area_ar(sin_cero)
         if area and sin_cero[len(area):len(area) + 2] == "15":
-            explicito, ar = True, area + sin_cero[len(area) + 2:]
+            ar = area + sin_cero[len(area) + 2:]
     elif len(digitos) == 12:
         area = _area_ar(digitos)
         if area and digitos[len(area):len(area) + 2] == "15":
-            explicito, ar = True, area + digitos[len(area) + 2:]
+            ar = area + digitos[len(area) + 2:]
     if ar and len(ar) == 10 and _area_ar(ar):
         if _parece_repetido(ar[len(_area_ar(ar)):]):
             return None
-        return Telefono(("+549" if explicito else "+54") + ar, "celular" if explicito else "fijo", texto)
+        # Con el 9, con el «15» o sin nada: celular (ver el docstring del módulo).
+        return Telefono("+549" + ar, "celular", texto)
     return None
 
 

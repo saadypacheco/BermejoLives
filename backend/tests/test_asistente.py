@@ -309,7 +309,8 @@ def test_el_saber_local_se_edita_y_se_borra(client, repo, admin_token):
     assert r.json()["item"]["respuesta"].startswith("Av. Petrolera")
     assert len(client.get("/admin/asistente/saber", headers=h).json()["items"]) == 1
     assert client.delete(f"/admin/asistente/saber/{sid}", headers=h).status_code == 200
-    assert client.get("/admin/asistente/saber", headers=h).json()["items"] == []
+    # B-05: borrar es una baja lógica (`activo = false`), no un DELETE: sigue en la lista, apagada.
+    assert [i["activo"] for i in client.get("/admin/asistente/saber", headers=h).json()["items"]] == [False]
     assert client.get("/admin/asistente/saber").status_code in (401, 403)
 
 

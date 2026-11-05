@@ -97,13 +97,42 @@ def _vigente_tiene(estado: dict | None, permisos: tuple[str, ...]) -> bool:
     return any(tiene_permiso(vigentes, p) for p in permisos)
 
 
-def hash_password(password: str, salt: str | None = None) -> str:
+#: PBKDF2 de siempre: lo usan las claves de Mi comercio y del comprador (se verifican en cada ingreso).
+ITERACIONES_BASE = 100_000
+#: PBKDF2 de las contraseñas del PANEL (equipo): quien entra ahí tiene permisos amplios, así que su hash
+#: cuesta 6 veces más. Los hashes viejos (100.000) siguen sirviendo y se pasan a éste al entrar.
+ITERACIONES_PANEL = 600_000
+#: Largo mínimo de una contraseña NUEVA del panel.
+MIN_LARGO_CLAVE_PANEL = 12
+
+
+def hash_password(password: str, salt: str | None = None, iteraciones: int = ITERACIONES_BASE) -> str:
     salt = salt or secrets.token_hex(16)
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), 100_000)
-    return f"pbkdf2_sha256$100000${salt}${dk.hex()}"
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), iteraciones)
+    return f"pbkdf2_sha256${iteraciones}${salt}${dk.hex()}"
+
+
+def hash_password_panel(password: str, salt: str | None = None) -> str:
+    """El hash de una contraseña del panel: PBKDF2 a `ITERACIONES_PANEL`."""
+    return hash_password(password, salt, ITERACIONES_PANEL)
+
+
+def iteraciones_de(stored: str | None) -> int:
+    """Cuántas iteraciones de PBKDF2 tiene un hash guardado (0 si no se entiende)."""
+    try:
+        return int((stored or "").split("$")[1])
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+def hash_panel_desactualizado(stored: str | None) -> bool:
+    """¿Este hash del panel es de los viejos (menos iteraciones que las de hoy)?"""
+    return iteraciones_de(stored) < ITERACIONES_PANEL
 
 
 def verify_password(password: str, stored: str) -> bool:
+    # Funciona con cualquier cantidad de iteraciones: lee la del propio hash (los viejos, de 100.000,
+    # y los nuevos, de 600.000, conviven).
     try:
         _, iters, salt, expected = stored.split("$")
         dk = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), int(iters))

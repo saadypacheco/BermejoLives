@@ -13,7 +13,7 @@ def _h(t):
 
 
 def _crear(client, admin_token, **kw):
-    cuerpo = {"email": "ana@uruku.bo", "password": "campo2026", "roles": ["agente"], **kw}
+    cuerpo = {"email": "ana@uruku.bo", "password": "campo-2026-larga", "roles": ["agente"], **kw}
     return client.post("/admin/equipo", headers=_h(admin_token), json=cuerpo)
 
 
@@ -47,7 +47,7 @@ def test_crear_alguien_del_equipo_y_que_entre(client, repo, admin_token):
     assert r.json()["usuario"]["email"] == "ana@uruku.bo"      # el correo, en minúsculas
     assert "password_hash" not in r.json()["usuario"]          # nunca sale el hash
 
-    login = client.post("/auth/campo/login", json={"email": "ana@uruku.bo", "password": "campo2026"})
+    login = client.post("/auth/campo/login", json={"email": "ana@uruku.bo", "password": "campo-2026-larga"})
     assert login.status_code == 200
     assert login.json()["agente"]["ciudad"] == "santa-cruz"
     assert login.json()["user"]["permisos"] == ["comercios.cargar"]
@@ -61,9 +61,9 @@ def test_crear_alguien_del_equipo_y_que_entre(client, repo, admin_token):
 def test_el_rol_decide_que_puede_hacer(client, repo, admin_token):
     """Un agente no entra al panel; un moderador sí, pero no a la plata."""
     _crear(client, admin_token, email="ana@uruku.bo", roles=["agente"])
-    _crear(client, admin_token, email="moni@uruku.bo", password="moni2026", roles=["moderador"])
-    t_agente = client.post("/auth/campo/login", json={"email": "ana@uruku.bo", "password": "campo2026"}).json()["access_token"]
-    t_moni = client.post("/auth/login", json={"email": "moni@uruku.bo", "password": "moni2026"}).json()["access_token"]
+    _crear(client, admin_token, email="moni@uruku.bo", password="moni-2026-larga", roles=["moderador"])
+    t_agente = client.post("/auth/campo/login", json={"email": "ana@uruku.bo", "password": "campo-2026-larga"}).json()["access_token"]
+    t_moni = client.post("/auth/login", json={"email": "moni@uruku.bo", "password": "moni-2026-larga"}).json()["access_token"]
 
     # El agente: carga comercios y nada más.
     assert client.get("/admin/equipo", headers=_h(t_agente)).status_code == 403
@@ -78,10 +78,10 @@ def test_el_rol_decide_que_puede_hacer(client, repo, admin_token):
 
 def test_apagar_a_alguien_lo_deja_afuera(client, repo, admin_token):
     u = _crear(client, admin_token, email="beto@uruku.bo").json()["usuario"]
-    assert client.post("/auth/campo/login", json={"email": "beto@uruku.bo", "password": "campo2026"}).status_code == 200
+    assert client.post("/auth/campo/login", json={"email": "beto@uruku.bo", "password": "campo-2026-larga"}).status_code == 200
     client.put(f"/admin/equipo/{u['id']}", headers=_h(admin_token),
                json={"email": "beto@uruku.bo", "activo": False, "roles": ["agente"]})
-    assert client.post("/auth/campo/login", json={"email": "beto@uruku.bo", "password": "campo2026"}).status_code == 401
+    assert client.post("/auth/campo/login", json={"email": "beto@uruku.bo", "password": "campo-2026-larga"}).status_code == 401
 
 
 def test_la_cuenta_del_env_sigue_andando(client):
@@ -102,7 +102,7 @@ def test_crear_un_rol_nuevo_desde_el_panel(client, repo, admin_token):
     assert r.json()["rol"]["permisos"] == ["comercios.cargar", "lugares"]
 
     _crear(client, admin_token, email="luis@uruku.bo", roles=["cargador-sc"])
-    t = client.post("/auth/campo/login", json={"email": "luis@uruku.bo", "password": "campo2026"}).json()
+    t = client.post("/auth/campo/login", json={"email": "luis@uruku.bo", "password": "campo-2026-larga"}).json()
     assert t["user"]["permisos"] == ["comercios.cargar", "lugares"]
     # `lugares` en el rol le abre el ABM de lugares; el resto del panel, no.
     assert client.get("/admin/lugares", headers=_h(t["access_token"])).status_code == 200
