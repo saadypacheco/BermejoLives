@@ -469,6 +469,8 @@ PESTANAS_DE_ANTES = {
 
 #: Banco y Contenido para redes piden `difusion` (como Difusión); Cuidar suscriptores pide `pagos`.
 SECCIONES_DE_REDES = {"banco": "difusion", "redes": "difusion", "suscriptores": "pagos"}
+#: Secciones que se sumaron después (docs/telefonos-en-fotos.md).
+SECCIONES_NUEVAS = {"telefonos-fotos": "moderar"}
 
 
 def _secciones_ts():
@@ -492,7 +494,10 @@ def test_el_menu_tiene_las_23_pestanas_de_antes_con_el_mismo_permiso_mas_inicio_
     for sid, permiso in SECCIONES_DE_REDES.items():
         assert sid in menu, f"falta la sección {sid}"
         assert menu[sid] == permiso, f"{sid}: permiso {menu[sid]!r} en vez de {permiso!r}"
-    assert set(menu) == set(PESTANAS_DE_ANTES) | {"inicio", "calles", "manuales"} | set(SECCIONES_DE_REDES)
+    for sid, permiso in SECCIONES_NUEVAS.items():
+        assert menu.get(sid) == permiso, f"{sid}: permiso {menu.get(sid)!r} en vez de {permiso!r}"
+    assert set(menu) == (set(PESTANAS_DE_ANTES) | {"inicio", "calles", "manuales"}
+                         | set(SECCIONES_DE_REDES) | set(SECCIONES_NUEVAS))
 
 
 def test_el_tipo_SeccionAdmin_y_el_menu_coinciden():
