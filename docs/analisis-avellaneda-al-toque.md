@@ -147,6 +147,18 @@ URUKU resuelve **otro problema**: una ciudad entera, de todos los rubros, con un
 | P-04 | ¿Arrancamos ya con `/encargos`? Depende de P-01 de su spec: ¿hay una cuenta en pesos para cobrar el anticipo? | Sí, si hay una cuenta en pesos. Sin ella, el cliente de Orán no puede pagar a distancia |
 | P-05 | ¿Están las cuentas de Apple y Google y los 12 testers con Android para las apps? | Abrirlas cuando estén publicados Términos y Privacidad (#5) |
 
+### Decisiones del dueño (5/11/2026)
+
+| # | Respuesta | Qué cambia |
+|---|---|---|
+| P-01 | **Sí, sigue atado al pago** | No se separa «Destacado» de «Datos verificados»: la estrella sigue siendo del plan |
+| P-02 | **No** | Precios sólo en ofertas |
+| P-03 | **Sí** | Se mantiene el sello «Envía a Argentina» |
+| P-04 | **Sí** | `/encargos` es la próxima feature (spec existente) |
+| P-05 | **No están, hay que crearlas** | Apple Developer US$ 99 por año y Google Play US$ 25 una vez (cuentas personales nuevas de Google: 12 testers durante 14 días). Las apps esperan esas cuentas y Términos y Privacidad publicados |
+
+Primer incremento (sin la separación del sello): emoji del aviso de iPhone, header más limpio con redes sólo al pie, carrusel propio de comercios destacados, «≈ $ ARS» junto al precio en Bs en ciudades de frontera, tira «Vencen hoy» y mensaje cuando no hay ofertas, una sola sección de videos. Términos y Privacidad se publican cuando el dueño apruebe los textos de `docs/legal/`.
+
 ## 12. Fuentes
 
 **Avellaneda a un Toque** (consultadas el 3/11/2026):
