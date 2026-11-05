@@ -33,7 +33,7 @@ export function PreguntaContesto() {
   async function contestar(respondio: boolean) {
     if (!pendiente) return;
     quitarContacto(pendiente.id);
-    responderContesto(pendiente.id, respondio);
+    void responderContesto(pendiente.id, respondio, pendiente.token, pendiente.sesion);
     setPendiente(null);
     setListo("gracias");
     setTimeout(() => setListo(""), 2500);

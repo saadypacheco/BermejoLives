@@ -12,6 +12,7 @@ import { redirect } from "next/navigation";
  * esta ruta sólo redirige: los enlaces viejos, los favoritos y lo que esté
  * compartido por WhatsApp siguen funcionando.
  */
-export default function MapaPage({ searchParams }: { searchParams?: { of?: string } }) {
+export default async function MapaPage(props: { searchParams?: Promise<{ of?: string }> }) {
+  const searchParams = await props.searchParams;
   redirect(searchParams?.of === "1" ? "/ofertas" : "/buscar?vista=mapa");
 }

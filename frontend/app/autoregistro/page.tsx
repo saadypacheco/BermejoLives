@@ -29,26 +29,40 @@ export default function PublicarPage() {
   // La clave de entrada del negocio recién creado: se muestra una vez, antes
   // del chatbot, y vive sólo en memoria (nunca en localStorage).
   const [claveNueva, setClaveNueva] = useState<string | null>(null);
+  // El alta nace OCULTA hasta que el dueño confirma su WhatsApp (o el equipo la aprueba): el backend
+  // lo dice con `oculto_hasta_confirmar` y manda el `aviso`, que se le muestra tal cual al comerciante.
+  const [avisoAlta, setAvisoAlta] = useState<string | null>(null);
   useEffect(() => setSess(getComercioSession()), []);
 
   if (!sess) {
-    return <AuthView onLogged={setSess} onRegistrado={({ sesion, claveInicial }) => {
-      setClaveNueva(claveInicial); setSess(sesion);
+    return <AuthView onLogged={setSess} onRegistrado={({ sesion, claveInicial, aviso }) => {
+      setClaveNueva(claveInicial); setAvisoAlta(aviso); setSess(sesion);
     }} />;
   }
-  if (claveNueva) return <ClaveDelNegocio clave={claveNueva} nombre={sess.nombre} onListo={() => setClaveNueva(null)} />;
+  if (claveNueva || avisoAlta) {
+    return <ClaveDelNegocio clave={claveNueva} aviso={avisoAlta} nombre={sess.nombre}
+      onListo={() => { setClaveNueva(null); setAvisoAlta(null); }} />;
+  }
   return <ChatBot sess={sess} onLogout={() => { clearComercio(); setSess(null); }} />;
 }
 
 /** La clave con la que el dueño entra a su panel, una vez, antes de seguir. */
-function ClaveDelNegocio({ clave, nombre, onListo }: { clave: string; nombre: string; onListo: () => void }) {
+function ClaveDelNegocio({ clave, aviso, nombre, onListo }: { clave: string | null; aviso: string | null; nombre: string; onListo: () => void }) {
   return (
     <>
       <Nav />
       <div className="wrap" style={{ maxWidth: 480, paddingTop: 56 }}>
         <span className="eyebrow"><Ic n="listo" s={14} /> Negocio creado</span>
-        <h1 style={{ fontSize: 28, margin: "10px 0 14px" }}>{nombre} ya está en URUKU</h1>
-        <ClaveUnaVez clave={clave} titulo="Tu clave para entrar" onListo={onListo} textoListo="Ya la guardé" aviso="Anotala: no se vuelve a mostrar. Tiene la forma NOMBRE-XXXXXX; con tu celular y esta clave entrás a tu panel." />
+        {/* Con `aviso` el negocio todavía NO se ve en URUKU: no se le dice que ya está. */}
+        <h1 style={{ fontSize: 28, margin: "10px 0 14px" }}>{aviso ? `${nombre} quedó creado` : `${nombre} ya está en URUKU`}</h1>
+        {aviso && (
+          <p role="status" className="glass" style={{ padding: "12px 14px", borderRadius: 12, margin: "0 0 14px", fontSize: 14, color: "var(--txt)", border: "1px solid var(--amber)" }}>
+            <Ic n="reloj" s={15} /> {aviso}
+          </p>
+        )}
+        {clave
+          ? <ClaveUnaVez clave={clave} titulo="Tu clave para entrar" onListo={onListo} textoListo="Ya la guardé" aviso="Anotala: no se vuelve a mostrar. Tiene la forma NOMBRE-XXXXXX; con tu celular y esta clave entrás a tu panel." />
+          : <button type="button" className="btn btn-primary" style={{ minHeight: 44 }} onClick={onListo}>Entendido</button>}
       </div>
     </>
   );

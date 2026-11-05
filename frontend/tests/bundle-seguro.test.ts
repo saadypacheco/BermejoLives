@@ -44,6 +44,6 @@ test("ningún componente cliente importa los módulos que leen la base", () => {
 test("ningún archivo de lib/ lee SUPABASE en el navegador (data-client y data-pure no importan supabase)", () => {
   for (const m of ["data-client", "data-pure"]) {
     const txt = readFileSync(resolve(RAIZ, "lib", `${m}.ts`), "utf8");
-    assert.doesNotMatch(txt, /@supabase\/supabase-js|@\/lib\/supabase|@\/lib\/data"/, `lib/${m}.ts no puede tocar la base`);
+    assert.doesNotMatch(txt, /@supabase\/(?:supabase|postgrest)-js|@\/lib\/supabase|@\/lib\/data"/, `lib/${m}.ts no puede tocar la base`);
   }
 });

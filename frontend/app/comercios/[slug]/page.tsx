@@ -47,7 +47,8 @@ export function generateStaticParams() { return []; }
 /** El título y la vista previa de la ficha: es lo que se ve cuando alguien
  *  la comparte por WhatsApp o la encuentra en Google. La imagen la dibuja
  *  `opengraph-image.tsx` (al lado de este archivo): por eso acá no hay `images`. */
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const f = await cargarFicha(params.slug);
   if (!f) return { title: { absolute: "Comercio no encontrado | URUKU" }, robots: robotsFor(false) };
   const { comercio: c, ciudad, que, indexable, descripcion } = f;
@@ -65,7 +66,8 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   };
 }
 
-export default async function ComercioPage({ params }: { params: { slug: string } }) {
+export default async function ComercioPage(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const ficha = await cargarFicha(params.slug);
   // 404 de verdad (app/not-found.tsx): un slug viejo o mal copiado no es
   // una página que existe, y así lo entienden los buscadores y el navegador.

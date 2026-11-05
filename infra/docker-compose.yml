@@ -8,11 +8,24 @@
 #
 # Uso:  cd infra && docker compose up -d --build
 # ============================================================
+# Rotación de logs (sin esto el log json-file crece sin tope): 5 archivos de 10 MB por servicio.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   backend:
     build: ../backend
     container_name: bermejo-backend
     restart: unless-stopped
+    logging: *logging
+    # Corre como uid 1001 (backend/Dockerfile): sin capacidades ni setuid. Los volúmenes NUEVOS
+    # heredan el dueño de la imagen; si ya tenés unos de antes (creados como root), pasalos una
+    # vez con el comando de docker-compose.prod.yml (`run --user root --cap-add CHOWN ... chown -R 1001:1001`).
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     ports:
       - "127.0.0.1:8000:8000"
     env_file: ../backend/.env
@@ -36,6 +49,7 @@ services:
     build: ../renderer
     container_name: buscadonde-reels
     restart: unless-stopped
+    logging: *logging
     env_file: ../renderer/.env
     mem_limit: 1536m
     cpus: 1.5
@@ -61,17 +75,24 @@ services:
     build:
       context: ../frontend
       args:
-        # Se hornean en el bundle del navegador → apuntan al host
-        NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54421"
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+        # La base la lee el SERVIDOR de Next (build y runtime), no el navegador: ya no se hornean
+        # NEXT_PUBLIC_SUPABASE_*. Con el Supabase local (Kong) el origen LLEVA /rest/v1.
+        SUPABASE_INTERNAL_URL: "http://host.docker.internal:54421/rest/v1"
+        SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+        # Se hornea en el bundle del navegador → apunta al host
         NEXT_PUBLIC_API_URL: "http://localhost:8000"
     container_name: bermejo-frontend
     restart: unless-stopped
+    logging: *logging
+    # Corre como `node` (no root), sin capacidades ni setuid.
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     ports:
       - "127.0.0.1:3003:3003"
     environment:
-      # SSR dentro del contenedor → alcanza Supabase del host
-      - SUPABASE_INTERNAL_URL=http://host.docker.internal:54421
+      # SSR dentro del contenedor → alcanza Supabase del host (el Kong local lleva /rest/v1)
+      - SUPABASE_INTERNAL_URL=http://host.docker.internal:54421/rest/v1
+      - SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on: [backend]
@@ -82,6 +103,7 @@ services:
     image: devlikeapro/waha:latest
     container_name: bermejo-waha
     restart: unless-stopped
+    logging: *logging
     ports:
       - "127.0.0.1:4501:3000"          # SOLO localhost (4501 para no pisar mentorcomercial:4500)
     environment:

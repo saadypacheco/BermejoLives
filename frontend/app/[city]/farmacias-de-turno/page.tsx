@@ -23,7 +23,7 @@ import { cargarCiudad, cargarTurnos } from "../_datos";
  */
 export const dynamic = "force-dynamic";
 
-type Props = { params: { city: string } };
+type Props = { params: Promise<{ city: string }> };
 
 /** Ciudad + turnos. `null` en `turnos` = no se pudo leer: se LANZA en vez de dar un
  *  404 o un «no hay turnos» que mentirían. */
@@ -35,14 +35,16 @@ async function cargar(slug: string) {
   return { ciudad, ahora, turnos };
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  const params = await props.params;
   const datos = await cargar(params.city);
   if (!datos || datos.turnos.length === 0) return { title: "No encontrada", robots: { index: false, follow: false } };
   // Sin turnos en la llamada (`[]`): título y descripción genéricos, sin nombres.
   return metaFarmaciasTurno(datos.ciudad.nombre, [], datos.ahora, `/${datos.ciudad.slug}/farmacias-de-turno`);
 }
 
-export default async function FarmaciasDeTurnoCiudadPage({ params }: Props) {
+export default async function FarmaciasDeTurnoCiudadPage(props: Props) {
+  const params = await props.params;
   const datos = await cargar(params.city);
   // Sin ciudad, o sin ningún turno cargado → 404 (sólo ciudades con turnos).
   if (!datos || datos.turnos.length === 0) notFound();

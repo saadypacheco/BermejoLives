@@ -41,7 +41,8 @@ function Ayuda({ texto }: { texto: string }) {
   );
 }
 
-export default async function PiezaPage({ params }: { params: { token: string } }) {
+export default async function PiezaPage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const r = await leerPieza(params.token);
 
   if (r.tipo === "no_existe") {

@@ -72,7 +72,8 @@ function recortar(s: string, max: number): string {
   return t.length <= max ? t : `${t.slice(0, max - 1).trimEnd()}…`;
 }
 
-export default async function OgFicha({ params }: { params: { slug: string } }) {
+export default async function OgFicha(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const f = await cargarFichaBasica(params.slug);
   const nombre = recortar(f?.comercio.nombre ?? "URUKU", 64);
   const queEs = f ? (f.que || f.rubro) : "";

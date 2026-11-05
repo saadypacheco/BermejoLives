@@ -7,12 +7,35 @@
 # DOMINIO: DOMAIN = dominio canónico (ej. encontralo.store).
 #   DOMAIN_ALT (opcional) = segundo dominio servido en simultáneo durante la
 #   migración (ej. buscadonde.com). Si no se setea, cae a DOMAIN (sin efecto).
+#
+# PRIMER DEPLOY DESPUÉS DE ESTE CAMBIO (contenedores sin root, ver auditoría 5/11):
+#   El backend ahora corre como uid 1001 y el frontend como `node` (uid 1000). Los volúmenes
+#   que ya existen se crearon cuando el backend corría como root: hay que pasárselos UNA vez,
+#   ANTES del `up -d` (con el backend parado):
+#     docker compose -f docker-compose.prod.yml --env-file .env run --rm --no-deps --user root \
+#       --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --entrypoint chown backend \
+#       -R 1001:1001 /models /data/fotos /data/content /data/wa_received
+#   (el `cap_drop: [ALL]` del servicio se mantiene; el `run` le devuelve sólo esas tres capacidades.)
+#   Además, ./data/pago/qr.png (carpeta del compose en el host) tiene que ser legible por todos
+#   (chmod o+r), porque el backend ya no es root.
 # ============================================================
+
+# Rotación de logs: sin esto el log json-file de cada contenedor crece sin tope
+# (se come el disco del VPS). 5 archivos de 10 MB por servicio.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   postgres:
+    # Mayor fijada (17): los menores son sólo correcciones. Un cambio de mayor exige pg_upgrade,
+    # y nunca debe pasar por un `up`.
     image: postgres:17-alpine
     container_name: buscadonde-postgres
     restart: unless-stopped
+    logging: *logging
     environment:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - AUTHENTICATOR_PASSWORD=${AUTHENTICATOR_PASSWORD}
@@ -30,6 +53,7 @@ services:
     image: postgrest/postgrest:v12.2.3
     container_name: buscadonde-postgrest
     restart: unless-stopped
+    logging: *logging
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,6 +65,15 @@ services:
       - PGRST_DB_MAX_ROWS=1000
     networks: [traefik, internal]
     labels:
+      # PASO 3 pendiente (auditoría 5/11, A-02): cuando el backend Y el frontend lean por la red
+      # interna (http://buscadonde-postgrest:3000), este router se cierra: se sacan TODAS las
+      # labels de abajo y la red `traefik` de este servicio, y se borra el DNS `db.`. Mientras
+      # tanto el router sigue abierto, con tope de pedidos por IP (ratelimit).
+      #
+      # OJO CON EL ORDEN: el backend todavía le pega a https://db.${DOMAIN} (SUPABASE_URL de abajo)
+      # y para Traefik es UNA sola IP: con el tope puesto, un backend que sigue por la URL
+      # pública se queda sin cupo (30 pedidos por minuto). Deployá el backend con la URL interna
+      # ANTES (o a la vez que) este ratelimit.
       - traefik.enable=true
       - traefik.docker.network=traefik
       - "traefik.http.routers.buscadonde-db.rule=Host(`db.${DOMAIN}`)"
@@ -51,8 +84,15 @@ services:
       # supabase-js/supabase-py agregan /rest/v1 solos (asumen el Kong de
       # Supabase Cloud) — PostgREST bare sirve las tablas en la raíz, así
       # que se lo sacamos acá antes de reenviar.
-      - traefik.http.routers.buscadonde-db.middlewares=buscadonde-db-stripprefix
+      # Primero el tope y después el stripprefix (un pedido rechazado no hace trabajo de más).
+      - traefik.http.routers.buscadonde-db.middlewares=buscadonde-db-ratelimit,buscadonde-db-stripprefix
       - "traefik.http.middlewares.buscadonde-db-stripprefix.stripprefix.prefixes=/rest/v1"
+      # 30 pedidos por minuto por IP, con ráfaga de 30. La IP es la de origen de la conexión; si
+      # algún día el registro `db` pasa por el proxy de Cloudflare (naranja), todos se ven con la
+      # IP de Cloudflare y el tope pasa a ser compartido: ahí hay que usar CF-Connecting-IP.
+      - traefik.http.middlewares.buscadonde-db-ratelimit.ratelimit.average=30
+      - traefik.http.middlewares.buscadonde-db-ratelimit.ratelimit.period=1m
+      - traefik.http.middlewares.buscadonde-db-ratelimit.ratelimit.burst=30
   waha:
     # Fijada por digest a la imagen que corría en prod el 5/11/2026 (era `latest`):
     # un `up` no debe cambiar el bridge de WhatsApp solo. Para actualizar, probar en QA
@@ -60,6 +100,7 @@ services:
     image: devlikeapro/waha@sha256:527ff3d634925adb26d596883d7b3ca502c080f737af3c2af2be0c973c511533
     container_name: buscadonde-waha
     restart: unless-stopped
+    logging: *logging
     environment:
       - WAHA_API_KEY=${WAHA_API_KEY}
       - WHATSAPP_DEFAULT_ENGINE=NOWEB
@@ -104,9 +145,21 @@ services:
     build:
       context: ./frontend
       args:
-        # NEXT_PUBLIC_* se hornean en el bundle (apuntan a PostgREST self-hosted, https://db.$DOMAIN)
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        # La base (PostgREST) la lee el SERVIDOR de Next por la red interna de Docker, sin pasar
+        # por Traefik ni por internet (lib/supabase.ts; la URL va SIN /rest/v1). Ya no se hornean
+        # NEXT_PUBLIC_SUPABASE_* en el bundle del navegador: el navegador no habla con la base
+        # (lee por /api/lectura) y `npm run check:bundle` lo verifica.
+        # Van como build arg Y como `environment` (abajo): las páginas estáticas leen en el build y
+        # el servidor lee en runtime. Ojo: BuildKit no entra a las redes del compose, así que en el
+        # build `buscadonde-postgrest` no resuelve: por eso va también SUPABASE_URL (pública), que
+        # lib/supabase.ts prefiere SOLO durante el build. Si no, sitemap, /que-es-uruku y
+        # /comprar-en-bermejo salen sin datos y así se quedan hasta su revalidación (1 h a 1 día).
+        # PASO 3: cuando `db.` se cierre, el build ya no podrá leer la base; habrá que dar otra
+        # salida (p. ej. build con `network: host` o regenerar esas páginas tras el `up`).
+        SUPABASE_INTERNAL_URL: http://buscadonde-postgrest:3000
+        SUPABASE_URL: https://db.${DOMAIN}
+        # Acepta el nombre nuevo o, mientras el .env del VPS no se renombre, el viejo.
+        SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-${NEXT_PUBLIC_SUPABASE_ANON_KEY}}
         NEXT_PUBLIC_API_URL: https://api.${DOMAIN}
         # El mapa base sale del caché propio (servicio `tiles`), no de OSM
         # directo. Se puede pisar por ciudad desde `ciudades.tiles_url` sin
@@ -121,6 +174,14 @@ services:
         APP_ENV: ${APP_ENV:-}
     container_name: buscadonde-frontend
     restart: unless-stopped
+    logging: *logging
+    environment:
+      - SUPABASE_INTERNAL_URL=http://buscadonde-postgrest:3000
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${NEXT_PUBLIC_SUPABASE_ANON_KEY}}
+    # Corre como `node` (no root). Sin capacidades de Linux y sin poder ganar privilegios (setuid):
+    # Next sólo escucha en el 3003 y lee archivos, no necesita ninguna.
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     depends_on:
       postgrest:
         condition: service_started
@@ -134,7 +195,21 @@ services:
       - traefik.http.routers.buscadonde-fe.entrypoints=websecure
       - traefik.http.routers.buscadonde-fe.tls=true
       - traefik.http.routers.buscadonde-fe.tls.certresolver=letsencrypt
+      - traefik.http.routers.buscadonde-fe.middlewares=buscadonde-headers
       - traefik.http.services.buscadonde-fe.loadbalancer.server.port=3003
+      # Encabezados de seguridad (auditoría 5/11, M-07) para el sitio Y la API: la definición vive
+      # acá y el router de la API la usa con `buscadonde-headers@docker`.
+      #  - HSTS un año con subdominios: todos los subdominios (api., tiles., db.) ya van por https.
+      #  - X-Frame-Options DENY: nadie puede meter el sitio ni el /admin en un iframe (clickjacking).
+      #  - nosniff, Referrer-Policy y Permissions-Policy: cámara y micrófono (búsqueda por voz) y
+      #    ubicación sólo para el propio sitio.
+      # La CSP (en modo sólo reporte) la manda Next desde next.config.mjs.
+      - traefik.http.middlewares.buscadonde-headers.headers.stsseconds=31536000
+      - traefik.http.middlewares.buscadonde-headers.headers.stsincludesubdomains=true
+      - traefik.http.middlewares.buscadonde-headers.headers.framedeny=true
+      - traefik.http.middlewares.buscadonde-headers.headers.contenttypenosniff=true
+      - traefik.http.middlewares.buscadonde-headers.headers.referrerpolicy=strict-origin-when-cross-origin
+      - "traefik.http.middlewares.buscadonde-headers.headers.customresponseheaders.Permissions-Policy=geolocation=(self), camera=(self), microphone=(self)"
 
   # Tiles propios: un caché delante de OpenStreetMap. Ver selfhost/tiles/nginx.conf
   # para el porqué. En resumen: mil personas mirando el centro de Bermejo pasan a
@@ -143,6 +218,7 @@ services:
     image: nginx:1.27-alpine
     container_name: uruku-tiles
     restart: unless-stopped
+    logging: *logging
     volumes:
       - ./selfhost/tiles/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - tiles_cache:/var/cache/tiles
@@ -166,7 +242,14 @@ services:
         GIT_SHA: ${GIT_SHA:-dev}
     container_name: buscadonde-backend
     restart: unless-stopped
+    logging: *logging
     env_file: ./backend/.env
+    # Corre como uid 1001 (Dockerfile): sin capacidades y sin setuid. No necesita CAP_CHOWN: el
+    # os.chown de la carpeta out/ del job de videos va al uid 1001 de reels, que es el mismo uid,
+    # y chownear a uno mismo no pide privilegios. Escribe sólo en los volúmenes de abajo
+    # (/models, /data/fotos, /data/content, /data/wa_received); ver el `chown -R` de arriba.
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     depends_on:
       postgrest:
         condition: service_started
@@ -200,6 +283,7 @@ services:
       #   ssh <vps> "mkdir -p <carpeta del compose>/data/pago"
       #   scp qr.png <vps>:<carpeta del compose>/data/pago/qr.png
       # y el backend lo sirve por /pago/qr/imagen (re-codificado). Cambiarlo no pide reinicio.
+      # El backend ya no es root: el archivo tiene que ser legible por otros (chmod o+r).
       - ./data/pago:/data/pago:ro
     # `render`: red interna compartida sólo con el armador de videos (reels).
     networks: [traefik, internal, render]
@@ -210,6 +294,8 @@ services:
       - traefik.http.routers.buscadonde-be.entrypoints=websecure
       - traefik.http.routers.buscadonde-be.tls=true
       - traefik.http.routers.buscadonde-be.tls.certresolver=letsencrypt
+      # Encabezados de seguridad: el middleware lo define el frontend (más arriba).
+      - traefik.http.routers.buscadonde-be.middlewares=buscadonde-headers@docker
       - traefik.http.services.buscadonde-be.loadbalancer.server.port=8000
 
   # Armador de videos 9:16 (docs/contenido-redes-tecnico.md, 16.4): Chromium fotografía
@@ -223,6 +309,7 @@ services:
       context: ./renderer
     container_name: buscadonde-reels
     restart: unless-stopped
+    logging: *logging
     env_file: ./renderer/.env
     mem_limit: 1536m
     cpus: 1.5

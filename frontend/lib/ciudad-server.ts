@@ -13,7 +13,7 @@ import type { Ciudad } from "@/lib/types";
  *  puede no nombrar ninguna ciudad. */
 export async function ciudadActual(): Promise<{ ciudad: Ciudad | null; ciudades: Ciudad[]; elegida: boolean }> {
   const ciudades = await getCiudades();
-  const slug = cookies().get(CIUDAD_COOKIE)?.value;
+  const slug = (await cookies()).get(CIUDAD_COOKIE)?.value;
   const ciudad = resolveCiudad(ciudades, slug);
   return { ciudad, ciudades, elegida: Boolean(slug && ciudad && ciudad.slug === slug) };
 }

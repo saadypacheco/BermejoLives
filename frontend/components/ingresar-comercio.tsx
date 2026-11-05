@@ -7,9 +7,10 @@ import { Ic } from "@/components/ic";
 import { ClaveUnaVez } from "@/components/clave-una-vez";
 import {
   comercioIngresar, comercioLogin, comercioRecuperar, comercioRecuperarEstado, comercioRecuperarConfirmar,
-  VariosNegocios, ClaveAnulada,
+  VariosNegocios, ClaveAnulada, CodigoEnCurso,
   type ComercioSession, type NegocioDelNumero,
 } from "@/lib/comercio";
+import { guardarRecuperacion, leerRecuperacion, olvidarRecuperacion, recuperacionVigente } from "@/lib/recuperacion";
 import { CONFIRMACION_VENCE_MS, MAX_CLAVE_COMERCIO, POLL_MS, claveComercioPlausible, limpiarClaveComercio, mensajeDeError } from "@/lib/acceso";
 
 /**
@@ -161,6 +162,8 @@ export function IngresarConWhatsapp({ whatsapp, setWhatsapp, onVolver, onLogged 
 }) {
   const [codigo, setCodigo] = useState("");
   const [waLink, setWaLink] = useState("");
+  // El token de la solicitud: POST /recuperar lo devuelve una vez y el estado y la confirmación lo exigen.
+  const [token, setToken] = useState("");
   const [paso, setPaso] = useState<Paso>("pedir");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
@@ -177,13 +180,14 @@ export function IngresarConWhatsapp({ whatsapp, setWhatsapp, onVolver, onLogged 
   const parar = () => { if (intervaloRef.current) { clearInterval(intervaloRef.current); intervaloRef.current = null; } };
   useEffect(() => parar, []);
 
-  async function entrar(wa: string, c: string) {
+  async function entrar(wa: string, c: string, t: string) {
     if (entrandoRef.current) return;
     entrandoRef.current = true;
     parar();
     setPaso("entrando"); setErr("");
     try {
-      const { sesion, claveNueva } = await comercioRecuperarConfirmar(wa, c);
+      const { sesion, claveNueva } = await comercioRecuperarConfirmar(wa, c, t);
+      olvidarRecuperacion();   // el código y el token se gastaron: no se guardan más
       if (claveNueva) { setEntrega({ sesion, clave: claveNueva }); setPaso("clave"); }
       else onLogged(sesion);
     } catch (ex) {
@@ -195,13 +199,13 @@ export function IngresarConWhatsapp({ whatsapp, setWhatsapp, onVolver, onLogged 
   }
 
   /** Espera el mensaje de confirmación; a los 15 minutos el código ya no sirve. */
-  function esperar(wa: string, c: string) {
+  function esperar(wa: string, c: string, t: string) {
     parar();
     const inicio = Date.now();
     intervaloRef.current = setInterval(async () => {
       if (Date.now() - inicio >= CONFIRMACION_VENCE_MS) { parar(); setPaso("vencido"); return; }
       try {
-        if (await comercioRecuperarEstado(wa, c)) void entrar(wa, c);
+        if (await comercioRecuperarEstado(wa, c, t)) void entrar(wa, c, t);
       } catch { /* sin conexión: se reintenta en el próximo ciclo */ }
     }, POLL_MS);
   }
@@ -209,11 +213,25 @@ export function IngresarConWhatsapp({ whatsapp, setWhatsapp, onVolver, onLogged 
   async function solicitar(wa: string, id?: string) {
     setLoading(true); setErr("");
     try {
-      const { codigo: c, wa_link } = await comercioRecuperar(wa, id);
-      setCodigo(c); setWaLink(wa_link); setComercioId(id); setPaso("esperando");
-      esperar(wa, c);
+      const { codigo: c, wa_link, token: t } = await comercioRecuperar(wa, id);
+      // En sessionStorage (sólo esta pestaña, 15 min): si recarga o vuelve a tocar «Continuar» se retoma.
+      guardarRecuperacion({ whatsapp: wa, comercioId: id, codigo: c, wa_link, token: t, en: Date.now() });
+      setCodigo(c); setWaLink(wa_link); setToken(t); setComercioId(id); setPaso("esperando");
+      esperar(wa, c, t);
     } catch (ex) {
       if (ex instanceof VariosNegocios) { setNegocios(ex.negocios); setPaso("elegir"); return; }
+      // 409 «ya hay una confirmación en curso»: si esa solicitud es de este navegador, se retoma
+      // (tenemos su token); si no, se muestra el mensaje del backend tal cual.
+      if (ex instanceof CodigoEnCurso) {
+        const g = leerRecuperacion();
+        if (recuperacionVigente(g, wa, Date.now(), id)) {
+          setCodigo(g.codigo); setWaLink(g.wa_link); setToken(g.token); setComercioId(g.comercioId); setPaso("esperando");
+          esperar(wa, g.codigo, g.token);
+          return;
+        }
+        setErr(ex.message);
+        return;
+      }
       // 404 (el número no es de ningún negocio), 400 (número inválido) o 429: el
       // backend dice qué pasó y se muestra tal cual.
       setErr(mensajeDeError(ex, "No se pudo generar el código. Probá de nuevo."));
@@ -229,6 +247,7 @@ export function IngresarConWhatsapp({ whatsapp, setWhatsapp, onVolver, onLogged 
 
   function volver() {
     parar();
+    // Quien vuelve atrás no abandona el código: se queda guardado hasta que venza (por si toca «Continuar» otra vez).
     setPaso("pedir"); setErr(""); setComercioId(undefined);
   }
 
@@ -315,7 +334,7 @@ export function IngresarConWhatsapp({ whatsapp, setWhatsapp, onVolver, onLogged 
   return (
     <div className="glass" style={tarjeta}>
       <span role="alert" style={{ color: "var(--pink)", fontSize: 13 }}><Ic n="aviso" s={14} /> {err || "No se pudo entrar."}</span>
-      <button className="btn btn-primary" type="button" onClick={() => void entrar(whatsapp.trim(), codigo)}>Reintentar</button>
+      <button className="btn btn-primary" type="button" onClick={() => void entrar(whatsapp.trim(), codigo, token)}>Reintentar</button>
       <button type="button" onClick={volver} style={linkSecundario}>← Volver</button>
     </div>
   );

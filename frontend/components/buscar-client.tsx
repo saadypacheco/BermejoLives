@@ -197,7 +197,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
   }, [loading, results.length, ciudad]);
   const [hayMas, setHayMas] = useState(inicial ? inicial.resultados.length === PRIMERAS_BUSQUEDA : false);
   const [cargandoMas, setCargandoMas] = useState(false);
-  const debounce = useRef<ReturnType<typeof setTimeout>>();
+  const debounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const sp = useSearchParams();
   // Última búsqueda logueada: se le atan los contactos que salgan de ella.
   const [busquedaId, setBusquedaId] = useState<string | null>(null);

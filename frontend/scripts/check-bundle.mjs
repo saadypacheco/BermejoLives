@@ -27,7 +27,7 @@ if (!existsSync(raiz)) {
 
 const patrones = ["rest/v1", "eyJhbGciOiJIUzI1NiIs"];
 for (const v of [
-  process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY,
+  process.env.SUPABASE_URL, process.env.SUPABASE_INTERNAL_URL, process.env.SUPABASE_ANON_KEY,
   process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
 ]) {
   if (v && v.trim().length >= 8) patrones.push(v.trim());

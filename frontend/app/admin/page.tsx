@@ -64,6 +64,8 @@ import { RubroRecalcular } from "@/components/rubro-recalcular";
 import { CatalogoPanel } from "@/components/catalogo-panel";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { FotoPrincipal } from "@/components/foto-principal";
+import { ImagenPrivada } from "@/components/imagen-privada";
+import { botonReactivar, confirmarReactivar, etiquetaBaja, resumenBajas } from "@/lib/baja-comercio";
 import { CatalogoPdf } from "@/components/catalogo-pdf";
 import { TildesSuma, CLAVES_TILDES, type Tildes } from "@/components/tildes-suma";
 import { esCatalogoSubido, normalizarEnlace } from "@/lib/catalogo";
@@ -1006,9 +1008,9 @@ function TabCambioNumero({
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 11, color: "var(--txt-3)", marginBottom: 4 }}>Foto nueva</div>
-                {s.foto_url
-                  ? <img src={s.foto_url} alt="" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }} />
-                  : <div style={{ height: 120, background: "var(--panel)", borderRadius: 8, display: "grid", placeItems: "center", color: "var(--txt-3)", fontSize: 12 }}>sin foto</div>}
+                {/* La foto del trámite es privada: la ruta del backend se pide con el Bearer del admin. */}
+                <ImagenPrivada valor={s.foto_url} alt="Foto nueva del trámite de cambio de número" ancho="100%" alto={120}
+                  style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }} />
               </div>
             </div>
 
@@ -1079,9 +1081,8 @@ function TabPagos({
       )}
       {items.map((p) => (
         <div className="mod-item" key={p.id}>
-          {p.comprobante_url
-            ? <a href={p.comprobante_url} target="_blank" rel="noopener"><img src={p.comprobante_url} alt="comprobante" /></a>
-            : <div style={{ width: 120, minWidth: 120, height: 84, display: "grid", placeItems: "center", background: "var(--panel)", borderRadius: 8, color: "var(--txt-3)", fontSize: 12 }}>sin foto</div>}
+          {/* El comprobante es privado: la ruta del backend se pide con el Bearer del admin. */}
+          <ImagenPrivada valor={p.comprobante_url} alt="comprobante" />
           <div>
             <h4>{p.comercios?.nombre ?? "Comercio"}</h4>
             <p>
@@ -2286,14 +2287,14 @@ function DadosDeBaja({ ciudad, onReactivado }: { ciudad: string | null; onReacti
   useEffect(() => { cargar(); }, [cargar]);
 
   async function reactivar(c: ComercioDadoDeBaja) {
-    if (!window.confirm(`¿Reactivar "${c.nombre || "este negocio"}"? Vuelve a verse en URUKU.`)) return;
+    if (!window.confirm(confirmarReactivar(c.baja_motivo, c.nombre))) return;
     setErrFila(null); setReactivando(c.id);
     try {
       await adminReactivarComercio(c.id);
       setLista((prev) => prev?.filter((x) => x.id !== c.id) ?? prev);
       onReactivado();   // la lista de activos ya no es la misma
     } catch (e) {
-      setErrFila({ id: c.id, msg: mensajeDeError(e, "No se pudo reactivar") });
+      setErrFila({ id: c.id, msg: mensajeDeError(e, botonReactivar(c.baja_motivo).fallo) });
     } finally { setReactivando(null); }
   }
 
@@ -2307,7 +2308,7 @@ function DadosDeBaja({ ciudad, onReactivado }: { ciudad: string | null; onReacti
   return (
     <div>
       <div style={{ padding: "12px 16px", color: "var(--txt-3)", fontSize: 13 }}>
-        {lista.length} {lista.length === 1 ? "negocio dado de baja" : "negocios dados de baja"}. No se ven en URUKU hasta que los reactives.
+        {resumenBajas(lista.length, lista.filter((x) => x.baja_motivo === "sin_verificar").length)}
       </div>
       {lista.map((c) => (
         <div key={c.id} style={{ display: "flex", gap: 12, padding: "12px 16px", borderTop: "1px solid var(--border)", alignItems: "center", flexWrap: "wrap" }}>
@@ -2321,12 +2322,12 @@ function DadosDeBaja({ ciudad, onReactivado }: { ciudad: string | null; onReacti
               {c.updated_at ? ` · dado de baja ${new Date(c.updated_at).toLocaleDateString("es-BO")}` : ""}
             </div>
             <div style={{ fontSize: 12, color: "var(--txt-3)" }}>
-              <Ic n={c.baja_motivo === "admin" ? "cerrajeria" : "aviso"} s={12} /> {c.baja_motivo === "admin" ? "Dado de baja por el admin" : "Sin motivo registrado"}
+              <Ic n={etiquetaBaja(c.baja_motivo).icono} s={12} /> {etiquetaBaja(c.baja_motivo).texto}
             </div>
             {errFila?.id === c.id && <div role="alert" style={{ color: "var(--pink)", fontSize: 12.5, marginTop: 4 }}><Ic n="aviso" s={12} /> {errFila.msg}</div>}
           </div>
           <button type="button" className="btn btn-primary btn-sm" style={{ minHeight: 44 }} disabled={reactivando === c.id} onClick={() => reactivar(c)}>
-            <Ic n="actualizar" s={14} /> {reactivando === c.id ? "Reactivando…" : "Reactivar"}
+            <Ic n="actualizar" s={14} /> {reactivando === c.id ? botonReactivar(c.baja_motivo).enCurso : botonReactivar(c.baja_motivo).texto}
           </button>
         </div>
       ))}
