@@ -15,9 +15,10 @@ import { ciudadActual } from "@/lib/ciudad-server";
 
 export const dynamic = "force-dynamic";
 
-type Props = { searchParams?: Record<string, string | string[] | undefined> };
+type Props = { searchParams?: Promise<Record<string, string | string[] | undefined>> };
 
-export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  const searchParams = await props.searchParams;
   const { ciudad, elegida } = await ciudadActual();
   // Sin ciudad elegida no se nombra ninguna: un robot no manda cookies, así
   // que para Google la ciudad siempre era la de respaldo y el buscador
@@ -50,7 +51,8 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
  * La otra mitad está en la ficha de cada negocio (#novedades): el mismo
  * contenido visto desde un local. Acá se mira la ciudad; allá, un comercio.
  */
-export default async function NovedadesPage({ searchParams }: Props) {
+export default async function NovedadesPage(props: Props) {
+  const searchParams = await props.searchParams;
   const { ciudad } = await ciudadActual();
   const nombre = ciudad?.nombre ?? "Bermejo";
   const rubro = typeof searchParams?.rubro === "string" ? searchParams.rubro : null;

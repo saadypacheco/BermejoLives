@@ -5,7 +5,7 @@
 // Usa el JWT del admin (el mismo de /admin) y lee `GET /admin/agents/<id>/credential`.
 // Sin credencial vigente no hay nada que imprimir: avisa y vuelve a Equipo.
 
-import { useCallback, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AgentCredentialCard } from "@/components/agent-credential-card";
 import { Carga, useCarga } from "@/components/admin/estado-seccion";
@@ -14,13 +14,14 @@ import { getToken } from "@/lib/api";
 import { getCredencialAdmin, nombreCompleto, origenQr, type CredencialAdmin } from "@/lib/agent-credentials";
 import "@/app/styles/credencial-agente.css";
 
-export default function CredencialAdminPage({ params }: { params: { id: string } }) {
+export default function CredencialAdminPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const [estado, correr] = useCarga("No se pudo cargar la credencial");
   const [datos, setDatos] = useState<CredencialAdmin | null>(null);
   // `null` hasta montar: el token vive en localStorage y el servidor no lo ve.
   const [conSesion, setConSesion] = useState<boolean | null>(null);
 
-  const cargar = useCallback(() => correr(async () => { setDatos(await getCredencialAdmin(params.id)); }), [correr, params.id]);
+  const cargar = useCallback(() => correr(async () => { setDatos(await getCredencialAdmin(id)); }), [correr, id]);
 
   useEffect(() => {
     const hay = !!getToken();

@@ -13,10 +13,11 @@ import { urlHttp } from "@/lib/catalogo";
 // directiva queda para el día que el marco no dependa de la cookie.)
 export const revalidate = 300;
 
-type Props = { params: { id: string } };
+type Props = { params: Promise<{ id: string }> };
 
 /** Lo que se ve al compartir el link por WhatsApp: título, un pedazo del texto y la portada. */
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  const params = await props.params;
   const n = await getNovedadUruku(params.id);
   if (!n) return { title: "Novedad no encontrada", robots: { index: false, follow: false } };
   const titulo = n.titulo;
@@ -32,7 +33,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function NovedadUrukuPage({ params }: Props) {
+export default async function NovedadUrukuPage(props: Props) {
+  const params = await props.params;
   const n = await getNovedadUruku(params.id);
   // 404 de verdad: una novedad dada de baja o un id mal copiado no es una página que existe.
   if (!n) notFound();

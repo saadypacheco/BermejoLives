@@ -21,5 +21,21 @@ COPY scripts ./scripts
 # Datos que se importan con un comando (rol de turnos de las farmacias, etc.).
 COPY data ./data
 
+# Usuario no root. uid/gid 1001 A PROPÓSITO: es el mismo del contenedor `reels` (`pwuser`),
+# y el backend le entrega a ese uid la carpeta `out/` de cada job de video con
+# os.chown(out, 1001, -1) (content_render.py). Chownear al propio uid no pide
+# privilegios, así que anda sin CAP_CHOWN y con `cap_drop: [ALL]` (un uid distinto
+# sí lo pediría, y Docker no le da capacidades a un proceso no root).
+# Lo único que el backend escribe: /data/fotos, /data/content, /data/wa_received y
+# /models (cache de whisper). Las carpetas se crean acá con dueño 1001 para que un
+# volumen NUEVO herede el dueño; los volúmenes que ya existen en el VPS (creados
+# cuando corría como root) se arreglan una vez con `chown -R 1001:1001`
+# (ver docker-compose.prod.yml).
+RUN groupadd --gid 1001 app \
+ && useradd --uid 1001 --gid 1001 --no-create-home --shell /usr/sbin/nologin app \
+ && mkdir -p /models /data/fotos /data/content /data/wa_received \
+ && chown -R 1001:1001 /models /data
+USER 1001:1001
+
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -24,7 +24,8 @@ const RUBROS_CON_CARTA = new Set([
   "restaurantes", "comida-rapida", "cafeteria", "bebidas", "panaderia", "nocturna", "hospedaje",
 ]);
 
-export default async function TarjetaMesaPage({ params }: { params: { slug: string } }) {
+export default async function TarjetaMesaPage(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const comercio = await getComercioBySlug(params.slug);
   if (!comercio) {
     return <div style={{ padding: 40 }}>No encontramos ese comercio.</div>;

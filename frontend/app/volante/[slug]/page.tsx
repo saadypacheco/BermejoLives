@@ -43,7 +43,8 @@ export const dynamic = "force-dynamic";
  * grupo va con cada local y sigue funcionando aunque cambie el teléfono que
  * lo atiende.
  */
-export default async function VolantePage({ params }: { params: { slug: string } }) {
+export default async function VolantePage(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const comercio = await getComercioBySlug(params.slug);
   if (!comercio) {
     return <div style={{ padding: 40 }}>No encontramos ese comercio.</div>;

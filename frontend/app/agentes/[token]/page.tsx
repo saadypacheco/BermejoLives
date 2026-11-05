@@ -33,7 +33,8 @@ function Foto({ url, nombre }: { url: string | null; nombre: string }) {
   );
 }
 
-export default async function CredencialPage({ params }: { params: { token: string } }) {
+export default async function CredencialPage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const r = await verificarCredencial(params.token);
 
   // 404 del backend: el token no existe. Siempre el mismo mensaje.

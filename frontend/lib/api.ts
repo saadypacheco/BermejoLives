@@ -1,6 +1,7 @@
 // Cliente del backend FastAPI (ingesta + moderación).
 import { normalizarCapa, type CapaCalles, type EstadoMarca } from "@/lib/calles";
 import { camposOpcionesFoto, respuestaPortada, subirConProgreso, type OpcionesFoto, type RespuestaPortada } from "@/lib/upload";
+import { rutaPrivada } from "@/lib/archivo-privado";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_admin_token";
 
@@ -62,6 +63,20 @@ export async function authFetch(path: string, opts: RequestInit = {}) {
     );
   }
   return res;
+}
+
+/** Baja un archivo privado del admin (comprobante de pago, foto del trámite de cambio de número):
+ *  los listados traen una RUTA del backend que exige el Bearer, así que se pide con fetch y se
+ *  muestra como blob. `null` si el valor no es una ruta privada o el archivo ya no está (404). */
+export async function getArchivoPrivado(valor: string | null | undefined): Promise<Blob | null> {
+  const ruta = rutaPrivada(valor, API);
+  if (!ruta) return null;
+  try {
+    return await (await authFetch(ruta)).blob();
+  } catch (e) {
+    if ((e as { status?: number } | null)?.status === 404) return null;
+    throw e;
+  }
 }
 
 /** Lee `items` de una respuesta de lista.
@@ -298,7 +313,7 @@ export async function rechazarComercio(id: string) {
 export type ComercioDadoDeBaja = {
   id: string; slug: string; nombre: string; rubro_nombre: string | null;
   portada_thumb_url: string | null; updated_at: string | null;
-  /** Quién lo dio de baja: 'admin', o null en los viejos (sin motivo registrado). */
+  /** Por qué está de baja: 'admin', 'sin_verificar' (se registró solo y espera confirmar su WhatsApp o que lo aprueben) o null en los viejos. */
   baja_motivo?: string | null;
 };
 

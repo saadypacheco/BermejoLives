@@ -40,9 +40,10 @@ export async function generateStaticParams(): Promise<{ city: string; category: 
   return [];
 }
 
-type Props = { params: { city: string; category: string } };
+type Props = { params: Promise<{ city: string; category: string }> };
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  const params = await props.params;
   if (!esSlugPublico(params.category)) return { title: "No encontrada", robots: { index: false, follow: false } };
   // La ciudad primero: si no existe no se pide ni la lista de pares.
   const ciudad = await cargarCiudad(params.city);
@@ -71,7 +72,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function CategoriaPage({ params }: Props) {
+export default async function CategoriaPage(props: Props) {
+  const params = await props.params;
   if (!esSlugPublico(params.category)) notFound();
   const ciudad = await cargarCiudad(params.city);
   if (!ciudad) notFound();

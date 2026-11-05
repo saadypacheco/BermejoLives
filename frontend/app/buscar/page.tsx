@@ -17,9 +17,10 @@ export const metadata: Metadata = {
   robots: { index: false, follow: true },
 };
 
-type Props = { searchParams?: Record<string, string | string[] | undefined> };
+type Props = { searchParams?: Promise<Record<string, string | string[] | undefined>> };
 
-export default async function BuscarPage({ searchParams }: Props) {
+export default async function BuscarPage(props: Props) {
+  const searchParams = await props.searchParams;
   // El buscador arranca parado en la ciudad elegida. Sin esto devolvía comercios
   // de todas: alguien que eligió Santa Cruz buscaba y recibía locales de Bermejo,
   // lo que contradice lo único que acababa de decir.

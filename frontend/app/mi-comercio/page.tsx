@@ -121,7 +121,7 @@ const NAV_ITEMS: { v: Vista; label: string; Icon: any }[] = [
 
 function Sidebar({ vista, setVista, sub, onLogout, noLeidos, abierto, onCerrar, lateralRef }: {
   vista: Vista; setVista: (v: Vista) => void; sub: Suscripcion | null; onLogout: () => void; noLeidos: number;
-  abierto: boolean; onCerrar: () => void; lateralRef: React.RefObject<HTMLElement>;
+  abierto: boolean; onCerrar: () => void; lateralRef: React.RefObject<HTMLElement | null>;
 }) {
   const e = sub ? (ESTADO[sub.estado] ?? ESTADO.activo) : null;
   return (

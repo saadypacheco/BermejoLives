@@ -7,6 +7,8 @@ import { normalizarCapa, type CapaCalles, type EstadoMarca } from "@/lib/calles"
 // El `?ref=` con el que llegó esta persona (lo guarda RefCapture, primer toque,
 // y vence a los 30 días: ver lib/ref.ts).
 import { refGuardado } from "@/lib/ref";
+import { sesionDeLaPestania } from "@/lib/sesion";
+import { cuerpoRespondio, leadDeRespuesta, resultadoRespondio, type ResultadoRespondio } from "@/lib/contestaron";
 export { refGuardado };
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_agente_token";
@@ -454,6 +456,9 @@ export async function registrarLead(comercio_id: string, tipo: TipoLead = "whats
   // WhatsApp, mapa y reserva atribuyen el contacto sin repetir esto en cada uno.
   const ref = origen || refGuardado();
   if (ref) body.origen = ref;
+  // La misma sesión de la pestaña que va a /visita: el backend ata el voto de «¿te contestó?» a ella.
+  const sesion = sesionDeLaPestania().id;
+  body.sesion = sesion;
   fetch(`${API}/lead`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -462,19 +467,27 @@ export async function registrarLead(comercio_id: string, tipo: TipoLead = "whats
     // Un contacto de WhatsApp queda anotado para preguntar después «¿te
     // contestó?» (components/pregunta-contesto.tsx). Las vistas, no.
     if (tipo !== "whatsapp" && tipo !== "telefono") return;
-    const j = await r.json().catch(() => null);
-    if (j?.id) {
+    // POST /lead responde {ok, id, token}: el token se guarda junto al id, sin él no se puede votar.
+    const lead = leadDeRespuesta(await r.json().catch(() => null));
+    if (lead) {
       const { anotarContacto } = await import("@/lib/contestaron");
-      anotarContacto(j.id, comercio_id, nombre || "el local");
+      anotarContacto(lead.id, comercio_id, nombre || "el local", lead.token, sesion);
     }
   }).catch(() => undefined);
 }
 
 /** «¿Te contestó?»: sí o no sobre un contacto propio. Fire-and-forget. */
-export function responderContesto(leadId: string, respondio: boolean): void {
-  fetch(`${API}/lead/${encodeURIComponent(leadId)}/respondio`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ respondio }),
-  }).catch(() => undefined);
+export async function responderContesto(leadId: string, respondio: boolean, token: string, sesion?: string): Promise<ResultadoRespondio> {
+  try {
+    const r = await fetch(`${API}/lead/${encodeURIComponent(leadId)}/respondio`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpoRespondio(respondio, token, sesion)),
+    });
+    // 425 (muy pronto) y 429 (tope) se tratan en silencio, igual que 403 y 410: es una métrica, no se le
+    // muestra ningún error a la persona. Los llamadores ignoran el resultado; la regla vive en lib/contestaron.
+    return resultadoRespondio(r.status, await r.json().catch(() => null));
+  } catch {
+    return "error";
+  }
 }
 
 /** Loguea una búsqueda para los KPIs (qué se busca / qué no da / a quién encontró). Fire-and-forget. */

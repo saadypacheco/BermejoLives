@@ -38,9 +38,10 @@ export async function generateStaticParams(): Promise<{ city: string }[]> {
   return [];
 }
 
-type Props = { params: { city: string } };
+type Props = { params: Promise<{ city: string }> };
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  const params = await props.params;
   const ciudad = await cargarCiudad(params.city);
   if (!ciudad) return { title: "No encontrada", robots: { index: false, follow: false } };
   const pares = await cargarPares();
@@ -57,7 +58,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function CiudadPage({ params }: Props) {
+export default async function CiudadPage(props: Props) {
+  const params = await props.params;
   const ciudad = await cargarCiudad(params.city);
   if (!ciudad) notFound();
   const [pares, conTurnos] = await Promise.all([cargarPares(), ciudadTieneTurnos(ciudad.id)]);

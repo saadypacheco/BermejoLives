@@ -84,7 +84,7 @@ type Props = {
   ciudadNombre: string | null;
 };
 
-export function Dashboard({ resumen, cargando, error, onIr, onRecargar, ciudadNombre }: Props): JSX.Element {
+export function Dashboard({ resumen, cargando, error, onIr, onRecargar, ciudadNombre }: Props): React.JSX.Element {
   const hora = useHoraDeActualizacion(resumen);
   const titulo = ciudadNombre ?? "Todas las ciudades";
 

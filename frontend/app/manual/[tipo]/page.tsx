@@ -23,13 +23,15 @@ export function generateStaticParams() {
   return TIPOS_MANUAL.map((tipo) => ({ tipo }));
 }
 
-export function generateMetadata({ params }: { params: { tipo: string } }): Metadata {
+export async function generateMetadata(props: { params: Promise<{ tipo: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const titulo = esTipoManual(params.tipo) ? TITULO_MANUAL[params.tipo] : "Manual";
   // El contenido no es secreto, pero no es para buscadores.
   return { title: titulo, robots: { index: false, follow: false, nocache: true } };
 }
 
-export default async function ManualRuta({ params }: { params: { tipo: string } }) {
+export default async function ManualRuta(props: { params: Promise<{ tipo: string }> }) {
+  const params = await props.params;
   if (!esTipoManual(params.tipo)) notFound();
   return <PaginaManualServidor tipo={params.tipo} />;
 }

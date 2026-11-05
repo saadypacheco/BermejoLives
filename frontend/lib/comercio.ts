@@ -4,6 +4,7 @@ import {
   type OpcionesFoto, type ListaFotos, type RespuestaPortada,
 } from "@/lib/upload";
 import { detalleDeError } from "@/lib/acceso";
+import { avisoDeAlta } from "@/lib/alta-comercio";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_comercio_token";
 const COMERCIO_KEY = "bermejo_comercio";
@@ -101,7 +102,15 @@ export async function comercioIngresar(whatsapp: string, clave: string): Promise
   return guardarSesion(await res.json());
 }
 
-export type SolicitudRecuperar = { codigo: string; wa_link: string };
+/** Lo que devuelve POST /auth/comercio/recuperar. El `token` viene UNA sola vez y sin él no se puede
+ *  consultar el estado ni confirmar: guardalo (lib/recuperacion.ts, sessionStorage) mientras dura el código. */
+export type SolicitudRecuperar = { codigo: string; wa_link: string; token: string };
+
+/** 409 «ya hay una confirmación en curso para este negocio»: otro código vigente que no se pisa. El
+ *  mensaje del backend se muestra tal cual; si la solicitud es de este navegador se retoma. */
+export class CodigoEnCurso extends Error {
+  constructor(mensaje: string) { super(mensaje); this.name = "CodigoEnCurso"; }
+}
 
 /** Un negocio de los que comparten el número (para que la persona elija cuál). */
 export type NegocioDelNumero = { id: string; nombre: string; direccion: string | null };
@@ -146,6 +155,10 @@ export async function comercioRecuperar(whatsapp: string, comercioId?: string): 
       const detail = (data as Record<string, unknown>).detail;
       throw new VariosNegocios(typeof detail === "string" && detail ? detail : "Ese número está en más de un negocio. Elegí el tuyo.", negocios);
     }
+    // 409 sin lista de negocios: ya hay un código vigente (no se pisa). El `detail` se muestra.
+    const detail = typeof data === "object" && data !== null ? (data as Record<string, unknown>).detail : null;
+    throw new CodigoEnCurso(typeof detail === "string" && detail ? detail
+      : "Ya hay una confirmación en curso para este negocio. Terminala desde el mismo navegador o esperá unos minutos y pedí otra.");
   }
   // 404: ese número no es de ningún negocio; 400: número inválido; 429: demasiados
   // pedidos. El `detail` del backend lo explica y se muestra tal cual, en vez de
@@ -155,12 +168,16 @@ export async function comercioRecuperar(whatsapp: string, comercioId?: string): 
     throw new Error(typeof detail === "string" && detail ? detail : "No se pudo generar el código. Probá de nuevo.");
   }
   const ok = data as Record<string, unknown>;
-  return { codigo: typeof ok.codigo === "string" ? ok.codigo : "", wa_link: typeof ok.wa_link === "string" ? ok.wa_link : "" };
+  const token = typeof ok.token === "string" ? ok.token : "";
+  // Sin token no hay forma de seguir (el backend rechaza el estado y la confirmación): se corta acá.
+  if (!token) throw new Error("No se pudo generar el código. Probá de nuevo.");
+  return { codigo: typeof ok.codigo === "string" ? ok.codigo : "", wa_link: typeof ok.wa_link === "string" ? ok.wa_link : "", token };
 }
 
 /** Para pollear mientras se espera que llegue el mensaje de confirmación. */
-export async function comercioRecuperarEstado(whatsapp: string, codigo: string): Promise<boolean> {
-  const res = await fetch(`${API}/auth/comercio/recuperar/estado?whatsapp=${encodeURIComponent(whatsapp)}&codigo=${encodeURIComponent(codigo)}`);
+export async function comercioRecuperarEstado(whatsapp: string, codigo: string, token: string): Promise<boolean> {
+  // El token es obligatorio (sin él el backend contesta 422).
+  const res = await fetch(`${API}/auth/comercio/recuperar/estado?whatsapp=${encodeURIComponent(whatsapp)}&codigo=${encodeURIComponent(codigo)}&token=${encodeURIComponent(token)}`);
   if (!res.ok) return false;
   return (await res.json()).confirmado === true;
 }
@@ -170,11 +187,11 @@ export async function comercioRecuperarEstado(whatsapp: string, codigo: string):
 export type EntradaConfirmada = { sesion: ComercioSession; claveNueva: string | null };
 
 /** Entra con el número ya confirmado por WhatsApp. */
-export async function comercioRecuperarConfirmar(whatsapp: string, codigo: string): Promise<EntradaConfirmada> {
+export async function comercioRecuperarConfirmar(whatsapp: string, codigo: string, token: string, nuevaPassword?: string): Promise<EntradaConfirmada> {
   const res = await fetch(`${API}/auth/comercio/recuperar/confirmar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ whatsapp, codigo }),
+    body: JSON.stringify(nuevaPassword ? { whatsapp, codigo, token, nueva_password: nuevaPassword } : { whatsapp, codigo, token }),
   });
   if (!res.ok) throw new Error(await detalleDeError(res, "No se pudo entrar"));
   const data = await res.json();
@@ -237,7 +254,14 @@ export class NumeroYaRegistrado extends Error {
 /** Lo que devuelve el alta: la sesión (sin claves) y la clave de entrada, que el
  *  backend manda SÓLO en la raíz de la respuesta. Se muestra una vez al dueño y
  *  vive sólo en memoria. */
-export type RegistroResult = { sesion: ComercioSession; claveInicial: string | null };
+export type RegistroResult = {
+  sesion: ComercioSession;
+  claveInicial: string | null;
+  /** El texto del backend cuando el negocio nace OCULTO (`oculto_hasta_confirmar`): sale al confirmar el
+   *  WhatsApp o cuando el equipo lo aprueba. Se le muestra tal cual al comerciante. null = ya se ve. */
+  aviso: string | null;
+};
+
 
 export async function comercioRegistro(payload: RegistroPayload): Promise<RegistroResult> {
   const fd = new FormData();
@@ -258,7 +282,7 @@ export async function comercioRegistro(payload: RegistroPayload): Promise<Regist
     throw new Error(detalle);
   }
   const data = await res.json();
-  return { sesion: guardarSesion(data), claveInicial: leerClave(data.clave) ?? leerClave(data.clave_inicial) };
+  return { sesion: guardarSesion(data), claveInicial: leerClave(data.clave) ?? leerClave(data.clave_inicial), aviso: avisoDeAlta(data) };
 }
 
 export type PublicarPayload = {
