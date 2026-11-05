@@ -24,6 +24,7 @@ import { EstrellaVerificado } from "@/components/estrella-verificado";
 import { ordenarCerca } from "@/lib/orden-cerca";
 import { FilterChip, OptionList } from "@/components/filter-chips";
 import { Ic, IcRubro } from "@/components/ic";
+import { MicrofonoBusqueda } from "@/components/microfono-busqueda";
 import { HorarioBadge } from "@/components/horario-badge";
 import { registrarLead, logBusqueda } from "@/lib/campo";
 
@@ -593,7 +594,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
           "Buscar"— para que sea uno solo y no dos que se parecen. */}
       <form className="uk-search" style={{ marginBottom: 14 }}
             onSubmit={(e) => { e.preventDefault(); setQ(texto.trim()); }}>
-        <Search style={{ width: 20, height: 20 }} />
+        <Search style={{ width: 24, height: 24 }} />
         {rubroElegido && (
           <button type="button" className="uk-search-chip"
                   title="Quitar el rubro y buscar en todos"
@@ -605,6 +606,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
         <input autoFocus value={texto} onChange={(e) => setTexto(e.target.value)}
                placeholder={rubroElegido ? `Buscar en ${rubroElegido}…` : "¿Qué estás buscando?"}
                aria-label="Buscar" />
+        <MicrofonoBusqueda onResultado={(t) => { setTexto(t); setQ(t); }} />
         <button type="submit">Buscar</button>
       </form>
 

@@ -218,9 +218,8 @@
    celular no cambia: ahí va de lado a lado porque no hay otro lado. */
 @media (min-width: 900px) {
   .uk-brand-full { height: 60px; }
-  .uk-search { width: 100%; max-width: 760px; margin-left: auto; margin-right: auto; border-radius: 999px; min-height: 56px; }
-  .uk-search input { font-size: 17px; padding-left: 8px; }
-  .uk-search button[type="submit"] { border-radius: 999px; margin: 4px; }
+  /* El buscador de la compu se declara más abajo, junto al base: tiene que
+     ir después para ganarle por orden. */
 }
 
 /* Mapa · Ofertas · Cambio en el header, sólo de 900px para arriba: abajo de
@@ -259,12 +258,94 @@
 .uk-footer-brand .uk-brand-full { height: 30px; }
 .uk-red { color: var(--uk-red); font-weight: 700; }
 
-.uk-search { display: flex; align-items: center; background: var(--uk-surface); border: 1px solid var(--uk-line); box-shadow: var(--uk-shadow-soft); border-radius: var(--uk-radius-btn); overflow: hidden; min-height: 52px; }
-.uk-search svg { margin-left: 16px; width: 20px; height: 20px; color: var(--uk-ink-soft); flex-shrink: 0; }
-.uk-search input { flex: 1; border: 0; outline: 0; background: transparent; padding: 0 16px; min-width: 0; color: var(--uk-ink); text-overflow: ellipsis; }
-/* El ejemplo del placeholder es largo para un celular angosto: se corta con «…» en vez de quedar mocho. */
-.uk-search input::placeholder { text-overflow: ellipsis; }
-.uk-search button { align-self: stretch; border: 0; color: #fff; font-weight: 800; background: var(--uk-green-grad); padding: 0 26px; cursor: pointer; }
+/* ===== El buscador: lo más importante de la pantalla =====
+   Caja clara con borde del verde de marca y sombra suave, texto y lupa
+   grandes, «Buscar» en verde lleno. Las variables --sb-* son del buscador:
+   en modo claro la caja es blanca; en oscuro SIGUE siendo clara (con borde
+   verde brillante) para que no sea gris sobre gris y se distinga del fondo.
+   `overflow` visible a propósito: el aviso del micrófono («Escuchando…») cuelga
+   por debajo de la caja, y por eso el botón verde lleva su propio radio. */
+.uk-search {
+  --sb-bg: #FFFFFF; --sb-ink: #214533; --sb-ph: #566A5D; --sb-ic: #1A764C;
+  --sb-border: var(--uk-green); --sb-mic: #E3F1E8; --sb-mic-ink: #10623E;
+  --sb-sombra: 0 6px 20px rgba(29,141,82,.22), 0 1px 3px rgba(33,69,51,.14);
+  --sb-radio: var(--uk-radius-btn);
+  position: relative; display: flex; align-items: center;
+  background: var(--sb-bg); border: 2px solid var(--sb-border); box-shadow: var(--sb-sombra);
+  border-radius: var(--sb-radio); min-height: 56px; transition: box-shadow .15s ease;
+}
+.uk[data-theme="dark"] .uk-search {
+  --sb-bg: #F3F8F4; --sb-ink: #14231A; --sb-ph: #52665A; --sb-ic: #1A764C;
+  --sb-border: #4CC985;
+  --sb-sombra: 0 0 0 1px rgba(76,201,133,.35), 0 8px 24px rgba(0,0,0,.5), 0 0 20px rgba(76,201,133,.28);
+}
+/* Foco: anillo bien visible alrededor de toda la caja. */
+.uk-search:focus-within { box-shadow: var(--sb-sombra), 0 0 0 4px rgba(29,141,82,.42); }
+.uk[data-theme="dark"] .uk-search:focus-within { box-shadow: var(--sb-sombra), 0 0 0 4px rgba(76,201,133,.55); }
+.uk-search > svg { margin-left: 16px; width: 24px; height: 24px; color: var(--sb-ic); flex-shrink: 0; }
+.uk-search input { flex: 1; border: 0; outline: 0; background: transparent; padding: 0 10px 0 12px; min-width: 0; color: var(--sb-ink);
+  font-size: 17px; font-weight: 500; text-overflow: ellipsis; }
+/* El ejemplo del placeholder es largo para un celular angosto: se corta con «…» en vez de quedar mocho.
+   `opacity: 1` porque Firefox le baja la opacidad y se pierde el contraste (AA sobre la caja clara). */
+.uk-search input::placeholder { text-overflow: ellipsis; color: var(--sb-ph); opacity: 1; font-weight: 400; }
+.uk-search button[type="submit"] { align-self: stretch; border: 0; color: #fff; font-size: 16px; font-weight: 800; background: var(--uk-green-grad);
+  padding: 0 22px; cursor: pointer; border-radius: 0 calc(var(--sb-radio) - 2px) calc(var(--sb-radio) - 2px) 0; }
+.uk-search button[type="submit"]:focus-visible { outline: 3px solid #fff; outline-offset: -6px; }
+.uk-search button[type="submit"]:hover { filter: brightness(1.06); }
+
+/* Micrófono (búsqueda por voz): 44 px de toque, dentro de la caja. */
+.uk-search .uk-mic { align-self: center; flex-shrink: 0; width: 44px; height: 44px; min-height: 44px; padding: 0; margin: 0 6px 0 0;
+  border: 0; border-radius: 50%; background: var(--sb-mic); color: var(--sb-mic-ink); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; }
+.uk-search .uk-mic svg { margin: 0; width: 26px; height: 26px; color: inherit; }
+.uk-search .uk-mic:hover { background: #CFE8D9; }
+.uk-search .uk-mic:focus-visible { outline: 3px solid var(--sb-mic-ink); outline-offset: 2px; }
+.uk-search .uk-mic.uk-mic-on { background: #10623E; color: #fff; animation: uk-mic-pulso 1.3s ease-out infinite; }
+@keyframes uk-mic-pulso {
+  0% { box-shadow: 0 0 0 0 rgba(29,141,82,.55); }
+  100% { box-shadow: 0 0 0 14px rgba(29,141,82,0); }
+}
+@media (prefers-reduced-motion: reduce) { .uk-search .uk-mic.uk-mic-on { animation: none; box-shadow: 0 0 0 4px rgba(29,141,82,.4); } }
+/* El estado va en una región aria-live. Vacío: sólo para lectores de pantalla.
+   Con texto: un cartel que cuelga debajo de la caja, con ícono y palabras
+   (no sólo color). */
+.uk-search .uk-mic-estado { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.uk-search .uk-mic-estado.on { left: 0; right: 0; top: calc(100% + 8px); width: auto; height: auto; overflow: visible; clip: auto; white-space: normal;
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 12px; font-size: 14px; font-weight: 700; line-height: 1.3; z-index: 30;
+  box-shadow: var(--uk-shadow); }
+.uk-search .uk-mic-estado svg { margin: 0; width: 18px; height: 18px; color: inherit; }
+.uk-search .uk-mic-estado.escuchando { background: #10623E; color: #fff; border: 1px solid #4CC985; }
+.uk-search .uk-mic-estado.error { background: #FDE8E6; color: #8E1B1B; border: 1px solid #F0B4AF; }
+
+/* El rubro elegido, como chip adentro de la caja: en la caja clara del modo
+   oscuro el chip oscuro se perdía. */
+.uk[data-theme="dark"] .uk-search .uk-search-chip { background: #DDEFE3; color: #10623E; }
+
+/* Celulares angostos (320–430): la fila lupa + texto + micrófono + «Buscar»
+   tiene que entrar sin empujar nada. Menos aire, mismo alto de toque. */
+@media (max-width: 430px) {
+  .uk-search > svg { margin-left: 12px; width: 22px; height: 22px; }
+  .uk-search input { padding: 0 6px 0 10px; }
+  .uk-search .uk-mic { margin-right: 4px; }
+  .uk-search button[type="submit"] { padding: 0 16px; }
+}
+/* 16 px es el mínimo que iOS no agranda al enfocar, y deja entrar más del
+   ejemplo en un 360. */
+@media (max-width: 400px) {
+  .uk-search input { font-size: 16px; }
+  .uk-search button[type="submit"] { padding: 0 14px; }
+}
+
+/* En la compu, el buscador como el de Google: centrado, redondo y de un
+   ancho cómodo. Estuvo pegado a la izquierda con un tope de 680px (se leía
+   como cortado) y de punta a punta (se leía como una barra de menú). En el
+   celular no cambia: ahí va de lado a lado porque no hay otro lado. */
+@media (min-width: 900px) {
+  .uk-search { --sb-radio: 999px; width: 100%; max-width: 760px; margin-left: auto; margin-right: auto; min-height: 60px; }
+  .uk-search input { font-size: 18px; padding-left: 10px; }
+  .uk-search button[type="submit"] { border-radius: 999px; margin: 4px; padding: 0 30px; }
+  .uk-search .uk-mic { margin-right: 6px; }
+}
 
 .uk-tools { display: flex; align-items: center; gap: 14px; }
 /* En desktop los wrappers "desaparecen" (los hijos entran directo al flex de .uk-tools);

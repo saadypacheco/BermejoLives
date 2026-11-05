@@ -11,6 +11,7 @@ import { CatNav } from "@/components/catnav";
 import { SocialLinks, money } from "@/components/uruku-ui";
 import { WA_URUKU_TEXTO, waUruku } from "@/lib/contacto";
 import { Ic, climaIcono } from "@/components/ic";
+import { MicrofonoBusqueda } from "@/components/microfono-busqueda";
 import { getCiudades, getCityCategoryPagesCached, getClima, getCotizaciones, getRedes, getRubros } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { CambioArsProvider } from "@/components/precio-ars";
@@ -164,6 +165,7 @@ export async function UrukuShell({
           <form className="uk-search" action="/buscar" method="get">
             <Ic n="buscar" />
             <input name="q" placeholder="Probá: zapatillas, celulares, farmacia" aria-label="Buscar: por ejemplo zapatillas, celulares o farmacia" />
+            <MicrofonoBusqueda />
             <button type="submit">Buscar</button>
           </form>
           )}

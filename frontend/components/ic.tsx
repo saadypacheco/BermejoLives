@@ -48,7 +48,7 @@ export type NombreIcono = keyof typeof ICONOS;
  *  paquete (ver arriba): lo lee el generador, que es quien saca el dibujo. */
 export const ICONOS = {
   // ── Navegación y acciones ────────────────────────────────────────────────
-  buscar: "MagnifyingGlass", mapa: "MapTrifold", ubicacion: "MapPin", comercios: "Storefront",
+  buscar: "MagnifyingGlass", microfono: "Microphone", mapa: "MapTrifold", ubicacion: "MapPin", comercios: "Storefront",
   ofertas: "Tag", novedades: "Megaphone", cambio: "ArrowsLeftRight", guia: "BookOpen",
   whatsapp: "WhatsappLogo", compartir: "ShareNetwork", favorito: "Heart", verificado: "SealCheck",
   volver: "ArrowLeft", seguir: "ArrowRight", abrir: "ArrowSquareOut", cerrar: "X",
