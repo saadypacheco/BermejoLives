@@ -15,6 +15,8 @@
 
 ---
 
+**Vigentes desde el 5 de noviembre de 2026.**
+
 ## 1. Qué es URUKU
 
 URUKU (uruku.bo) es una **guía de comercios** de Bermejo y la frontera: muestra quién vende qué, dónde queda, sus ofertas y cómo contactarlo. El contacto con el comercio se hace **directo por WhatsApp o por teléfono**.
@@ -67,9 +69,9 @@ El comercio se compromete a:
 
 - **Plan gratis:** para siempre. Tu comercio aparece en el mapa y el buscador, con los límites de publicaciones y fotos que muestra Mi comercio. Nadie sale del mapa por no pagar.
 - **Planes pagos:** mensuales, con más publicaciones, fotos, mejor ubicación en el buscador, estrella y otras funciones. El precio y lo que incluye se informan **antes de contratar** por los canales oficiales; los cargos extra (por ejemplo, una foto más) se ven en Mi comercio.
-- **Cómo se paga:** **sólo a URUKU**, por **QR a nombre de [completar: titular]** o el medio oficial que publiquemos en uruku.bo. Guardamos el comprobante.
+- **Cómo se paga:** **sólo a URUKU**, por **QR a nombre de Saady Pacheco** o el medio oficial que publiquemos en uruku.bo. Guardamos el comprobante.
 - **Los agentes de URUKU nunca cobran**: ni en efectivo, ni por transferencia a su nombre, ni «para adelantar el trámite». Si alguien te pide plata en nombre de URUKU, **no pagues** y avisanos al **67671888**.
-- **Si dejás de pagar:** tu comercio vuelve al plan gratis y sigue en el mapa; pierde la estrella, el orden preferente y lo que superaba el plan gratis [completar: si las fotos extra se ocultan o se borran].
+- **Si dejás de pagar:** tu comercio vuelve al plan gratis y sigue en el mapa; pierde la estrella, el orden preferente y lo que superaba el plan gratis. Las fotos de más **se ocultan, no se borran**: si volvés a un plan pago, aparecen de nuevo.
 - **Reembolsos (propuesta):** el mes ya empezado no se devuelve; si URUKU no pudo darte el servicio por una falla nuestra, compensamos con días de plan.
 - URUKU puede cambiar los planes y sus precios; los cambios no afectan el período que ya pagaste y se avisan antes.
 
@@ -114,11 +116,11 @@ Si los cambiamos, publicamos la versión nueva con su fecha en uruku.bo y, si el
 
 ## 14. Ley aplicable y jurisdicción
 
-Estos términos se rigen por las leyes del Estado Plurinacional de Bolivia. Cualquier conflicto se resuelve ante los juzgados de **Tarija** [completar: confirmar Tarija capital o Bermejo], salvo que la ley de tu país te dé un derecho que no se puede renunciar.
+Estos términos se rigen por las leyes del Estado Plurinacional de Bolivia. Cualquier conflicto se resuelve ante los juzgados de **Bermejo o de la ciudad de Tarija**, salvo que la ley de tu país te dé un derecho que no se puede renunciar.
 
 ## 15. Contacto
 
-[completar: razón social] · NIT [completar] · [completar: domicilio], Bermejo, Tarija, Bolivia · WhatsApp **67671888** · [completar: email].
+Saady Pacheco (persona natural) · Bermejo, Tarija, Bolivia · WhatsApp **67671888** · info@uruku.bo.
 
 ---
 

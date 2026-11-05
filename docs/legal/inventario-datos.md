@@ -100,11 +100,11 @@
 |---|---|---|---|---|---|
 | I1 | **Google (Gemini API)** | Fotos de ofertas y de locales, texto de publicaciones y descripciones, preguntas al asistente | `services/vision.py:315-346,388-417`; `clasificador.py:49-75,99-215`; `asistente.py:1002-1010`; `sinonimos.py:179-187`; `main.py:116-136` | Fuera de Bolivia (EE. UU. u otro) | En el plan **gratis** Google usa el contenido para mejorar productos y lo pueden leer revisores humanos; en el **pago**, no (términos del 28/04/2026). Exige 18+ (H-03) |
 | I2 | **WhatsApp / Meta** | Todo lo que se escribe en chats, grupos y comunidades; URUKU lo lee vía WAHA (no oficial) | `docker-compose.prod.yml:84-85` (`waha_sessions`) | Fuera de Bolivia | Las personas aceptan los términos de WhatsApp aparte |
-| I3 | Meta (Facebook, Instagram, canal de WhatsApp de URUKU) | Ofertas aprobadas (foto + texto del comercio) | `services/difusion.py:209`; `core/config.py:90-114` | Fuera de Bolivia | [completar: si FB/IG está encendido] |
-| I4 | Hostinger (VPS) | Toda la base y las fotos | `docs/estado-vps-prod-uruku.md:11,30` | **[completar: país del servidor]** | Proveedor de infraestructura |
+| I3 | Meta (Facebook, Instagram, canal de WhatsApp de URUKU) | Ofertas aprobadas (foto + texto del comercio) | `services/difusion.py:209`; `core/config.py:90-114` | Fuera de Bolivia | Sin integración automática: se publica a mano en las cuentas de URUKU (5/11/2026) |
+| I4 | Hostinger (VPS) | Toda la base y las fotos | `docs/estado-vps-prod-uruku.md:11,30` | Brasil | Proveedor de infraestructura |
 | I5 | Cloudflare | Tráfico del sitio (IP, páginas) al pasar por su red | `docs/estado-vps-prod-uruku.md:18-24` | Fuera de Bolivia | `api` y `db` no pasan por Cloudflare |
 | I6 | OpenStreetMap / unpkg | IP del navegador al bajar mapas y la librería del mapa | `lib/mapa-tiles.ts:42` (respaldo si no hay tiles propios), `lib/mapa-visual.ts:145-149` | Fuera de Bolivia | Tiles propios en `tiles.uruku.bo` cuando está configurado |
-| I7 | OpenAI (Whisper) | Audio del agente | `api/campo.py:85-101` | EE. UU. | **Sólo si** `OPENAI_API_KEY` está cargada; si no, se transcribe en el VPS [completar] |
+| I7 | OpenAI (Whisper) | Audio del agente | `api/campo.py:85-101` | EE. UU. | **Sólo si** `OPENAI_API_KEY` está cargada; si no, se transcribe en el VPS. Plan pago de la API |
 
 ## J. Previsto por spec, todavía NO en el código (`docs/grupos-por-comercio.md`, v2 19/10)
 
@@ -131,8 +131,8 @@
 | H-09 | Logs de Docker con teléfonos e IP, sin rotación | G2 | `logging: max-size/max-file` |
 
 **Supuestos (a confirmar por el dueño):**
-- **S-01** Responsable: una sola persona o empresa titular de URUKU en Bolivia [completar].
-- **S-02** El email de contacto de privacidad es distinto del personal del dueño [completar].
+- **S-01** Responsable: Saady Pacheco, persona natural (sin razón social ni NIT por ahora; 5/11/2026).
+- **S-02** El email de contacto de privacidad es info@uruku.bo.
 - **S-03** Ante una baja: se oculta al instante y se borra o anonimiza en 30 días, salvo pagos y pruebas de consentimiento.
 - **S-04** Plazos propuestos: mensajes de WhatsApp 12 meses (`sin_comercio` 90 días); asistente 12 meses; visitas, búsquedas y reclamos 24 meses; intentos de ingreso 90 días; pedidos de cambio de número 12 meses.
 - **S-05** Pagos y pruebas de consentimiento 5 años (plazo contable a confirmar con contador).

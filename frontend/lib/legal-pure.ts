@@ -17,8 +17,8 @@
 /** Si las páginas legales ya se publican: link en el pie, sitemap e indexables.
  *  En `false` mientras el texto tenga `[completar: …]` (razón social, NIT,
  *  domicilio…): las páginas existen para revisarlas, pero con `noindex` y sin
- *  links. Se pasa a `true` cuando el dueño complete los datos (5/11/2026). */
-export const LEGAL_PUBLICADO = false;
+ *  links. En `true` desde el 5/11/2026, con los datos que completó el dueño. */
+export const LEGAL_PUBLICADO = true;
 
 export type TipoLegal = "terminos" | "privacidad";
 

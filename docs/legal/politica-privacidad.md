@@ -15,11 +15,13 @@
 
 ---
 
+**Vigente desde el 5 de noviembre de 2026.**
+
 ## 1. Quién es responsable de tus datos
 
 URUKU es un sitio (uruku.bo) que muestra los comercios de Bermejo y la frontera, sus ofertas y cómo contactarlos.
-El responsable de los datos es **[completar: razón social]**, NIT **[completar]**, con domicilio en **[completar]**, Bermejo, Tarija, Bolivia.
-Para cualquier tema de privacidad: WhatsApp **67671888** (atendido por personas) o **[completar: email]**.
+El responsable de los datos es **Saady Pacheco**, persona natural, con domicilio en Bermejo, Tarija, Bolivia.
+Para cualquier tema de privacidad: WhatsApp **67671888** (atendido por personas) o **info@uruku.bo**.
 
 ## 2. Lo importante, en corto
 
@@ -98,13 +100,13 @@ De agentes y equipo guardamos email, nombre, ciudad, permisos, último ingreso y
 
 ## 5. Quién más ve tus datos (y salida del país)
 <!-- inv: I1 I2 I3 I4 I5 I6 I7 G4 -->
-- **Google (Gemini):** le mandamos fotos de ofertas y de locales, textos de publicaciones y las preguntas al asistente, para describirlos, clasificarlos y revisar que no sean estafas. **[completar según plan: «Usamos el plan pago: Google no usa estos datos para entrenar sus sistemas» / si es gratis: Google puede usarlos para mejorar sus productos y personas de Google pueden leerlos.]**
+- **Google (Gemini):** le mandamos fotos de ofertas y de locales, textos de publicaciones y las preguntas al asistente, para describirlos, clasificarlos y revisar que no sean estafas. Usamos el **plan pago**: Google no usa estos datos para entrenar sus sistemas.
 - **WhatsApp (Meta):** todo lo que escribís en WhatsApp pasa por WhatsApp, con sus propias reglas.
-- **Facebook, Instagram y el canal de WhatsApp de URUKU:** publicamos ahí ofertas aprobadas de los comercios. [completar]
-- **Hostinger:** guarda nuestro servidor, en **[completar: país]**. Hacemos copias de seguridad que se reemplazan cada 14 días.
+- **Facebook, Instagram, TikTok y el canal de WhatsApp de URUKU:** publicamos ahí, a mano y en las cuentas de URUKU, ofertas y videos de los comercios que lo autorizaron. No les mandamos otros datos.
+- **Hostinger:** guarda nuestro servidor, en **Brasil**. Hacemos copias de seguridad que se reemplazan cada 14 días.
 - **Cloudflare:** el tráfico del sitio pasa por su red para protegerlo.
 - **Mapas:** tu navegador baja los mapas de nuestro servidor o, si falla, de OpenStreetMap, y la librería del mapa de unpkg; esos servicios ven tu IP.
-- **OpenAI:** sólo si se activa, para pasar a texto el audio del agente. [completar]
+- **OpenAI:** sólo si se activa, para pasar a texto el audio del agente. Usamos el **plan pago** de su API: OpenAI no usa estos datos para entrenar sus sistemas.
 
 Varios de estos servicios están **fuera de Bolivia** (Estados Unidos u otros países). Al usar URUKU aceptás ese envío. **Nunca vendemos ni alquilamos tus datos.** Sólo los entregamos a una autoridad con orden judicial escrita.
 
@@ -135,7 +137,7 @@ Podés pedir, sin costo:
 - **Retirar tu permiso** cuando quieras; lo que ya se hizo antes sigue siendo válido.
 - Que saquemos una **foto donde aparecés vos**.
 
-**Cómo:** escribí a **67671888** por WhatsApp **desde el número que querés consultar** (así sabemos que sos vos) o a **[completar: email]**. Te respondemos en un máximo de **10 días**. Si es sobre un comercio, lo pide el dueño o alguien autorizado.
+**Cómo:** escribí a **67671888** por WhatsApp **desde el número que querés consultar** (así sabemos que sos vos) o a **info@uruku.bo**. Te respondemos en un máximo de **10 días**. Si es sobre un comercio, lo pide el dueño o alguien autorizado.
 
 **Bolivia:** si sentís que no respetamos tu privacidad, además podés presentar una **Acción de Protección de Privacidad** ante un juez (Constitución, art. 130).
 **Argentina** (por ejemplo, Aguas Blancas u Orán): tenés los derechos de la Ley 25.326 y podés reclamar ante la Agencia de Acceso a la Información Pública (AAIP).
