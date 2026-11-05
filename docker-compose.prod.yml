@@ -54,10 +54,10 @@ services:
       - traefik.http.routers.buscadonde-db.middlewares=buscadonde-db-stripprefix
       - "traefik.http.middlewares.buscadonde-db-stripprefix.stripprefix.prefixes=/rest/v1"
   waha:
-    # PENDIENTE (dueño): fijar el tag que corre hoy en el VPS (`docker inspect
-    # buscadonde-waha --format '{{.Config.Image}} {{.Image}}'` o GET /api/version)
-    # en vez de `latest`: un `up --build` no debe cambiar el bridge de WhatsApp solo.
-    image: devlikeapro/waha:latest
+    # Fijada por digest a la imagen que corría en prod el 5/11/2026 (era `latest`):
+    # un `up` no debe cambiar el bridge de WhatsApp solo. Para actualizar, probar en QA
+    # y cambiar el digest a mano (`docker image inspect --format '{{index .RepoDigests 0}}'`).
+    image: devlikeapro/waha@sha256:527ff3d634925adb26d596883d7b3ca502c080f737af3c2af2be0c973c511533
     container_name: buscadonde-waha
     restart: unless-stopped
     environment:
@@ -84,6 +84,10 @@ services:
       # la sesión a su propio celular.
       - WAHA_DASHBOARD_USERNAME=${WAHA_DASHBOARD_USER}
       - WAHA_DASHBOARD_PASSWORD=${WAHA_DASHBOARD_PASSWORD}
+      # Swagger (la documentación de la API) con las mismas credenciales que el dashboard:
+      # sin esto WAHA inventa una clave nueva en cada arranque y la imprime en el log.
+      - WHATSAPP_SWAGGER_USERNAME=${WAHA_DASHBOARD_USER}
+      - WHATSAPP_SWAGGER_PASSWORD=${WAHA_DASHBOARD_PASSWORD}
     volumes:
       - waha_sessions:/app/.sessions
       - waha_media:/app/.media
