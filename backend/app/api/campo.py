@@ -9,8 +9,9 @@ import httpx
 import structlog
 import re
 from datetime import datetime, timezone
+from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 from starlette.concurrency import run_in_threadpool
 
 from app.core import auth
@@ -889,11 +890,11 @@ def usar_como_portada_mi_comercio(
 
 
 class _LeadIn(BaseModel):
-    comercio_id: str
-    tipo: str = "whatsapp"
+    comercio_id: str = Field(max_length=64)
+    tipo: str = Field(default="whatsapp", max_length=30)
     # De qué búsqueda salió este contacto. Vacío si llegó por el mapa, la home
     # o un link compartido: son caminos igual de válidos, no un dato faltante.
-    busqueda_id: str | None = None
+    busqueda_id: str | None = Field(default=None, max_length=64)
     # De dónde llegó (el `?ref=` de la URL): volante-<slug>, mesa-<slug>,
     # ficha-<slug>, fb, ig. Vacío si entró por el buscador o el mapa.
     origen: str | None = Field(default=None, max_length=200)
@@ -930,7 +931,7 @@ class _VisitaIn(BaseModel):
     #: Sólo el host (google.com, facebook.com). La URL entera no hace falta y
     #: puede llevar datos de la otra página.
     referido: str | None = Field(default=None, max_length=500)
-    ciudad: str | None = None
+    ciudad: str | None = Field(default=None, max_length=60)
     #: Primera página de esta sesión: es lo que hace «personas» sin agrupar.
     primera: bool = False
 
@@ -993,9 +994,10 @@ def lead_respondio(lead_id: str, body: _RespondioIn, repo: Repo = Depends(get_re
 
 
 class _BusquedaIn(BaseModel):
-    query: str
-    resultados: int = 0
-    comercios: list[str] | None = None   # ids que aparecieron, en orden (para análisis)
+    query: str = Field(max_length=200)
+    resultados: int = Field(default=0, ge=0, le=100_000)
+    # ids que aparecieron, en orden (para análisis). Acotado: es un endpoint público.
+    comercios: list[Annotated[str, StringConstraints(max_length=64)]] | None = Field(default=None, max_length=100)
 
 
 @router.post("/busquedas/log")
@@ -1014,10 +1016,10 @@ def log_busqueda(body: _BusquedaIn, repo: Repo = Depends(get_repo)) -> dict:
 
 
 class _ReclamoIn(BaseModel):
-    nombre: str | None = None
-    contacto: str | None = None
-    comercio_id: str | None = None
-    mensaje: str
+    nombre: str | None = Field(default=None, max_length=120)
+    contacto: str | None = Field(default=None, max_length=120)
+    comercio_id: str | None = Field(default=None, max_length=64)
+    mensaje: str = Field(max_length=2000)
 
 
 @router.post("/reclamos")

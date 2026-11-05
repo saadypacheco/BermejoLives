@@ -1164,7 +1164,9 @@ def listar_solicitudes_cambio_numero(
 @router.post("/admin/solicitudes-cambio-numero/{solicitud_id}/aprobar")
 def aprobar_solicitud_cambio_numero(
     solicitud_id: str,
-    admin: dict = Depends(require_permiso("panel")),
+    # Aprobar entrega la cuenta de un comercio a otro celular: es manejo de CUENTA, no
+    # de "el resto del panel". Lo pide `comercios.cuenta` (admin y moderador).
+    admin: dict = Depends(require_permiso("comercios.cuenta")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Actualiza el WhatsApp del comercio al número nuevo. Siempre manual.

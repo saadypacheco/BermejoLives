@@ -30,6 +30,7 @@ import structlog
 
 from app.core.codigo import _RE_CON_PREFIJO
 from app.core.clave_comercio import RE_FORMA_DE_CLAVE
+from app.core import gemini
 from app.core.config import settings
 from app.services import cost_switches
 
@@ -562,9 +563,7 @@ def llamar_gemini_partes(partes: list[dict]) -> dict | None:
     if not settings.gemini_api_key:
         return None
     try:
-        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-               f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}")
-        r = vision._post_con_reintentos(url, {
+        r = vision._post_con_reintentos(gemini.url_generar(), {
             "contents": [{"parts": partes}],
             "generationConfig": {"responseMimeType": "application/json"}})
         r.raise_for_status()

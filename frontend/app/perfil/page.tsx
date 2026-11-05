@@ -9,13 +9,15 @@ import { ThemeToggle, ThemeNoFlash, POR_DEFECTO } from "@/components/uruku-theme
 import { CompradorAuthForm } from "@/components/comprador-auth";
 import { Bookmark, User } from "@/components/icons";
 import { Ic } from "@/components/ic";
+import { rutaInternaSegura } from "@/lib/ruta-interna";
 import { getUsuarioSession, clearUsuario, type UsuarioSession } from "@/lib/usuario";
 
 // Tras loguearse, si vino con ?next (ej. desde la tienda uruku.bo/tienda), volver ahí.
 function volverSiNext() {
   if (typeof window === "undefined") return;
   const next = new URLSearchParams(window.location.search).get("next");
-  if (next && next.startsWith("/")) window.location.href = next;
+  const destino = rutaInternaSegura(next);
+  if (destino) window.location.href = destino;
 }
 
 export default function PerfilPage() {

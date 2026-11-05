@@ -25,7 +25,9 @@ def health() -> dict:
         db_ok = True
         detail = "connected"
     except Exception as exc:  # noqa: BLE001
-        detail = str(exc)
+        # Sólo el tipo de error: el texto de la excepción puede traer la URL de
+        # la base o pedazos de configuración, y /health es público.
+        detail = f"error: {exc.__class__.__name__}"
     return {
         "status": "ok" if db_ok else "degraded",
         "service": "bermejo-backend",

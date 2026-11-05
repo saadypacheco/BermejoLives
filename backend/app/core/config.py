@@ -457,4 +457,46 @@ def _numeros_propios(crudo: str, variable: str = "WA_NUMEROS_PROPIOS") -> frozen
     return frozenset(validos)
 
 
+#: Valores de fábrica (el código y los ejemplos son públicos): ninguno puede estar en producción.
+_CLAVES_DE_FABRICA = frozenset({
+    "bermejo-dev-secret-change-in-prod", "bermejo1234", "campo1234", "publicar1234",
+})
+_JWT_MIN_LARGO = 32
+_CLAVE_PANEL_MIN_LARGO = 12
+
+
+def problemas_config_produccion(cfg: "Settings") -> list[str]:
+    """Qué secretos de `cfg` no sirven para producción. NUNCA incluye los valores:
+    sólo el nombre de la variable y el motivo, porque el mensaje va a los logs."""
+    def de_fabrica(v: str) -> bool:
+        return (v or "").strip() in _CLAVES_DE_FABRICA or "cambiar" in (v or "").lower()
+
+    problemas: list[str] = []
+    jwt = cfg.jwt_secret or ""
+    if de_fabrica(jwt):
+        problemas.append("JWT_SECRET es el de fábrica o un ejemplo sin cambiar")
+    elif len(jwt) < _JWT_MIN_LARGO:
+        problemas.append(f"JWT_SECRET tiene menos de {_JWT_MIN_LARGO} caracteres")
+    for nombre, valor in (("ADMIN_PASSWORD", cfg.admin_password),
+                          ("AGENTE_PASSWORD", cfg.agente_password),
+                          ("PUBLICADOR_PASSWORD", cfg.publicador_password)):
+        if de_fabrica(valor):
+            problemas.append(f"{nombre} es la de fábrica o un ejemplo sin cambiar")
+        elif len(valor or "") < _CLAVE_PANEL_MIN_LARGO:
+            problemas.append(f"{nombre} tiene menos de {_CLAVE_PANEL_MIN_LARGO} caracteres")
+    return problemas
+
+
+def exigir_config_produccion(cfg: "Settings") -> None:
+    """Con ENVIRONMENT=production el backend se niega a arrancar con secretos de
+    fábrica o cortos. En cualquier otro ambiente no hace nada."""
+    if (cfg.environment or "").strip().lower() != "production":
+        return
+    problemas = problemas_config_produccion(cfg)
+    if problemas:
+        raise RuntimeError(
+            "Configuración insegura para producción, el backend no arranca: "
+            + "; ".join(problemas) + ". Corregilo en backend/.env.")
+
+
 settings = Settings()

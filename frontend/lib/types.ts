@@ -23,7 +23,8 @@ export type Comercio = {
   portada_url: string | null;
   whatsapp: string | null;
   telefono: string | null;
-  email: string | null;
+  /** Interna (0186): el sitio público ya no la lee. Sólo viene en las respuestas del panel. */
+  email?: string | null;
   tiktok_url: string | null;
   facebook_url: string | null;
   instagram_url: string | null;
@@ -49,7 +50,8 @@ export type Comercio = {
   // Campos fronterizos (migration 0011)
   monedas_aceptadas: string[] | null;
   envios_internacionales: boolean;
-  origen_importacion: string[] | null;
+  /** Interna (0186): el sitio público ya no la lee. */
+  origen_importacion?: string[] | null;
   pedido_minimo: string | null;
   tiene_factura: boolean;
   /** «Lo que suma» en la ficha (spec docs/ficha-destacados.md). Todo opcional:

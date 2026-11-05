@@ -20,7 +20,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
 from app.api import agent_credentials, asistente, auth, calles, campo, comercio, contenido, content, cost_switches, health, moderacion, observabilidad, pago, reception, subscribers, telefonos_foto, usuario, webhook
-from app.core.config import settings
+from app.core.config import exigir_config_produccion, settings
 from app.core.ip import ip_cliente
 from app.core.limite_cuerpo import LimiteCuerpoMiddleware
 from app.core.registro import configurar_logging
@@ -279,6 +279,11 @@ async def _telefonos_foto_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("api.startup", service="bermejo", environment=settings.environment)
+    try:
+        exigir_config_produccion(settings)
+    except RuntimeError as exc:
+        logger.critical("config.produccion_insegura", detalle=str(exc))
+        raise
     if not settings.clave_pepper:
         # Sin pepper las claves de Mi comercio se guardan sólo con PBKDF2: una base filtrada
         # permite probar claves. Se arregla poniendo CLAVE_PEPPER en backend/.env.
@@ -319,7 +324,15 @@ async def lifespan(app: FastAPI):
         t.cancel()
 
 
-app = FastAPI(title="Bermejo Live Market API", version="0.1.0", lifespan=lifespan)
+def _opciones_docs(en_produccion: bool) -> dict:
+    """En producción no se publica el mapa de la API (/docs, /redoc, /openapi.json)."""
+    if en_produccion:
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    return {}
+
+
+app = FastAPI(title="Bermejo Live Market API", version="0.1.0", lifespan=lifespan,
+              **_opciones_docs(settings.environment == "production"))
 
 
 def _cors_origins() -> list[str]:
@@ -392,6 +405,24 @@ _RL_RULES: dict[str, int] = {
     # Uruku Ayuda: 20 preguntas por minuto por IP es más de lo que una persona
     # escribe, y menos de lo que un bot gastaría en modelo.
     "/asistente/": 20,
+    # Endpoints públicos sin cuenta (por IP y por minuto). Los topes están por encima de
+    # lo que hace una persona (muchas salen por la misma IP de la operadora) y muy por
+    # debajo de lo que haría un script. El orden importa: gana la primera que coincide.
+    "/lead/": 20,                    # «¿te contestó?»: una vez por contacto
+    "/lead": 60,                     # un click de contacto por vez
+    "/visita": 120,                  # una por página vista
+    "/busquedas/log": 60,
+    "/reclamos": 5,                  # un reclamo a mano; el resto es relleno
+    "/comercio/generar-descripcion": 10,   # llama al modelo (cuesta plata)
+}
+# POST con el id en el medio de la ruta: (prefijo, sufijo) -> tope por minuto.
+_RL_RULES_SUFIJO: dict[tuple[str, str], int] = {
+    ("/comercio/", "/solicitar-cambio-numero"): 5,     # sube una foto de hasta 15 MB
+}
+# GET que se pueden usar para probar valores a ciegas.
+_RL_RULES_GET: dict[str, int] = {
+    # El sitio consulta cada 2,5 s mientras espera el mensaje (24 por minuto).
+    "/auth/comercio/recuperar/estado": 60,
 }
 # NO hay regla para `GET /public/agents*` (la lista de agentes y la verificación de una
 # credencial por QR): el backend sólo ve la IP del servidor de Next, así que un tope "por
@@ -416,26 +447,40 @@ def _barrer_buckets(now: float) -> None:
         del _BUCKETS[k]
 
 
+def _regla_de_limite(metodo: str, ruta: str) -> tuple[str, int] | None:
+    """(clave del contador, tope por minuto) que le toca a este pedido, o None."""
+    if metodo == "POST":
+        for prefix, limite in _RL_RULES.items():
+            if ruta.startswith(prefix):
+                return prefix, limite
+        for (prefijo, sufijo), limite in _RL_RULES_SUFIJO.items():
+            if ruta.startswith(prefijo) and ruta.endswith(sufijo):
+                return prefijo + "*" + sufijo, limite
+    elif metodo == "GET":
+        for prefix, limite in _RL_RULES_GET.items():
+            if ruta.startswith(prefix):
+                return prefix, limite
+    return None
+
+
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):
-    if request.method == "POST":
-        for prefix, limite in _RL_RULES.items():
-            if not request.url.path.startswith(prefix):
-                continue
-            ip = _client_ip(request)
-            now = time.time()
-            if len(_BUCKETS) > _RL_MAX_BUCKETS or now - _ultimo_barrido > _RL_WINDOW:
-                _barrer_buckets(now)
-            clave = f"{prefix}:{ip}"
-            dq = _BUCKETS.get(clave)
-            if dq is None:
-                dq = _BUCKETS[clave] = deque()
-            while dq and now - dq[0] > _RL_WINDOW:
-                dq.popleft()
-            if len(dq) >= limite:
-                return JSONResponse({"detail": "Demasiados intentos, probá en un minuto"}, status_code=429)
-            dq.append(now)
-            break
+    regla = _regla_de_limite(request.method, request.url.path)
+    if regla:
+        prefix, limite = regla
+        ip = _client_ip(request)
+        now = time.time()
+        if len(_BUCKETS) > _RL_MAX_BUCKETS or now - _ultimo_barrido > _RL_WINDOW:
+            _barrer_buckets(now)
+        clave = f"{prefix}:{ip}"
+        dq = _BUCKETS.get(clave)
+        if dq is None:
+            dq = _BUCKETS[clave] = deque()
+        while dq and now - dq[0] > _RL_WINDOW:
+            dq.popleft()
+        if len(dq) >= limite:
+            return JSONResponse({"detail": "Demasiados intentos, probá en un minuto"}, status_code=429)
+        dq.append(now)
     return await call_next(request)
 
 

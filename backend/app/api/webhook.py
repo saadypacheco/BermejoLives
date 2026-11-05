@@ -38,8 +38,10 @@ _ALGORITMOS = {"sha512": hashlib.sha512, "sha256": hashlib.sha256}
 
 def _valid_signature(body: bytes, signature: str | None, algoritmo: str | None = None) -> bool:
     if not settings.webhook_secret:
-        # fail-OPEN solo en dev; en producción se rechaza si no hay secreto configurado
-        return settings.environment != "production"
+        # Sin secreto se rechaza TODO, salvo que el ambiente sea exactamente
+        # "development" (escrito a propósito): cualquier otro valor —production,
+        # qa, staging, un typo— cierra la puerta.
+        return settings.environment == "development"
     if not signature:
         return False
     hash_fn = _ALGORITMOS.get((algoritmo or "sha512").strip().lower())

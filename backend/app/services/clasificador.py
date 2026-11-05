@@ -9,6 +9,7 @@ import json
 import httpx
 import structlog
 
+from app.core import gemini
 from app.core.config import settings
 
 logger = structlog.get_logger()
@@ -28,15 +29,12 @@ def clasificar(titulo: str, descripcion: str | None, categorias: list[dict]) -> 
         "Respondé solo el slug:"
     )
     try:
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
-        )
-        r = httpx.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=20)
+        r = httpx.post(gemini.url_generar(), json={"contents": [{"parts": [{"text": prompt}]}]},
+                       headers=gemini.cabeceras(), timeout=20)
         r.raise_for_status()
         texto = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip().lower()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("clasificar.error", error=str(exc))
+        logger.warning("clasificar.error", error=gemini.sin_secretos(str(exc)))
         return None
 
     # El modelo puede devolver texto extra; buscamos el primer slug que aparezca.
@@ -69,11 +67,8 @@ def moderar_publicacion(titulo: str, descripcion: str | None) -> dict:
         '"confianza": 0.0-1.0}'
     )
     try:
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
-        )
-        r = httpx.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=20)
+        r = httpx.post(gemini.url_generar(), json={"contents": [{"parts": [{"text": prompt}]}]},
+                       headers=gemini.cabeceras(), timeout=20)
         r.raise_for_status()
         texto = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
         texto = texto.strip("`")
@@ -81,7 +76,7 @@ def moderar_publicacion(titulo: str, descripcion: str | None) -> dict:
             texto = texto[4:].strip()
         data = json.loads(texto)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("moderar_publicacion.error", error=str(exc))
+        logger.warning("moderar_publicacion.error", error=gemini.sin_secretos(str(exc)))
         return {"veredicto": "dudoso", "motivo": "No se pudo consultar la IA; revisión humana.", "confianza": 0.0}
 
     veredicto = str(data.get("veredicto", "dudoso")).strip().lower()
@@ -113,11 +108,8 @@ def generar_texto_comercio(nombre: str, que_vende: str, rubros: list[dict]) -> d
         '"rubro_slug": "el slug más adecuado de la lista de rubros"}'
     )
     try:
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
-        )
-        r = httpx.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=20)
+        r = httpx.post(gemini.url_generar(), json={"contents": [{"parts": [{"text": prompt}]}]},
+                       headers=gemini.cabeceras(), timeout=20)
         r.raise_for_status()
         texto = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
         texto = texto.strip("`")
@@ -125,7 +117,7 @@ def generar_texto_comercio(nombre: str, que_vende: str, rubros: list[dict]) -> d
             texto = texto[4:].strip()
         data = json.loads(texto)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("generar_texto_comercio.error", error=str(exc))
+        logger.warning("generar_texto_comercio.error", error=gemini.sin_secretos(str(exc)))
         return None
 
     descripcion = (data.get("descripcion") or "").strip()
@@ -152,11 +144,8 @@ def sugerir_rubros(descripcion: str, rubros: list[dict]) -> list[str]:
         'Devolvé SOLO un JSON (sin markdown): {"rubro_slugs": ["slug1", "slug2"]}'
     )
     try:
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
-        )
-        r = httpx.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=20)
+        r = httpx.post(gemini.url_generar(), json={"contents": [{"parts": [{"text": prompt}]}]},
+                       headers=gemini.cabeceras(), timeout=20)
         r.raise_for_status()
         texto = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
         texto = texto.strip("`")
@@ -164,7 +153,7 @@ def sugerir_rubros(descripcion: str, rubros: list[dict]) -> list[str]:
             texto = texto[4:].strip()
         data = json.loads(texto)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("sugerir_rubros.error", error=str(exc))
+        logger.warning("sugerir_rubros.error", error=gemini.sin_secretos(str(exc)))
         return []
 
     candidatos = data.get("rubro_slugs") or []
@@ -210,18 +199,15 @@ def sugerir_rubros_explicado(nombre: str, texto: str, rubros: list[dict]) -> dic
         '"motivo": "una frase de máximo 20 palabras que explique por qué"}'
     )
     try:
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
-        )
-        r = httpx.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=20)
+        r = httpx.post(gemini.url_generar(), json={"contents": [{"parts": [{"text": prompt}]}]},
+                       headers=gemini.cabeceras(), timeout=20)
         r.raise_for_status()
         crudo = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip().strip("`")
         if crudo.lower().startswith("json"):
             crudo = crudo[4:].strip()
         data = json.loads(crudo)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("sugerir_rubros_explicado.error", error=str(exc))
+        logger.warning("sugerir_rubros_explicado.error", error=gemini.sin_secretos(str(exc)))
         return None
 
     elegidos = [s for s in (data.get("rubros") or []) if s in slugs][:3]

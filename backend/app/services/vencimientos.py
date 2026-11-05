@@ -45,7 +45,6 @@ HOSTS_TLS = [
     ("api.uruku.bo", "el backend"),
     ("db.uruku.bo", "la base (PostgREST)"),
     ("tiles.uruku.bo", "el mapa"),
-    ("waha.uruku.bo", "el panel de WhatsApp"),
 ]
 
 

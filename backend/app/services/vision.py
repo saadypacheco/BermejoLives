@@ -18,6 +18,7 @@ import time
 import httpx
 import structlog
 
+from app.core import gemini
 from app.core.config import settings
 
 logger = structlog.get_logger()
@@ -121,7 +122,7 @@ def _post_con_reintentos(url: str, payload: dict) -> "httpx.Response":
     ultimo = None
     for intento in range(REINTENTOS):
         try:
-            r = httpx.post(url, json=payload, timeout=TIMEOUT_MODELO)
+            r = httpx.post(url, json=payload, headers=gemini.cabeceras(), timeout=TIMEOUT_MODELO)
             if r.status_code not in _ESTADOS_REINTENTABLES:
                 return r
             ultimo = r
@@ -263,19 +264,11 @@ Rubros disponibles:
 
 
 def _sin_secretos(texto: str) -> str:
-    """Saca la API key de cualquier texto que vaya a mostrarse.
+    """Saca la API key de cualquier texto que vaya a mostrarse (ver core/gemini.py).
 
-    httpx incluye la URL completa en el mensaje de sus errores, y la URL de
-    Gemini lleva ?key=... — así que un 404 terminaba mostrando la clave entera
-    en el panel del admin. Cualquiera con acceso a esa pantalla, o a una captura,
-    se la lleva.
-    """
-    if not texto:
-        return texto
-    limpio = re.sub(r"([?&]key=)[^&\s\"']+", r"\g<1><oculta>", texto)
-    if settings.gemini_api_key:
-        limpio = limpio.replace(settings.gemini_api_key, "<oculta>")
-    return limpio
+    httpx incluye la URL en el mensaje de sus errores: la clave ya no viaja en la URL
+    (va en una cabecera), pero esto sigue limpiando cualquier rastro."""
+    return gemini.sin_secretos(texto)
 
 
 def _parsear(texto: str) -> dict:
@@ -345,8 +338,7 @@ def analizar_oferta(url: str) -> dict:
         {"text": PROMPT_OFERTA},
         {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(data).decode()}},
     ]
-    url_api = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-               f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}")
+    url_api = gemini.url_generar()
     r = None
     try:
         r = _post_con_reintentos(url_api, {"contents": [{"parts": partes}]})
@@ -466,8 +458,7 @@ def leer_telefonos_foto(data: bytes) -> list[str]:
     if not settings.gemini_api_key:
         raise VisionNoConfigurada("Falta GEMINI_API_KEY")
     foto = _chica(data)
-    url_api = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-               f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}")
+    url_api = gemini.url_generar()
     payload = {"contents": [{"parts": [
         {"text": PROMPT_TELEFONOS},
         {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(foto).decode()}}]}]}
@@ -518,8 +509,7 @@ def analizar_fotos(urls: list[str], rubros: list[dict], ciudad: dict | None = No
                 "rubro_slugs": [], "confianza": 0.0, "fotos_analizadas": 0,
                 "error": "No se pudo descargar ninguna foto"}
 
-    url_api = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-               f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}")
+    url_api = gemini.url_generar()
     r = None
     try:
         r = _post_con_reintentos(url_api, {"contents": [{"parts": partes}]})

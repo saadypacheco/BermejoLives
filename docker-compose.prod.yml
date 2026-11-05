@@ -54,6 +54,9 @@ services:
       - traefik.http.routers.buscadonde-db.middlewares=buscadonde-db-stripprefix
       - "traefik.http.middlewares.buscadonde-db-stripprefix.stripprefix.prefixes=/rest/v1"
   waha:
+    # PENDIENTE (dueño): fijar el tag que corre hoy en el VPS (`docker inspect
+    # buscadonde-waha --format '{{.Config.Image}} {{.Image}}'` o GET /api/version)
+    # en vez de `latest`: un `up --build` no debe cambiar el bridge de WhatsApp solo.
     image: devlikeapro/waha:latest
     container_name: buscadonde-waha
     restart: unless-stopped
@@ -84,15 +87,14 @@ services:
     volumes:
       - waha_sessions:/app/.sessions
       - waha_media:/app/.media
-    networks: [traefik, internal]
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=traefik
-      - "traefik.http.routers.buscadonde-waha.rule=Host(`waha.${DOMAIN}`)"
-      - traefik.http.routers.buscadonde-waha.entrypoints=websecure
-      - traefik.http.routers.buscadonde-waha.tls=true
-      - traefik.http.routers.buscadonde-waha.tls.certresolver=letsencrypt
-      - traefik.http.services.buscadonde-waha.loadbalancer.server.port=3000
+    # WAHA ya NO se publica por Traefik: la API y el dashboard no tienen por qué
+    # estar en internet. El backend lo alcanza por la red `internal` y el WAHA le
+    # avisa al backend por la misma red (WHATSAPP_HOOK_URL de arriba).
+    # El dashboard (QR, estado de la sesión) se abre por túnel SSH:
+    #   ssh -L 3010:127.0.0.1:3010 <vps>   y luego http://localhost:3010
+    ports:
+      - "127.0.0.1:3010:3000"
+    networks: [internal]
 
   frontend:
     build:
@@ -122,7 +124,9 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=traefik
-      - "traefik.http.routers.buscadonde-fe.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`${DOMAIN_ALT:-${DOMAIN}}`) || Host(`www.${DOMAIN_ALT:-${DOMAIN}}`)"
+      # El optimizador de imágenes de Next (/_next/image) está apagado en el código
+      # (images.unoptimized) y además NO se enruta desde afuera: Traefik contesta 404.
+      - "traefik.http.routers.buscadonde-fe.rule=(Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`) || Host(`${DOMAIN_ALT:-${DOMAIN}}`) || Host(`www.${DOMAIN_ALT:-${DOMAIN}}`)) && !PathPrefix(`/_next/image`)"
       - traefik.http.routers.buscadonde-fe.entrypoints=websecure
       - traefik.http.routers.buscadonde-fe.tls=true
       - traefik.http.routers.buscadonde-fe.tls.certresolver=letsencrypt
