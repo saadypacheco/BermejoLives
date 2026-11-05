@@ -16,7 +16,7 @@
 // que el sitio recibe a los visitantes.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { getCiudadesReales } from "@/lib/data";
+import { getCiudadesReales } from "@/lib/data-client";
 import { miCiudad } from "@/lib/api";
 import type { Ciudad } from "@/lib/types";
 import { Ic } from "@/components/ic";

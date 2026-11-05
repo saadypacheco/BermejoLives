@@ -4,7 +4,7 @@ import Link from "next/link";
 import { sinEmoji } from "@/lib/rubros";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { getRubros } from "@/lib/data";
+import { getRubros } from "@/lib/data-client";
 import type { Rubro } from "@/lib/types";
 
 /** Nav de categorías tipo carrusel: scroll horizontal + flechas. La flecha derecha

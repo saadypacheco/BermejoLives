@@ -1,3 +1,4 @@
+import "server-only";
 import { cache } from "react";
 import {
   getCiudades, getCiudadesReales, getCityCategoryPages, getComercioBySlugEstricto, getFuncionesDePlan, getGaleriaComercio,

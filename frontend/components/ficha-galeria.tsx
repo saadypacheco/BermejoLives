@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import type { GaleriaFoto } from "@/lib/data";
+import type { GaleriaFoto } from "@/lib/data-pure";
 import { Ic } from "@/components/ic";
 
 /**

@@ -12,7 +12,7 @@ import { duracionVideo } from "@/lib/upload";
 import { CapturaWhatsapp } from "@/components/captura-whatsapp";
 import { CompletarComercio, apiGaleriaCampo } from "@/components/completar-comercio";
 import { GaleriaUploader } from "@/components/galeria-uploader";
-import { getCiudades, getRubros } from "@/lib/data";
+import { getCiudades, getRubros } from "@/lib/data-client";
 import type { Ciudad, Rubro } from "@/lib/types";
 import { Pin, User, Arrow, Edit } from "@/components/icons";
 import { comprimirImagen } from "@/lib/imagen";

@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Ic } from "@/components/ic";
 import { FotoEntera } from "@/components/galeria-tienda";
-import type { NovedadFoto } from "@/lib/data";
+import type { NovedadFoto } from "@/lib/data-pure";
 
 export function NovedadUrukuFotos({ fotos, titulo }: { fotos: NovedadFoto[]; titulo: string }) {
   const [abierta, setAbierta] = useState<number | null>(null);

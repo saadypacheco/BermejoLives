@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getCotizaciones, getClima, getRedes, getFronteraEstado, getCiudades, type Cotizacion, type Clima, type Red, type FronteraEstado } from "@/lib/data";
+import { getCotizaciones, getClima, getRedes, getFronteraEstado, getCiudades } from "@/lib/data-client";
+import type { Cotizacion, Clima, Red, FronteraEstado } from "@/lib/data-pure";
 import type { Ciudad } from "@/lib/types";
 import {
   publicadorLogin, hayPub, clearPub, editarCotizacion, overrideClima, refrescarClima, editarFrontera,

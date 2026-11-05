@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { GaleriaFoto, GaleriaVideo } from "@/lib/data";
+import type { GaleriaFoto, GaleriaVideo } from "@/lib/data-pure";
 import { Ic } from "@/components/ic";
 
 /** Galería pública en la ficha del comercio: fotos (thumb → lightbox) + videos. */

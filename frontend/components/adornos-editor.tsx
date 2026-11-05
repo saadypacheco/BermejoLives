@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadLeaflet } from "@/lib/mapa-visual";
 import { adornoHTML, MEDIDAS, type Adorno } from "@/lib/adornos";
-import { getComerciosMapa } from "@/lib/data";
+import { getPuntosComercios } from "@/lib/data-client";
 import {
   adminListAdornos, adminCrearAdorno, adminUpdateAdorno, adminDeleteAdorno,
   type AdornoAdmin,
@@ -84,9 +84,9 @@ function AdornosDeCiudad({ ciudad }: { ciudad: Ciudad }) {
 
       // Los comercios de fondo, apagados: están para decidir dónde NO poner un
       // adorno, no para trabajar con ellos. Son los de la ciudad elegida: sin
-      // pasarle la ciudad, getComerciosMapa usa el recuadro de Bermejo (y una
+      // pasarle la ciudad, getPuntosComercios usa el recuadro de Bermejo (y una
       // ciudad sin coordenadas mostraría los de Bermejo: mejor ninguno).
-      (centro ? getComerciosMapa(ciudad) : Promise.resolve([])).then((cs: any[]) => {
+      (centro ? getPuntosComercios(ciudad) : Promise.resolve([])).then((cs) => {
         if (cancelled) return;
         cs.forEach((c) => {
           if (c.lat == null || c.lng == null) return;

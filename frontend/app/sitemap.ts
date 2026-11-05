@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { supabase, hasSupabase } from "@/lib/supabase";
 import { getBusinessesForSitemap, getCiudadesConTurnos, getCityCategoryPagesOrNull } from "@/lib/data";
 import { absoluteUrl, businessPath, categoryPath, cityPath } from "@/lib/seo";
+import { LEGAL_PUBLICADO } from "@/lib/legal-pure";
 
 /**
  * El mapa del sitio para los buscadores (docs/visibilidad-buscadores-ia.md §3.7).
@@ -66,6 +67,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: absoluteUrl("/comunidad"), changeFrequency: "monthly", priority: 0.7 },
     { url: absoluteUrl("/agentes"), changeFrequency: "monthly", priority: 0.5 },
     { url: absoluteUrl("/autoregistro"), changeFrequency: "monthly", priority: 0.5 },
+    ...(LEGAL_PUBLICADO ? [
+      { url: absoluteUrl("/terminos"), changeFrequency: "yearly" as const, priority: 0.3 },
+      { url: absoluteUrl("/privacidad"), changeFrequency: "yearly" as const, priority: 0.3 },
+    ] : []),
   ];
   if (!hasSupabase) return fijas;
 

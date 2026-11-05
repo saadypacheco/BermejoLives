@@ -21,7 +21,7 @@
 // precio, el WhatsApp y «Reservar».
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { GaleriaFoto, GaleriaVideo } from "@/lib/data";
+import type { GaleriaFoto, GaleriaVideo } from "@/lib/data-pure";
 import { contactoDeOferta, precioFmt, vencimientoFmt, type FeedItem } from "@/lib/types";
 import { PrecioArs } from "@/components/precio-ars";
 import { Ic } from "@/components/ic";

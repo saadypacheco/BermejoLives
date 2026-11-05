@@ -1,19 +1,32 @@
+import "server-only";
 import { createClient } from "@supabase/supabase-js";
 
-// Solo claves PÚBLICAS en el frontend. service_role nunca acá (lesson KB).
-// En Docker, el código de SERVIDOR (dentro del contenedor) alcanza Supabase por
-// SUPABASE_INTERNAL_URL (host.docker.internal); el NAVEGADOR usa la URL pública
-// (localhost). En local sin Docker, ambos caen a NEXT_PUBLIC_SUPABASE_URL.
-const publicUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+// SÓLO SERVIDOR. Este módulo (y lib/data.ts, lib/ficha-data.ts,
+// lib/saber-revisado.ts) llevan `import "server-only"`: si un componente
+// cliente los importa, el build falla. Así la URL de la base y la anon key
+// nunca llegan al bundle del navegador, y nadie puede bajarse el catálogo
+// entero hablando directo con PostgREST (db.uruku.bo/rest/v1/...).
+//
+// El navegador lee datos por `lib/data-client.ts` -> `/api/lectura` (route
+// handler de Next, que sí corre acá, en el servidor).
+//
+// Variables (de SERVIDOR, sin el prefijo NEXT_PUBLIC_):
+//   SUPABASE_URL           URL pública de PostgREST.
+//   SUPABASE_INTERNAL_URL  Si el contenedor alcanza la base por otro host
+//                          (host.docker.internal), tiene prioridad.
+//   SUPABASE_ANON_KEY      La anon key (RLS la limita igual que antes).
+// Mientras no estén seteadas se usan las NEXT_PUBLIC_SUPABASE_URL /
+// NEXT_PUBLIC_SUPABASE_ANON_KEY de siempre, para no romper el deploy actual.
+// Ojo: esas dos se hornean en el build; las nuevas se leen en runtime.
 const url =
-  typeof window === "undefined"
-    ? process.env.SUPABASE_INTERNAL_URL || publicUrl
-    : publicUrl;
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  process.env.SUPABASE_INTERNAL_URL ||
+  process.env.SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL;
+const anonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!url || !anonKey) {
   // No tiramos error en build para permitir levantar sin .env; las queries fallan suave.
-  console.warn("Faltan NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  console.warn("Faltan SUPABASE_URL / SUPABASE_ANON_KEY (o NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY)");
 }
 
 export const supabase = createClient(url ?? "http://localhost", anonKey ?? "anon", {

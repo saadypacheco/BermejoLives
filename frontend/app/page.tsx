@@ -19,7 +19,7 @@ import { conFundador } from "@/lib/seo-paginas";
 import { CarruselNovedades } from "@/components/carrusel-novedades";
 import { getPromo, tarjetasDestacados, tarjetasServicios } from "@/components/tarjetas-promo";
 import { OfertaCard } from "@/components/oferta-card";
-import { etiquetaVence, ofertasPorVencer, tituloVencen } from "@/lib/precios-pure";
+import { etiquetaVence, ofertasPorVencer, soloVigentes, tituloVencen } from "@/lib/precios-pure";
 import { TarjetaTurnoHoy } from "@/components/tarjeta-turno-hoy";
 import { NovedadUrukuCard } from "@/components/novedad-uruku-card";
 import { ciudadActual } from "@/lib/ciudad-server";
@@ -189,7 +189,13 @@ export default async function InicioPage() {
   const nombre = ciudad?.nombre ?? "Bermejo";
   // La foto del hero es de la ciudad; sin foto propia, la de Bermejo sólo en
   // Bermejo. Otra ciudad sin foto va con el fondo liso, no con el río de otra.
-  const ofertas = feed.filter((f) => f.tipo === "oferta");
+  // Sin vencidas: `feed_publico` no filtra por vencimiento. Se parte del feed y, si
+  // las vencidas lo dejaron corto, se completa con las de la ciudad (las mismas de
+  // la tira «Vencen hoy»), sin repetir.
+  const ahora = new Date();
+  const feedOfertas = soloVigentes(feed.filter((f) => f.tipo === "oferta"), ahora);
+  const idsFeed = new Set(feedOfertas.map((o) => o.id));
+  const ofertas = [...feedOfertas, ...soloVigentes(ofertasVigentes, ahora).filter((o) => !idsFeed.has(o.id))];
   // «Ofertas destacadas» y «Novedades» son dos secciones: las ofertas se
   // quedan como estaban y las novedades —las de URUKU primero, después las de
   // los comercios— van aparte. Antes, sin ofertas, las novedades se mostraban
@@ -207,7 +213,6 @@ export default async function InicioPage() {
   const hayNovedades = conGuia || novUruku.length + novComerciosVisibles.length + (turnosHoy ?? []).length > 0;
   const tarjetasDestacadas = tarjetasDestacados(promo);
   // «Vencen hoy»: las ofertas que vencen hoy o mañana, en hora de Bolivia.
-  const ahora = new Date();
   const porVencer = ofertasPorVencer(ofertasVigentes, ahora);
   // El aviso de lanzamiento (si todavía falta) reemplaza a la línea de «no hay ofertas».
   const muestraLanzamiento = !hayOfertas && !hayNovedades && faltaParaLanzamiento();

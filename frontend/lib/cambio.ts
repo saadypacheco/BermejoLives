@@ -8,7 +8,7 @@
 // veces más de lo que dan (0109 corrige la etiqueta). Todo se convierte pasando por bolivianos, que es
 // la moneda del lugar; ARS↔USD usa usd_ars si está, que es la que la gente
 // mira, y si no, también por Bs.
-import type { Cotizacion } from "@/lib/data";
+import type { Cotizacion } from "@/lib/data-pure";
 
 export type Moneda = "ARS" | "BOB" | "USD";
 

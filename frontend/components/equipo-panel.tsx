@@ -7,7 +7,7 @@ import {
   emitirCredencial, getCredencialAdmin, revocarCredencial, subirFotoAgente, type CredencialAdmin,
 } from "@/lib/agent-credentials";
 import { crearUsuarioPanel, editarUsuarioPanel, getEquipo, guardarRol, borrarRol, type EquipoData, type UsuarioPanel, type RolAdmin } from "@/lib/api";
-import { getCiudades } from "@/lib/data";
+import { getCiudades } from "@/lib/data-client";
 import type { Ciudad } from "@/lib/types";
 
 /**
