@@ -3,6 +3,7 @@ import "@/app/uruku.css";
 import { ThemeToggle, ThemeNoFlash, POR_DEFECTO } from "@/components/uruku-theme";
 import { CitySelector } from "@/components/city-selector";
 import { IngresarMenu } from "@/components/ingresar-menu";
+import { InstalarAppBoton } from "@/components/instalar-app";
 import { BottomNav } from "@/components/bottom-nav";
 import { Asistente } from "@/components/asistente";
 import { Suspense } from "react";
@@ -210,6 +211,8 @@ export async function UrukuShell({
                 <h4>Información</h4>
                 <a href="/manual/comprador" className="uk-foot-link"><Ic n="ayuda" /><span>Cómo se usa URUKU</span><i>›</i></a>
                 <Link href="/agentes" className="uk-foot-link"><Ic n="seguridad" /><span>Agentes de URUKU</span><i>›</i></Link>
+                {/* Visible siempre (se esconde sola si la app ya está instalada). */}
+                <InstalarAppBoton variante="pie" />
                 {LEGAL_PUBLICADO && (<>
                   <Link href="/terminos" className="uk-foot-link"><Ic n="dato" /><span>Términos y condiciones</span><i>›</i></Link>
                   <Link href="/privacidad" className="uk-foot-link"><Ic n="seguridad" /><span>Política de privacidad</span><i>›</i></Link>

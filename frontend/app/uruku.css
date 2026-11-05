@@ -1615,3 +1615,59 @@ a.uk-product-img { display: block; }
 .uk-vm-error { margin: 0; font-size: 13px; color: var(--uk-red); display: flex; gap: 6px; align-items: flex-start; }
 .uk-vm-acciones { display: flex; flex-wrap: wrap; gap: 8px; }
 .uk-vm-acciones .uk-btn-ghost { flex: 1 1 140px; min-height: 44px; }
+
+/* ── Encabezado en el celular: la fila 1 NO se parte ─────────────────────────
+   Fila 1 = logo + ciudad + Ingresar + tema. La cotización baja sola a su fila.
+   Antes eran `flex-wrap: wrap` y el navegador partía la fila apenas la SUMA de
+   anchos naturales no entraba: en un Android de 360 px (338 útiles) o con la
+   letra del sistema al 115–130 %, el logo quedaba solo arriba y «ciudad ·
+   Ingresar · tema» caía a un segundo renglón (el iPhone, 30 px más ancho,
+   entraba justo).
+   Ahora es una grilla de dos columnas: el logo con su ancho y las acciones con
+   lo que sobre. La falta de ancho NUNCA parte la fila: se la come la ciudad,
+   que se recorta con «…». Ingresar queda en un ícono en los más angostos. Va
+   al FINAL del archivo para ganarle a las reglas de más arriba. */
+@media (max-width: 819px) {
+  .uk-head-top {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "logo acciones" "tira tira";
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 8px;
+  }
+  .uk-head-top .uk-brand { grid-area: logo; min-width: 0; }
+  .uk-head-actions { grid-area: acciones; justify-self: end; max-width: 100%; min-width: 0; margin-left: 0; }
+  .uk-head-strip { grid-area: tira; }
+  /* La ciudad es la que cede: con tope de ancho y puntos suspensivos. */
+  .uk-head-actions .uk-city { display: flex; min-width: 0; flex: 0 1 auto; }
+  .uk-head-actions .uk-city-btn { min-width: 0; max-width: 100%; }
+  .uk-head-actions .uk-city-nombre { min-width: 2.6em; max-width: 11em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .uk-head-actions .uk-acct, .uk-head-actions .uk-theme-toggle { flex-shrink: 0; }
+}
+@media (max-width: 430px) {
+  /* Sin la flechita de la ciudad: son 20 px que valen más para el nombre. */
+  .uk-head-actions .uk-city-btn > svg:last-child { display: none; }
+  .uk-head-actions .uk-city-btn, .uk-head-actions .uk-acct-btn { gap: 4px; padding-inline: 7px; }
+  .uk-head-actions { gap: 5px; }
+  .uk-head-actions .uk-theme-toggle-icon { padding: 7px 8px; }
+}
+@media (max-width: 400px) {
+  .uk-brand-full { height: 34px; }
+  .uk-head-top { column-gap: 6px; }
+}
+/* 360 px (22,5 em, que con la letra del sistema más grande salta antes):
+   Ingresar queda sólo con el ícono; el aria-label lo sigue nombrando. */
+@media (max-width: 360px), (max-width: 22.5em) {
+  .uk-head-actions .uk-pill-txt { display: none; }
+  .uk-head-actions .uk-acct-btn { padding: 6px 8px; }
+}
+@media (max-width: 340px) {
+  .uk-brand-full { height: 30px; }
+}
+
+/* Entrada «Instalar la app» del pie y del menú de Ingresar: son <button>, no
+   <a>, así que se les saca el aspecto de botón del navegador. */
+.uk-foot-link-btn { width: 100%; background: none; border: 0; text-align: left; font: inherit; cursor: pointer; }
+.uk-acct-item-btn { width: 100%; background: none; border: 0; text-align: left; font: inherit; cursor: pointer; }
+.uk-acct-item-tit { display: inline-flex; align-items: center; gap: 6px; }

@@ -73,6 +73,11 @@ export const viewport: Viewport = {
   // dark»: es el color de la barra del navegador en Android y de la franja
   // superior en iOS, o sea lo primero que se ve al abrir el sitio.
   themeColor: COLOR.verde,
+  // <meta name="color-scheme" content="light dark">: le avisa a Samsung Internet
+  // (y a cualquier navegador con «modo oscuro forzado») que el sitio maneja su
+  // propio tema. Sin esto, en modo oscuro el navegador invierte colores por su
+  // cuenta —logo y encabezado incluidos— y el rojo de la marca se ve virado.
+  colorScheme: "light dark",
   width: "device-width",
   initialScale: 1,
 };
