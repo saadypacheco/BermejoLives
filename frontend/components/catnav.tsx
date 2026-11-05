@@ -22,18 +22,28 @@ import type { Rubro } from "@/lib/types";
  * Ahora enlaza a `?rubro=<slug>`, que es el filtro real — el diagnóstico confirmó
  * que los 36 rubros devuelven exactamente los comercios que tienen. Y al venir de
  * la base, una categoría nueva aparece sola, sin tocar código. */
-export function CatNav({ active }: { active?: string }) {
+export function CatNav({ active, rubrosIniciales }: {
+  active?: string;
+  /** Los rubros leídos en el servidor: así los enlaces están en el HTML y un
+   *  rastreador sin JavaScript ve la barra entera, no sólo «Todos». */
+  rubrosIniciales?: Rubro[];
+}) {
   // El rubro de la URL MANDA sobre el que llega por prop. En /buscar la barra
   // es además el filtro: si no se marcara cuál está puesto, la persona ve
   // trescientos resultados de «Moda y ropa» con «Todos» resaltado arriba.
   // En el home no hay `?rubro`, así que ahí sigue mandando la prop.
   const sp = useSearchParams();
   const activo = sp?.get("rubro") || active;
-  const [rubros, setRubros] = useState<Rubro[]>([]);
+  const soloComerciales = (rs: Rubro[]) => rs.filter((r) => r.comercial !== false);
+  const [rubros, setRubros] = useState<Rubro[]>(rubrosIniciales ? soloComerciales(rubrosIniciales) : []);
   // Sólo los rubros comerciales: baños, cajeros, estacionamientos y wifi
   // son servicios y tienen su fila propia en el home. En una barra de
   // "qué querés comprar", "Wifi gratis" es ruido.
-  useEffect(() => { getRubros().then((rs) => setRubros(rs.filter((r) => r.comercial !== false))).catch(() => {}); }, []);
+  useEffect(() => {
+    if (rubrosIniciales?.length) return;
+    getRubros().then((rs) => setRubros(soloComerciales(rs))).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const ref = useRef<HTMLDivElement>(null);
   const [overflow, setOverflow] = useState(false);
   const [atStart, setAtStart] = useState(true);

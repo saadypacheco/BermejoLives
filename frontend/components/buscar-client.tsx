@@ -8,6 +8,7 @@ import { MapResults } from "@/components/map-results";
 import { CLAVE_ULTIMA_BUSQUEDA } from "@/components/volver-a-resultados";
 import { buscarComercios, getFiltrosDisponibles, getOfertasDeComercios, getRefinamientos, getRubros, getZonas } from "@/lib/data-client";
 import { APAGADAS, type FiltrosDisponibles } from "@/lib/data-pure";
+import { claveBusqueda, PRIMERAS_BUSQUEDA, type BusquedaInicial } from "@/lib/buscar-filtros";
 import { PrecioArs } from "@/components/precio-ars";
 import { type FeedItem, type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD_LABEL, precioFmt, comoLlegarHref, waLink } from "@/lib/types";
 import { productosDe } from "@/lib/productos";
@@ -27,7 +28,15 @@ import { HorarioBadge } from "@/components/horario-badge";
 import { registrarLead, logBusqueda } from "@/lib/campo";
 
 
-export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, nombreCiudad = "" }: {
+export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, nombreCiudad = "", inicial, rubrosIniciales }: {
+  /** La primera tanda de resultados, armada en el SERVIDOR con la misma
+   *  consulta que hace este componente (lib/buscar-filtros.ts). Va en el HTML:
+   *  un rastreador sin JavaScript tiene que leer una lista de comercios, no una
+   *  pantalla vacía que se llena después. Si coincide con lo que se está por
+   *  buscar, no se vuelve a pedir al montar. */
+  inicial?: BusquedaInicial;
+  /** Los rubros, para poner el nombre del que está elegido ya en el HTML. */
+  rubrosIniciales?: Rubro[];
   /** La fila de accesos de la ciudad (baños, cajeros, ofertas…). La arma la
    *  pantalla, que es de servidor, y se dibuja debajo del buscador. */
   accesos?: React.ReactNode;
@@ -37,23 +46,24 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
   /** De dónde saca el mapa base esta ciudad. NULL = la del código. */
   tilesCiudad?: { id?: string; tiles_url?: string | null; tiles_atribucion?: string | null; lat?: number | null; lng?: number | null } | null;
 }) {
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(inicial?.params.q ?? "");
   // Lo que la persona está escribiendo, separado de lo que se BUSCA (`q`).
   // El buscador de resultados es igual al del home: se busca al apretar
   // Buscar o Enter, no en cada tecla. Es más previsible, es lo que la gente
   // conoce, y no deja pedidos a medias ("rust") que puedan pisar al bueno.
-  const [texto, setTexto] = useState("");
-  const [rubro, setRubro] = useState("");
+  const [texto, setTexto] = useState(inicial?.params.q ?? "");
+  const [rubro, setRubro] = useState(inicial?.params.rubro ?? "");
   // El chip de refinamiento elegido, y los que hay para ofrecer. Salen de los
   // resultados de ESTA búsqueda, no de una lista fija.
-  const [subcategoria, setSubcategoria] = useState("");
+  const [subcategoria, setSubcategoria] = useState(inicial?.params.subcategoria ?? "");
   const [refinamientos, setRefinamientos] = useState<{ subcategoria: string; n: number }[]>([]);
-  const [total, setTotal] = useState<number | null>(null);
-  const [modalidad, setModalidad] = useState("");
-  const [zona, setZona] = useState("");
-  const [precioMax, setPrecioMax] = useState("");
+  const [total, setTotal] = useState<number | null>(
+    inicial ? (inicial.resultados.length ? (inicial.resultados[0].total ?? inicial.resultados.length) : 0) : null);
+  const [modalidad, setModalidad] = useState(inicial?.params.modalidad ?? "");
+  const [zona, setZona] = useState(inicial?.params.zona ?? "");
+  const [precioMax, setPrecioMax] = useState(inicial?.params.precioMax ?? "");
   // Arranca en la ciudad del selector; el parámetro ?ciudad= de la URL la pisa.
-  const [ciudad, setCiudad] = useState(ciudadInicial);
+  const [ciudad, setCiudad] = useState(inicial?.params.ciudad ?? ciudadInicial);
   // Pero si DESPUÉS cambian la ciudad en el selector de arriba, esa gana: es
   // una acción deliberada y el ?ciudad= de la URL es de la búsqueda anterior.
   // (El selector además reescribe el parámetro; esto cubre el caso en que la
@@ -116,7 +126,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
       return null;
     }
   }
-  const [results, setResults] = useState<ResultadoBusqueda[]>([]);
+  const [results, setResults] = useState<ResultadoBusqueda[]>(inicial?.resultados ?? []);
   // NÚMERO DE SERIE DE LA BÚSQUEDA. Cada búsqueda nueva lo sube, y toda
   // respuesta que llegue con un número viejo se tira — venga del primer lote,
   // de los lotes de fondo o de "Cargar más".
@@ -154,7 +164,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
   // Las ofertas van aparte de la búsqueda: `buscar_comercios` da una fila por
   // comercio y no tiene dónde meterlas salvo como contador.
   const [ofertas, setOfertas] = useState<Map<string, FeedItem[]>>(new Map());
-  const [rubros, setRubros] = useState<Rubro[]>([]);
+  const [rubros, setRubros] = useState<Rubro[]>(rubrosIniciales ?? []);
   // Timer propio para el registro: el de la búsqueda es corto a propósito y el
   // de la medición tiene que ser largo. Compartirlos obliga a elegir uno mal.
   const logTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -165,7 +175,10 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
   useEffect(() => { getFiltrosDisponibles().then(setDisp).catch(() => {}); }, []);
 
   const [zonas, setZonas] = useState<Zona[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Con datos del servidor no se arranca «cargando»: la lista ya está.
+  const [loading, setLoading] = useState(!inicial);
+  // La tanda inicial se usa UNA vez (la primera búsqueda); las siguientes se piden.
+  const inicialUsada = useRef(false);
   // «No encontramos comercios con esa búsqueda, probá con otra palabra» es
   // mentira en una ciudad recién abierta: no hay palabra que sirva, todavía no
   // hay nada cargado. Y eso es justo lo que va a ver el que entre a Santa Cruz
@@ -181,7 +194,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
       .catch(() => { /* si falla, queda el mensaje de siempre */ });
     return () => { cancelado = true; };
   }, [loading, results.length, ciudad]);
-  const [hayMas, setHayMas] = useState(false);
+  const [hayMas, setHayMas] = useState(inicial ? inicial.resultados.length === PRIMERAS_BUSQUEDA : false);
   const [cargandoMas, setCargandoMas] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout>>();
   const sp = useSearchParams();
@@ -194,7 +207,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
   //
   // PAGE: el tamaño de cada lote que sigue llegando SOLO, por detrás, mientras
   // la persona ya está leyendo. No hay que apretar nada.
-  const PRIMERAS = 10;
+  const PRIMERAS = PRIMERAS_BUSQUEDA;
   const PAGE = 30;
   // Hasta dónde sigue solo. Más allá de esto queda el botón: mil tarjetas en el
   // DOM de un celular de gama baja no es "cargar en background", es trabarlo.
@@ -216,7 +229,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
     : { q, rubro, subcategoria, modalidad, zona, ciudad, precioMax: precioMax ? Number(precioMax) : undefined };
 
   useEffect(() => {
-    getRubros().then(setRubros);
+    if (!rubrosIniciales?.length) getRubros().then(setRubros);
     getZonas().then(setZonas);
   }, []);
 
@@ -350,7 +363,12 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
 
   useEffect(() => {
     clearTimeout(debounce.current);
-    setLoading(true);
+    // ¿Es la búsqueda que el servidor ya resolvió? Entonces no se pide de nuevo
+    // ni se pasa por «cargando»: se sigue desde esa lista.
+    const usarInicial = !inicialUsada.current && !!inicial
+      && claveBusqueda({ q, rubro, subcategoria, modalidad, zona, ciudad, precioMax }) === claveBusqueda(inicial.params);
+    inicialUsada.current = true;
+    if (!usarInicial) setLoading(true);
     // Se marca al desmontar o al cambiar la búsqueda. Sin esto, los lotes que
     // seguían viniendo por detrás de la búsqueda ANTERIOR se agregaban a la
     // lista de la nueva: escribías "pan", llegaban diez panaderías, seguías
@@ -360,7 +378,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
     // Vigente = no se desmontó Y ninguna búsqueda nueva pasó por encima.
     const vigente = () => !cancelado && serie.current === mia;
     debounce.current = setTimeout(async () => {
-      const r = await buscarComercios(filtros, PRIMERAS, 0);
+      const r = usarInicial && inicial ? inicial.resultados : await buscarComercios(filtros, PRIMERAS, 0);
       // Tecleando "rust…ico", el pedido de "rust" tardaba más que el de
       // "rustico", llegaba después y pisaba la lista con rústicas y
       // rustidores. Desde el home no pasaba porque la palabra llega entera.
@@ -423,7 +441,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
         setHayMas(lote.length === PAGE);
         if (lote.length < PAGE) break;
       }
-    }, 280);
+    }, usarInicial ? 0 : 280);
     return () => {
       cancelado = true;
       clearTimeout(debounce.current);
@@ -758,6 +776,9 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
       )}
       {(
         <div className="uk-res-grid" style={vista === "mapa" ? { display: "none" } : undefined}>
+          {loading && shown.length === 0 && (
+            <p className="uk-empty" role="status">Buscando comercios…</p>
+          )}
           {!loading && shown.length === 0 && (
             servicio
               ? (

@@ -46,13 +46,19 @@ export default function manifest(): MetadataRoute.Manifest {
         icons: [{ src: "/logouruku-192.png", sizes: "192x192", type: "image/png" }],
       },
     ],
-    // Los del kit de marca. `maskable` es el que Android recorta en círculo o
-    // en gota según el teléfono: tiene que ser el que trae margen de sobra, o
-    // el logo sale mordido.
+    // El símbolo COMPLETO de la marca (la U dorada con la gota y las semillas;
+    // docs/Uruku-KIT-COMPLETO/2-Logos-y-Dax/uruku-simbolo-color.svg) sobre el
+    // crema #F9F6ED. Antes eran la versión simplificada del kit, sin semillas,
+    // y el dueño las veía «parecidas pero no las correctas».
+    //
+    // `any` y `maskable` van en entradas SEPARADAS: una sola con
+    // `purpose: "any maskable"` obliga a que el mismo dibujo sirva para los dos,
+    // y no sirve. El maskable tiene el símbolo dentro del 80 % central (zona
+    // segura) para que Android lo recorte en círculo o en gota sin morder nada.
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 }

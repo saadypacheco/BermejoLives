@@ -59,11 +59,17 @@ export const metadata: Metadata = {
   },
   appleWebApp: { capable: true, statusBarStyle: "default", title: MARCA },
   icons: {
+    // `/favicon.ico` (16, 32 y 48) es el que piden por defecto los robots y
+    // asistentes que no leen el <head>; el SVG y el PNG son para los navegadores.
+    // El favicon chico sigue siendo la versión simplificada (sin semillas): a 16
+    // px las semillas son ruido.
     icon: [
+      { url: "/favicon.ico", sizes: "16x16 32x32 48x48" },
       { url: "/favicon.svg", type: "image/svg+xml" },
       { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
     ],
-    apple: "/apple-touch-icon.png",
+    // El ícono de la app instalada en iPhone: el símbolo completo, 180x180.
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   twitter: { card: "summary_large_image" },
 };

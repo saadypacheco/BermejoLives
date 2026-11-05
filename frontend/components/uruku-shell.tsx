@@ -11,7 +11,7 @@ import { CatNav } from "@/components/catnav";
 import { SocialLinks, money } from "@/components/uruku-ui";
 import { WA_URUKU_TEXTO, waUruku } from "@/lib/contacto";
 import { Ic, climaIcono } from "@/components/ic";
-import { getCiudades, getCityCategoryPagesCached, getClima, getCotizaciones, getRedes } from "@/lib/data";
+import { getCiudades, getCityCategoryPagesCached, getClima, getCotizaciones, getRedes, getRubros } from "@/lib/data";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { CambioArsProvider } from "@/components/precio-ars";
 import { tasasDe } from "@/lib/cambio";
@@ -74,9 +74,11 @@ export async function UrukuShell({
    *  sigue listando todas. */
   fixedCity?: Ciudad;
 }) {
-  const [{ ciudad, ciudades }, clima, cotizaciones, redes, slugsIndexables] = await Promise.all([
+  const [{ ciudad, ciudades }, clima, cotizaciones, redes, slugsIndexables, rubrosNav] = await Promise.all([
     fixedCity ? ciudadFija(fixedCity) : ciudadActual(), getClima(), getCotizaciones(), getRedes(),
     showFooter && !fill ? slugsCiudadesIndexables() : Promise.resolve<ReadonlySet<string>>(new Set()),
+    // Los rubros de la barra, en el HTML del servidor (no los arma el navegador).
+    showCatnav ? getRubros().catch(() => []) : Promise.resolve([]),
   ]);
   // Pie «Ciudades»: sólo las que tienen una página que se indexa (enlace interno
   // a /{ciudad}). Sin ninguna, el bloque no aparece.
@@ -170,7 +172,7 @@ export async function UrukuShell({
         {/* En Suspense porque CatNav lee el rubro de la URL
             (useSearchParams): sin el límite, TODA la página se renderiza del
             lado del cliente y se pierde el HTML del servidor. */}
-        {showCatnav && <Suspense fallback={null}><CatNav active={activeCat} /></Suspense>}
+        {showCatnav && <Suspense fallback={null}><CatNav active={activeCat} rubrosIniciales={rubrosNav} /></Suspense>}
       </header>
 
       <main className={`${fill ? "uk-fill-main" : ""}${mainClass ? " " + mainClass : ""}`.trim() || undefined}>

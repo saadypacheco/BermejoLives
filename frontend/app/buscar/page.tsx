@@ -4,6 +4,8 @@ import { UrukuShell } from "@/components/uruku-shell";
 import { BuscarClient } from "@/components/buscar-client";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { AccesosCiudad } from "@/components/accesos-ciudad";
+import { buscarComerciosOrNull, getRubros } from "@/lib/data";
+import { filtrosDeBusqueda, paramsDeUrl, PRIMERAS_BUSQUEDA, type BusquedaInicial } from "@/lib/buscar-filtros";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +25,19 @@ export default async function BuscarPage({ searchParams }: Props) {
   // lo que contradice lo único que acababa de decir.
   const { ciudad } = await ciudadActual();
   const rubro = typeof searchParams?.rubro === "string" ? searchParams.rubro : "";
+  // LA PRIMERA TANDA VA EN EL HTML. Antes los resultados los armaba sólo el
+  // navegador, así que un rastreador (o ChatGPT, o cualquiera sin JavaScript)
+  // leía una pantalla sin un solo comercio y la tomaba por vacía. Se pide acá,
+  // con la misma consulta que usa el cliente (lib/buscar-filtros.ts), y se le
+  // pasa a BuscarClient para que no la repita. Si la base falla (`null`) NO se
+  // pasa nada: el cliente carga como siempre, y nunca se publica «no hay
+  // comercios» por un error de lectura.
+  const params = paramsDeUrl(searchParams, ciudad?.slug ?? "");
+  const [filas, rubros] = await Promise.all([
+    buscarComerciosOrNull(filtrosDeBusqueda(params), PRIMERAS_BUSQUEDA, 0),
+    getRubros().catch(() => []),
+  ]);
+  const inicial: BusquedaInicial | undefined = filas ? { params, resultados: filas } : undefined;
   // Cada frontera tiene su guía (0124): sin ella, los accesos a la aduana y
   // al paso no van a ninguna parte.
   const conGuia = ciudad ? (ciudad.guia_activa ?? ciudad.slug === "bermejo") : false;
@@ -51,6 +66,8 @@ export default async function BuscarPage({ searchParams }: Props) {
             lleva a las ofertas DE ESE rubro, que es lo que se está mirando. */}
         <BuscarClient
           accesos={<AccesosCiudad conGuia={conGuia} ofertas={rubro || true} />}
+          inicial={inicial}
+          rubrosIniciales={rubros}
           ciudadInicial={ciudad?.slug ?? ""}
           nombreCiudad={ciudad?.nombre ?? ""}
           tilesCiudad={ciudad ? { id: ciudad.id, tiles_url: ciudad.tiles_url ?? null, tiles_atribucion: ciudad.tiles_atribucion ?? null, lat: ciudad.lat, lng: ciudad.lng } : null}

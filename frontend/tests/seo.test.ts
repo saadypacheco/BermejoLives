@@ -203,6 +203,38 @@ test("organizationNodes: la marca del dueño y sameAs de las redes (YouTube incl
   assert.equal(RESPONSIBLE, "Equipo URUKU");
 });
 
+test("organizationNodes: WebSite con SearchAction hacia /buscar?q={search_term_string}", () => {
+  const [, web] = organizationNodes();
+  const accion = web.potentialAction as { "@type": string; target: { "@type": string; urlTemplate: string }; "query-input": string };
+  assert.equal(accion["@type"], "SearchAction");
+  assert.equal(accion.target.urlTemplate, "https://uruku.bo/buscar?q={search_term_string}");
+  assert.equal(accion["query-input"], "required name=search_term_string");
+});
+
+test("localBusinessNode (ficha completa): name, url, address, geo, image, horario confirmado; sin telephone ni conteos", () => {
+  const nodo = localBusinessNode({
+    comercio: {
+      slug: "optica-sol", nombre: "Óptica Sol", calle: "Comercio", direccion: "Comercio 12", lat: -22.73, lng: -64.34,
+      telefono: "46-12345", whatsapp: "59167671888", portada_url: "https://api.uruku.bo/fotos/sol.jpg",
+      horario: "Lun-Vie 9:00-18:00", horario_estimado: false,
+    },
+    ciudad: { nombre: "Bermejo", departamento: "Tarija" },
+    rubroSlug: "optica",
+  });
+  assert.equal(nodo.name, "Óptica Sol");
+  assert.equal(nodo.url, "https://uruku.bo/comercios/optica-sol");
+  assert.deepEqual(nodo.geo, { "@type": "GeoCoordinates", latitude: -22.73, longitude: -64.34 });
+  const dir = nodo.address as { "@type": string; streetAddress?: string; addressLocality?: string; addressCountry?: string };
+  assert.equal(dir["@type"], "PostalAddress");
+  assert.equal(dir.streetAddress, "Comercio 12");
+  assert.equal(dir.addressLocality, "Bermejo");
+  assert.equal(dir.addressCountry, "BO");
+  assert.deepEqual(nodo.image, ["https://api.uruku.bo/fotos/sol.jpg"]);
+  assert.ok(Array.isArray(nodo.openingHoursSpecification));
+  assert.ok(!("telephone" in nodo));
+  assert.ok(!JSON.stringify(nodo).includes("numberOfItems"));
+});
+
 test("enlaceRed: YouTube arma la URL del canal y rechaza esquemas peligrosos", () => {
   assert.equal(enlaceRed("youtube", "@uruku"), "https://www.youtube.com/@uruku");
   assert.equal(enlaceRed("youtube", "https://youtube.com/@uruku"), "https://youtube.com/@uruku");
