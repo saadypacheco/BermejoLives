@@ -2658,6 +2658,23 @@ def crepo(repo):
 
 
 @pytest.fixture
+def trepo(repo):
+    """El repositorio de los teléfonos leídos en las fotos, en memoria, apoyado en el mismo FakeRepo."""
+    from tests.telefonos_fakes import FakeTelefonosRepo
+    return FakeTelefonosRepo(repo)
+
+
+@pytest.fixture(autouse=True)
+def _telefonos_repo_en_memoria(trepo):
+    """Ningún test toca la base real por los teléfonos de las fotos: el relevamiento por fotos los guarda
+    (moderacion.analizar_*) y sin esto cada test que lo ejerce intentaría abrir una conexión."""
+    from app.db.telefonos_repository import get_telefonos_repo
+    app.dependency_overrides[get_telefonos_repo] = lambda: trepo
+    yield
+    app.dependency_overrides.pop(get_telefonos_repo, None)
+
+
+@pytest.fixture
 def client(repo, crepo):
     from app.db.content_repository import get_content_repo
     app.dependency_overrides[get_repo] = lambda: repo

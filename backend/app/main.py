@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
-from app.api import agent_credentials, asistente, auth, calles, campo, comercio, contenido, content, cost_switches, health, moderacion, observabilidad, pago, reception, subscribers, usuario, webhook
+from app.api import agent_credentials, asistente, auth, calles, campo, comercio, contenido, content, cost_switches, health, moderacion, observabilidad, pago, reception, subscribers, telefonos_foto, usuario, webhook
 from app.core.config import settings
 from app.core.ip import ip_cliente
 from app.core.limite_cuerpo import LimiteCuerpoMiddleware
@@ -250,6 +250,32 @@ async def _content_render_loop():
             logger.warning("content_render_loop.error", error=str(exc))
 
 
+async def _telefonos_foto_loop():
+    """Lee los teléfonos de las portadas de los comercios, DE A UNA, en un hilo aparte (docs/telefonos-en-fotos.md).
+
+    Cada vuelta toma `TELEFONOS_FOTO_POR_TANDA` portadas sin leer (primero las de comercios sin WhatsApp) y deja los
+    números como propuestas: nada se escribe solo en la ficha. Duerme `TELEFONOS_FOTO_CADA_SEG` entre tandas; sin
+    trabajo (o sin Tesseract instalado, que avisa una sola vez) duerme `TELEFONOS_FOTO_OCIOSO_SEG`.
+    Apagado por defecto: TELEFONOS_FOTO_WORKER=true. Nunca corta el loop.
+    """
+    from app.db.content_repository import get_content_repo
+    from app.db.telefonos_repository import get_telefonos_repo
+    from app.services import telefonos_foto
+
+    await asyncio.sleep(90)             # el arranque no compite con esta vuelta
+    while True:
+        pausa = settings.telefonos_foto_cada_seg
+        try:
+            r = await run_in_threadpool(telefonos_foto.tanda, get_telefonos_repo(), get_content_repo(),
+                                        settings.telefonos_foto_por_tanda)
+            if not r["tomadas"] or r["sin_lector"] or r["cortada"]:
+                pausa = settings.telefonos_foto_ocioso_seg
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("telefonos_foto_loop.error", error=str(exc))
+            pausa = settings.telefonos_foto_ocioso_seg
+        await asyncio.sleep(pausa)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("api.startup", service="bermejo", environment=settings.environment)
@@ -281,6 +307,8 @@ async def lifespan(app: FastAPI):
             tareas.append(asyncio.create_task(_content_planner_loop()))
         if settings.content_render_worker:
             tareas.append(asyncio.create_task(_content_render_loop()))
+    if settings.telefonos_foto_worker:
+        tareas.append(asyncio.create_task(_telefonos_foto_loop()))
     from app.services import indexnow
     if indexnow.habilitado():
         tareas.append(asyncio.create_task(_indexnow_loop()))
@@ -496,6 +524,7 @@ app.include_router(agent_credentials.router, tags=["credencial-agentes"])
 app.include_router(content.router, tags=["contenido-redes"])
 app.include_router(cost_switches.router, tags=["interruptores-de-costo"])
 app.include_router(subscribers.router, tags=["suscriptores"])
+app.include_router(telefonos_foto.router, tags=["telefonos-en-fotos"])
 
 # Fotos de comercio: servidas por el propio backend (reemplaza a Supabase
 # Storage en el self-host — ver services/imagenes.py).

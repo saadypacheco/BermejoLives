@@ -25,6 +25,8 @@ from app.services.sinonimos import desde_propuesta, sinonimos_para
 from app.services.cuentas import nueva_clave_comercio
 from app.services.rubros import SLUG_DESCARTE, aplicar_rubros, resolver_rubros
 from app.db.repository import LIMITE_COMERCIOS_TODOS, Repo, get_repo
+from app.db.telefonos_repository import TelefonosRepo, get_telefonos_repo
+from app.services import telefonos_foto as telefonos_foto_svc
 from app.models.schemas import ModerarBody
 from app.services.clasificador import moderar_publicacion
 from app.services.reservalo_sync import ReservaloSyncClient, get_reservalo_sync_client
@@ -1856,6 +1858,7 @@ async def analizar_comercio(
     aplicar: bool = Query(False, description="false = sólo proponer; true = escribir"),
     admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
+    trepo: TelefonosRepo = Depends(get_telefonos_repo),
 ) -> dict:
     """Mira las fotos del local y propone productos, descripción, subcategoría y rubros.
 
@@ -1891,6 +1894,10 @@ async def analizar_comercio(
             repo.registrar_rubros_propuestos(propuestos, comercio_id)
         except Exception:  # noqa: BLE001 — nunca romper el análisis por el registro
             logger.warning("vision.registro_propuestos_fallo", comercio=comercio_id, exc_info=True)
+
+    # Los teléfonos que el modelo leyó en las fotos quedan como PROPUESTAS (docs/telefonos-en-fotos.md), aunque no
+    # se aplique la propuesta del relevamiento: es información que ya se pagó. Nunca rompe el análisis.
+    telefonos_foto_svc.guardar_del_relevamiento(trepo, comercio, urls, propuesta)
 
     resultado = {
         "comercio": {"slug": comercio.get("slug"), "nombre": comercio.get("nombre"),
@@ -1947,6 +1954,7 @@ async def analizar_tanda(
     ciudad: str | None = Query(default=None),
     admin: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
+    trepo: TelefonosRepo = Depends(get_telefonos_repo),
 ) -> dict:
     """Analiza un puñado de comercios pendientes y devuelve el avance.
 
@@ -1979,6 +1987,9 @@ async def analizar_tanda(
             propuesta = await run_in_threadpool(analizar_fotos, urls, rubros, ciudades[cid])
         except VisionNoConfigurada as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+        # Los teléfonos leídos quedan como propuestas (docs/telefonos-en-fotos.md); no frena la tanda.
+        telefonos_foto_svc.guardar_del_relevamiento(trepo, comercio, urls, propuesta)
 
         fila = {"slug": comercio.get("slug"), "nombre": comercio.get("nombre"),
                 "confianza": propuesta.get("confianza", 0),
