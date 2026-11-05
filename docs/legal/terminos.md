@@ -80,6 +80,7 @@ El comercio se compromete a:
 - Si lo borrás o das de baja tu comercio, deja de verse en URUKU. Las copias de seguridad se renuevan solas; lo ya difundido en redes lo borramos a pedido cuando la red lo permita.
 - Las fotos que saca el equipo de URUKU son de URUKU; el comercio puede pedir que se cambien o se saquen.
 - La marca URUKU, el diseño del sitio y sus textos son de URUKU. No los copies para otro servicio.
+- **Extracción masiva o automatizada de datos.** No está permitido bajar, copiar o juntar de forma masiva o automatizada (con robots, «scrapers», programas u otro método) las fichas, fotos, ofertas, precios, ubicaciones y demás datos que muestra URUKU, ni reutilizarlos con fines comerciales, sin **permiso escrito** de URUKU. Mirar, compartir un link o mandar una ficha o una oferta puntual está permitido, y los buscadores que respetan el archivo robots.txt de uruku.bo también. Podemos bloquear el acceso de quien no cumpla. Para pedir permiso, escribinos al **67671888**.
 
 ## 8. Baja
 

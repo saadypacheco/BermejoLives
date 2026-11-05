@@ -5,7 +5,7 @@ import {
   getPreguntasDelAsistente, getRespuestasDelChatbot, crearRespuestaDelChatbot,
   editarRespuestaDelChatbot, borrarRespuestaDelChatbot, type RespuestaDelLocal, type PreguntaDelAsistente,
 } from "@/lib/comercio";
-import { getFuncionesDePlan } from "@/lib/data";
+import { getFuncionesDePlan } from "@/lib/data-client";
 import { Ic } from "@/components/ic";
 
 /**

@@ -32,7 +32,7 @@ import {
   listSolicitudesCambioNumero, aprobarSolicitudCambioNumero, rechazarSolicitudCambioNumero, type SolicitudCambioNumero,
   getResumenAdmin, type ResumenAdmin,
 } from "@/lib/api";
-import { getRubros } from "@/lib/data";
+import { getRubros } from "@/lib/data-client";
 import { datosTope, type TopeFotos } from "@/lib/upload";
 import { TopeFotosDialogo, type DecisionTope } from "@/components/tope-fotos-dialogo";
 import { AdminMap } from "@/components/admin-map";

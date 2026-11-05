@@ -1,6 +1,6 @@
 import { Ic } from "@/components/ic";
 import { VideoUrukuCard } from "@/components/video-uruku-card";
-import type { VideoPromo } from "@/lib/data";
+import type { VideoPromo } from "@/lib/data-pure";
 import { videoUrl, type PublicVideo } from "@/lib/videos-pure";
 
 /**

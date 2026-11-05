@@ -10,7 +10,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Ic } from "@/components/ic";
-import { getCiudades } from "@/lib/data";
+import { getCiudades } from "@/lib/data-client";
 import type { Ciudad } from "@/lib/types";
 import {
   bajaNovedadUruku, crearNovedadUruku, editarNovedadUruku, listarNovedadesUruku, quitarFotoNovedad,

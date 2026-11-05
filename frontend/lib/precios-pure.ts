@@ -83,6 +83,19 @@ export function etiquetaVence(venceEl: string | null | undefined, ahora: Date = 
   return null;
 }
 
+/** ¿Sigue vigente (en Bolivia)? Sin fecha de vencimiento, sí: la oferta no vence.
+ *  Con fecha, vigente hasta el final de ese día (`vence_el` es el ÚLTIMO día). Una
+ *  fecha ilegible no se descarta: ante la duda, la oferta se muestra. */
+export function ofertaVigente(venceEl: string | null | undefined, ahora: Date = new Date()): boolean {
+  const d = diasHastaVencer(venceEl, ahora);
+  return d === null || d >= 0;
+}
+
+/** Saca las ofertas vencidas (`feed_publico` no las filtra), conservando el orden. */
+export function soloVigentes<T extends { vence_el: string | null }>(items: readonly T[], ahora: Date = new Date()): T[] {
+  return items.filter((it) => ofertaVigente(it.vence_el, ahora));
+}
+
 /** Las ofertas que vencen hoy o mañana, las de hoy primero (después, por orden de
  *  llegada). Una oferta sin fecha, ya vencida o que vence en más de dos días no entra. */
 export function ofertasPorVencer<T extends { vence_el: string | null }>(items: readonly T[], ahora: Date = new Date(), max = 8): T[] {

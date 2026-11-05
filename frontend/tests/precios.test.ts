@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   arsAproximado, diasHastaVencer, etiquetaVence, hoyEnBolivia, miles, ofertasPorVencer, precioArsTexto,
-  tituloVencen, venceHoy,
+  ofertaVigente, soloVigentes, tituloVencen, venceHoy,
 } from "../lib/precios-pure";
 
 // 1.000 ARS = 6,8 Bs → 0,0068 Bs por peso (así lo entrega `tasasDe`).
@@ -132,6 +132,33 @@ test("tituloVencen promete sólo lo que hay", () => {
   assert.equal(tituloVencen([of("a", "2026-11-05")], AHORA), "Vencen hoy");
   assert.equal(tituloVencen([of("a", "2026-11-06")], AHORA), "Vencen mañana");
   assert.equal(tituloVencen([of("a", "2026-11-05"), of("b", "2026-11-06")], AHORA), "Vencen hoy y mañana");
+});
+
+/* ─── Ofertas vencidas fuera de «Ofertas destacadas» ─────────────────────── */
+
+test("ofertaVigente: sin fecha vale; hasta el último día vale; después de ese día no", () => {
+  // 2026-11-05 15:00 UTC = 11:00 en Bolivia.
+  const ahora = new Date("2026-11-05T15:00:00Z");
+  assert.equal(ofertaVigente(null, ahora), true);
+  assert.equal(ofertaVigente("2026-11-05", ahora), true);   // vence hoy: vigente
+  assert.equal(ofertaVigente("2026-11-06", ahora), true);
+  assert.equal(ofertaVigente("2026-11-04", ahora), false);  // venció ayer
+});
+
+test("ofertaVigente usa la fecha de Bolivia y no la del servidor (UTC)", () => {
+  // 2026-11-06 01:00 UTC sigue siendo 5 de noviembre a las 21:00 en Bolivia.
+  const ahora = new Date("2026-11-06T01:00:00Z");
+  assert.equal(ofertaVigente("2026-11-05", ahora), true);
+  assert.equal(ofertaVigente("2026-11-04", ahora), false);
+});
+
+test("soloVigentes saca las vencidas y conserva el orden", () => {
+  const ahora = new Date("2026-11-05T15:00:00Z");
+  const items = [
+    { id: "a", vence_el: "2026-11-01" }, { id: "b", vence_el: null },
+    { id: "c", vence_el: "2026-11-05" }, { id: "d", vence_el: "2026-10-31" },
+  ];
+  assert.deepEqual(soloVigentes(items, ahora).map((o) => o.id), ["b", "c"]);
 });
 
 /* ─── Reglas de marca ────────────────────────────────────────────────────── */

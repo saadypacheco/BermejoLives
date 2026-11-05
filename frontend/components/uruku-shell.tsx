@@ -17,6 +17,7 @@ import { tasasDe } from "@/lib/cambio";
 import type { Ciudad } from "@/lib/types";
 import { versionLabel } from "@/lib/version";
 import { URUKU_SVG } from "@/lib/adornos";
+import { LEGAL_PUBLICADO } from "@/lib/legal-pure";
 
 /** Los slugs de las ciudades con alguna página indexable (pie «Ciudades»). Salen de
  *  `getCityCategoryPagesCached`: el pie está en casi todas las páginas y no vale una
@@ -207,9 +208,12 @@ export async function UrukuShell({
               </div>
               <div className="uk-foot-col">
                 <h4>Información</h4>
-                {/* Términos y privacidad vuelven cuando estén escritos: un enlace a «#» promete algo que no hay. */}
                 <a href="/manual/comprador" className="uk-foot-link"><Ic n="ayuda" /><span>Cómo se usa URUKU</span><i>›</i></a>
                 <Link href="/agentes" className="uk-foot-link"><Ic n="seguridad" /><span>Agentes de URUKU</span><i>›</i></Link>
+                {LEGAL_PUBLICADO && (<>
+                  <Link href="/terminos" className="uk-foot-link"><Ic n="dato" /><span>Términos y condiciones</span><i>›</i></Link>
+                  <Link href="/privacidad" className="uk-foot-link"><Ic n="seguridad" /><span>Política de privacidad</span><i>›</i></Link>
+                </>)}
               </div>
             </div>
 

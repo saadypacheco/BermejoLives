@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Ic } from "@/components/ic";
-import { fechaNovedad, type NovedadUruku } from "@/lib/data";
+import { fechaNovedad, type NovedadUruku } from "@/lib/data-pure";
 
 /**
  * La tarjeta de una novedad de URUKU (migración 0150), la misma en el inicio y

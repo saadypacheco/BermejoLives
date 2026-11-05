@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { getCiudades } from "@/lib/data";
+import { getCiudades } from "@/lib/data-client";
 import { useCallback, useEffect, useState } from "react";
 import {
   borrarSaberLocal, getAsistenteConversaciones, getRespuestasLocales, getSaberLocal, guardarSaberLocal,

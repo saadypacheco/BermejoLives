@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "next build",
+    "check:bundle": "node scripts/check-bundle.mjs",
     "dev": "next dev -p 3003",
     "iconos": "node scripts/generar-iconos.mjs",
     "lint": "next lint",

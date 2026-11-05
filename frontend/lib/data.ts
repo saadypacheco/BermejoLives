@@ -1,4 +1,9 @@
+import "server-only";
 import { supabase, hasSupabase } from "@/lib/supabase";
+import type { FiltrosDisponibles, Volumenes, Cotizacion, Clima, VideoPromo, Red, NovedadFoto, NovedadUruku, GaleriaFoto, GaleriaVideo, FronteraEstado } from "@/lib/data-pure";
+import { UMBRALES } from "@/lib/data-pure";
+
+export * from "@/lib/data-pure";
 import type { Adorno } from "@/lib/adornos";
 import { estaDeTurno, rangoTurnos, turnosAhora, type FarmaciaTurno, type TurnoFarmacia } from "@/lib/turnos-farmacia";
 import { isBusinessIndexable, type BusinessSeoFields, type CityCategoryPage } from "@/lib/seo";
@@ -75,79 +80,6 @@ export async function buscarComercios(f: FiltrosBusqueda, limit = 24, offset = 0
   return (await buscarComerciosOrNull(f, limit, offset)) ?? [];
 }
 
-
-/**
- * Qué filtros tienen datos detrás. Un filtro que no filtra es peor que uno que
- * no está: la persona lo toca, no cambia nada, y deja de confiar en los demás.
- *
- * Medido el 27/8 sobre 680 comercios: **ninguno tenía horario cargado**, así
- * que "Abierto ahora" —construido, visible y en la lista de hechos— no podía
- * dar un resultado correcto nunca. No fallaba: no hacía nada, que es la forma
- * de romperse más difícil de ver.
- *
- * Son consultas de conteo puro (`head: true`), sin traer filas. Van una vez al
- * cargar la pantalla y cuestan prácticamente nada.
- */
-export type FiltrosDisponibles = { horario: boolean; zona: boolean; ofertas: boolean };
-
-/** Cuánto hay de cada cosa que el home promete.
- *
- * POR QUÉ EXISTE
- * ==============
- * El home decía "Comercios verificados", "Locales destacados" y "Promos
- * exclusivas" desde el primer día. Con cero verificados y cero destacados, eso
- * no es una promesa: es una lista de lo que falta, firmada por nosotros. Y en
- * la etapa de captación un comerciante que entra, lee "promos exclusivas" y no
- * ve ninguna, aprende que la plataforma está vacía — que es exactamente lo que
- * no queremos que aprenda.
- *
- * Así que cada bloque aparece cuando hay volumen detrás. Los umbrales están más
- * abajo, en un solo lugar, y son altos a propósito: mostrar tres ofertas es
- * peor que no mostrar la sección.
- */
-export type Volumenes = {
-  ofertas: number;
-  verificados: number;
-  destacados: number;
-  promos: number;
-  lugares: number;
-};
-
-/** Desde cuánto vale la pena prometer cada cosa. Un solo lugar para cambiarlos.
- *
- *  No son redondeos: son el punto donde la sección deja de contar lo que falta
- *  y empieza a contar lo que hay. */
-export const UMBRALES: Volumenes = {
-  ofertas: 100,
-  verificados: 300,
-  destacados: 50,
-  promos: 50,
-  lugares: 8,
-};
-
-/** Secciones apagadas a mano mientras el catálogo crece.
- *
- *  No son umbrales: son una decisión. Un umbral dice "cuando haya tanto, esto
- *  vale la pena"; esto dice "hoy no queremos mostrarlo, aunque el número dé".
- *  Mezclarlas escondería la decisión adentro de un número y nadie sabría, en
- *  dos meses, si la sección no aparece porque falta dato o porque se apagó.
- *
- *  Se vuelve a encender poniendo `false`. */
-export const APAGADAS = {
-  /** Con pocos mercados cargados la sección cuenta lo que falta. */
-  mercados: true,
-  /** "Lo mejor de hoy": con una oferta activa, el panel dice "1" y eso mide
-   *  el vacío en vez de mostrar la ciudad. */
-  loMejorDeHoy: true,
-  /** Los filtros del buscador: los chips de refinamiento y los desplegables de
-   *  Categoría, Zona, Precio y Tipo.
-   *
-   *  Un filtro sirve cuando hay demasiado y hace falta cortar. Con lo que hay
-   *  hoy, afinar "ropa" a "ropa femenina 25" no ayuda a nadie a decidir: sólo
-   *  muestra qué poco hay de cada cosa. Mientras tanto la pantalla es el
-   *  buscador, el total y la lista — y ese total es el termómetro. */
-  filtrosBuscador: true,
-};
 
 const SIN_VOLUMEN: Volumenes = { ofertas: 0, verificados: 0, destacados: 0, promos: 0, lugares: 0 };
 
@@ -430,6 +362,16 @@ export function bboxCiudad(lat: number, lng: number, dLat = 0.16, dLng = 0.20) {
   return { latMin: lat - dLat, latMax: lat + dLat, lngMin: lng - dLng, lngMax: lng + dLng };
 }
 
+/** Sólo las coordenadas de los comercios de una ciudad (nada más: ni nombre, ni
+ *  contacto). Es lo que necesita el editor de adornos del mapa para dibujar los
+ *  comercios de fondo; así ese panel no obliga a mandar el catálogo al navegador. */
+export async function getPuntosComercios(
+  ciudad?: { lat: number | null; lng: number | null } | null,
+): Promise<{ lat: number; lng: number }[]> {
+  const cs = await getComerciosMapa(ciudad);
+  return cs.flatMap((c) => (c.lat != null && c.lng != null ? [{ lat: c.lat, lng: c.lng }] : []));
+}
+
 // Comercios geolocalizados para el mapa (+ auspiciantes/destacados).
 // Acotado al área de la CIUDAD seleccionada (bbox) y SIN join (el embed era
 // lentísimo sobre la tabla con el import OSM masivo). El rubro se resuelve aparte.
@@ -622,11 +564,6 @@ export async function getComercioBySlugEstricto(slug: string): Promise<Comercio 
   return comercio;
 }
 
-// Contenido de la home Inicio (migración 0032): cotizaciones, clima, videos promo.
-export type Cotizacion = { clave: string; etiqueta: string; detalle: string | null; valor: number | null; unidad: string | null; actualizado_en?: string | null };
-export type Clima = { temp_c: number | null; descripcion: string | null; icono: string | null };
-export type VideoPromo = { id: string; titulo: string | null; url: string };
-
 export async function getCotizaciones(): Promise<Cotizacion[]> {
   if (!hasSupabase) return [];
   const { data } = await supabase.from("cotizaciones").select("clave, etiqueta, detalle, valor, unidad, orden, actualizado_en").order("orden");
@@ -646,7 +583,6 @@ export async function getClima(): Promise<Clima | null> {
   const { data } = await supabase.from("clima").select("temp_c, descripcion, icono").eq("id", 1).limit(1);
   return (data?.[0] as Clima) ?? null;
 }
-export type Red = { clave: string; etiqueta: string; url: string | null };
 export async function getRedes(): Promise<Red[]> {
   if (!hasSupabase) return [];
   const { data } = await supabase.from("redes_sociales").select("clave, etiqueta, url, orden").order("orden");
@@ -663,23 +599,6 @@ export async function getVideosPromo(limit = 8): Promise<VideoPromo[]> {
 // fue auspiciante del Festival del Lapacho». Anon lee sólo las activas y, por el
 // grant select por columnas, nunca `created_by`: por eso la lista es explícita y
 // no hay `select("*")`.
-export type NovedadFoto = { url: string; thumb_url: string | null };
-export type NovedadUruku = {
-  id: string;
-  ciudad_id: string | null;       // null = «todas las ciudades»
-  titulo: string;
-  texto: string | null;
-  fecha: string;                  // YYYY-MM-DD
-  portada_url: string | null;
-  portada_thumb_url: string | null;
-  fotos: NovedadFoto[];
-  video_url: string | null;
-  video_poster_url: string | null;
-  enlace_url: string | null;
-  destacada: boolean;
-  activo: boolean;
-};
-
 const COLUMNAS_NOVEDAD_URUKU = [
   "id", "ciudad_id", "titulo", "texto", "fecha", "portada_url", "portada_thumb_url", "fotos",
   "video_url", "video_poster_url", "enlace_url", "destacada", "activo",
@@ -737,15 +656,6 @@ export async function getNovedadUruku(id: string): Promise<NovedadUruku | null> 
   return fila ? novedadDeFila(fila) : null;
 }
 
-/** «12 oct 2026» a partir de un `YYYY-MM-DD`, sin pasar por la zona horaria
- *  (un `new Date("2026-10-12")` en La Paz caía en el 11). */
-export function fechaNovedad(iso: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!m) return "";
-  const meses = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-  return `${Number(m[3])} ${meses[Number(m[2]) - 1] ?? ""} ${m[1]}`;
-}
-
 // Videos recientes de comercios ("Recorrimos Bermejo" en la home Inicio).
 export type VideoRecap = { id: string; url: string; comercio_slug: string; comercio_nombre: string; portada_thumb_url: string | null };
 export async function getVideosRecientes(limit = 8): Promise<VideoRecap[]> {
@@ -764,8 +674,6 @@ export async function getVideosRecientes(limit = 8): Promise<VideoRecap[]> {
 
 // Galería del comercio (migración 0030): fotos con thumb + videos. Lectura
 // pública (anon) — las tarjetas usan el thumb, la ficha amplía a la grande.
-export type GaleriaFoto = { id: string; url: string; thumb_url: string | null };
-export type GaleriaVideo = { id: string; url: string; duracion_seg: number | null };
 /** Hasta `porComercio` fotos de galería de cada comercio, en UNA consulta (el
  *  carrusel de destacados de la portada). Orden de la galería. */
 export async function getFotosDeComercios(ids: string[], porComercio = 2): Promise<(GaleriaFoto & { comercio_id: string })[]> {
@@ -971,15 +879,6 @@ export async function getSaberLocalPorSeccion(ciudadId?: string | null): Promise
   }
   return out;
 }
-
-export type FronteraEstado = {
-  // "no_aplica": esta frontera no tiene chalanas o no tiene río (0124).
-  puente: "normal" | "demoras" | "cerrado";
-  chalanas: "operando" | "limitadas" | "suspendidas" | "no_aplica";
-  rio: "normal" | "crecido" | "no_aplica";
-  chalanas_horario?: string | null;
-  nota: string | null; actualizado_en: string | null;
-};
 
 export async function getFronteraEstado(ciudadId?: string | null): Promise<FronteraEstado | null> {
   if (!hasSupabase) return null;

@@ -33,7 +33,7 @@ import {
 import { aCercanos, cercanosGuardados, listaEnMemoria, recordarLista, type ComercioCercano } from "@/lib/campo-cache";
 import { calcularFaltas, etiquetasFaltas } from "@/lib/faltas";
 import { geoErrorMsg, metros } from "@/lib/geo";
-import { getRubros } from "@/lib/data";
+import { getRubros } from "@/lib/data-client";
 import { listarPendientes } from "@/lib/offline-altas";
 import type { Rubro } from "@/lib/types";
 import { MapaAca, type PosicionAca, type PinAca } from "@/components/mapa-aca";

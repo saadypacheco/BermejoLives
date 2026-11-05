@@ -8,7 +8,7 @@ import { registrarLead, type TipoLead } from "@/lib/campo";
 import { rubroStyle, loadLeaflet } from "@/lib/mapa-visual";
 import { rubroSvg, SVG_UBICACION, SVG_ESTRELLA } from "@/lib/iconos-mapa";
 import { adornoHTML, MEDIDAS, ZOOM_MIN_ADORNOS, type Adorno } from "@/lib/adornos";
-import { getAdornosMapa, getFarmaciasDeTurnoAhora } from "@/lib/data";
+import { getAdornosMapa, getFarmaciasDeTurnoAhora } from "@/lib/data-client";
 import { etiquetaHasta } from "@/lib/turnos-farmacia";
 import { PIN_TURNO, pinTurnoHtml, selloTurnoHtml } from "@/lib/mapa-turno";
 
