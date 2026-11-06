@@ -42,6 +42,12 @@ logger = structlog.get_logger()
 #: editados a mano): el tope de siempre. Mejor que dejar a todos sin poder subir.
 _TOPE_DE_RESPALDO = 10
 
+#: Las fotos del local (frente, interior) que el EQUIPO de URUKU (agentes y admin) puede
+#: subir a cualquier comercio, aunque su plan dé menos: el plan gratis no deja al
+#: comerciante subir galería (sólo la portada), pero el agente que lo recorre sí carga
+#: el local (decisión del dueño, 6/11/2026). El comerciante sigue con el tope de su plan.
+FOTOS_DEL_LOCAL = 10
+
 #: Un uuid que no existe: `imagen_en_uso` pide un id a excluir y acá no hay ninguno.
 _NINGUN_ID = "00000000-0000-0000-0000-000000000000"
 
@@ -75,8 +81,10 @@ def _fotos_max(plan: dict | None) -> int | None:
         return None
 
 
-def tope_fotos(repo, comercio: dict, hoy: date | None = None) -> int:
-    """El máximo de fotos de galería que puede tener ahora este comercio."""
+def tope_fotos(repo, comercio: dict, hoy: date | None = None, equipo: bool = False) -> int:
+    """El máximo de fotos de galería que puede tener ahora este comercio.
+
+    `equipo`: la subida la hace un agente o el admin; el tope nunca baja de `FOTOS_DEL_LOCAL`."""
     gratis = _fotos_max(repo.get_plan("gratis"))
     base = None
     if al_dia(comercio, hoy):
@@ -89,7 +97,8 @@ def tope_fotos(repo, comercio: dict, hoy: date | None = None) -> int:
         extra = max(0, int(comercio.get("fotos_extra") or 0))
     except (TypeError, ValueError):
         extra = 0
-    return base + extra
+    tope = base + extra
+    return max(tope, FOTOS_DEL_LOCAL) if equipo else tope
 
 
 def precio_extra(repo, comercio: dict) -> tuple[float | int, str]:
@@ -131,10 +140,10 @@ def detalle_tope(repo, comercio: dict, fotos: list[dict], limite: int) -> dict:
     }
 
 
-def listado(repo, comercio: dict) -> dict:
-    """Lo que devuelven los GET de la galería: las fotos y su tope actual."""
+def listado(repo, comercio: dict, equipo: bool = False) -> dict:
+    """Lo que devuelven los GET de la galería: las fotos y su tope actual (el del equipo si `equipo`)."""
     return {"items": repo.list_fotos_comercio(comercio["id"]),
-            "limite": tope_fotos(repo, comercio)}
+            "limite": tope_fotos(repo, comercio, equipo=equipo)}
 
 
 # ──────────────────────────────────────────────── subir con reglas de tope
@@ -175,7 +184,8 @@ def preparar(repo, comercio: dict, *, reemplazar: str | None, extra: str | None,
         if vieja is None:
             raise HTTPException(status_code=404, detail="Foto no encontrada")
 
-    limite = tope_fotos(repo, comercio)
+    # Quien no puede pagar es el equipo de URUKU (agente, admin, banco de contenido).
+    limite = tope_fotos(repo, comercio, equipo=not puede_pagar)
     if len(fotos) < limite:
         return Subida(fotos=fotos)
     if vieja is not None:

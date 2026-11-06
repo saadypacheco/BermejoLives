@@ -498,3 +498,27 @@ def test_borrar_una_foto_ajena_da_404_y_no_toca_nada(client, repo, lados):
     assert r.status_code == 404
     assert _en_disco("otro", "ajena.jpg")
     assert "ajena" in _fotos_de(repo, otro["id"])
+
+
+def test_el_equipo_sube_hasta_10_fotos_del_local_aunque_el_plan_de_menos():
+    """Decisión del 6/11/2026: el gratis no deja al comerciante subir galería, el agente sí (10)."""
+    from app.services import fotos_galeria
+
+    class _Repo:
+        def get_plan(self, slug):
+            return {"slug": slug, "fotos_max": 0}
+
+    comercio = {"id": "c1", "plan": "gratis", "fotos_extra": 0}
+    assert fotos_galeria.tope_fotos(_Repo(), comercio) == 0
+    assert fotos_galeria.tope_fotos(_Repo(), comercio, equipo=True) == fotos_galeria.FOTOS_DEL_LOCAL == 10
+
+
+def test_el_piso_del_equipo_no_baja_un_tope_mas_alto():
+    from app.services import fotos_galeria
+
+    class _Repo:
+        def get_plan(self, slug):
+            return {"slug": slug, "fotos_max": 60}
+
+    comercio = {"id": "c1", "plan": "publica", "plan_cortesia": True, "fotos_extra": 2}
+    assert fotos_galeria.tope_fotos(_Repo(), comercio, equipo=True) == 62

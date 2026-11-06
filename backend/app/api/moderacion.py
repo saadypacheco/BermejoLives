@@ -1767,8 +1767,9 @@ def admin_listar_fotos(
     repo: Repo = Depends(get_repo),
 ) -> dict:
     comercio = _comercio_o_404(repo, comercio_id)
-    # `limite` = el tope de fotos de hoy (plan + extras): la galería muestra «23/50».
-    return fotos_galeria.listado(repo, comercio)
+    # `limite` = el tope de fotos de hoy (plan + extras, nunca menos de las 10 del local
+    # para el equipo): la galería muestra «23/50».
+    return fotos_galeria.listado(repo, comercio, equipo=True)
 
 
 @router.post("/admin/comercio/{comercio_id}/fotos")

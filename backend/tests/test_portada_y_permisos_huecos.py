@@ -327,7 +327,9 @@ def test_el_alcance_de_comercios_editar_para_el_publicador_es_la_ficha_y_no_la_c
 
 # ══════════════════════════════════ intercambio: bordes
 
-def test_el_intercambio_funciona_con_la_galeria_llena_en_el_tope_del_plan(client, repo, admin_token):
+def test_el_intercambio_funciona_con_la_galeria_llena_en_el_tope_del_plan(client, repo, admin_token, monkeypatch):
+    # Prueba el tope con topes chicos: sin el piso de 10 fotos del local del equipo.
+    monkeypatch.setattr("app.services.fotos_galeria.FOTOS_DEL_LOCAL", 0)
     c = _con_portada(repo)
     _sembrar(repo, c["id"], ["B", "C"])
     repo.upsert_plan("gratis", {"fotos_max": 2})

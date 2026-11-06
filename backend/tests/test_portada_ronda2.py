@@ -116,7 +116,9 @@ def test_agente_portada_nueva_deja_la_anterior_en_la_galeria_y_en_el_disco(clien
         assert _en_disco(n), n
 
 
-def test_agente_portada_nueva_pasa_a_la_galeria_aunque_supere_el_tope(client, repo, tok_agente):
+def test_agente_portada_nueva_pasa_a_la_galeria_aunque_supere_el_tope(client, repo, tok_agente, monkeypatch):
+    # Prueba el tope con topes chicos: sin el piso de 10 fotos del local del equipo.
+    monkeypatch.setattr("app.services.fotos_galeria.FOTOS_DEL_LOCAL", 0)
     c = _con_portada(repo, "A")
     _sembrar(repo, c["id"], ["B", "C"])
     repo.upsert_plan("gratis", {"fotos_max": 2})           # la galería YA está en el tope

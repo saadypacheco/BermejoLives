@@ -3,6 +3,7 @@ import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
 import { getPlanes, type PlanPublico } from "@/lib/data";
 import { waUruku } from "@/lib/contacto";
+import { lineaCuota, lineaFotos } from "@/lib/planes-pure";
 
 export const dynamic = "force-dynamic";
 
@@ -22,9 +23,9 @@ const esGratis = (p: PlanPublico) => p.slug === "gratis";
 /**
  * /planes — lo que se vende, leído de la base.
  *
- * Nombre, cuota, la frase que dice qué es y las viñetas salen de la tabla
+ * Nombre, cuota, fotos, la frase que dice qué es y las viñetas salen de la tabla
  * `planes`, que se edita en Admin › Planes. Acá no hay ningún número escrito:
- * si cambia una cuota, cambia acá sin deploy.
+ * si cambia una cuota o el tope de fotos, cambia acá sin deploy (lib/planes-pure).
  *
  * NO HAY PRECIOS DE PLANES. Se decide por ciudad y hablando con el comerciante,
  * así que donde iría el precio hay una forma de consultarlo (el WhatsApp de
@@ -58,13 +59,9 @@ export default async function PlanesPage() {
               </header>
               <ul>
                 {p.incluye.map((linea) => <li key={linea}>{linea}</li>)}
+                {lineaFotos(p.fotos_max) && <li className="uk-plan-cuota">{lineaFotos(p.fotos_max)}</li>}
                 <li className="uk-plan-cuota">
-                  {p.publicaciones_mes == null
-                    ? "Publicaciones sin límite"
-                    : esGratis(p)
-                      // El gratis no tiene cuota mensual que contar: cada foto se paga.
-                      ? `Podés publicar fotos a Bs ${p.precio_publicacion_extra} cada una`
-                      : `Hasta ${p.publicaciones_mes} publicaciones por mes`}
+                  {lineaCuota({ publicaciones_mes: p.publicaciones_mes, publica_meses: p.publica_meses, esGratis: esGratis(p) })}
                   {!esGratis(p) && p.permite_extras && p.publicaciones_mes != null && p.precio_publicacion_extra > 0
                     ? ` · la extra, Bs ${p.precio_publicacion_extra}`
                     : ""}

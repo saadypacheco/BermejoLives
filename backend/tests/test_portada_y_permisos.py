@@ -325,7 +325,9 @@ def test_el_agente_no_borra_fotos(client, repo, lados):
     assert len(repo.list_fotos_comercio(c["id"])) == 1 and _en_disco("B.jpg")
 
 
-def test_el_agente_no_reemplaza_pero_el_409_de_tope_sigue_igual(client, repo, lados):
+def test_el_agente_no_reemplaza_pero_el_409_de_tope_sigue_igual(client, repo, lados, monkeypatch):
+    # Prueba el tope con topes chicos: sin el piso de 10 fotos del local del equipo.
+    monkeypatch.setattr("app.services.fotos_galeria.FOTOS_DEL_LOCAL", 0)
     c = _comercio(repo)
     _sembrar(repo, c["id"], ["B"])
     repo.upsert_plan("gratis", {"fotos_max": 1})
