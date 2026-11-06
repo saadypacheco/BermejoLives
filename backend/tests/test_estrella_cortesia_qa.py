@@ -355,6 +355,13 @@ def test_la_migracion_0143_es_la_misma_en_las_dos_carpetas_y_ninguna_posterior_l
                 otras = re.compile(r"create\s+(or\s+replace\s+)?function\s+(public\.)?(plan_orden_de|plan_publico|planes_orden|admin_resumen)\b", re.I)
                 assert not otras.search(sin_comentarios), p.name
                 continue
+            if p.name.startswith("0193_"):
+                # La 0193 reemplaza `admin_resumen` SOLO para que «contactos» no cuente compartir ni red: el
+                # cuerpo es el de la 0143 con esas dos condiciones (lo prueba test_site_metrics_migration.py),
+                # así que la cuenta de suscripciones de cortesía queda igual.
+                otras = re.compile(r"create\s+(or\s+replace\s+)?function\s+(public\.)?(buscar_comercios|plan_orden_de|plan_publico|planes_orden)\b", re.I)
+                assert not otras.search(sin_comentarios), p.name
+                continue
             assert not redefine.search(sin_comentarios), p.name
 
 

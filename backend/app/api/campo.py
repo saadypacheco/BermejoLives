@@ -26,7 +26,7 @@ from app.db.repository import Repo, get_repo
 from app.models.schemas import LoginBody
 from app.services.clasificador import sugerir_rubros
 from app.services.imagenes import subir_foto_comercio, subir_foto_galeria, subir_video_comercio
-from app.services import cargas, content_consent, planes, que_hay_aca
+from app.services import cargas, content_consent, planes, que_hay_aca, site_metrics
 from app.services import calles_mapa
 from app.services import enlaces
 from app.services import fotos_galeria, portada
@@ -45,7 +45,10 @@ _MODALIDADES = {"mayorista", "minorista", "ambos"}
 # "reserva" = mandó una reserva por WhatsApp desde el carrito. Es el contacto
 # que más vale: no preguntó, pidió algo concreto. Es LA métrica que
 # justifica un plan pago, así que va contada aparte del WhatsApp suelto.
-_TIPOS_LEAD  = {"whatsapp", "telefono", "email", "web", "vista", "mapa", "reserva"}
+# "compartir" (compartió la ficha; detalle native|copy) y "red" (fue a una red del comercio; detalle
+# instagram|facebook|tiktok|youtube) son de la medición v2 (0193): NO son contactos con el comercio.
+# La lista vive en services/site_metrics.py; un tipo que no está ahí NO se guarda.
+_TIPOS_LEAD  = site_metrics.TIPOS_LEAD
 
 
 @router.post("/auth/campo/login")
@@ -904,48 +907,49 @@ class _LeadIn(BaseModel):
     # De dónde llegó (el `?ref=` de la URL): volante-<slug>, mesa-<slug>,
     # ficha-<slug>, fb, ig. Vacío si entró por el buscador o el mapa.
     origen: str | None = Field(default=None, max_length=200)
-    # El id al azar de la sesión del navegador (el mismo que va en /visita). Si viene, el token que
-    # devuelve este endpoint queda atado a ella y el «¿te contestó?» tiene que reenviarla.
+    # El id al azar de la sesión del navegador (el mismo que va en /collect). Si viene, el token que
+    # devuelve este endpoint queda atado a ella y el «¿te contestó?» tiene que reenviarla. También sirve
+    # para no contar dos veces lo mismo (misma sesión, mismo comercio).
     sesion: str | None = Field(default=None, max_length=40, pattern=r"^[A-Za-z0-9-]*$")
+    # Tipo `red`: instagram | facebook | tiktok | youtube. Tipo `compartir`: native | copy.
+    detalle: str | None = Field(default=None, max_length=20)
 
 
-#: Contactos que una misma IP puede registrar sobre un mismo comercio por hora. Pasado el tope no se
-#: guardan (la respuesta es la misma, sin id): nadie arma una pila de «contactos» falsos con un script.
-leads_por_ip_y_comercio = VentanaPorClave(maximo=20, ventana_seg=3600)
 #: Votos «¿te contestó?» por IP y por día (la clave lleva el día: el contador no cruza la medianoche).
 votos_por_ip = VentanaPorClave(maximo=10, ventana_seg=86400)
+
+MENSAJE_DEMASIADOS_PEDIDOS = "Demasiados pedidos, probá en un minuto"
 
 
 @router.post("/lead")
 def registrar_lead(body: _LeadIn, request: Request, repo: Repo = Depends(get_repo)) -> dict:
-    """Registra un click de contacto (WhatsApp, teléfono, email…) o una vista de ficha.
+    """Registra un click de contacto (WhatsApp, teléfono, email…), un «cómo llegar», un compartir, un toque a
+    una red del comercio o una vista de ficha.
 
-    Devuelve `id` y `token`: el token es el HMAC del id del contacto y la sesión que lo creó, y es
-    lo que hay que reenviar en `POST /lead/{id}/respondio` (sin él, cualquiera que adivine o consiga
-    un id podría votar por otro)."""
-    tipo = body.tipo if body.tipo in _TIPOS_LEAD else "whatsapp"
-    if not leads_por_ip_y_comercio.permitir(f"{ip_cliente(request)}|{body.comercio_id}"):
-        logger.info("lead.tope_por_ip_y_comercio", comercio=body.comercio_id)
+    Respuestas (siempre 200 salvo el límite):
+    - `{ok: false}`: `tipo` desconocido, `comercio_id` que no es uuid, `detalle` fuera de la lista o error de la base.
+      No se guarda nada.
+    - `{ok: true, id: null}`: `vista`, `compartir` y `red` (van a un buffer que se vuelca cada 5 s), un pedido de
+      un bot o de otro sitio, o el techo de la IP.
+    - `{ok: true, id, token}`: contacto guardado. `token` es el HMAC del id y la sesión; es lo que hay que reenviar
+      en `POST /lead/{id}/respondio` (sin él, cualquiera que adivine un id podría votar por otro).
+    - `{ok: true, id, token, repetido: true}`: la misma sesión ya hizo ese contacto hoy; devuelve el id del primero.
+    429 si la IP pasa de 120 pedidos por minuto."""
+    ip = ip_cliente(request)
+    estado = site_metrics.medidor.limitar("lead", ip)
+    if estado == site_metrics.LIMITADO:
+        raise HTTPException(status_code=429, detail=MENSAJE_DEMASIADOS_PEDIDOS)
+    if estado == site_metrics.LLENO or not site_metrics.pedido_de_request(request):
         return {"ok": True, "id": None}
-    fila = {"comercio_id": body.comercio_id, "tipo": tipo}
-    # Si el contacto salió de una búsqueda, se guarda cuál. Es lo que permite
-    # medir después si el buscador acertó: qué se mostró contra qué se eligió.
-    # Viene vacío cuando llegan por el mapa, la home o un link compartido.
-    if body.busqueda_id:
-        fila["busqueda_id"] = body.busqueda_id
-    origen = limpiar_ref(body.origen)
-    if origen:
-        fila["origen"] = origen
-    creado = repo.insert_lead(fila) or {}
-    # El id vuelve para que el sitio pueda preguntar después «¿te contestó?», con su token.
-    lead_id = creado.get("id")
-    return {"ok": True, "id": lead_id,
-            "token": firmas.token_de_lead(str(lead_id), body.sesion) if lead_id else None}
+    return site_metrics.registrar_contacto(
+        repo, ip=ip, comercio_id=body.comercio_id, tipo=body.tipo, sesion=body.sesion,
+        busqueda_id=body.busqueda_id, origen=body.origen, detalle=body.detalle)
 
 
-# ── Visitas al sitio (0130) ──────────────────────────────────────────────────
+# ── Visitas al sitio (0130, 0193) ────────────────────────────────────────────
 class _VisitaIn(BaseModel):
-    """Una página vista. SIN cookies, sin IP, sin user-agent.
+    """Una página vista, del cliente VIEJO (las PWA instaladas guardan el bundle viejo en el service worker).
+    SIN cookies, sin IP, sin user-agent. Los clientes nuevos usan `POST /collect`.
 
     `sesion` es un número al azar que vive en la pestaña y se pierde al
     cerrarla: sirve para no contar diez veces a la misma persona en una
@@ -959,32 +963,29 @@ class _VisitaIn(BaseModel):
     ciudad: str | None = Field(default=None, max_length=60)
     #: Primera página de esta sesión: es lo que hace «personas» sin agrupar.
     primera: bool = False
+    device: str | None = Field(default=None, max_length=10)
+    standalone: bool = False
 
 
 #: Rutas que NO se cuentan: el panel, la carga de campo y el editor del
 #: comercio son trabajo, no visitas. Contarlas inflaría el número justo con
 #: quienes estamos construyendo el sitio, que es la peor forma de engañarse.
-_RUTAS_INTERNAS = ("/admin", "/contenido", "/publicar", "/campo", "/mi-comercio", "/api/")
+_RUTAS_INTERNAS = site_metrics.RUTAS_INTERNAS
 
 
 @router.post("/visita")
-def registrar_visita(body: _VisitaIn, repo: Repo = Depends(get_repo)) -> dict:
-    """Anota una página vista. Fuego y olvido: si falla, no rompe la visita."""
-    ruta = (body.ruta or "/").strip()[:200]
-    if not ruta.startswith("/") or ruta.startswith(_RUTAS_INTERNAS):
+def registrar_visita(body: _VisitaIn, request: Request) -> dict:
+    """Alias de compatibilidad de `POST /collect` (se quita a los 60 días del deploy de la medición v2).
+    Mismo pipeline: límite de pedidos (429), filtro de bots y de otros sitios, buffer. Fuego y olvido."""
+    estado = site_metrics.medidor.limitar("collect", ip_cliente(request))
+    if estado == site_metrics.LIMITADO:
+        raise HTTPException(status_code=429, detail=MENSAJE_DEMASIADOS_PEDIDOS)
+    if estado == site_metrics.LLENO or not site_metrics.pedido_de_request(request):
         return {"ok": True, "contada": False}
-
-    limpio = lambda v, n: re.sub(r"[^a-z0-9_.:/-]", "", (v or "").strip().lower())[:n] or None
-    fila = {
-        "ruta": ruta,
-        "sesion": re.sub(r"[^a-zA-Z0-9-]", "", body.sesion)[:40],
-        "origen": limpiar_ref(body.origen),   # la misma regla que /lead
-        "referido": limpio(body.referido, 80),
-        "ciudad_slug": limpio(body.ciudad, 40),
-        "primera": bool(body.primera),
-    }
-    repo.insert_visita({k: v for k, v in fila.items() if v is not None})
-    return {"ok": True, "contada": True}
+    contada = site_metrics.registrar_visita_vieja(
+        ruta=body.ruta, sesion=body.sesion, origen=body.origen, referido=body.referido, ciudad=body.ciudad,
+        primera=body.primera, device=body.device, standalone=body.standalone)
+    return {"ok": True, "contada": contada}
 
 
 class _RespondioIn(BaseModel):
@@ -1074,17 +1075,31 @@ class _BusquedaIn(BaseModel):
 
 
 @router.post("/busquedas/log")
-def log_busqueda(body: _BusquedaIn, repo: Repo = Depends(get_repo)) -> dict:
+def log_busqueda(body: _BusquedaIn, request: Request, repo: Repo = Depends(get_repo)) -> dict:
     """Loguea una búsqueda (KPIs: qué se busca, qué no da resultados y a quién encontró).
 
     Devuelve el id para que el front pueda atarle el click posterior: sin ese
     puente se sabe qué se mostró y qué se contactó, pero no si una cosa llevó a
     la otra — que es justo lo que dice si el buscador sirve.
+
+    ANTES DE GUARDAR se enmascaran los datos personales: mails → `[mail]` y secuencias de 6 o más dígitos → `#`
+    («71234567 zapatos» queda «# zapatos»), con tope de 100 caracteres. Límite: 60 por minuto por IP (429).
+    Un bot, otro sitio o un error de la base devuelven `{ok: true}` sin id.
     """
-    q = (body.query or "").strip()
-    if len(q) < 2:
+    estado = site_metrics.medidor.limitar("busqueda", ip_cliente(request))
+    if estado == site_metrics.LIMITADO:
+        raise HTTPException(status_code=429, detail=MENSAJE_DEMASIADOS_PEDIDOS)
+    if estado == site_metrics.LLENO or not site_metrics.pedido_de_request(request):
         return {"ok": True}
-    bid = repo.insert_busqueda(q, max(0, int(body.resultados)), body.comercios)
+    q = site_metrics.enmascarar_busqueda(body.query)
+    if len(q.replace("[mail]", "").replace("#", "").strip()) < 2:
+        return {"ok": True}
+    ids = [c for c in (site_metrics.es_uuid(x) for x in (body.comercios or [])) if c]
+    try:
+        bid = repo.insert_busqueda(q, max(0, int(body.resultados)), ids or None)
+    except Exception as exc:  # noqa: BLE001 — loguear una búsqueda no puede romper el buscador
+        logger.warning("busqueda_log_failed", error=str(exc)[:200])
+        return {"ok": True}
     return {"ok": True, "busqueda_id": bid}
 
 

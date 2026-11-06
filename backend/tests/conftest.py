@@ -4,6 +4,7 @@ No requiere Supabase ni red: toda la lógica de negocio se ejerce contra dicts.
 """
 import os
 os.environ.setdefault("CLIMA_WORKER", "0")  # el worker de clima no corre en tests (no red)
+os.environ.setdefault("SITE_METRICS_WORKER", "0")  # ni los loops de volcado y retención de la medición
 
 import pytest
 from fastapi.testclient import TestClient
@@ -22,8 +23,9 @@ def _reset_rate_limit():
     from app.core.clave import pedidos_de_clave
     pedidos_de_clave.limpiar()       # los 3 pedidos de clave por hora también son de módulo
     from app.api import campo as _campo
-    _campo.leads_por_ip_y_comercio.limpiar()   # los topes de /lead y del «¿te contestó?» también
-    _campo.votos_por_ip.limpiar()
+    _campo.votos_por_ip.limpiar()              # el tope del «¿te contestó?» también
+    from app.services import site_metrics
+    site_metrics.reiniciar()                   # límites, deduplicación y buffer de la medición: de módulo
     yield
 
 
@@ -134,9 +136,10 @@ def _sin_limite_de_subidas_de_catalogo():
 
 
 from tests.fake_integracion import FakeIntegracionMixin  # noqa: E402
+from tests.site_metrics_fakes import FakeSiteMetricsMixin  # noqa: E402
 
 
-class FakeRepo(FakeIntegracionMixin):
+class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
     """Implementación en memoria del Protocol Repo."""
 
     def __init__(self):
@@ -208,6 +211,7 @@ class FakeRepo(FakeIntegracionMixin):
         self.wa_lid_map: dict[str, dict] = {}        # lid -> fila (0159)
         self.leads: list[dict] = []
         self.visitas: list[dict] = []
+        self._init_site_metrics()
         self.busquedas: list[dict] = []
         self.busqueda_comercios: list[dict] = []
         self.producto_refs: dict[str, dict] = {}     # id -> row
@@ -685,33 +689,6 @@ class FakeRepo(FakeIntegracionMixin):
                 c["horario_estimado"] = bool(estimado)
                 n += 1
         return n
-
-    def insert_visita(self, fila):
-        self.visitas.append({"id": self._id("vis"), **fila})
-
-    def resumen_visitas(self, dias: int = 30):
-        from collections import Counter
-        from app.core.ai_sources import summarize_ai_sources
-        por_dia = {}
-        for v in self.visitas:
-            d = por_dia.setdefault(v.get("dia", "hoy"), {"dia": v.get("dia", "hoy"), "visitas": 0, "personas": 0})
-            d["visitas"] += 1
-            if v.get("primera"):
-                d["personas"] += 1
-        rutas = Counter(v["ruta"] for v in self.visitas)
-        por_tipo = Counter(l.get("tipo") for l in self.leads)
-        contactos = sum(n for t, n in por_tipo.items() if t in ("whatsapp", "telefono", "reserva"))
-        personas = len({v["sesion"] for v in self.visitas})
-        return {
-            "dias": dias, "visitas": len(self.visitas), "personas": personas,
-            "por_dia": sorted(por_dia.values(), key=lambda d: d["dia"]),
-            "top_rutas": [{"ruta": r, "n": n} for r, n in rutas.most_common(12)],
-            "top_referidos": [], "top_origenes": [],
-            "ai_sources": summarize_ai_sources(self.visitas),
-            "embudo": {"visitas": len(self.visitas), "personas": personas,
-                       "fichas_vistas": por_tipo.get("vista", 0), "contactos": contactos,
-                       "mapa": por_tipo.get("mapa", 0)},
-        }
 
     def comercios_para_indexnow(self, desde_iso, limite=1000):
         rub = {v: k for k, v in self.rubros.items()}
@@ -2531,7 +2508,8 @@ class FakeRepo(FakeIntegracionMixin):
         return [l for l in self.leads if l.get("comercio_id") == comercio_id]
 
     def insert_busqueda(self, query, resultados, comercios=None):
-        bid = self._id("busq")
+        import uuid as _uuid
+        bid = str(_uuid.uuid4())      # el real es uuid, y /lead lo valida
         # `created_at` no estaba: sin él, el informe de demanda —que filtra por
         # fecha— no veía NINGUNA búsqueda del fake y habría dado siempre cero.
         from datetime import datetime, timezone
@@ -2746,8 +2724,18 @@ class _ClienteConTokenDeRecuperacion(TestClient):
 
     auto_token = True
     repo_de_prueba = None
+    #: Después de cada pedido se vuelca el buffer de la medición al repo de prueba (como hace el loop de 5 s en
+    #: producción), para que los tests lean `repo.visitas` y `repo.leads` sin esperar. Los tests del buffer lo apagan.
+    auto_volcar = True
 
     def request(self, method, url, **kw):
+        respuesta = self._pedido(method, url, **kw)
+        if self.auto_volcar and self.repo_de_prueba is not None:
+            from app.services import site_metrics
+            site_metrics.volcar(self.repo_de_prueba)
+        return respuesta
+
+    def _pedido(self, method, url, **kw):
         if self.auto_token and isinstance(url, str) and url.split("?")[0] in (
                 "/auth/comercio/recuperar/estado", "/auth/comercio/recuperar/confirmar"):
             dato = kw.get("params") if method.upper() == "GET" else kw.get("json")

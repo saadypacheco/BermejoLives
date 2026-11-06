@@ -202,8 +202,11 @@ def test_los_errores_del_clasificador_se_registran_sin_la_clave(monkeypatch):
 
 def test_las_reglas_cubren_los_endpoints_publicos():
     r = main_mod._regla_de_limite
-    for ruta in ("/lead", "/visita", "/busquedas/log", "/reclamos", "/comercio/generar-descripcion"):
+    for ruta in ("/reclamos", "/comercio/generar-descripcion"):
         assert r("POST", ruta), ruta
+    # /lead, /visita y /busquedas/log los limita services/site_metrics.py (0193), no este middleware.
+    for ruta in ("/lead", "/visita", "/busquedas/log"):
+        assert r("POST", ruta) is None, ruta
     assert r("POST", "/lead/abc/respondio")[0] == "/lead/"          # contador aparte del click
     assert r("POST", "/comercio/abc-123/solicitar-cambio-numero")
     assert r("GET", "/auth/comercio/recuperar/estado")
@@ -227,12 +230,15 @@ def test_reclamos_corta_a_la_ip_que_se_pasa(client, monkeypatch):
 
 
 def test_lead_visita_y_busquedas_cortan(client, monkeypatch):
-    assert _llamar_hasta_429(monkeypatch, ("/visita", main_mod._RL_RULES),
-                             lambda: client.post("/visita", json={"ruta": "/", "sesion": "abcdef"}))[-1] == 429
-    assert _llamar_hasta_429(monkeypatch, ("/busquedas/log", main_mod._RL_RULES),
-                             lambda: client.post("/busquedas/log", json={"query": "pan"}))[-1] == 429
-    assert _llamar_hasta_429(monkeypatch, ("/lead", main_mod._RL_RULES),
-                             lambda: client.post("/lead", json={"comercio_id": "c1"}))[-1] == 429
+    from app.services import site_metrics
+
+    def hasta_429(nombre, hacer, tope=3):
+        monkeypatch.setattr(site_metrics.medidor.limitadores[nombre], "limite", tope)
+        return [hacer().status_code for _ in range(tope + 1)]
+
+    assert hasta_429("collect", lambda: client.post("/visita", json={"ruta": "/", "sesion": "abcdef"}))[-1] == 429
+    assert hasta_429("busqueda", lambda: client.post("/busquedas/log", json={"query": "pan"}))[-1] == 429
+    assert hasta_429("lead", lambda: client.post("/lead", json={"comercio_id": "c1"}))[-1] == 429
 
 
 def test_generar_descripcion_corta(client, monkeypatch):
@@ -273,9 +279,10 @@ def test_otra_ip_no_comparte_el_contador(client, monkeypatch):
 
 
 def test_los_topes_por_defecto_son_los_documentados():
-    assert main_mod._RL_RULES["/lead"] == 60 and main_mod._RL_RULES["/lead/"] == 20
-    assert main_mod._RL_RULES["/visita"] == 120
-    assert main_mod._RL_RULES["/busquedas/log"] == 60
+    from app.services import site_metrics
+    assert main_mod._RL_RULES["/lead/"] == 30                       # «¿te contestó?»: 30 por minuto por IP
+    assert not {"/lead", "/visita", "/busquedas/log"} & set(main_mod._RL_RULES)
+    assert site_metrics.LIMITES_POR_MINUTO == {"collect": 300, "lead": 120, "busqueda": 60, "csp": 30}
     assert main_mod._RL_RULES["/reclamos"] == 5
     assert main_mod._RL_RULES["/comercio/generar-descripcion"] == 10
     assert main_mod._RL_RULES_SUFIJO[("/comercio/", "/solicitar-cambio-numero")] == 5

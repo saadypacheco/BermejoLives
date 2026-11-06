@@ -19,20 +19,23 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
-from app.api import (agent_credentials, asistente, auth, calles, campo, comercio, contenido, content, cost_switches,
-                     health, integracion, integracion_admin, moderacion, observabilidad, pago, reception,
-                     subscribers, telefonos_foto, usuario, webhook)
+from app.api import (agent_credentials, asistente, auth, calles, campo, collect, comercio, contenido, content,
+                     cost_switches, health, integracion, integracion_admin, moderacion, observabilidad, pago,
+                     reception, subscribers, telefonos_foto, usuario, webhook)
 from app.core.config import exigir_config_produccion, settings
 from app.core.errores_integracion import IntegracionError
 from app.core.ip import ip_cliente
 from app.core.limite_cuerpo import LimiteCuerpoMiddleware
 from app.core.registro import configurar_logging
 from app.services.clima import fetch_clima_bermejo
+from app.services import site_metrics
 from app.services.observabilidad import registrar_error, registrar_perf
 from app.db.repository import get_repo
 
 configurar_logging()          # tracebacks sin variables locales (core/registro.py)
 logger = structlog.get_logger()
+# El access log de uvicorn no registra los endpoints de medición (de ahí no queda huella de quién visitó qué).
+site_metrics.instalar_filtro_access_log()
 
 
 async def _clima_loop():
@@ -279,6 +282,31 @@ async def _telefonos_foto_loop():
         await asyncio.sleep(pausa)
 
 
+async def _site_metrics_flush_loop():
+    """Vuelca el buffer de la medición (visitas, eventos y vistas de ficha) a la base cada 5 segundos, en UN insert
+    en lote por tabla. Sin filas pendientes no toca la base. Si el volcado falla se loguea y se descarta el lote.
+    Se pierden como mucho 5 s si el proceso muere sin apagarse. ASUME UN SOLO WORKER de uvicorn."""
+    while True:
+        await asyncio.sleep(5)
+        try:
+            if site_metrics.medidor.pendientes():
+                await run_in_threadpool(site_metrics.volcar, get_repo())
+        except Exception as exc:  # noqa: BLE001 — nunca corta el loop
+            logger.warning("site_metrics_flush_loop.error", error=str(exc)[:200])
+
+
+async def _site_metrics_retention_loop():
+    """Una vez por día (04:00 de Bolivia) borra visitas y eventos de más de 13 meses (`purge_site_metrics`).
+    Los contactos (`leads`) y las búsquedas NO se borran nunca."""
+    while True:
+        await asyncio.sleep(site_metrics.segundos_hasta_purga())
+        try:
+            await run_in_threadpool(site_metrics.purgar, get_repo())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("site_metrics_retention_loop.error", error=str(exc)[:200])
+        await asyncio.sleep(60)        # que no vuelva a disparar en el mismo minuto
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("api.startup", service="bermejo", environment=settings.environment)
@@ -305,6 +333,9 @@ async def lifespan(app: FastAPI):
     if settings.wa_sesion_vigilar:
         tareas.append(asyncio.create_task(_wa_sesion_loop()))
     tareas.append(asyncio.create_task(_wa_received_loop()))
+    if settings.site_metrics_worker:
+        tareas.append(asyncio.create_task(_site_metrics_flush_loop()))
+        tareas.append(asyncio.create_task(_site_metrics_retention_loop()))
     from app.services import content_storage
     if not content_storage.dir_seguro():
         # CONTENT_DIR dentro de FOTOS_DIR (o al revés) serviría público lo privado: se apaga el banco y el render.
@@ -325,6 +356,12 @@ async def lifespan(app: FastAPI):
     yield
     for t in tareas:
         t.cancel()
+    if settings.site_metrics_worker and site_metrics.medidor.pendientes():
+        # Al apagar: lo que quedó en el buffer se vuelca (si falla, se pierde: son contadores).
+        try:
+            await run_in_threadpool(site_metrics.volcar, get_repo())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("site_metrics_flush_shutdown.error", error=str(exc)[:200])
 
 
 def _opciones_docs(en_produccion: bool) -> dict:
@@ -411,10 +448,9 @@ _RL_RULES: dict[str, int] = {
     # Endpoints públicos sin cuenta (por IP y por minuto). Los topes están por encima de
     # lo que hace una persona (muchas salen por la misma IP de la operadora) y muy por
     # debajo de lo que haría un script. El orden importa: gana la primera que coincide.
-    "/lead/": 20,                    # «¿te contestó?»: una vez por contacto
-    "/lead": 60,                     # un click de contacto por vez
-    "/visita": 120,                  # una por página vista
-    "/busquedas/log": 60,
+    # `/lead`, `/visita` y `/busquedas/log` ya NO están acá: los limita services/site_metrics.py con topes
+    # pensados para el CGNAT (120, 300 y 60 por minuto; docs/estadisticas-v2.md §4.2).
+    "/lead/": 30,                    # «¿te contestó?»: una vez por contacto
     "/reclamos": 5,                  # un reclamo a mano; el resto es relleno
     "/comercio/generar-descripcion": 10,   # llama al modelo (cuesta plata)
 }
@@ -566,6 +602,7 @@ app.include_router(health.router, tags=["health"])
 app.include_router(auth.router, tags=["auth"])
 app.include_router(comercio.router, tags=["comercio"])
 app.include_router(campo.router, tags=["campo"])
+app.include_router(collect.router, tags=["medicion"])
 app.include_router(calles.router, tags=["calles"])
 app.include_router(webhook.router, prefix="/ingest", tags=["ingesta"])
 app.include_router(moderacion.router, tags=["moderacion"])

@@ -106,44 +106,37 @@ def test_endpoint_admin_visitas_trae_ai_sources_y_conserva_las_claves(client, re
     assert d["visitas"] == 3
 
 
-# ── el repo de verdad, con una base de mentira ──────────────────────────────────
-class _Q:
-    def __init__(self, filas):
-        self._filas = filas
+# ── el resumen real sobre lo que devuelve la función SQL ────────────────────────
+class _RepoConRpc:
+    """Lo que devuelve `site_metrics_summary` (0193): filas YA agrupadas por la base."""
 
-    def select(self, *a, **k): return self
-    def gte(self, *a, **k): return self
-    def order(self, *a, **k): return self
-    def limit(self, *a, **k): return self
+    def site_metrics_summary(self, desde, hasta, ciudad=None):
+        return {
+            "totals": {"pageviews": 3, "sessions": 3, "first_pages": 3},
+            "ai_groups": [
+                {"origen": "chatgpt.com", "referido": None, "n": 1, "people": 1, "fichas": 1},
+                {"origen": None, "referido": "perplexity.ai", "n": 1, "people": 1, "fichas": 0},
+                {"origen": None, "referido": "google.com", "n": 1, "people": 1, "fichas": 0},
+            ],
+            "ai_routes": [
+                {"origen": "chatgpt.com", "referido": None, "ruta": "/comercios/a", "n": 1},
+                {"origen": None, "referido": "perplexity.ai", "ruta": "/", "n": 1},
+            ],
+            "referrers_raw": [{"referido": "perplexity.ai", "origen": None, "n": 1},
+                              {"referido": "google.com", "origen": None, "n": 1},
+                              {"referido": None, "origen": "chatgpt.com", "n": 1}],
+        }
 
-    def range(self, desde, hasta):
-        self._filas = self._filas[desde:hasta + 1]
-        return self
-
-    def execute(self):
-        class R: pass
-        r = R()
-        r.data = self._filas
-        return r
-
-
-class _Db:
-    def __init__(self, visitas):
-        self._v = visitas
-
-    def table(self, nombre):
-        return _Q(list(self._v) if nombre == "visitas" else [])
+    def last_visit_at(self):
+        return None
 
 
-def test_el_repo_real_suma_ai_sources_sin_tocar_las_claves_de_siempre():
-    from app.db.repository import SupabaseRepo
-    visitas = [
-        {"dia": "2026-11-01", "ruta": "/comercios/a", "sesion": "s1", "origen": "chatgpt.com", "referido": None, "primera": True},
-        {"dia": "2026-11-01", "ruta": "/", "sesion": "s2", "origen": None, "referido": "perplexity.ai", "primera": True},
-        {"dia": "2026-11-02", "ruta": "/", "sesion": "s3", "origen": None, "referido": "google.com", "primera": True},
-    ]
-    r = SupabaseRepo(_Db(visitas)).resumen_visitas(30)
+def test_el_resumen_suma_ai_sources_sin_tocar_las_claves_de_siempre():
+    from app.services import site_metrics
+    r = site_metrics.resumen_del_sitio(_RepoConRpc(), 30)
     assert CLAVES_DE_SIEMPRE <= set(r)
     assert r["visitas"] == 3 and r["personas"] == 3
-    assert r["top_referidos"] == [{"referido": "perplexity.ai", "n": 1}, {"referido": "google.com", "n": 1}]
+    assert {x["referido"] for x in r["top_referidos"]} == {"google.com", "perplexity.ai"}
     assert {x["source"]: x["visits"] for x in r["ai_sources"]} == {"chatgpt": 1, "perplexity": 1}
+    assert {x["source"]: x["business_views"] for x in r["ai_sources"]} == {"chatgpt": 1, "perplexity": 0}
+    assert {(x["kind"], x["name"]) for x in r["referrers"]} == {("ai", "chatgpt"), ("ai", "perplexity"), ("search", "google")}

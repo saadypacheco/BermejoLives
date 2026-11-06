@@ -18,6 +18,7 @@ from PIL import Image
 
 from app.core.config import settings
 from app.services import ingest, revision_ia
+C1 = "00000000-0000-4000-8000-0000000000c1"   # los comercios_id de /lead tienen que ser uuid (0193)
 
 DESCONOCIDO = "59199988877"
 
@@ -695,8 +696,8 @@ def test_una_visita_con_ref_y_un_lead_con_origen_aparecen_cada_uno_donde_debe(cl
     h = {"Authorization": f"Bearer {admin_token}"}
     client.post("/visita", json={"ruta": "/", "sesion": "sesion-aaa111", "origen": "volante-x"})
     client.post("/visita", json={"ruta": "/buscar", "sesion": "sesion-aaa111", "origen": "volante-x"})
-    client.post("/lead", json={"comercio_id": "c1", "tipo": "whatsapp", "origen": "volante-x"})
-    client.post("/lead", json={"comercio_id": "c1", "tipo": "whatsapp"})            # sin ref: no cuenta
+    client.post("/lead", json={"comercio_id": C1, "tipo": "whatsapp", "origen": "volante-x"})
+    client.post("/lead", json={"comercio_id": C1, "tipo": "whatsapp"})            # sin ref: no cuenta
     d = client.get("/admin/estadisticas", headers=h).json()
     assert d["llegadas_30d"] == 1                                                    # personas, no páginas
     assert d["llegadas_top"] == [{"origen": "volante-x", "count": 1}]
@@ -709,21 +710,23 @@ def test_un_lead_de_whatsapp_con_ref_guarda_el_origen_sanitizado(client, repo):
     for crudo, limpio in [("VOLANTE-X", "volante-x"), ("  mesa-sol ", "mesa-sol"),
                           ("<script>alert(1)</script>", "scriptalert1script"),
                           ("a" * 200, "a" * 64), ("grupo-ñandú", "grupo-and")]:
-        client.post("/lead", json={"comercio_id": "c1", "tipo": "whatsapp", "origen": crudo})
+        client.post("/lead", json={"comercio_id": C1, "tipo": "whatsapp", "origen": crudo})
         assert repo.leads[-1]["origen"] == limpio
-    client.post("/lead", json={"comercio_id": "c1", "tipo": "whatsapp", "origen": "!!!"})
+    client.post("/lead", json={"comercio_id": C1, "tipo": "whatsapp", "origen": "!!!"})
     assert "origen" not in repo.leads[-1]
 
 
-def test_un_lead_con_tipo_raro_cae_en_whatsapp_y_conserva_el_origen(client, repo):
-    client.post("/lead", json={"comercio_id": "c1", "tipo": "<b>x</b>", "origen": "fb"})
-    assert repo.leads[-1]["tipo"] == "whatsapp" and repo.leads[-1]["origen"] == "fb"
+def test_un_lead_con_tipo_raro_no_se_guarda(client, repo):
+    """Antes un tipo desconocido se convertía en `whatsapp` y se contaba como contacto (0193: CA-15)."""
+    r = client.post("/lead", json={"comercio_id": C1, "tipo": "<b>x</b>", "origen": "fb"})
+    assert r.status_code == 200 and r.json() == {"ok": False}
+    assert repo.leads == []
 
 
 def test_BUG2_el_mismo_ref_se_guarda_igual_en_visita_y_en_lead(client, repo):
     ref = "grupo:sol"
     client.post("/visita", json={"ruta": "/", "sesion": "sesion-aaa111", "origen": ref})
-    client.post("/lead", json={"comercio_id": "c1", "tipo": "whatsapp", "origen": ref})
+    client.post("/lead", json={"comercio_id": C1, "tipo": "whatsapp", "origen": ref})
     assert repo.visitas[-1]["origen"] == repo.leads[-1]["origen"]
 
 

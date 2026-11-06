@@ -9,6 +9,7 @@ import json
 import re
 import shutil
 import subprocess
+import uuid
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
@@ -20,6 +21,10 @@ from PIL import Image
 from app.api import campo as campo_mod
 from app.core import auth, firmas
 from app.core.config import settings
+
+C1 = "00000000-0000-4000-8000-0000000000c1"   # los comercios_id de /lead tienen que ser uuid (0193)
+C2 = "00000000-0000-4000-8000-0000000000c2"
+C3 = "00000000-0000-4000-8000-0000000000c3"
 
 APP = Path(__file__).resolve().parents[1] / "app"
 MIGRACIONES = Path(__file__).resolve().parents[2] / "supabase" / "migrations"
@@ -92,7 +97,7 @@ def test_el_backend_solo_usa_table_rpc_y_from_del_cliente():
 
 
 # ══════════════════════════════════════════ 2. A-04 «¿te contestó?»
-def _lead(client, repo, comercio="c1", sesion="sesion-aaaa", minutos=5, tipo="whatsapp"):
+def _lead(client, repo, comercio=C1, sesion="sesion-aaaa", minutos=5, tipo="whatsapp"):
     repo.comercios.setdefault(comercio, {"id": comercio, "slug": comercio, "nombre": comercio, "activo": True})
     r = client.post("/lead", json={"comercio_id": comercio, "tipo": tipo, "sesion": sesion}).json()
     for l in repo.leads:
@@ -144,7 +149,7 @@ def test_sin_token_pasa_en_la_gracia_con_aviso_y_deja_de_pasar_despues(client, r
     lead = _lead(client, repo)
     monkeypatch.setattr(settings, "lead_token_obligatorio_desde", "2999-01-01")
     assert client.post(f"/lead/{lead['id']}/respondio", json={"respondio": False}).status_code == 200
-    lead2 = _lead(client, repo, sesion="sesion-bbbb", comercio="c2")
+    lead2 = _lead(client, repo, sesion="sesion-bbbb", comercio=C2)
     monkeypatch.setattr(settings, "lead_token_obligatorio_desde", "2020-01-01")
     assert client.post(f"/lead/{lead2['id']}/respondio", json={"respondio": False}).status_code == 403
 
@@ -169,7 +174,7 @@ def test_un_solo_voto_por_contacto(client, repo):
     assert _votar(client, lead, False).json()["contacto_no"] == 1
     otra = _votar(client, lead, True).json()
     assert otra == {"ok": True, "ya": True}
-    assert repo.comercios["c1"]["contacto_ok"] == 0
+    assert repo.comercios[C1]["contacto_ok"] == 0
 
 
 def test_un_mismo_votante_vota_una_vez_por_comercio_cada_30_dias(client, repo):
@@ -177,34 +182,35 @@ def test_un_mismo_votante_vota_una_vez_por_comercio_cada_30_dias(client, repo):
     assert _votar(client, uno, False).json()["contacto_no"] == 1
     # el segundo contacto del MISMO votante sobre el mismo comercio no suma
     assert _votar(client, dos, False).json() == {"ok": True, "ya": True}
-    assert repo.comercios["c1"]["contacto_no"] == 1
+    assert repo.comercios[C1]["contacto_no"] == 1
     # otro comercio: sí puede
-    otro = _lead(client, repo, comercio="c2")
-    assert _votar(client, otro, False).status_code == 200 and "ya" not in _votar(client, _lead(client, repo, comercio="c3")).json()
+    otro = _lead(client, repo, comercio=C2)
+    assert _votar(client, otro, False).status_code == 200 and "ya" not in _votar(client, _lead(client, repo, comercio=C3)).json()
 
 
 def test_a_lo_sumo_diez_votos_por_dia_desde_una_ip(client, repo):
     estados = []
     for i in range(12):
-        lead = _lead(client, repo, comercio=f"c{i}")
+        lead = _lead(client, repo, comercio=str(uuid.UUID(int=i + 1)))
         estados.append(_votar(client, lead, True).status_code)
     assert estados[:10] == [200] * 10 and estados[10:] == [429, 429]
 
 
 def test_los_contactos_por_ip_y_comercio_tienen_tope(client, repo):
-    repo.comercios["c1"] = {"id": "c1", "slug": "c1", "nombre": "C1", "activo": True}
-    ids = [client.post("/lead", json={"comercio_id": "c1", "tipo": "whatsapp"}).json()["id"] for _ in range(25)]
-    assert sum(1 for i in ids if i) == 20 and len(repo.leads) == 20
+    repo.comercios[C1] = {"id": C1, "slug": C1, "nombre": "C1", "activo": True}
+    ids = [client.post("/lead", json={"comercio_id": C1, "tipo": "whatsapp"}).json()["id"] for _ in range(25)]
+    # Sin sesión no hay deduplicación: sólo frena el techo de la IP (10 de cada tipo por comercio y por día).
+    assert sum(1 for i in ids if i) == 10 and len(repo.leads) == 10
 
 
 def test_el_sello_no_responde_exige_tres_votantes_distintos(client, repo):
     """Cinco «no» de antes (sin votante) o de pocos votantes no encienden el sello (contacto_no >= 5)."""
-    repo.comercios["c1"] = {"id": "c1", "slug": "c1", "nombre": "C1", "activo": True}
+    repo.comercios[C1] = {"id": C1, "slug": C1, "nombre": "C1", "activo": True}
     ahora = datetime.now(timezone.utc).isoformat()
     for i in range(6):                        # 6 «no» heredados: sin `respondio_por`
-        repo.leads.append({"id": f"viejo{i}", "comercio_id": "c1", "tipo": "whatsapp", "respondio": False,
+        repo.leads.append({"id": f"viejo{i}", "comercio_id": C1, "tipo": "whatsapp", "respondio": False,
                            "respondio_en": ahora, "created_at": ahora})
-    assert repo.recontar_contactos("c1")["contacto_no"] == 4          # tapado: sin el sello
+    assert repo.recontar_contactos(C1)["contacto_no"] == 4          # tapado: sin el sello
     # dos votantes nuevos: sigue tapado; el tercero lo destapa
     for sesion in ("sesion-v001", "sesion-v002"):
         lead = _lead(client, repo, sesion=sesion)
@@ -635,7 +641,7 @@ def test_b02_el_enlace_de_tiktok_pasa_por_enlaces_py(client, repo):
 
 def test_b05_nada_se_borra_fisicamente(client, repo, admin_token):
     # producto de la tienda: archivado, ya no sale ni se puede volver a borrar
-    ref = repo.crear_producto_ref({"comercio_id": "c1", "titulo": "P"})
+    ref = repo.crear_producto_ref({"comercio_id": C1, "titulo": "P"})
     repo.delete_producto_ref(ref["id"])
     assert repo.producto_refs[ref["id"]]["estado"] == "archivado"
     assert repo.list_producto_refs("c1") == [] and repo.get_producto_ref(ref["id"]) is None

@@ -834,7 +834,7 @@ def test_visita_y_lead_limpian_el_ref_con_la_misma_funcion(client, repo):
 
     ref = "Grupo:Sol/ñandú_1.x"
     client.post("/visita", json={"ruta": "/", "sesion": "sesion-aaa111", "origen": ref})
-    client.post("/lead", json={"comercio_id": "c1", "tipo": "whatsapp", "origen": ref})
+    client.post("/lead", json={"comercio_id": "00000000-0000-4000-8000-0000000000c1", "tipo": "whatsapp", "origen": ref})
     assert repo.visitas[-1]["origen"] == repo.leads[-1]["origen"] == limpiar_ref(ref) == "gruposoland_1.x"
 
 

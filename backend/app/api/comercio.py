@@ -33,7 +33,7 @@ from app.services.imagenes import (
 from app.services import enlaces, integracion
 from app.services import ficha_catalogo as catalogo_svc
 from app.services import archivos_privados, fotos_galeria, portada
-from app.services import planes
+from app.services import planes, site_metrics
 from app.services import ingreso_clave
 from app.services.cuentas import cuentas_de_numero, nueva_clave_comercio
 from app.services.rubros import aplicar_rubros
@@ -881,19 +881,18 @@ def get_suscripcion(
 def get_metricas(
     claims: dict = Depends(require_comercio_vigente), repo: Repo = Depends(get_repo)
 ) -> dict:
-    """Resumen para el comercio: visitas a su ficha + quién lo contactó + publicaciones."""
-    leads = repo.list_leads_by_comercio(claims["comercio_id"], 30)
-    por_tipo: dict[str, int] = {}
-    for lead in leads:
-        t = lead.get("tipo") or "otro"
-        por_tipo[t] = por_tipo.get(t, 0) + 1
+    """Resumen para el comercio: visitas a su ficha + quién lo contactó + publicaciones.
 
-    # Separar VISITAS a la ficha (tipo 'vista') de los CONTACTOS reales (whatsapp/tel/…)
-    corte7 = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-    contactos = [l for l in leads if l.get("tipo") != "vista"]
-    visitas = [l for l in leads if l.get("tipo") == "vista"]
-    def _recientes(lst: list[dict]) -> int:
-        return sum(1 for l in lst if (l.get("created_at") or "") >= corte7)
+    Los números salen de funciones SQL (0193) y ya llegan deduplicados (una vista por persona cada media hora, un
+    contacto por persona y por día). SIEMPRE de este comercio: nunca cifras de otros ni posiciones en un ranking.
+    Suma `como_llegar_30d`, `compartidos_30d`, `redes_30d` (por red) y `origenes_30d` (`[{kind, name, n}]`: QR del
+    volante o de la mesa, Google, Facebook, WhatsApp, IA, directo…)."""
+    extra = site_metrics.metricas_de_comercio(repo, claims["comercio_id"], 30)
+    # `compartir` y `red` tienen su propia cifra: no son «contactos» ni van en el desglose por tipo.
+    por_tipo = {t: n for t, n in extra["por_tipo"].items() if t not in ("compartir", "red")}
+    por_tipo_7d = extra["por_tipo_7d"]
+    contactos_30d = sum(n for t, n in por_tipo.items() if t != "vista")
+    contactos_7d = sum(n for t, n in por_tipo_7d.items() if t not in site_metrics.TIPOS_NO_CONTACTO)
 
     pubs = repo.list_publicaciones_de_comercio(claims["comercio_id"])
     por_estado: dict[str, int] = {}
@@ -905,11 +904,15 @@ def get_metricas(
     terminos = repo.terminos_de_comercio(claims["comercio_id"], 30, 8)
 
     return {
-        "contactos_30d": len(contactos),
-        "contactos_7d": _recientes(contactos),
-        "visitas_30d": len(visitas),
-        "visitas_7d": _recientes(visitas),
+        "contactos_30d": contactos_30d,
+        "contactos_7d": contactos_7d,
+        "visitas_30d": por_tipo.get("vista", 0),
+        "visitas_7d": por_tipo_7d.get("vista", 0),
         "contactos_por_tipo": por_tipo,
+        "como_llegar_30d": extra["como_llegar_30d"],
+        "compartidos_30d": extra["compartidos_30d"],
+        "redes_30d": extra["redes_30d"],
+        "origenes_30d": extra["origenes_30d"],
         "terminos_busqueda": terminos,
         "publicaciones_total": len(pubs),
         "publicaciones_por_estado": por_estado,

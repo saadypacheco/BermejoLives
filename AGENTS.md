@@ -104,7 +104,10 @@ Moderador → /admin › Publicaciones → aprobar/rechazar/cambios → estado '
    `publicaciones.estado='aprobado'`.
 4. **Idempotencia** de ingesta por `wa_message_id`.
 5. **Sin Realtime** (el self-host no lo corre): lo nuevo aparece al recargar. No sumar suscripciones `postgres_changes`.
-6. **Soft-delete** siempre; queries filtran `activo = true`.
+6. **Soft-delete** siempre; queries filtran `activo = true`. **Única excepción: logs con TTL.** `visitas` y
+   `site_events` (telemetría sin valor por fila) se purgan a los **13 meses** y sólo con la función SQL
+   `purge_site_metrics` (SECURITY DEFINER, con el piso de 13 meses adentro; `service_role` no tiene DELETE ni
+   TRUNCATE ahí: migración 0193). `leads` y `busquedas` son historia del negocio: **nunca se borran**.
 7. WAHA en **red privada** + webhook **firmado (HMAC)**; usar número de WhatsApp
    **dedicado/descartable** (WAHA es bridge no-oficial).
 8. `npx supabase ...` (no el binario cacheado).
@@ -120,6 +123,12 @@ Moderador → /admin › Publicaciones → aprobar/rechazar/cambios → estado '
     (`confiable`, auto-aprobación de IA) tiene que pasar por `services/integracion.py`
     (`es_confiable` / `es_gestionado`). La API de integración no devuelve teléfonos, `codigo`
     ni `verificado`. Las URLs de la Graph API salen de `settings.graph_base()` (`GRAPH_API_VERSION`).
+
+13. **Un solo worker de uvicorn.** La medición del sitio (`services/site_metrics.py`: límites de pedidos,
+    deduplicación, techos por IP y buffer de volcado) y los loops del `lifespan` viven en la memoria del proceso.
+    Con más de un worker cada uno contaría por su cuenta y los límites valdrían N veces: antes de subir
+    `--workers`, mover la deduplicación a Postgres. El navegador **no escribe** en `visitas`, `leads` ni
+    `site_events` (sólo el backend con `service_role`; `docs/estadisticas-v2.md`).
 
 ## 8. Correr local
 
