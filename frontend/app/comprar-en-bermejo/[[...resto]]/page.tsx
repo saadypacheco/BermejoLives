@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { UrukuShell } from "@/components/uruku-shell";
 import { Ic, IcRubro } from "@/components/ic";
 import { JsonLd } from "@/components/json-ld";
@@ -27,6 +28,10 @@ import { hasSupabase } from "@/lib/supabase";
  * base con su fecha, y nada se inventa: si una pregunta no está cargada, esa
  * sección no se dibuja. ISR (3600) con el marco fijo en Bermejo: no lee cookies.
  *
+ * A pedido, no en el build (auditoría 5/11, A-02 paso 3): vive en `[[...resto]]` con
+ * `generateStaticParams` vacío, así que el build no lee la base y la página se arma en el
+ * primer pedido. `/comprar-en-bermejo/loquesea` da 404.
+ *
  * Marcado FAQPage: sólo las preguntas de la sección `comercios` (las demás se
  * marcan en /guia y /que-es-uruku; cada pregunta, en una sola página).
  */
@@ -36,6 +41,14 @@ export const revalidate = 3600;
 // el marco con `fixedCity`) y se perdería el ISR; ninguna parte de esta página
 // depende de la cookie de ciudad.
 export const dynamic = "force-static";
+export const dynamicParams = true;
+
+// Sin pre-render: el build no puede depender de la base.
+export async function generateStaticParams(): Promise<{ resto: string[] }[]> {
+  return [];
+}
+
+type Props = { params: Promise<{ resto?: string[] }> };
 
 const TITULO = "Comprar en Bermejo desde Argentina: qué conviene, cómo cruzar y cómo pagar";
 const DESCRIPCION =
@@ -82,20 +95,19 @@ function estadoPaso(f: FronteraEstado): string {
   return partes.join(" · ");
 }
 
-const ES_BUILD = process.env.NEXT_PHASE === "phase-production-build";
-
-export default async function ComprarEnBermejoPage() {
+export default async function ComprarEnBermejoPage(props: Props) {
+  const { resto } = await props.params;
+  if (resto && resto.length > 0) notFound();
   // ISR: una lectura fallida NO se guarda como «sin rubros» ni con las ciudades demo
-  // (su `id` no es el de Bermejo): se lanza y Next conserva la versión anterior. En
-  // el build no se lanza (no depende de la base): la página sale sin esos bloques.
+  // (su `id` no es el de Bermejo): se lanza y Next conserva la versión anterior.
   const ciudades = await getCiudadesReales();
-  if (ciudades === null && hasSupabase && !ES_BUILD) throw new Error("/comprar-en-bermejo: falló la lectura de ciudades");
+  if (ciudades === null && hasSupabase) throw new Error("/comprar-en-bermejo: falló la lectura de ciudades");
   const bermejo = (ciudades ?? []).find((c) => c.slug === "bermejo");
   const [saber, revisado, frontera, cotizaciones, feed, parLeidos] = await Promise.all([
     getSaberLocalPorSeccion(bermejo?.id), getSaberRevisado(bermejo?.id), getFronteraEstado(bermejo?.id),
     getCotizaciones(), getFeed(12, "bermejo"), getCityCategoryPagesOrNull(),
   ]);
-  if (parLeidos === null && hasSupabase && !ES_BUILD) throw new Error("/comprar-en-bermejo: falló la lectura de los pares ciudad+rubro");
+  if (parLeidos === null && hasSupabase) throw new Error("/comprar-en-bermejo: falló la lectura de los pares ciudad+rubro");
   const pares = parLeidos ?? [];
 
   // --- Preguntas de la sección `comercios` (las que se marcan acá) ---

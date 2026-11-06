@@ -4,6 +4,7 @@
 #   bash scripts/deploy-prod.sh                       # frontend + backend
 #   bash scripts/deploy-prod.sh frontend              # sólo el frontend
 #   bash scripts/deploy-prod.sh --sql selfhost/postgres-init/0105_*.sql frontend
+#   bash scripts/deploy-prod.sh postgrest frontend backend   # si cambió el compose de PostgREST
 #
 # En QA (/docker/buscadonde) sirve igual con dos variables:
 #   DOMINIO=encontralo.store APP_ENV=qa bash scripts/deploy-prod.sh frontend backend
@@ -109,6 +110,26 @@ for s in "${SERVICIOS[@]}"; do
     frontend) esperar frontend "https://$DOMINIO/version" commit ;;
     backend)  esperar backend  "https://api.$DOMINIO/health" commit ;;
   esac
+done
+
+# Calentar las páginas clave. El build ya no lee la base: las que dependen de datos (/, /buscar,
+# sitemap, /que-es-uruku, /comprar-en-bermejo, /bermejo) se arman en el PRIMER pedido, y ese lo
+# pagaría el primer visitante o el robot de Google. Se piden acá, por la URL pública. Si alguna
+# falla (500 = la base no contestó) no corta el deploy: sólo avisa, y se vuelve a armar en el
+# próximo pedido (una página que falló no se guarda).
+calentar() {
+  local ruta code t
+  echo "== calentando páginas clave =="
+  for ruta in / /buscar /sitemap.xml /llms.txt /que-es-uruku /comprar-en-bermejo /bermejo; do
+    read -r code t < <(curl -s -o /dev/null --max-time 60 -w '%{http_code} %{time_total}' "https://$DOMINIO$ruta" 2>/dev/null || echo "000 0")
+    case "$code" in
+      2??|3??|404) echo "  $ruta -> $code (${t}s)" ;;   # 404 esperado: /llms.txt y robots en QA
+      *) echo "  !! $ruta -> $code: no se pudo calentar (mirá los logs del frontend)" ;;
+    esac
+  done
+}
+for s in "${SERVICIOS[@]}"; do
+  [ "$s" = frontend ] && calentar
 done
 
 echo "== contenedores =="

@@ -2,6 +2,7 @@ import { getCiudadesConTurnos, getCityCategoryPagesOrNull } from "@/lib/data";
 import { absoluteUrl, categoryPath, cityPath } from "@/lib/seo";
 import { BRAND_NAME, CONTACT, FOUNDER, LAUNCH_DATE, ONE_LINER, RESPONSIBLE } from "@/lib/marca";
 import { WA_URUKU_TEXTO } from "@/lib/contacto";
+import { conMemoriaTtl } from "@/lib/memoria-ttl";
 
 /**
  * /llms.txt — un resumen en texto plano de URUKU para asistentes de IA
@@ -11,25 +12,16 @@ import { WA_URUKU_TEXTO } from "@/lib/contacto";
  *
  * Sólo en producción: en QA robots.ts bloquea todo y esto sería una invitación.
  */
-export const revalidate = 86400;
-// force-static: sin esto el fetch `no-store` de lib/supabase.ts cuenta como «uso
-// dinámico» al generar y las lecturas fallan (ver app/sitemap.ts).
-export const dynamic = "force-static";
+// DINÁMICO a propósito (auditoría 5/11, A-02 paso 3): el build no puede leer la base. Se arma
+// al primer pedido y se recuerda un día en memoria (`conMemoriaTtl`); si una lectura falla se
+// sigue sirviendo el último bueno, o un 500 si no hay ninguno: nunca uno recortado.
+export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<Response> {
-  const esProd = (process.env.NEXT_PUBLIC_ENV_LABEL || "").toLowerCase() === "prod";
-  if (!esProd) return new Response("No encontrado", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
+const UN_DIA_MS = 24 * 60 * 60_000;
 
+async function armarTexto(): Promise<string> {
   const [todos, ciudadesTurnos] = await Promise.all([getCityCategoryPagesOrNull(), getCiudadesConTurnos()]);
-  if (todos === null || ciudadesTurnos === null) {
-    // En el build: un 503 hace que Next NO lo pre-renderice (queda dinámico; el build
-    // no depende de la base). Después del build se LANZA: Next conserva el llms.txt
-    // anterior en vez de guardar uno recortado un día entero.
-    if (process.env.NEXT_PHASE === "phase-production-build") {
-      return new Response("Servicio no disponible", { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } });
-    }
-    throw new Error("llms.txt: falló una lectura de la base");
-  }
+  if (todos === null || ciudadesTurnos === null) throw new Error("llms.txt: falló una lectura de la base");
   const pares = todos.filter((p) => p.indexable);
   // Las ciudades con al menos un par indexable, en el orden en que llegan.
   const ciudades = [...new Map(pares.map((p) => [p.city_slug, p.city_name])).entries()];
@@ -65,7 +57,16 @@ export async function GET(): Promise<Response> {
   l.push("- No cruza mercadería de un país a otro.");
   l.push("");
 
-  return new Response(l.join("\n"), {
+  return l.join("\n");
+}
+
+const textoConMemoria = conMemoriaTtl(UN_DIA_MS, armarTexto);
+
+export async function GET(): Promise<Response> {
+  const esProd = (process.env.NEXT_PUBLIC_ENV_LABEL || "").toLowerCase() === "prod";
+  if (!esProd) return new Response("No encontrado", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
+
+  return new Response(await textoConMemoria(), {
     headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, s-maxage=86400, stale-while-revalidate=604800" },
   });
 }

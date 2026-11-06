@@ -63,36 +63,13 @@ services:
       - PGRST_DB_ANON_ROLE=anon
       - PGRST_JWT_SECRET=${PGRST_JWT_SECRET}
       - PGRST_DB_MAX_ROWS=1000
-    networks: [traefik, internal]
-    labels:
-      # PASO 3 pendiente (auditoría 5/11, A-02): cuando el backend Y el frontend lean por la red
-      # interna (http://buscadonde-postgrest:3000), este router se cierra: se sacan TODAS las
-      # labels de abajo y la red `traefik` de este servicio, y se borra el DNS `db.`. Mientras
-      # tanto el router sigue abierto, con tope de pedidos por IP (ratelimit).
-      #
-      # OJO CON EL ORDEN: el backend todavía le pega a https://db.${DOMAIN} (SUPABASE_URL de abajo)
-      # y para Traefik es UNA sola IP: con el tope puesto, un backend que sigue por la URL
-      # pública se queda sin cupo (30 pedidos por minuto). Deployá el backend con la URL interna
-      # ANTES (o a la vez que) este ratelimit.
-      - traefik.enable=true
-      - traefik.docker.network=traefik
-      - "traefik.http.routers.buscadonde-db.rule=Host(`db.${DOMAIN}`)"
-      - traefik.http.routers.buscadonde-db.entrypoints=websecure
-      - traefik.http.routers.buscadonde-db.tls=true
-      - traefik.http.routers.buscadonde-db.tls.certresolver=letsencrypt
-      - traefik.http.services.buscadonde-db.loadbalancer.server.port=3000
-      # supabase-js/supabase-py agregan /rest/v1 solos (asumen el Kong de
-      # Supabase Cloud) — PostgREST bare sirve las tablas en la raíz, así
-      # que se lo sacamos acá antes de reenviar.
-      # Primero el tope y después el stripprefix (un pedido rechazado no hace trabajo de más).
-      - traefik.http.routers.buscadonde-db.middlewares=buscadonde-db-ratelimit,buscadonde-db-stripprefix
-      - "traefik.http.middlewares.buscadonde-db-stripprefix.stripprefix.prefixes=/rest/v1"
-      # 30 pedidos por minuto por IP, con ráfaga de 30. La IP es la de origen de la conexión; si
-      # algún día el registro `db` pasa por el proxy de Cloudflare (naranja), todos se ven con la
-      # IP de Cloudflare y el tope pasa a ser compartido: ahí hay que usar CF-Connecting-IP.
-      - traefik.http.middlewares.buscadonde-db-ratelimit.ratelimit.average=30
-      - traefik.http.middlewares.buscadonde-db-ratelimit.ratelimit.period=1m
-      - traefik.http.middlewares.buscadonde-db-ratelimit.ratelimit.burst=30
+    # SOLO RED INTERNA (auditoría 5/11, A-02 paso 3): PostgREST ya no tiene router en Traefik ni
+    # está en la red `traefik`, así que `db.${DOMAIN}` no existe desde internet. Lo leen, por
+    # http://buscadonde-postgrest:3000 (sin /rest/v1), el servidor de Next (SUPABASE_INTERNAL_URL)
+    # y el backend (POSTGREST_INTERNAL_URL). El build del frontend NO lee la base. Para consultar
+    # a mano desde el VPS: `docker compose exec backend` o `docker run --rm --network <proyecto>_internal curlimages/curl ...`.
+    networks: [internal]
+
   waha:
     # Fijada por digest a la imagen que corría en prod el 5/11/2026 (era `latest`):
     # un `up` no debe cambiar el bridge de WhatsApp solo. Para actualizar, probar en QA
@@ -146,20 +123,12 @@ services:
       context: ./frontend
       args:
         # La base (PostgREST) la lee el SERVIDOR de Next por la red interna de Docker, sin pasar
-        # por Traefik ni por internet (lib/supabase.ts; la URL va SIN /rest/v1). Ya no se hornean
-        # NEXT_PUBLIC_SUPABASE_* en el bundle del navegador: el navegador no habla con la base
-        # (lee por /api/lectura) y `npm run check:bundle` lo verifica.
-        # Van como build arg Y como `environment` (abajo): las páginas estáticas leen en el build y
-        # el servidor lee en runtime. Ojo: BuildKit no entra a las redes del compose, así que en el
-        # build `buscadonde-postgrest` no resuelve: por eso va también SUPABASE_URL (pública), que
-        # lib/supabase.ts prefiere SOLO durante el build. Si no, sitemap, /que-es-uruku y
-        # /comprar-en-bermejo salen sin datos y así se quedan hasta su revalidación (1 h a 1 día).
-        # PASO 3: cuando `db.` se cierre, el build ya no podrá leer la base; habrá que dar otra
-        # salida (p. ej. build con `network: host` o regenerar esas páginas tras el `up`).
-        SUPABASE_INTERNAL_URL: http://buscadonde-postgrest:3000
-        SUPABASE_URL: https://db.${DOMAIN}
-        # Acepta el nombre nuevo o, mientras el .env del VPS no se renombre, el viejo.
-        SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-${NEXT_PUBLIC_SUPABASE_ANON_KEY}}
+        # por Traefik ni por internet (lib/supabase.ts; la URL va SIN /rest/v1) y sólo en RUNTIME
+        # (`environment`, abajo). El BUILD no lee la base y por eso ya no lleva SUPABASE_* como build
+        # arg: las páginas con datos se arman en el primer pedido y se regeneran por ISR (el
+        # router público `db.` está cerrado y BuildKit no entra a la red del compose). Tampoco se
+        # hornean NEXT_PUBLIC_SUPABASE_* en el bundle del navegador: el navegador no habla con la
+        # base (lee por /api/lectura) y `npm run check:bundle` lo verifica.
         NEXT_PUBLIC_API_URL: https://api.${DOMAIN}
         # El mapa base sale del caché propio (servicio `tiles`), no de OSM
         # directo. Se puede pisar por ciudad desde `ciudades.tiles_url` sin
@@ -256,10 +225,12 @@ services:
       waha:
         condition: service_started
     environment:
-      # supabase-py agrega /rest/v1 solo (asume el Kong de Supabase Cloud) —
-      # por eso va por la URL pública con el stripprefix de Traefik, en vez
-      # de pegarle directo a postgrest:3000 (que no tiene ese prefijo).
-      - SUPABASE_URL=https://db.${DOMAIN}
+      # PostgREST se lee por la red interna, directo y sin /rest/v1 (app/db/session.py):
+      # el router público `db.${DOMAIN}` ya no existe (A-02 paso 3). Va acá y no sólo en
+      # backend/.env porque `environment` le gana a `env_file`: la URL no puede quedar vieja
+      # (ni vacía, que volvería a SUPABASE_URL=https://db... y se quedaría sin base) en el .env
+      # de un VPS. SUPABASE_URL ya no se define acá.
+      - POSTGREST_INTERNAL_URL=http://buscadonde-postgrest:3000
       - FOTOS_PUBLIC_BASE_URL=https://api.${DOMAIN}/fotos
       # Al NOMBRE DEL CONTENEDOR, por lo mismo que el WHATSAPP_HOOK_URL de
       # arriba pero en el sentido contrario: `waha` es un alias en la red de

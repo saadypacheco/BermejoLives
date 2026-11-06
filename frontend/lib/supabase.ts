@@ -5,7 +5,7 @@ import { PostgrestClient } from "@supabase/postgrest-js";
 // lib/saber-revisado.ts) llevan `import "server-only"`: si un componente
 // cliente los importa, el build falla. Así la URL de la base y la anon key
 // nunca llegan al bundle del navegador, y nadie puede bajarse el catálogo
-// entero hablando directo con PostgREST (db.uruku.bo/rest/v1/...).
+// entero hablando directo con PostgREST.
 //
 // El navegador lee datos por `lib/data-client.ts` -> `/api/lectura` (route
 // handler de Next, que sí corre acá, en el servidor).
@@ -22,31 +22,34 @@ import { PostgrestClient } from "@supabase/postgrest-js";
 //                          de desarrollo), el prefijo va incluido en la variable
 //                          (http://host.docker.internal:54421/rest/v1).
 //                          Tiene prioridad sobre las demás.
-//   SUPABASE_URL           URL PÚBLICA de PostgREST (respaldo). Es la raíz
-//                          (https://db.uruku.bo): acá se le agrega `/rest/v1`,
-//                          que el Traefik de prod saca antes de reenviar.
+//   SUPABASE_URL           Respaldo para desarrollo: la raíz de un PostgREST/Kong al que
+//                          se le agrega `/rest/v1`. En prod y QA NO se usa: el router
+//                          público `db.` está cerrado y se lee por la red interna.
 //   SUPABASE_ANON_KEY      La anon key (RLS la limita igual que antes).
 // Mientras no estén seteadas se usan las NEXT_PUBLIC_SUPABASE_URL /
 // NEXT_PUBLIC_SUPABASE_ANON_KEY de siempre, para no romper un deploy viejo.
-// Ojo: las páginas estáticas leen la base DURANTE EL BUILD, así que las
-// variables tienen que estar también como build args (docker-compose.prod.yml);
-// en el build se usa SUPABASE_URL (pública) si está, ver `enBuild` más abajo.
+// EL BUILD NO LEE LA BASE (auditoría 5/11, A-02 paso 3): `docker build` (BuildKit) no entra a las
+// redes del compose, y el router público `db.` está cerrado, así que durante `next build` no hay
+// forma de llegar a PostgREST. Por eso ninguna página ni ruta puede depender de la base al
+// construirse: las de ISR usan `generateStaticParams` vacío (o `[[...resto]]`) y se arman en el
+// primer pedido; el sitemap y llms.txt son dinámicos con memoria propia (lib/memoria-ttl.ts).
+// Acá se refuerza: si algo intenta leer durante el build, la lectura FALLA fuerte y queda un
+// aviso en el log del build. Nunca se guarda una página «vacía» por haber leído una base
+// inalcanzable: una lectura que falla en ISR lanza y Next conserva la versión anterior.
 const internalUrl = process.env.SUPABASE_INTERNAL_URL?.trim().replace(/\/+$/, "");
 const publicUrl = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)?.trim().replace(/\/+$/, "");
 const anonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// EN EL BUILD manda la URL pública: `docker build` (BuildKit) no entra a las redes del compose, así
-// que `buscadonde-postgrest` no resuelve ahí. Sin esto las páginas estáticas (sitemap, /que-es-uruku,
-// /comprar-en-bermejo) se arman SIN datos y quedan así hasta su primera revalidación (1 h a 1 día).
-// En runtime (`next start`) manda la red interna, que es lo que importa.
 const enBuild = process.env.NEXT_PHASE === "phase-production-build";
 const restUrlPublica = publicUrl ? `${publicUrl}/rest/v1` : undefined;
-const restUrl = (enBuild && restUrlPublica) || internalUrl || restUrlPublica;
+const restUrl = internalUrl || restUrlPublica;
 
 if (!restUrl || !anonKey) {
   // No tiramos error en build para permitir levantar sin .env; las queries fallan suave.
   console.warn("Faltan SUPABASE_INTERNAL_URL o SUPABASE_URL / SUPABASE_ANON_KEY (o NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY)");
 }
+
+let avisoBuild = false;
 
 const clave = anonKey ?? "anon";
 
@@ -60,7 +63,19 @@ export const supabase = new PostgrestClient(restUrl ?? "http://localhost/rest/v1
   // que se lee de la base tiene que ser la de AHORA; el costo de no cachear
   // es una consulta a PostgREST por render, que es lo que ya se paga en el
   // resto del sitio.
-  fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
+  fetch: (input, init) => {
+    if (enBuild) {
+      // Next descarta las páginas dinámicas durante el build, pero antes arranca sus lecturas:
+      // esas fallan acá, sin salir a la red. Si una página ESTÁTICA llega acá, queda sin datos:
+      // hay que pasarla a ISR a pedido (ver arriba). Un solo aviso para no inundar el log.
+      if (!avisoBuild) {
+        avisoBuild = true;
+        console.warn("[supabase] lectura de la base durante `next build`: se rechaza (el build no depende de la base)");
+      }
+      return Promise.reject(new Error("La base no se lee durante `next build`"));
+    }
+    return fetch(input, { ...init, cache: "no-store" });
+  },
 });
 
 export const hasSupabase = Boolean(restUrl && anonKey);
