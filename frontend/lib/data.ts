@@ -792,6 +792,8 @@ export type PlanPublico = {
   slug: string; nombre: string; publicaciones_mes: number | null;
   precio_publicacion_extra: number; permite_extras: boolean; publica_meses: number | null;
   descripcion: string | null; incluye: string[]; funciones: Record<string, boolean>;
+  /** Fotos de galería del plan (el total; la portada va aparte). null = no se pudo leer. */
+  fotos_max: number | null;
 };
 
 // Las columnas de la 0101 (siempre están) y las que llegaron después (0108:
@@ -799,7 +801,7 @@ export type PlanPublico = {
 // tiene alguna, la corta: una página de venta que se queda en blanco porque
 // falta una columna es peor que una sin viñetas. Ya no se puede usar `*`.
 const PLANES_COLS_BASE = "slug,nombre,orden,publicaciones_mes,precio_publicacion_extra,permite_extras,funciones,descripcion";
-const PLANES_COLS_FULL = `${PLANES_COLS_BASE},incluye,publica_meses`;
+const PLANES_COLS_FULL = `${PLANES_COLS_BASE},incluye,publica_meses,fotos_max`;
 
 export async function getPlanes(): Promise<PlanPublico[]> {
   if (!hasSupabase) return [];
@@ -815,6 +817,7 @@ export async function getPlanes(): Promise<PlanPublico[]> {
     publica_meses: p.publica_meses == null ? null : Number(p.publica_meses),
     descripcion: (p.descripcion as string | null) ?? null, incluye: (p.incluye as string[] | null) ?? [],
     funciones: (p.funciones as Record<string, boolean> | null) ?? {},
+    fotos_max: p.fotos_max == null ? null : Number(p.fotos_max),
   }));
 }
 

@@ -76,3 +76,20 @@ cuidado de grants que `planes` (0134): el público no lee precios.
 5. Como anon: `comercios?select=plan_cortesia` da error de permiso; la ficha, el
    buscador, el mapa, las ofertas y la guía siguen andando.
 6. Tests verdes, `tsc` sin errores, sin emoji, sin precios al público.
+
+## Cambio del 6/11/2026 (decisión del dueño)
+
+`fotos_max` es el **total** de fotos de galería (la portada va aparte). Las primeras 10 son las del local; el resto, las que el comerciante cambia cuando quiera (reemplazar una foto en el tope).
+
+| Plan | `fotos_max` | En /planes se lee |
+|---|---|---|
+| Básico (`gratis`) | 0 | «Sólo foto de portada» · «Gratis por 2 meses…; después seguís en el mapa» (50 publicaciones por mes los 2 primeros meses, sin cambio) |
+| Publica | 60 | «10 fotos de tu local + 50 fotos que podés cambiar todos los días» |
+| Destacado | 130 | 10 + 120 |
+| Pro | 310 | 10 + 300 |
+| Empleado Digital | 510 | 10 + 500 |
+| Premium (viejo) | sin cambio | — |
+
+- El **equipo de URUKU** (agentes, admin, banco de contenido) puede subir hasta `FOTOS_DEL_LOCAL = 10` fotos a cualquier comercio aunque su plan dé menos (`fotos_galeria.tope_fotos(..., equipo=True)`). El comerciante sigue con el tope de su plan.
+- La línea de fotos y la de cuota las arma la página con los números del plan (`frontend/lib/planes-pure.ts`): lo que se cambia en Admin › Planes se ve sin deploy.
+- Migración `0188_fotos_por_plan_v2.sql`. Lo que ya tiene cada comercio no se borra.

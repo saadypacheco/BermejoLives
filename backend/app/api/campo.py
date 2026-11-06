@@ -1119,8 +1119,9 @@ _MAX_VIDEO_BYTES = 50 * 1024 * 1024  # 50 MB
 @router.get("/campo/mis-comercios/{comercio_id}/fotos")
 async def listar_fotos(comercio_id: str, agente: dict = Depends(auth.require_agente), repo: Repo = Depends(get_repo)) -> dict:
     comercio = _propio_o_404(repo, comercio_id, agente)
-    # `limite` = el tope de fotos de hoy (plan + extras): la galería muestra «23/50».
-    return fotos_galeria.listado(repo, comercio)
+    # `limite` = el tope de fotos de hoy (plan + extras, nunca menos de las 10 del local
+    # para el equipo): la galería muestra «23/50».
+    return fotos_galeria.listado(repo, comercio, equipo=True)
 
 
 @router.post("/campo/mis-comercios/{comercio_id}/fotos")

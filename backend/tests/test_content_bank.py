@@ -134,7 +134,9 @@ def test_mostrar_en_la_ficha_copia_a_la_galeria(client, repo, crepo, token):
     assert crepo.assets[r["asset"]["id"]]["gallery_photo_id"] == repo.comercio_fotos[0]["id"]
 
 
-def test_mostrar_en_la_ficha_en_el_tope_guarda_en_el_banco_igual(client, repo, crepo, token):
+def test_mostrar_en_la_ficha_en_el_tope_guarda_en_el_banco_igual(client, repo, crepo, token, monkeypatch):
+    # Prueba el tope con topes chicos: sin el piso de 10 fotos del local del equipo.
+    monkeypatch.setattr("app.services.fotos_galeria.FOTOS_DEL_LOCAL", 0)
     comercio(repo)
     repo.planes["publica"]["fotos_max"] = 1
     repo.comercio_fotos.append({"id": "g0", "comercio_id": "com-1", "url": "x", "thumb_url": "x", "orden": 0})
@@ -214,7 +216,9 @@ def test_el_listado_del_agente_trae_la_autorizacion_vigente(client, repo, crepo,
     assert lista["social_consent"]["granted"] is True and lista["social_consent"]["via"] == "agent_visit"
 
 
-def test_el_agente_en_el_tope_de_la_galeria_no_reemplaza(client, repo, crepo, agente_token):
+def test_el_agente_en_el_tope_de_la_galeria_no_reemplaza(client, repo, crepo, agente_token, monkeypatch):
+    # Prueba el tope con topes chicos: sin el piso de 10 fotos del local del equipo.
+    monkeypatch.setattr("app.services.fotos_galeria.FOTOS_DEL_LOCAL", 0)
     comercio(repo, cargado_por=AGENTE)
     repo.planes["publica"]["fotos_max"] = 1
     repo.comercio_fotos.append({"id": "g0", "comercio_id": "com-1", "url": "x", "thumb_url": "x", "orden": 0})

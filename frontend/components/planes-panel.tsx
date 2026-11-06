@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getPlanesAdmin, guardarPlan, type PlanAdmin } from "@/lib/api";
+import { lineaFotos } from "@/lib/planes-pure";
 
 /**
  * Admin › Planes: precio, cuota, extra, meses gratis, la frase y las viñetas
@@ -89,16 +90,21 @@ function FilaPlan({ p, onGuardado }: { p: PlanAdmin; onGuardado: () => void }) {
         {campo("Precio/mes (Bs)", "precio_mes", { type: "number", inputMode: "decimal" })}
         {campo("Publicaciones/mes (vacío = sin límite)", "publicaciones_mes", { type: "number", inputMode: "numeric" })}
         {campo("Publicaciones guardadas (máx.) (vacío = sin tope)", "publicaciones_guardadas", { type: "number", inputMode: "numeric", min: 1 })}
-        {campo("Fotos del local (máximo)", "fotos_max", { type: "number", inputMode: "numeric", min: 0, max: 1000, step: 1 })}
+        {campo("Fotos de galería, total (máximo)", "fotos_max", { type: "number", inputMode: "numeric", min: 0, max: 1000, step: 1 })}
         {campo("Piezas para redes por ciclo (0–31)", "social_pieces_per_month", { type: "number", inputMode: "numeric", min: 0, max: 31, step: 1 })}
         {campo("Extra (Bs c/u)", "precio_publicacion_extra", { type: "number", inputMode: "decimal" })}
         {campo("Meses que puede publicar (vacío = siempre)", "publica_meses", { type: "number", inputMode: "numeric" })}
       </div>
+      {v.fotos_max.trim() !== "" && lineaFotos(Number(v.fotos_max)).length > 0 && (
+        <small style={{ lineHeight: 1.4 }}>En la página de planes se lee: «{lineaFotos(Number(v.fotos_max)).join(". ")}».</small>
+      )}
       <small style={{ opacity: .7, lineHeight: 1.4 }}>
         Publicaciones guardadas: cuando el comercio llega al máximo y entra una más, se archiva la más vieja
         y se borra su foto del disco. Es para que el disco no crezca sin control. Vacío = no se archiva nada.
-        Fotos del local: al llegar al máximo, el comercio elige entre pagar una foto extra (al precio de
-        «Extra») o borrar la más vieja. Si el pago vence, vuelve al máximo del plan gratis.
+        Fotos de galería: es el total (la portada va aparte); las primeras 10 son las del local y el resto
+        las que el comercio cambia cuando quiera. Al llegar al máximo elige entre pagar una foto extra (al precio
+        de «Extra») o reemplazar una. Si el pago vence, vuelve al máximo del plan gratis. Los agentes y el admin
+        siempre pueden subir hasta 10 fotos del local, aunque el plan dé menos.
         Piezas para redes: videos propios que URUKU arma y publica en sus redes por cada ciclo de cobro
         (vacío = 0). No se muestra al público.
       </small>
