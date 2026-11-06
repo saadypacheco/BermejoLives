@@ -1,4 +1,4 @@
-// Las líneas de /planes que salen de los números del plan (no de las viñetas), para que
+// Las líneas de fotos de /planes salen de `fotos_max` (no de las viñetas), para que
 // lo que se cambie en Admin › Planes se vea en la página sin tocar código.
 
 /** Las fotos del local que entran en cualquier plan pago (backend: fotos_galeria.FOTOS_DEL_LOCAL). */
@@ -16,14 +16,4 @@ export function lineaFotos(fotosMax: number | null | undefined): string[] {
     `Publicás hasta ${cambian} fotos por día`,
     `En tu página se ven siempre ${n} fotos: las ${FOTOS_DEL_LOCAL} de tu local + ${cambian} que cambiás cuando quieras`,
   ];
-}
-
-/** La línea de publicaciones. El gratis no la muestra (decisión del dueño, 6/11/2026):
- *  la cuota de sus primeros meses sigue rigiendo, pero no se anuncia. */
-export function lineaCuota(p: {
-  publicaciones_mes: number | null; esGratis: boolean;
-}): string | null {
-  if (p.esGratis) return null;
-  if (p.publicaciones_mes == null) return "Publicaciones sin límite";
-  return `Hasta ${p.publicaciones_mes} publicaciones por mes`;
 }

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { UrukuShell } from "@/components/uruku-shell";
 import { getPlanes, type PlanPublico } from "@/lib/data";
 import { waUruku } from "@/lib/contacto";
-import { lineaCuota, lineaFotos } from "@/lib/planes-pure";
+import { lineaFotos } from "@/lib/planes-pure";
 
 export const dynamic = "force-dynamic";
 
@@ -60,14 +60,6 @@ export default async function PlanesPage() {
               <ul>
                 {p.incluye.map((linea) => <li key={linea}>{linea}</li>)}
                 {lineaFotos(p.fotos_max).map((linea) => <li key={linea} className="uk-plan-cuota">{linea}</li>)}
-                {lineaCuota({ publicaciones_mes: p.publicaciones_mes, esGratis: esGratis(p) }) && (
-                  <li className="uk-plan-cuota">
-                    {lineaCuota({ publicaciones_mes: p.publicaciones_mes, esGratis: esGratis(p) })}
-                    {p.permite_extras && p.publicaciones_mes != null && p.precio_publicacion_extra > 0
-                      ? ` · la extra, Bs ${p.precio_publicacion_extra}`
-                      : ""}
-                  </li>
-                )}
               </ul>
               {esGratis(p)
                 ? <Link href="/autoregistro?modo=registro" className="uk-btn uk-btn-primary">Registrar mi negocio gratis</Link>
