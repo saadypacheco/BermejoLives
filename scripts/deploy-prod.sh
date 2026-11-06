@@ -5,6 +5,9 @@
 #   bash scripts/deploy-prod.sh frontend              # sólo el frontend
 #   bash scripts/deploy-prod.sh --sql selfhost/postgres-init/0105_*.sql frontend
 #
+# En QA (/docker/buscadonde) sirve igual con dos variables:
+#   DOMINIO=encontralo.store APP_ENV=qa bash scripts/deploy-prod.sh frontend backend
+#
 # Hace lo mismo que se venía haciendo a mano, en el mismo orden: git pull,
 # las migraciones que se le pasen con --sql (antes de levantar nada), el
 # build con GIT_SHA, y después ESPERA a que el sitio conteste con el commit
@@ -20,6 +23,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ARGS=("$@")
 DOMINIO="${DOMINIO:-uruku.bo}"
+APP_ENV="${APP_ENV:-prod}"
 COMPOSE=(docker compose -f docker-compose.prod.yml --env-file .env)
 
 SQL=()
@@ -80,7 +84,7 @@ if [ -n "$INDEXNOW_KEY" ]; then
 fi
 
 echo "== build: ${SERVICIOS[*]} =="
-GIT_SHA="$SHA" APP_ENV=prod "${COMPOSE[@]}" up -d --build "${SERVICIOS[@]}"
+GIT_SHA="$SHA" APP_ENV="$APP_ENV" "${COMPOSE[@]}" up -d --build "${SERVICIOS[@]}"
 
 # Esperar a que conteste con el commit nuevo. Hasta 2 minutos; en la práctica
 # son 10-30 segundos.
