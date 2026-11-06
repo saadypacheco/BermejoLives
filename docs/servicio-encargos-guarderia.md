@@ -101,7 +101,7 @@ Vale para encargos y para **clientes que traen sus compras** (en ese caso el ope
 - **3 códigos mal** seguidos para el mismo paquete → se bloquea el retiro y avisa al admin.
 
 ### (g) Vencimiento del guardado
-- **Días gratis:** 7 corridos desde el ingreso (S-09); después se cobra por día (precio a definir, oculto al público).
+- **Días gratis:** ninguno (D-03, §12.1): el guardado se cobra por día desde el ingreso, y el retiro también se cobra (precios a definir, ocultos al público).
 - Aviso manual 2 días antes de vencer el gratis y al vencer (paquete → `overdue`, sigue guardado).
 - **Abandono:** a los **90 días** del ingreso sin retiro, y tras 3 avisos registrados (días 7, 30 y 75), el paquete pasa a `abandoned`. El admin decide: donar, vender para cubrir lo adeudado, o esperar. El sobrante de una venta queda a favor del cliente 12 meses (S-10, **validar con abogado**).
 - El anticipo de un encargo no retirado cubre primero lo adeudado por guardado.
@@ -339,8 +339,8 @@ L1 cliente (nombre, WhatsApp, ciudad) · L2 documento (hash + 3 dígitos) · L3 
 - **S-05** Cotización vigente 72 h; sin pago, `expired`.
 - **S-06** Diferencia de precio tolerada sin consultar: hasta 10 %; se ajusta al retirar.
 - **S-07** Factura del comercio a nombre del cliente si da NIT/CI; si no, sin nombre. URUKU factura sólo su tarifa (cuando tenga NIT).
-- **S-08** Tope de valor declarado: Bs 3.500 por paquete y Bs 50.000 en todo el depósito, editables.
-- **S-09** 7 días corridos de guardado gratis para encargos y walk-in.
+- **S-08** ~~Tope de valor declarado: Bs 3.500 por paquete y Bs 50.000 en todo el depósito, editables.~~ Reemplazado por D-05 (§12.1).
+- **S-09** ~~7 días corridos de guardado gratis para encargos y walk-in.~~ Reemplazado por D-03 (§12.1): sin días gratis.
 - **S-10** Abandono a los 90 días con 3 avisos; sobrante a favor del cliente 12 meses.
 - **S-11** Equipo inicial: 1 o 2 operadores + el admin (dueño).
 - **S-12** No se pide dirección del cliente (no hay envíos).
@@ -385,3 +385,20 @@ L1 cliente (nombre, WhatsApp, ciudad) · L2 documento (hash + 3 dígitos) · L3 
 | P-06 | Si URUKU compra algo **distinto a la foto que aprobó el cliente**, ¿URUKU lo cambia a su costo? | **Sí**: es error nuestro, no del producto; sin esto la garantía pierde credibilidad. No cambia la exclusión de producto fallado |
 | P-07 | ¿El depósito es la oficina actual, con retiro en horario de oficina? | **Sí** para el MVP (S-13); un depósito aparte, cuando el volumen lo pida |
 | P-08 | ¿Activamos ya el Respaldo 2 (68727584) como respaldo callado de WAHA, dado que el 67671888 es el público y no se conecta a WAHA? | **Sí** |
+
+### 12.1 Respuestas del dueño (6/11/2026)
+
+Mandan sobre las recomendaciones de arriba y sobre los supuestos S-xx que las contradigan.
+
+| # | Decisión |
+|---|---|
+| D-01 (P-01) | El anticipo se coordina **por WhatsApp** y se paga a una cuenta **de Bolivia o de Argentina**, según dónde tenga la plata el comprador. Hacen falta los datos de las dos cuentas en el panel |
+| D-02 (P-02) | Anticipo del **100 %** de los productos antes de comprar |
+| D-03 (P-03) | **Sin días de guardado gratis**: el guardado se cobra **por día** desde el ingreso, y **el retiro también se cobra** |
+| D-04 (P-04) | Abandono a los 90 días con 3 avisos: **sí** (sigue sujeto al abogado) |
+| D-05 (P-05) | **Sin valor máximo** cuando el comercio donde se compra tiene suscripción con URUKU. Si no la tiene, se manejan montos distintos **según peso y volumen**. Los montos van en el panel, ocultos al público (el ejemplo del dueño está fuera del repo, en `uruku-privado/`) |
+| D-06 (P-06) | Si URUKU compra algo distinto a la foto aprobada, **lo cambia a su costo** |
+| D-07 (P-07) | Depósito = la oficina actual, retiro en horario de oficina |
+| D-08 (P-08) | **No** se activa el Respaldo 2 como respaldo de WAHA |
+
+Para aclarar con el dueño antes de construir: en D-03, qué es «el retiro» que se cobra (que URUKU vaya a buscar al comercio, que el cliente retire en la oficina, o los dos); en D-05, la moneda de los montos y si la tabla por peso es el precio del guardado por día o el límite de la garantía.
