@@ -59,13 +59,15 @@ export default async function PlanesPage() {
               </header>
               <ul>
                 {p.incluye.map((linea) => <li key={linea}>{linea}</li>)}
-                {lineaFotos(p.fotos_max) && <li className="uk-plan-cuota">{lineaFotos(p.fotos_max)}</li>}
-                <li className="uk-plan-cuota">
-                  {lineaCuota({ publicaciones_mes: p.publicaciones_mes, publica_meses: p.publica_meses, esGratis: esGratis(p) })}
-                  {!esGratis(p) && p.permite_extras && p.publicaciones_mes != null && p.precio_publicacion_extra > 0
-                    ? ` · la extra, Bs ${p.precio_publicacion_extra}`
-                    : ""}
-                </li>
+                {lineaFotos(p.fotos_max).map((linea) => <li key={linea} className="uk-plan-cuota">{linea}</li>)}
+                {lineaCuota({ publicaciones_mes: p.publicaciones_mes, esGratis: esGratis(p) }) && (
+                  <li className="uk-plan-cuota">
+                    {lineaCuota({ publicaciones_mes: p.publicaciones_mes, esGratis: esGratis(p) })}
+                    {p.permite_extras && p.publicaciones_mes != null && p.precio_publicacion_extra > 0
+                      ? ` · la extra, Bs ${p.precio_publicacion_extra}`
+                      : ""}
+                  </li>
+                )}
               </ul>
               {esGratis(p)
                 ? <Link href="/autoregistro?modo=registro" className="uk-btn uk-btn-primary">Registrar mi negocio gratis</Link>

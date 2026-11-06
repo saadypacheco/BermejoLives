@@ -95,8 +95,8 @@ function FilaPlan({ p, onGuardado }: { p: PlanAdmin; onGuardado: () => void }) {
         {campo("Extra (Bs c/u)", "precio_publicacion_extra", { type: "number", inputMode: "decimal" })}
         {campo("Meses que puede publicar (vacío = siempre)", "publica_meses", { type: "number", inputMode: "numeric" })}
       </div>
-      {v.fotos_max.trim() !== "" && lineaFotos(Number(v.fotos_max)) && (
-        <small style={{ lineHeight: 1.4 }}>En la página de planes se lee: «{lineaFotos(Number(v.fotos_max))}».</small>
+      {v.fotos_max.trim() !== "" && lineaFotos(Number(v.fotos_max)).length > 0 && (
+        <small style={{ lineHeight: 1.4 }}>En la página de planes se lee: «{lineaFotos(Number(v.fotos_max)).join(". ")}».</small>
       )}
       <small style={{ opacity: .7, lineHeight: 1.4 }}>
         Publicaciones guardadas: cuando el comercio llega al máximo y entra una más, se archiva la más vieja
