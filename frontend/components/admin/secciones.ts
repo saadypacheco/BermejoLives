@@ -44,7 +44,7 @@ export const MENU: GrupoMenu[] = [
     { id: "lugares", label: "Lugares", icono: "mercado", permiso: "lugares", ciudad: "filtra" },
     { id: "importados", label: "Importados", icono: "descargar", permiso: "datos", ciudad: "filtra" },
     { id: "adornos", label: "Adornos", icono: "destacado", permiso: "lugares", ciudad: "filtra" },
-    { id: "cambio-numero", label: "Cambios de número", icono: "telefono", permiso: "panel", ciudad: "pendiente" },
+    { id: "cambio-numero", label: "Cambios de número", icono: "telefono", permiso: "comercios.cuenta", ciudad: "pendiente" },
     // Números leídos en las portadas (docs/telefonos-en-fotos.md). Mismo permiso que «Editar negocio»:
     // aplicar un número escribe en la ficha por el mismo camino.
     { id: "telefonos-fotos", label: "Teléfonos en fotos", icono: "foto", permiso: "moderar", ciudad: "filtra" },

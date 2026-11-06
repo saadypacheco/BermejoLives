@@ -462,7 +462,7 @@ PESTANAS_DE_ANTES = {
     "revision-rubros": "rubros", "whatsapp": "whatsapp", "difusion": "difusion", "demanda": "datos",
     "ayuda": "ayuda", "equipo": "equipo", "compradores": "datos", "planes": "planes", "importados": "datos",
     "cargas": "equipo", "publicaciones": "moderar", "suscripciones": "pagos", "pagos": "pagos",
-    "monitoreo": "datos", "kpis": "datos", "reclamos": "panel", "cambio-numero": "panel",
+    "monitoreo": "datos", "kpis": "datos", "reclamos": "panel", "cambio-numero": "comercios.cuenta",
     "vencimientos": "moderar",
 }
 
@@ -477,7 +477,7 @@ def _secciones_ts():
     src = (FRONT / "components/admin/secciones.ts").read_text(encoding="utf-8")
     out = {}
     for m in re.finditer(r'\{\s*id:\s*"([\w-]+)",[^}]*?\}', src):
-        permiso = re.search(r'permiso:\s*"(\w+)"', m.group(0))
+        permiso = re.search(r'permiso:\s*"([\w.]+)"', m.group(0))
         out[m.group(1)] = permiso.group(1) if permiso else None
     return out
 

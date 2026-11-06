@@ -1190,7 +1190,8 @@ def enviar_mensaje_comercio(
 @router.get("/admin/solicitudes-cambio-numero")
 def listar_solicitudes_cambio_numero(
     estado: str | None = Query(default="pendiente"),
-    _admin: dict = Depends(require_permiso("panel")),
+    # Mismo permiso que aprobar: quien decide sobre la cuenta tiene que ver los pedidos.
+    _admin: dict = Depends(require_permiso("comercios.cuenta")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     items = []
@@ -1246,7 +1247,7 @@ def aprobar_solicitud_cambio_numero(
 @router.post("/admin/solicitudes-cambio-numero/{solicitud_id}/rechazar")
 def rechazar_solicitud_cambio_numero(
     solicitud_id: str,
-    admin: dict = Depends(require_permiso("panel")),
+    admin: dict = Depends(require_permiso("comercios.cuenta")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     updated = repo.rechazar_solicitud_cambio_numero(solicitud_id, admin["email"])
