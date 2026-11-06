@@ -40,10 +40,10 @@ def hoy_local() -> "datetime.date":
 
 # Los dominios que sirven algo. Si uno deja de renovar, lo que se cae es lo que
 # está entre paréntesis — por eso el nombre va junto y no sólo el host.
+# `db.uruku.bo` ya no está: la base no se publica más (A-02 paso 3, sólo red interna).
 HOSTS_TLS = [
     ("uruku.bo", "el sitio"),
     ("api.uruku.bo", "el backend"),
-    ("db.uruku.bo", "la base (PostgREST)"),
     ("tiles.uruku.bo", "el mapa"),
 ]
 
