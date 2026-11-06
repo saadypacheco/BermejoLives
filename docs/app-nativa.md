@@ -143,7 +143,7 @@ Reglas:
 - **Topes (los confirma el dueño):** 1 aviso por comercio, por usuario y por día. Nada entre las 21 y las 8 (hora de Bolivia): lo que cae en ese horario sale a las 8.
 
 ```sql
--- 0167_device_tokens.sql (número: el siguiente libre al implementar; 0156-0158 rama de marketing, 0159-0164 grupos-por-comercio, 0165-0166 cobro-mensual)
+-- 0167_device_tokens.sql (número: el siguiente libre al implementar; 0190–0192 rama de marketing, 0159-0164 grupos-por-comercio, 0165-0166 cobro-mensual)
 create table device_tokens (
   id               uuid primary key default gen_random_uuid(),
   token            text not null unique,          -- token FCM (app) o endpoint Web Push (futuro)

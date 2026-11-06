@@ -115,6 +115,11 @@ Moderador → /admin › Publicaciones → aprobar/rechazar/cambios → estado '
     migración; si no, sumarla a `PRIVADAS_EXTRA` en
     `test_comercios_columnas_publicas.py`. Nunca `select("*")` sobre `comercios`
     desde el front (usar `COLUMNAS_COMERCIO` de `lib/data.ts`).
+12. **Comercio gestionado** (en `integracion_comercios`, API `/v1/integration`, ver
+    `docs/integracion-marketing.md`): nunca publica directo. Todo camino que apruebe solo
+    (`confiable`, auto-aprobación de IA) tiene que pasar por `services/integracion.py`
+    (`es_confiable` / `es_gestionado`). La API de integración no devuelve teléfonos, `codigo`
+    ni `verificado`. Las URLs de la Graph API salen de `settings.graph_base()` (`GRAPH_API_VERSION`).
 
 ## 8. Correr local
 

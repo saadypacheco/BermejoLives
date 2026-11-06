@@ -22,7 +22,7 @@ import structlog
 from app.core.config import settings
 from app.core.precio import extraer_precio, parece_oferta
 from app.db.repository import Repo, get_repo
-from app.services import clave_filtrada, difusion, planes, wa_identity
+from app.services import clave_filtrada, difusion, integracion, planes, wa_identity
 from app.models.whatsapp import WahaEvent, WahaMessagePayload
 
 logger = structlog.get_logger()
@@ -248,17 +248,22 @@ def _previa_fusionable(repo: Repo, comercio: dict, reproceso: dict | None, ts: i
 
 
 def _fusionar_con_la_anterior(repo: Repo, comercio: dict, row: dict, tipo: str,
-                              previa: dict | None) -> dict | None:
+                              previa: dict | None, solo_pendiente: bool = False) -> dict | None:
     """Junta este mensaje con el anterior cuando son las dos mitades de una oferta.
 
     Sólo si se COMPLEMENTAN: una tiene foto y le falta el texto, la otra tiene
     texto y le falta la foto. Si las dos tienen lo mismo son dos publicaciones
     distintas —dos ofertas seguidas, que también pasa— y no se tocan.
 
-    `previa`: lo que decidió `_previa_fusionable`. Devuelve la publicación ya
+    `previa`: lo que decidió `_previa_fusionable`. `solo_pendiente`: comercio gestionado,
+    sólo se junta con una publicación todavía pendiente. Devuelve la publicación ya
     completa, o None si no había con qué juntarla.
     """
     if not previa:
+        return None
+    # Comercio gestionado: no se le cambia por abajo una publicación que la integración ya aprobó o
+    # rechazó (saldría modificada sin que nadie la vuelva a mirar). Sólo se junta con una pendiente.
+    if solo_pendiente and previa.get("estado") != "pendiente":
         return None
 
     texto_nuevo = (row.get("descripcion") or "").strip()
@@ -434,6 +439,7 @@ def _publicar_del_explorador(payload, event, repo: Repo) -> dict:
         "contacto_whatsapp": settings.wa_contacto_explorador.strip() or None,
         "codigo_recibido": codigo,
         "identidad_origen": "explorador",
+        "remitente_rol": "uruku_explorer",
         "wa_message_id": payload.id,
     }
     creada = repo.insert_publicacion(row)
@@ -821,6 +827,11 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
     # publicar directo recién cuando alguien del equipo autoriza el número.
     confiable = bool(comercio.get("confiable")) and identidad_origen not in ("codigo", "numero_por_codigo")
 
+    # Quién mandó el mensaje, para la API de integración (que no ve teléfonos): `merchant` es el comercio;
+    # `third_party`, alguien que no está verificado como el comercio (sólo sabe el código, o es otro
+    # participante del grupo).
+    remitente_rol = "third_party" if identidad_origen in ("codigo", "grupo_desconocido") else "merchant"
+
     # En un grupo hay tres participantes y sólo uno publica. Si el mensaje vino
     # de un número que no es el del comercio ni uno nuestro, alguien agregó a un
     # cuarto: no se descarta en silencio —podría ser el mismo comerciante con
@@ -831,6 +842,14 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
         if not (duenio and duenio.get("id") == comercio["id"]):
             logger.info("ingest.remitente_ajeno", grupo=payload.grupo_jid, comercio=slug)
             confiable = False
+            remitente_rol = "third_party"
+
+    # Un comercio GESTIONADO por la integración de marketing (está en su alcance) NUNCA publica directo,
+    # sea o no `confiable`: la oferta queda pendiente, sin difusión, hasta que la apruebe esa integración.
+    # Si no se puede saber, se trata como gestionado (pendiente es el estado seguro).
+    gestionado = integracion.es_gestionado(repo, comercio["id"])
+    if gestionado:
+        confiable = False
 
     # Lo reprocesado por «Es de…» (S3) entra SIEMPRE a la cola, aunque el comercio sea
     # confiable: nadie del comercio mandó esto ahora; lo atribuyó una persona del equipo
@@ -876,6 +895,7 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
         "origen": "whatsapp",
         "codigo_recibido": codigo_recibido,
         "identidad_origen": identidad_origen,
+        "remitente_rol": remitente_rol,
         "wa_message_id": payload.id,
     }
     # LA FOTO Y EL PRECIO LLEGAN EN DOS MENSAJES.
@@ -890,7 +910,7 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
     # falta a esto, se juntan en una sola.
     if previa is None:
         previa = _previa_fusionable(repo, comercio, reproceso, payload.timestamp)
-    fusionada = _fusionar_con_la_anterior(repo, comercio, row, tipo, previa)
+    fusionada = _fusionar_con_la_anterior(repo, comercio, row, tipo, previa, solo_pendiente=gestionado)
     if fusionada:
         logger.info("ingest.publicacion_fusionada", comercio=slug, pub=fusionada["id"], tipo=fusionada.get("tipo"))
         repo.marcar_wa_inbox(payload.id, "publicada", "se juntó con el mensaje anterior", comercio["id"])

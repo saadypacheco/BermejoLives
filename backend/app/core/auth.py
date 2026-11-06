@@ -10,7 +10,7 @@ import time
 
 import jwt as pyjwt
 import structlog
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
@@ -347,3 +347,19 @@ def mismo_email(escrito: str | None, esperado: str | None) -> bool:
     deja afuera a quien escribió bien.
     """
     return (escrito or "").strip().lower() == (esperado or "").strip().lower()
+
+
+def require_integracion(scope: str | None = None):
+    """La guardia de la API de integración (`/v1/integration/*`): «hace falta una API key válida (con este scope)».
+
+    `Authorization: Bearer uki_<key_id>.<secreto>`. Hace, en orden: autenticar (401), límite de 60 pedidos por
+    minuto por clave (429) y comprobar el scope (403). Devuelve el `Cliente` (quién es y qué puede). Los errores
+    salen con el formato del contrato (`{"error": {"code", "message", "details"}}`)."""
+    def dep(request: Request, repo: Repo = Depends(get_repo)):
+        from app.services import integracion
+
+        cliente = integracion.autenticar(repo, request.headers.get("authorization"))
+        integracion.limitar(cliente)
+        integracion.exigir_scope(cliente, scope)
+        return cliente
+    return dep

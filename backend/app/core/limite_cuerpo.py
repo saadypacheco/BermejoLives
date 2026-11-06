@@ -59,6 +59,8 @@ TABLA_DE_TOPES: tuple[tuple[re.Pattern, int], ...] = tuple(
         (r"^/admin/comercio/[^/]+/catalogo$", 8),
         # Webhook de WAHA / Meta
         (r"^/ingest/webhook$", 25),
+        # API de integración: el JPEG cuadrado de marketing (E6; la ruta valida 12 MB)
+        (r"^/v1/integration/media$", 12),
         # Video promo
         (r"^/contenido/videos-promo$", 100),
         # Novedades de URUKU (0150): video (+ póster) de hasta 100 MB; portada y fotos de 15 MB

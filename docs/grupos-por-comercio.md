@@ -203,7 +203,7 @@ Un mismo miembro puede llegar primero como LID y después con número: se comple
 
 Reglas para todas (AGENTS.md §5 y §7; KB `lesson-supabase-cloud-grants-explicitos-en-migration`, `pattern-supabase-rls-policy`, `pattern-soft-delete-activo-flag`):
 
-- Desde **0159** (0156–0158 reservadas para otra rama). Archivo **idéntico byte a byte** en `supabase/migrations/` y `selfhost/postgres-init/`, con test por migración (como `test_admin_resumen_qa.py:398-409`). `begin; … commit;`, idempotente, `do $chk$` y `notify pgrst, 'reload schema';`.
+- Desde **0159** (0190–0192 reservadas para otra rama). Archivo **idéntico byte a byte** en `supabase/migrations/` y `selfhost/postgres-init/`, con test por migración (como `test_admin_resumen_qa.py:398-409`). `begin; … commit;`, idempotente, `do $chk$` y `notify pgrst, 'reload schema';`.
 - Tablas nuevas: RLS activo, `revoke all … from public, anon, authenticated`, `grant all … to service_role`. **Ninguna** es legible por anon. Funciones: `set search_path = public, pg_temp`, `revoke execute` de anon y authenticated, `grant execute` a `service_role`.
 - Columna nueva en `comercios` → privada (regla 11) y a `PRIVADAS_EXTRA` (`test_comercios_columnas_publicas.py:36`).
 - **Ninguna migración nueva puede contener la palabra que nombra al código del comercio** (ni en comentarios): la busca `test_ninguna_vista_ni_funcion_publica_expone_codigo` (`:396-410`).

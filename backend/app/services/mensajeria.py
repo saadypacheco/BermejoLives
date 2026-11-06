@@ -37,7 +37,6 @@ from app.core.config import settings
 logger = structlog.get_logger()
 
 _TIMEOUT = 20.0
-_GRAPH = "https://graph.facebook.com/v20.0"
 
 
 def proveedor() -> str:
@@ -117,7 +116,7 @@ def _cloud_texto(chat: str, texto: str) -> bool:
         logger.warning("mensajeria.cloud_sin_config")
         return False
     r = httpx.post(
-        f"{_GRAPH}/{settings.whatsapp_cloud_phone_id}/messages",
+        f"{settings.graph_base()}/{settings.whatsapp_cloud_phone_id}/messages",
         json={"messaging_product": "whatsapp", "to": _cloud_destino(chat),
               "type": "text", "text": {"body": texto}},
         headers={"Authorization": f"Bearer {settings.whatsapp_cloud_token}"},
@@ -130,7 +129,7 @@ def _cloud_imagen(chat: str, imagen_url: str, texto: str) -> bool:
     if not settings.whatsapp_cloud_phone_id or not settings.whatsapp_cloud_token:
         return False
     r = httpx.post(
-        f"{_GRAPH}/{settings.whatsapp_cloud_phone_id}/messages",
+        f"{settings.graph_base()}/{settings.whatsapp_cloud_phone_id}/messages",
         json={"messaging_product": "whatsapp", "to": _cloud_destino(chat),
               "type": "image", "image": {"link": imagen_url, "caption": texto}},
         headers={"Authorization": f"Bearer {settings.whatsapp_cloud_token}"},
@@ -225,7 +224,7 @@ def descargar_media_cloud(media_id: str) -> bytes | None:
         return None
     cab = {"Authorization": f"Bearer {token}"}
     try:
-        r = httpx.get(f"{_GRAPH}/{media_id}", headers=cab, timeout=_TIMEOUT)
+        r = httpx.get(f"{settings.graph_base()}/{media_id}", headers=cab, timeout=_TIMEOUT)
         r.raise_for_status()
         url = (r.json() or {}).get("url")
         if not url:

@@ -30,7 +30,7 @@ from app.services.imagenes import (
     guardar_foto_local, procesar_imagen, subir_foto_comercio,
     subir_foto_galeria, subir_video_comercio,
 )
-from app.services import enlaces
+from app.services import enlaces, integracion
 from app.services import ficha_catalogo as catalogo_svc
 from app.services import archivos_privados, fotos_galeria, portada
 from app.services import planes
@@ -617,7 +617,7 @@ def editar_publicacion(
     bajada = bool(actual and actual.get("comercio_id") == claims["comercio_id"]
                   and actual.get("estado") in ("rechazado", "cambios"))
     now = datetime.now(timezone.utc).isoformat()
-    if bool(comercio.get("confiable")) and not bajada:
+    if integracion.es_confiable(repo, comercio) and not bajada:
         patch["estado"], patch["approved_at"] = "aprobado", now
     else:
         patch["estado"], patch["approved_at"] = "pendiente", None
@@ -945,7 +945,7 @@ def publicar(
                     consecuencia=cuota["consecuencia"])
         raise HTTPException(status_code=402, detail=aviso)
 
-    confiable = bool(comercio.get("confiable"))
+    confiable = integracion.es_confiable(repo, comercio)
     now = datetime.now(timezone.utc).isoformat()
     # Descuento/vencimiento solo aplican a ofertas; el % se acota a 1..99.
     descuento = None
@@ -1148,7 +1148,7 @@ def destacar_producto(
         raise HTTPException(status_code=409, detail="Este producto ya está destacado")
 
     comercio = repo.get_comercio(claims["comercio_id"])
-    confiable = bool(comercio.get("confiable"))
+    confiable = integracion.es_confiable(repo, comercio)
     now = datetime.now(timezone.utc).isoformat()
     pub = repo.insert_publicacion_directa({
         "comercio_id": comercio["id"],

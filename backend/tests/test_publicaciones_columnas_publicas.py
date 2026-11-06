@@ -30,7 +30,9 @@ from tests.pg_0149 import RAIZ, columnas_de_tabla, leer_0149, pg0149, sin_coment
 PRIVADAS = ("raw", "codigo_recibido", "identidad_origen", "moderado_por", "moderado_at",
             "motivo_moderacion", "wa_message_id", "costo", "cobrado", "producto_ref_id",
             "terminos_ia", "ia_analizado_at", "ia_veredicto", "ia_motivo", "ia_confianza",
-            "ia_revisado_at", "busqueda")
+            "ia_revisado_at", "busqueda",
+            # 0191 (API de integración): nacen privadas, el sitio no las usa
+            "updated_at", "remitente_rol")
 FRONT = RAIZ / "frontend"
 
 
