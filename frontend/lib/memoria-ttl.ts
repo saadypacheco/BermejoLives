@@ -17,9 +17,8 @@ export function conMemoriaTtl<T>(
   let guardado: { valor: T; hasta: number } | null = null;
   let enCurso: Promise<T> | null = null;
 
-  return async () => {
-    if (guardado && reloj() < guardado.hasta) return guardado.valor;
-    // Un solo cálculo a la vez: pedidos simultáneos comparten la misma lectura.
+  // Un solo cálculo a la vez: pedidos simultáneos comparten la misma lectura.
+  const regenerar = (): Promise<T> => {
     if (!enCurso) {
       enCurso = producir()
         .then((valor) => {
@@ -30,14 +29,20 @@ export function conMemoriaTtl<T>(
           enCurso = null;
         });
     }
-    try {
-      return await enCurso;
-    } catch (e) {
-      if (guardado) {
-        guardado.hasta = reloj() + REINTENTO_TRAS_FALLA_MS;
-        return guardado.valor;
-      }
-      throw e;
+    return enCurso;
+  };
+
+  return async () => {
+    if (guardado && reloj() < guardado.hasta) return guardado.valor;
+    if (guardado) {
+      // Vencido pero hay uno bueno: se sirve ya y se regenera en segundo plano. Así una base lenta
+      // (PostgREST acepta pero no contesta) no deja colgados a los pedidos.
+      const anterior = guardado;
+      regenerar().catch(() => {
+        if (guardado === anterior) anterior.hasta = reloj() + REINTENTO_TRAS_FALLA_MS;
+      });
+      return anterior.valor;
     }
+    return regenerar();
   };
 }

@@ -112,16 +112,25 @@ for s in "${SERVICIOS[@]}"; do
   esac
 done
 
-# Calentar las páginas clave. El build ya no lee la base: las que dependen de datos (/, /buscar,
-# sitemap, /que-es-uruku, /comprar-en-bermejo, /bermejo) se arman en el PRIMER pedido, y ese lo
-# pagaría el primer visitante o el robot de Google. Se piden acá, por la URL pública. Si alguna
-# falla (500 = la base no contestó) no corta el deploy: sólo avisa, y se vuelve a armar en el
-# próximo pedido (una página que falló no se guarda).
+# Calentar las páginas clave. El build ya no lee la base: las que dependen de datos (sitemap,
+# llms.txt, /que-es-uruku, /comprar-en-bermejo, /bermejo) se arman en el PRIMER pedido, y ese lo
+# pagaría el primer visitante o el robot de Google. Se piden acá, por la URL pública. `/` y
+# `/buscar` no van: son dinámicas y no guardan nada. Si alguna falla (500 = la base no contestó)
+# no corta el deploy: sólo avisa, y se vuelve a armar en el próximo pedido (una página que falló
+# no se guarda). Antes se espera a que el backend vea la base, para no guardar una página a medias
+# justo cuando PostgREST se está reiniciando.
 calentar() {
-  local ruta code t
+  local ruta out code t i
   echo "== calentando páginas clave =="
-  for ruta in / /buscar /sitemap.xml /llms.txt /que-es-uruku /comprar-en-bermejo /bermejo; do
-    read -r code t < <(curl -s -o /dev/null --max-time 60 -w '%{http_code} %{time_total}' "https://$DOMINIO$ruta" 2>/dev/null || echo "000 0")
+  for i in $(seq 1 15); do
+    curl -sf --max-time 5 "https://api.$DOMINIO/health" 2>/dev/null | grep -q '"connected"' && break
+    sleep 2
+  done
+  for ruta in /sitemap.xml /llms.txt /que-es-uruku /comprar-en-bermejo /bermejo; do
+    # Captura y lectura separadas: con `set -e`, un `read` sin salto de línea final cortaba el script.
+    out="$(curl -s -o /dev/null --max-time 60 -w '%{http_code} %{time_total}
+' "https://$DOMINIO$ruta" 2>/dev/null)" || true
+    read -r code t <<<"${out:-000 0}" || true
     case "$code" in
       2??|3??|404) echo "  $ruta -> $code (${t}s)" ;;   # 404 esperado: /llms.txt y robots en QA
       *) echo "  !! $ruta -> $code: no se pudo calentar (mirá los logs del frontend)" ;;
