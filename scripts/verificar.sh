@@ -203,7 +203,12 @@ if [ -n "$FRONT_COMMIT" ] && [ -n "$BACK_COMMIT" ]; then
     if mismo_commit "$FRONT_COMMIT" "$ESPERADO" && mismo_commit "$BACK_COMMIT" "$ESPERADO"; then
       ok "Coincide con el commit del repositorio ($ESPERADO)"
     else
-      falla "No coincide con el commit esperado $ESPERADO" "frontend=$FRONT_COMMIT  backend=$BACK_COMMIT (¿falta el build o el git pull?)"
+      # Si entre lo que corre y el repo sólo cambiaron scripts/ o docs/, no hace falta reconstruir nada.
+      if [ "$FRONT_COMMIT" = "$BACK_COMMIT" ] && git cat-file -e "$FRONT_COMMIT^{commit}" 2>/dev/null          && git diff --quiet "$FRONT_COMMIT" "$ESPERADO" -- . ':(exclude)scripts' ':(exclude)docs' 2>/dev/null; then
+        ok "Corre $FRONT_COMMIT; el repo está en $ESPERADO, pero desde entonces sólo cambiaron scripts/ o docs/ (no hace falta deploy)"
+      else
+        falla "No coincide con el commit esperado $ESPERADO" "frontend=$FRONT_COMMIT  backend=$BACK_COMMIT (¿falta el build o el git pull?)"
+      fi
     fi
   else
     [ -z "$ESPERADO" ] && aviso "No se pudo saber el commit esperado (no es un repo git y no se pasó COMMIT_ESPERADO)"
@@ -586,7 +591,9 @@ PY
     *)
       MALAS=""
       for par in $SES; do [ "${par#*=}" = "WORKING" ] || MALAS="$MALAS $par"; done
-      if [ -z "$MALAS" ]; then ok "Sesión(es) de WhatsApp en WORKING: $SES"; else falla "Sesión de WhatsApp que NO está en WORKING:$MALAS" "no entra ninguna oferta por WhatsApp hasta que vuelva a WORKING"; fi ;;
+      if [ -z "$MALAS" ]; then ok "Sesión(es) de WhatsApp en WORKING: $SES"
+      elif [ "$AMBIENTE" = "qa" ]; then aviso "Sesión de WhatsApp de QA que NO está en WORKING:$MALAS" "en QA es normal si no se vinculó un número de prueba (nunca el de producción)"
+      else falla "Sesión de WhatsApp que NO está en WORKING:$MALAS" "no entra ninguna oferta por WhatsApp hasta que vuelva a WORKING"; fi ;;
   esac
 else
   salteado "Sesión de WAHA: $MOTIVO_SIN_DOCKER"
