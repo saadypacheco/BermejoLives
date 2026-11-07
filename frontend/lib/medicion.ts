@@ -303,20 +303,26 @@ function contexto() {
   };
 }
 
-/** `sendBeacon` con `text/plain` (no dispara el preflight de CORS) y, si el navegador no lo tiene o lo rechaza,
- *  `fetch` con `keepalive` y sin credenciales. */
+/** `fetch` con `keepalive`, `text/plain` (no dispara el preflight de CORS) y SIN credenciales. Va primero
+ *  porque `sendBeacon` siempre manda credenciales y el backend no las acepta (no usa cookies): el dato llegaba
+ *  igual, pero el navegador anotaba un error de CORS en la consola en cada página. `sendBeacon` queda de
+ *  respaldo para navegadores sin `keepalive`. */
 function mandarCollect(payload: Record<string, unknown>): void {
   const cuerpo = armarCuerpo(payload);
   const url = `${API}/collect`;
   try {
-    if (typeof navigator.sendBeacon === "function"
-        && navigator.sendBeacon(url, new Blob([cuerpo], { type: "text/plain;charset=UTF-8" }))) return;
-  } catch { /* cae al fetch */ }
+    if (typeof fetch === "function") {
+      fetch(url, {
+        method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        body: cuerpo, keepalive: true, credentials: "omit",
+      }).catch(() => { /* perder un número no puede costar una visita */ });
+      return;
+    }
+  } catch { /* cae al beacon */ }
   try {
-    fetch(url, {
-      method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" },
-      body: cuerpo, keepalive: true, credentials: "omit",
-    }).catch(() => { /* perder un número no puede costar una visita */ });
+    if (typeof navigator.sendBeacon === "function") {
+      navigator.sendBeacon(url, new Blob([cuerpo], { type: "text/plain;charset=UTF-8" }));
+    }
   } catch { /* nada */ }
 }
 
