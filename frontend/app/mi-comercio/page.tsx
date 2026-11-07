@@ -1185,7 +1185,8 @@ function EstadisticasView() {
       <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
         <h3 style={{ marginTop: 0 }}>Te escribieron o llamaron · últimos 30 días</h3>
         <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
-          <Stat color="var(--neon)" value={escribieron30(m)} label="contactos en total" />
+          <Stat color="var(--neon)" value={escribieron30(m)} label="contactos en 30 días" />
+          {m.contactos_7d !== undefined && <Stat value={m.contactos_7d} label="en los últimos 7 días" />}
         </div>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 14 }}>
           {tipos.length === 0

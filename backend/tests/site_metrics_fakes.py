@@ -23,7 +23,22 @@ def _dia_de(ts) -> str | None:
         return str(ts)[:10]
 
 
+#: Comercios «de prueba» que la base falsa da por existentes sin que el test los cree (los tests viejos de /lead
+#: usan uuid fijos). Un uuid al azar (uuid4) NO está acá: es un comercio inexistente, como en la base real.
+IDS_COMERCIOS_DE_PRUEBA = frozenset(
+    {"00000000-0000-4000-8000-0000000000c1", "00000000-0000-4000-8000-0000000000c2",
+     "00000000-0000-4000-8000-0000000000c3"} | {str(uuid.UUID(int=i)) for i in range(1, 300)})
+
+
 class FakeSiteMetricsMixin:
+    def ids_comercios_activos(self):
+        """Lo que haría `select id from comercios where activo` (más los comercios de prueba)."""
+        propios = {i for i, c in self.comercios.items() if c.get("activo", True) is not False}
+        return propios | set(IDS_COMERCIOS_DE_PRUEBA)
+
+    def _comercio_existe(self, comercio_id):
+        return comercio_id in self.comercios or comercio_id in IDS_COMERCIOS_DE_PRUEBA
+
     def _init_site_metrics(self):
         self.site_events: list[dict] = []
         self.insert_site_rows_falla = False          # para probar que un volcado fallido no rompe nada
@@ -35,6 +50,22 @@ class FakeSiteMetricsMixin:
             raise RuntimeError("base caída")
         if tabla not in ("visitas", "site_events", "leads"):
             raise ValueError(tabla)
+        if tabla == "leads":
+            # La clave foránea de `leads`: un solo `comercio_id` (o `busqueda_id`) que no existe rechaza TODO el insert,
+            # como el único statement de PostgREST. Nada se guarda.
+            ids_busqueda = {b["id"] for b in self.busquedas}
+            for f in filas:
+                if not self._comercio_existe(f.get("comercio_id")):
+                    raise RuntimeError('23503: insert or update on table "leads" violates foreign key constraint (comercio_id)')
+                if f.get("busqueda_id") is not None and f["busqueda_id"] not in ids_busqueda:
+                    raise RuntimeError('23503: insert or update on table "leads" violates foreign key constraint (busqueda_id)')
+        for f in filas:
+            for v in f.values():
+                if isinstance(v, str):
+                    try:
+                        v.encode("utf-8")
+                    except UnicodeEncodeError:
+                        raise RuntimeError("22021: invalid byte sequence for encoding UTF8") from None
         self.lotes_volcados.append((tabla, len(filas)))
         ahora = datetime.now(timezone.utc).isoformat()
         for f in filas:
@@ -118,7 +149,12 @@ class FakeSiteMetricsMixin:
             return []
         cont = Counter((x.get("origen"), x.get("referido")) for x in self.visitas
                        if x.get("ruta") == f"/comercios/{slug}" and x.get("primera") and str(x.get("dia", "9999")) >= desde)
-        return [{"origen": o, "referido": r, "n": n} for (o, r), n in cont.most_common(100)]
+        ses: dict[tuple, set] = {}
+        for x in self.visitas:
+            if x.get("ruta") == f"/comercios/{slug}" and x.get("primera") and str(x.get("dia", "9999")) >= desde:
+                ses.setdefault((x.get("origen"), x.get("referido")), set()).add(x.get("sesion"))
+        return [{"origen": o, "referido": r, "n": n, "sesiones": len(ses.get((o, r), ()))}
+                for (o, r), n in cont.most_common(100)]
 
     def comercio_lead_counts(self, comercio_id, dias=30):
         ahora = datetime.now(timezone.utc)

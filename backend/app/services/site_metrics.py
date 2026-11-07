@@ -19,7 +19,12 @@ REGLAS (spec §4.2)
   pasa el límite. Nunca 500: un error se loguea y se contesta 204.
 - Se descarta sin decir por qué: User-Agent vacío o de bot, `Origin` que no es del sitio, `Sec-Fetch-Site:
   cross-site`, ruta interna, evento o `detail` fuera del catálogo, sesión mal formada.
-- Todos los topes de memoria son «si se llena, se cuenta de más» (nunca cero) salvo el buffer, que descarta.
+- Los topes de memoria no se pueden apagar llenándolos: los límites por minuto, si se llenan, procesan el pedido
+  sin anotar la clave («se cuenta de más»); la deduplicación y los techos por IP sacan lo MÁS VIEJO (LRU) para
+  hacer lugar. Sólo el buffer descarta cuando se llena.
+- `comercio_id` tiene que ser un comercio ACTIVO (se compara con un conjunto en memoria que se refresca cada ~5
+  min) y `busqueda_id` uno que emitió este backend: la tabla `leads` tiene claves foráneas, y un solo id inventado
+  haría fallar el insert en lote de las otras 499 filas.
 - Las páginas vistas y los eventos van a un buffer que se vuelca en lote cada 5 s (y al apagar). Los
   contactos que devuelven `id` (whatsapp, telefono, reserva, mapa, email, web) se insertan síncronos.
 """
@@ -34,7 +39,7 @@ import secrets
 import threading
 import time
 import uuid
-from collections import Counter
+from collections import Counter, OrderedDict
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any
@@ -44,15 +49,24 @@ import structlog
 
 from app.core.ai_sources import classify_ai_source, summarize_ai_groups
 from app.core.config import settings
-from app.core.text import limpiar_ref
+from app.core.ip import red_de_ip
+from app.core.text import enmascarar_texto, limpiar_ref
 
 logger = structlog.get_logger()
 
 # ── constantes ─────────────────────────────────────────────────────────────────────────────────
 MAX_BODY_BYTES = 2048
 MAX_BODY_CSP = 8192
-MAX_CLAVES_LIMITE = 50_000          # claves de IP por ventana; lleno → se acepta y no se guarda
-MAX_DEDUP = 200_000                 # entradas de deduplicación y de techos; lleno → se cuenta de más
+MAX_CLAVES_LIMITE = 50_000          # claves de IP por ventana; lleno → se procesa el pedido y no se guarda la clave
+MAX_DEDUP = 200_000                 # entradas de deduplicación y de techos; lleno → sale la más vieja (LRU)
+MAX_BUSQUEDAS_EMITIDAS = 50_000     # ids de búsqueda que emitió este backend (los que /lead acepta como `busqueda_id`)
+TTL_BUSQUEDA_S = 6 * 3600           # un contacto puede atarse a una búsqueda de hasta 6 horas atrás
+REFRESCO_COMERCIOS_S = 5 * 60       # cada cuánto se recarga el conjunto de comercios activos
+RECARGA_MINIMA_S = 60               # un comercio desconocido fuerza una recarga, pero a lo sumo una por minuto
+REINTENTO_COMERCIOS_S = 10          # si la carga falla, no se vuelve a intentar antes de esto
+MAX_INTENTOS_AISLAR = 64            # pedidos de más a la base al aislar filas malas de un lote que falló
+MAX_CLAVES_CSP = 200                # (directiva, host) distintos por minuto en el log de CSP; el resto es «otro»
+PERIODO_LOG_CSP_S = 60
 MAX_BUFFER = 20_000                 # filas pendientes de volcar; llenas → se descartan y se avisa
 LOTE_INSERT = 500                   # filas por pedido a PostgREST al volcar
 VENTANA_VISTA_S = 30 * 60           # una vista de ficha por (sesión, comercio) cada 30 minutos
@@ -64,6 +78,8 @@ LIMITES_POR_MINUTO = {"collect": 300, "lead": 120, "busqueda": 60, "csp": 30}
 
 TECHO_VISTA_IP_DIA = 30             # vistas de ficha por IP y por comercio y por día
 TECHO_CONTACTO_IP_DIA = 10          # de cada tipo de contacto, por IP y por comercio y por día
+TECHO_COMERCIOS_IP_DIA = 200        # comercios DISTINTOS que una misma IP puede tocar por día (el techo por comercio no alcanza
+                                    # si el atacante reparte sus pedidos entre miles de comercios)
 
 #: Rutas que NO se cuentan: el panel, la carga de campo y el editor del comercio son trabajo, no visitas.
 #: El frontend tiene la misma lista (lib/medicion.ts): si se cambia una, se cambia la otra.
@@ -80,6 +96,12 @@ TIPOS_NO_CONTACTO = ("vista", "compartir", "red")
 TIPOS_CONTACTO_EMBUDO = ("whatsapp", "telefono", "reserva")
 
 REDES = frozenset({"instagram", "facebook", "tiktok", "youtube"})
+#: Las clases de `?ref=` que corresponden a un QR que imprimimos nosotros (migración 0114: `volante-<slug>`, `mesa-<slug>`,
+#: `ficha-<slug>`). En «Mi comercio» un `?ref=` que no es de esta lista NO se muestra como QR (lo manda cualquiera).
+CLASES_QR = frozenset({"volante", "mesa", "ficha"})
+#: En «Mi comercio», un host de referido desconocido (spam de referrer) sólo se nombra si lo trajeron al menos tantas
+#: sesiones distintas; el resto se junta en «Otros».
+MIN_SESIONES_HOST_OTRO = 3
 CANALES_COMPARTIR = frozenset({"native", "copy"})
 
 #: Catálogo cerrado de eventos del sitio (spec §4.5): evento -> conjunto de `detail` válidos, o "uuid".
@@ -182,17 +204,9 @@ def pedido_de_request(request) -> bool:
 
 # ── IP y límites ───────────────────────────────────────────────────────────────────────────────
 def clave_de_ip(ip: str | None) -> str:
-    """IP parseada: IPv4 tal cual, IPv6 agrupada por /64 (una conexión doméstica = un /64), IPv4 mapeada como
-    IPv4. Si no parsea (header raro, `testclient`), la clave fija `invalid`."""
-    try:
-        addr = ipaddress.ip_address((ip or "").strip())
-    except ValueError:
-        return "invalid"
-    if addr.version == 6:
-        if addr.ipv4_mapped is not None:
-            return str(addr.ipv4_mapped)
-        return str(ipaddress.IPv6Network(f"{addr}/64", strict=False).network_address)
-    return str(addr)
+    """La red de la IP (core/ip.py): IPv4 tal cual, IPv6 agrupada por /56, IPv4 mapeada como IPv4. Si no parsea
+    (header raro, `testclient`), la clave fija `invalid`."""
+    return red_de_ip(ip)
 
 
 def _reloj() -> float:
@@ -202,8 +216,8 @@ def _reloj() -> float:
 
 class VentanaFija:
     """Límite por clave con VENTANA FIJA por minuto y memoria acotada: el dict se vacía al cambiar la ventana y
-    tiene tope de claves. O(1) por pedido. `check` devuelve OK, LIMITED (429) o FULL (el dict está lleno: el
-    pedido se acepta pero no se guarda)."""
+    tiene tope de claves. O(1) por pedido. `check` devuelve OK, LIMITED (429) o FULL (el dict está lleno: la clave
+    no se guarda y quien llama PROCESA el pedido igual: medir de más es mejor que no medir)."""
 
     OK, LIMITED, FULL = "ok", "limited", "full"
 
@@ -242,21 +256,53 @@ def hoy_bolivia() -> date:
     return ahora_bolivia().date()
 
 
+def ids_comercios_activos(repo) -> set[str]:
+    """Los ids (uuid canónico) de los comercios activos. Si el repo tiene `ids_comercios_activos()` se usa; si no, se
+    pagina `comercios` con el cliente de PostgREST que expone el repo (`_db`). Levanta si no hay de dónde sacarlos."""
+    propio = getattr(repo, "ids_comercios_activos", None)
+    if callable(propio):
+        return {i for i in (es_uuid(x) for x in propio()) if i}
+    db = getattr(repo, "_db", None)
+    if db is None:
+        raise RuntimeError("el repo no sabe listar los comercios activos")
+    ids: set[str] = set()
+    for pagina in range(200):                      # tope de seguridad: 200.000 comercios
+        lote = (db.table("comercios").select("id").eq("activo", True).order("id")
+                .range(pagina * 1000, pagina * 1000 + 999).execute().data) or []
+        ids.update(i for i in (es_uuid(r.get("id")) for r in lote) if i)
+        if len(lote) < 1000:
+            break
+    return ids
+
+
 class Medidor:
     """El estado en memoria de la medición: límites, deduplicación, techos por IP y buffer de filas.
-    Todo con tope y detrás de un lock (los endpoints sincrónicos corren en hilos distintos)."""
+    Todo con tope y detrás de un lock (los endpoints sincrónicos corren en hilos distintos). Las estructuras con
+    tope son `OrderedDict` que expiran por orden de inserción (amortizado O(1) por pedido): nada recorre el
+    diccionario entero con el lock tomado."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self.limitadores = {nombre: VentanaFija(n) for nombre, n in LIMITES_POR_MINUTO.items()}
-        self._vistas: dict[tuple[str, str], float] = {}
-        self._contactos: dict[tuple[str, str, str, str], str | None] = {}
-        self._techos: dict[tuple[str, str, str], int] = {}
+        self._vistas: OrderedDict[tuple[str, str], float] = OrderedDict()
+        self._contactos: OrderedDict[tuple[str, str, str, str], str | None] = OrderedDict()
+        self._techos: OrderedDict[tuple[str, str, str], int] = OrderedDict()
+        self._pares_ip_comercio: OrderedDict[tuple[str, str], None] = OrderedDict()   # (hash de IP, comercio) tocados hoy
+        self._comercios_por_ip: dict[str, int] = {}                                    # hash de IP -> comercios distintos hoy
         self._dia: date | None = None
         self._sal = b""
         self._buffer: dict[str, list[dict]] = {"visitas": [], "site_events": [], "leads": []}
         self._ultimo_aviso_lleno = 0.0
         self.descartadas = 0
+        # comercios activos (para no aceptar un `comercio_id` inventado) y búsquedas emitidas por este backend
+        self._lock_comercios = threading.Lock()
+        self._comercios_ok: frozenset[str] = frozenset()
+        self._comercios_cargado: float | None = None
+        self._comercios_intento: float | None = None
+        self._busquedas: OrderedDict[str, float] = OrderedDict()
+        # reportes de CSP agregados (se loguea una línea por minuto)
+        self._csp: dict[tuple[str, str], list] = {}
+        self._csp_desde = _reloj()
 
     # -- límites --------------------------------------------------------------------------
     def limitar(self, nombre: str, ip: str | None, ahora: float | None = None) -> str:
@@ -267,26 +313,29 @@ class Medidor:
     def _rodar_dia(self, dia: date) -> None:
         if self._dia != dia:                      # día nuevo: sal nueva y contadores en cero
             self._dia, self._sal = dia, secrets.token_bytes(16)
-            self._contactos, self._techos = {}, {}
+            self._contactos, self._techos = OrderedDict(), OrderedDict()
+            self._pares_ip_comercio, self._comercios_por_ip = OrderedDict(), {}
 
     # -- deduplicación ----------------------------------------------------------------------
     def vista_repetida(self, sesion: str, comercio: str, ahora: float | None = None) -> bool:
-        """True si esa sesión ya vio esa ficha hace menos de 30 minutos (un F5 no suma otra «persona»)."""
+        """True si esa sesión ya vio esa ficha hace menos de 30 minutos (un F5 no suma otra «persona»).
+        Las entradas están en orden de tiempo (cada vista nueva va al final): se vencen las del principio y, si el
+        tope se pasa, sale la más vieja. Nunca se recorre todo con el lock tomado."""
         ahora = _reloj() if ahora is None else ahora
         clave = (sesion, comercio)
         with self._lock:
             visto = self._vistas.get(clave)
             if visto is not None and ahora - visto < VENTANA_VISTA_S:
                 return True
-            if visto is None and len(self._vistas) >= MAX_DEDUP:
-                self._podar_vistas(ahora)
-            if visto is not None or len(self._vistas) < MAX_DEDUP:
-                self._vistas[clave] = ahora
-            return False                          # lleno: se cuenta de más
-
-    def _podar_vistas(self, ahora: float) -> None:
-        for k in [k for k, t in self._vistas.items() if ahora - t >= VENTANA_VISTA_S]:
-            del self._vistas[k]
+            self._vistas[clave] = ahora
+            self._vistas.move_to_end(clave)
+            while self._vistas:
+                _k, t = next(iter(self._vistas.items()))
+                if len(self._vistas) > MAX_DEDUP or ahora - t >= VENTANA_VISTA_S:
+                    self._vistas.popitem(last=False)
+                else:
+                    break
+            return False
 
     def contacto_previo(self, dia: date, sesion: str, comercio: str, clase: str) -> tuple[bool, str | None]:
         """(¿ya hubo uno hoy?, id del primero). `clase` es el tipo (y el detalle, si lo lleva)."""
@@ -300,26 +349,125 @@ class Medidor:
     def recordar_contacto(self, dia: date, sesion: str, comercio: str, clase: str, lead_id: str | None) -> None:
         with self._lock:
             self._rodar_dia(dia)
-            if len(self._contactos) < MAX_DEDUP:
-                self._contactos[(dia.isoformat(), sesion, comercio, clase)] = lead_id
+            clave = (dia.isoformat(), sesion, comercio, clase)
+            self._contactos[clave] = lead_id
+            self._contactos.move_to_end(clave)
+            while len(self._contactos) > MAX_DEDUP:      # lleno: se olvida el más viejo, no el que llega
+                self._contactos.popitem(last=False)
 
     # -- techo por IP -----------------------------------------------------------------------
     def pasa_techo(self, dia: date, ip: str | None, comercio: str, clase: str, tope: int) -> bool:
         """True si esa IP todavía puede sumar `clase` sobre ese comercio hoy. La clave lleva un hash con la sal
-        del día: la IP no se guarda y el hash de ayer no se relaciona con el de hoy."""
+        del día: la IP no se guarda y el hash de ayer no se relaciona con el de hoy.
+
+        Dos techos: `tope` por (IP, comercio, clase) y `TECHO_COMERCIOS_IP_DIA` comercios distintos por IP y por día.
+        Si el diccionario se llena sale el registro más viejo (LRU): llenarlo ya no apaga el techo."""
         with self._lock:
             self._rodar_dia(dia)
             h = hashlib.blake2b(self._sal + clave_de_ip(ip).encode(), digest_size=8).hexdigest()
+            par = (h, comercio)
+            if par in self._pares_ip_comercio:
+                self._pares_ip_comercio.move_to_end(par)
+            else:
+                if self._comercios_por_ip.get(h, 0) >= TECHO_COMERCIOS_IP_DIA:
+                    return False
+                self._pares_ip_comercio[par] = None
+                self._comercios_por_ip[h] = self._comercios_por_ip.get(h, 0) + 1
+                while len(self._pares_ip_comercio) > MAX_DEDUP:
+                    (hv, _cv), _ = self._pares_ip_comercio.popitem(last=False)
+                    quedan = self._comercios_por_ip.get(hv, 1) - 1
+                    if quedan > 0:
+                        self._comercios_por_ip[hv] = quedan
+                    else:
+                        self._comercios_por_ip.pop(hv, None)
             clave = (h, comercio, clase)
             n = self._techos.get(clave)
             if n is None:
-                if len(self._techos) < MAX_DEDUP:
-                    self._techos[clave] = 1
-                return True                       # lleno: se cuenta de más
+                self._techos[clave] = 1
+                while len(self._techos) > MAX_DEDUP:
+                    self._techos.popitem(last=False)
+                return True
+            self._techos.move_to_end(clave)
             if n >= tope:
                 return False
             self._techos[clave] = n + 1
             return True
+
+    # -- comercios activos y búsquedas emitidas ---------------------------------------------
+    def _refrescar_comercios(self, repo, ahora: float) -> None:
+        with self._lock_comercios:
+            if self._comercios_intento is not None and ahora - self._comercios_intento < REINTENTO_COMERCIOS_S:
+                return                              # otro hilo acaba de recargar (o de intentarlo)
+            self._comercios_intento = ahora
+            try:
+                nuevos = frozenset(ids_comercios_activos(repo))
+            except Exception as exc:  # noqa: BLE001 — sin base se queda el conjunto anterior (o ninguno: todo se rechaza)
+                logger.warning("comercios_activos_failed", error=str(exc)[:200])
+                return
+            self._comercios_ok, self._comercios_cargado = nuevos, ahora
+
+    def comercio_activo(self, repo, cid: str) -> bool:
+        """¿Es `cid` (uuid canónico) un comercio activo? Con un conjunto en memoria que se recarga cada 5 minutos; un
+        id desconocido fuerza una recarga (por si es un comercio recién creado), a lo sumo una por minuto: así un
+        atacante que prueba ids al azar no convierte esto en una consulta por pedido."""
+        ahora = _reloj()
+        cargado = self._comercios_cargado
+        if cargado is None or ahora - cargado >= REFRESCO_COMERCIOS_S:
+            self._refrescar_comercios(repo, ahora)
+        if cid in self._comercios_ok:
+            return True
+        cargado = self._comercios_cargado
+        if cargado is None or ahora - cargado >= RECARGA_MINIMA_S:
+            self._refrescar_comercios(repo, ahora)
+            return cid in self._comercios_ok
+        return False
+
+    def recordar_busqueda(self, busqueda_id: Any) -> None:
+        """Anota un id de búsqueda que ACABA de emitir este backend: es el único que `/lead` acepta como `busqueda_id`."""
+        clave = es_uuid(busqueda_id) or (str(busqueda_id) if busqueda_id else None)
+        if not clave:
+            return
+        ahora = _reloj()
+        with self._lock:
+            self._busquedas[clave] = ahora
+            self._busquedas.move_to_end(clave)
+            while len(self._busquedas) > MAX_BUSQUEDAS_EMITIDAS or \
+                    (self._busquedas and ahora - next(iter(self._busquedas.values())) >= TTL_BUSQUEDA_S):
+                self._busquedas.popitem(last=False)
+
+    def busqueda_emitida(self, busqueda_id: Any) -> str | None:
+        """El id (canónico) si lo emitió este backend hace menos del TTL; None si no (el contacto se guarda sin él)."""
+        clave = es_uuid(busqueda_id) or (str(busqueda_id).strip() if busqueda_id else None)
+        if not clave:
+            return None
+        with self._lock:
+            t = self._busquedas.get(clave)
+            if t is None or _reloj() - t >= TTL_BUSQUEDA_S:
+                return None
+            return clave
+
+    # -- reportes de CSP --------------------------------------------------------------------
+    def anotar_csp(self, directiva: str, bloqueado: str, disposicion: str) -> None:
+        clave = (directiva, bloqueado)
+        with self._lock:
+            if clave not in self._csp and len(self._csp) >= MAX_CLAVES_CSP:
+                clave = ("otro", "otro")
+            fila = self._csp.setdefault(clave, [0, disposicion])
+            fila[0] += 1
+
+    def tomar_csp_si_toca(self, forzar: bool = False) -> list[dict] | None:
+        """Los reportes agregados desde la última vez, si pasó el período (1 minuto) o `forzar`; None si todavía no."""
+        ahora = _reloj()
+        with self._lock:
+            if not self._csp:
+                self._csp_desde = ahora
+                return None
+            if not forzar and ahora - self._csp_desde < PERIODO_LOG_CSP_S:
+                return None
+            filas = [{"directiva": d, "bloqueado": b, "disposicion": v[1], "n": v[0]}
+                     for (d, b), v in sorted(self._csp.items(), key=lambda kv: -kv[1][0])]
+            self._csp, self._csp_desde = {}, ahora
+            return filas
 
     # -- buffer -----------------------------------------------------------------------------
     def encolar(self, tabla: str, fila: dict) -> bool:
@@ -360,6 +508,16 @@ _HOST_RE = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{0,118}[a-z0-9])?$")
 _SLUG_RE = re.compile(r"[^a-z0-9-]")
 
 
+def es_utf8(texto: str) -> bool:
+    """False si el texto no se puede codificar en UTF-8 (un sustituto suelto U+D800 que el JSON deja pasar): Postgres lo
+    rechaza, y una sola fila así haría fallar el insert en lote de todas las demás."""
+    try:
+        texto.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def es_uuid(valor: Any) -> str | None:
     """El uuid en su forma canónica, o None si no es uno."""
     try:
@@ -382,7 +540,10 @@ def normalizar_ruta(raw: Any) -> str | None:
     ruta = raw.split("#", 1)[0].split("?", 1)[0].strip()
     if not ruta or not ruta.startswith("/") or any(ord(c) < 32 or ord(c) == 127 for c in ruta):
         return None
-    return ruta[:200]
+    ruta = ruta[:200]
+    if not es_utf8(ruta):
+        return None
+    return ruta
 
 
 def es_ruta_interna(ruta: str) -> bool:
@@ -492,8 +653,9 @@ def registrar_visita_vieja(*, ruta: str, sesion: str, origen: str | None, referi
 def registrar_contacto(repo, *, ip: str | None, comercio_id: Any, tipo: Any, sesion: Any = None,
                        busqueda_id: Any = None, origen: Any = None, detalle: Any = None) -> dict:
     """`POST /lead`. Devuelve el cuerpo de la respuesta:
-    - `{ok: False}`: `tipo` fuera de la lista, `comercio_id` que no es uuid, `detalle` fuera del conjunto cerrado o
-      un error de la base. NADA se guarda (un tipo desconocido ya no se convierte en whatsapp).
+    - `{ok: False}`: `tipo` fuera de la lista, `comercio_id` que no es uuid o no es un comercio activo, `detalle`
+      fuera del conjunto cerrado o un error de la base. NADA se guarda (un tipo desconocido ya no se convierte en
+      whatsapp). Un `busqueda_id` que este backend no emitió no invalida el contacto: se guarda sin él.
     - `{ok: True, id: None}`: vista, compartir o red (van al buffer), o el techo por IP.
     - `{ok: True, id, token}`: contacto insertado; si la sesión ya lo había hecho hoy, el del primero con `repetido: True`.
     """
@@ -513,8 +675,13 @@ def registrar_contacto(repo, *, ip: str | None, comercio_id: Any, tipo: Any, ses
         detalle_ok = detalle.strip().lower() if isinstance(detalle, str) and detalle.strip().lower() in CANALES_COMPARTIR else None
         if detalle_ok is None:
             return {"ok": False}
+    # Un comercio que no existe (o está dado de baja) no toca ningún mapa ni el buffer: la tabla `leads` tiene una
+    # clave foránea y una sola fila inventada haría fallar el lote entero.
+    if not medidor.comercio_activo(repo, cid):
+        return {"ok": False}
     sesion_ok = limpiar_sesion(sesion, estricta=False)
-    busqueda_ok = es_uuid(busqueda_id) if busqueda_id else None
+    # Sólo un `busqueda_id` que emitió este backend (y todavía vigente); cualquier otro se guarda como NULL.
+    busqueda_ok = medidor.busqueda_emitida(busqueda_id) if busqueda_id else None
     dia = hoy_bolivia()
 
     if tipo == "vista":
@@ -556,36 +723,62 @@ def registrar_contacto(repo, *, ip: str | None, comercio_id: Any, tipo: Any, ses
 
 
 # ── búsquedas ──────────────────────────────────────────────────────────────────────────────────
-_RE_MAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
-_RE_DIGITOS = re.compile(r"\d{6,}")
-
-
 def enmascarar_busqueda(q: str | None) -> str:
-    """El texto de una búsqueda sin datos personales: mails → `[mail]`, secuencias de 6 o más dígitos (teléfonos,
-    documentos) → `#`. Tope de 100 caracteres. «71234567 zapatos» queda «# zapatos»."""
-    texto = _RE_MAIL.sub("[mail]", q or "")
-    texto = _RE_DIGITOS.sub("#", texto)
-    return re.sub(r"\s+", " ", texto).strip()[:100]
+    """El texto de una búsqueda sin datos personales: mails (y «(at)», «[at]») → `[mail]`, secuencias de 6 o más
+    dígitos aunque vengan con espacios, puntos o guiones en el medio (teléfonos, documentos) → `#`. Tope de 100
+    caracteres. «71234567 zapatos» queda «# zapatos»; «+591 712-34567 pan» queda «# pan». Lo mismo, en SQL, para las
+    filas viejas: migración 0194."""
+    return enmascarar_texto(q, marca_mail="[mail]", marca_digitos="#", largo=100)
 
 
 # ── volcado y retención ────────────────────────────────────────────────────────────────────────
+def _insertar_aislando(repo, tabla: str, filas: list[dict]) -> int:
+    """Inserta el lote; si la base lo rechaza, lo PARTE A LA MITAD y reintenta cada mitad (recursivo) hasta aislar la
+    fila (o las pocas filas) que lo rompe: así una fila mala no se lleva puestas las otras 499. Devuelve cuántas
+    quedaron guardadas. Tiene un presupuesto de pedidos (`MAX_INTENTOS_AISLAR`): con la base caída no se hacen
+    cientos de intentos, se descarta el resto."""
+    presupuesto = [MAX_INTENTOS_AISLAR]
+
+    def ir(parte: list[dict]) -> int:
+        if presupuesto[0] <= 0:
+            logger.warning("site_metrics_flush_failed", tabla=tabla, filas=len(parte), error="sin presupuesto de reintentos")
+            return 0
+        presupuesto[0] -= 1
+        try:
+            repo.insert_site_rows(tabla, parte)
+            return len(parte)
+        except Exception as exc:  # noqa: BLE001
+            if len(parte) <= 1:
+                logger.warning("site_metrics_flush_failed", tabla=tabla, filas=len(parte), error=str(exc)[:200])
+                return 0
+            medio = len(parte) // 2
+            return ir(parte[:medio]) + ir(parte[medio:])
+
+    return ir(filas)
+
+
 def volcar(repo) -> dict[str, int]:
-    """Vuelca el buffer: un `insert` en lote por tabla (de a `LOTE_INSERT` filas). Si falla, se loguea
-    `site_metrics_flush_failed` y se DESCARTA el lote (sin reintento infinito). Devuelve filas guardadas por tabla."""
+    """Vuelca el buffer: un `insert` en lote por tabla (de a `LOTE_INSERT` filas). Si un lote falla se parte a la mitad
+    una y otra vez para aislar la fila mala (`_insertar_aislando`); la que no se puede guardar se loguea
+    (`site_metrics_flush_failed`) y se DESCARTA, sin reintento infinito. Devuelve filas guardadas por tabla.
+    También deja en el log, una vez por minuto, el resumen de los reportes de CSP."""
     guardadas: dict[str, int] = {}
     for tabla, filas in medidor.tomar_buffer().items():
         if not filas:
             continue
         ok = 0
         for i in range(0, len(filas), LOTE_INSERT):
-            parte = filas[i:i + LOTE_INSERT]
-            try:
-                repo.insert_site_rows(tabla, parte)
-                ok += len(parte)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("site_metrics_flush_failed", tabla=tabla, filas=len(parte), error=str(exc)[:200])
+            ok += _insertar_aislando(repo, tabla, filas[i:i + LOTE_INSERT])
         guardadas[tabla] = ok
+    volcar_csp()
     return guardadas
+
+
+def volcar_csp(forzar: bool = False) -> None:
+    """Una línea de log por minuto con los reportes de CSP agregados por (directiva, host bloqueado)."""
+    filas = medidor.tomar_csp_si_toca(forzar)
+    if filas:
+        logger.warning("csp_violations", total=sum(f["n"] for f in filas), distintas=len(filas), items=filas[:50])
 
 
 def segundos_hasta_purga(ahora: datetime | None = None) -> float:
@@ -669,8 +862,9 @@ def clasificar_llegada(origen: str | None, referido: str | None, *, qr_aparte: b
     """`(tipo, nombre)` de cómo llegó alguien: `ai` (asistentes de IA, por origen o por referido), el referido
     canónico, o el `?ref=` (red conocida o, si no, el QR/enlace marcado). Sin nada = `direct`.
 
-    `qr_aparte=True` (Mi comercio): un `?ref=` desconocido es `qr` con su clase (`volante`, `mesa`…).
-    `False` (panel): es `other` con nombre `qr_<clase>`."""
+    `qr_aparte=True` (Mi comercio): un `?ref=` de un QR nuestro (`CLASES_QR`: volante, mesa, ficha) es `qr` con su clase;
+    cualquier otro desconocido es `other`/`otros` (el `?ref=` lo puede escribir cualquiera).
+    `False` (panel del admin): es `other` con nombre `qr_<clase>`, sea cual sea."""
     ia = classify_ai_source(origen, referido)
     if ia:
         return "ai", ia
@@ -683,7 +877,9 @@ def clasificar_llegada(origen: str | None, referido: str | None, *, qr_aparte: b
         alias = _ORIGEN_ALIAS.get(clase)
         if alias:
             return alias
-        return ("qr", clase) if qr_aparte else ("other", f"qr_{clase}")
+        if qr_aparte:
+            return ("qr", clase) if clase in CLASES_QR else ("other", "otros")
+        return "other", f"qr_{clase}"
     return "direct", ""
 
 
@@ -693,6 +889,26 @@ def _contar(filas: list[tuple[tuple[str, str], int]], *, tope: int | None = None
         c[clave] += n
     salida = [{"kind": k, "name": nm, "n": n} for (k, nm), n in sorted(c.items(), key=lambda kv: (-kv[1], kv[0]))]
     return salida[:tope] if tope else salida
+
+
+def _juntar_hosts_raros(items: list[dict]) -> list[dict]:
+    """Para «Mi comercio»: un host de referido desconocido (`other` con un punto en el nombre) con menos de
+    `MIN_SESIONES_HOST_OTRO` sesiones se junta en «Otros». Así nadie puede usar la ficha de un comercio como cartel
+    mandándole visitas con un `Referer` de su sitio (el dueño vería ese dominio en su pantalla)."""
+    salida: list[dict] = []
+    otros = 0
+    for it in items:
+        if it["kind"] == "other" and "." in it["name"] and it["n"] < MIN_SESIONES_HOST_OTRO:
+            otros += it["n"]
+        else:
+            salida.append(it)
+    if otros:
+        previo = next((it for it in salida if it["kind"] == "other" and it["name"] == "otros"), None)
+        if previo:
+            previo["n"] += otros
+        else:
+            salida.append({"kind": "other", "name": "otros", "n": otros})
+    return sorted(salida, key=lambda it: (-it["n"], it["kind"], it["name"]))
 
 
 # ── resúmenes (los consume /admin/visitas y /comercio/metricas) ─────────────────────────────────
@@ -780,7 +996,9 @@ def metricas_de_comercio(repo, comercio_id: str, dias: int = 30) -> dict:
     origenes: list[tuple[tuple[str, str], int]] = []
     try:
         for r in repo.comercio_origins(comercio_id, desde.isoformat()) or []:
-            origenes.append((clasificar_llegada(r.get("origen") or None, r.get("referido") or None, qr_aparte=True), _entero(r.get("n"))))
+            # `sesiones` (0194) son las sesiones DISTINTAS; sin él (RPC vieja) se usa `n`, que son primeras páginas.
+            personas = _entero(r.get("sesiones") if r.get("sesiones") is not None else r.get("n"))
+            origenes.append((clasificar_llegada(r.get("origen") or None, r.get("referido") or None, qr_aparte=True), personas))
     except Exception:  # noqa: BLE001
         logger.warning("comercio_origins_failed", exc_info=True)
     return {
@@ -789,7 +1007,7 @@ def metricas_de_comercio(repo, comercio_id: str, dias: int = 30) -> dict:
         "como_llegar_30d": por_tipo.get("mapa", 0),
         "compartidos_30d": por_tipo.get("compartir", 0),
         "redes_30d": {k: _entero(v) for k, v in (cuentas.get("redes") or {}).items()},
-        "origenes_30d": _contar(origenes),
+        "origenes_30d": _juntar_hosts_raros(_contar(origenes)),
     }
 
 
@@ -800,9 +1018,40 @@ def configuracion_publica() -> dict:
 
 
 # ── CSP ────────────────────────────────────────────────────────────────────────────────────────
+_DIRECTIVA_CSP_RE = re.compile(r"^[a-z-]{1,40}$")
+_HOST_CSP_RE = re.compile(r"^[a-z0-9.-]{1,120}$")
+_PALABRAS_CSP = frozenset({"inline", "eval", "data", "blob", "wasm-eval", "about", "self"})
+_DISPOSICIONES_CSP = frozenset({"enforce", "report"})
+
+
+def _directiva_csp(valor: str) -> str:
+    d = valor.strip().split(" ", 1)[0].lower()
+    return d if _DIRECTIVA_CSP_RE.match(d) else "otro"
+
+
+def _bloqueado_csp(valor: str) -> str:
+    """Un host (`[a-z0-9.-]`) o una de las palabras conocidas (inline, eval, data, blob…); todo lo demás es «otro».
+    El reporte lo manda cualquiera: nada de lo que traiga llega crudo al log."""
+    v = valor.strip().lower()[:300]
+    if v in _PALABRAS_CSP:
+        return v
+    esquema = v.split(":", 1)[0]
+    if ":" in v and esquema in _PALABRAS_CSP:        # «data:image/png;base64,…», «blob:https://…»
+        return esquema
+    if "://" in v:
+        try:
+            host = urlsplit(v).hostname or ""
+        except ValueError:
+            return "otro"
+        return host if _HOST_CSP_RE.match(host) else "otro"
+    return v if _HOST_CSP_RE.match(v) else "otro"
+
+
 def resumir_csp(raw: bytes) -> dict | None:
     """De un reporte de CSP (formato `report-uri` o Reporting API) saca sólo la directiva violada y el host
-    bloqueado: sin IP, sin la URL de la página ni su query. None si no se entiende."""
+    bloqueado: sin IP, sin la URL de la página ni su query. None si no se entiende. Lista blanca estricta (el
+    endpoint es público: sin ella, un salto de línea en el reporte falsificaba líneas del log): directiva `[a-z-]{1,40}`,
+    host `[a-z0-9.-]` o una palabra conocida, disposición `enforce`/`report`; lo demás es «otro»."""
     try:
         datos = json.loads(raw.decode("utf-8"))
     except (ValueError, UnicodeDecodeError, RecursionError):
@@ -813,14 +1062,20 @@ def resumir_csp(raw: bytes) -> dict | None:
         datos = datos.get("csp-report") if isinstance(datos.get("csp-report"), dict) else datos.get("body", datos)
     if not isinstance(datos, dict):
         return None
-    directiva = datos.get("effective-directive") or datos.get("effectiveDirective") or datos.get("violated-directive") \
-        or datos.get("violatedDirective")
+    directiva = datos.get("effective-directive") or datos.get("effectiveDirective") or datos.get("violated-directive")         or datos.get("violatedDirective")
     bloqueado = datos.get("blocked-uri") or datos.get("blockedURL") or datos.get("blockedUri") or ""
     if not isinstance(directiva, str) or not isinstance(bloqueado, str):
         return None
-    host = urlsplit(bloqueado).hostname if "://" in bloqueado else bloqueado.strip().lower()
-    return {"directiva": directiva.split(" ", 1)[0][:60], "bloqueado": (host or "")[:120],
-            "disposicion": str(datos.get("disposition") or "")[:20]}
+    disposicion = datos.get("disposition")
+    disposicion = disposicion.strip().lower() if isinstance(disposicion, str) else ""
+    return {"directiva": _directiva_csp(directiva), "bloqueado": _bloqueado_csp(bloqueado),
+            "disposicion": disposicion if disposicion in _DISPOSICIONES_CSP else "otro"}
+
+
+def registrar_csp(resumen: dict) -> None:
+    """Suma un reporte (ya saneado por `resumir_csp`) al conteo por (directiva, host); el log sale una vez por minuto."""
+    medidor.anotar_csp(resumen["directiva"], resumen["bloqueado"], resumen["disposicion"])
+    volcar_csp()
 
 
 # ── access log ─────────────────────────────────────────────────────────────────────────────────

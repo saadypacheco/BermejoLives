@@ -23,7 +23,13 @@ const origen = (u) => {
 const ORIGEN_API = origen(process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000");
 const ORIGEN_TILES = origen(process.env.NEXT_PUBLIC_TILES_URL || "");
 const OSM = "https://tile.openstreetmap.org"; // respaldo de mapa-tiles.ts
-const UNPKG = "https://unpkg.com"; // Leaflet (+ markercluster): JS, CSS e íconos
+const UNPKG = "https://unpkg.com"; // Leaflet (+ markercluster): CSS, íconos y fetch del service worker
+// Los SCRIPTS de unpkg van fijados a la ruta y versión EXACTAS que carga el sitio (lib/mapa-visual.ts y
+// components/bolivia-map.tsx). Con `https://unpkg.com` a secas, cualquier paquete de npm serviría como script
+// (unpkg sirve CUALQUIER paquete publicado): una inyección de HTML podría cargar JS ajeno desde ahí. Si se sube la
+// versión de Leaflet o de markercluster, se cambia acá y en esos dos archivos.
+const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+const MARKERCLUSTER_JS = "https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js";
 const CF_BEACON = "https://static.cloudflareinsights.com"; // Cloudflare Web Analytics: el script
 const CF_RUM = "https://cloudflareinsights.com"; // ...y adonde manda las métricas
 const unicos = (xs) => [...new Set(xs.filter(Boolean))];
@@ -32,7 +38,7 @@ const enDev = process.env.NODE_ENV !== "production";
 function politicaCsp() {
   const directivas = {
     "default-src": ["'self'"],
-    "script-src": ["'self'", "'unsafe-inline'", UNPKG, CF_BEACON, ...(enDev ? ["'unsafe-eval'"] : [])],
+    "script-src": ["'self'", "'unsafe-inline'", LEAFLET_JS, MARKERCLUSTER_JS, CF_BEACON, ...(enDev ? ["'unsafe-eval'"] : [])],
     "style-src": ["'self'", "'unsafe-inline'", UNPKG],
     // picsum: marcador de las fotos que faltan en el panel admin.
     "img-src": ["'self'", "data:", "blob:", ORIGEN_API, ORIGEN_TILES, OSM, UNPKG, "https://picsum.photos"],

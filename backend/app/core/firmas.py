@@ -45,10 +45,14 @@ def token_de_lead(lead_id: str, sesion: str | None) -> str:
     return firmar("lead", settings.lead_token_secret, "lead", str(lead_id), (sesion or "").strip())
 
 
-def votante_de(ip: str, sesion: str | None) -> str:
-    """Quién vota, sin guardar la IP ni la sesión: un hash con la clave de los leads. Sirve para contar
-    votantes DISTINTOS y para no dejar votar dos veces al mismo."""
-    return firmar("lead", settings.lead_token_secret, "votante", ip or "?", (sesion or "").strip())[:32]
+def votante_de(ip: str, sesion: str | None = None) -> str:
+    """Quién vota, sin guardar la IP: un hash con la clave de los leads, derivado SÓLO de la red de la IP (IPv4
+    exacta, IPv6 /56). La sesión NO entra: es un número que el cliente inventa, y con ella una sola IP con cinco
+    sesiones eran cinco «votantes distintos» (y bastaban tres para encender el sello «no responde»). Así, votantes
+    distintos = redes distintas. `sesion` se acepta por compatibilidad y se ignora."""
+    from app.core.ip import red_de_ip
+
+    return firmar("lead", settings.lead_token_secret, "votante-red", red_de_ip(ip))[:32]
 
 
 def _segundos(expira) -> str:

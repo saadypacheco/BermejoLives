@@ -106,9 +106,9 @@ def _lead(client, repo, comercio=C1, sesion="sesion-aaaa", minutos=5, tipo="what
     return r
 
 
-def _votar(client, lead, respondio=False, **extra):
+def _votar(client, lead, respondio=False, ip=None, **extra):
     cuerpo = {"respondio": respondio, "token": lead["token"], "sesion": "sesion-aaaa", **extra}
-    return client.post(f"/lead/{lead['id']}/respondio", json=cuerpo)
+    return client.post(f"/lead/{lead['id']}/respondio", json=cuerpo, headers={"x-forwarded-for": ip} if ip else {})
 
 
 def test_lead_devuelve_id_y_token_atado_a_la_sesion(client, repo):
@@ -211,12 +211,12 @@ def test_el_sello_no_responde_exige_tres_votantes_distintos(client, repo):
         repo.leads.append({"id": f"viejo{i}", "comercio_id": C1, "tipo": "whatsapp", "respondio": False,
                            "respondio_en": ahora, "created_at": ahora})
     assert repo.recontar_contactos(C1)["contacto_no"] == 4          # tapado: sin el sello
-    # dos votantes nuevos: sigue tapado; el tercero lo destapa
-    for sesion in ("sesion-v001", "sesion-v002"):
+    # Un votante es una RED (la IP), no una sesión: dos redes nuevas siguen tapadas; la tercera lo destapa.
+    for sesion, ip in (("sesion-v001", "203.0.113.1"), ("sesion-v002", "203.0.113.2")):
         lead = _lead(client, repo, sesion=sesion)
-        assert _votar(client, lead, sesion=sesion).json()["contacto_no"] == 4
+        assert _votar(client, lead, sesion=sesion, ip=ip).json()["contacto_no"] == 4
     lead = _lead(client, repo, sesion="sesion-v003")
-    assert _votar(client, lead, sesion="sesion-v003").json()["contacto_no"] == 9
+    assert _votar(client, lead, sesion="sesion-v003", ip="203.0.113.3").json()["contacto_no"] == 9
 
 
 def test_el_ip_y_la_sesion_no_se_guardan_en_claro(client, repo):

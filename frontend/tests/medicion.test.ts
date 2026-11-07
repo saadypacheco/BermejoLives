@@ -224,7 +224,11 @@ test("origen para el comerciante: en castellano claro, con QR por su nombre", ()
   assert.equal(etiquetaOrigenComercio({ kind: "qr", name: "volante" }), "QR del volante");
   assert.equal(etiquetaOrigenComercio({ kind: "qr", name: "mesa" }), "QR de la mesa");
   assert.equal(etiquetaOrigenComercio({ kind: "qr", name: "ficha" }), "QR de tu ficha");
-  assert.equal(etiquetaOrigenComercio({ kind: "qr", name: "raro" }), "QR «raro»");
+  // un `?ref=` que no es de un QR nuestro (lo escribe cualquiera) no se muestra como QR
+  assert.equal(etiquetaOrigenComercio({ kind: "qr", name: "raro" }), "Otros");
+  assert.equal(etiquetaOrigenComercio({ kind: "qr", name: "tarjeta" }), "Otros");
+  assert.equal(etiquetaOrigenComercio({ kind: "other", name: "qr_raro" }), "Otros");
+  assert.equal(etiquetaOrigenComercio({ kind: "other", name: "otros" }), "Otros");
   assert.equal(etiquetaOrigenComercio({ kind: "search", name: "google" }), "Google");
   assert.equal(etiquetaOrigenComercio({ kind: "social", name: "facebook" }), "Facebook");
   assert.equal(etiquetaOrigenComercio({ kind: "whatsapp", name: "whatsapp" }), "WhatsApp");
@@ -283,4 +287,22 @@ test("«hace cuánto» y porcentajes", () => {
   assert.equal(urlSegura("javascript:alert(1)"), null);
   assert.equal(urlSegura("http://x.test"), null);
   assert.equal(urlSegura(null), null);
+});
+
+// ---- CSP (next.config.mjs) -------------------------------------------------------------------------
+
+test("la CSP fija los scripts de unpkg a la ruta exacta que carga el sitio y deja Cloudflare Insights", () => {
+  const raiz = process.cwd();
+  const cfg = readFileSync(resolve(raiz, "next.config.mjs"), "utf8");
+  const linea = cfg.split("\n").find((l) => l.includes('"script-src"')) ?? "";
+  assert.ok(linea.includes("LEAFLET_JS") && linea.includes("MARKERCLUSTER_JS") && linea.includes("CF_BEACON"));
+  assert.ok(!/\bUNPKG\b/.test(linea), "script-src no puede permitir todo unpkg.com");
+  // Todo `.js` de unpkg que el sitio carga tiene que estar en la lista (si no, la CSP lo bloquearía al pasar a enforce).
+  const usados = new Set<string>();
+  for (const f of ["lib/mapa-visual.ts", "components/bolivia-map.tsx"]) {
+    for (const m of readFileSync(resolve(raiz, f), "utf8").matchAll(/https:\/\/unpkg\.com\/[^"'`\s]+\.js/g)) usados.add(m[0]);
+  }
+  assert.ok(usados.size >= 2);
+  for (const u of usados) assert.ok(cfg.includes(`"${u}"`), `falta ${u} en script-src`);
+  assert.ok(cfg.includes('"https://static.cloudflareinsights.com"') && cfg.includes('"https://cloudflareinsights.com"'));
 });

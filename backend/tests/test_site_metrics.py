@@ -213,10 +213,13 @@ def test_cada_ip_tiene_su_propio_limite(cliente):
     assert _collect(cliente, _pv(), **h2).status_code == 204
 
 
-def test_las_ipv6_de_un_mismo_64_comparten_el_limite():
+def test_las_ipv6_de_un_mismo_56_comparten_el_limite():
+    # un hogar u operadora reparte /56 (o /64) a cada conexión: se agrupa por /56, no por /64
     assert site_metrics.clave_de_ip("2800:cb0:1:2::1") == site_metrics.clave_de_ip("2800:cb0:1:2:ffff::9")
-    assert site_metrics.clave_de_ip("2800:cb0:1:3::1") != site_metrics.clave_de_ip("2800:cb0:1:2::1")
+    assert site_metrics.clave_de_ip("2800:cb0:1:3::1") == site_metrics.clave_de_ip("2800:cb0:1:2::1")      # mismo /56
+    assert site_metrics.clave_de_ip("2800:cb0:1:100::1") != site_metrics.clave_de_ip("2800:cb0:1:2::1")    # otro /56
     assert site_metrics.clave_de_ip("::ffff:1.2.3.4") == "1.2.3.4"
+    assert site_metrics.clave_de_ip("1.2.3.4") != site_metrics.clave_de_ip("1.2.3.5")                       # IPv4: exacta
     assert site_metrics.clave_de_ip("basura") == "invalid"
 
 
@@ -466,7 +469,7 @@ def test_CA16_una_busqueda_con_un_telefono_queda_enmascarada(cliente, repo):
 
 @pytest.mark.parametrize("crudo, esperado", [
     ("71234567 zapatos", "# zapatos"),
-    ("zapatos 5917 1234567", "zapatos 5917 #"),
+    ("zapatos 5917 1234567", "zapatos #"),                      # 5917 1234567 son 11 dígitos con un espacio en el medio
     ("escribime a juan.perez@gmail.com por favor", "escribime a [mail] por favor"),
     ("talle 38", "talle 38"),
     ("12345", "12345"),
@@ -520,9 +523,12 @@ def test_csp_report_loguea_la_directiva_y_el_host_sin_ip(cliente):
     with capture_logs() as logs:
         r = cliente.post("/csp-report", content=json.dumps(cuerpo), headers={"content-type": "application/csp-report",
                                                                               "x-forwarded-for": "198.51.100.23"})
+        site_metrics.volcar_csp(forzar=True)
     assert r.status_code == 204
-    ev = [l for l in logs if l["event"] == "csp_violation"]
-    assert len(ev) == 1 and ev[0]["directiva"] == "script-src-elem" and ev[0]["bloqueado"] == "cdn.ajeno.example"
+    ev = [l for l in logs if l["event"] == "csp_violations"]
+    assert len(ev) == 1 and len(ev[0]["items"]) == 1
+    assert ev[0]["items"][0]["directiva"] == "script-src-elem" and ev[0]["items"][0]["bloqueado"] == "cdn.ajeno.example"
+    assert ev[0]["items"][0]["n"] == 1
     volcado = json.dumps(ev, default=str)
     assert "198.51.100.23" not in volcado and "secreto" not in volcado and "token" not in volcado
 
@@ -532,7 +538,9 @@ def test_csp_report_formato_reporting_api_y_basura(cliente):
     with capture_logs() as logs:
         assert cliente.post("/csp-report", content=json.dumps(nuevo)).status_code == 204
         assert cliente.post("/csp-report", content="basura{").status_code == 204
-    assert [(l["directiva"], l["bloqueado"]) for l in logs if l["event"] == "csp_violation"] == [("img-src", "inline")]
+        site_metrics.volcar_csp(forzar=True)
+    items = [i for l in logs if l["event"] == "csp_violations" for i in l["items"]]
+    assert [(i["directiva"], i["bloqueado"]) for i in items] == [("img-src", "inline")]
 
 
 def test_csp_report_limite_413_y_apagado(cliente, monkeypatch):
@@ -634,7 +642,7 @@ def test_metricas_del_comercio_suma_lo_nuevo_y_ya_viene_deduplicado(client, repo
     _volcar(repo)
     d = client.get("/comercio/metricas", headers=_com_headers(C1)).json()
     assert d["visitas_30d"] == 1 and d["visitas_7d"] == 1
-    assert d["contactos_30d"] == 2 and d["contactos_7d"] == 2                  # whatsapp + mapa (compartir y red no son contactos)
+    assert d["contactos_30d"] == 1 and d["contactos_7d"] == 1                  # sólo el whatsapp: ni mapa, ni compartir, ni red, ni vistas
     assert d["contactos_por_tipo"] == {"vista": 1, "whatsapp": 1, "mapa": 1}
     assert d["como_llegar_30d"] == 1 and d["compartidos_30d"] == 1
     assert d["redes_30d"] == {"instagram": 1, "tiktok": 1}

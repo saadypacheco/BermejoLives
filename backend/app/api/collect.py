@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import structlog
 from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.core.ip import ip_cliente
@@ -52,13 +53,16 @@ async def collect(request: Request) -> Response:
     Se descarta sin decir por qué (204): User-Agent vacío o de bot, `Origin` ajeno o `Sec-Fetch-Site: cross-site`,
     ruta interna, evento fuera del catálogo, sesión mal formada."""
     try:
-        estado = site_metrics.medidor.limitar("collect", ip_cliente(request))
+        # Lo que toma el lock del medidor va en el pool de hilos: el handler es `async` y un lock tomado en el
+        # event loop lo frena para TODOS los pedidos del servidor.
+        estado = await run_in_threadpool(site_metrics.medidor.limitar, "collect", ip_cliente(request))
         if estado == site_metrics.LIMITADO:
             raise HTTPException(status_code=429, detail=MENSAJE_LIMITE)
-        if estado == site_metrics.LLENO or not site_metrics.pedido_de_request(request):
+        # Con el diccionario de límites lleno (`LLENO`) el pedido se procesa igual: sólo no se anota la clave.
+        if not site_metrics.pedido_de_request(request):
             return Response(status_code=204, headers=SIN_CONTENIDO)
         crudo = await _leer_cuerpo(request, site_metrics.MAX_BODY_BYTES)
-        site_metrics.procesar_collect(crudo)
+        await run_in_threadpool(site_metrics.procesar_collect, crudo)
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001 — medir no puede romper la página: nunca 500
@@ -68,21 +72,20 @@ async def collect(request: Request) -> Response:
 
 @router.post("/csp-report", status_code=204, response_class=Response)
 async def csp_report(request: Request) -> Response:
-    """Reporte de violación de la CSP (`report-uri`). Se loguea `csp_violation` con la directiva y el host bloqueado;
-    no se guarda la IP, ni la página, ni su query. 30 por minuto por IP (429). Se apaga con `CSP_REPORT_ENABLED=false`
+    """Reporte de violación de la CSP (`report-uri`). Se cuentan por (directiva, host bloqueado), ya saneados con una
+    lista blanca, y se loguea UNA línea `csp_violations` por minuto; no se guarda la IP, ni la página, ni su query.
+    30 por minuto por IP (429). Se apaga con `CSP_REPORT_ENABLED=false`
     al pasar la CSP de Report-Only a enforce."""
     if not settings.csp_report_enabled:
         return Response(status_code=204, headers=SIN_CONTENIDO)
     try:
-        estado = site_metrics.medidor.limitar("csp", ip_cliente(request))
+        estado = await run_in_threadpool(site_metrics.medidor.limitar, "csp", ip_cliente(request))
         if estado == site_metrics.LIMITADO:
             raise HTTPException(status_code=429, detail=MENSAJE_LIMITE)
-        if estado == site_metrics.LLENO:
-            return Response(status_code=204, headers=SIN_CONTENIDO)
         crudo = await _leer_cuerpo(request, site_metrics.MAX_BODY_CSP)
         resumen = site_metrics.resumir_csp(crudo)
         if resumen:
-            logger.warning("csp_violation", **resumen)
+            await run_in_threadpool(site_metrics.registrar_csp, resumen)
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001

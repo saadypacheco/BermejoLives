@@ -886,13 +886,18 @@ def get_metricas(
     Los números salen de funciones SQL (0193) y ya llegan deduplicados (una vista por persona cada media hora, un
     contacto por persona y por día). SIEMPRE de este comercio: nunca cifras de otros ni posiciones en un ranking.
     Suma `como_llegar_30d`, `compartidos_30d`, `redes_30d` (por red) y `origenes_30d` (`[{kind, name, n}]`: QR del
-    volante o de la mesa, Google, Facebook, WhatsApp, IA, directo…)."""
+    volante, de la mesa o de la ficha, Google, Facebook, WhatsApp, IA, directo; un host desconocido con menos de 3
+    sesiones se junta en «Otros»). `contactos_30d` y `contactos_7d` son «te escribieron o llamaron»: no incluyen
+    vistas, compartir, redes ni `mapa` (el «cómo llegar» va aparte)."""
     extra = site_metrics.metricas_de_comercio(repo, claims["comercio_id"], 30)
     # `compartir` y `red` tienen su propia cifra: no son «contactos» ni van en el desglose por tipo.
     por_tipo = {t: n for t, n in extra["por_tipo"].items() if t not in ("compartir", "red")}
     por_tipo_7d = extra["por_tipo_7d"]
-    contactos_30d = sum(n for t, n in por_tipo.items() if t != "vista")
-    contactos_7d = sum(n for t, n in por_tipo_7d.items() if t not in site_metrics.TIPOS_NO_CONTACTO)
+    # «Te escribieron o llamaron»: sin vistas, sin compartir/red y SIN `mapa` («cómo llegar» tiene su propia cifra:
+    # `como_llegar_30d`). Los dos períodos cuentan lo mismo.
+    no_escribieron = (*site_metrics.TIPOS_NO_CONTACTO, "mapa")
+    contactos_30d = sum(n for t, n in por_tipo.items() if t not in no_escribieron)
+    contactos_7d = sum(n for t, n in por_tipo_7d.items() if t not in no_escribieron)
 
     pubs = repo.list_publicaciones_de_comercio(claims["comercio_id"])
     por_estado: dict[str, int] = {}

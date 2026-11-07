@@ -16,10 +16,11 @@ const NOMBRES: Record<string, string> = {
   meta_ai: "Meta AI", deepseek: "DeepSeek", grok: "Grok", mistral: "Mistral",
 };
 
-/** Lo que dice cada clase de `?ref=` de los QR impresos. */
+/** Lo que dice cada clase de `?ref=` de los QR que imprimimos nosotros (migración 0114: volante-, mesa-, ficha-). Es la
+ *  MISMA lista que `CLASES_QR` de backend/app/services/site_metrics.py: cualquier otro `?ref=` lo puede escribir cualquiera
+ *  y en «Mi comercio» no se muestra como QR (sale como «Otros»). */
 const QR: Record<string, string> = {
-  volante: "QR del volante", mesa: "QR de la mesa", ficha: "QR de tu ficha", tarjeta: "QR de la tarjeta",
-  vidriera: "QR de la vidriera", vitrina: "QR de la vidriera", cartel: "QR del cartel", afiche: "QR del afiche",
+  volante: "QR del volante", mesa: "QR de la mesa", ficha: "QR de tu ficha",
 };
 
 export function nombreCanonico(name: string): string {
@@ -30,7 +31,7 @@ export function nombreCanonico(name: string): string {
 
 function etiquetaQr(clase: string): string {
   const c = (clase || "").trim().toLowerCase();
-  return QR[c] ?? (c ? `QR «${c}»` : "QR");
+  return QR[c] ?? "Otros";
 }
 
 /** «De dónde llegaron» para el COMERCIANTE: «QR del volante», «Google», «Facebook», «WhatsApp», «Directo»… */

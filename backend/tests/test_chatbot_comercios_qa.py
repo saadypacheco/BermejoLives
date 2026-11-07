@@ -643,7 +643,7 @@ def test_front_el_boton_de_derivacion_usa_el_enlace_con_registro_de_contacto():
     # sólo con comercio (el asistente de URUKU nunca deriva)
     assert re.search(r"m\.de === \"uruku\" && comercio && m\.derivar", src)
     lead = _fuente("components/wa-lead-link.tsx")
-    assert "registrarLead(comercioId, \"whatsapp\"" in lead and "waLink(whatsapp, mensaje)" in lead
+    assert "contacto(comercioId, \"whatsapp\"" in lead and "waLink(whatsapp, mensaje)" in lead
 
 
 def test_front_la_bandeja_no_muestra_como_pendientes_las_ya_resueltas():

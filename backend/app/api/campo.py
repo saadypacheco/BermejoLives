@@ -939,7 +939,8 @@ def registrar_lead(body: _LeadIn, request: Request, repo: Repo = Depends(get_rep
     estado = site_metrics.medidor.limitar("lead", ip)
     if estado == site_metrics.LIMITADO:
         raise HTTPException(status_code=429, detail=MENSAJE_DEMASIADOS_PEDIDOS)
-    if estado == site_metrics.LLENO or not site_metrics.pedido_de_request(request):
+    # `LLENO` (el diccionario de límites está lleno): se procesa igual, sólo no se anota la clave.
+    if not site_metrics.pedido_de_request(request):
         return {"ok": True, "id": None}
     return site_metrics.registrar_contacto(
         repo, ip=ip, comercio_id=body.comercio_id, tipo=body.tipo, sesion=body.sesion,
@@ -980,7 +981,7 @@ def registrar_visita(body: _VisitaIn, request: Request) -> dict:
     estado = site_metrics.medidor.limitar("collect", ip_cliente(request))
     if estado == site_metrics.LIMITADO:
         raise HTTPException(status_code=429, detail=MENSAJE_DEMASIADOS_PEDIDOS)
-    if estado == site_metrics.LLENO or not site_metrics.pedido_de_request(request):
+    if not site_metrics.pedido_de_request(request):
         return {"ok": True, "contada": False}
     contada = site_metrics.registrar_visita_vieja(
         ruta=body.ruta, sesion=body.sesion, origen=body.origen, referido=body.referido, ciudad=body.ciudad,
@@ -1022,7 +1023,8 @@ def lead_respondio(lead_id: str, body: _RespondioIn, request: Request, repo: Rep
     - Un solo voto por contacto.
     - El `token` del contacto (HMAC del id + la sesión que lo creó) tiene que ser el que devolvió
       `POST /lead`.
-    - Un mismo votante (IP + sesión) vota una vez por comercio cada 30 días, y a lo sumo 10 veces por día.
+    - Un mismo votante (la RED de la IP: IPv4 exacta o IPv6 /56; la sesión NO cuenta, la inventa el cliente) vota una
+      vez por comercio cada 30 días, y a lo sumo 10 veces por día.
     - El sello «no responde» necesita «no» de al menos 3 votantes distintos (en `recontar_contactos`).
     Después se recuentan los contadores del comercio (últimos 90 días)."""
     lead = repo.get_lead(lead_id)
@@ -1056,7 +1058,7 @@ def lead_respondio(lead_id: str, body: _RespondioIn, request: Request, repo: Rep
 
     ip = ip_cliente(request)
     hoy = datetime.now(timezone.utc).date().isoformat()
-    if not votos_por_ip.permitir(f"{hoy}|{ip}"):
+    if not votos_por_ip.permitir(f"{hoy}|{site_metrics.clave_de_ip(ip)}"):
         raise HTTPException(status_code=429, detail="Demasiados intentos, probá mañana")
     votante = firmas.votante_de(ip, body.sesion)
     if repo.voto_reciente(lead["comercio_id"], votante, VENTANA_DE_VOTOS_DIAS):
@@ -1082,24 +1084,29 @@ def log_busqueda(body: _BusquedaIn, request: Request, repo: Repo = Depends(get_r
     puente se sabe qué se mostró y qué se contactó, pero no si una cosa llevó a
     la otra — que es justo lo que dice si el buscador sirve.
 
-    ANTES DE GUARDAR se enmascaran los datos personales: mails → `[mail]` y secuencias de 6 o más dígitos → `#`
+    ANTES DE GUARDAR se enmascaran los datos personales: mails (también «(at)», «[at]») → `[mail]` y 6 o más dígitos, aunque
+    lleven espacios, puntos o guiones en el medio → `#`
     («71234567 zapatos» queda «# zapatos»), con tope de 100 caracteres. Límite: 60 por minuto por IP (429).
     Un bot, otro sitio o un error de la base devuelven `{ok: true}` sin id.
     """
     estado = site_metrics.medidor.limitar("busqueda", ip_cliente(request))
     if estado == site_metrics.LIMITADO:
         raise HTTPException(status_code=429, detail=MENSAJE_DEMASIADOS_PEDIDOS)
-    if estado == site_metrics.LLENO or not site_metrics.pedido_de_request(request):
+    if not site_metrics.pedido_de_request(request):
         return {"ok": True}
     q = site_metrics.enmascarar_busqueda(body.query)
     if len(q.replace("[mail]", "").replace("#", "").strip()) < 2:
         return {"ok": True}
-    ids = [c for c in (site_metrics.es_uuid(x) for x in (body.comercios or [])) if c]
+    # Sólo comercios activos: `busqueda_comercios` tiene una clave foránea y un id inventado haría fallar el insert.
+    ids = [c for c in (site_metrics.es_uuid(x) for x in (body.comercios or [])[:20])
+           if c and site_metrics.medidor.comercio_activo(repo, c)]
     try:
         bid = repo.insert_busqueda(q, max(0, int(body.resultados)), ids or None)
     except Exception as exc:  # noqa: BLE001 — loguear una búsqueda no puede romper el buscador
         logger.warning("busqueda_log_failed", error=str(exc)[:200])
         return {"ok": True}
+    if bid:
+        site_metrics.medidor.recordar_busqueda(bid)        # sólo estos ids los acepta /lead como `busqueda_id`
     return {"ok": True, "busqueda_id": bid}
 
 
