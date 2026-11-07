@@ -7,7 +7,7 @@ import { ContactoUruku } from "@/components/contacto-uruku";
 import { AccesosCiudad } from "@/components/accesos-ciudad";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import {
-  getCiudades, getCityCategoryPagesCached, getClima, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado,
+  getCiudades, getCityCategoryPagesCached, getClima, getComerciosNuevos, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado,
   getNovedadesUruku, getPublicaciones, getRedes, getVideosPromo,
 } from "@/lib/data";
 import { JsonLd } from "@/components/json-ld";
@@ -25,6 +25,7 @@ import { NovedadUrukuCard } from "@/components/novedad-uruku-card";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { titulo, descripcion, MARCA, META_DESCRIPTION } from "@/lib/marca";
 import { formatoMonto, tasasDe } from "@/lib/cambio";
+import { lineaComerciosNuevos } from "@/lib/comercios-nuevos-pure";
 
 export const dynamic = "force-dynamic";
 
@@ -156,7 +157,7 @@ export default async function InicioPage() {
   const conGuia = (ciudad?.slug ?? "bermejo") === "bermejo";
   // El peso argentino, en cualquier ciudad de frontera.
   const esFrontera = ciudad?.es_frontera ?? true;
-  const [feed, ofertasVigentes, novedadesUruku, videos, frontera, clima, cotizaciones, turnosHoy, promo, paresCiudad, ciudadesTodas, redes, videosUruku] = await Promise.all([
+  const [feed, ofertasVigentes, novedadesUruku, videos, frontera, clima, cotizaciones, turnosHoy, promo, paresCiudad, ciudadesTodas, redes, videosUruku, comerciosNuevos] = await Promise.all([
     getFeed(12, ciudad?.slug),
     // Todas las ofertas de la ciudad, para la tira «Vencen hoy»: en los 12 del feed (que
     // mezcla novedades y videos) casi nunca está la que vence hoy.
@@ -173,6 +174,8 @@ export default async function InicioPage() {
     getCityCategoryPagesCached(), getCiudades(), getRedes(),
     // Los videos de las redes de URUKU (§15.2). No tira nunca: si la API no contesta, `[]` y la franja no aparece.
     getVideosUruku(ciudad?.slug),
+    // Cuántos comercios se sumaron en las últimas 24 h (número real; sin dato, la línea va sin número).
+    getComerciosNuevos(),
   ]);
   const ciudadesIndexables = [...new Map(paresCiudad.filter((p) => p.indexable).map((p) => [p.city_slug, p])).values()];
   const datosMarca = jsonLdGraph([
@@ -236,6 +239,7 @@ export default async function InicioPage() {
               <Link href="/ofertas" className="uk-btn uk-btn-primary"><Ic n="ofertas" s={18} /> Ver ofertas del día</Link>
               <Link href={conGuia ? "/guia" : "/buscar?vista=mapa"} className="uk-btn uk-btn-ghost uk-home-btn-claro"><><Ic n={conGuia ? "explorar" : "mapa"} s={18} /> {conGuia ? "Explorar servicios" : "Ver el mapa"}</></Link>
             </div>
+            <p className="uk-home-nuevos"><span aria-hidden="true" />{lineaComerciosNuevos(comerciosNuevos)}</p>
             <div className="uk-home-props">
               <div><b>Comercios locales</b><span>Locales con productos y ofertas</span></div>
               <div><b>Información confiable</b><span>Cargada por gente de {nombre}</span></div>

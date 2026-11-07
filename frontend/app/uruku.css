@@ -1319,6 +1319,12 @@
 .uk-home-hero h1 span { color: var(--uk-green); }
 .uk-home-btn-claro { background: var(--uk-surface); }
 .uk-home-hero .uk-hero-actions .uk-btn, .uk-home-hero .uk-hero-actions .uk-btn-ghost { flex: 0 0 auto; width: auto; }
+/* «N comercios nuevos en las últimas 24 horas»: una etiqueta chica con un punto que late, visible
+   sin competir con los botones. Sin animación para quien pidió menos movimiento. */
+.uk-home-nuevos { display: inline-flex; align-items: center; gap: 8px; margin: 18px 0 0; padding: 6px 14px 6px 12px; border: 1px solid var(--uk-line); border-radius: 999px; background: var(--uk-surface); font-size: 13.5px; font-weight: 600; color: var(--uk-ink); }
+.uk-home-nuevos span { width: 8px; height: 8px; border-radius: 50%; background: var(--uk-green); box-shadow: 0 0 0 0 var(--uk-green); animation: uk-late 2s ease-out infinite; flex: 0 0 auto; }
+@keyframes uk-late { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--uk-green) 55%, transparent); } 100% { box-shadow: 0 0 0 9px transparent; } }
+@media (prefers-reduced-motion: reduce) { .uk-home-nuevos span { animation: none; } }
 .uk-home-props { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-top: 26px; }
 .uk-home-props div { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
 .uk-home-props b { font-size: 14px; }
