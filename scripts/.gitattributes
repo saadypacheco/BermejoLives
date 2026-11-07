@@ -1,0 +1,2 @@
+# El script de verificación tiene que quedar con saltos de línea LF: con CRLF bash falla en el VPS.
+verificar.sh text eol=lf
