@@ -406,3 +406,9 @@ Aclaraciones del dueño (6/11/2026):
 - **D-03:** «el retiro» que se cobra es **que URUKU vaya a buscar la mercadería al comercio**. Que el cliente retire su paquete en la oficina no tiene un cargo aparte.
 - **D-05:** los montos son en **pesos argentinos** y son **el precio del guardado** según peso y volumen (no un límite de la garantía). Además del precio por día hay un precio por bloque de 3 días. Los montos están fuera del repo, en `uruku-privado/`, y en el sistema se cargan desde el panel, ocultos al público.
 - **Todo configurable desde el panel (dueño, 6/11/2026):** los tramos de peso y volumen todavía no están definidos y van a cambiar. El admin crea, edita y desactiva tramos (desde/hasta kg, volumen, precio por día, precio por bloque de N días, moneda), sin tocar código. El **precio de ir a buscar la mercadería al comercio** también se carga y se cambia desde el panel. Un encargo guarda el precio vigente al momento de cotizar: si después se cambia la tabla, lo ya cotizado no se recalcula.
+
+### 12.2 Estado (dueño, 6/11/2026)
+
+- **No se construye por ahora.** El servicio queda **anunciado como «muy pronto»** (tarjeta del home, «Comprar en Bermejo», «Qué es URUKU») y quien se interese **consulta por WhatsApp** al número público. El diseño técnico queda listo en `docs/encargos-diseno.md` para cuando se retome (empezar por la entrega E1).
+- **Moneda:** la conversión entre bolivianos y pesos se hace **al momento de comprar**, con el tipo de cambio de ese día.
+
