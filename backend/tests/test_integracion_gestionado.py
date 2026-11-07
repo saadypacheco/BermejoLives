@@ -184,6 +184,13 @@ def _pend(repo, comercio_id, titulo="zapatillas"):
                                             "created_at": "2026-09-10T10:00:00+00:00"})
 
 
+def _pend_comercio(repo, comercio_id, titulo="zapatillas"):
+    """Pendiente que mandó el comercio mismo: la integración SÍ puede aprobarla (el panel pide override)."""
+    return repo.insert_publicacion_directa({"comercio_id": comercio_id, "tipo": "oferta", "titulo": titulo, "estado": "pendiente",
+                                            "remitente_rol": "merchant", "identidad_origen": "numero",
+                                            "created_at": "2026-09-10T10:00:00+00:00"})
+
+
 def test_la_ia_sigue_auto_aprobando_a_un_no_gestionado(repo, ia_aprueba):
     c = _comercio(repo, "com-a", confiable=False)
     p = _pend(repo, c["id"])
@@ -247,7 +254,7 @@ def test_aprobar_desde_el_panel_a_un_no_gestionado_sigue_igual(client, repo, adm
 def test_aprobar_desde_el_panel_a_un_gestionado_es_409(client, repo, admin_token):
     c = _comercio(repo, "com-a", confiable=False)
     _gestionar(repo, c["id"])
-    p = _pend(repo, c["id"])
+    p = _pend_comercio(repo, c["id"])
     r = client.post(f"/moderacion/publicaciones/{p['id']}", headers=_admin(admin_token), json={"estado": "aprobado"})
     assert r.status_code == 409 and "marketing" in r.json()["detail"]
     assert repo.get_publicacion(p["id"])["estado"] == "pendiente" and repo.difusion == []
@@ -264,7 +271,7 @@ def test_rechazar_o_pedir_cambios_desde_el_panel_si_se_puede(client, repo, admin
 def test_override_de_admin_aprueba_una_vez_exige_motivo_y_queda_registrado(client, repo, admin_token):
     c = _comercio(repo, "com-a", confiable=False)
     _gestionar(repo, c["id"])
-    p = _pend(repo, c["id"])
+    p = _pend_comercio(repo, c["id"])
     corto = client.post(f"/moderacion/publicaciones/{p['id']}", headers=_admin(admin_token),
                         json={"estado": "aprobado", "override_gestionado": True, "motivo": "ok"})
     assert corto.status_code == 422
@@ -282,9 +289,130 @@ def test_override_sin_ser_admin_es_403(client, repo):
 
     c = _comercio(repo, "com-a", confiable=False)
     _gestionar(repo, c["id"])
-    p = _pend(repo, c["id"])
+    p = _pend_comercio(repo, c["id"])
     moderador = auth.make_token("mod@x.com", rol="moderador")
     r = client.post(f"/moderacion/publicaciones/{p['id']}", headers=_h(moderador),
                     json={"estado": "aprobado", "override_gestionado": True, "motivo": "quiero aprobarla igual ya mismo"})
     assert r.status_code == 403
     assert repo.get_publicacion(p["id"])["estado"] == "pendiente"
+
+
+# ═════════════════════════════════════════════════ lo que la integración se niega a aprobar lo aprueba el panel
+CASOS_SOLO_URUKU = [
+    {"remitente_rol": "third_party"},
+    {"remitente_rol": "uruku_explorer", "origen": "explorador", "identidad_origen": "explorador"},
+    {"origen": "explorador"},
+    {"identidad_origen": "codigo"},
+    {"identidad_origen": "numero_por_codigo"},
+    {"remitente_rol": None, "identidad_origen": "grupo"},          # sin rol y no deducible: se trata como «sí»
+    {"remitente_rol": "merchant", "ia_veredicto": "rechazar", "ia_confianza": 0.95},
+]
+
+
+@pytest.mark.parametrize("cambio", CASOS_SOLO_URUKU)
+def test_el_panel_aprueba_sin_override_lo_que_la_integracion_se_niega_a_aprobar(client, repo, admin_token, cambio):
+    c = _comercio(repo, "com-a", confiable=False)
+    _gestionar(repo, c["id"])
+    p = repo.insert_publicacion_directa({"comercio_id": c["id"], "tipo": "oferta", "titulo": "zapatillas", "estado": "pendiente",
+                                         "codigo_recibido": c.get("codigo"),      # por código: se revalida al aprobar
+                                         "created_at": "2026-09-10T10:00:00+00:00", **cambio})
+    assert integracion.requiere_moderacion_de_uruku(repo.get_publicacion(p["id"]))
+    r = client.post(f"/moderacion/publicaciones/{p['id']}", headers=_admin(admin_token), json={"estado": "aprobado"})
+    assert r.status_code == 200, r.text
+    pub = repo.get_publicacion(p["id"])
+    assert pub["estado"] == "aprobado" and not (pub.get("motivo_moderacion") or "").startswith("override-gestionado")
+    assert not [e for e in repo.integ_eventos if e["tipo"] == "override_aprobacion"]       # no hizo falta override
+
+
+def test_un_moderador_comun_tambien_aprueba_lo_que_solo_uruku_puede_moderar(client, repo):
+    from app.core import auth
+
+    c = _comercio(repo, "com-a", confiable=False)
+    _gestionar(repo, c["id"])
+    p = repo.insert_publicacion_directa({"comercio_id": c["id"], "tipo": "oferta", "titulo": "x", "estado": "pendiente",
+                                         "remitente_rol": "third_party", "created_at": "2026-09-10T10:00:00+00:00"})
+    r = client.post(f"/moderacion/publicaciones/{p['id']}", headers=_h(auth.make_token("mod@x.com", rol="moderador")),
+                    json={"estado": "aprobado"})
+    assert r.status_code == 200 and repo.get_publicacion(p["id"])["estado"] == "aprobado"
+
+
+@pytest.mark.parametrize("cambio", CASOS_SOLO_URUKU)
+def test_el_panel_rechaza_lo_que_solo_uruku_modera_sin_override(client, repo, admin_token, cambio):
+    c = _comercio(repo, "com-a", confiable=False)
+    _gestionar(repo, c["id"])
+    p = repo.insert_publicacion_directa({"comercio_id": c["id"], "tipo": "oferta", "titulo": "x", "estado": "pendiente",
+                                         "created_at": "2026-09-10T10:00:00+00:00", **cambio})
+    r = client.post(f"/moderacion/publicaciones/{p['id']}", headers=_admin(admin_token), json={"estado": "rechazado", "motivo": "spam"})
+    assert r.status_code == 200 and repo.get_publicacion(p["id"])["estado"] == "rechazado"
+
+
+@pytest.mark.parametrize("cambio", [
+    {"remitente_rol": "merchant", "identidad_origen": "numero", "ia_veredicto": "aprobar"},
+    {"remitente_rol": "merchant", "identidad_origen": "grupo"},
+    {"origen": "panel"},
+])
+def test_lo_que_la_integracion_si_puede_aprobar_sigue_pidiendo_override_en_el_panel(client, repo, admin_token, cambio):
+    c = _comercio(repo, "com-a", confiable=False)
+    _gestionar(repo, c["id"])
+    p = repo.insert_publicacion_directa({"comercio_id": c["id"], "tipo": "oferta", "titulo": "x", "estado": "pendiente",
+                                         "created_at": "2026-09-10T10:00:00+00:00", **cambio})
+    assert not integracion.requiere_moderacion_de_uruku(repo.get_publicacion(p["id"]))
+    r = client.post(f"/moderacion/publicaciones/{p['id']}", headers=_admin(admin_token), json={"estado": "aprobado"})
+    assert r.status_code == 409 and "marketing" in r.json()["detail"]
+    assert repo.get_publicacion(p["id"])["estado"] == "pendiente"
+
+
+def test_un_comercio_no_gestionado_con_remitente_ajeno_sigue_igual_en_el_panel(client, repo, admin_token):
+    c = _comercio(repo, "com-a", confiable=False)
+    p = repo.insert_publicacion_directa({"comercio_id": c["id"], "tipo": "oferta", "titulo": "x", "estado": "pendiente",
+                                         "remitente_rol": "third_party", "created_at": "2026-09-10T10:00:00+00:00"})
+    r = client.post(f"/moderacion/publicaciones/{p['id']}", headers=_admin(admin_token), json={"estado": "aprobado", "motivo": "ok"})
+    assert r.status_code == 200 and repo.get_publicacion(p["id"])["motivo_moderacion"] == "ok"
+
+
+def test_el_panel_y_la_integracion_usan_la_misma_funcion_para_decidir():
+    from pathlib import Path
+
+    app = Path(__file__).resolve().parents[1] / "app"
+    assert "integracion.requiere_moderacion_de_uruku(" in (app / "api/moderacion.py").read_text(encoding="utf-8")
+    assert "integracion.requiere_moderacion_de_uruku(" in (app / "api/integracion.py").read_text(encoding="utf-8")
+
+
+# ═════════════════════════════════════════════════ el override mira el permiso de HOY, no sólo el del token
+def _pend_override(repo):
+    c = _comercio(repo, "com-a", confiable=False)
+    _gestionar(repo, c["id"])
+    return repo.insert_publicacion_directa({"comercio_id": c["id"], "tipo": "oferta", "titulo": "x", "estado": "pendiente",
+                                            "remitente_rol": "merchant", "identidad_origen": "numero",
+                                            "created_at": "2026-09-10T10:00:00+00:00"})
+
+
+def _alta_admin(repo, roles):
+    from app.core import auth
+
+    repo.crear_usuario_panel({"email": "jefe@uruku.bo", "nombre": "Jefe", "activo": True, "password_hash": "x"}, roles)
+    auth.reiniciar_cache_acceso()
+    return auth.make_token("jefe@uruku.bo", rol="admin")
+
+
+_OVERRIDE = {"estado": "aprobado", "override_gestionado": True, "motivo": "marketing caído y el comercio pide salir hoy"}
+
+
+def test_override_con_permiso_vigente_funciona(client, repo):
+    p = _pend_override(repo)
+    token = _alta_admin(repo, ["admin"])
+    r = client.post(f"/moderacion/publicaciones/{p['id']}", headers=_h(token), json=_OVERRIDE)
+    assert r.status_code == 200 and repo.get_publicacion(p["id"])["estado"] == "aprobado"
+
+
+def test_un_admin_al_que_le_sacaron_el_permiso_no_puede_hacer_override_con_su_token_viejo(client, repo):
+    from app.core import auth
+
+    p = _pend_override(repo)
+    token = _alta_admin(repo, ["admin"])                      # el token se emitió cuando era admin
+    repo.usuario_roles[next(iter(repo.agentes))] = ["moderador"]   # ...y después lo bajaron a moderador
+    auth.reiniciar_cache_acceso()
+    r = client.post(f"/moderacion/publicaciones/{p['id']}", headers=_h(token), json=_OVERRIDE)
+    assert r.status_code == 403
+    assert repo.get_publicacion(p["id"])["estado"] == "pendiente"
+    assert not [e for e in repo.integ_eventos if e["tipo"] == "override_aprobacion"]
