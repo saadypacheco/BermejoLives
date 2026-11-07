@@ -307,8 +307,9 @@ def crear_respuesta_de_mi_comercio(body: RespuestaLocalCreate, claims: dict = De
     fila = repo.upsert_saber_local({
         "pregunta": body.pregunta, "respuesta": body.respuesta, "etiquetas": [], "activo": True,
         "comercio_id": comercio_id,
-        # Nunca el email del dueño: `creado_por` no es dato del público ni del admin.
-        "creado_por": f"comercio:{comercio_id}",
+        # Nunca el email del dueño: `creado_por` no es dato del público ni del admin. Si entró un admin
+        # (token con `adm`), queda su correo: lo cargó el equipo, no el dueño.
+        "creado_por": f"admin:{claims['adm']}" if claims.get("adm") else f"comercio:{comercio_id}",
     })
     if conv:
         repo.marcar_conversacion(conv["id"], {"resuelta_en": datetime.now(timezone.utc).isoformat()})

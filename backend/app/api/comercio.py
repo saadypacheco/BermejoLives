@@ -5,6 +5,7 @@ Regla de negocio clave:
   - comercio.confiable = False -> la publicación va a la cola de moderación.
 """
 import secrets
+import uuid
 from datetime import date, datetime, timedelta, timezone
 
 import structlog
@@ -17,7 +18,7 @@ from app.core import auth, firmas
 from app.core import clave as claves
 from app.core import clave_comercio
 from app.core.config import settings
-from app.core.sesion_comercio import require_comercio_vigente
+from app.core.sesion_comercio import exigir_dueno, quien_actua, require_comercio_vigente
 from app.core.ip import ip_cliente
 from app.core.telefono import normalizar_whatsapp, whatsapp_para_guardar
 from app.core.text import slug_unico, slugify
@@ -87,6 +88,16 @@ def _comercio_escribe(
         raise HTTPException(status_code=403, detail=MSG_BAJA_ADMIN)
     return claims
 
+
+def _comercio_dueno(
+    claims: dict = Depends(_comercio_escribe),
+) -> dict:
+    """Como `_comercio_escribe`, pero para lo que SÓLO puede hacer el dueño: cambia quién controla la
+    cuenta o mueve plata (clave, pagos, destacados con costo, autorización de contenido, bandeja). Con el
+    token de un admin que entró (`adm`) contesta 403 «No disponible entrando como admin».
+    La lista de rutas así está fijada en `tests/test_entrar_como_comercio.py`."""
+    exigir_dueno(claims)
+    return claims
 
 
 @router.post("/auth/comercio/registro")
@@ -302,6 +313,52 @@ def _token_de(cuenta: dict, comercio: dict) -> str:
     # este token deja de servir (core/sesion_comercio.py).
     return auth.make_comercio_token(cuenta["comercio_id"], identidad, cuenta["id"],
                                     cuenta.get("credenciales_version"))
+
+
+class EntrarComoComercioBody(BaseModel):
+    """Opcional: para qué entra el admin (queda en la auditoría)."""
+    motivo: str | None = Field(None, max_length=200)
+
+
+@router.post("/admin/comercios/{comercio_id}/entrar")
+def admin_entrar_como_comercio(
+    comercio_id: str,
+    body: EntrarComoComercioBody | None = None,
+    admin: dict = Depends(auth.require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Un admin del panel (permiso `equipo`, mirado HOY en la base) entra a «Mi comercio» de CUALQUIER
+    comercio para verlo y manejarlo como lo haría el dueño. Devuelve un token de comercio de 30 minutos
+    con el claim `adm` (ver `auth.make_comercio_admin_token`): sirve aunque el comercio no tenga cuenta y
+    no depende de la clave del dueño, pero deja de servir si al admin lo dan de baja o pierde `equipo`; y
+    no sirve para lo que cambia quién controla la cuenta o la plata (403 «No disponible entrando como
+    admin»). Cada entrada queda en `comercio_eventos` y en el log; el token nunca va a un log.
+    404 si el comercio no existe o está dado de baja."""
+    try:
+        uuid.UUID(str(comercio_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Comercio no encontrado") from exc
+    comercio = repo.get_comercio(comercio_id)
+    if not comercio or comercio.get("activo") is False:
+        raise HTTPException(status_code=404, detail="Comercio no encontrado")
+    motivo = ((body.motivo if body else None) or "").strip() or None
+    admin_email = admin.get("email") or admin.get("sub")
+    token, exp = auth.make_comercio_admin_token(comercio["id"], admin_email)
+    expira_en = datetime.fromtimestamp(exp, tz=timezone.utc).isoformat()
+    # Auditoría ANTES de entregar el token: si no se puede dejar constancia, no se entra.
+    try:
+        repo.registrar_evento_comercio(comercio["id"], "entro_como_comercio", admin_email,
+                                       {"motivo": motivo, "expira_en": expira_en})
+    except Exception as exc:  # noqa: BLE001
+        logger.error("admin.entrada_sin_auditoria", comercio_id=comercio["id"], admin=admin_email, error=str(exc))
+        raise HTTPException(status_code=503, detail="No se pudo dejar constancia de la entrada. Probá de nuevo.") from exc
+    logger.info("admin.entro_como_comercio", admin=admin_email, comercio_id=comercio["id"], motivo=motivo)
+    return {
+        "access_token": token,
+        "comercio": {"id": comercio["id"], "nombre": comercio.get("nombre"), "slug": comercio.get("slug")},
+        "expira_en": expira_en,
+        "por_admin": admin_email,
+    }
 
 
 class IngresarBody(BaseModel):
@@ -530,7 +587,7 @@ def comercio_recuperar_confirmar(body: RecuperarConfirmarBody, request: Request,
 @router.post("/comercio/clave")
 def comercio_clave_nueva(
     response: Response,
-    claims: dict = Depends(_comercio_escribe),
+    claims: dict = Depends(_comercio_dueno),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Genera una clave nueva (la anterior deja de servir) y la devuelve UNA vez.
@@ -698,7 +755,11 @@ def get_perfil(
     comercio = repo.get_comercio(claims["comercio_id"])
     if not comercio:
         raise HTTPException(status_code=404, detail="comercio no encontrado")
-    return _perfil_dict(repo, comercio)
+    perfil = _perfil_dict(repo, comercio)
+    if claims.get("adm"):
+        # Entró un admin (POST /admin/comercios/{id}/entrar): la pantalla lo avisa.
+        perfil["por_admin"] = claims["adm"]
+    return perfil
 
 
 # Campos del comercio que Reservalo replica en su tabla `vendedores`. Si el
@@ -757,7 +818,8 @@ def update_perfil(
         # Cambió el catálogo (enlace nuevo o vaciado): si el anterior era un PDF
         # nuestro, se borra del disco.
         catalogo_svc.soltar_catalogo_reemplazado(anterior, patch["catalogo_url"], claims["comercio_id"])
-    logger.info("comercio.perfil_update", comercio=claims["comercio_id"], campos=list(patch))
+    logger.info("comercio.perfil_update", comercio=claims["comercio_id"], campos=list(patch),
+                por_admin=claims.get("adm"))
     # Si cambió de qué vende, se recalculan los rubros. Sólo SUMA: si alguien los
     # curó a mano, ese trabajo no se pisa.
     if {"prod_obs_human", "descripcion", "nombre"} & patch.keys():
@@ -952,6 +1014,9 @@ def publicar(
         logger.info("comercio.publicar_sin_cuota", comercio=comercio.get("slug"),
                     consecuencia=cuota["consecuencia"])
         raise HTTPException(status_code=402, detail=aviso)
+    if cuota["consecuencia"] == "cobrar":
+        # Pasarse del tope genera un cargo al comercio: lo decide el dueño, no un admin que entró.
+        exigir_dueno(claims)
 
     confiable = integracion.es_confiable(repo, comercio)
     now = datetime.now(timezone.utc).isoformat()
@@ -988,7 +1053,8 @@ def publicar(
     # y borra su foto. Nunca lanza.
     if pub.get("id"):
         planes.archivar_excedentes(repo, comercio)
-    logger.info("comercio.publicar", comercio=comercio["slug"], estado=row["estado"], confiable=confiable)
+    logger.info("comercio.publicar", comercio=comercio["slug"], estado=row["estado"], confiable=confiable,
+                por_admin=claims.get("adm"))
     return {
         "ok": True,
         "estado": row["estado"],
@@ -1116,10 +1182,11 @@ async def crear_producto(
         "precio": precio,
         "moneda": moneda,
         "estado": "publicado",
-        "cargado_por": claims.get("email"),
+        "cargado_por": quien_actua(claims),
     })
     logger.info("comercio.producto_alta", comercio=comercio["slug"],
-                producto=res.get("producto_id"), fotos=len(fotos_urls), stub=client.stub)
+                producto=res.get("producto_id"), fotos=len(fotos_urls), stub=client.stub,
+                por_admin=claims.get("adm"))
     return {"ok": True, "producto_ref": ref, "url": res.get("url")}
 
 
@@ -1144,7 +1211,7 @@ _DESTACADO_COSTO = 1000.0   # ARS por publicación destacada (se factura con la 
 @router.post("/comercio/productos/{ref_id}/destacar")
 def destacar_producto(
     ref_id: str,
-    claims: dict = Depends(_comercio_escribe),
+    claims: dict = Depends(_comercio_dueno),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Crea una publicación destacada en el feed para este producto. Tiene COSTO,
@@ -1207,7 +1274,7 @@ async def comercio_pago(
     metodo: str = Form("transferencia"),
     referencia: str | None = Form(None),
     comprobante: UploadFile | None = File(None),
-    claims: dict = Depends(_comercio_escribe),
+    claims: dict = Depends(_comercio_dueno),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """El comercio declara un pago con comprobante → queda PENDIENTE de confirmación del admin."""
@@ -1253,7 +1320,7 @@ def mis_mensajes(
 @router.post("/comercio/mensajes/{mensaje_id}/leido")
 def marcar_leido(
     mensaje_id: str,
-    claims: dict = Depends(_comercio_escribe),
+    claims: dict = Depends(_comercio_dueno),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     m = repo.marcar_mensaje_leido(mensaje_id, claims["comercio_id"])
