@@ -10,7 +10,7 @@
 
 import { authFetch, getToken } from "@/lib/api";
 import { getAgenteToken, clearAgente } from "@/lib/campo";
-import { getCToken, clearComercio } from "@/lib/comercio";
+import { tokenVigente, clearComercio } from "@/lib/comercio";
 import { subirConProgreso } from "@/lib/upload";
 import {
   API_BASE, camposSubida, geminiContentPrendido,
@@ -364,7 +364,7 @@ async function comercioJson<T>(path: string, init: { method?: string; body?: unk
     res = await fetch(`${API_BASE}${path}`, {
       method: init.method ?? "GET",
       headers: {
-        Authorization: `Bearer ${getCToken() ?? ""}`,
+        Authorization: `Bearer ${tokenVigente() ?? ""}`,
         ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
       body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
