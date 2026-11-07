@@ -71,7 +71,7 @@ class CloudAPIProvider:
         digitos = re.sub(r"\D", "", telefono)
         try:
             r = httpx.post(
-                f"https://graph.facebook.com/v20.0/{settings.whatsapp_cloud_phone_id}/messages",
+                f"{settings.graph_base()}/{settings.whatsapp_cloud_phone_id}/messages",
                 json={
                     "messaging_product": "whatsapp",
                     "to": digitos,

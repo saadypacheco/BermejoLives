@@ -122,6 +122,12 @@ class Settings(BaseSettings):
     facebook_page_token: str = ""
     instagram_user_id: str = ""
 
+    # Versión de la Graph API de Meta (Facebook, Instagram y WhatsApp Cloud usan el
+    # mismo versionado). Meta da de baja cada versión ~2 años después: la v20.0 se
+    # removió el 24/9/2026. Se cambia con GRAPH_API_VERSION en el .env, sin tocar
+    # código; todas las URLs salen de `graph_base()`.
+    graph_api_version: str = "v26.0"
+
     # Qué destinos salen SOLOS al aprobar. Los que no estén acá se encolan y
     # esperan un clic en el panel.
     #
@@ -131,6 +137,19 @@ class Settings(BaseSettings):
     # una página deja de tener alcance. La diferencia no la puede decidir el
     # código; la decide quien mira el feed.
     difusion_auto: str = "wa_canal"
+
+    # API de integración (marketing): la difusión a Facebook/Instagram por esa API (E7 con destinos, E9 y
+    # E10) está APAGADA por defecto: postergada por decisión del dueño (docs/integracion-marketing.md).
+    # Se enciende con INTEGRACION_DIFUSION=true cuando se active FB/IG; mientras tanto contestan 403.
+    integracion_difusion: bool = False
+    # Subidas de imagen de la integración (E6), por cliente y por día (ventana móvil de 24 h): ni los
+    # archivos ni los bytes pueden llenar el disco de fotos. Cuenta sólo lo que se escribe (no los repetidos).
+    integracion_media_cuota_archivos_dia: int = 50
+    integracion_media_cuota_bytes_dia: int = 100 * 1024 * 1024
+    # Un `med_*` que ninguna fila de `difusion_cola` usa se borra a los N días (limpieza diaria).
+    integracion_media_huerfana_dias: int = 14
+    # Claves inválidas (401) por IP y por minuto antes de contestar 429 (frena adivinar claves).
+    integracion_auth_fallos_por_min: int = 20
 
     # A dónde apunta el enlace de cada oferta que se publica en las redes.
     sitio_url: str = "https://uruku.bo"
@@ -254,6 +273,15 @@ class Settings(BaseSettings):
     # pregunta a WAHA y, si no está WORKING, queda un ERROR en los registros.
     wa_sesion_vigilar: bool = True
     wa_sesion_cada_seg: int = 300
+
+    def graph_base(self) -> str:
+        """`https://graph.facebook.com/<versión configurada>`, sin barra final."""
+        import re
+
+        version = (self.graph_api_version or "").strip()
+        if not re.fullmatch(r"v\d{1,3}\.\d{1,2}", version):
+            raise ValueError(f"GRAPH_API_VERSION inválida: {version!r} (esperado p. ej. v26.0)")
+        return f"https://graph.facebook.com/{version}"
 
     def destinos_automaticos(self) -> set[str]:
         return {d.strip() for d in self.difusion_auto.split(",") if d.strip()}

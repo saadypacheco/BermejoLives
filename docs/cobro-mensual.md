@@ -100,7 +100,7 @@ La recomendación usa el stack de siempre (FastAPI + Postgres/PostgREST + Next) 
 
 ## 4. Modelo de datos
 
-Reglas (AGENTS.md §5 y §7): archivos **idénticos** en `supabase/migrations/` y `selfhost/postgres-init/` con test de igualdad (como `test_admin_resumen_qa.py:398-409`); `begin; … commit;`, idempotentes, `do $chk$`, `notify pgrst, 'reload schema';`. RLS activo, `revoke all … from public, anon, authenticated`, `grant all … to service_role`; **nada legible por anon**. Baja lógica con `activo`. **No se agregan columnas a `comercios`** (regla 11 sin cambios). Ninguna migración nombra la columna del código del comercio, ni en comentarios (`test_ninguna_vista_ni_funcion_publica_expone_codigo`). Se arranca en **0165** (0156-0158: marketing; 0159-0164: grupos).
+Reglas (AGENTS.md §5 y §7): archivos **idénticos** en `supabase/migrations/` y `selfhost/postgres-init/` con test de igualdad (como `test_admin_resumen_qa.py:398-409`); `begin; … commit;`, idempotentes, `do $chk$`, `notify pgrst, 'reload schema';`. RLS activo, `revoke all … from public, anon, authenticated`, `grant all … to service_role`; **nada legible por anon**. Baja lógica con `activo`. **No se agregan columnas a `comercios`** (regla 11 sin cambios). Ninguna migración nombra la columna del código del comercio, ni en comentarios (`test_ninguna_vista_ni_funcion_publica_expone_codigo`). Se arranca en **0165** (0190–0192: marketing; 0159-0164: grupos).
 
 ### 0165 · `0165_billing_cycles.sql` (E1)
 

@@ -19,8 +19,11 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
-from app.api import agent_credentials, asistente, auth, calles, campo, comercio, contenido, content, cost_switches, health, moderacion, observabilidad, pago, reception, subscribers, telefonos_foto, usuario, webhook
+from app.api import (agent_credentials, asistente, auth, calles, campo, comercio, contenido, content, cost_switches,
+                     health, integracion, integracion_admin, moderacion, observabilidad, pago, reception,
+                     subscribers, telefonos_foto, usuario, webhook)
 from app.core.config import exigir_config_produccion, settings
+from app.core.errores_integracion import IntegracionError
 from app.core.ip import ip_cliente
 from app.core.limite_cuerpo import LimiteCuerpoMiddleware
 from app.core.registro import configurar_logging
@@ -522,6 +525,13 @@ async def timing_middleware(request: Request, call_next):
     return response
 
 
+@app.exception_handler(IntegracionError)
+async def integracion_error_handler(request: Request, exc: IntegracionError):
+    """La API de integración contesta `{"error": {"code", "message", "details"}}` (contrato de integración)."""
+    return JSONResponse({"error": {"code": exc.code, "message": exc.message, "details": exc.details}},
+                        status_code=exc.status, headers=exc.headers)
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     if request.scope.get("cuerpo_excedido"):
@@ -570,6 +580,8 @@ app.include_router(content.router, tags=["contenido-redes"])
 app.include_router(cost_switches.router, tags=["interruptores-de-costo"])
 app.include_router(subscribers.router, tags=["suscriptores"])
 app.include_router(telefonos_foto.router, tags=["telefonos-en-fotos"])
+app.include_router(integracion.router)
+app.include_router(integracion_admin.router)
 
 # Fotos de comercio: servidas por el propio backend (reemplaza a Supabase
 # Storage en el self-host — ver services/imagenes.py).

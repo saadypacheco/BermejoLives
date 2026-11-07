@@ -10,7 +10,7 @@ import time
 
 import jwt as pyjwt
 import structlog
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
@@ -347,3 +347,29 @@ def mismo_email(escrito: str | None, esperado: str | None) -> bool:
     deja afuera a quien escribió bien.
     """
     return (escrito or "").strip().lower() == (esperado or "").strip().lower()
+
+
+def require_integracion(scope: str | None = None):
+    """La guardia de la API de integración (`/v1/integration/*`): «hace falta una API key válida (con este scope)».
+
+    `Authorization: Bearer uki_<key_id>.<secreto>`. Hace, en orden: autenticar (401), límite de 60 pedidos por
+    minuto por clave (429) y comprobar el scope (403). Devuelve el `Cliente` (quién es y qué puede). Los errores
+    salen con el formato del contrato (`{"error": {"code", "message", "details"}}`)."""
+    def dep(request: Request, repo: Repo = Depends(get_repo)):
+        from app.core.errores_integracion import IntegracionError
+        from app.core.ip import ip_cliente
+        from app.services import integracion
+
+        # Claves inválidas: se cuentan por IP y, pasado el tope por minuto, se contesta 429 sin ni tocar la base.
+        ip = ip_cliente(request)
+        integracion.exigir_ip_sin_exceso_de_fallos(ip)
+        try:
+            cliente = integracion.autenticar(repo, request.headers.get("authorization"))
+        except IntegracionError as exc:
+            if exc.status == 401:
+                integracion.registrar_fallo_de_ip(ip)
+            raise
+        integracion.limitar(cliente)
+        integracion.exigir_scope(cliente, scope)
+        return cliente
+    return dep
