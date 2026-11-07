@@ -77,13 +77,13 @@ export function tarjetasServicios({ turnos, conGuia }: {
   // SERVICIO DE URUKU (la empresa, no un comercio): retira o hace las compras y
   // las guarda en la guardería URUKU, con garantía de custodia. Sin precios.
   if (conGuia) lista.push(
-        <a key="s-uruku" href={waUruku("Hola URUKU, quiero que retiren o hagan mis compras en Bermejo y me las guarden en la guardería")}
+        <a key="s-uruku" href={waUruku("Hola URUKU, quiero saber cómo funciona el servicio de encargos y guardería")}
            target="_blank" rel="noopener" className="uk-offer sin-foto uk-offer-servicio uk-offer-uruku">
-          <span className="uk-offer-tag">Servicio URUKU</span>
+          <span className="uk-offer-tag">Muy pronto · URUKU</span>
           <span className="uk-offer-emoji"><Ic n="encargo" s={64} peso="fill" /></span>
           <div className="uk-offer-body">
             <h3>Retiramos o hacemos tus compras</h3>
-            <small>Te las guardamos en la guardería URUKU · custodia garantizada · WhatsApp {WA_URUKU_TEXTO}</small>
+            <small>Y te las guardamos hasta que las retires · consultá por WhatsApp {WA_URUKU_TEXTO}</small>
           </div>
         </a>,
   );

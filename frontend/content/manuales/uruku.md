@@ -77,7 +77,7 @@ No tenés que aprender nada nuevo: seguís atendiendo por tu WhatsApp.
 
 URUKU acerca a quien compra con quien vende. **No vende por los comercios ni media pagos:** la compra es entre ambas partes, y el precio, la entrega y el pago se arreglan directamente con el comercio. Los agentes de URUKU nunca cobran. URUKU tampoco cruza mercadería de un país a otro.
 
-Aparte de la guía, URUKU ofrece un servicio propio: comprar por encargo en comercios de Bermejo y guardar las compras hasta que se retiren. Se pide por WhatsApp al 67 671 888.
+Aparte de la guía, URUKU prepara un servicio propio: comprar por encargo en comercios de Bermejo y guardar las compras hasta que se retiren. Para saber cómo funciona, se consulta por WhatsApp al 67 671 888.
 
 Si ves un dato incorrecto en una ficha, avisanos desde **«¿Hay algún dato incorrecto?»**.
 

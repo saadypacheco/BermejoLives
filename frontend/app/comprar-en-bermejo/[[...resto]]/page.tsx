@@ -241,12 +241,13 @@ export default async function ComprarEnBermejoPage(props: Props) {
         <section className="uk-guia-sec" id="encargos">
           <h2><Ic n="encargo" s={22} /> Encargos y guardería de URUKU</h2>
           <p>
-            URUKU puede comprar por encargo en comercios de Bermejo y guardarte las compras hasta que las retires,
-            con garantía de custodia. No cruza mercadería. Para pedirlo, escribinos por WhatsApp al {WA_URUKU_TEXTO}.
+            Muy pronto URUKU va a poder comprar por encargo en comercios de Bermejo y guardarte las compras hasta
+            que las retires. No cruza mercadería. Si te interesa, consultanos por WhatsApp al {WA_URUKU_TEXTO} y te
+            contamos cómo funciona.
           </p>
           <p>
-            <a className="uk-btn uk-btn-primary" href={waUruku("Hola URUKU, quiero que retiren o hagan mis compras en Bermejo y me las guarden en la guardería")} target="_blank" rel="noopener">
-              <Ic n="whatsapp" s={18} /> Escribir por WhatsApp
+            <a className="uk-btn uk-btn-primary" href={waUruku("Hola URUKU, quiero saber cómo funciona el servicio de encargos y guardería")} target="_blank" rel="noopener">
+              <Ic n="whatsapp" s={18} /> Consultar por el servicio
             </a>
           </p>
         </section>
