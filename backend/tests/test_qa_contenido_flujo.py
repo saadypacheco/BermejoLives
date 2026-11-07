@@ -113,7 +113,17 @@ def test_pieza_publica_token_invalido_o_inexistente(client):
 
 
 @pytest.mark.skipif(not HAY_FFMPEG, reason="sin ffmpeg")
+def _congelar_un_martes(monkeypatch):
+    """El plan de la semana sólo llena los días que faltan desde hoy: un sábado o un domingo no
+    queda ningún lugar y el plan da 0. Estos tests no pueden depender del día en que se corren."""
+    from datetime import datetime, timezone
+    from app.services import cargas
+    fijo = datetime(2026, 11, 3, 14, 0, tzinfo=timezone.utc)   # martes 3/11, 10:00 en Bolivia
+    monkeypatch.setattr(cargas, "ahora_utc", lambda: fijo)
+
+
 def test_flujo_completo_extremo_a_extremo(client, repo, crepo, ana, luis, monkeypatch, capsys):
+    _congelar_un_martes(monkeypatch)
     monkeypatch.setattr(settings, "content_render_timeout_seg", 300)
     comercio(repo)
     # 1) 4 fotos al banco
@@ -220,7 +230,8 @@ def test_flujo_completo_extremo_a_extremo(client, repo, crepo, ana, luis, monkey
     print("PUBLISHED_POSTS", rv.json()["published_posts"])
 
 
-def test_sin_emojis_en_textos_aunque_el_comercio_los_tenga_en_nombre_y_rubro(client, repo, crepo, ana):
+def test_sin_emojis_en_textos_aunque_el_comercio_los_tenga_en_nombre_y_rubro(client, repo, crepo, ana, monkeypatch):
+    _congelar_un_martes(monkeypatch)
     from app.services import content_captions, subscriber_messages as sm
     comercio(repo, nombre="🔥 Vidriería Pacheco 🔥", rubros={"nombre": "👕 Vidriería", "slug": "vidrios"})
     _subir(client, ana, "com-1", 4)
