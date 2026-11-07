@@ -1332,7 +1332,7 @@ def set_confiable(
 def generar_clave_comercio(
     comercio_id: str,
     response: Response,
-    admin: dict = Depends(require_permiso("comercios.cuenta")),
+    admin: dict = Depends(require_admin),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """«Generar clave nueva»: la clave automática (`PREFIJO-AZAR`) del comercio.
@@ -1340,8 +1340,8 @@ def generar_clave_comercio(
     La anterior deja de servir y se devuelve la nueva UNA sola vez (`{"clave": ...}`);
     el admin se la pasa al dueño. Como lo hace quien administra la cuenta, los
     fallos de ingreso de ese número quedan obsoletos (si no, un dueño bloqueado por
-    equivocarse seguiría bloqueado con la clave nueva). Pide `comercios.cuenta`: el
-    publicador no la tiene. Crea la cuenta de Mi comercio si el comercio no tenía.
+    equivocarse seguiría bloqueado con la clave nueva). Es SÓLO DEL ADMIN (permiso `equipo`, mirado
+    HOY en la base; decisión del dueño, 7/11/2026): el moderador, aunque tenga `comercios.cuenta`, recibe 403. Crea la cuenta de Mi comercio si el comercio no tenía.
     La clave nunca va a un log."""
     response.headers["Cache-Control"] = "no-store"
     try:

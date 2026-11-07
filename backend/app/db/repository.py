@@ -194,7 +194,8 @@ class Repo(Protocol):
     def anular_clave_comercio(self, user_ids: list[str]) -> None: ...
     def anular_claves_de_comercio(self, comercio_id: str) -> None: ...
     def get_cuenta_comercio(self, comercio_id: str, cuenta_id: str | None = None) -> dict | None: ...
-    def registrar_evento_comercio(self, comercio_id: str, tipo: str, actor: str, detalle: dict | None = None) -> None: ...
+    def registrar_evento_comercio(self, comercio_id: str, tipo: str, actor: str, detalle: dict | None = None) -> str | None: ...
+    def list_eventos_comercio(self, comercio_id: str, tipo: str, limite: int = 50) -> list[dict]: ...
     def get_comercio_por_alta_uid(self, cargado_por: str, alta_uid: str) -> dict | None: ...
     def get_solicitud_cambio_numero(self, solicitud_id: str) -> dict | None: ...
     # Intentos de ingreso con clave (tabla `clave_fallos`, 0137): el conteo es atómico en la base.
@@ -1390,7 +1391,17 @@ class SupabaseRepo(IntegracionRepoMixin):
         fila: dict = {"comercio_id": comercio_id, "tipo": tipo, "actor": actor}
         if detalle is not None:
             fila["detalle"] = detalle
-        self._db.table("comercio_eventos").insert(fila).execute()
+        res = self._db.table("comercio_eventos").insert(fila).execute()
+        # El id del evento (uuid): `entro_como_comercio` lo usa de `jti` del token del admin.
+        return str(res.data[0]["id"]) if res.data and res.data[0].get("id") else None
+
+    def list_eventos_comercio(self, comercio_id: str, tipo: str, limite: int = 50) -> list[dict]:
+        """Los últimos eventos de ese tipo de la cuenta de un comercio (`comercio_eventos`), los más nuevos
+        primero. `{id, actor, detalle, created_at}`."""
+        res = (self._db.table("comercio_eventos").select("id, actor, detalle, created_at")
+               .eq("comercio_id", comercio_id).eq("tipo", tipo)
+               .order("created_at", desc=True).order("id").limit(max(1, int(limite))).execute())
+        return res.data or []
 
     def get_comercio_por_alta_uid(self, cargado_por: str, alta_uid: str) -> dict | None:
         """El comercio que ese agente ya dio de alta con ese `alta_uid` (reintentos de la
@@ -2384,8 +2395,11 @@ class SupabaseRepo(IntegracionRepoMixin):
         comerciante no obtuvo nada por ella, y cobrársela sería cobrarle por un
         rechazo nuestro.
         """
+        # Sin las que cargó el equipo entrando al comercio (`identidad_origen = 'admin'`): no gastan su plan.
+        # `neq` solo dejaría afuera las de `identidad_origen` NULL (casi todas), de ahí el `or`.
         res = (self._db.table("publicaciones").select("id", count="exact")
                .eq("comercio_id", comercio_id).eq("estado", "aprobado")
+               .or_("identidad_origen.is.null,identidad_origen.neq.admin")
                .gte("created_at", desde_iso).limit(1).execute())
         return res.count or 0
 
@@ -2399,6 +2413,8 @@ class SupabaseRepo(IntegracionRepoMixin):
         archivado miraría una lista incompleta y dejaría de archivar de más.
         `id` desempata el orden para que el paginado sea total.
         """
+        # Sin las que cargó el equipo entrando al comercio (`identidad_origen = 'admin'`): no ocupan el cupo
+        # del plan del comercio ni se archivan por él (decisión del dueño, 7/11/2026).
         # Sin los destacados de producto (`producto_ref_id`): llevan un costo
         # que se cobra con la suscripción y que deja de verse si la publicación
         # se archiva, y el producto quedaría marcado «ya destacado» para
@@ -2406,7 +2422,8 @@ class SupabaseRepo(IntegracionRepoMixin):
         return self._traer_todo(
             "publicaciones", "id, imagen_url, created_at", ["created_at", "id"],
             filtrar=lambda q: (q.eq("comercio_id", comercio_id).eq("activo", True)
-                               .is_("producto_ref_id", "null")))
+                               .is_("producto_ref_id", "null")
+                               .or_("identidad_origen.is.null,identidad_origen.neq.admin")))
 
     def archivar_publicacion(self, pub_id: str) -> None:
         """Soft-delete: `activo = false`. La fila queda."""

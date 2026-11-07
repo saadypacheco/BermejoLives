@@ -20,7 +20,7 @@ from fastapi.routing import APIRoute
 from structlog.testing import capture_logs
 
 from app.core import auth
-from app.core.sesion_comercio import MSG_NO_COMO_ADMIN, require_comercio_vigente
+from app.core.sesion_comercio import MSG_NO_COMO_ADMIN
 from app.main import app
 
 ID_COMERCIO = "7d1e2f30-4a5b-4c6d-8e7f-9a0b1c2d3e4f"
@@ -40,6 +40,13 @@ def _admin_con_fila(repo, email="jefa@uruku.bo", roles=("admin",), activo=True):
     """Alguien del equipo CON fila en `usuarios_panel` (la cuenta del `.env` no tiene: nunca se corta)."""
     repo.crear_usuario_panel({"email": email, "nombre": "Jefa", "activo": activo, "password_hash": "x"}, list(roles))
     return auth.make_token(email, roles=list(roles))
+
+
+@pytest.fixture
+def admin_token(repo):
+    """El admin de estos tests: tiene FILA en el panel (las cuentas del `.env` no pueden entrar: ver
+    `test_la_cuenta_de_emergencia_del_env_no_entra`)."""
+    return _admin_con_fila(repo, "admin@bermejolive.com")
 
 
 def _entrar(client, token, comercio_id=ID_COMERCIO, **kw):
@@ -145,7 +152,7 @@ def test_no_depende_de_la_version_de_la_clave_del_dueno(client, repo, admin_toke
 
 def test_el_token_vencido_da_401(client, repo, admin_token):
     _comercio(repo)
-    vencido, _ = auth.make_comercio_admin_token(ID_COMERCIO, "admin@bermejolive.com", ttl_segundos=-5)
+    vencido, _ = auth.make_comercio_admin_token(ID_COMERCIO, "admin@bermejolive.com", "evt-1", ttl_segundos=-5)
     assert client.get("/comercio/perfil", headers=_h(vencido)).status_code == 401
 
 
@@ -223,6 +230,7 @@ PERMITIDAS = {
     ("GET", "/comercio/asistente/preguntas"), ("GET", "/comercio/asistente/respuestas"),
     ("POST", "/comercio/asistente/respuestas"), ("PUT", "/comercio/asistente/respuestas/{respuesta_id}"),
     ("DELETE", "/comercio/asistente/respuestas/{respuesta_id}"),
+    ("POST", "/comercio/entrada/salir"),
 }
 
 
@@ -243,13 +251,14 @@ def _todas_las_rutas(rutas):
             yield from _todas_las_rutas(r.original_router.routes)
 
 
-def _rutas_de_mi_comercio():
-    """{(método, ruta): ¿lleva el guarda `_comercio_dueno`?} de TODA ruta que usa la sesión de Mi comercio."""
+def _rutas_de_mi_comercio(rutas=None):
+    """{(método, ruta): ¿lleva el guarda `_comercio_dueno`?} de TODA ruta que usa la sesión de Mi comercio:
+    la que pasa por `auth.require_comercio` (directo o por `require_comercio_vigente`, que lo trae adentro)."""
     from app.api.comercio import _comercio_dueno
     out = {}
-    for r in _todas_las_rutas(app.routes):
+    for r in _todas_las_rutas(rutas if rutas is not None else app.routes):
         llamadas = set(_llamadas(r.dependant))
-        if require_comercio_vigente not in llamadas:
+        if auth.require_comercio not in llamadas:
             continue
         for metodo in r.methods - {"HEAD", "OPTIONS"}:
             out[(metodo, r.path)] = _comercio_dueno in llamadas
@@ -297,20 +306,24 @@ def test_las_mismas_acciones_siguen_andando_para_el_dueno(client, repo):
     assert client.post("/comercio/clave", headers=_h(dueno)).status_code == 200      # (sube la versión de la clave)
 
 
-def test_publicar_pasandose_del_tope_cobra_y_eso_es_del_dueno(client, repo, admin_token):
+def test_publicar_pasandose_del_tope_cobra_al_dueno_pero_nunca_al_admin(client, repo, admin_token):
+    """Regla del dueño (7/11): lo del equipo no gasta el plan. Con el tope lleno el admin publica igual, sin
+    cargo; el dueño en la misma situación sí genera el cargo de siempre."""
     c = _comercio(repo, plan="publica")
     hoy = datetime.now(timezone.utc).isoformat()
     for i in range(25):
         repo.insert_publicacion_directa({"comercio_id": c["id"], "tipo": "oferta", "titulo": f"of {i}",
                                          "estado": "aprobado", "created_at": hoy})
-    antes = len(repo.publicaciones)
     t = _token_adm(client, admin_token)
     r = client.post("/comercio/publicar", headers=_h(t), json={"tipo": "oferta", "titulo": "Una más"})
-    assert r.status_code == 403 and r.json()["detail"] == MSG_NO_COMO_ADMIN
-    assert len(repo.publicaciones) == antes                                       # no se publicó ni se cobró
+    assert r.status_code == 200, r.text
+    assert r.json()["aviso"] is None
+    assert repo.cargos_extra == []                                                # no se cobró nada
+    assert next(p for p in repo.publicaciones if p["titulo"] == "Una más")["identidad_origen"] == "admin"
     dueno = auth.make_comercio_token(c["id"], "x@y.com")
     assert client.post("/comercio/publicar", headers=_h(dueno),
-                       json={"tipo": "oferta", "titulo": "Una más"}).status_code == 200
+                       json={"tipo": "oferta", "titulo": "Del dueño"}).status_code == 200
+    assert len(repo.cargos_extra) == 1                                            # el del dueño sí cobra
 
 
 # ═════════════════════════════════════════════════════════ lo que SÍ se puede

@@ -399,10 +399,23 @@ def test_el_admin_con_un_comercio_inexistente_da_404(client, repo, admin_token):
     assert client.post("/admin/comercio/no-existe/clave", headers=_hdr(admin_token)).status_code == 404
 
 
-def test_el_moderador_con_comercios_cuenta_puede(client, repo):
-    c, _u = _con_cuenta(repo, id=ID_COMERCIO)
+def test_el_moderador_con_comercios_cuenta_ya_no_puede_generar_la_clave(client, repo):
+    """Regla del dueño (7/11/2026): «Generar clave nueva» es SÓLO del admin (permiso `equipo`)."""
+    c, cuenta = _con_cuenta(repo, id=ID_COMERCIO)
+    cuenta["clave_hash"] = auth.hash_password("004217")
     r = client.post(f"/admin/comercio/{c['id']}/clave", headers=_hdr(_admin_con(["comercios.cuenta"])))
+    assert r.status_code == 403 and "clave" not in r.json()
+    moderador = auth.make_token("moni@uruku.bo", roles=["moderador"])
+    assert client.post(f"/admin/comercio/{c['id']}/clave", headers=_hdr(moderador)).status_code == 403
+    assert _ingresar(client, "70123456", "004217").status_code == 200                      # la clave sigue siendo la misma
+    assert not [e for e in repo.comercio_eventos if e["tipo"] == "clave_generada_por_admin"]
+
+
+def test_el_admin_con_equipo_si_puede_generar_la_clave(client, repo, admin_token):
+    c, _u = _con_cuenta(repo, id=ID_COMERCIO)
+    r = client.post(f"/admin/comercio/{c['id']}/clave", headers=_hdr(admin_token))
     assert r.status_code == 200 and "clave" in r.json()
+    assert r.headers["cache-control"] == "no-store"
 
 
 def test_sin_comercios_cuenta_es_403_y_no_toca_la_clave(client, repo):

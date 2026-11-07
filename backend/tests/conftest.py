@@ -733,6 +733,7 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         return len([p for p in self.publicaciones
                     if p.get("comercio_id") == comercio_id
                     and p.get("estado") == "aprobado"
+                    and p.get("identidad_origen") != "admin"          # las del equipo no gastan el plan
                     and str(p.get("created_at") or "9999") >= desde_iso])
 
     # ---- tope de publicaciones guardadas (0134) ----
@@ -744,7 +745,7 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         activas = [(str(p.get("created_at") or "9999"), i, p)
                    for i, p in enumerate(self.publicaciones)
                    if p.get("comercio_id") == comercio_id and p.get("activo", True)
-                   and not p.get("producto_ref_id")]
+                   and not p.get("producto_ref_id") and p.get("identidad_origen") != "admin"]
         return [{"id": p["id"], "imagen_url": p.get("imagen_url"),
                  "created_at": p.get("created_at")}
                 for _, _, p in sorted(activas, key=lambda t: (t[0], t[1]))]
@@ -1200,9 +1201,17 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         if self.falla_auditoria:
             raise RuntimeError("no se pudo escribir comercio_eventos")
         fila = {"comercio_id": comercio_id, "tipo": tipo, "actor": actor}
-        if detalle is not None:        # 0151: sólo los eventos con detalle llevan fecha en el fake
-            fila.update({"detalle": detalle, "created_at": self._tic()})
+        evento_id = self._id("evt")
+        if detalle is not None:        # 0151: sólo los eventos con detalle llevan fecha (y id) en el fake
+            fila.update({"id": evento_id, "detalle": detalle, "created_at": self._tic()})
         self.comercio_eventos.append(fila)
+        return evento_id
+
+    def list_eventos_comercio(self, comercio_id, tipo, limite=50):
+        """Como el repo real: los del tipo pedido, los más nuevos primero (el orden de llegada desempata)."""
+        filas = [e for e in self.comercio_eventos if e["comercio_id"] == comercio_id and e["tipo"] == tipo]
+        filas = sorted(enumerate(filas), key=lambda t: (str(t[1].get("created_at") or ""), t[0]), reverse=True)
+        return [{k: e.get(k) for k in ("id", "actor", "detalle", "created_at")} for _, e in filas[:limite]]
 
     def _tic(self):
         """Una marca de tiempo ISO estrictamente creciente (dos llamadas seguidas nunca empatan)."""

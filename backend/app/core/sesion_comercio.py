@@ -19,7 +19,7 @@ comparan.
 from __future__ import annotations
 
 import structlog
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 
 from app.core import auth
 from app.db.repository import Repo, get_repo
@@ -47,12 +47,24 @@ def exigir_sesion_vigente(claims: dict, repo: Repo) -> None:
         raise HTTPException(status_code=401, detail=MSG_SESION_CERRADA)
 
 
+_METODOS_DE_LECTURA = {"GET", "HEAD", "OPTIONS"}
+
+
 def require_comercio_vigente(
+    request: Request,
     claims: dict = Depends(auth.require_comercio),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """Como `require_comercio`, y además la sesión tiene que seguir vigente."""
+    """Como `require_comercio`, y además la sesión tiene que seguir vigente.
+
+    Es el ÚNICO lugar por el que pasa toda ruta de Mi comercio (publicar, editar y borrar, productos, fotos y
+    videos, perfil, catálogo, asistente…), así que acá queda la atribución: cada escritura hecha con el token
+    de un admin que entró (`adm`) se registra con `por_admin` y `jti` (el id del evento `entro_como_comercio`
+    de `comercio_eventos`), sin importar qué ruta sea. El token nunca se registra."""
     exigir_sesion_vigente(claims, repo)
+    if claims.get("adm") and request.method.upper() not in _METODOS_DE_LECTURA:
+        logger.info("comercio.escritura_como_admin", por_admin=claims["adm"], jti=claims.get("jti"),
+                    comercio_id=claims.get("comercio_id"), metodo=request.method.upper(), ruta=request.url.path)
     return claims
 
 

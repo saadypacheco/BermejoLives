@@ -208,9 +208,10 @@ def make_comercio_token(comercio_id: str, email: str, cuenta_id: str | None = No
 #: Cuánto dura el token con el que un admin entra a «Mi comercio» de otro (`POST /admin/comercios/{id}/entrar`).
 ENTRADA_ADMIN_TTL_SEGUNDOS = 30 * 60
 MSG_ENTRADA_ADMIN_CORTADA = "Tu acceso de admin ya no permite entrar a este comercio"
+MSG_ENTRADA_ADMIN_CERRADA = "La entrada como admin ya se cerró"
 
 
-def make_comercio_admin_token(comercio_id: str, admin_email: str,
+def make_comercio_admin_token(comercio_id: str, admin_email: str, jti: str,
                               ttl_segundos: int = ENTRADA_ADMIN_TTL_SEGUNDOS) -> tuple[str, int]:
     """El token con el que un ADMIN entra a Mi comercio de cualquier comercio. Devuelve `(token, exp)`.
 
@@ -218,7 +219,11 @@ def make_comercio_admin_token(comercio_id: str, admin_email: str,
     admin, y vida corta (30 min). No lleva `cuenta_id` ni `ver`: no depende de la cuenta del dueño (puede
     no existir) ni de la versión de su clave. En su lugar, cada pedido vuelve a mirar la cuenta del PANEL
     del admin (`exigir_admin_vigente`): si la dieron de baja o perdió `equipo`, el token deja de servir.
-    `sub`/`email` son los del admin: lo que el código registra como «quién» es el admin, no el dueño."""
+    `sub`/`email` son los del admin: lo que el código registra como «quién» es el admin, no el dueño.
+
+    `jti` es el id del evento `entro_como_comercio` de `comercio_eventos` (se escribe ANTES de emitir el
+    token): ata cada cosa que se haga con este token a una entrada auditada, y es lo que `revocar_entrada`
+    usa para cortarlo antes de los 30 minutos."""
     exp = int(time.time()) + int(ttl_segundos)
     payload = {
         "sub": admin_email,
@@ -226,20 +231,53 @@ def make_comercio_admin_token(comercio_id: str, admin_email: str,
         "rol": "comercio",
         "comercio_id": str(comercio_id),
         "adm": admin_email,
+        "jti": str(jti),
         "exp": exp,
     }
     return pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256"), exp
 
 
+# Entradas de admin cerradas a mano (`POST /comercio/entrada/salir`): jti -> exp del token.
+# EN MEMORIA, a propósito: el backend corre con UN solo worker de uvicorn. Si el proceso se reinicia el
+# conjunto se olvida, y la entrada que se había cerrado vuelve a servir hasta que el token venza solo (a
+# los 30 minutos como máximo). Cada alta limpia las que ya vencieron, así no crece sin tope.
+_entradas_revocadas: dict[str, int] = {}
+
+
+def revocar_entrada(jti: str, exp: int) -> None:
+    """Corta la entrada de admin con ese `jti` hasta que el token venza."""
+    ahora = int(time.time())
+    for k in [k for k, v in _entradas_revocadas.items() if v <= ahora]:
+        del _entradas_revocadas[k]
+    _entradas_revocadas[str(jti)] = int(exp)
+
+
+def entrada_revocada(jti: str | None) -> bool:
+    exp = _entradas_revocadas.get(str(jti)) if jti else None
+    return exp is not None and exp > int(time.time())
+
+
+def reiniciar_entradas_revocadas() -> None:
+    """Vacía las entradas cortadas (los tests)."""
+    _entradas_revocadas.clear()
+
+
 def exigir_admin_vigente(claims: dict, repo: Repo) -> None:
-    """Si el token de Mi comercio trae `adm` (entró un admin), 401 salvo que la cuenta del panel de ese admin
-    siga activa Y tenga HOY el permiso `equipo` (el de la base, con el caché de 60 s del corte de acceso).
+    """Si el token de Mi comercio trae `adm` (entró un admin), 401 salvo que: el token tenga `jti` y no se haya
+    cerrado la entrada, y la cuenta del panel de ese admin siga activa Y tenga HOY el permiso `equipo` (el de la
+    base, con el caché de 60 s del corte de acceso).
     Sin `adm` no hace nada. Se llama en cada pedido: es lo que reemplaza a la versión de la clave del dueño."""
     if "adm" not in claims:
         return
     adm = claims.get("adm")
     if not isinstance(adm, str) or not adm.strip():
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
+    jti = claims.get("jti")
+    if not isinstance(jti, str) or not jti.strip():
+        # Un token de admin sin `jti` no se puede atar a una entrada auditada: no sirve.
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+    if entrada_revocada(jti):
+        raise HTTPException(status_code=401, detail=MSG_ENTRADA_ADMIN_CERRADA)
     estado = _verificar_cuenta({"email": adm}, repo)       # 401 si la dieron de baja
     if not _vigente_tiene(estado, ("equipo",)):
         logger.info("auth.entrada_admin_sin_permiso", admin=adm)

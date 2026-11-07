@@ -34,7 +34,7 @@ from app.services.imagenes import (
 from app.services import enlaces, integracion
 from app.services import ficha_catalogo as catalogo_svc
 from app.services import archivos_privados, fotos_galeria, portada
-from app.services import planes, site_metrics
+from app.services import cargas, planes, site_metrics
 from app.services import ingreso_clave
 from app.services.cuentas import cuentas_de_numero, nueva_clave_comercio
 from app.services.rubros import aplicar_rubros
@@ -98,6 +98,28 @@ def _comercio_dueno(
     La lista de rutas así está fijada en `tests/test_entrar_como_comercio.py`."""
     exigir_dueno(claims)
     return claims
+
+
+def _es_admin_adentro(claims: dict) -> bool:
+    """¿Este token es el de un admin que entró (`adm`) y no el del dueño?"""
+    return bool(claims.get("adm"))
+
+
+def _actor_de(claims: dict) -> str:
+    """Quién queda en los registros de catálogo/producto: el correo del ADMIN si entró uno, si no el comercio."""
+    return claims.get("adm") or claims["comercio_id"]
+
+
+def _admin_con_cuenta(admin: dict = Depends(auth.require_admin), repo: Repo = Depends(get_repo)) -> dict:
+    """Como `require_admin` (permiso `equipo` mirado HOY), pero la cuenta tiene que tener FILA en el panel.
+    Las cuentas de emergencia del `.env` (sin fila en `usuarios_panel`) sirven para recuperar el acceso, no
+    para el día a día: contestan 403. Si la base no contesta y no hay dato previo tampoco se deja entrar."""
+    email = admin.get("email") or admin.get("sub") or ""
+    if auth._estado_cuenta(repo, email) is None:
+        logger.info("admin.entrada_denegada_cuenta_de_emergencia", admin=email)
+        raise HTTPException(status_code=403,
+                            detail="Esta cuenta es de emergencia: no puede entrar a un comercio. Usá tu cuenta del equipo.")
+    return admin
 
 
 @router.post("/auth/comercio/registro")
@@ -320,20 +342,30 @@ class EntrarComoComercioBody(BaseModel):
     motivo: str | None = Field(None, max_length=200)
 
 
+def _texto_aviso_de_entrada(motivo: str | None, ahora: datetime | None = None) -> str:
+    """El aviso que ve el dueño en su bandeja cuando el equipo entra. NO dice quién: «El equipo de URUKU»."""
+    cuando = (ahora or datetime.now(timezone.utc)).astimezone(cargas.BOLIVIA).strftime("%d/%m/%Y %H:%M")
+    return f"El equipo de URUKU entró a tu negocio el {cuando}. Motivo: {motivo or 'sin motivo indicado'}."
+
+
 @router.post("/admin/comercios/{comercio_id}/entrar")
 def admin_entrar_como_comercio(
     comercio_id: str,
+    response: Response,
     body: EntrarComoComercioBody | None = None,
-    admin: dict = Depends(auth.require_admin),
+    admin: dict = Depends(_admin_con_cuenta),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """Un admin del panel (permiso `equipo`, mirado HOY en la base) entra a «Mi comercio» de CUALQUIER
-    comercio para verlo y manejarlo como lo haría el dueño. Devuelve un token de comercio de 30 minutos
-    con el claim `adm` (ver `auth.make_comercio_admin_token`): sirve aunque el comercio no tenga cuenta y
-    no depende de la clave del dueño, pero deja de servir si al admin lo dan de baja o pierde `equipo`; y
-    no sirve para lo que cambia quién controla la cuenta o la plata (403 «No disponible entrando como
-    admin»). Cada entrada queda en `comercio_eventos` y en el log; el token nunca va a un log.
-    404 si el comercio no existe o está dado de baja."""
+    """Un admin del panel (permiso `equipo`, mirado HOY en la base, con cuenta propia en el panel: las del
+    `.env` dan 403) entra a «Mi comercio» de CUALQUIER comercio para verlo y manejarlo como lo haría el
+    dueño. Devuelve un token de comercio de 30 minutos con el claim `adm` y un `jti` (ver
+    `auth.make_comercio_admin_token`): sirve aunque el comercio no tenga cuenta y no depende de la clave del
+    dueño, pero deja de servir si al admin lo dan de baja o pierde `equipo`, o si cierra la entrada
+    (`POST /comercio/entrada/salir`); y no sirve para lo que cambia quién controla la cuenta o la plata (403
+    «No disponible entrando como admin»). Cada entrada queda en `comercio_eventos` (su id es el `jti`) y en
+    el log; el token nunca va a un log. El dueño recibe un aviso en su bandeja de Mi comercio (nunca por
+    WhatsApp, y sin decir quién). 404 si el comercio no existe o está dado de baja."""
+    response.headers["Cache-Control"] = "no-store"
     try:
         uuid.UUID(str(comercio_id))
     except ValueError as exc:
@@ -343,22 +375,69 @@ def admin_entrar_como_comercio(
         raise HTTPException(status_code=404, detail="Comercio no encontrado")
     motivo = ((body.motivo if body else None) or "").strip() or None
     admin_email = admin.get("email") or admin.get("sub")
-    token, exp = auth.make_comercio_admin_token(comercio["id"], admin_email)
-    expira_en = datetime.fromtimestamp(exp, tz=timezone.utc).isoformat()
-    # Auditoría ANTES de entregar el token: si no se puede dejar constancia, no se entra.
+    ttl = auth.ENTRADA_ADMIN_TTL_SEGUNDOS
+    expira_previsto = datetime.fromtimestamp(datetime.now(timezone.utc).timestamp() + ttl, tz=timezone.utc).isoformat()
+    # Auditoría ANTES de entregar el token: si no se puede dejar constancia, no se entra. El id del evento
+    # es el `jti` del token: todo lo que se haga con él se puede atar a esta entrada.
     try:
-        repo.registrar_evento_comercio(comercio["id"], "entro_como_comercio", admin_email,
-                                       {"motivo": motivo, "expira_en": expira_en})
+        jti = repo.registrar_evento_comercio(comercio["id"], "entro_como_comercio", admin_email,
+                                             {"motivo": motivo, "expira_en": expira_previsto})
     except Exception as exc:  # noqa: BLE001
         logger.error("admin.entrada_sin_auditoria", comercio_id=comercio["id"], admin=admin_email, error=str(exc))
         raise HTTPException(status_code=503, detail="No se pudo dejar constancia de la entrada. Probá de nuevo.") from exc
-    logger.info("admin.entro_como_comercio", admin=admin_email, comercio_id=comercio["id"], motivo=motivo)
+    if not jti:
+        logger.error("admin.entrada_sin_id_de_auditoria", comercio_id=comercio["id"], admin=admin_email)
+        raise HTTPException(status_code=503, detail="No se pudo dejar constancia de la entrada. Probá de nuevo.")
+    token, exp = auth.make_comercio_admin_token(comercio["id"], admin_email, jti, ttl)
+    expira_en = datetime.fromtimestamp(exp, tz=timezone.utc).isoformat()
+    # El aviso al dueño, en su bandeja (tabla `mensajes`). Si no se puede escribir, la entrada sigue: ya quedó
+    # auditada, y trabarle al equipo el acceso por la bandeja sería peor; queda un error en el log.
+    try:
+        repo.crear_mensaje({"comercio_id": comercio["id"], "autor": "admin", "nombre": "URUKU",
+                            "cuerpo": _texto_aviso_de_entrada(motivo)})
+    except Exception:  # noqa: BLE001
+        logger.error("admin.entrada_sin_aviso_al_comercio", comercio_id=comercio["id"], jti=jti, exc_info=True)
+    logger.info("admin.entro_como_comercio", admin=admin_email, comercio_id=comercio["id"], motivo=motivo, jti=jti)
     return {
         "access_token": token,
         "comercio": {"id": comercio["id"], "nombre": comercio.get("nombre"), "slug": comercio.get("slug")},
         "expira_en": expira_en,
         "por_admin": admin_email,
     }
+
+
+@router.get("/admin/comercios/{comercio_id}/entradas")
+def admin_entradas_a_comercio(
+    comercio_id: str,
+    _: dict = Depends(auth.require_admin),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Quién entró a «Mi comercio» de este comercio y cuándo, las más nuevas primero (hasta 50). Sale de los
+    eventos `entro_como_comercio` de `comercio_eventos`. Pide `equipo`."""
+    try:
+        uuid.UUID(str(comercio_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Comercio no encontrado") from exc
+    if not repo.get_comercio(comercio_id):
+        raise HTTPException(status_code=404, detail="Comercio no encontrado")
+    items = []
+    for e in repo.list_eventos_comercio(comercio_id, "entro_como_comercio", 50)[:50]:
+        detalle = e.get("detalle") or {}
+        items.append({"admin": e.get("actor"), "motivo": detalle.get("motivo") or None,
+                      "at": e.get("created_at"), "expira_en": detalle.get("expira_en")})
+    return {"items": items}
+
+
+@router.post("/comercio/entrada/salir", status_code=204)
+def salir_de_la_entrada(claims: dict = Depends(require_comercio_vigente)) -> Response:
+    """El admin que entró cierra su entrada: ese `jti` deja de servir (401) hasta que el token venza. Sólo con el
+    token de un admin (`adm`); el del dueño contesta 403. La lista de entradas cerradas vive en memoria del
+    proceso (un solo worker): si el backend se reinicia se olvida, y el token igual muere solo a los 30 minutos."""
+    if not _es_admin_adentro(claims):
+        raise HTTPException(status_code=403, detail="Sólo se puede salir de una entrada como admin")
+    auth.revocar_entrada(claims["jti"], int(claims["exp"]))
+    logger.info("admin.salio_de_comercio", admin=claims["adm"], comercio_id=claims["comercio_id"], jti=claims["jti"])
+    return Response(status_code=204, headers={"Cache-Control": "no-store"})
 
 
 class IngresarBody(BaseModel):
@@ -840,7 +919,7 @@ async def subir_mi_catalogo(
     borra el archivo viejo si era nuestro. El `Request` se lee a mano para cortar
     el cuerpo apenas pasa el tope (ver `services/catalogo.leer_pdf`)."""
     comercio = _mi_comercio(repo, claims)
-    url = await catalogo_svc.subir_catalogo(repo, comercio, request, actor=claims["comercio_id"])
+    url = await catalogo_svc.subir_catalogo(repo, comercio, request, actor=_actor_de(claims))
     return {"catalogo_url": url}
 
 
@@ -850,7 +929,7 @@ async def quitar_mi_catalogo(
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Quita el catálogo: borra el PDF si es nuestro y deja `catalogo_url` en null."""
-    await catalogo_svc.quitar_catalogo(repo, _mi_comercio(repo, claims), actor=claims["comercio_id"])
+    await catalogo_svc.quitar_catalogo(repo, _mi_comercio(repo, claims), actor=_actor_de(claims))
     return {"ok": True}
 
 
@@ -1006,16 +1085,25 @@ def publicar(
     # Si no puede publicar, el error ES el aviso (402, con el texto que explica
     # las dos salidas); si puede pero se pasó, sale y el aviso viaja en la
     # respuesta —con WAHA en sólo lectura no hay otro canal para avisarle—.
-    cuota = planes.revisar_antes_de_publicar(repo, comercio)
-    aviso = None
-    if cuota["consecuencia"]:
-        aviso = planes.texto_de_aviso(cuota, planes.plan_siguiente(repo, cuota["plan"]))
-    if not cuota["puede"]:
-        logger.info("comercio.publicar_sin_cuota", comercio=comercio.get("slug"),
-                    consecuencia=cuota["consecuencia"])
-        raise HTTPException(status_code=402, detail=aviso)
+    #
+    # Lo que publica el EQUIPO entrando al comercio (token `adm`) no gasta el plan del dueño (decisión del
+    # dueño del producto, 7/11/2026): no se mira la cuota ni se cobra extra, y la publicación nace con
+    # `identidad_origen = 'admin'`, que la deja afuera de la cuota mensual y del tope de guardadas.
+    adentro = _es_admin_adentro(claims)
+    if adentro:
+        cuota = {"puede": True, "consecuencia": None}
+        aviso = None
+    else:
+        cuota = planes.revisar_antes_de_publicar(repo, comercio)
+        aviso = None
+        if cuota["consecuencia"]:
+            aviso = planes.texto_de_aviso(cuota, planes.plan_siguiente(repo, cuota["plan"]))
+        if not cuota["puede"]:
+            logger.info("comercio.publicar_sin_cuota", comercio=comercio.get("slug"),
+                        consecuencia=cuota["consecuencia"])
+            raise HTTPException(status_code=402, detail=aviso)
     if cuota["consecuencia"] == "cobrar":
-        # Pasarse del tope genera un cargo al comercio: lo decide el dueño, no un admin que entró.
+        # Pasarse del tope genera un cargo al comercio: es del dueño (por las dudas, nunca de un admin).
         exigir_dueno(claims)
 
     confiable = integracion.es_confiable(repo, comercio)
@@ -1042,6 +1130,10 @@ def publicar(
         "moderado_por": "auto-confiable" if confiable else None,
         "moderado_at": now if confiable else None,
     }
+    if adentro:
+        # Columna privada de siempre (0044, 0149). `publicaciones` no tiene columna de «autor»: quién fue el
+        # admin queda en el log (`comercio.escritura_como_admin` y `comercio.publicar`, con `por_admin` y `jti`).
+        row["identidad_origen"] = "admin"
     pub = repo.insert_publicacion_directa(row)
     # El cargo se ata a la publicación (una fila por publicación). OJO: acá eso
     # NO evita el doble cobro si el comerciante reintenta tras un timeout, porque
@@ -1051,10 +1143,10 @@ def publicar(
         planes.cobrar_extra(repo, comercio, pub["id"], cuota["plan"])
     # Después de insertar: si se pasó del tope de guardadas, archiva la más vieja
     # y borra su foto. Nunca lanza.
-    if pub.get("id"):
+    if pub.get("id") and not adentro:
         planes.archivar_excedentes(repo, comercio)
     logger.info("comercio.publicar", comercio=comercio["slug"], estado=row["estado"], confiable=confiable,
-                por_admin=claims.get("adm"))
+                por_admin=claims.get("adm"), jti=claims.get("jti"))
     return {
         "ok": True,
         "estado": row["estado"],
@@ -1361,7 +1453,18 @@ async def agregar_mi_foto(
     cid = claims["comercio_id"]
     comercio = _mi_comercio(repo, claims)
     # En el tope: 409 con las opciones; `extra=pagar` (sólo acá) o `reemplazar=<id>`.
-    subida = fotos_galeria.preparar(repo, comercio, reemplazar=reemplazar, extra=extra, puede_pagar=True)
+    # Comprar una foto extra es un cargo al comercio: sólo el dueño. Un admin que entró sube dentro del tope
+    # (y puede reemplazar); en el tope recibe el 409 de siempre sin la salida de pagar (`puede_pagar: false`),
+    # y con `extra=pagar` un 403 «No disponible entrando como admin».
+    adentro = _es_admin_adentro(claims)
+    if adentro and (extra or "").strip().lower() == "pagar":
+        exigir_dueno(claims)
+    try:
+        subida = fotos_galeria.preparar(repo, comercio, reemplazar=reemplazar, extra=extra, puede_pagar=not adentro)
+    except HTTPException as exc:
+        if adentro and exc.status_code == 409 and isinstance(exc.detail, dict):
+            exc.detail = {**exc.detail, "puede_pagar": False}
+        raise
     data = await foto.read()
     if not data:
         raise HTTPException(status_code=400, detail="Falta la foto")
