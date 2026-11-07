@@ -645,8 +645,8 @@ def limpiar_media_huerfana(repo, dias: int | None = None, ahora: float | None = 
 
 def mantenimiento_diario(repo) -> dict:
     """Lo que la integración limpia una vez por día: la caché de idempotencia vencida (7 días) y las imágenes
-    de E6 sin uso. Nunca lanza (cada paso falla por separado). Lo llama el loop diario de retención
-    (`wa_received.purge_events`)."""
+    de E6 sin uso. Nunca lanza (cada paso falla por separado). Lo llama su propio loop diario de
+    `main.py` (`_integracion_mantenimiento_loop`)."""
     res = {"idempotencia": 0, "media": 0}
     try:
         res["idempotencia"] = int(repo.integracion_idem_purgar() or 0)

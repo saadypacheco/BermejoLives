@@ -22,7 +22,7 @@ import pytest
 from PIL import Image
 
 from app.core.config import settings
-from app.services import difusion, ingest, integracion, wa_media, wa_received
+from app.services import difusion, ingest, integracion, wa_media
 from tests.test_ingest import GRUPO, _evento_grupo
 from tests.test_integracion_api import BASE, H, _aprobar, _foto, _pub, aprobada, error, etag, mundo  # noqa: F401
 
@@ -502,16 +502,27 @@ def test_limpieza_no_borra_nada_si_no_puede_saber_que_esta_en_uso(repo, monkeypa
     assert (Path(settings.fotos_dir) / "integracion" / f"med_{'d' * 32}.jpg").exists()
 
 
-def test_el_loop_diario_de_retencion_corre_la_limpieza_y_la_purga_de_idempotencia(repo):
+def test_el_mantenimiento_diario_corre_la_limpieza_y_la_purga_de_idempotencia(repo):
     from pathlib import Path
 
     _plantar("med_" + "e" * 32, 90)
     repo.integracion_idem_reclamar("g1", "vieja", "h")
     repo._integ()["idem"][("g1", "vieja")]["created_at"] = "2020-01-01T00:00:00+00:00"
     repo.integracion_idem_reclamar("g1", "nueva", "h")
-    wa_received.purge_events(repo)                                       # lo que llama el loop diario de main.py
+    assert integracion.mantenimiento_diario(repo)["idempotencia"] == 1   # lo que llama el loop diario de main.py
     assert not (Path(settings.fotos_dir) / "integracion" / f"med_{'e' * 32}.jpg").exists()
     assert ("g1", "vieja") not in repo._integ()["idem"] and ("g1", "nueva") in repo._integ()["idem"]
+
+
+def test_el_mantenimiento_tiene_su_propio_loop_y_ya_no_cuelga_de_la_retencion_de_whatsapp():
+    from pathlib import Path
+
+    fuente = (Path(__file__).resolve().parents[1] / "app/main.py").read_text(encoding="utf-8")
+    assert "async def _integracion_mantenimiento_loop" in fuente
+    assert "asyncio.create_task(_integracion_mantenimiento_loop())" in fuente
+    assert "integracion.mantenimiento_diario" in fuente
+    retencion = (Path(__file__).resolve().parents[1] / "app/services/wa_received.py").read_text(encoding="utf-8")
+    assert "mantenimiento_diario" not in retencion
 
 
 def test_el_mantenimiento_nunca_lanza(repo, monkeypatch):

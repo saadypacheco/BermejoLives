@@ -181,6 +181,23 @@ async def _wa_received_loop():
         await asyncio.sleep(86400)  # 1 día
 
 
+async def _integracion_mantenimiento_loop():
+    """Mantenimiento diario de la API de integración con marketing: borra la caché de idempotencia vencida
+    (7 días) y las imágenes de E6 que ninguna difusión usa. Una vez al día, con su propio loop (antes
+    colgaba de la retención de WhatsApp). `mantenimiento_diario` nunca lanza; igual se protege el loop.
+
+    Espera antes de la primera vuelta para que el arranque no compita con la limpieza."""
+    from app.services import integracion
+
+    await asyncio.sleep(600)
+    while True:
+        try:
+            await run_in_threadpool(integracion.mantenimiento_diario, get_repo())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("integracion_mantenimiento_loop.error", error=str(exc))
+        await asyncio.sleep(86400)  # 1 día
+
+
 async def _indexnow_loop():
     """Avisa a IndexNow (Bing y compañía) las fichas que cambiaron.
 
@@ -333,6 +350,7 @@ async def lifespan(app: FastAPI):
     if settings.wa_sesion_vigilar:
         tareas.append(asyncio.create_task(_wa_sesion_loop()))
     tareas.append(asyncio.create_task(_wa_received_loop()))
+    tareas.append(asyncio.create_task(_integracion_mantenimiento_loop()))
     if settings.site_metrics_worker:
         tareas.append(asyncio.create_task(_site_metrics_flush_loop()))
         tareas.append(asyncio.create_task(_site_metrics_retention_loop()))

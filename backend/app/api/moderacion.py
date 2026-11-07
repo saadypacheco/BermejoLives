@@ -10,7 +10,7 @@ import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.auth import MIN_LARGO_CLAVE_PANEL, hash_password_panel, reiniciar_cache_acceso, require_admin, require_alguno, require_moderador, require_panel, require_permiso
+from app.core.auth import MIN_LARGO_CLAVE_PANEL, _verificar_cuenta, _vigente_tiene, hash_password_panel, reiniciar_cache_acceso, require_admin, require_alguno, require_moderador, require_panel, require_permiso
 from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS, tiene as tiene_permiso
 from app.core.config import _numeros_propios, settings
 from app.api.agent_credentials import catalogo_de_permisos, es_agente
@@ -189,18 +189,29 @@ def _exigir_override_si_gestionado(repo: Repo, pub_id: str, body: ModerarBody, m
     """Un comercio GESTIONADO por la integración de marketing se aprueba desde ese sistema (una sola
     aprobación). Desde acá: 409, salvo un override de admin con motivo, que queda registrado.
 
+    EXCEPTO lo que la integración se niega a aprobar (`integracion.requiere_moderacion_de_uruku`: lo que no
+    mandó el comercio mismo, lo del explorador o del código, lo que la IA marcó para rechazar): eso sólo lo
+    puede aprobar el equipo de Uruku desde este panel, así que se aprueba SIN override. Es la misma función
+    que usa la integración, para que los dos lados nunca se desalineen.
+
     Devuelve el motivo a guardar (con el prefijo del override). No toca nada de los comercios comunes."""
     from app.services import integracion
 
     pub = repo.get_publicacion(pub_id) or {}
     if not integracion.es_gestionado(repo, pub.get("comercio_id")):
         return body.motivo
+    if integracion.requiere_moderacion_de_uruku(pub):
+        logger.info("moderacion.aprobada_gestionado_sin_override", pub=pub_id, comercio=pub.get("comercio_id"),
+                    by=mod.get("email"))
+        return body.motivo
     if not body.override_gestionado:
         raise HTTPException(
             status_code=409,
             detail="Este comercio lo gestiona el sistema de marketing: la aprobación se hace desde ahí. "
                    "Si hace falta aprobarla igual, un admin puede hacerlo con override y motivo.")
-    if not tiene_permiso(mod, "equipo"):
+    # El permiso se mira HOY (el de la base), no sólo el que trae el token: un admin al que le sacaron el
+    # permiso no puede hacer override hasta que el token venza.
+    if not tiene_permiso(mod, "equipo") or not _vigente_tiene(_verificar_cuenta(mod, repo), ("equipo",)):
         raise HTTPException(status_code=403, detail="Sólo un admin puede aprobar con override un comercio gestionado")
     razon = (body.motivo or "").strip()
     if len(razon) < 10:
