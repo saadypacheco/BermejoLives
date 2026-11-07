@@ -27,7 +27,7 @@ export async function UnirmeComunidad({ variante = "banner" }: { variante?: "ban
   if (!comunidad) return null;
   if (variante === "boton") {
     return (
-      <a className="uk-btn uk-btn-wa uk-comunidad-btn" href={comunidad} target="_blank" rel="noopener">
+      <a className="uk-btn uk-btn-wa uk-comunidad-btn" href={comunidad} target="_blank" rel="noopener" data-uk-evento="uruku_whatsapp_click" data-uk-detalle="comunidad">
         <Ic n="comunidad" s={17} /> Unite a la comunidad
       </a>
     );
@@ -35,7 +35,7 @@ export async function UnirmeComunidad({ variante = "banner" }: { variante?: "ban
   if (variante === "chico") {
     return (
       <p className="uk-comunidad-chico">
-        <Ic n="comunidad" s={17} /> <a href={comunidad} target="_blank" rel="noopener"><b>Unite a la comunidad de compradores</b></a>: la cotización de la mañana,
+        <Ic n="comunidad" s={17} /> <a href={comunidad} target="_blank" rel="noopener" data-uk-evento="uruku_whatsapp_click" data-uk-detalle="comunidad"><b>Unite a la comunidad de compradores</b></a>: la cotización de la mañana,
         las ofertas del día y gente que ya compró en Bermejo. <Link href="/comunidad">Qué es →</Link>
       </p>
     );
@@ -48,7 +48,7 @@ export async function UnirmeComunidad({ variante = "banner" }: { variante?: "ban
           <span>Cotización de la mañana, ofertas del día, cómo está el paso, y un grupo por ciudad para preguntar a los que ya vinieron. Entrás vos: nadie te agrega.</span>
         </div>
         <div className="uk-comunidad-acciones">
-          <a className="uk-btn uk-btn-wa" href={comunidad} target="_blank" rel="noopener">Unite a la comunidad</a>
+          <a className="uk-btn uk-btn-wa" href={comunidad} target="_blank" rel="noopener" data-uk-evento="uruku_whatsapp_click" data-uk-detalle="comunidad">Unite a la comunidad</a>
           <Link href="/comunidad" className="uk-btn-ghost">Cómo funciona</Link>
         </div>
       </div>

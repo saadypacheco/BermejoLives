@@ -59,7 +59,7 @@ export default async function ComunidadPage() {
           <div className="uk-comunidad-col uk-comunidad-entrar">
             {comunidad ? (
               <>
-                <a className="uk-btn uk-btn-wa uk-comunidad-btn" href={comunidad} target="_blank" rel="noopener"><Ic n="comunidad" s={17} /> Unite a la comunidad</a>
+                <a className="uk-btn uk-btn-wa uk-comunidad-btn" href={comunidad} target="_blank" rel="noopener" data-uk-evento="uruku_whatsapp_click" data-uk-detalle="comunidad"><Ic n="comunidad" s={17} /> Unite a la comunidad</a>
                 {qr && (
                   <div className="uk-comunidad-qr">
                     <img src={qr} alt="QR para entrar a la comunidad" width={200} height={200} />
@@ -68,7 +68,7 @@ export default async function ComunidadPage() {
                 )}
                 {canal && (
                   <p className="uk-comunidad-canal">
-                    ¿Sólo querés leer? <a href={canal} target="_blank" rel="noopener">Seguí el canal de URUKU</a>: los avisos, sin chat.
+                    ¿Sólo querés leer? <a href={canal} target="_blank" rel="noopener" data-uk-evento="uruku_whatsapp_click" data-uk-detalle="canal">Seguí el canal de URUKU</a>: los avisos, sin chat.
                   </p>
                 )}
               </>

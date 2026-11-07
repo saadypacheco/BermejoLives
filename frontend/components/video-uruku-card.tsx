@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Ic } from "@/components/ic";
+import { evento } from "@/lib/medicion";
 import { duracionCorta, rubroHref, VIDEO_NETWORK_LABEL, type PublicVideo, type VideoNetwork } from "@/lib/videos-pure";
 
 const REDES: readonly VideoNetwork[] = ["tiktok", "instagram", "facebook", "youtube"];
@@ -25,7 +26,7 @@ export function VideoUrukuCard({ video, cover, src }: { video: PublicVideo; cove
 
   return (
     <div className="uk-vc">
-      <button ref={disparador} type="button" className="uk-vc-btn" onClick={() => setAbierto(true)}
+      <button ref={disparador} type="button" className="uk-vc-btn" onClick={() => { evento("video_play", video.id); setAbierto(true); }}
               aria-label={`Ver el video: ${video.title}`} aria-haspopup="dialog">
         <img src={cover} alt="" loading="lazy" decoding="async" className="uk-vc-img" />
         <span className="uk-vc-play" aria-hidden><Ic n="video_play" s={44} peso="fill" /></span>
@@ -69,7 +70,8 @@ function ReproductorVideo({ video, cover, src, onClose }: { video: PublicVideo; 
         <b className="uk-vm-titulo">{video.title}</b>
         <div className="uk-vm-acciones">
           {redes.map((r) => (
-            <a key={r} className="uk-btn-ghost" href={video.network_links[r]} target="_blank" rel="noopener noreferrer">
+            <a key={r} className="uk-btn-ghost" href={video.network_links[r]} target="_blank" rel="noopener noreferrer"
+               onClick={() => evento("video_network_click", r)}>
               <Ic n={r} s={16} /> Ver en {VIDEO_NETWORK_LABEL[r]}
             </a>
           ))}

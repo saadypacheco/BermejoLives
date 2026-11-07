@@ -26,7 +26,7 @@ import { FilterChip, OptionList } from "@/components/filter-chips";
 import { Ic, IcRubro } from "@/components/ic";
 import { MicrofonoBusqueda } from "@/components/microfono-busqueda";
 import { HorarioBadge } from "@/components/horario-badge";
-import { registrarLead, logBusqueda } from "@/lib/campo";
+import { contacto, busqueda } from "@/lib/medicion";
 
 
 export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, nombreCiudad = "", inicial, rubrosIniciales }: {
@@ -417,7 +417,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
           // el panel lee para saber qué se buscó y no se encontró, y con el
           // tamaño de página ahí ese número mediría cuánto pedimos, no cuánto
           // hay.
-          logBusqueda(q, r.length ? (r[0].total ?? r.length) : 0, r.map((c) => c.id))
+          busqueda(q, r.length ? (r[0].total ?? r.length) : 0, r.map((c) => c.id))
             .then(setBusquedaId);
         }, 900);
       } else {
@@ -973,7 +973,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
                     {r.whatsapp && (
                       <a className="uk-resic" title="WhatsApp" aria-label="WhatsApp"
                          href={waLink(r.whatsapp, `Hola, te vi en URUKU`)} target="_blank" rel="noopener"
-                         onClick={() => registrarLead(r.id, "whatsapp", busquedaId, null, r.nombre)}>
+                         onClick={() => { void contacto(r.id, "whatsapp", { busquedaId, nombre: r.nombre }); }}>
                         <WhatsApp style={{ width: 17, height: 17 }} />
                       </a>
                     )}
@@ -984,7 +984,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
                     {!(r.rubro_slug === "taxis" && r.lat == null && !r.direccion) && (
                       <a className="uk-resic" title="Cómo llegar" aria-label="Cómo llegar"
                          href={comoLlegarHref(r)} target="_blank" rel="noopener"
-                         onClick={() => registrarLead(r.id, "mapa", busquedaId)}>
+                         onClick={() => { void contacto(r.id, "mapa", { busquedaId }); }}>
                         <Pin style={{ width: 17, height: 17 }} />
                       </a>
                     )}

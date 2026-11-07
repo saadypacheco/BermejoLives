@@ -113,3 +113,38 @@ def summarize_ai_sources(filas: list[dict], top_rutas: int = 3) -> list[dict]:
         }
         for f, n in sorted(visitas.items(), key=lambda kv: (-kv[1], kv[0]))
     ]
+
+
+def summarize_ai_groups(grupos: list[dict], rutas: list[dict], top_rutas: int = 3) -> list[dict]:
+    """Lo mismo que `summarize_ai_sources`, pero sobre filas YA AGRUPADAS por la base
+    (`site_metrics_summary`): sin bajar cada visita a Python.
+
+    `grupos`: `[{origen, referido, n, people, fichas}]` (una fila por par origen/referido).
+    `rutas`:  `[{origen, referido, ruta, n}]`.
+    `people` suma las personas de cada par: si una sesión llegó con dos pares distintos que caen en la
+    misma fuente, se cuenta dos veces (caso raro, y el número es una estimación de todos modos)."""
+    visitas: Counter = Counter()
+    gente: Counter = Counter()
+    fichas: Counter = Counter()
+    por_ruta: dict[str, Counter] = {}
+    for g in grupos:
+        fuente = classify_ai_source(g.get("origen"), g.get("referido"))
+        if not fuente:
+            continue
+        visitas[fuente] += int(g.get("n") or 0)
+        gente[fuente] += int(g.get("people") or 0)
+        fichas[fuente] += int(g.get("fichas") or 0)
+    for r in rutas:
+        fuente = classify_ai_source(r.get("origen"), r.get("referido"))
+        if fuente:
+            por_ruta.setdefault(fuente, Counter())[r.get("ruta") or "/"] += int(r.get("n") or 0)
+    return [
+        {
+            "source": f,
+            "visits": n,
+            "people": gente[f],
+            "business_views": fichas[f],
+            "top_routes": [{"ruta": ru, "n": c} for ru, c in por_ruta.get(f, Counter()).most_common(top_rutas)],
+        }
+        for f, n in sorted(visitas.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]

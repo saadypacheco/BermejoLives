@@ -47,6 +47,7 @@ import { geoErrorMsg } from "@/lib/geo";
 import { PermisoUbicacion } from "@/components/permiso-ubicacion";
 import { Ic } from "@/components/ic";
 import { waUruku } from "@/lib/contacto";
+import { etiquetaOrigenComercio, nombreCanonico, porcentaje } from "@/lib/origenes";
 import { LoginComercio } from "@/components/ingresar-comercio";
 import { ClaveDelComercio } from "@/components/clave-del-comercio";
 import { SocialConsentToggle } from "@/components/social-consent-toggle";
@@ -295,7 +296,7 @@ function Overview({ onEditar, onOfertas, onPlanes }: { onEditar: () => void; onO
             <h3 style={{ margin: "0 0 14px" }}>Resumen de actividad</h3>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
               <MiniStat Icon={Eye} color="var(--blue-soft)" value={m?.visitas_30d ?? "–"} label="Visitas" sub="Últimos 30 días" />
-              <MiniStat Icon={WhatsApp} color="var(--neon)" value={m?.contactos_30d ?? "–"} label="Contactos" sub="Últimos 30 días" />
+              <MiniStat Icon={WhatsApp} color="var(--neon)" value={m ? escribieron30(m) : "–"} label="Te escribieron o llamaron" sub="Últimos 30 días" />
               <MiniStat Icon={Store} value={m?.publicaciones_total ?? "–"} label="Publicaciones" sub="Activas" />
               <MiniStat Icon={Chat} value={noLeidos} label="Mensajes" sub="Sin leer" />
             </div>
@@ -337,7 +338,7 @@ function ContactosView() {
     getMetricas().then(setM).catch(() => {});
   }, []);
   if (!p) return <p style={{ color: "var(--txt-3)" }}>Cargando…</p>;
-  const tipos = m ? Object.entries(m.contactos_por_tipo).filter(([t]) => t !== "vista") : [];
+  const tipos = m ? tiposDeContacto(m) : [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -350,15 +351,16 @@ function ContactosView() {
         <InfoRow label="Horario" value={p.horario} Icon={ic("M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z")} />
       </div>
       <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
-        <h3 style={{ marginTop: 0 }}><Ic n="gente" s={18} /> Visitas a tu ficha · últimos 30 días</h3>
+        <h3 style={{ marginTop: 0 }}><Ic n="gente" s={18} /> Personas que vieron tu ficha · últimos 30 días</h3>
         <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
           <Stat color="var(--blue-soft)" value={m?.visitas_30d ?? "–"} label="personas abrieron tu ficha" />
           <Stat value={m?.visitas_7d ?? "–"} label="últimos 7 días" />
         </div>
+        <p style={{ color: "var(--txt-3)", fontSize: 13, marginTop: 12, marginBottom: 0 }}>{NOTA_UNA_VEZ}</p>
       </div>
       <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
-        <h3 style={{ marginTop: 0 }}>Quién te contactó · últimos 30 días</h3>
-        <Stat color="var(--neon)" value={m?.contactos_30d ?? "–"} label="contactos por la app" />
+        <h3 style={{ marginTop: 0 }}>Te escribieron o llamaron · últimos 30 días</h3>
+        <Stat color="var(--neon)" value={m ? escribieron30(m) : "–"} label="contactos por la app" />
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 14 }}>
           {tipos.length === 0
             ? <span style={{ color: "var(--txt-3)", fontSize: 14 }}>Todavía nadie te contactó por la app.</span>
@@ -1109,29 +1111,44 @@ function Stat({ value, label, color }: { value: React.ReactNode; label: string; 
   );
 }
 
-const TIPO_LABEL: Record<string, string> = { whatsapp: "WhatsApp", telefono: "Teléfono", email: "Email", web: "Web" };
+const TIPO_LABEL: Record<string, string> = { whatsapp: "WhatsApp", telefono: "Teléfono", email: "Email", web: "Web", reserva: "Reserva" };
+const NOTA_UNA_VEZ = "Contamos una vez por persona cada media hora.";
+const RED_LABEL: Record<string, string> = { instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", youtube: "YouTube" };
+
+/** Lo que cuenta como «te escribieron o llamaron»: todos los contactos MENOS «cómo llegar», que tiene su propia
+ *  cifra (si no, el mismo toque se leería dos veces). */
+function tiposDeContacto(m: Metricas): [string, number][] {
+  return Object.entries(m.contactos_por_tipo).filter(([t, n]) => t !== "vista" && t !== "mapa" && n > 0);
+}
+function escribieron30(m: Metricas): number {
+  return tiposDeContacto(m).reduce((a, [, n]) => a + n, 0);
+}
 
 function EstadisticasView() {
   const [m, setM] = useState<Metricas | null>(null);
   useEffect(() => { getMetricas().then(setM).catch(() => {}); }, []);
   if (!m) return <p style={{ color: "var(--txt-3)" }}>Cargando…</p>;
-  const tipos = Object.entries(m.contactos_por_tipo).filter(([t]) => t !== "vista");
+  const tipos = tiposDeContacto(m);
   const estados = Object.entries(m.publicaciones_por_estado);
+  const redes = Object.entries(m.redes_30d ?? {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+  const redesTotal = redes.reduce((a, [, n]) => a + n, 0);
+  const origenes = (m.origenes_30d ?? []).filter((o) => o.n > 0).sort((a, b) => b.n - a.n);
+  const origenesTotal = origenes.reduce((a, o) => a + o.n, 0);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
-        <h3 style={{ marginTop: 0 }}><Ic n="gente" s={18} /> Visitas a tu ficha</h3>
+        <h3 style={{ marginTop: 0 }}><Ic n="gente" s={18} /> Personas que vieron tu ficha</h3>
         <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
           <Stat color="var(--blue-soft)" value={m.visitas_30d ?? 0} label="últimos 30 días" />
           <Stat value={m.visitas_7d ?? 0} label="últimos 7 días" />
         </div>
         <p style={{ color: "var(--txt-3)", fontSize: 13, marginTop: 12, marginBottom: 0 }}>
-          Cuántas personas abrieron tu ficha en el mapa. Sumá fotos y ofertas para que más gente entre.
+          Cuántas personas abrieron tu ficha en el mapa. {NOTA_UNA_VEZ} Sumá fotos y ofertas para que más gente entre.
         </p>
       </div>
       <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
-        <h3 style={{ marginTop: 0 }}><Ic n="buscar" s={18} /> Con qué te buscan · últimos 30 días</h3>
+        <h3 style={{ marginTop: 0 }}><Ic n="buscar" s={18} /> Con qué palabras te encontraron · últimos 30 días</h3>
         {(m.terminos_busqueda?.length ?? 0) === 0
           ? <span style={{ color: "var(--txt-3)", fontSize: 14 }}>Todavía no registramos búsquedas que te hayan encontrado.</span>
           : (
@@ -1148,16 +1165,50 @@ function EstadisticasView() {
         </p>
       </div>
       <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
-        <h3 style={{ marginTop: 0 }}>Contactos · últimos 30 días</h3>
+        <h3 style={{ marginTop: 0 }}><Ic n="mapa" s={18} /> De dónde llegaron · últimos 30 días</h3>
+        {origenes.length === 0
+          ? <span style={{ color: "var(--txt-3)", fontSize: 14 }}>Todavía no tenemos de dónde llegaron a tu ficha. Poné el QR de tu ficha en el local y vas a ver cuánta gente llega por ahí.</span>
+          : (
+            <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+              {origenes.map((o) => (
+                <li key={`${o.kind}-${o.name}`} style={{ display: "flex", gap: 8, justifyContent: "space-between", fontSize: 14, color: "var(--txt-2)", overflowWrap: "anywhere" }}>
+                  <span>{etiquetaOrigenComercio(o)}</span>
+                  <span style={{ flexShrink: 0 }}><b style={{ color: "var(--blue-soft)" }}>{o.n}</b> · {porcentaje(o.n, origenesTotal)}%</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        <p style={{ color: "var(--txt-3)", fontSize: 13, marginTop: 12, marginBottom: 0 }}>
+          Cómo llegó cada persona a tu ficha: por el QR del volante o de la mesa, desde Google, Facebook, WhatsApp o escribiendo la dirección.
+        </p>
+      </div>
+      <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
+        <h3 style={{ marginTop: 0 }}>Te escribieron o llamaron · últimos 30 días</h3>
         <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
-          <Stat color="var(--neon)" value={m.contactos_30d} label="contactos en total" />
-          <Stat value={m.contactos_7d ?? 0} label="últimos 7 días" />
+          <Stat color="var(--neon)" value={escribieron30(m)} label="contactos en 30 días" />
+          {m.contactos_7d !== undefined && <Stat value={m.contactos_7d} label="en los últimos 7 días" />}
         </div>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 14 }}>
           {tipos.length === 0
             ? <span style={{ color: "var(--txt-3)", fontSize: 14 }}>Todavía nadie te contactó por la app.</span>
             : tipos.map(([t, n]) => <span key={t} style={{ color: "var(--txt-2)", fontSize: 14 }}>{TIPO_LABEL[t] ?? t}: <b>{n}</b></span>)}
         </div>
+      </div>
+      <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
+        <h3 style={{ marginTop: 0 }}>Más movimiento · últimos 30 días</h3>
+        <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
+          <Stat color="var(--blue-soft)" value={m.como_llegar_30d ?? 0} label="te pidieron cómo llegar" />
+          <Stat value={m.compartidos_30d ?? 0} label="compartieron tu ficha" />
+          <Stat value={redesTotal} label="fueron a tus redes" />
+        </div>
+        {redes.length > 0 && (
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 14 }}>
+            {redes.map(([r, n]) => <span key={r} style={{ color: "var(--txt-2)", fontSize: 14 }}>{RED_LABEL[r] ?? nombreCanonico(r)}: <b>{n}</b></span>)}
+          </div>
+        )}
+        <p style={{ color: "var(--txt-3)", fontSize: 13, marginTop: 12, marginBottom: 0 }}>
+          Son sólo los de tu comercio. Si ves que van a una red, mantenela al día.
+        </p>
       </div>
       <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
         <h3 style={{ marginTop: 0 }}>Tus publicaciones</h3>

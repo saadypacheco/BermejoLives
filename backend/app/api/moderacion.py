@@ -16,7 +16,7 @@ from app.core.config import _numeros_propios, settings
 from app.api.agent_credentials import catalogo_de_permisos, es_agente
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp, whatsapp_para_guardar
-from app.services import archivos_privados, turnos_farmacia
+from app.services import archivos_privados, site_metrics, turnos_farmacia
 from app.services import calles_mapa, enlaces, ficha_catalogo as catalogo_svc, fotos_galeria, portada, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
@@ -563,15 +563,23 @@ def horario_en_lote(
 
 @router.get("/admin/visitas")
 def visitas_del_sitio(
+    response: Response,
     dias: int = Query(default=30, ge=1, le=180),
+    ciudad: str | None = Query(default=None, max_length=40),
     _: dict = Depends(require_permiso("datos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Cuánta gente entra al sitio, a qué, de dónde, y cuántos escriben.
 
     Hasta la 0130 lo único medido era la visita a la ficha de un comercio: la
-    home, el buscador y /ofertas no existían para nadie."""
-    return repo.resumen_visitas(dias)
+    home, el buscador y /ofertas no existían para nadie.
+
+    Sale de la función SQL `site_metrics_summary` (0193): sin tope de filas, los totales no se cortan. Las claves
+    de siempre (`dias, visitas, personas, por_dia, top_rutas, top_referidos, top_origenes, ai_sources, embudo`) más
+    `referrers, devices, standalone_share, events, funnel, desde, hasta, umami_url, last_hit_at`.
+    `ciudad` (slug) filtra por ciudad. `Cache-Control: no-store`."""
+    response.headers["Cache-Control"] = "no-store"
+    return site_metrics.resumen_del_sitio(repo, dias, ciudad)
 
 
 # ── El equipo: usuarios, roles y permisos (0126) ──────────────────────────────

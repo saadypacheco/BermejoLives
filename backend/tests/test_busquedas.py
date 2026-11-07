@@ -1,4 +1,5 @@
 
+C1 = "00000000-0000-4000-8000-0000000000c1"   # los comercios_id de /lead tienen que ser uuid (0193)
 
 
 # ── El puente búsqueda → contacto ───────────────────────────────────────────
@@ -16,7 +17,7 @@ def test_el_contacto_guarda_de_que_busqueda_salio(client, repo):
     bid = client.post("/busquedas/log",
                       json={"query": "termo", "resultados": 5}).json()["busqueda_id"]
     cid = repo.crear_comercio_min("Bazar Lidia") if hasattr(repo, "crear_comercio_min") else None
-    comercio_id = cid or next(iter(repo.comercios), "c1")
+    comercio_id = cid or next(iter(repo.comercios), C1)
 
     r = client.post("/lead", json={"comercio_id": comercio_id, "tipo": "whatsapp",
                                    "busqueda_id": bid})
@@ -27,7 +28,7 @@ def test_el_contacto_guarda_de_que_busqueda_salio(client, repo):
 def test_un_contacto_sin_busqueda_sigue_valiendo(client, repo):
     """Llegar por el mapa, la home o un link compartido no es un dato faltante:
     es otro camino, y tiene que registrarse igual."""
-    comercio_id = next(iter(repo.comercios), "c1")
+    comercio_id = next(iter(repo.comercios), C1)
     r = client.post("/lead", json={"comercio_id": comercio_id, "tipo": "whatsapp"})
     assert r.status_code == 200
     assert repo.leads[-1].get("busqueda_id") is None

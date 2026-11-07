@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Ic } from "@/components/ic";
+import { evento } from "@/lib/medicion";
 import { InstalarHoja, abrirEnChrome, pedirInstalacion, useInstalacion } from "@/components/instalar-app";
 
 const DISMISSED_KEY = "encontralo_install_dismissed";
@@ -26,19 +27,31 @@ export function InstallPrompt() {
 
   useEffect(() => { setDescartado(leerDescartado()); }, []);
 
-  function dismiss() {
+  /** `medido`: el X del banner cuenta como «dismissed»; cuando ya se contó otra cosa (se aceptó o se rechazó el
+   *  diálogo nativo) sólo se esconde el banner. */
+  function dismiss(medido = false) {
+    if (medido) evento("pwa_install", "dismissed");
     try { localStorage.setItem(DISMISSED_KEY, "1"); } catch { /* sin almacenamiento: se cierra igual */ }
     setDescartado(true);
   }
 
   async function instalar() {
     const r = await pedirInstalacion();
-    if (r !== "hoja") dismiss();
+    if (r !== "hoja") dismiss();   // el resultado ya lo midió `pedirInstalacion`
   }
 
   const ofrecer = listo && !instalada && !descartado && (plan === "ios" || plan === "abrir-chrome" || plan === "nativo");
   const ios = plan === "ios";
   const aChrome = plan === "abrir-chrome";
+
+  // «shown»: se le ofreció instalar (una vez por carga). En iPhone lo que se le muestra son las instrucciones
+  // manuales, y eso es «ios_hint».
+  const mostrado = useRef(false);
+  useEffect(() => {
+    if (!ofrecer || mostrado.current) return;
+    mostrado.current = true;
+    evento("pwa_install", ios ? "ios_hint" : "shown");
+  }, [ofrecer, ios]);
 
   return (
     <>
@@ -56,7 +69,7 @@ export function InstallPrompt() {
           </div>
           {aChrome && <button className="btn btn-primary btn-sm" onClick={abrirEnChrome}>Abrir en Chrome</button>}
           {plan === "nativo" && <button className="btn btn-primary btn-sm" onClick={instalar}>Instalar</button>}
-          <button className="install-banner-close" onClick={dismiss} aria-label="Cerrar"><Ic n="cerrar" s={16} /></button>
+          <button className="install-banner-close" onClick={() => dismiss(true)} aria-label="Cerrar"><Ic n="cerrar" s={16} /></button>
         </div>
       )}
       <InstalarHoja />

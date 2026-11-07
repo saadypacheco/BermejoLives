@@ -339,6 +339,13 @@ class Settings(BaseSettings):
     # Worker que refresca el clima desde open-meteo cada 30 min (se apaga en tests)
     clima_worker: bool = True
 
+    # ---- Medición propia del sitio (docs/estadisticas-v2.md) ----
+    # Los loops de volcado (cada 5 s) y de retención (diario 04:00 de Bolivia). Se apagan en tests.
+    # El estado en memoria (límites, deduplicación, buffer) ASUME UN SOLO WORKER de uvicorn.
+    site_metrics_worker: bool = True
+    # POST /csp-report: se puede apagar al pasar la CSP de Report-Only a enforce.
+    csp_report_enabled: bool = True
+
     # ---- Ciclo de vida del comercio en el mapa ----
     # Días después de vencido el pago antes de sacarlo del mapa.
     #

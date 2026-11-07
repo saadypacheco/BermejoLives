@@ -531,7 +531,24 @@ export type ResumenVisitas = {
   top_referidos: { referido: string; n: number }[];
   top_origenes: { origen: string; n: number }[];
   embudo: { visitas: number; personas: number; fichas_vistas: number; contactos: number; mapa: number };
+  // ---- Medición v2 (docs/estadisticas-v2.md). Opcionales: un backend viejo no los manda. ----
+  desde?: string;
+  hasta?: string;
+  /** De dónde llegó cada sesión, ya con el nombre canónico (`google`, `facebook`…). Un QR llega como `other`
+   *  con nombre `qr_<clase>` (`qr_volante`, `qr_mesa`). */
+  referrers?: OrigenVisita[];
+  devices?: { device: string; n: number }[];
+  /** 0..1: la parte de las páginas vistas que se abrieron desde la app instalada. */
+  standalone_share?: number;
+  events?: { event: string; detail: string; n: number }[];
+  /** Sesiones que vieron una ficha y sesiones que contactaron. Sólo vale desde que los contactos traen sesión. */
+  funnel?: { sessions: number; sessions_with_ficha: number; sessions_with_contact: number };
+  umami_url?: string | null;
+  /** Cuándo llegó el último dato (ISO). Sirve para detectar una caída silenciosa de la medición. */
+  last_hit_at?: string | null;
 };
+export type TipoOrigen = "search" | "social" | "whatsapp" | "ai" | "direct" | "other";
+export type OrigenVisita = { kind: TipoOrigen; name: string; n: number };
 export async function getVisitas(dias = 30): Promise<ResumenVisitas> {
   const res = await authFetch(`/admin/visitas?dias=${dias}`);
   return okDe(res, "cargar las visitas") as Promise<ResumenVisitas>;

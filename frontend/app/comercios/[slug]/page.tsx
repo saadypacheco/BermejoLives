@@ -127,12 +127,13 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
   // Cada enlace pasa por `enlaceRed`: arma «@mitienda» como la dirección de la
   // red y descarta lo que no sea web. Antes iban tal cual al href, y un
   // `javascript:` cargado en «Sitio web» corría al tocarlo.
+  // `red` es lo que se mide al tocarla (le dice al comerciante qué red le sirve); el sitio web no es una red.
   const redes = [
-    { label: "TikTok", href: enlaceRed("tiktok", comercio.tiktok_url), Icon: TikTok },
-    { label: "Instagram", href: enlaceRed("instagram", comercio.instagram_url), Icon: Instagram },
-    { label: "Facebook", href: enlaceRed("facebook", comercio.facebook_url), Icon: Facebook },
-    { label: "Sitio web", href: enlaceRed("web", comercio.sitio_web), Icon: Globe },
-  ].filter((r) => r.href) as { label: string; href: string; Icon: typeof TikTok }[];
+    { label: "TikTok", red: "tiktok" as const, href: enlaceRed("tiktok", comercio.tiktok_url), Icon: TikTok },
+    { label: "Instagram", red: "instagram" as const, href: enlaceRed("instagram", comercio.instagram_url), Icon: Instagram },
+    { label: "Facebook", red: "facebook" as const, href: enlaceRed("facebook", comercio.facebook_url), Icon: Facebook },
+    { label: "Sitio web", red: null, href: enlaceRed("web", comercio.sitio_web), Icon: Globe },
+  ].filter((r) => r.href) as { label: string; red: "tiktok" | "instagram" | "facebook" | null; href: string; Icon: typeof TikTok }[];
 
   // «Lo que suma»: lo que el local cargó y hace que lo elijan. Todo opcional y
   // sin relleno: lo que falta no aparece, y sin nada no hay fila. Los enlaces
@@ -292,7 +293,7 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
                 </a>
               )}
               <GuardarBoton comercioId={comercio.id} className="uk-btn-ghost" />
-              <CompartirBoton titulo={comercio.nombre} texto={`${comercio.nombre} en URUKU`} className="uk-btn-ghost" />
+              <CompartirBoton titulo={comercio.nombre} texto={`${comercio.nombre} en URUKU`} className="uk-btn-ghost" comercioId={comercio.id} />
             </div>
 
             <div className="uk-ficha-qr">
@@ -393,13 +394,21 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
                   <div><b>Pedido mínimo</b>{pedidoMinimo}</div>
                 </div>
               )}
-              {redes.length > 0 && redes.map((r) => (
-                <a className="uk-info-row" key={r.label} href={r.href} target="_blank" rel="noopener"
-                   style={{ color: "inherit" }}>
-                  <span className="ic"><r.Icon style={{ width: 17, height: 17 }} /></span>
-                  <div><b>{r.label}</b>{r.href.replace(/^https?:\/\//, "")}</div>
-                </a>
-              ))}
+              {redes.length > 0 && redes.map((r) => {
+                const fila = (
+                  <>
+                    <span className="ic"><r.Icon style={{ width: 17, height: 17 }} /></span>
+                    <div><b>{r.label}</b>{r.href.replace(/^https?:\/\//, "")}</div>
+                  </>
+                );
+                return r.red ? (
+                  <LeadLink className="uk-info-row" key={r.label} href={r.href} tipo="red" detalle={r.red}
+                            comercioId={comercio.id} style={{ color: "inherit" }}>{fila}</LeadLink>
+                ) : (
+                  <a className="uk-info-row" key={r.label} href={r.href} target="_blank" rel="noopener"
+                     style={{ color: "inherit" }}>{fila}</a>
+                );
+              })}
             </div>
 
             {sinParada && (

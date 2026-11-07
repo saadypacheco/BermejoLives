@@ -7,8 +7,8 @@ import { normalizarCapa, type CapaCalles, type EstadoMarca } from "@/lib/calles"
 // El `?ref=` con el que llegó esta persona (lo guarda RefCapture, primer toque,
 // y vence a los 30 días: ver lib/ref.ts).
 import { refGuardado } from "@/lib/ref";
-import { sesionDeLaPestania } from "@/lib/sesion";
-import { cuerpoRespondio, leadDeRespuesta, resultadoRespondio, type ResultadoRespondio } from "@/lib/contestaron";
+import { cuerpoRespondio, resultadoRespondio, type ResultadoRespondio } from "@/lib/contestaron";
+import { busqueda, contacto, type TipoLead } from "@/lib/medicion";
 export { refGuardado };
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_agente_token";
@@ -420,60 +420,15 @@ export async function actualizarFotoComercioAgente(id: string, foto: File): Prom
 
 // El agente tampoco da de baja comercios: eso es del admin (Negocios › Dar de baja).
 
-/** Registra un click de contacto (WhatsApp, teléfono, etc.) para un comercio. */
-export type TipoLead = "whatsapp" | "telefono" | "email" | "web" | "vista" | "mapa" | "reserva";
+// La medición (páginas vistas, contactos, búsquedas) vive en `lib/medicion.ts`, el único punto de entrada.
+// Estos dos nombres quedan como alias por un tiempo, para no romper a quien todavía los importe:
+// código nuevo, `contacto()` y `busqueda()` de `@/lib/medicion`. `registrarVisita` ya no existe:
+// el contador usa `vistaDePagina()` (POST /collect) y `POST /visita` quedó sólo para las PWA con el bundle viejo.
+export type { TipoLead };
 
-/** Una página vista. Sin cookies y sin IP: ver components/contador-visitas.tsx.
- *  Fuego y olvido, igual que el lead. */
-export function registrarVisita(v: {
-  ruta: string; sesion: string; primera: boolean;
-  origen?: string | null; referido?: string | null; ciudad?: string | null;
-}): void {
-  const body: Record<string, unknown> = { ruta: v.ruta, sesion: v.sesion, primera: v.primera };
-  if (v.origen) body.origen = v.origen;
-  if (v.referido) body.referido = v.referido;
-  if (v.ciudad) body.ciudad = v.ciudad;
-  // `keepalive` para que el pedido sobreviva a la navegación: sin esto, el que
-  // entra y toca un enlace enseguida —que es lo normal— no se contaría nunca.
-  fetch(`${API}/visita`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    keepalive: true,
-  }).catch(() => { /* perder un número no puede costar una visita */ });
-}
-
-
+/** @deprecated Usá `contacto()` de `@/lib/medicion`. */
 export async function registrarLead(comercio_id: string, tipo: TipoLead = "whatsapp", busqueda_id?: string | null, origen?: string | null, nombre?: string | null): Promise<void> {
-  // Fire-and-forget: no bloqueamos la navegación del usuario
-  const body: Record<string, string> = { comercio_id, tipo };
-  // `busqueda_id` ata el contacto a la búsqueda que lo produjo. Sin ese
-  // puente se sabe qué se mostró y qué se contactó, pero no si una cosa llevó
-  // a la otra — que es justo lo que dice si el buscador acierta.
-  if (busqueda_id) body.busqueda_id = busqueda_id;
-  // `origen` es el `?ref=` con el que llegó (volante, mesa, el QR de la ficha).
-  // Si quien llama no lo pasa, se toma el guardado: así los botones de
-  // WhatsApp, mapa y reserva atribuyen el contacto sin repetir esto en cada uno.
-  const ref = origen || refGuardado();
-  if (ref) body.origen = ref;
-  // La misma sesión de la pestaña que va a /visita: el backend ata el voto de «¿te contestó?» a ella.
-  const sesion = sesionDeLaPestania().id;
-  body.sesion = sesion;
-  fetch(`${API}/lead`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  }).then(async (r) => {
-    // Un contacto de WhatsApp queda anotado para preguntar después «¿te
-    // contestó?» (components/pregunta-contesto.tsx). Las vistas, no.
-    if (tipo !== "whatsapp" && tipo !== "telefono") return;
-    // POST /lead responde {ok, id, token}: el token se guarda junto al id, sin él no se puede votar.
-    const lead = leadDeRespuesta(await r.json().catch(() => null));
-    if (lead) {
-      const { anotarContacto } = await import("@/lib/contestaron");
-      anotarContacto(lead.id, comercio_id, nombre || "el local", lead.token, sesion);
-    }
-  }).catch(() => undefined);
+  await contacto(comercio_id, tipo, { busquedaId: busqueda_id, origen, nombre });
 }
 
 /** «¿Te contestó?»: sí o no sobre un contacto propio. Fire-and-forget. */
@@ -490,28 +445,8 @@ export async function responderContesto(leadId: string, respondio: boolean, toke
   }
 }
 
-/** Loguea una búsqueda para los KPIs (qué se busca / qué no da / a quién encontró). Fire-and-forget. */
-/** Loguea una búsqueda y devuelve su id, para poder atarle el contacto que
- *  venga después. Nunca falla hacia arriba ni bloquea: si el registro se cae, la
- *  persona igual busca y contacta — perder una métrica no puede costar una
- *  venta. */
-export async function logBusqueda(query: string, resultados: number, comercios?: string[]): Promise<string | null> {
-  // Tres, no dos. Con dos entraban "re" y "om" —prefijos de "restaurante" y
-  // "comida"— y se leían como demanda. Ninguna búsqueda real de dos letras
-  // significa algo en este catálogo.
-  if (!query || query.trim().length < 3) return null;
-  try {
-    const res = await fetch(`${API}/busquedas/log`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: query.trim(), resultados, comercios: comercios?.slice(0, 10) }),
-    });
-    if (!res.ok) return null;
-    return (await res.json()).busqueda_id ?? null;
-  } catch {
-    return null;
-  }
-}
+/** @deprecated Usá `busqueda()` de `@/lib/medicion`. */
+export const logBusqueda = busqueda;
 
 /** Deja un reclamo público (sobre un comercio, o sobre la plataforma si comercio_id es undefined). */
 export async function crearReclamo(body: { nombre?: string; contacto?: string; comercio_id?: string; mensaje: string }): Promise<void> {

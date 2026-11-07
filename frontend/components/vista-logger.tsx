@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { registrarLead } from "@/lib/campo";
+import { contacto, origenDeLaUrl } from "@/lib/medicion";
 
 /** Loguea una "vista" de la ficha del comercio (KPI: locales más visitados),
  *  con el `?ref=` si llegó por un QR (volante, tarjeta de mesa, el QR de la
@@ -14,12 +14,9 @@ import { registrarLead } from "@/lib/campo";
  *  El backend limpia el valor igual que el `ref`. */
 export function VistaLogger({ comercioId }: { comercioId: string }) {
   useEffect(() => {
-    let origen: string | null = null;
-    try {
-      const q = new URLSearchParams(window.location.search);
-      origen = q.get("ref") || q.get("utm_source");
-    } catch { /* nada */ }
-    registrarLead(comercioId, "vista", null, origen);
+    // `contacto()` deduplica (una vista por ficha cada 30 min por pestaña) y no cuenta al equipo ni al
+    // dueño del comercio.
+    void contacto(comercioId, "vista", { origen: origenDeLaUrl(window.location.search) });
   }, [comercioId]);
   return null;
 }

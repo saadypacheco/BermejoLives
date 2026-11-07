@@ -400,11 +400,20 @@ export type Suscripcion = {
 };
 
 export type Metricas = {
+  /** «Te escribieron o llamaron»: sin vistas, compartir, redes ni `mapa` (el «cómo llegar» va en `como_llegar_30d`). */
   contactos_30d: number;
   contactos_7d?: number;
   visitas_30d?: number;
   visitas_7d?: number;
   contactos_por_tipo: Record<string, number>;
+  /** Medición v2. Opcionales: un backend viejo no los manda. SIEMPRE de este comercio, nunca de otros. */
+  como_llegar_30d?: number;
+  compartidos_30d?: number;
+  /** Cuántas veces tocaron cada red del comercio (`instagram`, `facebook`, `tiktok`, `youtube`). */
+  redes_30d?: Record<string, number>;
+  /** De dónde llegaron a la ficha. `qr` trae en `name` la clase del `?ref=`: sólo `volante`, `mesa` o `ficha` (los QR que
+   *  imprimimos); un `?ref=` desconocido o un sitio con menos de 3 sesiones llegan como `other`/`otros`. */
+  origenes_30d?: { kind: "qr" | "search" | "social" | "whatsapp" | "ai" | "direct" | "other"; name: string; n: number }[];
   terminos_busqueda?: { query: string; n: number }[];
   publicaciones_total: number;
   publicaciones_por_estado: Record<string, number>;

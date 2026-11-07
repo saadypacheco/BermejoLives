@@ -289,8 +289,13 @@ class Repo(Protocol):
         self, comercio_id: str, dias: int = 30, limit: int = 8
     ) -> list[dict]: ...
     def kpis_admin(self, dias: int = 30) -> dict: ...
-    def insert_visita(self, fila: dict) -> None: ...
-    def resumen_visitas(self, dias: int = 30) -> dict: ...
+    # Medición (0193, services/site_metrics.py)
+    def insert_site_rows(self, tabla: str, filas: list[dict]) -> None: ...
+    def site_metrics_summary(self, desde: str, hasta: str, ciudad: str | None = None) -> dict: ...
+    def comercio_origins(self, comercio_id: str, desde: str) -> list[dict]: ...
+    def comercio_lead_counts(self, comercio_id: str, dias: int = 30) -> dict: ...
+    def last_visit_at(self) -> str | None: ...
+    def purge_site_metrics(self, meses: int) -> int: ...
     def comercios_para_indexnow(self, desde_iso: str, limite: int = 1000) -> list[dict]: ...
     def list_suscripciones(self, ciudad_id: str | None = None) -> list[dict]: ...
     def registrar_pago(self, comercio_id: str, row: dict) -> dict: ...
@@ -2821,7 +2826,7 @@ class SupabaseRepo(IntegracionRepoMixin):
         por_clase = self._por_clase(por_origen)
         llegadas_top = sorted(({"origen": o, "count": n} for o, n in por_origen.items()), key=lambda x: -x["count"])[:10]
 
-        contactos = [l for l in leads if (l.get("tipo") or "") != "vista"]
+        contactos = [l for l in leads if (l.get("tipo") or "") not in ("vista", "compartir", "red")]
         contactos_origen: dict[str, int] = {}
         for l in contactos:
             o = (l.get("origen") or "").strip()
@@ -4068,82 +4073,46 @@ class SupabaseRepo(IntegracionRepoMixin):
                     cont[q] += 1
         return [{"query": q, "n": n} for q, n in cont.most_common(limit)]
 
-    # ── visitas al sitio (0130) ──────────────────────────────────────────────
-    def insert_visita(self, fila: dict) -> None:
-        """Anota una página vista. Si falla, se pierde y no pasa nada: perder
-        un número no puede costar una visita."""
-        try:
-            self._db.table("visitas").insert(fila).execute()
-        except Exception as e:
-            logger.warning("visitas.insert_fallo", error=str(e)[:200])
+    # ── medición del sitio (0130, 0193) ──────────────────────────────────────
+    # El navegador NO escribe en estas tablas: sólo el backend (service_role). Las filas llegan del buffer
+    # de `services/site_metrics.py`, en lote.
+    _TABLAS_MEDICION = ("visitas", "site_events", "leads")
 
-    def resumen_visitas(self, dias: int = 30) -> dict:
-        """Cuánta gente entró, a qué, de dónde, y cuántos terminaron
-        escribiéndole a un comercio.
+    def insert_site_rows(self, tabla: str, filas: list[dict]) -> None:
+        """Un `insert` en lote en `visitas`, `site_events` o `leads`. Todas las filas con las MISMAS claves (si no,
+        PostgREST rellena con NULL lo que falta y pisa los defaults). Sin devolver las filas (`minimal`)."""
+        if tabla not in self._TABLAS_MEDICION:
+            raise ValueError(f"tabla de medición desconocida: {tabla}")
+        if not filas:
+            return
+        self._db.table(tabla).insert(filas, returning="minimal").execute()
 
-        El embudo es el punto. Un número de visitas suelto no dice nada; lo que
-        dice si el sitio sirve es cuántos de los que entran llegan a una ficha,
-        y cuántos de esos salen hacia el local. Si entran mil y ninguno escribe,
-        el problema no es la falta de tráfico.
-        """
-        from collections import Counter
-        from datetime import date, timedelta
+    def site_metrics_summary(self, desde: str, hasta: str, ciudad: str | None = None) -> dict:
+        """El resumen del sitio entre dos días (inclusivos, hora de Bolivia), calculado en SQL (RPC
+        `site_metrics_summary`, 0193): sin bajar filas a Python ni cortar los totales."""
+        res = self._db.rpc("site_metrics_summary", {"p_from": desde, "p_to": hasta, "p_city": ciudad or None}).execute()
+        return res.data or {}
 
-        from app.core.ai_sources import summarize_ai_sources
+    def comercio_origins(self, comercio_id: str, desde: str) -> list[dict]:
+        """De dónde llegaron a la ficha de ese comercio (RPC `comercio_origins`): `[{origen, referido, n}]` crudos."""
+        res = self._db.rpc("comercio_origins", {"p_comercio": comercio_id, "p_from": desde}).execute()
+        return res.data or []
 
-        # Inclusiva y en hora de Bolivia: `dias=1` es hoy, no hoy y ayer.
-        desde = (self._hoy_en_bolivia() - timedelta(days=max(0, dias - 1))).isoformat()
-        filas: list[dict] = []
-        while True:
-            lote = (self._db.table("visitas")
-                    .select("dia, ruta, sesion, origen, referido, primera")
-                    .gte("dia", desde).order("dia", desc=True)
-                    .range(len(filas), len(filas) + 999).execute().data) or []
-            filas += lote
-            # PostgREST corta en 1000 sin avisar: sin paginar, el panel diría
-            # «1000 visitas» para siempre y nadie se enteraría.
-            if len(lote) < 1000 or len(filas) >= 50_000:
-                break
+    def comercio_lead_counts(self, comercio_id: str, dias: int = 30) -> dict:
+        """Contactos de ese comercio por tipo (RPC `comercio_lead_counts`): `{por_tipo, por_tipo_7d, redes}`."""
+        res = self._db.rpc("comercio_lead_counts", {"p_comercio": comercio_id, "p_days": int(dias)}).execute()
+        return res.data or {}
 
-        por_dia: dict[str, dict] = {}
-        for v in filas:
-            d = por_dia.setdefault(v["dia"], {"dia": v["dia"], "visitas": 0, "personas": 0})
-            d["visitas"] += 1
-            if v.get("primera"):
-                d["personas"] += 1
-        dias_orden = sorted(por_dia.values(), key=lambda d: d["dia"])
+    def last_visit_at(self) -> str | None:
+        """Cuándo se guardó la última página vista (para detectar una caída silenciosa del volcado)."""
+        res = (self._db.table("visitas").select("created_at")
+               .order("dia", desc=True).order("created_at", desc=True).limit(1).execute())
+        return res.data[0]["created_at"] if res.data else None
 
-        rutas = Counter(v["ruta"] for v in filas)
-        referidos = Counter(v["referido"] for v in filas if v.get("referido"))
-        origenes = Counter(v["origen"] for v in filas if v.get("origen"))
-        personas = len({v["sesion"] for v in filas})
-
-        # El embudo, contra los leads del mismo período.
-        desde_ts = f"{desde}T00:00:00-04:00"
-        leads = (self._db.table("leads").select("tipo")
-                 .gte("created_at", desde_ts).limit(20_000).execute().data) or []
-        por_tipo = Counter(l.get("tipo") for l in leads)
-        contactos = sum(n for t, n in por_tipo.items() if t in ("whatsapp", "telefono", "reserva"))
-
-        return {
-            "dias": dias,
-            "visitas": len(filas),
-            "personas": personas,
-            "por_dia": dias_orden,
-            "top_rutas": [{"ruta": r, "n": n} for r, n in rutas.most_common(12)],
-            "top_referidos": [{"referido": r, "n": n} for r, n in referidos.most_common(8)],
-            "top_origenes": [{"origen": o, "n": n} for o, n in origenes.most_common(8)],
-            # Visitas que vienen de asistentes de IA (ChatGPT, Perplexity, …): sobre las
-            # mismas filas, sin consultas nuevas.
-            "ai_sources": summarize_ai_sources(filas),
-            "embudo": {
-                "visitas": len(filas),
-                "personas": personas,
-                "fichas_vistas": por_tipo.get("vista", 0),
-                "contactos": contactos,
-                "mapa": por_tipo.get("mapa", 0),
-            },
-        }
+    def purge_site_metrics(self, meses: int) -> int:
+        """Borra visitas y eventos de antes del corte (RPC `purge_site_metrics`; el piso de 13 meses está adentro)."""
+        res = self._db.rpc("purge_site_metrics", {"p_months": int(meses)}).execute()
+        return int(res.data or 0)
 
     def comercios_para_indexnow(self, desde_iso: str, limite: int = 1000) -> list[dict]:
         """TODAS las fichas modificadas DESPUÉS de `desde_iso` (activas o no, suspendidas o

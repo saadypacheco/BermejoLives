@@ -30,11 +30,11 @@ export async function ContactoUruku() {
           <span>¿Tenés un comercio y querés aparecer, o una consulta? Te respondemos por WhatsApp.</span>
         </div>
         <div className="uk-comunidad-acciones" style={{ alignItems: "center" }}>
-          <a className="uk-btn uk-btn-wa" href={enlace} target="_blank" rel="noopener">
+          <a className="uk-btn uk-btn-wa" href={enlace} target="_blank" rel="noopener" data-uk-evento="uruku_whatsapp_click" data-uk-detalle="contacto">
             <Ic n="whatsapp" s={17} /> {WA_URUKU_TEXTO}
           </a>
           {qr && (
-            <a href={enlace} target="_blank" rel="noopener" title="Escaneá para escribirle a URUKU por WhatsApp"
+            <a href={enlace} target="_blank" rel="noopener" data-uk-evento="uruku_whatsapp_click" data-uk-detalle="contacto" title="Escaneá para escribirle a URUKU por WhatsApp"
                style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 4, textDecoration: "none" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={qr} alt={`QR para escribirle a URUKU por WhatsApp al ${WA_URUKU_TEXTO}`}

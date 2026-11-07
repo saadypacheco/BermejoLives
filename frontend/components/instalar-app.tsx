@@ -15,6 +15,7 @@
  */
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Ic } from "@/components/ic";
+import { evento as medir } from "@/lib/medicion";
 import {
   detectarPlataforma, planInstalacion, intentAbrirEnChrome, instruccionManual, nombreNavegador,
   type Plataforma, type PlanInstalacion,
@@ -42,6 +43,7 @@ if (typeof window !== "undefined") {
     diferido = null;
     instaladaAhora = true;
     hojaAbierta = false;
+    medir("pwa_install", "installed");
     avisar();
   });
 }
@@ -101,13 +103,14 @@ export async function pedirInstalacion(): Promise<"aceptada" | "rechazada" | "ho
   const plataforma = leerPlataforma();
   const plan = planInstalacion(plataforma, diferido !== null);
   if (plan === "nativo" && diferido) {
-    const evento = diferido;
+    const aviso = diferido;
     // El aviso sirve una sola vez: después hay que esperar a que Chrome lo dispare de nuevo.
     diferido = null;
     avisar();
     try {
-      await evento.prompt();
-      const { outcome } = await evento.userChoice;
+      await aviso.prompt();
+      const { outcome } = await aviso.userChoice;
+      medir("pwa_install", outcome === "accepted" ? "accepted" : "dismissed");
       return outcome === "accepted" ? "aceptada" : "rechazada";
     } catch {
       return "rechazada"; // si el diálogo falla, no hay nada más que hacer
@@ -146,6 +149,11 @@ export function InstalarHoja() {
   const cerrarRef = useRef<HTMLButtonElement>(null);
 
   const cerrar = () => { hojaAbierta = false; avisar(); };
+
+  // Las instrucciones manuales de iPhone: es lo único que se le puede mostrar a quien usa Safari.
+  useEffect(() => {
+    if (abierta && plan === "ios") medir("pwa_install", "ios_hint");
+  }, [abierta, plan]);
 
   useEffect(() => {
     if (!abierta) return;

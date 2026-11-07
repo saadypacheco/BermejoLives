@@ -1,10 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import { contacto, evento } from "@/lib/medicion";
 
-/** Botón compartir: usa Web Share API (nativo en móvil) y cae a copiar el link. */
-export function CompartirBoton({ titulo, texto, className }: { titulo: string; texto?: string; className?: string }) {
+/** Botón compartir: usa Web Share API (nativo en móvil) y cae a copiar el link.
+ *
+ *  Mide el compartir: en la ficha de un comercio (`comercioId`) es un `compartir` de ESE comercio (boca a boca,
+ *  lo que ve el comerciante); en el resto es el evento `share` de URUKU. El detalle es `native` o `copy`, y sólo
+ *  se cuenta si se compartió de verdad (cancelar el diálogo no cuenta). */
+export function CompartirBoton({ titulo, texto, className, comercioId }: {
+  titulo: string; texto?: string; className?: string; comercioId?: string;
+}) {
   const [copiado, setCopiado] = useState(false);
+
+  function medir(canal: "native" | "copy") {
+    if (comercioId) void contacto(comercioId, "compartir", { detalle: canal });
+    else evento("share", canal);
+  }
 
   async function compartir() {
     const url = typeof window !== "undefined" ? window.location.href : "";
@@ -12,6 +24,7 @@ export function CompartirBoton({ titulo, texto, className }: { titulo: string; t
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share(data);
+        medir("native");
         return;
       } catch {
         return; // el usuario canceló: no hacemos nada
@@ -19,6 +32,7 @@ export function CompartirBoton({ titulo, texto, className }: { titulo: string; t
     }
     try {
       await navigator.clipboard.writeText(url);
+      medir("copy");
       setCopiado(true);
       setTimeout(() => setCopiado(false), 1800);
     } catch {
