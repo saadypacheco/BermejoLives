@@ -5,7 +5,7 @@ import {
 } from "@/lib/upload";
 import { detalleDeError } from "@/lib/acceso";
 import { avisoDeAlta } from "@/lib/alta-comercio";
-import { suavizarBloqueo, type EntradaAdmin } from "@/lib/entrar-como";
+import { MENSAJE_PESTANA_VIEJA, pestanaVieja, suavizarBloqueo, type EntradaAdmin } from "@/lib/entrar-como";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_comercio_token";
 const COMERCIO_KEY = "bermejo_comercio";
@@ -29,6 +29,45 @@ export function getComercioSession(): ComercioSession | null {
 export function clearComercio() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(COMERCIO_KEY);
+}
+
+/** La pestaña quedó vieja: otra pestaña abrió OTRO comercio en este navegador (comparten localStorage). */
+export class PestanaVieja extends Error {
+  constructor() { super(MENSAJE_PESTANA_VIEJA); this.name = "PestanaVieja"; }
+}
+
+// El comercio con el que se cargó la vista de «Mi comercio» (lo fija el panel al montarse). null = sin control.
+let comercioEsperado: string | null = null;
+export function fijarComercioEsperado(id: string | null) { comercioEsperado = id; }
+
+/** El token para MANDAR un pedido del panel. Si la sesión guardada ya es de otro comercio que el de esta vista,
+ *  lanza `PestanaVieja`: el pedido no sale (si saliera, los datos de A se escribirían en B). */
+export function tokenVigente(): string | null {
+  if (typeof window === "undefined") return null;
+  if (pestanaVieja(comercioEsperado, getComercioSession())) throw new PestanaVieja();
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+/** Cierra la sesión de comerciante de este navegador. Si era una entrada de admin avisa al servidor
+ *  (`POST /comercio/entrada/salir`, revoca el token): es de mejor esfuerzo, un error no frena nada. Si la pestaña
+ *  quedó vieja NO toca nada (la sesión guardada es de otro comercio y no es de ésta). Devuelve false en ese caso. */
+export async function cerrarSesionComercio(esperadoId: string | null, avisarSalida: boolean): Promise<boolean> {
+  let token: string | null = null;
+  try {
+    if (pestanaVieja(esperadoId, getComercioSession())) return false;
+    token = localStorage.getItem(TOKEN_KEY);
+    clearComercio();
+  } catch { return true; /* almacenamiento bloqueado */ }
+  if (avisarSalida && token) {
+    const corte = new AbortController();
+    const t = setTimeout(() => corte.abort(), 3000);
+    try {
+      await fetch(`${API}/comercio/entrada/salir`, {
+        method: "POST", headers: { Authorization: `Bearer ${token}` }, keepalive: true, signal: corte.signal,
+      });
+    } catch { /* de mejor esfuerzo */ } finally { clearTimeout(t); }
+  }
+  return true;
 }
 
 /** Campos que NUNCA se guardan en el navegador: una clave en localStorage la lee
@@ -334,7 +373,7 @@ export class PublicarBloqueado extends Error {
 export async function publicar(payload: PublicarPayload): Promise<PublicarResult> {
   const res = await fetch(`${API}/comercio/publicar`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${getCToken() ?? ""}` },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokenVigente() ?? ""}` },
     body: JSON.stringify(payload),
   });
   if (res.status === 402) {
@@ -352,7 +391,7 @@ async function cFetch(path: string, init?: RequestInit) {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${getCToken() ?? ""}`,
+      Authorization: `Bearer ${tokenVigente() ?? ""}`,
       ...(init?.headers ?? {}),
     },
   });
@@ -449,7 +488,7 @@ export async function subirFotoPerfil(foto: File): Promise<Perfil> {
   fd.append("foto", foto);
   const res = await fetch(`${API}/comercio/perfil/foto`, {
     method: "PUT",
-    headers: { Authorization: `Bearer ${getCToken() ?? ""}` },
+    headers: { Authorization: `Bearer ${tokenVigente() ?? ""}` },
     body: fd,
   });
   if (res.status === 401) { const motivo = await motivo401(res); clearComercio(); throw new Error(motivo); }
@@ -464,7 +503,7 @@ export async function subirCatalogoComercio(file: File, onP?: (pct: number) => v
   const fd = new FormData();
   fd.append("archivo", file);
   try {
-    const d = await postFormData<{ catalogo_url?: string | null }>(`${API}/comercio/catalogo`, fd, getCToken(), onP);
+    const d = await postFormData<{ catalogo_url?: string | null }>(`${API}/comercio/catalogo`, fd, tokenVigente(), onP);
     return d.catalogo_url ?? null;
   } catch (e) {
     if ((e as Error & { status?: number })?.status === 401) { clearComercio(); throw new Error("Tu sesión venció, volvé a entrar."); }
@@ -519,10 +558,10 @@ export const borrarFotoComercio = (id: string): Promise<void> => cFetch(`/comerc
 export const borrarVideoComercio = (id: string): Promise<void> => cFetch(`/comercio/videos/${id}`, { method: "DELETE" }).then(() => undefined);
 /** `opts`: cómo reintentar cuando la galería llegó al tope del plan (409):
  *  `reemplazar=<id>` borra esa foto, `extra=pagar` cobra una foto extra. */
-export const subirFotoGaleriaComercio = (file: File, onP?: (p: number) => void, opts?: OpcionesFoto): Promise<FotoGaleria> =>
-  subirConProgreso<{ foto: FotoGaleria }>(`${API}/comercio/fotos`, "foto", file, getCToken(), camposOpcionesFoto(opts), onP).then((d) => d.foto);
-export const subirVideoGaleriaComercio = (file: File, dur: number | null, onP?: (p: number) => void): Promise<VideoGaleria> =>
-  subirConProgreso<{ video: VideoGaleria }>(`${API}/comercio/videos`, "video", file, getCToken(), dur != null ? { duracion_seg: String(dur) } : {}, onP).then((d) => d.video);
+export const subirFotoGaleriaComercio = async (file: File, onP?: (p: number) => void, opts?: OpcionesFoto): Promise<FotoGaleria> =>
+  (await subirConProgreso<{ foto: FotoGaleria }>(`${API}/comercio/fotos`, "foto", file, tokenVigente(), camposOpcionesFoto(opts), onP)).foto;
+export const subirVideoGaleriaComercio = async (file: File, dur: number | null, onP?: (p: number) => void): Promise<VideoGaleria> =>
+  (await subirConProgreso<{ video: VideoGaleria }>(`${API}/comercio/videos`, "video", file, tokenVigente(), dur != null ? { duracion_seg: String(dur) } : {}, onP)).video;
 
 export async function pagarSuscripcion(
   fields: { monto: number; moneda: string; metodo: string; referencia?: string },
@@ -536,7 +575,7 @@ export async function pagarSuscripcion(
   if (comprobante) fd.append("comprobante", comprobante);
   const res = await fetch(`${API}/comercio/pago`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${getCToken() ?? ""}` },
+    headers: { Authorization: `Bearer ${tokenVigente() ?? ""}` },
     body: fd,
   });
   if (res.status === 401) { const motivo = await motivo401(res); clearComercio(); throw new Error(motivo); }
@@ -614,7 +653,7 @@ export async function crearProducto(
   fotos.forEach((f) => fd.append("fotos", f));
   const res = await fetch(`${API}/comercio/productos`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${getCToken() ?? ""}` },  // sin Content-Type: lo pone FormData
+    headers: { Authorization: `Bearer ${tokenVigente() ?? ""}` },  // sin Content-Type: lo pone FormData
     body: fd,
   });
   if (res.status === 401) { const motivo = await motivo401(res); clearComercio(); throw new Error(motivo); }

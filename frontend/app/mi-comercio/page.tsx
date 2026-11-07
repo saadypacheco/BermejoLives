@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import "@/app/uruku.css";
 import "@/app/styles/mi-comercio.css";
@@ -25,7 +25,7 @@ const Logout = ic("M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9
 const Tag = ic("M20.6 13.4 11 3.8H4v7l9.6 9.6a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8zM7 7h.01");
 const ImageIcon = ic("M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5zM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM21 15l-5-5L5 21");
 import {
-  getComercioSession, clearComercio,
+  getComercioSession, cerrarSesionComercio, fijarComercioEsperado,
   getPerfil, updatePerfil, subirFotoPerfil, getSuscripcion, getMetricas, pagarSuscripcion,
   draftProducto, listProductos, crearProducto, borrarProducto, destacarProducto,
   getMensajes, marcarLeido,
@@ -52,7 +52,7 @@ import { LoginComercio } from "@/components/ingresar-comercio";
 import { ClaveDelComercio } from "@/components/clave-del-comercio";
 import { SocialConsentToggle } from "@/components/social-consent-toggle";
 import { BannerEntradaAdmin, BloqueadoPorAdmin, EntradaAdminContext, usePorAdmin } from "@/components/entrada-admin";
-import { MENSAJE_VENCIDA, entradaVencida, motivoBloqueo } from "@/lib/entrar-como";
+import { MENSAJE_VENCIDA, claveDeSesion, emailPorAdmin, entradaVencida, motivoBloqueo } from "@/lib/entrar-como";
 
 export default function MiComercioPage() {
   const [sess, setSess] = useState<ComercioSession | null>(null);
@@ -61,7 +61,7 @@ export default function MiComercioPage() {
   const [vencida, setVencida] = useState(false);
   useEffect(() => {
     const leida = getComercioSession();
-    if (entradaVencida(leida, Date.now())) { clearComercio(); setVencida(true); setSess(null); }
+    if (entradaVencida(leida, Date.now())) { void cerrarSesionComercio(leida?.id ?? null, true); setVencida(true); setSess(null); }
     else setSess(leida);
     setReady(true);
     // Otra pestaña entró a otro comercio o salió: esta pestaña se pone al día en vez de seguir con datos ajenos.
@@ -73,8 +73,20 @@ export default function MiComercioPage() {
     window.addEventListener("storage", alCambiar);
     return () => window.removeEventListener("storage", alCambiar);
   }, []);
-  const cerrarPorVencida = useCallback(() => { clearComercio(); setVencida(true); setSess(null); }, []);
-  const cerrar = useCallback(() => { clearComercio(); setSess(null); }, []);
+  // Cerrar la sesión de ESTA vista. Si la pestaña quedó vieja (otra abrió otro comercio) no se toca la sesión
+  // guardada, que ya es de otro: se muestra la que haya. Una entrada de admin además se revoca en el servidor.
+  const sessRef = useRef<ComercioSession | null>(null);
+  sessRef.current = sess;
+  const cerrarSesion = useCallback(async (entradaAdmin: boolean, porVencida: boolean) => {
+    const cerrada = await cerrarSesionComercio(sessRef.current?.id ?? null, entradaAdmin);
+    if (cerrada && porVencida) setVencida(true);
+    let hoy: ComercioSession | null = null;
+    try { hoy = getComercioSession(); } catch { /* almacenamiento bloqueado */ }
+    setSess(hoy);
+  }, []);
+  const cerrarPorVencida = useCallback(() => { void cerrarSesion(true, true); }, [cerrarSesion]);
+  const cerrar = useCallback(() => cerrarSesion(false, false), [cerrarSesion]);
+  const salirDeEntradaAdmin = useCallback(() => cerrarSesion(true, false), [cerrarSesion]);
 
   if (!ready) return null;
   return (
@@ -83,7 +95,9 @@ export default function MiComercioPage() {
       <div className="uk-app-toggle"><ThemeToggle /></div>
       {!sess
         ? <LoginGate onLogged={(s) => { setVencida(false); setSess(s); }} vencida={vencida} />
-        : <Panel sess={sess} onLogout={cerrar} onVencida={cerrarPorVencida} />}
+        // La clave cambia con el comercio o con la entrada: el panel se monta de cero con datos frescos y no
+        // queda un formulario de A mandando el token de B (pestañas que comparten localStorage).
+        : <Panel key={claveDeSesion(sess)} sess={sess} onLogout={cerrar} onSalirAdmin={salirDeEntradaAdmin} onVencida={cerrarPorVencida} />}
     </div>
   );
 }
@@ -541,6 +555,8 @@ function OfertaEditForm({ pub, onCancel, onSaved }: { pub: Publicacion; onCancel
 }
 
 function GaleriaTab() {
+  // Entrando como admin no se compra nada: la foto extra la paga el dueño (el servidor igual contesta 403).
+  const porAdmin = usePorAdmin();
   // El perfil, sólo por la foto principal: vive en PerfilTab y no en el
   // padre, así que esta pestaña lo pide para sí.
   const [portada, setPortada] = useState<string | null>(null);
@@ -560,11 +576,14 @@ function GaleriaTab() {
         {topeFotos
           ? `Y hasta ${topeFotos} fotos de tu plan y 5 videos (≤60s) más de tu local.`
           : "Y las fotos que permite tu plan y hasta 5 videos (≤60s) más de tu local."}
-        {" "}Se muestran en tu ficha, después de la principal. Si llegás al tope, elegís entre pagar una foto extra o borrar la más vieja.
+        {" "}Se muestran en tu ficha, después de la principal.{" "}
+        {porAdmin
+          ? "Si llegás al tope, se puede borrar la más vieja (la foto extra la paga el dueño)."
+          : "Si llegás al tope, elegís entre pagar una foto extra o borrar la más vieja."}
       </p>
       {/* «Usar como portada» actualiza la foto principal de arriba: `portada` es
           el mismo estado que ella lee. */}
-      <GaleriaUploader puedePagarExtra onLimite={setTopeFotos}
+      <GaleriaUploader puedePagarExtra={!porAdmin} onLimite={setTopeFotos}
         portada={portada || portadaThumb ? { url: portada, thumb_url: portadaThumb } : null}
         onPortada={(p) => { setPortada(p.url); setPortadaThumb(p.thumb_url); }}
         api={{
@@ -597,20 +616,32 @@ function AvisoSuscripcion({ sub, onPagar }: { sub: Suscripcion; onPagar: () => v
   );
 }
 
-function Panel({ sess, onLogout, onVencida }: { sess: ComercioSession; onLogout: () => void; onVencida: () => void }) {
+function Panel({ sess, onLogout, onSalirAdmin, onVencida }: {
+  sess: ComercioSession; onLogout: () => void; onSalirAdmin: () => Promise<void>; onVencida: () => void;
+}) {
   const [vista, setVista] = useState<Vista>("inicio");
-  // Entró un admin («Entrar como este comercio»): lo dice la sesión guardada o, si no, el perfil (`por_admin`).
-  const [porAdmin, setPorAdmin] = useState<string | null>(sess.porAdmin ?? null);
+  // Los pedidos de este panel sólo salen mientras la sesión guardada siga siendo de ESTE comercio (si otra pestaña
+  // abrió otro, `tokenVigente` los corta). useLayoutEffect: queda fijado antes de que los hijos pidan sus datos.
+  useLayoutEffect(() => {
+    fijarComercioEsperado(sess.id);
+    return () => fijarComercioEsperado(null);
+  }, [sess.id]);
+  // Entró un admin («Entrar como este comercio»): lo dice la sesión actual o, si no, el perfil (`por_admin`).
+  // Se recalcula en cada render con la sesión de ese momento: no queda fijo a lo que había al montar.
+  const [porAdminPerfil, setPorAdminPerfil] = useState<string | null>(null);
   useEffect(() => {
-    getPerfil().then((p) => { if (typeof p.por_admin === "string" && p.por_admin) setPorAdmin(p.por_admin); }).catch(() => {});
+    getPerfil().then((p) => { if (typeof p.por_admin === "string" && p.por_admin) setPorAdminPerfil(p.por_admin); }).catch(() => {});
   }, []);
+  const porAdmin = emailPorAdmin(sess, porAdminPerfil);
   const [altoAviso, setAltoAviso] = useState(0);
   const salirDeLaEntrada = useCallback(() => {
-    onLogout();
-    // La pestaña la abrió el panel de admin: se cierra. Si el navegador no deja, se vuelve a /admin.
-    try { window.close(); } catch { /* sin permiso */ }
-    window.setTimeout(() => { window.location.href = "/admin"; }, 300);
-  }, [onLogout]);
+    // Avisa al servidor (revoca el token), borra la sesión de este navegador y recién ahí cierra la pestaña.
+    void onSalirAdmin().finally(() => {
+      // La pestaña la abrió el panel de admin: se cierra. Si el navegador no deja, se vuelve a /admin.
+      try { window.close(); } catch { /* sin permiso */ }
+      window.setTimeout(() => { window.location.href = "/admin"; }, 300);
+    });
+  }, [onSalirAdmin]);
   const [sub, setSub] = useState<Suscripcion | null>(null);
   const [noLeidos, setNoLeidos] = useState(0);
   // Si la suscripción no se pudo leer, el chatbot lo dice (con reintento) en
@@ -690,7 +721,7 @@ function Panel({ sess, onLogout, onVencida }: { sess: ComercioSession; onLogout:
         </button>
         <Link className="brand" href="/"><b>URUKU</b><span>EN EL MAPA</span></Link>
       </header>
-      <Sidebar vista={vista} setVista={ir} sub={sub} onLogout={onLogout} noLeidos={noLeidos}
+      <Sidebar vista={vista} setVista={ir} sub={sub} onLogout={porAdmin ? salirDeLaEntrada : onLogout} noLeidos={noLeidos}
                abierto={menuAbierto} onCerrar={() => { setMenuAbierto(false); burger.current?.focus(); }} lateralRef={lateral} />
       <div className={`mic-fondo${menuAbierto ? " abierto" : ""}`} aria-hidden onClick={() => setMenuAbierto(false)} />
       <div className="mic-main">
@@ -1326,6 +1357,7 @@ function MensajesTab() {
 
 /* -------------------------------- Productos tab -------------------------------- */
 function ProductosTab() {
+  const porAdmin = usePorAdmin();
   const [items, setItems] = useState<ProductoRef[] | null>(null);
   const [err, setErr] = useState("");
   const [adding, setAdding] = useState(false);
@@ -1365,7 +1397,9 @@ function ProductosTab() {
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               {p.destacado_pub_id
                 ? <span style={{ fontSize: 12, color: "var(--amber)", fontWeight: 700 }}><Ic n="destacado" s={13} /> Destacado</span>
-                : <button className="btn" onClick={() => destacar(p.id)} style={{ border: "1px solid var(--amber)", color: "var(--amber)" }}>Destacar $1.000</button>}
+                : porAdmin
+                  ? <span style={{ fontSize: 12, color: "var(--txt-3)" }}><Ic n="aviso" s={13} /> Destacar lo paga el dueño</span>
+                  : <button className="btn" onClick={() => destacar(p.id)} style={{ border: "1px solid var(--amber)", color: "var(--amber)" }}>Destacar $1.000</button>}
               {p.url && <a className="btn" href={p.url} target="_blank" rel="noopener" style={{ border: "1px solid var(--stroke)" }}>Ver</a>}
               <button className="btn" onClick={() => eliminar(p.id)} style={{ border: "1px solid var(--stroke)", color: "var(--pink)" }}>Borrar</button>
             </div>

@@ -115,3 +115,58 @@ export function sesionAjena(actual: SesionConEntrada | null | undefined, comerci
   if (actual.id === comercioId && esEntradaAdmin(actual)) return null;
   return actual.nombre || "otro negocio";
 }
+
+/* ───────────── Pestañas viejas ─────────────
+ * La sesión del comerciante vive en localStorage y la comparten TODAS las pestañas. Si el admin entra al comercio
+ * B en otra pestaña mientras esta sigue mostrando el A, el token ya es el de B pero los formularios son de A:
+ * un «Guardar» escribiría en B. Estas piezas cortan eso. */
+
+export const MENSAJE_PESTANA_VIEJA = "Esta pestaña quedó vieja: se abrió otro comercio en otra pestaña. Recargá.";
+
+/** Clave con la que se (re)monta el panel: cambia si cambia el comercio o la entrada (otro vencimiento). */
+export function claveDeSesion(s: SesionConEntrada | null | undefined): string {
+  return s?.id ? `${s.id}:${s.expiraEn ?? ""}` : "";
+}
+
+/** ¿Esta pestaña quedó vieja? `esperado` es el comercio con el que se cargó la vista (null = no hay vista de
+ *  comercio, no se controla). Sin sesión guardada no hay token que mande a otro lado: no cuenta como vieja. */
+export function pestanaVieja(esperado: string | null | undefined, actual: SesionConEntrada | null | undefined): boolean {
+  return !!esperado && !!actual?.id && actual.id !== esperado;
+}
+
+/** Quién entró como admin: lo que dice la sesión guardada y, si no, lo que dijo el perfil (`por_admin`). Se
+ *  recalcula en cada render con la sesión de ese momento. */
+export function emailPorAdmin(s: SesionConEntrada | null | undefined, porAdminDelPerfil?: string | null): string | null {
+  if (esEntradaAdmin(s)) return s?.porAdmin as string;
+  return typeof porAdminDelPerfil === "string" && porAdminDelPerfil ? porAdminDelPerfil : null;
+}
+
+/* ───────────── Últimas entradas del equipo ───────────── */
+
+/** Una fila de `GET /admin/comercios/{id}/entradas`. */
+export type EntradaDelEquipo = { admin: string; motivo: string | null; at: string; expiraEn: string };
+
+/** Lee `{ items: [...] }`; descarta lo que no tenga admin y fecha legible. Más nueva primero (como viene). */
+export function leerEntradasDelEquipo(d: unknown): EntradaDelEquipo[] {
+  const o = (typeof d === "object" && d !== null ? d : {}) as Record<string, unknown>;
+  const items = Array.isArray(o.items) ? o.items : [];
+  const fuera: EntradaDelEquipo[] = [];
+  for (const it of items) {
+    const r = (typeof it === "object" && it !== null ? it : {}) as Record<string, unknown>;
+    const admin = typeof r.admin === "string" ? r.admin : "";
+    const at = typeof r.at === "string" ? r.at : "";
+    if (!admin || !Number.isFinite(Date.parse(at))) continue;
+    const motivo = typeof r.motivo === "string" && r.motivo.trim() ? r.motivo.trim() : null;
+    fuera.push({ admin, motivo, at, expiraEn: typeof r.expira_en === "string" ? r.expira_en : "" });
+  }
+  return fuera;
+}
+
+/** «07/11/2026 14:05» en hora de Bolivia (UTC-4, sin horario de verano). "" si la fecha no se entiende. */
+export function fechaHoraBolivia(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  const d = new Date(t - 4 * 3_600_000);
+  const dos = (n: number) => String(n).padStart(2, "0");
+  return `${dos(d.getUTCDate())}/${dos(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${dos(d.getUTCHours())}:${dos(d.getUTCMinutes())}`;
+}

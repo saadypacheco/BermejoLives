@@ -2,7 +2,7 @@
 import { normalizarCapa, type CapaCalles, type EstadoMarca } from "@/lib/calles";
 import { camposOpcionesFoto, respuestaPortada, subirConProgreso, type OpcionesFoto, type RespuestaPortada } from "@/lib/upload";
 import { rutaPrivada } from "@/lib/archivo-privado";
-import { leerEntradaAdmin, type EntradaAdmin } from "@/lib/entrar-como";
+import { leerEntradaAdmin, leerEntradasDelEquipo, type EntradaAdmin, type EntradaDelEquipo } from "@/lib/entrar-como";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_admin_token";
 
@@ -814,7 +814,7 @@ export async function setConfiable(comercioId: string, confiable: boolean) {
   return res.json();
 }
 
-/** «Generar clave nueva» de un comercio (permiso `comercios.cuenta`):
+/** «Generar clave nueva» de un comercio (permiso `equipo`):
  *  `POST /admin/comercio/{id}/clave`. La anterior deja de servir. Devuelve la
  *  clave en claro (`BOUTIQUE-K7M2P9`): es la única vez que se ve, el servidor
  *  guarda sólo el hash. Nunca se guarda en el navegador ni se escribe en logs. */
@@ -837,6 +837,13 @@ export async function adminEntrarComoComercio(comercioId: string, motivo?: strin
     body: JSON.stringify(m ? { motivo: m } : {}),
   });
   return leerEntradaAdmin(await res.json().catch(() => null));
+}
+
+/** Últimas entradas del equipo a este comercio: `GET /admin/comercios/{id}/entradas` (permiso `equipo`), la más
+ *  nueva primero. Lanza si el servidor contesta error (403/404): quien llama oculta el bloque. */
+export async function adminEntradasDelComercio(comercioId: string): Promise<EntradaDelEquipo[]> {
+  const res = await authFetch(`/admin/comercios/${encodeURIComponent(comercioId)}/entradas`);
+  return leerEntradasDelEquipo(await res.json().catch(() => null));
 }
 
 export type NumeroComercio = {

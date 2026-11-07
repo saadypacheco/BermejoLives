@@ -8,7 +8,7 @@ import { mensajeDeError } from "@/lib/acceso";
 
 /**
  * «Generar clave nueva» del comercio, en Admin › Editar negocio. Sólo se monta
- * con el permiso `comercios.cuenta` (el servidor igual contesta 403 sin él).
+ * con el permiso `equipo` (el servidor igual contesta 403 sin él).
  *
  * Pide confirmación (la clave anterior deja de servir), llama a
  * `POST /admin/comercio/{id}/clave` y muestra la clave UNA vez. Vive sólo en

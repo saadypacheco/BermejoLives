@@ -61,6 +61,7 @@ import { puedo } from "@/lib/api";
 import { linkWhatsapp, mensajePasarQr, mensajePedirFotos, whatsappValido } from "@/lib/ficha-whatsapp";
 import { GenerarClaveComercio } from "@/components/admin/generar-clave";
 import { EntrarComoComercio } from "@/components/admin/entrar-como";
+import { EntradasDelEquipo } from "@/components/admin/entradas-equipo";
 import { RubroRecalcular } from "@/components/rubro-recalcular";
 import { CatalogoPanel } from "@/components/catalogo-panel";
 import { ImageLightbox } from "@/components/image-lightbox";
@@ -2760,11 +2761,13 @@ function ModalEditar({
             </label>
             </fieldset>
 
-            {/* La clave de acceso del comercio: sólo con `comercios.cuenta`. Va FUERA
+            {/* La clave de acceso del comercio: sólo con `equipo` (igual que «Entrar como este comercio»). Va FUERA
                 del fieldset (que se desactiva sin `comercios.editar`): no edita la ficha. */}
-            {puedeCuenta && <GenerarClaveComercio comercioId={comercio.id} nombre={comercio.nombre} />}
+            {puedeEntrar && <GenerarClaveComercio comercioId={comercio.id} nombre={comercio.nombre} />}
             {/* Entrar a «Mi comercio» de este negocio como si fuera el dueño (30 min, a nombre del admin): sólo con `equipo`. */}
             {puedeEntrar && <EntrarComoComercio comercioId={comercio.id} nombre={comercio.nombre} />}
+            {/* Quién del equipo entró a este negocio, y cuándo: sólo con `equipo` (si el servidor no lo da, no se ve). */}
+            {puedeEntrar && <EntradasDelEquipo comercioId={comercio.id} />}
 
             {/* La galería va FUERA del fieldset: subir y borrar fotos usa el permiso de
                 moderar, no el de editar, y tiene que andar también en sólo lectura. */}
