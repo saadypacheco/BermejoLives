@@ -86,7 +86,7 @@ test("cliente del comercio: todo pedido toma el token con la guarda de pestaña 
   assert.ok(c.includes("export function tokenVigente"));
   assert.ok(c.includes("throw new PestanaVieja()"));
   // Fuera de la propia guarda, nadie manda un token leído con getCToken().
-  const sinDefinicion = c.replace(/export function getCToken[\s\S]*?\n}\n/, "");
+  const sinDefinicion = c.replace(/export function getCToken[\s\S]*?\r?\n}\r?\n/, "");
   assert.ok(!sinDefinicion.includes("getCToken()"), "comercio.ts: usar tokenVigente()");
   assert.ok(!raiz("frontend/lib/content.ts").includes("getCToken()"), "content.ts: usar tokenVigente()");
 });
