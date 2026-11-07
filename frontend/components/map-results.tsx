@@ -4,7 +4,7 @@ import { agregarTiles } from "@/lib/mapa-tiles";
 import { useEffect, useRef, useState } from "react";
 import type { Ubicacion } from "@/lib/ubicacion";
 import { type ResultadoBusqueda, comoLlegarHref, waLink, MODALIDAD_LABEL } from "@/lib/types";
-import { registrarLead, type TipoLead } from "@/lib/campo";
+import { contacto, type TipoLead } from "@/lib/medicion";
 import { rubroStyle, loadLeaflet } from "@/lib/mapa-visual";
 import { rubroSvg, SVG_UBICACION, SVG_ESTRELLA } from "@/lib/iconos-mapa";
 import { adornoHTML, MEDIDAS, ZOOM_MIN_ADORNOS, type Adorno } from "@/lib/adornos";
@@ -212,7 +212,7 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
       // Sin leer el tipo, los tres enlaces del popup se registraban como
       // "whatsapp" — y "Cómo llegar" ni siquiera tenía el atributo.
       const tipo = (target?.getAttribute("data-lead-tipo") as TipoLead) || "whatsapp";
-      if (comercioId) registrarLead(comercioId, tipo);
+      if (comercioId) void contacto(comercioId, tipo);
     }
     el.addEventListener("click", onClick);
     return () => el.removeEventListener("click", onClick);

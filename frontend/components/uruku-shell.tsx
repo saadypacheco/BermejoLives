@@ -205,7 +205,7 @@ export async function UrukuShell({
                 <Link href="/autoregistro" className="uk-foot-link"><Ic n="comercios" /><span>Publicar comercio</span><i>›</i></Link>
                 <Link href="/mi-comercio" className="uk-foot-link"><Ic n="usuario" /><span>Mi negocio</span><i>›</i></Link>
                 <Link href="/pagar" className="uk-foot-link"><Ic n="qr" /><span>Pagar suscripción</span><i>›</i></Link>
-                <a href={waUruku("Hola, quiero hacer una consulta a URUKU")} target="_blank" rel="noopener" className="uk-foot-link"><Ic n="whatsapp" /><span>WhatsApp {WA_URUKU_TEXTO}</span><i>›</i></a>
+                <a href={waUruku("Hola, quiero hacer una consulta a URUKU")} target="_blank" rel="noopener" data-uk-evento="uruku_whatsapp_click" data-uk-detalle="contacto" className="uk-foot-link"><Ic n="whatsapp" /><span>WhatsApp {WA_URUKU_TEXTO}</span><i>›</i></a>
                 {/* El enlace a /planes salió del sitio el 2/10: los precios se deciden
           por ciudad y mostrar los de Bermejo en Santa Cruz es prometer algo
           que todavía no está decidido. La pantalla sigue existiendo para uso

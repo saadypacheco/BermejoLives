@@ -126,7 +126,7 @@ export function ContactoQr({ qrContacto, qrWhatsapp, enlaceWa, numero }: {
           (se lo mandaron por WhatsApp): ahí no hay QR que escanear. */}
       <div className="ct-acciones">
         <a className="ct-btn ct-btn-sec" href="/contacto/uruku.vcf"><Ic n="descargar" s={18} /> Guardar contacto</a>
-        <a className="ct-btn ct-btn-wa" href={enlaceWa} target="_blank" rel="noopener"><Ic n="whatsapp" s={18} /> Escribir</a>
+        <a className="ct-btn ct-btn-wa" href={enlaceWa} target="_blank" rel="noopener" data-uk-evento="uruku_whatsapp_click" data-uk-detalle="contacto"><Ic n="whatsapp" s={18} /> Escribir</a>
       </div>
     </main>
   );

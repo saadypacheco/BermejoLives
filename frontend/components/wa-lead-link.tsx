@@ -1,7 +1,7 @@
 "use client";
 
 import { waLink } from "@/lib/types";
-import { registrarLead } from "@/lib/campo";
+import { contacto } from "@/lib/medicion";
 
 export function WaLeadLink({
   comercioId, whatsapp, mensaje, className, children, nombre,
@@ -20,7 +20,7 @@ export function WaLeadLink({
       href={waLink(whatsapp, mensaje)}
       target="_blank"
       rel="noopener"
-      onClick={() => registrarLead(comercioId, "whatsapp", null, null, nombre)}
+      onClick={() => { void contacto(comercioId, "whatsapp", { nombre }); }}
     >
       {children}
     </a>

@@ -8,7 +8,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { ThemeToggle, ThemeNoFlash, POR_DEFECTO } from "@/components/uruku-theme";
 import { alCambiar, leerReservas, porComercio, quitarReserva, vaciarComercio, type GrupoReserva } from "@/lib/reservas";
 import { precioFmt, waLink } from "@/lib/types";
-import { registrarLead } from "@/lib/campo";
+import { contacto } from "@/lib/medicion";
 import { Ic } from "@/components/ic";
 
 export default function ReservasPage() {
@@ -37,7 +37,7 @@ export default function ReservasPage() {
       "",
       "¿Me confirmás si los tenés disponibles?",
     ].join("\n");
-    registrarLead(g.comercio_id, "reserva");
+    void contacto(g.comercio_id, "reserva");
     setEnviados((prev) => [...prev, g.comercio_id]);
     window.open(waLink(g.comercio_whatsapp, texto), "_blank", "noopener");
   }

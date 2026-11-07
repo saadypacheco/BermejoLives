@@ -48,6 +48,10 @@ function politicaCsp() {
     "base-uri": ["'self'"],
     "form-action": ["'self'"],
     "frame-ancestors": ["'none'"],
+    // Adónde avisa el navegador lo que la política bloquearía (medición v2, docs/estadisticas-v2.md §4.3):
+    // `POST {API}/csp-report` (204, structlog `csp_violation`, sin IP). Esta es la ÚNICA fuente de la CSP: Traefik
+    // no pone ninguna (docker-compose.prod.yml sólo anota que la manda Next).
+    ...(ORIGEN_API ? { "report-uri": [`${ORIGEN_API}/csp-report`] } : {}),
   };
   return Object.entries(directivas)
     .map(([nombre, valores]) => `${nombre} ${unicos(valores).join(" ")}`)

@@ -1,81 +1,43 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
-import { registrarVisita } from "@/lib/campo";
-import { CIUDAD_COOKIE } from "@/lib/ciudad";
-import { sesionDeLaPestania } from "@/lib/sesion";
+import { useEffect } from "react";
+import { usePathname } from "next/navigation";
+import { configurarMedicion, evento, eventoDeEnlace, vistaDePagina } from "@/lib/medicion";
 
 /**
- * Cuenta las páginas que se ven en URUKU.
+ * Cuenta las páginas que se ven en URUKU. Es sólo el enganche con React: toda la regla (rutas internas, equipo,
+ * deduplicación, sendBeacon…) vive en `lib/medicion.ts`.
  *
- * Hasta ahora lo único medido era la visita a la FICHA de un comercio. La
- * home, el buscador, /ofertas y /guia no existían para nadie: si alguien
- * entraba, buscaba «zapatillas», no encontraba y se iba, eso no quedaba
- * registrado en ninguna parte.
+ * SIN COOKIES Y SIN IP. La «sesión» es un número al azar que vive en la pestaña (sessionStorage) y se pierde al
+ * cerrarla. Sirve para no contar diez veces a la misma persona en una recorrida, y para nada más: no identifica
+ * a nadie, no sigue a nadie entre visitas, y por eso tampoco hace falta el cartel de cookies.
  *
- * SIN COOKIES Y SIN IP. La «sesión» es un número al azar que vive en la
- * pestaña (sessionStorage) y se pierde al cerrarla. Sirve para no contar diez
- * veces a la misma persona en una recorrida, y para nada más — no identifica
- * a nadie, no sigue a nadie entre visitas, y por eso tampoco hace falta el
- * cartel de cookies.
+ * También escucha, para todo el sitio, los toques a los enlaces de URUKU que declaran un evento con
+ * `data-uk-evento` y `data-uk-detalle` (el canal, la comunidad y el contacto de URUKU): viven en páginas de
+ * servidor, donde no se puede colgar un `onClick`.
  *
- * Fuego y olvido, igual que `registrarLead`: si el servidor de métricas está
- * caído, la persona no se entera. Perder un número no puede costar una visita.
+ * Fuego y olvido: si el servidor de métricas está caído, la persona no se entera.
  */
-
-
-/** Sólo el HOST de donde vino. La URL entera puede llevar datos de la otra
- *  página y no hace falta para nada: lo que interesa es si vino de Google, de
- *  Facebook o de un WhatsApp. */
-function deDondeVino(): string | null {
-  try {
-    const r = document.referrer;
-    if (!r) return null;
-    const host = new URL(r).hostname.replace(/^www\./, "");
-    return host === window.location.hostname ? null : host;
-  } catch {
-    return null;
-  }
-}
-
-function ciudadDeLaCookie(): string | null {
-  try {
-    const c = document.cookie.split(";").find((x) => x.trim().startsWith(`${CIUDAD_COOKIE}=`));
-    return c ? decodeURIComponent(c.split("=")[1]) : null;
-  } catch {
-    return null;
-  }
-}
-
 export function ContadorVisitas() {
   const ruta = usePathname();
-  const sp = useSearchParams();
-  // La última ruta contada. Sin esto, cada vez que el buscador reescribe la
-  // dirección —que lo hace en cada tecla— contaría una visita nueva, y
-  // /buscar se llevaría el 90% del total.
-  const ultima = useRef<string | null>(null);
+
+  useEffect(() => { configurarMedicion(); }, []);
+
+  // El buscador reescribe la dirección en cada tecla, pero eso cambia la query y no la ruta: `usePathname` no
+  // cambia y el efecto no corre. Sólo cuenta cuando cambia de verdad de página.
+  useEffect(() => {
+    if (ruta) vistaDePagina(ruta);
+  }, [ruta]);
 
   useEffect(() => {
-    if (!ruta || ultima.current === ruta) return;
-    ultima.current = ruta;
-    const { id, primera } = sesionDeLaPestania();
-    registrarVisita({
-      ruta,
-      sesion: id,
-      primera,
-      // `?ref=` son los QR impresos (volante, tarjeta de mesa, la ficha).
-      // `?utm_source=` es lo que van a llevar los enlaces de las redes, que
-      // es el formato que usa todo el mundo y el que el calendario de
-      // contenidos da por hecho. Se guardan en el mismo campo porque
-      // responden la misma pregunta —de dónde vino esta persona— y la
-      // pantalla de visitas ya las muestra juntas. El `ref` manda si están
-      // los dos: un QR es una pista más concreta que «instagram».
-      origen: sp?.get("ref") ?? sp?.get("utm_source") ?? null,
-      referido: primera ? deDondeVino() : null,
-      ciudad: ciudadDeLaCookie(),
-    });
-  }, [ruta, sp]);
+    function alTocar(e: MouseEvent) {
+      const enlace = e.target instanceof Element ? e.target.closest("[data-uk-evento]") : null;
+      const ev = eventoDeEnlace(enlace);
+      if (ev) evento(ev.nombre, ev.detail);
+    }
+    document.addEventListener("click", alTocar);
+    return () => document.removeEventListener("click", alTocar);
+  }, []);
 
   return null;
 }
