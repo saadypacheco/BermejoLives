@@ -401,4 +401,7 @@ Mandan sobre las recomendaciones de arriba y sobre los supuestos S-xx que las co
 | D-07 (P-07) | Depósito = la oficina actual, retiro en horario de oficina |
 | D-08 (P-08) | **No** se activa el Respaldo 2 como respaldo de WAHA |
 
-Para aclarar con el dueño antes de construir: en D-03, qué es «el retiro» que se cobra (que URUKU vaya a buscar al comercio, que el cliente retire en la oficina, o los dos); en D-05, la moneda de los montos y si la tabla por peso es el precio del guardado por día o el límite de la garantía.
+Aclaraciones del dueño (6/11/2026):
+
+- **D-03:** «el retiro» que se cobra es **que URUKU vaya a buscar la mercadería al comercio**. Que el cliente retire su paquete en la oficina no tiene un cargo aparte.
+- **D-05:** los montos son en **pesos argentinos** y son **el precio del guardado** según peso y volumen (no un límite de la garantía). Además del precio por día hay un precio por bloque de 3 días. Los montos están fuera del repo, en `uruku-privado/`, y en el sistema se cargan desde el panel, ocultos al público.
