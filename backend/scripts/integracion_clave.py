@@ -43,7 +43,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     e = sub.add_parser("emitir", help="cliente nuevo con su primera clave")
     e.add_argument("--nombre", required=True)
-    e.add_argument("--scopes", nargs="*", default=None, help=f"por defecto todos: {' '.join(integracion.SCOPES)}")
+    e.add_argument("--scopes", nargs="*", default=None,
+                   help=f"por defecto: {' '.join(integracion.SCOPES_POR_DEFECTO)} (broadcast:send sólo si se pide acá)")
     r = sub.add_parser("rotar", help="clave nueva para el mismo cliente (la vieja sigue activa)")
     r.add_argument("--key-id", required=True)
     v = sub.add_parser("revocar", help="desactiva una clave")

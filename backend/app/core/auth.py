@@ -356,9 +356,19 @@ def require_integracion(scope: str | None = None):
     minuto por clave (429) y comprobar el scope (403). Devuelve el `Cliente` (quién es y qué puede). Los errores
     salen con el formato del contrato (`{"error": {"code", "message", "details"}}`)."""
     def dep(request: Request, repo: Repo = Depends(get_repo)):
+        from app.core.errores_integracion import IntegracionError
+        from app.core.ip import ip_cliente
         from app.services import integracion
 
-        cliente = integracion.autenticar(repo, request.headers.get("authorization"))
+        # Claves inválidas: se cuentan por IP y, pasado el tope por minuto, se contesta 429 sin ni tocar la base.
+        ip = ip_cliente(request)
+        integracion.exigir_ip_sin_exceso_de_fallos(ip)
+        try:
+            cliente = integracion.autenticar(repo, request.headers.get("authorization"))
+        except IntegracionError as exc:
+            if exc.status == 401:
+                integracion.registrar_fallo_de_ip(ip)
+            raise
         integracion.limitar(cliente)
         integracion.exigir_scope(cliente, scope)
         return cliente

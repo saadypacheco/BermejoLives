@@ -6,12 +6,16 @@
 // botón «Guardar como PDF», se arma en /manual/uruku, que NO se indexa para no
 // duplicar). Sin cifras de comercios.
 //
-// Es estática (el .md se lee durante `next build`; en producción no existe la
-// carpeta content/): las ciudades y las preguntas de abajo son las del momento
-// del build, y se actualizan en cada despliegue.
+// ISR a pedido (auditoría 5/11, A-02 paso 3): el build NO lee la base. La página vive en
+// `[[...resto]]` con `generateStaticParams` vacío: no se arma en el build, se arma en el
+// primer pedido y se reusa un día. Una ruta fija con `force-static` se pre-renderizaba en el
+// build y, sin base, habría quedado un día entera sin ciudades ni preguntas. El .md se lee en
+// el render (en producción la carpeta content/ viaja en la imagen; ver manual-servidor).
+// `/que-es-uruku/loquesea` da 404 (ver `notFound` abajo).
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { PaginaManualServidor } from "@/components/manual/manual-servidor";
 import { JsonLd } from "@/components/json-ld";
 import { getCiudadesReales, getCityCategoryPagesOrNull, getRedes, getSaberLocalPorSeccion } from "@/lib/data";
@@ -25,6 +29,14 @@ import { META_DESCRIPTION, RESPONSIBLE } from "@/lib/marca";
 export const dynamic = "force-static";
 // ISR de un día: las ciudades y las preguntas del momento cambian poco.
 export const revalidate = 86400;
+export const dynamicParams = true;
+
+// Sin pre-render: el build no puede depender de la base.
+export async function generateStaticParams(): Promise<{ resto: string[] }[]> {
+  return [];
+}
+
+type Props = { params: Promise<{ resto?: string[] }> };
 
 export const metadata: Metadata = {
   // `absolute`: el título ya lleva el nombre; sin esto la plantilla le suma « · Uruku».
@@ -34,15 +46,16 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
-export default async function QueEsUruku() {
+export default async function QueEsUruku(props: Props) {
+  const { resto } = await props.params;
+  if (resto && resto.length > 0) notFound();
   const [ciudadesLeidas, paresLeidos, redes, saber] = await Promise.all([
     getCiudadesReales(), getCityCategoryPagesOrNull(), getRedes(), getSaberLocalPorSeccion(null),
   ]);
   // Sin la lista real NO se cae a las ciudades demo (`getCiudades`): «Dónde está
-  // URUKU» saldría con ciudades de mentira. Si la lectura falla, en el build se
-  // omite el bloque (el build no depende de la base) y en una regeneración se
-  // LANZA, para que Next conserve la versión anterior en vez de fijar el hueco un día.
-  if ((ciudadesLeidas === null || paresLeidos === null) && hasSupabase && process.env.NEXT_PHASE !== "phase-production-build") {
+  // URUKU» saldría con ciudades de mentira. Si la lectura falla se LANZA: Next conserva
+  // la versión anterior (o contesta 500 si no hay) en vez de fijar el hueco un día.
+  if ((ciudadesLeidas === null || paresLeidos === null) && hasSupabase) {
     throw new Error("/que-es-uruku: falló la lectura de ciudades o rubros");
   }
   const activas = (ciudadesLeidas ?? []).filter((c) => c.activa);

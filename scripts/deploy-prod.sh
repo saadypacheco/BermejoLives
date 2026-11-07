@@ -4,6 +4,7 @@
 #   bash scripts/deploy-prod.sh                       # frontend + backend
 #   bash scripts/deploy-prod.sh frontend              # sólo el frontend
 #   bash scripts/deploy-prod.sh --sql selfhost/postgres-init/0105_*.sql frontend
+#   bash scripts/deploy-prod.sh postgrest frontend backend   # si cambió el compose de PostgREST
 #
 # En QA (/docker/buscadonde) sirve igual con dos variables:
 #   DOMINIO=encontralo.store APP_ENV=qa bash scripts/deploy-prod.sh frontend backend
@@ -109,6 +110,35 @@ for s in "${SERVICIOS[@]}"; do
     frontend) esperar frontend "https://$DOMINIO/version" commit ;;
     backend)  esperar backend  "https://api.$DOMINIO/health" commit ;;
   esac
+done
+
+# Calentar las páginas clave. El build ya no lee la base: las que dependen de datos (sitemap,
+# llms.txt, /que-es-uruku, /comprar-en-bermejo, /bermejo) se arman en el PRIMER pedido, y ese lo
+# pagaría el primer visitante o el robot de Google. Se piden acá, por la URL pública. `/` y
+# `/buscar` no van: son dinámicas y no guardan nada. Si alguna falla (500 = la base no contestó)
+# no corta el deploy: sólo avisa, y se vuelve a armar en el próximo pedido (una página que falló
+# no se guarda). Antes se espera a que el backend vea la base, para no guardar una página a medias
+# justo cuando PostgREST se está reiniciando.
+calentar() {
+  local ruta out code t i
+  echo "== calentando páginas clave =="
+  for i in $(seq 1 15); do
+    curl -sf --max-time 5 "https://api.$DOMINIO/health" 2>/dev/null | grep -q '"connected"' && break
+    sleep 2
+  done
+  for ruta in /sitemap.xml /llms.txt /que-es-uruku /comprar-en-bermejo /bermejo; do
+    # Captura y lectura separadas: con `set -e`, un `read` sin salto de línea final cortaba el script.
+    out="$(curl -s -o /dev/null --max-time 60 -w '%{http_code} %{time_total}
+' "https://$DOMINIO$ruta" 2>/dev/null)" || true
+    read -r code t <<<"${out:-000 0}" || true
+    case "$code" in
+      2??|3??|404) echo "  $ruta -> $code (${t}s)" ;;   # 404 esperado: /llms.txt y robots en QA
+      *) echo "  !! $ruta -> $code: no se pudo calentar (mirá los logs del frontend)" ;;
+    esac
+  done
+}
+for s in "${SERVICIOS[@]}"; do
+  [ "$s" = frontend ] && calentar
 done
 
 echo "== contenedores =="

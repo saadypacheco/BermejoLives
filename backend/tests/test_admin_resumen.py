@@ -373,7 +373,7 @@ def test_el_numero_coincide_con_las_alertas_de_la_pestana_vencimientos(api, repo
     repo.crear_vencimiento({"nombre": "dominio", "vence_el": (hoy + timedelta(days=10)).isoformat()})   # por vencer
     repo.crear_vencimiento({"nombre": "otro", "vence_el": (hoy - timedelta(days=5)).isoformat()})
     monkeypatch.setattr(vencimientos, "vence_certificado",
-                        lambda h, puerto=443, timeout=6.0: {"host": h, "estado": "por_vencer" if h.startswith("db") else "ok"})
+                        lambda h, puerto=443, timeout=6.0: {"host": h, "estado": "por_vencer" if h.startswith("tiles") else "ok"})
     pestana = api.get("/admin/vencimientos", headers=admin_h()).json()["alertas"]
     vencimientos.limpiar_cache_certificados()
     assert resumen(api)["pendientes"]["vencimientos"] == pestana == 3
@@ -383,7 +383,7 @@ def test_los_certificados_se_miden_una_vez_y_se_recuerdan(api, repo, _sin_red_ni
     resumen(api)
     resumen(api)
     resumen(api)
-    assert len(_sin_red_ni_cache) == len(vencimientos.HOSTS_TLS)       # cuatro hosts, una sola vuelta
+    assert len(_sin_red_ni_cache) == len(vencimientos.HOSTS_TLS)       # tres hosts, una sola vuelta
 
 
 def test_un_host_que_no_responde_no_suma_alertas(api, repo, monkeypatch):

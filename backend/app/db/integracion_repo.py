@@ -74,10 +74,18 @@ class IntegracionRepoMixin:
 
     # ── alcance (qué comercios) ──────────────────────────────────────────────────────────────────────────
     def es_comercio_gestionado(self, comercio_id: str) -> bool:
-        """¿Está el comercio en el alcance de algún cliente de integración (activo)?"""
-        res = (self._db.table("integracion_comercios").select("comercio_id")
-               .eq("comercio_id", comercio_id).eq("activo", True).limit(1).execute())
-        return bool(res.data)
+        """¿Está el comercio en el alcance (activo) de un cliente de integración que TODAVÍA tiene una clave activa?
+
+        Un cliente sin ninguna clave activa (todas revocadas) ya no gestiona nada: sus comercios vuelven a su flujo
+        de siempre en vez de quedar pendientes para siempre esperando a alguien que ya no puede aprobar."""
+        res = (self._db.table("integracion_comercios").select("cliente_id")
+               .eq("comercio_id", comercio_id).eq("activo", True).execute())
+        grupos = sorted({f["cliente_id"] for f in (res.data or [])})
+        if not grupos:
+            return False
+        claves = (self._db.table("integracion_clientes").select("id")
+                  .in_("grupo_id", grupos).eq("activo", True).is_("revocada_at", "null").limit(1).execute())
+        return bool(claves.data)
 
     def integracion_comercios_de(self, grupo_id: str, solo_activos: bool = True) -> list[dict]:
         def filtrar(q):
@@ -170,11 +178,14 @@ class IntegracionRepoMixin:
 
     # ── publicaciones ────────────────────────────────────────────────────────────────────────────────────
     def integracion_listar_publicaciones(self, comercio_ids: list[str], cursor: tuple[str, str] | None,
-                                         limite: int, estado: str | None) -> list[dict]:
-        """Cambios desde el cursor `(updated_at, id)`, sólo de esos comercios, en orden estable."""
+                                         limite: int, estado: str | None, activo: str = "true") -> list[dict]:
+        """Cambios desde el cursor `(updated_at, id)`, sólo de esos comercios, en orden estable.
+        `activo`: "true" (por defecto, sólo las vigentes), "false" (sólo las dadas de baja) o "all"."""
         if not comercio_ids:
             return []
         q = (self._db.table("publicaciones").select(COLUMNAS_PUBLICACION).in_("comercio_id", comercio_ids))
+        if activo in ("true", "false"):
+            q = q.eq("activo", activo == "true")
         if estado:
             q = q.eq("estado", estado)
         if cursor:
@@ -196,6 +207,37 @@ class IntegracionRepoMixin:
             q = q.eq(col, val)
         res = q.execute()
         return res.data[0] if res.data else None
+
+    def integracion_origen_de_publicacion(self, pub_id: str) -> dict | None:
+        """Quién mandó una publicación que entró por WhatsApp: `{remitente_rol, identidad_origen, origen, phone}`.
+        `phone` es el número del remitente guardado en la bandeja (`wa_inbox`); None si no hay (panel, importada…).
+        Lo usa la ingesta para decidir si dos mensajes son del MISMO remitente (fusión foto + texto)."""
+        res = (self._db.table("publicaciones").select("wa_message_id, remitente_rol, identidad_origen, origen")
+               .eq("id", pub_id).limit(1).execute())
+        if not res.data:
+            return None
+        fila = res.data[0]
+        phone = None
+        if fila.get("wa_message_id"):
+            ib = (self._db.table("wa_inbox").select("phone").eq("wa_message_id", fila["wa_message_id"])
+                  .limit(1).execute())
+            phone = (ib.data[0].get("phone") if ib.data else None) or None
+        return {"remitente_rol": fila.get("remitente_rol"), "identidad_origen": fila.get("identidad_origen"),
+                "origen": fila.get("origen"), "phone": phone}
+
+    # ── media (E6) ───────────────────────────────────────────────────────────────────────────────────────
+    def integracion_uso_media(self, grupo_id: str, desde: str) -> tuple[int, int]:
+        """(archivos nuevos, bytes) que ese cliente subió por E6 desde `desde` (auditoría `media_subida`)."""
+        filas = self._traer_todo(
+            "integracion_eventos", "id, detalle", "id",
+            filtrar=lambda q: q.eq("tipo", "media_subida").eq("detalle->>grupo_id", grupo_id).gte("created_at", desde))
+        return len(filas), sum(int((f.get("detalle") or {}).get("bytes") or 0) for f in filas)
+
+    def difusion_imagenes_en_uso(self) -> set[str]:
+        """Las URLs de imagen que alguna fila de `difusion_cola` tiene como `imagen_url_override` (E6)."""
+        filas = self._traer_todo("difusion_cola", "id, imagen_url_override", "id",
+                                 filtrar=lambda q: q.not_.is_("imagen_url_override", "null"))
+        return {f["imagen_url_override"] for f in filas if f.get("imagen_url_override")}
 
     # ── difusión ─────────────────────────────────────────────────────────────────────────────────────────
     def difusion_de_publicacion(self, publicacion_id: str) -> list[dict]:

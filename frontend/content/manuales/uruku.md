@@ -32,7 +32,7 @@ Está todos los días entre nosotros. Eso es lo que queremos que sea URUKU: algo
 
 ## Cómo funciona
 
-1. **Agentes que recorren.** Los agentes de URUKU visitan los comercios, conversan con quienes los atienden y cargan cada local en su puerta. Los agentes de URUKU nunca cobran. Los datos de quienes están autorizados se ven en uruku.bo/agentes.
+1. **Agentes que recorren.** Los agentes de URUKU visitan los comercios, conversan con quienes los atienden y cargan cada local en su puerta: todos los días se suman comercios nuevos. Los agentes de URUKU nunca cobran. Los datos de quienes están autorizados se ven en uruku.bo/agentes.
 2. **Comercios que publican por WhatsApp.** Cada comercio manda sus ofertas, novedades y videos por WhatsApp, como ya trabaja.
 3. **Revisión antes de publicar.** Las publicaciones se revisan antes de aparecer, salvo las de los comercios de confianza.
 4. **Compradores que encuentran y escriben.** Se busca lo que se necesita, se ve dónde queda cada local y se le escribe directo por WhatsApp.

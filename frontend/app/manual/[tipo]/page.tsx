@@ -9,7 +9,8 @@
 // El Dockerfile de producción copia sólo `.next`, `public` y `next.config.mjs`
 // (`next start`, no `standalone`). El .md se lee durante `next build`, cuando la
 // carpeta `content/` sí está, y queda adentro del HTML ya generado en `.next`.
-// En runtime no se vuelve a abrir ningún archivo.
+// En runtime no se vuelve a abrir ningún archivo. (Excepción: /que-es-uruku, que se arma en
+// el primer pedido y por eso el Dockerfile sí copia `content/` a la imagen final.)
 
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";

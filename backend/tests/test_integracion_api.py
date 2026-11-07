@@ -44,8 +44,9 @@ def mundo(repo, client, monkeypatch):
     monkeypatch.setattr(settings, "facebook_page_id", "111")
     monkeypatch.setattr(settings, "facebook_page_token", "tok")
     monkeypatch.setattr(settings, "instagram_user_id", "222")
+    monkeypatch.setattr(settings, "integracion_difusion", True)         # los tests de E9/E10 ejercen la difusión
     integracion.reiniciar_limites()
-    clave = integracion.emitir_clave(repo, "Marketing", None, "test")
+    clave = integracion.emitir_clave(repo, "Marketing", list(integracion.SCOPES), "test")
     com = repo.seed_comercio(id=str(uuid.uuid4()), slug="vidrieria-pacheco", nombre="Vidriería Pacheco", plan="destacado",
                              activo=True, confiable=True, verificado=True, codigo="K7M2", whatsapp="59170000009",
                              wa_jid="59170000009@c.us")
@@ -442,10 +443,17 @@ def test_instagram_sin_imagen_no_se_aprueba(mundo):
 
 
 def test_el_codigo_que_ya_no_coincide_es_409_sin_filtrar_los_codigos(mundo):
+    from app.api import integracion as api
+
+    # Defensa en profundidad: aunque ya no llegue por E7 (lo que entró por código lo modera Uruku), la
+    # comprobación de `_aprobar` contesta con un mensaje propio, sin los códigos del panel.
     p = _pub(mundo.repo, mundo.com["id"], identidad_origen="codigo", codigo_recibido="ZZZZ")
-    r = _aprobar(mundo, p)
-    assert r.status_code == 409 and error(r)["code"] == "codigo_no_coincide"
-    assert "ZZZZ" not in r.text and "K7M2" not in r.text and "URUKU-" not in r.text
+    cliente = integracion.Cliente(id="x", grupo_id="x", key_id="k", nombre="n", scopes=frozenset())
+    with pytest.raises(integracion.IntegracionError) as e:
+        api._aprobar(mundo.repo, cliente, mundo.repo.get_publicacion(p["id"]), {"activo": True},
+                     {"actor": {"usuario": "op"}, "difusion": {}})
+    assert e.value.status == 409 and e.value.code == "codigo_no_coincide"
+    assert "ZZZZ" not in e.value.message and "K7M2" not in e.value.message and "URUKU-" not in e.value.message
 
 
 def test_rechazar_baja_la_publicacion_con_motivo(mundo):

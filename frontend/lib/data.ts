@@ -2,6 +2,8 @@ import "server-only";
 import { supabase, hasSupabase } from "@/lib/supabase";
 import type { FiltrosDisponibles, Volumenes, Cotizacion, Clima, VideoPromo, Red, NovedadFoto, NovedadUruku, GaleriaFoto, GaleriaVideo, FronteraEstado } from "@/lib/data-pure";
 import { UMBRALES } from "@/lib/data-pure";
+import { conMemoriaTtl } from "@/lib/memoria-ttl";
+import { desdeConteo } from "@/lib/comercios-nuevos-pure";
 
 export * from "@/lib/data-pure";
 import type { Adorno } from "@/lib/adornos";
@@ -109,6 +111,24 @@ export async function getVolumenes(): Promise<Volumenes> {
     // esconder de más molesta, acá prometer de más miente.
     return SIN_VOLUMEN;
   }
+}
+
+/**
+ * Cuántos comercios se sumaron en las últimas 24 horas (contando desde el 7/11/2026), para la
+ * línea del home. Lectura anónima: cuenta sólo lo que el público ve. La home es dinámica, así que
+ * el número se recuerda 5 minutos (una consulta por ventana, no una por visita). Ante un error,
+ * `null`: la línea sale sin número, nunca con uno inventado.
+ */
+const contarComerciosNuevos = conMemoriaTtl(5 * 60_000, async (): Promise<number> => {
+  const { count, error } = await supabase.from("comercios")
+    .select("id", { count: "exact", head: true }).eq("activo", true).gte("created_at", desdeConteo());
+  if (error) throw error;
+  return count ?? 0;
+});
+
+export async function getComerciosNuevos(): Promise<number | null> {
+  if (!hasSupabase) return null;
+  try { return await contarComerciosNuevos(); } catch { return null; }
 }
 
 const NINGUNO: FiltrosDisponibles = { horario: false, zona: false, ofertas: false };

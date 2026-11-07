@@ -15,18 +15,12 @@ ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_TILES_URL
 ENV NEXT_PUBLIC_TILES_URL=$NEXT_PUBLIC_TILES_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-# Las páginas estáticas leen la base DURANTE el build: acá van como ARG, y en la
-# etapa final no se copian (el contenedor las recibe como `environment`).
-# Ojo: BuildKit no se une a las redes del compose, así que el nombre interno
-# (buscadonde-postgrest) no resuelve en el build. Por eso en el build lib/supabase.ts
-# prefiere SUPABASE_URL (la pública, que sí resuelve) sobre SUPABASE_INTERNAL_URL;
-# en runtime sólo existe la interna.
-ARG SUPABASE_INTERNAL_URL
-ARG SUPABASE_URL
-ARG SUPABASE_ANON_KEY
-ENV SUPABASE_INTERNAL_URL=$SUPABASE_INTERNAL_URL
-ENV SUPABASE_URL=$SUPABASE_URL
-ENV SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+# EL BUILD NO LEE LA BASE (auditoría 5/11, A-02 paso 3): por eso ya no hay ARG de SUPABASE_*.
+# `docker build` (BuildKit) no entra a las redes del compose y el router público `db.` está
+# cerrado. Las páginas que dependen de datos (/que-es-uruku, /comprar-en-bermejo, fichas,
+# ciudades, rubros) se arman en el primer pedido y se regeneran por ISR; el sitemap y llms.txt
+# se arman al pedido. En runtime el contenedor recibe SUPABASE_INTERNAL_URL / SUPABASE_ANON_KEY
+# como `environment` (docker-compose.prod.yml).
 # Versión: commit y ambiente con los que se buildeó (se hornean en el bundle)
 ARG GIT_SHA
 ARG APP_ENV
@@ -46,6 +40,9 @@ COPY --chown=node:node package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --chown=node:node --from=builder /app/.next ./.next
 COPY --chown=node:node --from=builder /app/public ./public
+# Los manuales en Markdown: /que-es-uruku se arma en el primer pedido (no en el build) y lee
+# content/manuales/uruku.md en ese momento. Sólo lectura.
+COPY --chown=node:node --from=builder /app/content ./content
 COPY --chown=node:node --from=builder /app/next.config.mjs ./
 EXPOSE 3003
 # Directo al binario (sin `npx`, que podría intentar bajar nada de internet al arrancar).

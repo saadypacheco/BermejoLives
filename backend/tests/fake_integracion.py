@@ -53,7 +53,14 @@ class FakeIntegracionMixin:
 
     # ── alcance ──────────────────────────────────────────────────────────────────────────────────────────
     def es_comercio_gestionado(self, comercio_id):
-        return any(f["comercio_id"] == comercio_id and f["activo"] for f in self._integ()["alcance"].values())
+        """Como el real: en el alcance (activo) de un cliente que todavía tiene alguna clave activa."""
+        clientes = self._integ()["clientes"].values()
+        for f in self._integ()["alcance"].values():
+            if f["comercio_id"] == comercio_id and f["activo"]:
+                if any(c.get("grupo_id") == f["cliente_id"] and c.get("activo", True) and not c.get("revocada_at")
+                       for c in clientes):
+                    return True
+        return False
 
     def integracion_comercios_de(self, grupo_id, solo_activos=True):
         return [dict(f) for (g, _), f in sorted(self._integ()["alcance"].items())
@@ -108,7 +115,12 @@ class FakeIntegracionMixin:
         self._integ()["idem"].pop((grupo_id, key), None)
 
     def integracion_idem_purgar(self):
-        return 0
+        idem = self._integ()["idem"]
+        corte = datetime.now(timezone.utc) - timedelta(days=7)
+        viejas = [k for k, v in idem.items() if datetime.fromisoformat(v["created_at"]) < corte]
+        for k in viejas:
+            del idem[k]
+        return len(viejas)
 
     # ── publicaciones ────────────────────────────────────────────────────────────────────────────────────
     def _integ_bump(self, pub):
@@ -121,9 +133,10 @@ class FakeIntegracionMixin:
     def _integ_clave(p):
         return (str(p.get("updated_at") or p.get("created_at") or ""), str(p.get("id")))
 
-    def integracion_listar_publicaciones(self, comercio_ids, cursor, limite, estado):
+    def integracion_listar_publicaciones(self, comercio_ids, cursor, limite, estado, activo="true"):
         filas = [p for p in self.publicaciones if p.get("comercio_id") in set(comercio_ids)
-                 and (estado is None or p.get("estado") == estado)]
+                 and (estado is None or p.get("estado") == estado)
+                 and (activo == "all" or bool(p.get("activo", True)) == (activo == "true"))]
         if cursor:
             filas = [p for p in filas if self._integ_clave(p) > (cursor[0], cursor[1])]
         return [dict(p) for p in sorted(filas, key=self._integ_clave)[:limite]]
@@ -139,6 +152,24 @@ class FakeIntegracionMixin:
         p.update(patch)
         self._integ_bump(p)
         return dict(p)
+
+    def integracion_origen_de_publicacion(self, pub_id):
+        p = self.get_publicacion(pub_id)
+        if not p:
+            return None
+        ib = self.wa_inbox.get(p.get("wa_message_id")) if p.get("wa_message_id") else None
+        return {"remitente_rol": p.get("remitente_rol"), "identidad_origen": p.get("identidad_origen"),
+                "origen": p.get("origen"), "phone": (ib or {}).get("phone") or None}
+
+    # ── media (E6) ───────────────────────────────────────────────────────────────────────────────────────
+    def integracion_uso_media(self, grupo_id, desde):
+        evs = [e for e in self._integ()["eventos"]
+               if e.get("tipo") == "media_subida" and (e.get("detalle") or {}).get("grupo_id") == grupo_id
+               and str(e.get("created_at")) >= desde.replace("Z", "+00:00")]
+        return len(evs), sum(int((e.get("detalle") or {}).get("bytes") or 0) for e in evs)
+
+    def difusion_imagenes_en_uso(self):
+        return {f["imagen_url_override"] for f in self.difusion if f.get("imagen_url_override")}
 
     # ── difusión ─────────────────────────────────────────────────────────────────────────────────────────
     def difusion_de_publicacion(self, publicacion_id):

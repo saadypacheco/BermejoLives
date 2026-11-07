@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
 from app.core.auth import require_integracion
+from app.core.config import settings
 from app.core.errores_integracion import IntegracionError
 from app.db.repository import Repo, get_repo
 from app.services import difusion, integracion, planes
@@ -56,11 +57,19 @@ def _alcance(repo: Repo, cliente: Cliente) -> list[str]:
     return [f["comercio_id"] for f in repo.integracion_comercios_de(cliente.grupo_id)]
 
 
-def _publicacion_en_alcance(repo: Repo, cliente: Cliente, pub_id: str) -> tuple[dict, dict]:
-    """(publicación, info del comercio) o 404. Una publicación fuera del alcance es un 404 igual que una inexistente."""
+def _exigir_difusion_habilitada() -> None:
+    """La difusión por esta API (E7 con destinos, E9, E10) está apagada mientras `INTEGRACION_DIFUSION` sea false."""
+    if not settings.integracion_difusion:
+        raise IntegracionError(403, "difusion_deshabilitada",
+                               "La difusión a Facebook e Instagram por esta API está deshabilitada en Uruku por ahora.")
+
+
+def _publicacion_en_alcance(repo: Repo, cliente: Cliente, pub_id: str, solo_activas: bool = False) -> tuple[dict, dict]:
+    """(publicación, info del comercio) o 404. Una publicación fuera del alcance es un 404 igual que una inexistente.
+    Con `solo_activas`, una publicación dada de baja (`activo = false`) también es un 404."""
     pub_id = _uuid_o_404(pub_id)
     pub = repo.integracion_get_publicacion(pub_id)
-    if not pub:
+    if not pub or (solo_activas and not pub.get("activo", True)):
         raise _no_encontrada()
     en_alcance = {f["comercio_id"] for f in repo.integracion_comercios_de(cliente.grupo_id)}
     if pub.get("comercio_id") not in en_alcance:
@@ -93,7 +102,10 @@ def _fila(f: dict) -> dict:
 
 
 def _filas_de(repo: Repo, pub_id: str) -> list[dict]:
-    return [f for f in repo.difusion_de_publicacion(pub_id) if f["destino"] in integracion.DESTINOS_INTEGRACION]
+    """Las filas de Facebook/Instagram que PIDIÓ la integración (`solicitado_por`). Las que encoló otro camino
+    (el panel, el worker) no son suyas: ni las ve en E8 ni las manda E9."""
+    return [f for f in repo.difusion_de_publicacion(pub_id)
+            if f["destino"] in integracion.DESTINOS_INTEGRACION and integracion.solicitada_por_integracion(f)]
 
 
 async def _escritura(request: Request, repo: Repo, cliente: Cliente, hash_extra: bytes | None, ejecutar) -> JSONResponse:
@@ -145,20 +157,28 @@ def publications(request: Request, cliente: Cliente = Depends(require_integracio
     estado = q.get("estado") or None
     if estado is not None and estado not in _ESTADOS:
         raise IntegracionError(422, "validation", f"estado tiene que ser uno de: {', '.join(_ESTADOS)}.")
+    activo = q.get("activo") or "true"
+    if activo not in ("true", "false", "all"):
+        raise IntegracionError(422, "validation", "activo tiene que ser true, false o all.")
     cursor = q.get("cursor") or None
     desde = integracion.decodificar_cursor(cursor)
     ids = _alcance(repo, cliente)
-    filas = repo.integracion_listar_publicaciones(ids, desde, int(crudo_limite), estado)
+    filas = repo.integracion_listar_publicaciones(ids, desde, int(crudo_limite), estado, activo)
     comercios = {i["id"]: i for i in repo.integracion_info_comercios(sorted({f["comercio_id"] for f in filas}))}
     items = [integracion.vista_publicacion(f, comercios.get(f["comercio_id"])) for f in filas]
     return {"items": items, "next_cursor": integracion.codificar_cursor(filas[-1]) if filas else cursor}
 
 
 @router.get("/publications/{pub_id}")
-def publication(pub_id: str, cliente: Cliente = Depends(require_integracion("publications:read")),
+def publication(pub_id: str, request: Request,
+                cliente: Cliente = Depends(require_integracion("publications:read")),
                 repo: Repo = Depends(get_repo)):
-    """E4: el detalle con su media y su ETag (también en el header)."""
-    pub, info = _publicacion_en_alcance(repo, cliente, pub_id)
+    """E4: el detalle con su media y su ETag (también en el header). Una publicación dada de baja es 404, salvo
+    con `?activo=all`."""
+    activo = request.query_params.get("activo") or "true"
+    if activo not in ("true", "all"):
+        raise IntegracionError(422, "validation", "activo tiene que ser true o all.")
+    pub, info = _publicacion_en_alcance(repo, cliente, pub_id, solo_activas=(activo == "true"))
     return _json(200, integracion.vista_publicacion(pub, info))
 
 
@@ -205,7 +225,7 @@ async def upload_media(request: Request, cliente: Cliente = Depends(require_inte
         raise IntegracionError(422, "validation", "Falta el archivo (campo `file`).")
     contenido = await archivo.read()
     return await _escritura(request, repo, cliente, b"MEDIA" + contenido,
-                            lambda: (200, integracion.guardar_media(contenido)))
+                            lambda: (200, integracion.guardar_media(contenido, repo, cliente)))
 
 
 # ═══════════════════════════════════════════════════════════════════════════ E7
@@ -228,6 +248,8 @@ def _validar_moderacion(cuerpo: dict) -> dict:
         if (not isinstance(destinos, list) or len(set(destinos)) != len(destinos)
                 or any(d not in integracion.DESTINOS_INTEGRACION for d in destinos)):
             raise IntegracionError(422, "validation", "Destino de difusión desconocido (facebook o instagram).")
+        if destinos:
+            _exigir_difusion_habilitada()
         texto = dif.get("texto")
         if destinos and (not isinstance(texto, str) or not texto.strip() or len(texto) > 2000):
             raise IntegracionError(422, "validation", "La difusión necesita `texto` (hasta 2000 caracteres).")
@@ -326,6 +348,9 @@ async def moderation(pub_id: str, request: Request,
         if pub.get("estado") != "pendiente" or not pub.get("activo", True):
             raise IntegracionError(409, "not_pending", "La publicación ya no está pendiente.")
         if cuerpo["decision"] == "approve":
+            if integracion.requiere_moderacion_de_uruku(pub):
+                raise IntegracionError(409, "requiere_moderacion_uruku",
+                                       "Esta publicación la tiene que aprobar el equipo de Uruku desde su panel.")
             return _aprobar(repo, cliente, pub, info, cuerpo)
         return _rechazar(repo, cliente, pub, info, cuerpo)
 
@@ -348,6 +373,7 @@ async def send_broadcasts(pub_id: str, request: Request,
                           repo: Repo = Depends(get_repo)):
     """E9: envía las filas PENDIENTES de esa publicación (Facebook/Instagram). Nunca reenvía una `enviada`; una
     `incierta` primero se resuelve consultando a Meta."""
+    _exigir_difusion_habilitada()
     if_match = request.headers.get("if-match")
 
     def ejecutar() -> tuple[int, dict]:
@@ -368,13 +394,15 @@ async def send_broadcasts(pub_id: str, request: Request,
 
 @router.post("/broadcasts/{fila_id}/verify")
 async def verify_broadcast(fila_id: str, request: Request,
-                           cliente: Cliente = Depends(require_integracion("publications:read")),
+                           cliente: Cliente = Depends(require_integracion("broadcast:send")),
                            repo: Repo = Depends(get_repo)):
     """E10: Uruku relee el posteo en la Graph API con su token y guarda `verificado_at` + `permalink`."""
+    _exigir_difusion_habilitada()
+
     def ejecutar() -> tuple[int, dict]:
         fid = _uuid_o_404(fila_id, "la fila de difusión")
         fila = repo.get_difusion_fila(fid)
-        if not fila:
+        if not fila or not integracion.solicitada_por_integracion(fila):
             raise _no_encontrada("la fila de difusión")
         _publicacion_en_alcance(repo, cliente, fila["publicacion_id"])      # fuera del alcance ⇒ 404
         if fila["destino"] not in integracion.DESTINOS_INTEGRACION:

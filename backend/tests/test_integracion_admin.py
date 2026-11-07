@@ -93,10 +93,14 @@ def test_agregar_verificados_arma_el_piloto_sin_exponer_el_dato(client, repo, cl
     ruta = f"/admin/integracion/clientes/{cli['grupo_id']}/comercios/verificados"
     sim = client.post(f"{ruta}?simular=true", headers=_h(admin_token)).json()
     assert sim["simulado"] is True and sim["agregados"] == 2 and not repo.es_comercio_gestionado(v1["id"])
-    r = client.post(ruta, headers=_h(admin_token)).json()
+    # sin `simular` es una SIMULACIÓN (por defecto): agregar en bloque hay que pedirlo con simular=false
+    por_defecto = client.post(ruta, headers=_h(admin_token)).json()
+    assert por_defecto["simulado"] is True and por_defecto["agregados"] == 2 and not repo.es_comercio_gestionado(v1["id"])
+    r = client.post(f"{ruta}?simular=false", headers=_h(admin_token)).json()
+    assert r["simulado"] is False
     assert r["agregados"] == 2 and {c["slug"] for c in r["comercios"]} == {"v1", "v2"}
     assert repo.es_comercio_gestionado(v1["id"]) and repo.es_comercio_gestionado(v2["id"])
-    assert client.post(ruta, headers=_h(admin_token)).json()["agregados"] == 0          # idempotente
+    assert client.post(f"{ruta}?simular=false", headers=_h(admin_token)).json()["agregados"] == 0   # idempotente
     assert "AAAA" not in json.dumps(r) and "verificado" not in json.dumps(r).replace("Verificado", "")
     # y la integración ve «los comercios que me asignaron», sin saber por qué
     items = client.get("/v1/integration/merchants", headers=_h(cli["clave"])).json()["items"]

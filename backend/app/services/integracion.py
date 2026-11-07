@@ -20,7 +20,7 @@ import time
 import uuid
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -32,18 +32,23 @@ from app.core.errores_integracion import IntegracionError
 logger = structlog.get_logger()
 
 SCOPES = ("publications:read", "publications:write", "media:write", "broadcast:send")
+#: Lo que recibe una clave si no se pide otra cosa. `broadcast:send` (mandar a Facebook/Instagram) NO viene por
+#: defecto: hay que pedirlo explícitamente al emitir (y además la difusión por la API está apagada por
+#: `INTEGRACION_DIFUSION`).
+SCOPES_POR_DEFECTO = ("publications:read", "publications:write", "media:write")
 SISTEMA = "marketing"
 VERSION_API = "uruku-integracion-1"
 PREFIJO_CLAVE = "uki_"
 LIMITE_PEDIDOS_POR_MIN = 60
 MAX_IDEM_KEY = 128
-MAX_MEDIA_BYTES = 12 * 1024 * 1024
+MAX_MEDIA_BYTES = 8 * 1024 * 1024        # el tope de Instagram para una imagen
 DESTINOS_INTEGRACION = ("facebook", "instagram")
 MONEDAS = ("BOB", "USD", "ARS")
 TIPOS = ("oferta", "novedad", "video")
 
 _RE_BEARER = re.compile(r"^Bearer uki_([A-Za-z0-9]{6,32})\.([A-Za-z0-9_\-]{16,128})$")
 _RE_MEDIA_ID = re.compile(r"^med_[0-9a-f]{32}$")
+_RE_MEDIA_ARCHIVO = re.compile(r"^med_[0-9a-f]{32}\.jpg$")
 
 
 # ══════════════════════════════════════════════════════════════════════ comercio gestionado
@@ -149,6 +154,44 @@ def limitar(cliente: Cliente, limite: int | None = None) -> None:
 def reiniciar_limites() -> None:
     with _candado:
         _ventanas.clear()
+        _fallos_ip.clear()
+
+
+# ── claves inválidas por IP: frena el adivinar claves (en memoria, una instancia de API) ──────────────────
+_fallos_ip: dict[str, deque] = defaultdict(deque)
+_MAX_IPS_RECORDADAS = 10_000
+
+
+def _purgar_fallos(dq: deque, ahora: float) -> None:
+    while dq and ahora - dq[0] > 60:
+        dq.popleft()
+
+
+def exigir_ip_sin_exceso_de_fallos(ip: str) -> None:
+    """429 si esta IP ya acumuló demasiados 401 en el último minuto (antes de tocar la base)."""
+    ahora = time.monotonic()
+    with _candado:
+        dq = _fallos_ip.get(ip)
+        if dq is None:
+            return
+        _purgar_fallos(dq, ahora)
+        if len(dq) >= max(1, settings.integracion_auth_fallos_por_min):
+            espera = max(1, int(60 - (ahora - dq[0])) + 1)
+            raise IntegracionError(429, "rate_limited", "Demasiados intentos con una clave inválida: esperá un momento.",
+                                   headers={"Retry-After": str(espera)})
+
+
+def registrar_fallo_de_ip(ip: str) -> None:
+    ahora = time.monotonic()
+    with _candado:
+        if ip not in _fallos_ip and len(_fallos_ip) >= _MAX_IPS_RECORDADAS:
+            for k in [k for k, dq in _fallos_ip.items() if not dq or ahora - dq[-1] > 60]:
+                del _fallos_ip[k]
+            if len(_fallos_ip) >= _MAX_IPS_RECORDADAS:
+                _fallos_ip.clear()              # bajo ataque masivo: se prefiere olvidar a crecer sin tope
+        dq = _fallos_ip[ip]
+        _purgar_fallos(dq, ahora)
+        dq.append(ahora)
 
 
 def exigir_scope(cliente: Cliente, scope: str | None) -> None:
@@ -249,7 +292,10 @@ def remitente_de(pub: dict) -> str | None:
         return "uruku_explorer"
     if pub.get("origen") == "panel":
         return "merchant"
-    if pub.get("identidad_origen") in ("numero", "numero_por_codigo"):
+    # Quien sólo sabe el código del local (o fue autorizado por el código) NO es el comercio.
+    if pub.get("identidad_origen") in ("codigo", "numero_por_codigo"):
+        return "third_party"
+    if pub.get("identidad_origen") == "numero":
         return "merchant"
     return None
 
@@ -296,6 +342,47 @@ def media_de(imagen_url: str | None) -> list[dict]:
     return [item]
 
 
+# Un teléfono escrito en el texto (el comerciante pone «consultas al 7xxxxxxx»): la API no entrega teléfonos,
+# ni siquiera los que vienen adentro de un título o de una descripción. Se tapan grupos de 8 o más dígitos
+# (celular boliviano = 8; con 591 = 11), salvo que sigan a una moneda (un precio grande no es un teléfono).
+_RE_TELEFONO = re.compile(r"(?<![\w])\+?\d(?:[ .\-()]{0,2}\d){7,}(?![\w])")
+_RE_FECHA = re.compile(r"\d{1,4}[-./]\d{1,2}[-./]\d{1,4}")
+_RE_MONEDA_ANTES = re.compile(r"(?:bs\.?|bob|\$|us\$|usd|ars|u\$s)\s*$", re.IGNORECASE)
+
+
+def enmascarar_telefonos(texto: str | None) -> str | None:
+    if not texto:
+        return texto
+
+    def tapar(m: re.Match) -> str:
+        if _RE_FECHA.fullmatch(m.group(0)) or _RE_MONEDA_ANTES.search(texto[max(0, m.start() - 6):m.start()]):
+            return m.group(0)
+        return "[teléfono]" if sum(c.isdigit() for c in m.group(0)) >= 8 else m.group(0)
+
+    return _RE_TELEFONO.sub(tapar, texto)
+
+
+def requiere_moderacion_de_uruku(pub: dict) -> bool:
+    """¿Esta publicación sólo la puede aprobar el equipo de Uruku desde su panel (nunca la integración)?
+
+    Sí cuando: quien la mandó no es el comercio (`remitente_rol` != merchant: sólo sabía el código, otro
+    participante del grupo, el explorador), entró por un camino que Uruku siempre mira a mano
+    (`revision_ia._ORIGENES_SIEMPRE_HUMANOS`: explorador, código…) o la revisión automática la marcó para
+    rechazar. Lo que no se puede saber (sin `remitente_rol` deducible) se trata como «sí»."""
+    from app.services.revision_ia import _ORIGENES_SIEMPRE_HUMANOS
+
+    if remitente_de(pub) != "merchant":
+        return True
+    if pub.get("origen") in _ORIGENES_SIEMPRE_HUMANOS or pub.get("identidad_origen") in _ORIGENES_SIEMPRE_HUMANOS:
+        return True
+    return pub.get("ia_veredicto") == "rechazar"
+
+
+def solicitada_por_integracion(fila: dict) -> bool:
+    """¿Esta fila de `difusion_cola` la pidió la integración (E7)? Lo dice `solicitado_por` (`integracion:…`)."""
+    return str(fila.get("solicitado_por") or "").startswith("integracion:")
+
+
 def vista_publicacion(pub: dict, comercio: dict | None) -> dict:
     """Una publicación como la ve la integración. Lista blanca de campos: lo que no está acá no sale."""
     slug = (comercio or {}).get("slug")
@@ -311,8 +398,8 @@ def vista_publicacion(pub: dict, comercio: dict | None) -> dict:
         "tipo": pub.get("tipo"),
         "estado": pub.get("estado"),
         "activo": bool(pub.get("activo", True)),
-        "titulo": pub.get("titulo"),
-        "descripcion": pub.get("descripcion"),
+        "titulo": enmascarar_telefonos(pub.get("titulo")),
+        "descripcion": enmascarar_telefonos(pub.get("descripcion")),
         "precio": float(pub["precio"]) if pub.get("precio") is not None else None,
         "moneda": pub.get("moneda"),
         "descuento_pct": pub.get("descuento_pct"),
@@ -418,13 +505,72 @@ def actor_de(actor: dict | None) -> str:
 
 # ══════════════════════════════════════════════════════════════════════ media (E6)
 
-def guardar_media(contenido: bytes) -> dict:
-    """Valida y guarda el JPEG del cuadrado. Idempotente por sha256: el mismo archivo da el mismo `media_id`.
-    El archivo se guarda TAL CUAL (sin recomprimir): la integración sube la imagen ya lista para Instagram."""
+def quitar_metadatos_jpeg(contenido: bytes) -> bytes:
+    """Saca los segmentos APP1 (EXIF y XMP: GPS, modelo del celular, fecha), APP13 (Photoshop/IPTC) y los
+    comentarios (COM) SIN recomprimir: los datos de la imagen (todo desde SOS) pasan byte a byte. Se conserva
+    APP0 (JFIF), APP2 (perfil de color) y APP14 (Adobe), que cambian cómo se ve la imagen. Lanza ValueError si
+    la estructura no es la de un JPEG."""
+    if not contenido.startswith(b"\xff\xd8"):
+        raise ValueError("no es JPEG")
+    salida = bytearray(b"\xff\xd8")
+    i, n = 2, len(contenido)
+    while i < n:
+        if contenido[i] != 0xFF:
+            raise ValueError("marcador esperado")
+        while i < n and contenido[i] == 0xFF:        # relleno 0xFF antes del código
+            i += 1
+        if i >= n:
+            raise ValueError("JPEG cortado")
+        marca = contenido[i]
+        i += 1
+        if marca == 0xDA:                             # SOS: de acá hasta el final son datos de la imagen
+            # El encabezado de SOS lleva largo propio; todo lo que sigue se copia tal cual.
+            salida += b"\xff\xda" + contenido[i:]
+            return bytes(salida)
+        if marca == 0xD9:                             # EOI antes de SOS: no hay imagen
+            raise ValueError("JPEG sin datos")
+        if marca == 0x01 or 0xD0 <= marca <= 0xD8 or marca == 0x00:   # sin largo
+            salida += bytes([0xFF, marca])
+            continue
+        if i + 2 > n:
+            raise ValueError("JPEG cortado")
+        largo = int.from_bytes(contenido[i:i + 2], "big")
+        if largo < 2 or i + largo > n:
+            raise ValueError("segmento inválido")
+        if marca not in (0xE1, 0xED, 0xFE):           # APP1, APP13, COM: se descartan
+            salida += bytes([0xFF, marca]) + contenido[i:i + largo]
+        i += largo
+    raise ValueError("JPEG sin datos")
+
+
+def _verificar_cuota_media(repo, cliente: Cliente, nuevos_bytes: int) -> None:
+    """Cuota diaria (ventana de 24 h) de subidas NUEVAS por cliente: archivos y bytes. Si no se puede medir se
+    rechaza (503): sin tope no se escribe al disco."""
+    desde = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat().replace("+00:00", "Z")   # sin '+' en la URL
+    try:
+        archivos, usados = repo.integracion_uso_media(cliente.grupo_id, desde)
+    except Exception:  # noqa: BLE001
+        logger.error("integracion.cuota_media_no_se_pudo_medir", exc_info=True)
+        raise IntegracionError(503, "cuota_no_verificable",
+                               "No pudimos comprobar la cuota de imágenes: reintentá en un momento.") from None
+    if archivos + 1 > settings.integracion_media_cuota_archivos_dia:
+        raise IntegracionError(429, "media_quota_exceeded",
+                               "Llegaste al máximo de imágenes nuevas por día.", headers={"Retry-After": "3600"})
+    if usados + nuevos_bytes > settings.integracion_media_cuota_bytes_dia:
+        raise IntegracionError(429, "media_quota_exceeded",
+                               "Llegaste al máximo de megabytes de imágenes por día.", headers={"Retry-After": "3600"})
+
+
+def guardar_media(contenido: bytes, repo=None, cliente: Cliente | None = None) -> dict:
+    """Valida y guarda el JPEG del cuadrado. Idempotente: el mismo contenido da el mismo `media_id`.
+
+    Se guarda SIN recomprimir pero SIN metadatos (EXIF/XMP/IPTC/comentarios: ubicación y datos del equipo del
+    que sacó la foto no tienen por qué quedar en un archivo público). El `media_id` y el `sha256` son los del
+    archivo ya limpio. Con `repo` y `cliente` se aplica la cuota diaria del cliente (sólo a archivos nuevos)."""
     if not contenido:
         raise IntegracionError(422, "validation", "El archivo está vacío.")
     if len(contenido) > MAX_MEDIA_BYTES:
-        raise IntegracionError(413, "media_too_large", "La imagen supera los 12 MB.")
+        raise IntegracionError(413, "media_too_large", "La imagen supera los 8 MB (el máximo de Instagram).")
     if not contenido.startswith(b"\xff\xd8"):
         raise IntegracionError(422, "validation", "Sólo se aceptan imágenes JPEG.")
     from PIL import Image
@@ -432,6 +578,7 @@ def guardar_media(contenido: bytes) -> dict:
     from app.services.imagenes import _exigir_tamano_razonable, _preparar_pillow
 
     try:
+        contenido = quitar_metadatos_jpeg(contenido)
         _preparar_pillow()
         with Image.open(io.BytesIO(contenido)) as img:
             _exigir_tamano_razonable(img)
@@ -445,12 +592,73 @@ def guardar_media(contenido: bytes) -> dict:
     media_id = f"med_{sha[:32]}"
     sub = f"integracion/{media_id}.jpg"
     destino = Path(settings.fotos_dir) / sub
-    if not destino.exists():
+    if destino.exists():
+        try:
+            destino.touch()          # lo vuelven a usar: se renueva su plazo antes de la limpieza
+        except OSError:
+            pass
+    else:
+        if repo is not None and cliente is not None:
+            _verificar_cuota_media(repo, cliente, len(contenido))
         destino.parent.mkdir(parents=True, exist_ok=True)
         tmp = destino.with_suffix(f".tmp{secrets.token_hex(4)}")
         tmp.write_bytes(contenido)
         tmp.replace(destino)
+        if repo is not None and cliente is not None:
+            repo.integracion_registrar_evento({
+                "tipo": "media_subida", "cliente_id": cliente.id, "actor": f"integracion:{cliente.key_id}",
+                "detalle": {"grupo_id": cliente.grupo_id, "media_id": media_id, "bytes": len(contenido)}})
     return {"media_id": media_id, "url": settings.public_photo_url(sub), "sha256": sha, "width": ancho, "height": alto}
+
+
+def limpiar_media_huerfana(repo, dias: int | None = None, ahora: float | None = None) -> int:
+    """Borra del disco los `med_*.jpg` subidos por E6 que NINGUNA fila de `difusion_cola` usa y que tienen más de
+    `dias` días (por defecto `INTEGRACION_MEDIA_HUERFANA_DIAS`). Devuelve cuántos borró. Si no se puede saber qué
+    está en uso no se borra nada."""
+    dias = settings.integracion_media_huerfana_dias if dias is None else dias
+    carpeta = Path(settings.fotos_dir) / "integracion"
+    if not carpeta.is_dir():
+        return 0
+    corte = (time.time() if ahora is None else ahora) - max(0, dias) * 86400
+    viejos = [f for f in carpeta.iterdir() if _RE_MEDIA_ARCHIVO.match(f.name) and f.is_file()
+              and f.stat().st_mtime < corte]
+    if not viejos:
+        return 0
+    try:
+        en_uso = {u for u in repo.difusion_imagenes_en_uso() if u}
+    except Exception:  # noqa: BLE001
+        logger.warning("integracion.limpieza_media_no_se_pudo_saber", exc_info=True)
+        return 0
+    borrados = 0
+    for f in viejos:
+        if settings.public_photo_url(f"integracion/{f.name}") in en_uso:
+            continue
+        try:
+            f.unlink()
+            borrados += 1
+        except OSError:
+            logger.warning("integracion.media_no_borrada", archivo=f.name, exc_info=True)
+    if borrados:
+        logger.info("integracion.media_huerfana_borrada", n=borrados, dias=dias)
+    return borrados
+
+
+def mantenimiento_diario(repo) -> dict:
+    """Lo que la integración limpia una vez por día: la caché de idempotencia vencida (7 días) y las imágenes
+    de E6 sin uso. Nunca lanza (cada paso falla por separado). Lo llama el loop diario de retención
+    (`wa_received.purge_events`)."""
+    res = {"idempotencia": 0, "media": 0}
+    try:
+        res["idempotencia"] = int(repo.integracion_idem_purgar() or 0)
+    except Exception:  # noqa: BLE001
+        logger.warning("integracion.purga_idempotencia_fallo", exc_info=True)
+    try:
+        res["media"] = limpiar_media_huerfana(repo)
+    except Exception:  # noqa: BLE001
+        logger.warning("integracion.limpieza_media_fallo", exc_info=True)
+    if res["idempotencia"] or res["media"]:
+        logger.info("integracion.mantenimiento", **res)
+    return res
 
 
 def resolver_media(media_id: str | None) -> str | None:
@@ -467,7 +675,7 @@ def resolver_media(media_id: str | None) -> str | None:
 # (lo usa `scripts/integracion_clave.py`; el secreto NO pasa por la API HTTP)
 
 def _scopes_validos(scopes: list[str] | None) -> list[str]:
-    elegidos = list(dict.fromkeys(scopes or SCOPES))
+    elegidos = list(dict.fromkeys(scopes or SCOPES_POR_DEFECTO))
     malos = [s for s in elegidos if s not in SCOPES]
     if malos:
         raise ValueError(f"scopes inválidos: {', '.join(malos)} (válidos: {', '.join(SCOPES)})")

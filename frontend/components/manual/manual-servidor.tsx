@@ -3,8 +3,9 @@
 // QR. Lo usan /manual/<tipo> y la dirección corta /que-es-uruku, para que las
 // dos muestren exactamente lo mismo.
 //
-// El .md se lee durante `next build` (las dos rutas son estáticas) y queda
-// adentro del HTML generado: en producción no se abre ningún archivo.
+// /manual/<tipo> es estática: el .md se lee durante `next build`. /que-es-uruku se arma en
+// el primer pedido (ISR; el build no lee la base), así que el Dockerfile copia `content/` a
+// la imagen final y el .md se abre en ese momento.
 
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";

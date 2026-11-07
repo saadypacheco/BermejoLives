@@ -36,7 +36,21 @@ Lo que hacía falta y no existía (verificado en el código):
 (`publications:read`, `publications:write`, `media:write`, `broadcast:send`) y, por su cliente, un **alcance**: los
 comercios de `integracion_comercios`. Fuera del alcance todo es **404** (no 403: no se filtra la existencia). 401 igual
 para clave inexistente, mal escrita, revocada o inactiva. Límite de **60 pedidos por minuto por clave**
-(429 + `Retry-After`; en memoria: una instancia de API).
+(429 + `Retry-After`; en memoria: una instancia de API). Las claves inválidas tienen además un tope por IP
+(`INTEGRACION_AUTH_FALLOS_POR_MIN`, 20 por minuto; después 429).
+
+**Cambios de la revisión de seguridad (6/11/2026):**
+- Una clave nueva sale con `publications:read`, `publications:write` y `media:write`. `broadcast:send` va sólo si
+  se pide con `--scopes` al emitirla.
+- La difusión a Facebook/Instagram desde la API está **apagada** (`INTEGRACION_DIFUSION=false`): E7 con destinos,
+  E9 y E10 contestan 403 `difusion_deshabilitada` hasta que el dueño la encienda. E9/E8 sólo tocan filas que pidió
+  la integración.
+- E7 no aprueba (409 `requiere_moderacion_uruku`) lo que no mandó el propio comercio (`sender_role` distinto de
+  `merchant`, explorador, número que entró sólo con el código) ni lo que la IA marcó para rechazar: eso lo modera
+  URUKU.
+- E3/E4 devuelven sólo publicaciones activas (`?activo=all` para ver las bajas) y tapan los teléfonos de título y
+  descripción como `[teléfono]`.
+- Un cliente sin ninguna clave activa deja de tener comercios «gestionados».
 
 Una rotación crea una clave nueva del mismo cliente (`grupo_id`), con el mismo alcance y scopes, y deja las dos
 activas hasta que se revoque la vieja.
@@ -50,11 +64,11 @@ activas hasta que se revoque la vieja.
 | E3 | `GET /publications?cursor=&limit=&estado=` | read | cambios desde el cursor `(updated_at, id)` (opaco), `limit` 1–100 (50) |
 | E4 | `GET /publications/{id}` | read | detalle con media y ETag (también en el header) |
 | E5 | `PATCH /publications/{id}` | write | enriquecer contenido (sólo `pendiente`); no cambia el estado |
-| E6 | `POST /media` (multipart `file`) | media | JPEG cuadrado; idempotente por sha256; se guarda sin recomprimir; ≤ 12 MB |
+| E6 | `POST /media` (multipart `file`) | media | JPEG cuadrado; idempotente por sha256 (del archivo ya sin metadatos); se guarda sin recomprimir y sin EXIF; ≤ 8 MB; cuota diaria por cliente (50 archivos / 100 MB); los que nadie usa se borran a los 14 días |
 | E7 | `POST /publications/{id}/moderation` | write | `approve` / `reject` + difusión (texto, imagen, destinos) |
 | E8 | `GET /publications/{id}/broadcasts` | read | filas de Facebook/Instagram |
 | E9 | `POST /publications/{id}/broadcasts/send` | broadcast:send | envía las filas pendientes (Facebook/Instagram) |
-| E10 | `POST /broadcasts/{fila_id}/verify` | read | relee el posteo en la Graph API y guarda `permalink` + `verificado_at` |
+| E10 | `POST /broadcasts/{fila_id}/verify` | broadcast:send | relee el posteo en la Graph API y guarda `permalink` + `verificado_at` |
 
 Errores: `{"error": {"code", "message", "details"}}`, mensajes en español. Códigos: `unauthorized` (401),
 `scope_insuficiente` (403), `not_found` (404), `not_pending` / `not_approved` / `codigo_no_coincide` /
@@ -150,8 +164,9 @@ implementación **no lo manda**, a propósito, y el dueño lo aprobó el 2026-10
   - `GET  /admin/integracion/clientes/{id}/comercios` — el alcance de un cliente.
   - `POST /admin/integracion/clientes/{id}/comercios` `{comercio_ids: [...]}` — agregar.
   - `DELETE /admin/integracion/clientes/{id}/comercios/{comercio_id}` — quitar (baja lógica).
-  - `POST /admin/integracion/clientes/{id}/comercios/verificados[?simular=true]` — **agregar en bloque todos los
-    comercios activos y verificados** que todavía no están (con `simular=true` sólo muestra a quiénes alcanzaría).
+  - `POST /admin/integracion/clientes/{id}/comercios/verificados[?simular=false]` — **agregar en bloque todos los
+    comercios activos y verificados** que todavía no están. Por defecto sólo **simula** (muestra a quiénes alcanzaría);
+    para agregarlos de verdad hay que pasar `simular=false`.
   Todo con el rol admin existente (`equipo`) y con rastro en `integracion_eventos`.
 - **Un comercio que se verifica DESPUÉS de armado el alcance NO entra solo.** «Agregar verificados en bloque» es una
   foto del momento en que se aprieta: no hay ninguna regla que mantenga el alcance sincronizado con `verificado`.

@@ -3,6 +3,7 @@ import { supabase, hasSupabase } from "@/lib/supabase";
 import { getBusinessesForSitemap, getCiudadesConTurnos, getCityCategoryPagesOrNull } from "@/lib/data";
 import { absoluteUrl, businessPath, categoryPath, cityPath } from "@/lib/seo";
 import { LEGAL_PUBLICADO } from "@/lib/legal-pure";
+import { conMemoriaTtl } from "@/lib/memoria-ttl";
 
 /**
  * El mapa del sitio para los buscadores (docs/visibilidad-buscadores-ia.md §3.7).
@@ -17,21 +18,20 @@ import { LEGAL_PUBLICADO } from "@/lib/legal-pure";
  *    `/farmacias-de-turno`, que declara esa dirección como canónica).
  *  - NO lleva `/buscar` ni `/buscar?vista=mapa`: son `noindex`.
  *
- * Si una lectura FALLA el sitemap lanza: Next sigue sirviendo el anterior en vez de
- * guardar una hora uno incompleto (que le saca páginas a los buscadores sin avisar).
- * La excepción es el build: no puede depender de la base, y ahí se arma con las
- * páginas fijas (se regenera a la hora).
+ * Si una lectura FALLA el sitemap lanza: se sigue sirviendo el último bueno (memoria del
+ * proceso) o, sin ninguno, un 500 que el robot reintenta; nunca se publica uno incompleto
+ * (que le saca páginas a los buscadores sin avisar).
  *
  * Sólo en producción: en QA robots.ts bloquea todo, y un sitemap ahí sería
  * una invitación a indexar lo que se está bloqueando.
  */
-export const revalidate = 3600;
-// force-static: lib/supabase.ts pide todo con `cache: "no-store"` y, sin esto, Next
-// lo toma durante la generación estática (build e ISR) como «uso dinámico» y hace
-// fallar la lectura: el sitemap salía con SÓLO las páginas fijas (sin ciudades, rubros
-// ni fichas) y así quedaba. Con `force-static` se lee la base al (re)generar, una vez
-// por `revalidate`, y no en cada pedido del robot.
-export const dynamic = "force-static";
+// DINÁMICO a propósito (auditoría 5/11, A-02 paso 3): el build no puede leer la base (el router
+// público `db.` está cerrado), y un sitemap armado en el build saldría con SÓLO las páginas
+// fijas y así quedaría hasta su primera revalidación. Se arma al primer pedido y se recuerda
+// una hora en memoria (`conMemoriaTtl`): una lectura de la base por hora, no una por robot.
+export const dynamic = "force-dynamic";
+
+const UNA_HORA_MS = 60 * 60_000;
 
 const aFecha = (iso: string | null | undefined): Date | undefined => {
   if (!iso) return undefined;
@@ -51,7 +51,7 @@ async function novedadesParaSitemap(): Promise<{ id: string; fecha: string | nul
   }
 }
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+async function armarSitemap(): Promise<MetadataRoute.Sitemap> {
   const esProd = (process.env.NEXT_PUBLIC_ENV_LABEL || "").toLowerCase() === "prod";
   if (!esProd) return [];
   // /planes salió del sitemap el 2/10: los precios se deciden por ciudad y todavía
@@ -78,7 +78,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     getCityCategoryPagesOrNull(), getBusinessesForSitemap(), novedadesParaSitemap(), getCiudadesConTurnos(),
   ]);
   if (pares === null || fichas === null || novedades === null || ciudadesTurnos === null) {
-    if (process.env.NEXT_PHASE === "phase-production-build") return fijas;
     throw new Error("sitemap: falló una lectura de la base; se conserva el sitemap anterior");
   }
 
@@ -111,4 +110,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     out.push({ url: absoluteUrl(businessPath(c.slug)), changeFrequency: "weekly", priority: 0.6, lastModified: aFecha(c.updated_at) });
   }
   return out;
+}
+
+const sitemapConMemoria = conMemoriaTtl(UNA_HORA_MS, armarSitemap);
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  return sitemapConMemoria();
 }
