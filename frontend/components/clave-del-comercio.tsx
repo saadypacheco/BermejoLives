@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Ic } from "@/components/ic";
 import { ClaveUnaVez } from "@/components/clave-una-vez";
 import { generarClaveNueva } from "@/lib/comercio";
+import { BloqueadoPorAdmin, usePorAdmin } from "@/components/entrada-admin";
 
 /**
  * «Tu clave», en Mi comercio.
@@ -14,6 +15,7 @@ import { generarClaveNueva } from "@/lib/comercio";
  * muestra acá: lo ve sólo el admin.
  */
 export function ClaveDelComercio() {
+  const porAdmin = usePorAdmin();
   const [paso, setPaso] = useState<"reposo" | "confirmar" | "generando">("reposo");
   const [clave, setClave] = useState<string | null>(null);
   const [err, setErr] = useState("");
@@ -25,6 +27,16 @@ export function ClaveDelComercio() {
       setErr(ex instanceof TypeError ? "Sin conexión. Revisá tu internet y probá de nuevo." : ex instanceof Error ? ex.message : "No se pudo generar la clave.");
       setPaso("reposo");
     }
+  }
+
+  // Entrando como admin el servidor rechaza (403) generar la clave: se explica en vez de ofrecer el botón.
+  if (porAdmin) {
+    return (
+      <div className="glass" style={{ padding: 20, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+        <h3 style={{ margin: 0 }}>Tu clave</h3>
+        <BloqueadoPorAdmin id="clave" />
+      </div>
+    );
   }
 
   if (clave) {

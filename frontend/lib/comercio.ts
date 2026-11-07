@@ -5,12 +5,17 @@ import {
 } from "@/lib/upload";
 import { detalleDeError } from "@/lib/acceso";
 import { avisoDeAlta } from "@/lib/alta-comercio";
+import { suavizarBloqueo, type EntradaAdmin } from "@/lib/entrar-como";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_comercio_token";
 const COMERCIO_KEY = "bermejo_comercio";
 
 // El código `URUKU-XXXX` ya no viaja a la sesión del comercio: lo ve sólo el admin.
-export type ComercioSession = { id: string; nombre: string; slug: string; confiable: boolean; lugar_nombre?: string | null };
+export type ComercioSession = {
+  id: string; nombre: string; slug: string; confiable: boolean; lugar_nombre?: string | null;
+  /** Sólo si la abrió un admin con «Entrar como este comercio»: su email y cuándo vence (ISO, 30 min). */
+  porAdmin?: string; expiraEn?: string;
+};
 
 export function getCToken(): string | null {
   return typeof window === "undefined" ? null : localStorage.getItem(TOKEN_KEY);
@@ -18,7 +23,8 @@ export function getCToken(): string | null {
 export function getComercioSession(): ComercioSession | null {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem(COMERCIO_KEY);
-  return raw ? (JSON.parse(raw) as ComercioSession) : null;
+  if (!raw) return null;
+  try { return JSON.parse(raw) as ComercioSession; } catch { return null; }
 }
 export function clearComercio() {
   localStorage.removeItem(TOKEN_KEY);
@@ -45,6 +51,19 @@ async function motivo401(res: Response): Promise<string> {
   return typeof d.detail === "string" && /cambi[oó] la clave/i.test(d.detail)
     ? d.detail
     : "Tu sesión venció, volvé a entrar.";
+}
+
+/** Abre en este navegador la sesión de comerciante que dio `POST /admin/comercios/{id}/entrar`. Va a las MISMAS
+ *  claves que el login del dueño (`bermejo_comercio_*`) y NO toca el token del admin (`bermejo_admin_token`).
+ *  Sólo se guarda lo mínimo, sin ninguna clave. */
+export function guardarEntradaAdmin(e: EntradaAdmin): ComercioSession {
+  const sesion: ComercioSession = {
+    id: e.comercio.id, nombre: e.comercio.nombre, slug: e.comercio.slug, confiable: false,
+    porAdmin: e.porAdmin, expiraEn: e.expiraEn,
+  };
+  localStorage.setItem(TOKEN_KEY, e.accessToken);
+  localStorage.setItem(COMERCIO_KEY, JSON.stringify(sesion));
+  return sesion;
 }
 
 function guardarSesion(data: { access_token: string; comercio: unknown }): ComercioSession {
@@ -346,7 +365,7 @@ async function cFetch(path: string, init?: RequestInit) {
     const data = await res.json().catch(() => ({}));
     // 429 (p. ej. «Generar clave nueva»: 3 por hora) trae su motivo; si no, uno propio.
     const respaldo = res.status === 429 ? "Hiciste demasiados pedidos seguidos. Esperá un rato y probá de nuevo." : "Error en la solicitud";
-    throw new Error(typeof data.detail === "string" && data.detail ? data.detail : respaldo);
+    throw new Error(typeof data.detail === "string" && data.detail ? suavizarBloqueo(data.detail) : respaldo);
   }
   return res.json();
 }
@@ -386,6 +405,8 @@ export type Perfil = {
   lat?: number | null;
   lng?: number | null;
   rubro_slugs?: string[];
+  /** Email del admin, sólo cuando se está dentro del comercio con «Entrar como este comercio». */
+  por_admin?: string | null;
 };
 
 export type Suscripcion = {
@@ -521,7 +542,7 @@ export async function pagarSuscripcion(
   if (res.status === 401) { const motivo = await motivo401(res); clearComercio(); throw new Error(motivo); }
   if (!res.ok) {
     const d = await res.json().catch(() => ({}));
-    throw new Error(d.detail ?? "No se pudo enviar el pago");
+    throw new Error(typeof d.detail === "string" && d.detail ? suavizarBloqueo(d.detail) : "No se pudo enviar el pago");
   }
   return res.json();
 }

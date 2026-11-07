@@ -15,7 +15,8 @@
 //  - Todo va en try/catch y es «fuego y olvido»: perder un número no puede costar una visita ni una venta.
 //  - Las rutas internas (`/admin`, `/contenido`…) no se miden. La lista es IGUAL a `RUTAS_INTERNAS` de
 //    `backend/app/services/site_metrics.py`: si cambia una, cambia la otra.
-//  - Al equipo no se lo mide: con el token de admin, agente o publicador en este navegador no se manda nada.
+//  - Al equipo no se lo mide: con el token de admin, agente o publicador en este navegador no se manda nada
+//    (tampoco con una sesión de comerciante abierta por un admin: «Entrar como este comercio»).
 //    Al comerciante logueado no se le cuentan vistas ni contactos de SU PROPIO comercio.
 //  - Umami NO se carga en esta ronda: `GET /public/measurement-config` devuelve `umami: null` y este módulo no
 //    carga ningún script de terceros. Cuando se prenda, se engancha acá (y sólo acá).
@@ -173,10 +174,26 @@ export function vistaRepetida(almacen: Almacen | null, comercioId: string, ahora
   return false;
 }
 
-/** ¿Hay un token del equipo (admin, agente, publicador) en este navegador? */
+/** ¿La sesión de comerciante de este navegador la abrió un admin («Entrar como este comercio»)? Ese token es de
+ *  comerciante pero lo usa el equipo: no cuenta visitas ni contactos, ni siquiera de OTROS comercios. */
+export function esEntradaDeAdmin(almacen: Pick<Storage, "getItem"> | null): boolean {
+  if (!almacen) return false;
+  try {
+    if (!almacen.getItem(TOKEN_COMERCIO)) return false;
+    const raw = almacen.getItem(SESION_COMERCIO);
+    if (!raw) return false;
+    const s = JSON.parse(raw) as { porAdmin?: unknown };
+    return typeof s.porAdmin === "string" && s.porAdmin.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** ¿Hay un token del equipo (admin, agente, publicador) o una entrada de admin a un comercio en este navegador? */
 export function esEquipo(almacen: Pick<Storage, "getItem"> | null): boolean {
   if (!almacen) return false;
-  try { return TOKENS_DEL_EQUIPO.some((k) => !!almacen.getItem(k)); } catch { return false; }
+  try { if (TOKENS_DEL_EQUIPO.some((k) => !!almacen.getItem(k))) return true; } catch { return false; }
+  return esEntradaDeAdmin(almacen);
 }
 
 /** ¿El comerciante logueado en este navegador es el dueño de ESTE comercio? Sus vistas y contactos no se cuentan. */

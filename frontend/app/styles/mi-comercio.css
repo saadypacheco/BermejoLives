@@ -213,3 +213,23 @@
 @media (max-width: 900px) {
   .mic .mc-grid { grid-template-columns: minmax(0, 1fr) !important; }
 }
+
+/* ---------- Entrada de un admin («Entrar como este comercio») ----------
+   Aviso fijo arriba de todo. La barra lateral y las barras pegadas se corren
+   `--entrada-h` (la altura real del aviso, que en el celular ocupa más líneas). */
+.mic-entrada {
+  position: sticky; top: 0; z-index: 90;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap;
+  padding: 10px 76px 10px 16px; /* a la derecha queda lugar para el botón de tema */
+  background: var(--amber); color: #1d1400; border-bottom: 2px solid #1d1400;
+  font-size: 14px; line-height: 1.4;
+}
+.mic-entrada-txt { flex: 1 1 280px; min-width: 0; }
+.mic-entrada-min { margin-left: 8px; white-space: nowrap; font-weight: 800; }
+.mic-entrada-salir { min-height: 44px; background: #1d1400; color: #fff; border: 0; white-space: nowrap; }
+.uk-entrada .mic-side { top: var(--entrada-h, 0px); height: calc(100vh - var(--entrada-h, 0px)); }
+.uk-entrada .mic-topbar { top: var(--entrada-h, 0px); }
+@media (max-width: 1023px) {
+  .uk-entrada .mic-bar { top: var(--entrada-h, 0px); }
+  .uk-entrada .mic-side { top: var(--entrada-h, 0px); height: auto; }
+}
