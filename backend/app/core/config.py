@@ -138,6 +138,19 @@ class Settings(BaseSettings):
     # código; la decide quien mira el feed.
     difusion_auto: str = "wa_canal"
 
+    # API de integración (marketing): la difusión a Facebook/Instagram por esa API (E7 con destinos, E9 y
+    # E10) está APAGADA por defecto: postergada por decisión del dueño (docs/integracion-marketing.md).
+    # Se enciende con INTEGRACION_DIFUSION=true cuando se active FB/IG; mientras tanto contestan 403.
+    integracion_difusion: bool = False
+    # Subidas de imagen de la integración (E6), por cliente y por día (ventana móvil de 24 h): ni los
+    # archivos ni los bytes pueden llenar el disco de fotos. Cuenta sólo lo que se escribe (no los repetidos).
+    integracion_media_cuota_archivos_dia: int = 50
+    integracion_media_cuota_bytes_dia: int = 100 * 1024 * 1024
+    # Un `med_*` que ninguna fila de `difusion_cola` usa se borra a los N días (limpieza diaria).
+    integracion_media_huerfana_dias: int = 14
+    # Claves inválidas (401) por IP y por minuto antes de contestar 429 (frena adivinar claves).
+    integracion_auth_fallos_por_min: int = 20
+
     # A dónde apunta el enlace de cada oferta que se publica en las redes.
     sitio_url: str = "https://uruku.bo"
 

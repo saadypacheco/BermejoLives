@@ -110,13 +110,15 @@ def quitar_comercio(grupo_id: str, comercio_id: str, admin: dict = Depends(requi
 
 
 @router.post("/clientes/{grupo_id}/comercios/verificados")
-def agregar_verificados(grupo_id: str, simular: bool = Query(default=False, description="sólo cuenta, no agrega"),
+def agregar_verificados(grupo_id: str,
+                        simular: bool = Query(default=True, description="sólo cuenta, no agrega (por defecto). Para agregar de verdad: simular=false"),
                         admin: dict = Depends(require_admin), repo: Repo = Depends(get_repo)) -> dict:
     """Agrega al alcance, de una vez, todos los comercios ACTIVOS y VERIFICADOS que todavía no están.
 
     Es la forma de armar el piloto sin que `verificado` salga por la API de integración: el admin decide el
     alcance acá (donde ya ve ese dato) y la integración sólo ve «los comercios que me asignaron». Con
-    `simular=true` devuelve a quiénes alcanzaría sin tocar nada."""
+    `simular=true` (el valor por defecto: agregar en bloque exige pedirlo con `simular=false`) devuelve a quiénes
+    alcanzaría sin tocar nada."""
     cliente = _cliente_o_404(repo, grupo_id)
     ya = {f["comercio_id"] for f in repo.integracion_comercios_de(cliente["id"])}
     nuevos = [c for c in repo.integracion_comercios_verificados() if c["id"] not in ya]

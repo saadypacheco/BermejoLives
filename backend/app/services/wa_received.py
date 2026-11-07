@@ -173,6 +173,11 @@ def purge_events(repo, dias: int | None = None) -> dict:
                 break
     if cuenta["events"] or cuenta["lids"]:
         logger.info("wa_received.eventos_purgados", dias=dias, **cuenta)
+    # Este loop corre una vez por día: de paso, el mantenimiento diario de la API de integración (caché de
+    # idempotencia vencida e imágenes de E6 sin uso). Nunca lanza.
+    from app.services import integracion
+
+    integracion.mantenimiento_diario(repo)
     return cuenta
 
 

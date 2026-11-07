@@ -247,8 +247,30 @@ def _previa_fusionable(repo: Repo, comercio: dict, reproceso: dict | None, ts: i
     return previa["pub"]
 
 
+#: De más a menos confiable: el rol que queda al juntar dos mensajes es el MENOS confiable de los dos.
+_CONFIANZA_ROL = {"merchant": 2, "uruku_explorer": 1, "third_party": 0}
+
+
+def _info_de_previa_del_mismo_remitente(repo: Repo, previa: dict | None, phone: str | None) -> dict | None:
+    """Quién mandó la publicación `previa`, SI fue el mismo número que manda este mensaje; si fue otro, o no se
+    puede saber (panel, importada, sin bandeja, la base no contesta), None: dos mensajes de remitentes distintos
+    nunca se juntan en una publicación (uno no puede completar ni cambiar lo que mandó el otro)."""
+    if not previa or not previa.get("id") or not phone:
+        return None
+    try:
+        info = repo.integracion_origen_de_publicacion(previa["id"])
+    except Exception:  # noqa: BLE001 - sin saber quién fue, no se junta
+        logger.warning("ingest.remitente_de_previa_no_se_pudo_saber", exc_info=True)
+        return None
+    if not info or not info.get("phone") or str(info["phone"]) != str(phone):
+        return None
+    return info
+
+
 def _fusionar_con_la_anterior(repo: Repo, comercio: dict, row: dict, tipo: str,
-                              previa: dict | None, solo_pendiente: bool = False) -> dict | None:
+                              previa: dict | None, solo_pendiente: bool = False,
+                              phone: str | None = None, solo_codigo: bool = False,
+                              confiable: bool = False) -> dict | None:
     """Junta este mensaje con el anterior cuando son las dos mitades de una oferta.
 
     Sólo si se COMPLEMENTAN: una tiene foto y le falta el texto, la otra tiene
@@ -258,12 +280,27 @@ def _fusionar_con_la_anterior(repo: Repo, comercio: dict, row: dict, tipo: str,
     `previa`: lo que decidió `_previa_fusionable`. `solo_pendiente`: comercio gestionado,
     sólo se junta con una publicación todavía pendiente. Devuelve la publicación ya
     completa, o None si no había con qué juntarla.
+
+    Reglas de confianza (nadie cambia por abajo lo que otro mandó o lo que ya se publicó):
+      - Sólo se juntan mensajes del MISMO remitente (`phone`).
+      - Una publicación ya APROBADA sólo recibe la otra mitad si quien la manda es de confianza para publicar
+        directo (no es un número autorizado sólo por el código y el comercio es `confiable`): si el mensaje de
+        todos modos iría a moderación, no puede modificar sin moderar lo que ya está a la vista. En ese caso
+        se crea una publicación nueva, que sigue la regla de confianza de siempre.
+      - El `remitente_rol` que queda es el MENOS confiable de los dos mensajes.
     """
     if not previa:
         return None
     # Comercio gestionado: no se le cambia por abajo una publicación que la integración ya aprobó o
     # rechazó (saldría modificada sin que nadie la vuelva a mirar). Sólo se junta con una pendiente.
     if solo_pendiente and previa.get("estado") != "pendiente":
+        return None
+    info = _info_de_previa_del_mismo_remitente(repo, previa, phone)
+    if info is None:
+        logger.info("ingest.fusion_otro_remitente", comercio=comercio.get("slug") or comercio.get("id"))
+        return None
+    if previa.get("estado") == "aprobado" and (solo_codigo or not confiable):
+        logger.info("ingest.fusion_sobre_aprobada_negada", comercio=comercio.get("slug") or comercio.get("id"))
         return None
 
     texto_nuevo = (row.get("descripcion") or "").strip()
@@ -288,6 +325,11 @@ def _fusionar_con_la_anterior(repo: Repo, comercio: dict, row: dict, tipo: str,
     else:
         return None
 
+    rol_previo = info.get("remitente_rol") or integracion.remitente_de(info) or "third_party"
+    rol_nuevo = row.get("remitente_rol") or "third_party"
+    rol = min(rol_previo, rol_nuevo, key=lambda r: _CONFIANZA_ROL.get(r, 0))
+    if rol != info.get("remitente_rol"):
+        patch["remitente_rol"] = rol
     return repo.update_publicacion(previa["id"], patch)
 
 
@@ -778,7 +820,8 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
         # foto sin texto, este texto es SU descripción: no es charla, se fusiona.
         previa = _previa_fusionable(repo, comercio, reproceso, payload.timestamp)
         es_segunda_mitad = bool(previa and previa.get("imagen_url")
-                                and not (previa.get("descripcion") or "").strip())
+                                and not (previa.get("descripcion") or "").strip()
+                                and _info_de_previa_del_mismo_remitente(repo, previa, payload.phone))
         if not es_segunda_mitad:
             motivo = "charla 1-a-1: el Registrador no contesta"
             logger.info("ingest.charla_1a1", comercio=slug)
@@ -827,10 +870,14 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
     # publicar directo recién cuando alguien del equipo autoriza el número.
     confiable = bool(comercio.get("confiable")) and identidad_origen not in ("codigo", "numero_por_codigo")
 
+    # `solo_codigo`: quien manda sólo está autorizado por el código del local (papel en el mostrador), no por una
+    # persona del equipo. Nunca publica directo y no cuenta como «el comercio» para la API de integración.
+    solo_codigo = identidad_origen in ("codigo", "numero_por_codigo")
+
     # Quién mandó el mensaje, para la API de integración (que no ve teléfonos): `merchant` es el comercio;
     # `third_party`, alguien que no está verificado como el comercio (sólo sabe el código, o es otro
     # participante del grupo).
-    remitente_rol = "third_party" if identidad_origen in ("codigo", "grupo_desconocido") else "merchant"
+    remitente_rol = "third_party" if solo_codigo or identidad_origen == "grupo_desconocido" else "merchant"
 
     # En un grupo hay tres participantes y sólo uno publica. Si el mensaje vino
     # de un número que no es el del comercio ni uno nuestro, alguien agregó a un
@@ -842,6 +889,13 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
         if not (duenio and duenio.get("id") == comercio["id"]):
             logger.info("ingest.remitente_ajeno", grupo=payload.grupo_jid, comercio=slug)
             confiable = False
+            remitente_rol = "third_party"
+        elif repo.numero_autorizado_por_codigo(numero):
+            # El número es «del comercio» sólo porque mandó el código: en un grupo cuenta igual que en un chat
+            # 1-a-1 (`numero_por_codigo`): no hereda `confiable` y no es el comercio para la integración.
+            logger.info("ingest.remitente_solo_codigo", grupo=payload.grupo_jid, comercio=slug)
+            confiable = False
+            solo_codigo = True
             remitente_rol = "third_party"
 
     # Un comercio GESTIONADO por la integración de marketing (está en su alcance) NUNCA publica directo,
@@ -910,7 +964,8 @@ def handle_message(event_dict: dict, repo: Repo | None = None, media_path: str |
     # falta a esto, se juntan en una sola.
     if previa is None:
         previa = _previa_fusionable(repo, comercio, reproceso, payload.timestamp)
-    fusionada = _fusionar_con_la_anterior(repo, comercio, row, tipo, previa, solo_pendiente=gestionado)
+    fusionada = _fusionar_con_la_anterior(repo, comercio, row, tipo, previa, solo_pendiente=gestionado,
+                                          phone=payload.phone, solo_codigo=solo_codigo, confiable=confiable)
     if fusionada:
         logger.info("ingest.publicacion_fusionada", comercio=slug, pub=fusionada["id"], tipo=fusionada.get("tipo"))
         repo.marcar_wa_inbox(payload.id, "publicada", "se juntó con el mensaje anterior", comercio["id"])
