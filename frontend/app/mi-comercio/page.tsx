@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import "@/app/uruku.css";
 import "@/app/styles/mi-comercio.css";
@@ -51,11 +51,30 @@ import { etiquetaOrigenComercio, nombreCanonico, porcentaje } from "@/lib/origen
 import { LoginComercio } from "@/components/ingresar-comercio";
 import { ClaveDelComercio } from "@/components/clave-del-comercio";
 import { SocialConsentToggle } from "@/components/social-consent-toggle";
+import { BannerEntradaAdmin, BloqueadoPorAdmin, EntradaAdminContext, usePorAdmin } from "@/components/entrada-admin";
+import { MENSAJE_VENCIDA, entradaVencida, motivoBloqueo } from "@/lib/entrar-como";
 
 export default function MiComercioPage() {
   const [sess, setSess] = useState<ComercioSession | null>(null);
   const [ready, setReady] = useState(false);
-  useEffect(() => { setSess(getComercioSession()); setReady(true); }, []);
+  // Se acabaron los 30 minutos de una entrada de admin: la sesión se cierra y se avisa.
+  const [vencida, setVencida] = useState(false);
+  useEffect(() => {
+    const leida = getComercioSession();
+    if (entradaVencida(leida, Date.now())) { clearComercio(); setVencida(true); setSess(null); }
+    else setSess(leida);
+    setReady(true);
+    // Otra pestaña entró a otro comercio o salió: esta pestaña se pone al día en vez de seguir con datos ajenos.
+    const alCambiar = (e: StorageEvent) => {
+      if (e.key !== null && e.key !== "bermejo_comercio" && e.key !== "bermejo_comercio_token") return;
+      const nueva = getComercioSession();
+      setSess((antes) => (antes?.id === nueva?.id && antes?.expiraEn === nueva?.expiraEn ? antes : nueva));
+    };
+    window.addEventListener("storage", alCambiar);
+    return () => window.removeEventListener("storage", alCambiar);
+  }, []);
+  const cerrarPorVencida = useCallback(() => { clearComercio(); setVencida(true); setSess(null); }, []);
+  const cerrar = useCallback(() => { clearComercio(); setSess(null); }, []);
 
   if (!ready) return null;
   return (
@@ -63,18 +82,26 @@ export default function MiComercioPage() {
       <ThemeNoFlash />
       <div className="uk-app-toggle"><ThemeToggle /></div>
       {!sess
-        ? <LoginGate onLogged={setSess} />
-        : <Panel sess={sess} onLogout={() => { clearComercio(); setSess(null); }} />}
+        ? <LoginGate onLogged={(s) => { setVencida(false); setSess(s); }} vencida={vencida} />
+        : <Panel sess={sess} onLogout={cerrar} onVencida={cerrarPorVencida} />}
     </div>
   );
 }
 
 /* --------------------------------- Login gate --------------------------------- */
-function LoginGate({ onLogged }: { onLogged: (s: ComercioSession) => void }) {
+function LoginGate({ onLogged, vencida }: { onLogged: (s: ComercioSession) => void; vencida?: boolean }) {
   return (
     <>
       <Nav />
       <div className="wrap" style={{ maxWidth: 420, paddingTop: 56 }}>
+        {vencida && (
+          <div role="alert" style={{ display: "flex", flexDirection: "column", gap: 10, padding: 14, marginBottom: 18, borderRadius: 12, border: "1px solid var(--amber)", background: "rgba(255,176,32,.1)", fontSize: 14, color: "var(--txt)" }}>
+            <span><Ic n="reloj" s={16} /> {MENSAJE_VENCIDA}</span>
+            <Link href="/admin" className="btn btn-sm" style={{ minHeight: 44, alignSelf: "flex-start", border: "1px solid var(--stroke)" }}>
+              <Ic n="volver" s={16} /> Volver al panel de admin
+            </Link>
+          </div>
+        )}
         <span className="eyebrow"><span className="dot-live" /> Mi negocio</span>
         <h1 style={{ fontSize: 28, margin: "10px 0 6px" }}>Entrá a tu negocio en URUKU</h1>
         <p style={{ color: "var(--txt-3)", marginBottom: 20 }}>Gestioná tu comercio, ofertas y suscripción.</p>
@@ -372,10 +399,17 @@ function ContactosView() {
 }
 
 function ConfiguracionView() {
+  const porAdmin = usePorAdmin();
   return (
     <div className="glass" style={{ padding: 22, borderRadius: 16 }}>
       <h3 style={{ marginTop: 0 }}>Configuración</h3>
       <p style={{ color: "var(--txt-3)", fontSize: 14 }}>Próximamente: cambiar email y contraseña, notificaciones y dar de baja la cuenta.</p>
+      {porAdmin && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <BloqueadoPorAdmin id="acceso" titulo="Email y contraseña" />
+          <BloqueadoPorAdmin id="baja" titulo="Dar de baja el comercio" />
+        </div>
+      )}
     </div>
   );
 }
@@ -563,8 +597,20 @@ function AvisoSuscripcion({ sub, onPagar }: { sub: Suscripcion; onPagar: () => v
   );
 }
 
-function Panel({ sess, onLogout }: { sess: ComercioSession; onLogout: () => void }) {
+function Panel({ sess, onLogout, onVencida }: { sess: ComercioSession; onLogout: () => void; onVencida: () => void }) {
   const [vista, setVista] = useState<Vista>("inicio");
+  // Entró un admin («Entrar como este comercio»): lo dice la sesión guardada o, si no, el perfil (`por_admin`).
+  const [porAdmin, setPorAdmin] = useState<string | null>(sess.porAdmin ?? null);
+  useEffect(() => {
+    getPerfil().then((p) => { if (typeof p.por_admin === "string" && p.por_admin) setPorAdmin(p.por_admin); }).catch(() => {});
+  }, []);
+  const [altoAviso, setAltoAviso] = useState(0);
+  const salirDeLaEntrada = useCallback(() => {
+    onLogout();
+    // La pestaña la abrió el panel de admin: se cierra. Si el navegador no deja, se vuelve a /admin.
+    try { window.close(); } catch { /* sin permiso */ }
+    window.setTimeout(() => { window.location.href = "/admin"; }, 300);
+  }, [onLogout]);
   const [sub, setSub] = useState<Suscripcion | null>(null);
   const [noLeidos, setNoLeidos] = useState(0);
   // Si la suscripción no se pudo leer, el chatbot lo dice (con reintento) en
@@ -627,6 +673,13 @@ function Panel({ sess, onLogout }: { sess: ComercioSession; onLogout: () => void
   }, []);
 
   return (
+    <EntradaAdminContext.Provider value={porAdmin}>
+    <div className={porAdmin ? "uk-entrada" : undefined}
+         style={porAdmin ? ({ "--entrada-h": `${altoAviso}px` } as React.CSSProperties) : undefined}>
+    {porAdmin && (
+      <BannerEntradaAdmin nombre={sess.nombre} email={porAdmin} expiraEn={sess.porAdmin ? (sess.expiraEn ?? null) : null}
+        onSalir={salirDeLaEntrada} onVencida={onVencida} onAlto={setAltoAviso} />
+    )}
     <div className="mic">
       <header className="mic-bar">
         <button ref={burger} type="button" className="mic-menu-btn"
@@ -662,6 +715,8 @@ function Panel({ sess, onLogout }: { sess: ComercioSession; onLogout: () => void
         </div>
       </div>
     </div>
+    </div>
+    </EntradaAdminContext.Provider>
   );
 }
 
@@ -713,6 +768,7 @@ function CampoRow({ label, value, onChange, ph }: {
 }
 
 function PerfilTab() {
+  const porAdmin = usePorAdmin();
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [rubroSlugs, setRubroSlugs] = useState<string[]>([]);
   const [err, setErr] = useState("");
@@ -905,7 +961,9 @@ function PerfilTab() {
           <span aria-label="WhatsApp (no se edita acá)" style={{ flex: 1, minWidth: 0, color: "var(--txt)", fontSize: 15 }}>
             <Ic n="seguridad" s={13} /> {perfil.whatsapp || "Sin número"}
           </span>
-          <Link href="/recuperar-negocio" className="mic-enlace" style={{ fontSize: 13, color: "var(--neon)" }}>Cambié de número</Link>
+          {porAdmin
+            ? <span style={{ flexBasis: "100%", fontSize: 12.5, color: "var(--txt-3)" }}><Ic n="aviso" s={13} /> {motivoBloqueo("whatsapp")}</span>
+            : <Link href="/recuperar-negocio" className="mic-enlace" style={{ fontSize: 13, color: "var(--neon)" }}>Cambié de número</Link>}
         </div>
         {CONTACTO.map((c) => (
           <CampoRow key={c.k} label={c.label} ph={c.ph} value={(perfil[c.k] as string) ?? ""} onChange={(v) => set(c.k, v)} />
@@ -976,6 +1034,7 @@ const ESTADO: Record<Suscripcion["estado"], { label: string; color: string; bg: 
 };
 
 function SuscripcionTab() {
+  const porAdmin = usePorAdmin();
   const [sub, setSub] = useState<Suscripcion | null>(null);
   const [err, setErr] = useState("");
   // pago (inline, en la misma página)
@@ -1049,7 +1108,9 @@ function SuscripcionTab() {
       <div className="glass" style={{ padding: 20, borderRadius: 16, display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ fontSize: 12, color: "var(--txt-3)", fontWeight: 700 }}>PAGAR SUSCRIPCIÓN</div>
 
-        {enviado ? (
+        {porAdmin ? (
+          <BloqueadoPorAdmin id="pagos" titulo="Pagar la suscripción" />
+        ) : enviado ? (
           <div style={{ textAlign: "center", padding: "10px 0" }}>
             <div style={{ color: "var(--txt-3)" }}><Ic n="whatsapp" s={36} /></div>
             <h3 style={{ margin: "4px 0" }}>¡Comprobante enviado!</h3>

@@ -2,6 +2,7 @@
 import { normalizarCapa, type CapaCalles, type EstadoMarca } from "@/lib/calles";
 import { camposOpcionesFoto, respuestaPortada, subirConProgreso, type OpcionesFoto, type RespuestaPortada } from "@/lib/upload";
 import { rutaPrivada } from "@/lib/archivo-privado";
+import { leerEntradaAdmin, type EntradaAdmin } from "@/lib/entrar-como";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_admin_token";
 
@@ -823,6 +824,19 @@ export async function adminGenerarClaveComercio(comercioId: string): Promise<str
   const clave = typeof d === "object" && d !== null ? (d as Record<string, unknown>).clave : null;
   if (typeof clave !== "string" || !clave) throw new Error("No se pudo generar la clave. Probá de nuevo.");
   return clave;
+}
+
+/** «Entrar como este comercio»: `POST /admin/comercios/{id}/entrar` (permiso `equipo`; 404 si el comercio no está
+ *  activo). Devuelve un token de comerciante de 30 minutos. NO lo guarda: quien llama lo pasa a
+ *  `guardarEntradaAdmin` (lib/comercio.ts), para no tocar la sesión del admin. El token nunca se loguea. */
+export async function adminEntrarComoComercio(comercioId: string, motivo?: string): Promise<EntradaAdmin> {
+  const m = motivo?.trim();
+  const res = await authFetch(`/admin/comercios/${encodeURIComponent(comercioId)}/entrar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(m ? { motivo: m } : {}),
+  });
+  return leerEntradaAdmin(await res.json().catch(() => null));
 }
 
 export type NumeroComercio = {
