@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from starlette.concurrency import run_in_threadpool
 
 from app.api.campo import _propio_o_404
-from app.api.comercio import _comercio_escribe
+from app.api.comercio import _comercio_dueno
 from app.core import auth
 from app.core.auth import require_alguno, require_permiso
 from app.core.config import settings
@@ -184,7 +184,7 @@ def comercio_get_social_consent(claims: dict = Depends(require_comercio_vigente)
 
 
 @router.put("/comercio/social-consent")
-def comercio_put_social_consent(body: SocialConsentMerchantUpdate, claims: dict = Depends(_comercio_escribe),
+def comercio_put_social_consent(body: SocialConsentMerchantUpdate, claims: dict = Depends(_comercio_dueno),
                                 crepo: ContentRepo = Depends(get_content_repo)) -> dict:
     """El comerciante prende o apaga su autorización desde Mi comercio. No se puede si lo dio de baja el admin (403)."""
     quien = f"comercio:{claims.get('cuenta_id') or claims.get('email') or claims['comercio_id']}"

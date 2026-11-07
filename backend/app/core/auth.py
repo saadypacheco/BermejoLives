@@ -205,6 +205,47 @@ def make_comercio_token(comercio_id: str, email: str, cuenta_id: str | None = No
     return pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 
+#: Cuánto dura el token con el que un admin entra a «Mi comercio» de otro (`POST /admin/comercios/{id}/entrar`).
+ENTRADA_ADMIN_TTL_SEGUNDOS = 30 * 60
+MSG_ENTRADA_ADMIN_CORTADA = "Tu acceso de admin ya no permite entrar a este comercio"
+
+
+def make_comercio_admin_token(comercio_id: str, admin_email: str,
+                              ttl_segundos: int = ENTRADA_ADMIN_TTL_SEGUNDOS) -> tuple[str, int]:
+    """El token con el que un ADMIN entra a Mi comercio de cualquier comercio. Devuelve `(token, exp)`.
+
+    Es un token de comercio (`rol='comercio'` + `comercio_id`) con un claim extra, `adm` = correo del
+    admin, y vida corta (30 min). No lleva `cuenta_id` ni `ver`: no depende de la cuenta del dueño (puede
+    no existir) ni de la versión de su clave. En su lugar, cada pedido vuelve a mirar la cuenta del PANEL
+    del admin (`exigir_admin_vigente`): si la dieron de baja o perdió `equipo`, el token deja de servir.
+    `sub`/`email` son los del admin: lo que el código registra como «quién» es el admin, no el dueño."""
+    exp = int(time.time()) + int(ttl_segundos)
+    payload = {
+        "sub": admin_email,
+        "email": admin_email,
+        "rol": "comercio",
+        "comercio_id": str(comercio_id),
+        "adm": admin_email,
+        "exp": exp,
+    }
+    return pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256"), exp
+
+
+def exigir_admin_vigente(claims: dict, repo: Repo) -> None:
+    """Si el token de Mi comercio trae `adm` (entró un admin), 401 salvo que la cuenta del panel de ese admin
+    siga activa Y tenga HOY el permiso `equipo` (el de la base, con el caché de 60 s del corte de acceso).
+    Sin `adm` no hace nada. Se llama en cada pedido: es lo que reemplaza a la versión de la clave del dueño."""
+    if "adm" not in claims:
+        return
+    adm = claims.get("adm")
+    if not isinstance(adm, str) or not adm.strip():
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+    estado = _verificar_cuenta({"email": adm}, repo)       # 401 si la dieron de baja
+    if not _vigente_tiene(estado, ("equipo",)):
+        logger.info("auth.entrada_admin_sin_permiso", admin=adm)
+        raise HTTPException(status_code=401, detail=MSG_ENTRADA_ADMIN_CORTADA)
+
+
 def make_usuario_token(usuario_id: str, whatsapp: str) -> str:
     """Token del comprador/visitante — solo celular verificado, sin contraseña."""
     payload = {
@@ -308,8 +349,10 @@ def require_moderador(creds: HTTPAuthorizationCredentials | None = Depends(_bear
     return _con_permiso(creds, "moderar", repo)
 
 
-def require_comercio(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
-    """Exige Bearer de un comercio logueado; devuelve sus claims (incluye comercio_id)."""
+def require_comercio(creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
+                     repo: Repo = Depends(get_repo)) -> dict:
+    """Exige Bearer de un comercio logueado; devuelve sus claims (incluye comercio_id).
+    Si el token es de un admin que entró (`adm`), además mira que su cuenta del panel siga vigente."""
     if not creds:
         raise HTTPException(status_code=401, detail="No autenticado")
     try:
@@ -318,6 +361,7 @@ def require_comercio(creds: HTTPAuthorizationCredentials | None = Depends(_beare
         raise HTTPException(status_code=401, detail="Token inválido o expirado") from exc
     if claims.get("rol") != "comercio" or not claims.get("comercio_id"):
         raise HTTPException(status_code=403, detail="Requiere cuenta de comercio")
+    exigir_admin_vigente(claims, repo)
     return claims
 
 
