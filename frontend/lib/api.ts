@@ -1,6 +1,6 @@
 // Cliente del backend FastAPI (ingesta + moderación).
 import { normalizarCapa, type CapaCalles, type EstadoMarca } from "@/lib/calles";
-import { camposOpcionesFoto, respuestaPortada, subirConProgreso, type OpcionesFoto, type RespuestaPortada } from "@/lib/upload";
+import { camposOpcionesFoto, postFormData, respuestaPortada, subirConProgreso, type OpcionesFoto, type RespuestaPortada } from "@/lib/upload";
 import { rutaPrivada } from "@/lib/archivo-privado";
 import { leerEntradaAdmin, leerEntradasDelEquipo, type EntradaAdmin, type EntradaDelEquipo } from "@/lib/entrar-como";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -910,14 +910,25 @@ export type ComercioImportado = {
   horario: string | null; direccion: string | null;
   estado: "nuevo" | "promovido" | "descartado";
   duplicado_de: string | null; comercio_id: string | null; motivo: string | null;
+  ciudad_id?: string | null;
+  // Sólo las filas de tarjeta (docs/carga-tarjetas.md): el resto no los trae.
+  email?: string | null;
+  tiene_foto?: boolean;
+  ubicacion?: "aproximada" | "confirmada" | "no_encontrada" | null;
+  texto_leido?: string | null;
+  lector?: "tesseract" | "gemini" | null;
 };
 
+export type PatchImportado = Partial<Record<
+  "nombre" | "direccion" | "telefono" | "whatsapp" | "website" | "email" | "rubro_slug", string>> & { lat?: number; lng?: number };
+
 export async function listarImportados(
-  estado = "nuevo", q?: string, ciudadId?: string,
+  estado = "nuevo", q?: string, ciudadId?: string, fuente?: string,
 ): Promise<{ items: ComercioImportado[]; total: number; resumen: { ciudad_id: string | null; estado: string; n: number }[] }> {
   const p = new URLSearchParams({ estado });
   if (q) p.set("q", q);
   if (ciudadId) p.set("ciudad_id", ciudadId);
+  if (fuente) p.set("fuente", fuente);
   const res = await authFetch(`/admin/importados?${p}`);
   return res.json();
 }
@@ -941,6 +952,48 @@ export async function descartarImportado(id: string, motivo: string) {
   const res = await authFetch(
     `/admin/importados/${id}/descartar?motivo=${encodeURIComponent(motivo)}`, { method: "POST" });
   if (!res.ok) throw new Error("No se pudo descartar");
+  return res.json();
+}
+
+/** Sube las fotos de tarjetas de una ciudad (POST /admin/importados/tarjetas). Con progreso de la subida. */
+export function subirTarjetas(
+  ciudadId: string, fotos: File[], onProgress?: (pct: number) => void,
+): Promise<{ items?: ComercioImportado[]; errores?: unknown }> {
+  const fd = new FormData();
+  fd.append("ciudad_id", ciudadId);
+  for (const f of fotos) fd.append("fotos", f);
+  return postFormData(`${API}/admin/importados/tarjetas`, fd, getToken(), onProgress);
+}
+
+/** La foto privada de una tarjeta, con el Bearer (nunca el token en la URL). `null` si no hay (404). */
+export async function getFotoImportado(id: string): Promise<Blob | null> {
+  try {
+    return await (await authFetch(`/admin/importados/${encodeURIComponent(id)}/foto`)).blob();
+  } catch (e) {
+    if ((e as { status?: number } | null)?.status === 404) return null;
+    throw e;
+  }
+}
+
+/** Guarda lo editado de una tarjeta; devuelve la fila actualizada. */
+export async function editarImportado(id: string, cambios: PatchImportado): Promise<ComercioImportado> {
+  const res = await authFetch(`/admin/importados/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(cambios),
+  });
+  return res.json();
+}
+
+export type RespuestaUbicar = { lat: number; lng: number; aproximada: boolean; encontrado: boolean; display_name?: string | null };
+
+/** Busca la dirección en OpenStreetMap (Nominatim, del lado del servidor). Con `encontrado: false` no cambia nada. */
+export async function ubicarImportado(id: string, direccion: string): Promise<RespuestaUbicar> {
+  const res = await authFetch(`/admin/importados/${encodeURIComponent(id)}/ubicar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ direccion }),
+  });
   return res.json();
 }
 
