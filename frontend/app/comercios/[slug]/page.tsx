@@ -20,7 +20,7 @@ import { GaleriaTienda } from "@/components/galeria-tienda";
 import { VistaLogger } from "@/components/vista-logger";
 import { VolverAResultados } from "@/components/volver-a-resultados";
 import { MODALIDAD_LABEL } from "@/lib/types";
-import { enlaceCanal, enlaceRed, urlHttp } from "@/lib/catalogo";
+import { enlaceCanal, enlaceRed, tipoEnlaceWa, urlHttp } from "@/lib/catalogo";
 import {
   absoluteUrl, breadcrumbNode, businessPath, categoryPath, cityPath, jsonLdGraph, localBusinessNode, robotsFor, type MigaItem,
 } from "@/lib/seo";
@@ -147,6 +147,15 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
   const deConfianza = comercio.verificado === true || comercio.confiable === true || comercio.fuente === "campo";
   const canalHref = deConfianza ? enlaceCanal(comercio.canal_wa_url) : null;
   const catalogoHref = deConfianza ? urlHttp(comercio.catalogo_url) : null;
+  // El QR del grupo o canal del comercio, para quien mira la ficha en la computadora: lo escanea con el
+  // celular. Se arma en el servidor (la librería no viaja al navegador). En el celular se ve sólo el botón.
+  const tipoCanal = tipoEnlaceWa(canalHref);
+  const canalQr = canalHref
+    ? await QRCode.toDataURL(canalHref, { width: 200, margin: 1, errorCorrectionLevel: "M",
+                                          color: { dark: "#0f2c33", light: "#ffffff" } })
+    : null;
+  const textoCanal = tipoCanal === "grupo" ? "Unirme al grupo de WhatsApp"
+    : tipoCanal === "chat" ? "Escribir por WhatsApp" : "Canal de WhatsApp";
   const sellos = [
     comercio.tiene_pasero === true && { n: "pasero" as const, texto: "Tiene pasero" },
     comercio.envios_internacionales === true && { n: "envios" as const, texto: "Hace envíos" },
@@ -241,7 +250,7 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
                   <div className="uk-suma-botones">
                     {canalHref && (
                       <a className="uk-suma-btn" href={canalHref} target="_blank" rel="noopener">
-                        <Ic n="whatsapp" s={18} /> Canal de WhatsApp
+                        <Ic n="whatsapp" s={18} /> {textoCanal}
                       </a>
                     )}
                     {catalogoHref && (
@@ -250,6 +259,13 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
                       </a>
                     )}
                   </div>
+                )}
+                {canalQr && (
+                  <figure className="uk-suma-qr">
+                    <img src={canalQr} width={132} height={132}
+                         alt={`QR para ${tipoCanal === "grupo" ? "unirse al grupo" : "abrir el canal"} de WhatsApp de ${comercio.nombre}`} />
+                    <figcaption>Escaneá con el celular para {tipoCanal === "grupo" ? "unirte al grupo" : tipoCanal === "chat" ? "escribirle" : "seguir el canal"} de WhatsApp</figcaption>
+                  </figure>
                 )}
                 {sellos.length > 0 && (
                   <ul className="uk-suma-sellos">

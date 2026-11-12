@@ -839,6 +839,11 @@
 /* `.uk a { color: inherit }` le gana a `.uk-suma-btn` (misma razón que el botón de WhatsApp). */
 .uk a.uk-suma-btn { color: var(--uk-green); }
 .uk a.uk-suma-btn:hover, .uk a.uk-suma-btn:focus-visible { background: var(--uk-green); color: #fff; }
+/* El QR del grupo o canal: para la computadora. En el celular alcanza con el botón. */
+.uk-suma-qr { display: flex; align-items: center; gap: 12px; margin: 2px 0 0; }
+.uk-suma-qr img { width: 132px; height: 132px; border-radius: 8px; background: #fff; padding: 4px; border: 1px solid var(--uk-line); flex: 0 0 auto; }
+.uk-suma-qr figcaption { font-size: 13px; color: var(--uk-ink-soft); max-width: 22ch; }
+@media (max-width: 760px), (pointer: coarse) { .uk-suma-qr { display: none; } }
 .uk-suma-sellos { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
 .uk-suma-sellos li { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px;
   background: var(--uk-surface); border: 1px solid var(--uk-line); color: var(--uk-ink); font-size: 13px; font-weight: 700; }

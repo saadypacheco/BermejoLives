@@ -64,6 +64,19 @@ export function enlaceCanal(u: string | null | undefined): string | null {
   } catch { return null; }
 }
 
+/** Qué abre un enlace de WhatsApp ya validado por `enlaceCanal`: un grupo (`chat.whatsapp.com/…`),
+ *  un canal (`whatsapp.com/channel/…`) o un chat directo (`wa.me/…`). Decide el texto del botón y del QR. */
+export function tipoEnlaceWa(href: string | null | undefined): "grupo" | "canal" | "chat" | null {
+  if (!href) return null;
+  try {
+    const u = new URL(href);
+    const h = u.hostname.toLowerCase();
+    if (h === "chat.whatsapp.com") return "grupo";
+    if (h === "wa.me" || h === "api.whatsapp.com") return "chat";
+    return "canal";
+  } catch { return null; }
+}
+
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /** ¿Esta URL es un PDF subido a URUKU (y no un enlace que pegó una persona)?

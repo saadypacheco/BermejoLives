@@ -2880,11 +2880,11 @@ function ModalEditar({
                     onChange={(e) => setPedidoMinimo(e.target.value)} placeholder="Ej: 3 docenas, 200 Bs" />
                 </div>
                 <div>
-                  <label htmlFor="adm-canal" style={{ fontSize: 12, color: "var(--txt-3)" }}>Canal de WhatsApp del comercio</label>
+                  <label htmlFor="adm-canal" style={{ fontSize: 12, color: "var(--txt-3)" }}>Grupo o canal de WhatsApp del comercio</label>
                   <input id="adm-canal" className="adm-input" style={{ marginTop: 4 }} inputMode="url" autoCapitalize="none"
                     value={canalWa} onChange={(e) => setCanalWa(e.target.value)}
-                    placeholder="https://whatsapp.com/channel/..." />
-                  <div style={{ fontSize: 11.5, color: "var(--txt-3)", marginTop: 4 }}>El de él, donde publica sus ofertas. No el de URUKU. Vacío lo quita.</div>
+                    placeholder="https://chat.whatsapp.com/... o https://whatsapp.com/channel/..." />
+                  <div style={{ fontSize: 11.5, color: "var(--txt-3)", marginTop: 4 }}>El de él, donde publica sus ofertas. No el de URUKU. En la ficha sale el botón y, en la computadora, el QR para escanear. Vacío lo quita.</div>
                 </div>
                 <div>
                   <div style={{ fontSize: 12, color: "var(--txt-3)", marginBottom: 6 }}>Catálogo</div>
