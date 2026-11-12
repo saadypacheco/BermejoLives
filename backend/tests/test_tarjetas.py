@@ -227,11 +227,13 @@ def test_un_archivo_malo_no_frena_a_los_demas_y_dice_por_que(client, repo, datos
     lector(monkeypatch, [TEXTO_COMPLETO])
     grande = b"\xff\xd8\xff" + b"0" * tarjetas.MAX_BYTES        # un byte de más que 10 MB
     r = subir(client, datos, [("ok.jpg", imagen()), ("script.jpg", b"<?php evil(); ?>"), ("vacio.png", b""),
-                              ("gif.jpg", b"GIF89a" + b"0" * 50), ("../../etc/enorme.jpg", grande),
-                              ("rota.jpg", b"\xff\xd8\xff\xe0 no es un jpeg de verdad")])
+                              ("gif.jpg", b"GIF89a" + b"0" * 50), ("../../etc/enorme.jpg", grande)])
+    # De a 5 por pedido (tarjetas.MAX_ARCHIVOS): el panel parte la selección en tandas.
+    r2 = subir(client, datos, [("rota.jpg", b"\xff\xd8\xff\xe0 no es un jpeg de verdad")])
     cuerpo = r.json()
     assert r.status_code == 200 and len(cuerpo["items"]) == 1
-    motivos = {e["archivo"]: e["motivo"] for e in cuerpo["errores"]}
+    assert r2.status_code == 200 and r2.json()["items"] == []
+    motivos = {e["archivo"]: e["motivo"] for e in cuerpo["errores"] + r2.json()["errores"]}
     assert motivos["script.jpg"] == "No es una imagen JPEG, PNG o WebP"
     assert motivos["vacio.png"] == "El archivo está vacío"
     assert motivos["gif.jpg"] == "No es una imagen JPEG, PNG o WebP"
@@ -248,11 +250,11 @@ def test_acepta_png_y_webp(client, datos, monkeypatch):
 
 def test_mas_de_20_fotos_o_ninguna_o_ciudad_mala(client, datos, monkeypatch):
     lector(monkeypatch, [""])
-    assert subir(client, datos, [(f"{i}.jpg", imagen(color=color(i))) for i in range(21)]).status_code == 400
+    assert subir(client, datos, [(f"{i}.jpg", imagen(color=color(i))) for i in range(tarjetas.MAX_ARCHIVOS + 1)]).status_code == 400
     assert client.post("/admin/importados/tarjetas", headers=datos, data={"ciudad_id": CIUDAD}).status_code == 422
     assert subir(client, datos, [("a.jpg", imagen())], ciudad="no-es-uuid").status_code == 400
     assert subir(client, datos, [("a.jpg", imagen())], ciudad="x'; drop table ciudades;--").status_code == 400
-    assert len(subir(client, datos, [(f"{i}.jpg", imagen(color=color(i))) for i in range(20)]).json()["items"]) == 20
+    assert len(subir(client, datos, [(f"{i}.jpg", imagen(color=color(i))) for i in range(tarjetas.MAX_ARCHIVOS)]).json()["items"]) == tarjetas.MAX_ARCHIVOS
 
 
 def test_una_ciudad_que_no_existe_da_404(client, repo, datos, monkeypatch):

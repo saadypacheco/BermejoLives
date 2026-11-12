@@ -91,8 +91,9 @@ TABLA_DE_TOPES: tuple[tuple[re.Pattern, int], ...] = tuple(
         (r"^/admin/agents/[^/]+/photo$", 8),
         # El Excel de compradores ya leído por el panel: hasta 20.000 filas de JSON.
         (r"^/admin/contactos/importar$", 8),
-        # Fotos de tarjetas de presentación (docs/carga-tarjetas.md): hasta 20 fotos de 10 MB cada una.
-        (r"^/admin/importados/tarjetas$", 200),
+        # Fotos de tarjetas de presentación (docs/carga-tarjetas.md): de a 5 fotos de 10 MB por pedido (el panel
+        # parte la selección en tandas). Este tope corre antes de autenticar: cuanto más chico, mejor.
+        (r"^/admin/importados/tarjetas$", 60),
     )
 )
 

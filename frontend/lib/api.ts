@@ -955,14 +955,39 @@ export async function descartarImportado(id: string, motivo: string) {
   return res.json();
 }
 
-/** Sube las fotos de tarjetas de una ciudad (POST /admin/importados/tarjetas). Con progreso de la subida. */
-export function subirTarjetas(
+/** Cuántas fotos de tarjetas van en cada pedido: el servidor acepta 5 por vez (pedidos cortos, tope de cuerpo chico). */
+export const TARJETAS_POR_TANDA = 5;
+
+/** Sube las fotos de tarjetas de una ciudad (POST /admin/importados/tarjetas) en tandas de 5, una tras otra,
+ *  y junta lo que devuelve cada una. El progreso es el de todas las fotos juntas. Si una tanda falla, sus fotos
+ *  quedan como error con el motivo y las demás siguen. */
+export async function subirTarjetas(
   ciudadId: string, fotos: File[], onProgress?: (pct: number) => void,
-): Promise<{ items?: ComercioImportado[]; errores?: unknown }> {
-  const fd = new FormData();
-  fd.append("ciudad_id", ciudadId);
-  for (const f of fotos) fd.append("fotos", f);
-  return postFormData(`${API}/admin/importados/tarjetas`, fd, getToken(), onProgress);
+): Promise<{ items: ComercioImportado[]; errores: { archivo: string; motivo: string }[] }> {
+  const items: ComercioImportado[] = [];
+  const errores: { archivo: string; motivo: string }[] = [];
+  const total = fotos.length || 1;
+  for (let i = 0; i < fotos.length; i += TARJETAS_POR_TANDA) {
+    const tanda = fotos.slice(i, i + TARJETAS_POR_TANDA);
+    const fd = new FormData();
+    fd.append("ciudad_id", ciudadId);
+    for (const f of tanda) fd.append("fotos", f);
+    try {
+      const r = await postFormData<{ items?: ComercioImportado[]; errores?: { archivo: string; motivo: string }[] }>(
+        `${API}/admin/importados/tarjetas`, fd, getToken(),
+        (p) => onProgress?.(Math.round(((i + (p / 100) * tanda.length) / total) * 100)));
+      items.push(...(r.items ?? []));
+      errores.push(...(Array.isArray(r.errores) ? r.errores : []));
+    } catch (e) {
+      // Un 404/405 quiere decir que el servidor no tiene la carga: eso lo decide la pantalla, no se traga acá.
+      const st = (e as { status?: number } | null)?.status;
+      if (st === 404 || st === 405 || i === 0 && fotos.length <= TARJETAS_POR_TANDA) throw e;
+      const motivo = e instanceof Error && e.message ? e.message : "No se pudo subir esta tanda";
+      for (const f of tanda) errores.push({ archivo: f.name, motivo });
+    }
+  }
+  onProgress?.(100);
+  return { items, errores };
 }
 
 /** La foto privada de una tarjeta, con el Bearer (nunca el token en la URL). `null` si no hay (404). */

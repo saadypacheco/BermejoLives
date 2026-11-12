@@ -48,7 +48,7 @@ FUENTE = "tarjeta"
 LECTOR_TESSERACT = "tesseract"
 LECTOR_GEMINI = "gemini"
 
-MAX_ARCHIVOS = 20
+MAX_ARCHIVOS = 5   # por pedido: el panel manda las fotos elegidas (hasta 20) en tandas de 5
 MAX_BYTES = 10 * 1024 * 1024
 MAX_TEXTO_LEIDO = 8000
 
