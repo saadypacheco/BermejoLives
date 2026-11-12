@@ -8,6 +8,8 @@ import {
 import type { Ciudad, Rubro } from "@/lib/types";
 import { Ic } from "@/components/ic";
 import { useAdminCiudad } from "@/components/admin-ciudad";
+import { CargarTarjetasModal, FichaTarjeta } from "@/components/importados-tarjetas";
+import { esTarjeta, paramFuente, type FuenteFiltro } from "@/lib/tarjetas-pure";
 
 type FilaResumen = { ciudad_id: string | null; estado: string; n: number };
 
@@ -32,6 +34,12 @@ const ESTADOS = [
   { key: "descartado", label: "Descartados" },
 ] as const;
 
+const FUENTES: { key: FuenteFiltro; label: string }[] = [
+  { key: "todas", label: "Todas" },
+  { key: "osm", label: "OSM" },
+  { key: "tarjeta", label: "Tarjetas" },
+];
+
 export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: Ciudad | null }) {
   const { ciudades, elegir } = useAdminCiudad();
   const [estado, setEstado] = useState<string>("nuevo");
@@ -41,6 +49,8 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
   const [cargando, setCargando] = useState(true);
   const [err, setErr] = useState("");
   const [ocultarDup, setOcultarDup] = useState(true);
+  const [fuente, setFuente] = useState<FuenteFiltro>("todas");
+  const [modalTarjetas, setModalTarjetas] = useState(false);
   // Al cambiar de ciudad o de búsqueda salen consultas seguidas; si la vieja
   // llega después de la nueva, pisaría la lista con otra ciudad.
   const pedido = useRef(0);
@@ -50,7 +60,7 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
     const mio = ++pedido.current;
     setCargando(true); setErr("");
     try {
-      const r = await listarImportados(estado, q || undefined, ciudadId);
+      const r = await listarImportados(estado, q || undefined, ciudadId, paramFuente(fuente));
       if (mio !== pedido.current) return;
       setItems(r.items ?? []);
       setResumen(r.resumen ?? []);
@@ -66,7 +76,7 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
     } finally {
       if (mio === pedido.current) setCargando(false);
     }
-  }, [estado, q, ciudadId]);
+  }, [estado, q, ciudadId, fuente]);
 
   // Al cambiar de ciudad la lista se vacía en el acto, sin esperar la
   // respuesta: mientras dice «Cargando…» no pueden verse las fichas de la
@@ -93,8 +103,10 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
   // Los que ya están cargados en URUKU (mismo nombre a menos de 120 m) se
   // esconden por defecto: si no, el que revisa mira doscientas fichas que ya
   // tiene y abandona antes de llegar a las que sirven.
-  const visibles = ocultarDup ? items.filter((i) => !i.duplicado_de) : items;
-  const nDup = items.length - items.filter((i) => !i.duplicado_de).length;
+  // Las tarjetas no se esconden: su «repetido» se ve en la ficha y es justamente lo que hay que mirar.
+  const ocultables = (i: ComercioImportado) => !!i.duplicado_de && !esTarjeta(i);
+  const visibles = ocultarDup ? items.filter((i) => !ocultables(i)) : items;
+  const nDup = items.filter(ocultables).length;
 
   return (
     <div>
@@ -118,6 +130,20 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
           <input value={q} onChange={(ev) => setQ(ev.target.value)} placeholder="Buscar por nombre…"
                  style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border)",
                           background: "var(--panel)", color: "var(--txt-1)", fontSize: 13 }} />
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 10 }}>
+          <span style={{ fontSize: 12.5, color: "var(--txt-3)" }}>Fuente:</span>
+          {FUENTES.map((f) => (
+            <button key={f.key} type="button" aria-pressed={fuente === f.key}
+                    className={`btn btn-sm ${fuente === f.key ? "btn-primary" : "btn-ghost"}`}
+                    onClick={() => setFuente(f.key)}>
+              {f.label}
+            </button>
+          ))}
+          <button type="button" className="btn btn-sm btn-ghost" style={{ marginLeft: "auto", minHeight: 40 }}
+                  onClick={() => setModalTarjetas(true)}>
+            <Ic n="subir" s={15} /> Cargar tarjetas
+          </button>
         </div>
         {porCiudad.length > 0 && (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 10, fontSize: 12.5, color: "var(--txt-3)" }}>
@@ -147,13 +173,21 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
           nadie midió. */}
       {!cargando && !err && visibles.length === 0 && (
         <p style={{ color: "var(--txt-3)", fontSize: 13.5 }}>
-          Nada acá. Se llena corriendo <code>importar_osm.py</code> con la ciudad.
+          {fuente === "tarjeta"
+            ? <>Nada acá. Se llena con «Cargar tarjetas»: subí las fotos de las tarjetas de presentación.</>
+            : <>Nada acá. Se llena corriendo <code>importar_osm.py</code> con la ciudad, o con «Cargar tarjetas».</>}
         </p>
       )}
 
       {visibles.map((i) => (
-        <Fila key={i.id} item={i} rubros={rubros} onCambio={cargar} />
+        esTarjeta(i)
+          ? <FichaTarjeta key={i.id} item={i} rubros={rubros} ciudad={ciudad} onCambio={cargar} />
+          : <Fila key={i.id} item={i} rubros={rubros} onCambio={cargar} />
       ))}
+
+      {modalTarjetas && (
+        <CargarTarjetasModal ciudadInicial={ciudad} onCerrar={() => setModalTarjetas(false)} onTerminado={cargar} />
+      )}
     </div>
   );
 }
