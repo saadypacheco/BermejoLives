@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ponerHorarioEnLote, type ComercioPorVerificar } from "@/lib/api";
 import { Ic } from "@/components/ic";
+import { sinEmoji } from "@/lib/rubros";
 import { AdminCallesMapa } from "@/components/admin-calles-mapa";
 import { ElegirCiudad } from "@/components/admin-ciudad";
 import type { Ciudad } from "@/lib/types";
@@ -103,7 +104,9 @@ function CallesPorHorario({ comercios, onCambio }: {
       .sort((a, b) => b.items.length - a.items.length);
   }, [comercios]);
 
-  const sinHorarioTotal = comercios.filter((c) => !(c.horario ?? "").trim()).length;
+  // Sólo los locales: los servicios (baños, wifi…) no llevan horario de local y no se cuentan como faltantes.
+  const sinHorarioTotal = comercios.filter((c) => !esServicio(c) && sinHorario(c)).length;
+  const locales = comercios.filter((c) => !esServicio(c)).length;
 
   return (
     <div style={{ padding: 12, display: "grid", gap: 10 }}>
@@ -113,7 +116,7 @@ function CallesPorHorario({ comercios, onCambio }: {
         <b style={{ color: sinHorarioTotal ? "var(--amber)" : "var(--neon)" }}>
           {sinHorarioTotal} sin horario
         </b>{" "}
-        de {comercios.length}.
+        de {locales} locales (los servicios, como baños y wifi, no se cuentan).
       </p>
 
       {grupos.map((g) => (
@@ -126,10 +129,16 @@ function CallesPorHorario({ comercios, onCambio }: {
   );
 }
 
+// Lo que claramente no es un comercio con horario de local (baños, cajeros, estacionamientos…): viene del
+// mapa de servicios y ponerles «6 a 16» sería inventar. No cuentan como «sin horario» de la calle.
+const NO_LOCAL = new Set(["banos", "cajeros", "estacionamiento", "wifi", "taxis", "emergencias"]);
+const esServicio = (c: ComercioPorVerificar) => NO_LOCAL.has(c.rubros?.slug ?? "");
+const sinHorario = (c: ComercioPorVerificar) => !(c.horario ?? "").trim();
+
 function FilaCalle({ g, abierta, onAbrir, onCambio }: {
   g: Grupo; abierta: boolean; onAbrir: () => void; onCambio: () => void;
 }) {
-  const falta = g.items.length - g.conHorario;
+  const falta = g.items.filter((c) => !esServicio(c) && sinHorario(c)).length;
   // Los rubros de la calle, del más común al menos. Es lo que decide si el
   // horario de la calle aplica: en la 23 de Marzo hay 55 de ropa y 10 baños
   // públicos, y los baños no abren de 6 a 16.
@@ -180,7 +189,6 @@ function PanelCalle({ calle, porRubro, onCambio }: {
   // Arranca con TODO tildado menos lo que claramente no es un comercio con
   // horario de local (baños, cajeros, estacionamientos): esos vienen del mapa
   // de servicios y ponerles «6 a 16» sería inventar.
-  const NO_LOCAL = new Set(["banos", "cajeros", "estacionamiento", "wifi", "taxis", "emergencias"]);
   const [elegidos, setElegidos] = useState<Set<string>>(
     () => new Set(porRubro.map(([s]) => s).filter((s) => !NO_LOCAL.has(s))),
   );
@@ -232,7 +240,7 @@ function PanelCalle({ calle, porRubro, onCambio }: {
                                border: `1px solid ${on ? "var(--neon)" : "var(--border)"}`,
                                background: on ? "rgba(57,255,158,.12)" : "transparent",
                                color: on ? "var(--neon)" : "var(--txt-3)" }}>
-                {on ? <><Ic n="si" s={12} /> </> : ""}{v.nombre} ({v.items.length}{faltan !== v.items.length ? ` · ${faltan} sin` : ""})
+                {on ? <><Ic n="si" s={12} /> </> : ""}{sinEmoji(v.nombre)} ({v.items.length}{faltan !== v.items.length ? ` · ${faltan} sin` : ""})
               </button>
             );
           })}
