@@ -20,7 +20,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
 from app.api import (agent_credentials, asistente, auth, calles, campo, collect, comercio, contenido, content,
-                     cost_switches, health, integracion, integracion_admin, moderacion, observabilidad, pago,
+                     cost_switches, health, importados_tarjetas, integracion, integracion_admin, moderacion, observabilidad, pago,
                      reception, subscribers, telefonos_foto, usuario, webhook)
 from app.core.config import exigir_config_produccion, settings
 from app.core.errores_integracion import IntegracionError
@@ -624,6 +624,7 @@ app.include_router(collect.router, tags=["medicion"])
 app.include_router(calles.router, tags=["calles"])
 app.include_router(webhook.router, prefix="/ingest", tags=["ingesta"])
 app.include_router(moderacion.router, tags=["moderacion"])
+app.include_router(importados_tarjetas.router, tags=["importados-tarjetas"])
 app.include_router(reception.router, tags=["recepcion"])
 app.include_router(usuario.router, tags=["usuario"])
 app.include_router(observabilidad.router, tags=["observabilidad"])

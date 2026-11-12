@@ -1,8 +1,10 @@
 FROM python:3.12-slim
 
 # ffmpeg para decodificar el audio del navegador (faster-whisper) y tesseract-ocr para leer los teléfonos de las
-# portadas (OCR local gratis, docs/telefonos-en-fotos.md; con los datos del inglés alcanza: sólo se leen dígitos)
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg tesseract-ocr \
+# portadas (OCR local gratis, docs/telefonos-en-fotos.md; con los datos del inglés alcanza: sólo se leen dígitos).
+# tesseract-ocr-spa (~2 MB): las tarjetas de presentación (docs/carga-tarjetas.md) se leen con spa+eng; sin él
+# se lee con eng solo (services/tarjetas.py cae solo), con peores acentos.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg tesseract-ocr tesseract-ocr-spa \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

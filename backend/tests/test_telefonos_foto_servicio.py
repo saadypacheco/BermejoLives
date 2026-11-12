@@ -250,7 +250,7 @@ def test_la_api_de_interruptores_lista_y_prende_el_nuevo(client):
     from app.core import auth
     dueno = h(auth.make_token("dueno@uruku.bo", rol="x", roles=["x"], permisos=["equipo"]))
     claves = [i["key"] for i in client.get("/admin/cost-switches", headers=dueno).json()["items"]]
-    assert claves == ["gemini_content", "gemini_phone_scan"]
+    assert claves == ["gemini_content", "gemini_phone_scan", "gemini_tarjetas"]
     r = client.put("/admin/cost-switches/gemini_phone_scan", json={"enabled": True}, headers=dueno)
     assert r.status_code == 400 and "costo" in r.json()["detail"]
     r = client.put("/admin/cost-switches/gemini_phone_scan", json={"enabled": True, "confirm_cost": True}, headers=dueno)

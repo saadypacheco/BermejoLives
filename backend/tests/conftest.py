@@ -347,18 +347,41 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         self._importados_por_clave[clave] = fila
         return True
 
-    def list_importados(self, estado, ciudad_id, q, limite=200):
+    def list_importados(self, estado, ciudad_id, q, limite=200, fuente=None):
         out = list(self.importados.values())
         if estado:
             out = [i for i in out if i["estado"] == estado]
         if ciudad_id:
             out = [i for i in out if i.get("ciudad_id") == ciudad_id]
+        if fuente:
+            out = [i for i in out if i.get("fuente") == fuente]
         if q:
             out = [i for i in out if q.lower() in (i.get("nombre") or "").lower()]
         return out[:limite]
 
     def get_importado(self, importado_id):
         return self.importados.get(importado_id)
+
+    def get_importado_por_fuente(self, fuente, fuente_id):
+        return self._importados_por_clave.get((fuente, fuente_id))
+
+    def crear_importado(self, row):
+        clave = (row["fuente"], row["fuente_id"])
+        if clave in self._importados_por_clave:
+            return None
+        import uuid
+        fila = {"id": str(uuid.uuid4()), "estado": "nuevo", "comercio_id": None, "motivo": None,
+                "revisado_por": None, "revisado_at": None, "duplicado_de": None, **row}
+        self.importados[fila["id"]] = fila                  # en la base real el id es un uuid
+        self._importados_por_clave[clave] = fila
+        return fila
+
+    def list_telefonos_comercios(self):
+        return [{"id": c["id"], "nombre": c.get("nombre"), "whatsapp": c.get("whatsapp"), "telefono": c.get("telefono")}
+                for c in self.comercios.values() if c.get("activo", True)]
+
+    def nombres_de_comercios(self, ids):
+        return {i: (self.comercios[i].get("nombre") or "") for i in ids if i in self.comercios}
 
     def marcar_importado(self, importado_id, patch):
         fila = self.importados.get(importado_id)

@@ -317,8 +317,12 @@ class Repo(Protocol):
     # ---- comercios importados de fuentes externas ----
     def upsert_importado(self, row: dict) -> bool: ...
     def list_importados(self, estado: str | None, ciudad_id: str | None,
-                        q: str | None, limite: int) -> list[dict]: ...
+                        q: str | None, limite: int, fuente: str | None = None) -> list[dict]: ...
     def get_importado(self, importado_id: str) -> dict | None: ...
+    def get_importado_por_fuente(self, fuente: str, fuente_id: str) -> dict | None: ...
+    def crear_importado(self, row: dict) -> dict | None: ...
+    def list_telefonos_comercios(self) -> list[dict]: ...
+    def nombres_de_comercios(self, ids: list[str]) -> dict[str, str]: ...
     def marcar_importado(self, importado_id: str, patch: dict) -> dict | None: ...
     def resumen_importados(self) -> list[dict]: ...
     def comercios_con_coords(self, ciudad_id: str | None) -> list[dict]: ...
@@ -633,16 +637,48 @@ class SupabaseRepo(IntegracionRepoMixin):
         return True
 
     def list_importados(self, estado: str | None, ciudad_id: str | None,
-                        q: str | None, limite: int = 200) -> list[dict]:
+                        q: str | None, limite: int = 200, fuente: str | None = None) -> list[dict]:
         sel = self._db.table("comercios_importados").select("*")
         if estado:
             sel = sel.eq("estado", estado)
         if ciudad_id:
             sel = sel.eq("ciudad_id", ciudad_id)
+        if fuente:
+            sel = sel.eq("fuente", fuente)
         if q:
             sel = sel.ilike("nombre", f"%{q}%")
-        res = sel.order("nombre").limit(limite).execute()
+        # Las tarjetas se revisan por tanda: lo último que se subió primero. Los de OSM, por nombre.
+        sel = sel.order("importado_at", desc=True) if fuente == "tarjeta" else sel.order("nombre")
+        res = sel.limit(limite).execute()
         return res.data or []
+
+    def get_importado_por_fuente(self, fuente: str, fuente_id: str) -> dict | None:
+        res = (self._db.table("comercios_importados").select("id, estado")
+               .eq("fuente", fuente).eq("fuente_id", fuente_id).limit(1).execute())
+        return res.data[0] if res.data else None
+
+    def crear_importado(self, row: dict) -> dict | None:
+        """INSERT puro (no pisa nada, a diferencia de `upsert_importado`). Devuelve la fila creada, o None si ya
+        existía esa `(fuente, fuente_id)` (la violación del único: otra subida simultánea de la misma foto)."""
+        try:
+            res = self._db.table("comercios_importados").insert(row).execute()
+        except Exception as exc:  # noqa: BLE001
+            if "23505" in str(exc) or "duplicate key" in str(exc).lower():
+                return None
+            raise
+        return res.data[0] if res.data else None
+
+    def list_telefonos_comercios(self) -> list[dict]:
+        """`id, nombre, whatsapp, telefono` de los comercios ACTIVOS, para detectar repetidos (columnas explícitas)."""
+        return self._traer_todo("comercios", "id, nombre, whatsapp, telefono", "id",
+                                filtrar=lambda q: q.eq("activo", True))
+
+    def nombres_de_comercios(self, ids: list[str]) -> dict[str, str]:
+        ids = [i for i in dict.fromkeys(ids) if i]
+        if not ids:
+            return {}
+        res = self._db.table("comercios").select("id, nombre").in_("id", ids).execute()
+        return {r["id"]: r.get("nombre") or "" for r in (res.data or [])}
 
     def get_importado(self, importado_id: str) -> dict | None:
         res = (self._db.table("comercios_importados")

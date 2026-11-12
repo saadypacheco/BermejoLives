@@ -237,7 +237,7 @@ def test_c_prender_sin_confirmar_400_con_difusion_403_con_equipo_200(client, cre
     assert client.get("/admin/cost-switches", headers=tok("otro")).status_code == 403
     assert client.get("/admin/cost-switches").status_code in (401, 403)
     items = client.get("/admin/cost-switches", headers=tok("difusion")).json()["items"]
-    assert [i["key"] for i in items] == ["gemini_content", "gemini_phone_scan"] and items[0]["enabled"] is False
+    assert [i["key"] for i in items] == ["gemini_content", "gemini_phone_scan", "gemini_tarjetas"] and items[0]["enabled"] is False
 
 
 def test_c_el_interruptor_es_lo_que_deja_o_no_pasar_a_gemini(repo, crepo, client, ana, gemini):

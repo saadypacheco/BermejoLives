@@ -5,6 +5,7 @@ Escrituras con service_role (backend). Requiere JWT de admin.
 import re
 import uuid
 from datetime import timedelta
+from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
@@ -17,6 +18,7 @@ from app.api.agent_credentials import catalogo_de_permisos, es_agente
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp, whatsapp_para_guardar
 from app.services import archivos_privados, site_metrics, turnos_farmacia
+from app.services.tarjetas import importado_salida
 from app.services import calles_mapa, enlaces, ficha_catalogo as catalogo_svc, fotos_galeria, portada, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
@@ -1489,26 +1491,34 @@ def listar_importados(
     ciudad_id: str | None = None,
     q: str | None = None,
     limite: int = 200,
-    _admin: dict = Depends(require_permiso("panel")),
+    fuente: Literal["osm", "tarjeta"] | None = None,
+    _admin: dict = Depends(require_permiso("datos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    items = repo.list_importados(estado or None, ciudad_id, q, min(limite, 500))
-    return {"items": items, "total": len(items), "resumen": repo.resumen_importados()}
+    """El listado de Importados. `fuente` (`osm` | `tarjeta`) filtra por origen; sin él salen todos. Las tarjetas
+    suman `email`, `ubicacion`, `texto_leido`, `lector` y `tiene_foto` (la foto va por `/admin/importados/{id}/foto`)."""
+    items = repo.list_importados(estado or None, ciudad_id, q, min(limite, 500), fuente)
+    nombres = repo.nombres_de_comercios([i["duplicado_de"] for i in items if i.get("duplicado_de")])
+    return {"items": [importado_salida(i, nombres) for i in items], "total": len(items),
+            "resumen": repo.resumen_importados()}
 
 
 @router.post("/admin/importados/{importado_id}/promover")
 def promover_importado(
     importado_id: str,
     body: PromoverBody,
-    admin: dict = Depends(require_permiso("panel")),
+    admin: dict = Depends(require_permiso("datos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Crea el comercio de URUKU a partir del importado.
 
-    El comercio nace **sin verificar** y sin foto: lo que vino de la API es
+    El comercio nace **sin verificar** (y sin ser confiable) y sin foto: lo que vino de la API es
     nombre, punto y a veces teléfono. La foto de la vidriera —que es lo que hace
     útil a la ficha— la saca alguien parado enfrente, y ninguna API la da: de
     19.861 negocios medidos, 91 tenían imagen.
+
+    Si viene de una TARJETA (`fuente = 'tarjeta'`) también copia el teléfono, el sitio web, el correo y la
+    dirección que la persona dejó revisados. La foto de la tarjeta NO pasa a la ficha: es privada.
     """
     imp = repo.get_importado(importado_id)
     if not imp:
@@ -1523,15 +1533,21 @@ def promover_importado(
         raise HTTPException(status_code=400, detail="Sin coordenadas no va al mapa")
 
     rubro_slug = body.rubro_slug or imp.get("rubro_slug") or "otros"
-    from app.core.text import slugify
+    from app.core.text import slug_unico, slugify
 
-    comercio = repo.crear_comercio({
+    es_tarjeta = imp.get("fuente") == "tarjeta"
+    if es_tarjeta:
+        # El WhatsApp es sólo el celular que la persona dejó como tal: un fijo no abre un chat.
+        whatsapp = whatsapp_para_guardar(body.whatsapp or imp.get("whatsapp"))
+    else:
+        whatsapp = whatsapp_para_guardar(body.whatsapp or imp.get("whatsapp") or imp.get("telefono"))
+    datos = {
         "nombre": nombre,
-        "slug": slugify(nombre),
+        "slug": slug_unico(repo, slugify(nombre)),
         "ciudad_id": imp.get("ciudad_id"),
         "lat": imp["lat"], "lng": imp["lng"],
         "direccion": imp.get("direccion"),
-        "whatsapp": whatsapp_para_guardar(body.whatsapp or imp.get("whatsapp") or imp.get("telefono")),
+        "whatsapp": whatsapp,
         "horario": imp.get("horario"),
         "sitio_web": enlaces.sanear_red(imp.get("website"), "El sitio web"),
         "verificado": False,
@@ -1540,7 +1556,12 @@ def promover_importado(
         # puede distinguir un local caminado de uno traído de un mapa abierto —
         # y la diferencia importa para la licencia y para la confianza.
         "cargado_por": f"import:{imp.get('fuente', 'osm')}",
-    })
+    }
+    if es_tarjeta:
+        datos["telefono"] = imp.get("telefono")
+        datos["email"] = imp.get("email")
+        datos["confiable"] = False                       # una tarjeta nunca publica directo
+    comercio = repo.crear_comercio(datos)
     rid = repo.get_rubro_id(rubro_slug)
     if rid:
         repo.set_comercio_rubros(comercio["id"], [rid])
@@ -1559,7 +1580,7 @@ def promover_importado(
 def descartar_importado(
     importado_id: str,
     motivo: str = "",
-    admin: dict = Depends(require_permiso("panel")),
+    admin: dict = Depends(require_permiso("datos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
     """Descarta sin borrar: la fila queda para que la próxima importación no lo
@@ -1570,7 +1591,7 @@ def descartar_importado(
         "estado": "descartado", "motivo": motivo or None,
         "revisado_por": admin["email"], "revisado_at": _ahora(),
     })
-    return {"ok": True, "importado": fila}
+    return {"ok": True, "importado": importado_salida(fila) if fila else fila}
 
 
 def _ahora() -> str:

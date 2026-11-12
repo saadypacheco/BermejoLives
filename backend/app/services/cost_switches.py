@@ -4,7 +4,8 @@ COSTO CERO POR DEFECTO
 ======================
 Todo lo que genera un gasto queda APAGADO hasta que el dueño lo prende, sabiendo que tiene costo. Hoy el único
 servicio pago del contenido para redes es Gemini (`gemini_content`: los textos de las redes y del video y las
-marcas de las fotos); `gemini_phone_scan` (docs/telefonos-en-fotos.md) lee los teléfonos de las portadas con Gemini. Apagado, todo sigue funcionando con los textos fijos y la persona los completa en Revisión.
+marcas de las fotos); `gemini_phone_scan` (docs/telefonos-en-fotos.md) lee los teléfonos de las portadas con Gemini y `gemini_tarjetas`
+(docs/carga-tarjetas.md) lee las fotos de tarjetas de presentación. Apagado, todo sigue funcionando con los textos fijos y la persona los completa en Revisión.
 
 Sin fila en `cost_switches` = apagado. Un error al leer la base = apagado (ante la duda, no se gasta).
 
@@ -24,6 +25,7 @@ logger = structlog.get_logger()
 
 GEMINI_CONTENT = "gemini_content"
 GEMINI_PHONE_SCAN = "gemini_phone_scan"
+GEMINI_TARJETAS = "gemini_tarjetas"
 
 #: Lo que se puede prender o apagar. Fijo en el código: lo devuelve la API para que el panel lo muestre.
 CATALOGO: dict[str, dict] = {
@@ -39,6 +41,13 @@ CATALOGO: dict[str, dict] = {
         "what": "Lee con Gemini los teléfonos que se ven en la portada de cada comercio",
         "cost": "Estimado: menos de US$ 5 para todas las portadas (unas 6000); 0 si la clave es del nivel gratis",
         "off_means": "Se usa el lector gratis (Tesseract), que se pierde algunos números en carteles chicos o torcidos",
+    },
+    # docs/carga-tarjetas.md: leer las fotos de tarjetas de presentación (Comercios › Importados).
+    GEMINI_TARJETAS: {
+        "label": "Leer tarjetas de presentación con Gemini",
+        "what": "Lee con Gemini el texto de cada foto de tarjeta que se sube en Importados (nombre, dirección, teléfonos)",
+        "cost": "Menos de US$ 0,01 por tarjeta con el modelo actual (0 si la clave de Gemini es del nivel gratis)",
+        "off_means": "Se usa el lector gratis (Tesseract), que lee peor las tarjetas con fondos de color o letras decorativas",
     },
 }
 

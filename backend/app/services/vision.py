@@ -433,16 +433,16 @@ class LectorFallo(RuntimeError):
     """La foto o la respuesta del modelo no sirven para ESTA foto: se marca con el error y se reintenta más adelante."""
 
 
-def _chica(data: bytes) -> bytes:
-    """La foto a `LADO_FOTO_TELEFONOS` px de lado mayor, en JPEG: menos tokens y casi siempre alcanza para leer
-    un cartel. Si no se puede abrir como imagen, es un `LectorFallo`."""
+def _chica(data: bytes, lado: int = LADO_FOTO_TELEFONOS) -> bytes:
+    """La foto a `lado` px de lado mayor (por defecto `LADO_FOTO_TELEFONOS`), en JPEG: menos tokens y casi siempre
+    alcanza para leer un cartel. Si no se puede abrir como imagen, es un `LectorFallo`."""
     from io import BytesIO
 
     from PIL import Image, ImageOps
 
     try:
         im = ImageOps.exif_transpose(Image.open(BytesIO(data)))
-        im.thumbnail((LADO_FOTO_TELEFONOS, LADO_FOTO_TELEFONOS))
+        im.thumbnail((lado, lado))
         buf = BytesIO()
         im.convert("RGB").save(buf, format="JPEG", quality=85)
         return buf.getvalue()
@@ -479,6 +479,62 @@ def leer_telefonos_foto(data: bytes) -> list[str]:
     uso = cuerpo.get("usageMetadata") or {}
     logger.info("vision.uso_telefonos", tokens=uso.get("totalTokenCount"), modelo=settings.gemini_model)
     return _lista_de_telefonos(out.get("telefonos") if isinstance(out, dict) else None)
+
+
+# ── Leer el texto de UNA tarjeta de presentación (docs/carga-tarjetas.md) ───────────────────────────────────
+# Sólo con el interruptor `gemini_tarjetas` prendido (services/tarjetas.py lo decide). El modelo TRANSCRIBE: los
+# campos (nombre, teléfonos, dirección) los saca después el mismo código que lee lo que devuelve Tesseract.
+LADO_FOTO_TARJETA = 1600
+
+PROMPT_TARJETA = """Mirás la foto de una tarjeta de presentación de un comercio. Tu única tarea es TRANSCRIBIR el
+texto que está escrito en la tarjeta, renglón por renglón, en el orden en que se lee de arriba hacia abajo.
+
+Devolvé SOLO un JSON, sin markdown, con esta forma exacta:
+{"lineas": ["Panadería La Esquina", "Av. Costanera 440", "Cel: 7012 3456"]}
+
+Reglas:
+- Copiá cada renglón tal como está escrito. No traduzcas, no corrijas, no resumas, no agregues nada.
+- Si una palabra o un dígito no se lee con claridad, omití ese renglón: un dato equivocado es peor que ninguno.
+- Si no hay texto legible, devolvé {"lineas": []}.
+"""
+
+MAX_LINEAS_TARJETA = 40
+MAX_LARGO_LINEA_TARJETA = 200
+
+
+def leer_texto_tarjeta(data: bytes) -> str:
+    """El texto que Gemini transcribe de una foto de tarjeta, un renglón por línea.
+
+    Lanza `VisionNoConfigurada` sin GEMINI_API_KEY, `LectorTransitorio` si el modelo no pudo contestar ahora y
+    `LectorFallo` si la foto o la respuesta no sirven."""
+    if not settings.gemini_api_key:
+        raise VisionNoConfigurada("Falta GEMINI_API_KEY")
+    foto = _chica(data, LADO_FOTO_TARJETA)
+    url_api = gemini.url_generar()
+    payload = {"contents": [{"parts": [
+        {"text": PROMPT_TARJETA},
+        {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(foto).decode()}}]}]}
+    try:
+        r = _post_con_reintentos(url_api, payload)
+    except Exception as exc:  # noqa: BLE001
+        raise LectorTransitorio(_sin_secretos(str(exc))) from None
+    if r.status_code == 400:
+        raise LectorFallo(f"El modelo rechazó la foto: {_sin_secretos(str(r.text))[:200]}")
+    if r.status_code >= 400:
+        raise LectorTransitorio(f"El modelo contestó {r.status_code}")
+    try:
+        cuerpo = r.json()
+        out = _parsear(cuerpo["candidates"][0]["content"]["parts"][0]["text"])
+        lineas = out.get("lineas") if isinstance(out, dict) else None
+        if not isinstance(lineas, list):
+            raise ValueError("sin lineas")
+    except Exception:  # noqa: BLE001
+        raise LectorFallo("El modelo no devolvió un JSON legible") from None
+    uso = cuerpo.get("usageMetadata") or {}
+    logger.info("vision.uso_tarjeta", tokens=uso.get("totalTokenCount"), modelo=settings.gemini_model)
+    limpias = [str(x).strip()[:MAX_LARGO_LINEA_TARJETA] for x in lineas
+               if isinstance(x, (str, int)) and not isinstance(x, bool) and str(x).strip()]
+    return "\n".join(limpias[:MAX_LINEAS_TARJETA])
 
 
 def analizar_fotos(urls: list[str], rubros: list[dict], ciudad: dict | None = None) -> dict:

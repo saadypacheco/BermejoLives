@@ -73,8 +73,10 @@ def test_amplia_el_check_de_cost_switches_con_el_nombre_real():
 
 
 def test_el_check_coincide_con_el_catalogo_del_codigo():
+    """La ÚLTIMA migración que toca el check (la 0195 sumó `gemini_tarjetas`) coincide con el catálogo; la 0184
+    conserva el suyo, histórico, con las dos claves de entonces."""
     from app.services.cost_switches import CATALOGO
-    sql = _normal(_sql("supabase/migrations"))
+    sql = _normal((RAIZ / "supabase/migrations/0195_importados_tarjetas.sql").read_text(encoding="utf-8"))
     m = re.search(r"add constraint cost_switches_key_check check \(key in \(([^)]*)\)\)", sql)
     assert m
     assert sorted(re.findall(r"'([a-z_]+)'", m.group(1))) == sorted(CATALOGO)
