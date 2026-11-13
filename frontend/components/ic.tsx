@@ -123,6 +123,8 @@ export const ICONOS = {
   wifi: "WifiHigh", emergencias: "ShieldCheck",
   // Lugares turísticos: plazas, museos, miradores, excursiones, áreas protegidas (rubro no comercial, 0196).
   "para-visitar": "Binoculars",
+  // Guías, agencias, operadoras y complejos turísticos: negocios de turismo (rubro comercial, 0197).
+  turismo: "Compass",
   // La cruz de la farmacia de turno (pin del mapa, sello de la ficha y tarjetas).
   // Aparte de `farmacia` (la pastilla, el rubro): esto es «está de turno».
   turno_farmacia: "FirstAid",

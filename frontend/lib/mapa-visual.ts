@@ -34,6 +34,8 @@ export const CATEGORY_STYLE: Record<string, { color: string }> = {
   peluqueria: { color: "#6366f1" }, lavadero: { color: "#6366f1" },
   "gomeria-servicio": { color: "#6366f1" }, cerrajeria: { color: "#6366f1" },
   hospedaje: { color: "#6366f1" },
+  // Guías, agencias y operadoras de turismo (0197): negocios, con el color de hospedaje.
+  turismo: { color: "#6366f1" },
   // 🧸 Familia y ocio
   jugueteria: { color: "#f43f5e" }, bebes: { color: "#f43f5e" },
   deportes: { color: "#f43f5e" }, regaleria: { color: "#f43f5e" },
