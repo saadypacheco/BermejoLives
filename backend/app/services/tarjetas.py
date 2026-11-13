@@ -592,4 +592,8 @@ def importado_salida(fila: dict, nombres_repetidos: dict[str, str] | None = None
         out.setdefault(k, None)
     if fila.get("duplicado_de"):
         out["duplicado_nombre"] = (nombres_repetidos or {}).get(fila["duplicado_de"])
+    if fila.get("fuente") == "turismo":
+        # La subcategoría con la que va a quedar el comercio al promoverlo (Guía de turismo, Radio móvil…).
+        from app.services.subcategorias_turismo import subcategoria_de_importado
+        out["subcategoria_legible"] = subcategoria_de_importado(fila)
     return out

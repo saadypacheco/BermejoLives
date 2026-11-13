@@ -2499,6 +2499,13 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
             c["rubros"] = list(rubro_slugs)
         return c
 
+    def actualizar_campos_comercio(self, comercio_id, patch):
+        c = self.comercios.get(comercio_id)
+        if c is None:
+            return {}
+        c.update(patch)
+        return c
+
     # ---- leads ----
     def insert_lead(self, row):
         from datetime import datetime, timezone
