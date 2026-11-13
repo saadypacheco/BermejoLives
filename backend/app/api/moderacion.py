@@ -18,6 +18,8 @@ from app.api.agent_credentials import catalogo_de_permisos, es_agente
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp, whatsapp_para_guardar
 from app.services import archivos_privados, site_metrics, turnos_farmacia
+from app.services import completar_importado as completar_svc
+from app.services.subcategorias_turismo import subcategoria_de_importado
 from app.services.tarjetas import importado_salida
 from app.services import calles_mapa, enlaces, ficha_catalogo as catalogo_svc, fotos_galeria, portada, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
@@ -1483,6 +1485,16 @@ class PromoverBody(BaseModel):
     nombre: str | None = None          # se puede corregir al promover
     rubro_slug: str | None = None      # obligatorio si el importado no trae uno
     whatsapp: str | None = None
+    # Promover sin punto: sólo tarjetas y páginas de turismo. El comercio existe (ficha, búsqueda, listas) pero no
+    # sale en el mapa. Sin el flag, un importado sin coordenadas sigue dando 400.
+    sin_ubicacion: bool = False
+
+
+class CompletarBody(BaseModel):
+    """`completar`: con qué comercio, qué campos en conflicto se reemplazan por el nuevo y si se suma el rubro."""
+    comercio_id: str = Field(min_length=1, max_length=64)
+    usar: dict[str, Literal["nuevo"]] = Field(default_factory=dict)
+    sumar_rubro: bool = False
 
 
 @router.get("/admin/importados")
@@ -1510,7 +1522,58 @@ def listar_importados(
 def _rubro_no_comercial(repo: Repo, rubro_slug: str) -> bool:
     """¿El rubro existe y es NO comercial (`rubros.comercial = false`)? Un rubro que no se encuentra cuenta como
     comercial: es lo que siempre fue."""
-    return any(r.get("slug") == rubro_slug and r.get("comercial") is False for r in repo.list_rubros())
+    return completar_svc.rubro_es_no_comercial(repo, rubro_slug)
+
+
+def _error_completar(exc: completar_svc.CompletarError) -> HTTPException:
+    return HTTPException(status_code=exc.status, detail=exc.detail)
+
+
+@router.get("/admin/importados/{importado_id}/comparar")
+def comparar_importado(
+    importado_id: str,
+    comercio_id: str | None = Query(default=None, max_length=64),
+    _admin: dict = Depends(require_permiso("datos")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """El importado y el comercio que ya existe, lado a lado, para completarlo (docs/turismo-home-y-repetidos.md).
+    `comercio_id` por defecto es el `duplicado_de` del importado. Devuelve `{comercio, campos, rubro_sugerido,
+    rubros_actuales}`; cada campo trae `sugerido`: `completar` / `conservar` / `igual`."""
+    try:
+        return completar_svc.comparar(repo, importado_id, comercio_id)
+    except completar_svc.CompletarError as exc:
+        raise _error_completar(exc) from exc
+
+
+@router.post("/admin/importados/{importado_id}/completar")
+def completar_importado(
+    importado_id: str,
+    body: CompletarBody,
+    admin: dict = Depends(require_permiso("datos")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Completa el comercio existente con los datos del importado (no crea uno nuevo) y deja el importado promovido
+    apuntando a él. Lo vacío se llena solo; con los dos datos distintos se conserva el del existente salvo lo que
+    venga en `usar`. Nunca toca foto, punto existente, `verificado`, `confiable`, `codigo` ni slug."""
+    try:
+        return completar_svc.completar(repo, importado_id, body.comercio_id, body.usar, body.sumar_rubro,
+                                       admin["email"])
+    except completar_svc.CompletarError as exc:
+        raise _error_completar(exc) from exc
+
+
+@router.post("/admin/importados/{importado_id}/no-es-repetido")
+def importado_no_es_repetido(
+    importado_id: str,
+    _admin: dict = Depends(require_permiso("datos")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """«No es el mismo»: saca el aviso de repetido y deja el importado para promover como comercio nuevo."""
+    try:
+        fila = completar_svc.no_es_repetido(repo, importado_id)
+    except completar_svc.CompletarError as exc:
+        raise _error_completar(exc) from exc
+    return importado_salida(fila)
 
 
 @router.post("/admin/importados/{importado_id}/promover")
@@ -1545,13 +1608,17 @@ def promover_importado(
     nombre = (body.nombre or imp.get("nombre") or "").strip()
     if not nombre:
         raise HTTPException(status_code=400, detail="Sin nombre no se puede crear el comercio")
+    es_tarjeta = imp.get("fuente") in ("tarjeta", "turismo")      # las dos se revisan campo por campo
     if imp.get("lat") is None or imp.get("lng") is None:
-        raise HTTPException(status_code=400, detail="Sin coordenadas no va al mapa")
+        if not body.sin_ubicacion:
+            raise HTTPException(status_code=400, detail="Sin coordenadas no va al mapa")
+        if not es_tarjeta:
+            raise HTTPException(status_code=400,
+                                detail="Sólo las tarjetas y las páginas de turismo se promueven sin ubicación")
 
     rubro_slug = body.rubro_slug or imp.get("rubro_slug") or "otros"
     from app.core.text import slug_unico, slugify
 
-    es_tarjeta = imp.get("fuente") in ("tarjeta", "turismo")      # las dos se revisan campo por campo
     no_comercial = _rubro_no_comercial(repo, rubro_slug)
     if no_comercial:
         whatsapp = whatsapp_para_guardar(body.whatsapp)          # sólo si la persona lo confirmó a mano
@@ -1564,7 +1631,7 @@ def promover_importado(
         "nombre": nombre,
         "slug": slug_unico(repo, slugify(nombre)),
         "ciudad_id": imp.get("ciudad_id"),
-        "lat": imp["lat"], "lng": imp["lng"],
+        "lat": imp.get("lat"), "lng": imp.get("lng"),            # None si se promueve sin ubicación (fuera del mapa)
         "direccion": imp.get("direccion"),
         "whatsapp": whatsapp,
         "horario": imp.get("horario"),
@@ -1581,8 +1648,14 @@ def promover_importado(
         datos["email"] = imp.get("email")
         datos["confiable"] = False                       # una tarjeta (o un listado de turismo) nunca publica directo
     if no_comercial:
-        datos["subcategoria"] = imp.get("subcategoria")
         datos["fuente_url"] = imp.get("fuente_url")
+        datos["subcategoria"] = subcategoria_de_importado(imp)      # Plaza, Mirador… (o la etiqueta de su categoría)
+    elif imp.get("fuente") == "turismo":
+        # Un negocio de la página de turismo: la etiqueta legible de su categoría (`guias` → «Guía de turismo»,
+        # `radio-moviles` → «Radio móvil»). Es lo que separa guías de agencias en la home. Sin etiqueta, no se pone.
+        etiqueta = subcategoria_de_importado({**imp, "subcategoria": None})
+        if etiqueta:
+            datos["subcategoria"] = etiqueta
     comercio = repo.crear_comercio(datos)
     rid = repo.get_rubro_id(rubro_slug)
     if rid:
