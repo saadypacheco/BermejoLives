@@ -22,6 +22,7 @@ COMANDO (se corre a mano dentro del contenedor del backend)
 ===========================================================
     python -m app.services.ubicar_direccion --ciudad tarija --dry-run
     python -m app.services.ubicar_direccion --ciudad tarija [--limite N]
+    python -m app.services.ubicar_direccion --ciudad tarija --dry-run --solo-esquinas   (segundos, sin Nominatim)
 
 Vuelve a ubicar los importados `estado='nuevo'` de fuente turismo/tarjeta que quedaron sin punto y tienen
 dirección. Sin `--dry-run` guarda `lat`/`lng` con `ubicacion='aproximada'`. Si Nominatim falla 5 veces seguidas
@@ -149,6 +150,14 @@ _RE_REFERENCIA = re.compile(r"\b(?:pasando|frente|enfrente|diagonal|cerca|al\s+l
                             re.IGNORECASE)
 _RE_CLAVE = re.compile(r"\b(entre|esquina|esq|casi)\b\.?", re.IGNORECASE)
 _RE_ELIPSIS = re.compile(r"…|\.{3,}")
+#: Un segmento DESPUÉS de la calle que sigue siendo parte de la dirección («, entre X y Y», «, esq. X», «, #12»).
+#: Lo demás («, Mercado Central», «, Piso 2», «, Edificio X») es referencia y se corta ahí.
+_RE_SIGUE = re.compile(r"^\s*(?:(?:entre|esquina|esq|casi)\b|y\s|#|(?:n[º°o]|nro)\.?\s*\d|\d{1,5}\s*$)",
+                       re.IGNORECASE)
+#: «Final Bolívar», «Final Av. X»: el final de la calle, no parte del nombre.
+_RE_FINAL = re.compile(r"^\s*final\s+", re.IGNORECASE)
+#: «Av. Belgrano y Federico Ávila»: la «y» entre dos calles es una esquina.
+_RE_Y = re.compile(r"\s+y\s+", re.IGNORECASE)
 
 
 def _nombre_de(texto: str | None) -> tuple[str | None, str | None]:
@@ -156,11 +165,12 @@ def _nombre_de(texto: str | None) -> tuple[str | None, str | None]:
     letras (y sin números) es basura de un texto cortado y se descarta."""
     t = (texto or "").strip(" ,.;:-")
     t = re.sub(r"\s+y\s*$", "", t, flags=re.IGNORECASE).strip(" ,.;:-")
+    t = _RE_FINAL.sub("", t)
     tipo = None
     m = _RE_TIPO_INICIO.match(t)
     if m:
         tipo = "avenida" if (m.group("av") or m.group("av2")) else ("pasaje" if m.group("p") else "calle")
-        t = t[m.end():]
+        t = _RE_FINAL.sub("", t[m.end():])
     nombre = normalizar(t)
     letras = sum(ch.isalpha() for ch in nombre)
     if not nombre or not (letras >= 3 or any(ch.isdigit() for ch in nombre)):
@@ -170,9 +180,9 @@ def _nombre_de(texto: str | None) -> tuple[str | None, str | None]:
 
 def _texto_de(texto: str) -> str:
     """El nombre tal como se escribió, sin el tipo del principio («C/Sucre» -> «Sucre»)."""
-    t = (texto or "").strip(" ,.;:-")
+    t = _RE_FINAL.sub("", (texto or "").strip(" ,.;:-"))
     m = _RE_TIPO_INICIO.match(t)
-    return re.sub(r"\s+", " ", t[m.end():] if m else t).strip(" ,.;:-")
+    return re.sub(r"\s+", " ", _RE_FINAL.sub("", t[m.end():]) if m else t).strip(" ,.;:-")
 
 
 def partir_direccion(texto: str | None) -> Partes:
@@ -213,6 +223,8 @@ def partir_direccion(texto: str | None) -> Partes:
         segmentos = segmentos[desde:]
         primero = _RE_TIPO_EN_TEXTO.search(segmentos[0])
         segmentos[0] = segmentos[0][primero.start():]
+        corte = next((i for i, s in enumerate(segmentos[1:], 1) if not _RE_SIGUE.match(s)), len(segmentos))
+        segmentos = segmentos[:corte]
     else:                                                  # sin «Calle»/«Av.»: el segmento con número, o el primero
         con_numero = next((s for s in segmentos if re.search(r"\d", s)), segmentos[0])
         segmentos = [con_numero]
@@ -234,6 +246,11 @@ def partir_direccion(texto: str | None) -> Partes:
     clave = _RE_CLAVE.search(t)
     principal = t[:clave.start()] if clave else t
     resto = t[clave.end():] if clave else ""
+    modo = clave.group(1).lower() if clave else None
+    if modo is None:
+        y = _RE_Y.search(t)
+        if y:                                              # «Av. Belgrano y Federico Ávila»: esquina
+            principal, resto, modo = t[:y.start()], t[y.end():], "esquina"
     calle, tipo = _nombre_de(principal.strip())
     calle_texto = _texto_de(principal) if calle else None
     if numero is None and principal.strip():
@@ -245,15 +262,15 @@ def partir_direccion(texto: str | None) -> Partes:
 
     esquina: str | None = None
     entre: tuple[str, str] | None = None
-    if clave:
+    if modo:
         siguiente = _RE_CLAVE.search(resto)                # «esq. X entre …»: sólo vale lo primero
         if siguiente:
             resto = resto[:siguiente.start()]
-        piezas = re.split(r"\s+y\s+", resto.strip(), maxsplit=1) if clave.group(1).lower() == "entre" else [resto]
+        piezas = re.split(r"\s+y\s+", resto.strip(), maxsplit=1) if modo == "entre" else [resto]
         if truncada and piezas and piezas[-1].strip():     # la última palabra quedó cortada: no se confía
             piezas[-1] = " ".join(piezas[-1].split()[:-1])
         nombres = [n for n in (_nombre_de(p)[0] for p in piezas) if n]
-        if clave.group(1).lower() == "entre":
+        if modo == "entre":
             if len(nombres) == 2:
                 entre = (nombres[0], nombres[1])
             elif len(nombres) == 1:
@@ -491,6 +508,17 @@ def ubicar(repo, direccion: str | None, ciudad: dict | None, *, tramos: "Calles 
     return {**punto, "metodo": "calle"} if punto else None
 
 
+def calles_no_reconocidas(calles: Calles, direcciones: list[str]) -> Counter:
+    """Los nombres de calle de las direcciones con esquina o «entre» que `calles` no reconoce, con cuántas veces
+    aparecen: lo que hay que revisar (otro nombre en OpenStreetMap, o fuera de la zona importada)."""
+    faltan: Counter = Counter()
+    for d in direcciones:
+        p = partir_direccion(d)
+        if p.calle and (p.esquina or p.entre):
+            faltan.update(n for n in (p.calle, p.esquina, *(p.entre or ())) if n and not calles.buscar(n))
+    return faltan
+
+
 # ═══════════════════════════════════════════════════════════ línea de comandos
 
 FUENTES = ("turismo", "tarjeta")
@@ -503,6 +531,8 @@ def main(argv: list[str] | None = None, repo=None, *, pedir: Callable[[dict], li
     ap.add_argument("--ciudad", required=True, help="slug de la ciudad (p. ej. tarija)")
     ap.add_argument("--dry-run", action="store_true", help="muestra lo que ubicaría, sin guardar nada")
     ap.add_argument("--limite", type=int, default=None, help="probar sólo con los primeros N")
+    ap.add_argument("--solo-esquinas", action="store_true",
+                    help="no consulta Nominatim: sólo esquina y cuadra (tarda segundos; para revisar las calles)")
     args = ap.parse_args(argv)
     if args.limite is not None and args.limite < 1:
         print("--limite tiene que ser 1 o más.", file=sys.stderr)
@@ -543,7 +573,7 @@ def main(argv: list[str] | None = None, repo=None, *, pedir: Callable[[dict], li
         fallas = 0
         return filas
 
-    usar_mapas = True
+    usar_mapas = not args.solo_esquinas
     cuenta: Counter = Counter()
     sin_punto: list[dict] = []
     for f in candidatos:
@@ -572,6 +602,12 @@ def main(argv: list[str] | None = None, repo=None, *, pedir: Callable[[dict], li
     mostrar(f"Sin encontrar:   {cuenta['sin_punto']}")
     for f in sin_punto:
         mostrar(f"  - {str(f.get('nombre') or '-')[:34]:34} | {str(f['direccion'])[:70]}")
+    no_reconocidas = calles_no_reconocidas(calles, [f["direccion"] for f in sin_punto]) if calles else Counter()
+    if no_reconocidas:
+        mostrar("\nCalles de una esquina o un «entre» que no están en el mapa de la ciudad (con otro nombre o "
+                "fuera de lo importado):")
+        for nombre, n in no_reconocidas.most_common(30):
+            mostrar(f"  {n:3}  {nombre}")
     if args.dry_run:
         mostrar("\nSimulación: no se guardó nada. Repetir sin --dry-run para guardar los puntos (aproximados).")
     return 0

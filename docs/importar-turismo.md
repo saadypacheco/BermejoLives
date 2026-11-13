@@ -80,6 +80,7 @@ Sin servicios nuevos: la geometría ya está en la base.
 **Volver a ubicar** los importados que quedaron sin punto, sin volver a leer la página:
 
 ```
+docker exec buscadonde-backend python -m app.services.ubicar_direccion --ciudad tarija --dry-run --solo-esquinas   # segundos: sin Nominatim, lista las calles que no reconoce
 docker exec buscadonde-backend python -m app.services.ubicar_direccion --ciudad tarija --dry-run
 docker exec buscadonde-backend python -m app.services.ubicar_direccion --ciudad tarija
 ```

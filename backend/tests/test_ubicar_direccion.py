@@ -100,6 +100,17 @@ def nominatim_falso(lat=LAT0, lng=LNG0, llamadas=None):
     ("Av. Circunvalación esq. 6 de junio # 1920", "circunvalacion", "1920", "6 de junio", None),
     ("Ex terminal de Buses (Av. Las Américas)", "las americas", None, None, None),
     ("Parque Bolivar, Calle Oruro", "oruro", None, None, None),
+    # lo que quedó sin punto en la primera corrida de Tarija (13/11)
+    ("Calle Domingo Paz entre Sucre y Gral Trigo, Mercado Central, Piso 2", "domingo paz", None, None,
+     ("sucre", "general trigo")),
+    ("Calle La Madrid #734, entre Ejercito y O'Connor, Edificio Instituto CC", "la madrid", "734", None,
+     ("ejercito", "o'connor")),
+    ("Av. Belgrano y Federico Ávila", "belgrano", None, "federico avila", None),
+    ("Av. Jaime Paz Zamora y Av. La Paz", "jaime paz zamora", None, "la paz", None),
+    ("C/Fray Manuel Mingo y Damaso de Aguirre", "fray manuel mingo", None, "damaso de aguirre", None),
+    ("Final Bolivar Esq. Ingavi", "bolivar", None, "ingavi", None),
+    ("Calle Angel Calavi #283 esq. Bernardo Navajas", "angel calavi", "283", "bernardo navajas", None),
+    ("Calle Sucre #12, Edificio Las Palmas", "sucre", "12", None, None),
     # sin «Calle»: lo que usa el panel y las tarjetas
     ("Sucre 100", "sucre", "100", None, None),
     ("Calle La Madrid 282", "la madrid", "282", None, None),
@@ -488,3 +499,27 @@ def test_si_la_limpia_no_aparece_prueba_el_texto_original():
     punto = ub.ubicar(None, "Z/Central, Calle La Madrid #282", ciudad, tramos=[], pedir=mapa)
     assert punto and punto["metodo"] == "calle"
     assert len(consultas) == 2 and "Z/Central" not in consultas[0] and "Z/Central" in consultas[1]
+
+
+def test_calles_no_reconocidas_lista_las_que_faltan_en_el_mapa():
+    calles = ub.Calles(grilla())
+    faltan = ub.calles_no_reconocidas(calles, ["Calle Sucre esq. Inventada", "C/Sucre entre Inventada y Otra Mas",
+                                               "Sucre 100", "Calle Sucre esq. Bolívar"])
+    assert faltan == {"inventada": 2, "otra mas": 1}
+
+
+def test_comando_solo_esquinas_no_llama_a_nominatim_y_lista_las_calles_que_faltan(repo):
+    _cargar_grilla(repo)
+    _importado(repo, 1, "Calle La Madrid #282 esq. Sucre")
+    _importado(repo, 2, "Calle Bolívar 100")
+    _importado(repo, 3, "Calle Sucre esq. Inventada")
+
+    def pedir(params):
+        raise AssertionError("con --solo-esquinas no se consulta Nominatim")
+
+    salida = []
+    assert ub.main(["--ciudad", "tarija", "--dry-run", "--solo-esquinas"], repo, pedir=pedir,
+                   mostrar=salida.append) == 0
+    texto = "\n".join(salida)
+    assert "Por esquina:     1" in texto and "Sin encontrar:   2" in texto
+    assert "no están en el mapa" in texto and "  1  inventada" in texto
