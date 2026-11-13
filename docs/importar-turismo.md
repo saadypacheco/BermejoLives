@@ -55,3 +55,36 @@ docker exec buscadonde-backend python -m app.services.importar_turismo --ciudad 
 4. Un teléfono que ya tiene un comercio marca el repetido.
 5. Promover crea el comercio con nombre, dirección, teléfonos, web y punto; no sale verificado ni confiable.
 6. No se descarga ninguna imagen de la página.
+
+## Ubicar por esquinas (13/11/2026)
+
+En la carga real de Tarija, Nominatim ubicó 25 de 343: las direcciones vienen como
+«Z/Central, Calle La Madrid #282 esq. Sucre» o «C/Sucre entre Corrado y Domingo Paz #0966», y Nominatim no entiende
+«Z/», «B/», «esq.» ni «entre»; y aun limpiando, Tarija no tiene numeración en OpenStreetMap (cae en la calle, no en
+el número). La forma boliviana de dar una dirección es la esquina o la cuadra, así que se ubica así:
+
+1. **Partir la dirección** (`partir_direccion`): calle principal, número, `esquina` («esq.», «esquina», «casi»),
+   `entre A y B`; se descartan zona y barrio («Z/…», «B/…», «Barrio …», «Zona …»), «C/», «Calle», «Av.»,
+   «Nº», «#». Nombres normalizados (minúsculas, sin tildes, «Gral.» = «General», «O'Connor» / «O´connor» /
+   «O’connor» iguales, «Mcal.» = «Mariscal»).
+2. **Con las calles de la ciudad** (`calles_tramos`, «Calles y horarios», una fila por cuadra con nombre y
+   geometría): «A esq. B» → el punto donde se tocan una cuadra de A y una de B; «A entre B y C» → el punto medio
+   entre la esquina A–B y la esquina A–C (si las dos existen y están a menos de 600 m). Nombres comparados con
+   tolerancia (una tilde o una abreviatura no impiden el match), sin adivinar: si hay dudas, no hay punto.
+3. **Si no**, Nominatim con la dirección limpia («Calle La Madrid 282»): punto aproximado sobre la calle.
+4. **Si no**, sin punto (se marca a mano).
+
+Todo punto sigue entrando como **aproximado** (`ubicacion = 'aproximada'`) hasta que una persona lo confirma.
+Sin servicios nuevos: la geometría ya está en la base.
+
+**Volver a ubicar** los importados que quedaron sin punto, sin volver a leer la página:
+
+```
+docker exec buscadonde-backend python -m app.services.ubicar_direccion --ciudad tarija --dry-run
+docker exec buscadonde-backend python -m app.services.ubicar_direccion --ciudad tarija
+```
+
+Recorre `comercios_importados` con `estado = 'nuevo'`, `fuente in ('turismo','tarjeta')`, sin `lat` y con
+dirección; muestra cuántos ubicó por esquina, por cuadra, por calle y cuántos no. Si la ciudad no tiene calles
+cargadas lo avisa (se importan desde el panel, «Calles y horarios») y sigue sólo con Nominatim. El mismo ubicador
+lo usan el importador de turismo, la carga de tarjetas y el botón «Buscar la dirección» del panel.
