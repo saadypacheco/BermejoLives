@@ -5,6 +5,7 @@ import { Ic, IcRubro, climaIcono, type NombreIcono } from "@/components/ic";
 import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { ContactoUruku } from "@/components/contacto-uruku";
 import { AccesosCiudad } from "@/components/accesos-ciudad";
+import { hayParaVisitar } from "@/lib/para-visitar";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import {
   getCiudades, getCityCategoryPagesCached, getClima, getComerciosNuevos, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado,
@@ -227,7 +228,7 @@ export default async function InicioPage() {
     <UrukuShell activeCat="Todos" activeNav="Inicio">
       <JsonLd data={datosMarca} />
       {/* ===== Los accesos rápidos, debajo del buscador ===== */}
-      <AccesosCiudad conGuia={conGuia} />
+      <AccesosCiudad conGuia={conGuia} paraVisitar={hayParaVisitar(paresCiudad, ciudad?.slug)} />
 
       {/* ===== Hero: qué es esto, y cómo está Bermejo hoy ===== */}
       <section className="uk-hero uk-home-hero">

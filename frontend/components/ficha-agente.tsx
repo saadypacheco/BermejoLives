@@ -23,6 +23,7 @@ import { CompletarComercio } from "@/components/completar-comercio";
 import { OfrecerComercio } from "@/components/ofrecer-comercio";
 import { PLAN_CFG, SelloPlan } from "@/components/sello-plan";
 import { Ic, type NombreIcono } from "@/components/ic";
+import { esNoComercial } from "@/lib/para-visitar";
 
 const titulo: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 700, margin: "0 0 10px" };
 const caja: React.CSSProperties = { padding: 12, borderRadius: 12, background: "var(--panel)", border: "1px solid var(--stroke)" };
@@ -142,6 +143,9 @@ export function FichaAgente({ c, distancia, rubros, lugares, onVolver, onGuardad
     );
   }
 
+  // Un lugar público (plaza, museo, baño): está en la lista para que nadie lo vuelva a cargar, pero no es un cliente.
+  // Sin sello de plan, sin «Le falta», sin plan y estado, sin «Ofrecer».
+  const publico = esNoComercial(c);
   // De la galería real si respondió; si no, del conteo que trae la lista.
   const nFotos = fotos ? fotos.length : (c.fotos_count ?? null);
   const faltas = calcularFaltas(c, nFotos);
@@ -193,10 +197,18 @@ export function FichaAgente({ c, distancia, rubros, lugares, onVolver, onGuardad
         <h1 style={{ fontSize: 20, margin: "0 0 2px", overflowWrap: "anywhere" }}>{c.nombre || "Sin nombre"}</h1>
         <div style={{ fontSize: 13, color: "var(--txt-3)" }}>{subtitulo}</div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 6 }}>
-          <SelloPlan plan={c.estado_plan} />
-          <span style={{ fontSize: 11.5, fontWeight: 700, color: c.verificado ? "var(--neon)" : "var(--amber)" }}>
-            <Ic n={c.verificado ? "verificado" : "reloj"} s={12} peso="fill" /> {c.verificado ? "Verificado" : "Pendiente de verificar"}
-          </span>
+          {publico ? (
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--txt-2)" }}>
+              <Ic n="para-visitar" s={12} /> Lugar público
+            </span>
+          ) : (
+            <>
+              <SelloPlan plan={c.estado_plan} />
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: c.verificado ? "var(--neon)" : "var(--amber)" }}>
+                <Ic n={c.verificado ? "verificado" : "reloj"} s={12} peso="fill" /> {c.verificado ? "Verificado" : "Pendiente de verificar"}
+              </span>
+            </>
+          )}
           {distancia != null && Number.isFinite(distancia) && (
             <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--neon)" }}><Ic n="ubicacion" s={12} /> a {Math.round(distancia)} m</span>
           )}
@@ -230,6 +242,7 @@ export function FichaAgente({ c, distancia, rubros, lugares, onVolver, onGuardad
       </section>
 
       {/* Lo que suma */}
+      {!publico && (
       <section style={caja} aria-label="Lo que suma">
         <h2 style={titulo}><Ic n="destacado" s={16} /> Lo que suma</h2>
         {suma.length === 0
@@ -242,8 +255,22 @@ export function FichaAgente({ c, distancia, rubros, lugares, onVolver, onGuardad
               ))}
             </div>}
       </section>
+      )}
+
+      {/* Un lugar público no se ofrece ni se completa como un comercio: sólo se puede corregir. */}
+      {publico && (
+        <section style={caja} aria-label="Lugar público">
+          <p style={{ margin: "0 0 10px", fontSize: 13.5, lineHeight: 1.4 }}>
+            <Ic n="dato" s={15} /> Es un lugar público: está acá para que nadie lo vuelva a cargar. No se le ofrece plan.
+          </p>
+          <button type="button" className="btn btn-ghost" style={{ width: "100%", minHeight: 48 }} onClick={() => setCompletando(true)}>
+            <Ic n="editar" s={16} /> Revisar o editar
+          </button>
+        </section>
+      )}
 
       {/* Le falta */}
+      {!publico && (
       <section role="region" aria-label="Lo que le falta al comercio"
                style={{ padding: 12, borderRadius: 12, border: `1px solid ${faltas.length ? "var(--amber)" : "var(--neon)"}`, background: faltas.length ? "rgba(255,176,32,.08)" : "rgba(57,255,158,.08)" }}>
         {faltas.length === 0 ? (
@@ -266,8 +293,10 @@ export function FichaAgente({ c, distancia, rubros, lugares, onVolver, onGuardad
           <Ic n="editar" s={16} /> {faltas.length ? "Completar" : "Revisar o editar"}
         </button>
       </section>
+      )}
 
       {/* Plan y estado, sin precios */}
+      {!publico && (
       <section style={caja} aria-label="Plan y estado">
         <h2 style={titulo}><Ic n="estrella" s={16} /> Plan y estado</h2>
         {c.estado_plan && PLAN_CFG[c.estado_plan]
@@ -280,8 +309,11 @@ export function FichaAgente({ c, distancia, rubros, lugares, onVolver, onGuardad
           {c.verificado ? "Ya fue verificado por URUKU." : "Todavía está pendiente de verificar."}
         </p>
       </section>
+      )}
 
-      <OfrecerComercio comercio={{ id: c.id, nombre: c.nombre, slug: c.slug, whatsapp: c.whatsapp, rubroSlug: c.rubro_slug ?? c.rubros?.slug ?? null }} />
+      {!publico && (
+        <OfrecerComercio comercio={{ id: c.id, nombre: c.nombre, slug: c.slug, whatsapp: c.whatsapp, rubroSlug: c.rubro_slug ?? c.rubros?.slug ?? null }} />
+      )}
       <div style={{ height: 30 }} />
     </div>
   );

@@ -4,7 +4,8 @@ import { UrukuShell } from "@/components/uruku-shell";
 import { BuscarClient } from "@/components/buscar-client";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { AccesosCiudad } from "@/components/accesos-ciudad";
-import { buscarComerciosOrNull, getRubros } from "@/lib/data";
+import { hayParaVisitar } from "@/lib/para-visitar";
+import { buscarComerciosOrNull, getCityCategoryPagesCached, getRubros } from "@/lib/data";
 import { filtrosDeBusqueda, paramsDeUrl, PRIMERAS_BUSQUEDA, type BusquedaInicial } from "@/lib/buscar-filtros";
 
 export const dynamic = "force-dynamic";
@@ -34,9 +35,11 @@ export default async function BuscarPage(props: Props) {
   // pasa nada: el cliente carga como siempre, y nunca se publica «no hay
   // comercios» por un error de lectura.
   const params = paramsDeUrl(searchParams, ciudad?.slug ?? "");
-  const [filas, rubros] = await Promise.all([
+  const [filas, rubros, pares] = await Promise.all([
     buscarComerciosOrNull(filtrosDeBusqueda(params), PRIMERAS_BUSQUEDA, 0),
     getRubros().catch(() => []),
+    // Sólo decide si sale el acceso «Para visitar»; tolerante: si falla, `[]` y el acceso no sale.
+    getCityCategoryPagesCached().catch(() => []),
   ]);
   const inicial: BusquedaInicial | undefined = filas ? { params, resultados: filas } : undefined;
   // Cada frontera tiene su guía (0124): sin ella, los accesos a la aduana y
@@ -66,7 +69,7 @@ export default async function BuscarPage(props: Props) {
             el botón grande del hero y acá no había nada. Con un rubro puesto
             lleva a las ofertas DE ESE rubro, que es lo que se está mirando. */}
         <BuscarClient
-          accesos={<AccesosCiudad conGuia={conGuia} ofertas={rubro || true} />}
+          accesos={<AccesosCiudad conGuia={conGuia} ofertas={rubro || true} paraVisitar={hayParaVisitar(pares, ciudad?.slug)} />}
           inicial={inicial}
           rubrosIniciales={rubros}
           ciudadInicial={ciudad?.slug ?? ""}

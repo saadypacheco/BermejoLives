@@ -196,6 +196,8 @@ export const RUBRO_SCHEMA_TYPE: Readonly<Record<string, string>> = {
   carpinteria: "HomeAndConstructionBusiness", herreria: "HomeAndConstructionBusiness",
   emergencias: "EmergencyService",
   banos: "PublicToilet",
+  // Lugares turísticos (plazas, museos, miradores, excursiones…): rubro no comercial, 0196.
+  "para-visitar": "TouristAttraction",
   estacionamiento: "ParkingFacility",
   lavadero: "LocalBusiness", salones: "LocalBusiness", envios: "LocalBusiness", taxis: "LocalBusiness",
   wifi: "LocalBusiness", alquiler: "LocalBusiness", "servicio-tecnico": "LocalBusiness",
@@ -211,7 +213,7 @@ export const SCHEMA_TYPE_WHITELIST: readonly string[] = [
   "SportingGoodsStore", "Florist", "Pharmacy", "Optician", "HairSalon", "HealthAndBeautyBusiness",
   "ExerciseGym", "Restaurant", "FastFoodRestaurant", "CafeOrCoffeeShop", "Bakery", "LodgingBusiness",
   "NightClub", "AutoRepair", "GasStation", "FinancialService", "AutomatedTeller", "Locksmith",
-  "HomeAndConstructionBusiness", "EmergencyService", "PublicToilet", "ParkingFacility",
+  "HomeAndConstructionBusiness", "EmergencyService", "PublicToilet", "ParkingFacility", "TouristAttraction",
 ];
 
 /** El tipo de la ficha para un rubro; sin mapeo (o sin rubro) → `LocalBusiness`. */

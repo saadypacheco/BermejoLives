@@ -94,7 +94,9 @@ function derivar(comercio: Comercio, ciudades: readonly Ciudad[]) {
     nombre: comercio.nombre, que, ciudad: ciudad.nombre, departamento: ciudad.departamento,
     descripcion: comercio.descripcion, calle: comercio.direccion || comercio.calle, productos, conWhatsapp: Boolean(comercio.whatsapp),
   });
-  return { ciudad, rubroSlug, rubro, productos, que, indexable, descripcion };
+  // Rubro no comercial (baño, plaza, museo…): la ficha no habla de «negocio» ni de WhatsApp.
+  const lugarPublico = comercio.rubro_comercial === false;
+  return { ciudad, rubroSlug, rubro, productos, que, indexable, descripcion, lugarPublico };
 }
 
 /** Lo mínimo para la imagen de vista previa (no pide ofertas, galería ni turnos). */

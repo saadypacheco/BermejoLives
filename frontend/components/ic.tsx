@@ -121,6 +121,8 @@ export const ICONOS = {
   // ── Servicios de la ciudad ───────────────────────────────────────────────
   banos: "Toilet", cajeros: "CreditCard", estacionamiento: "Garage",
   wifi: "WifiHigh", emergencias: "ShieldCheck",
+  // Lugares turísticos: plazas, museos, miradores, excursiones, áreas protegidas (rubro no comercial, 0196).
+  "para-visitar": "Binoculars",
   // La cruz de la farmacia de turno (pin del mapa, sello de la ficha y tarjetas).
   // Aparte de `farmacia` (la pastilla, el rubro): esto es «está de turno».
   turno_farmacia: "FirstAid",

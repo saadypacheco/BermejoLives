@@ -5,6 +5,8 @@
 // validar; esto evita mandar 200 MB para que digan que no), el texto del estado de la
 // ubicación, qué campos cambiaron para el PATCH y la regla de cuándo se puede promover.
 
+import { RUBRO_PARA_VISITAR } from "./para-visitar";
+
 export const MAX_ARCHIVOS = 20;
 export const MAX_BYTES = 10 * 1024 * 1024;
 export const TIPOS_FOTO = ["image/jpeg", "image/png", "image/webp"] as const;
@@ -118,7 +120,9 @@ export function textoUbicar(r: { encontrado?: boolean; display_name?: string | n
 
 // ── Formulario ↔ PATCH ───────────────────────────────────────────────────────
 
-export const CAMPOS_EDITABLES = ["nombre", "direccion", "telefono", "whatsapp", "website", "email", "rubro_slug"] as const;
+// `subcategoria` y `horario` son de los lugares para visitar (docs/lugares-turismo.md): en el resto de las filas no
+// se tocan, así que el parche no los manda.
+export const CAMPOS_EDITABLES = ["nombre", "direccion", "telefono", "whatsapp", "website", "email", "rubro_slug", "subcategoria", "horario"] as const;
 export type CampoEditable = (typeof CAMPOS_EDITABLES)[number];
 export type FormTarjeta = Record<CampoEditable, string>;
 export type PatchTarjeta = Partial<Record<CampoEditable, string>> & { lat?: number; lng?: number };
@@ -165,11 +169,17 @@ export function puedePromover(
 
 // ── Listado ──────────────────────────────────────────────────────────────────
 
-export type FuenteFiltro = "todas" | "osm" | "tarjeta" | "turismo";
+export type FuenteFiltro = "todas" | "osm" | "tarjeta" | "turismo" | "turismo-visitar";
 
-/** El valor del query param `fuente`; con «todas» no se manda. */
+/** El valor del query param `fuente`; con «todas» no se manda. «Turismo › Para visitar» es `fuente=turismo` + `rubro`. */
 export function paramFuente(f: FuenteFiltro): string | undefined {
-  return f === "todas" ? undefined : f;
+  if (f === "todas") return undefined;
+  return f === "turismo-visitar" ? "turismo" : f;
+}
+
+/** El valor del query param `rubro` (slug exacto): sólo el filtro «Turismo › Para visitar» lo manda. */
+export function paramRubroImportados(f: FuenteFiltro): string | undefined {
+  return f === "turismo-visitar" ? RUBRO_PARA_VISITAR : undefined;
 }
 
 /** Sólo `fuente === "tarjeta"` tiene la ficha de revisión de tarjetas. */

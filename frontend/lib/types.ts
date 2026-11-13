@@ -46,6 +46,11 @@ export type Comercio = {
   rubro_id: string | null;
   rubro_slug?: string | null;
   rubro_nombre?: string | null;
+  /** `rubros.comercial` del rubro principal. `false` = lugar público (baño, plaza, museo): no tiene
+   *  WhatsApp ni «negocio». Ausente = comercial. Lo pone `getComercioBySlug*`. */
+  rubro_comercial?: boolean;
+  /** Página de origen de los datos (p. ej. la ficha en tarijaturismo.com). Pública (0196). */
+  fuente_url?: string | null;
   ciudad_id: string | null;
   // Campos fronterizos (migration 0011)
   monedas_aceptadas: string[] | null;

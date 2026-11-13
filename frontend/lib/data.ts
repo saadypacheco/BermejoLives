@@ -3,7 +3,7 @@ import { supabase, hasSupabase } from "@/lib/supabase";
 import type { FiltrosDisponibles, Volumenes, Cotizacion, Clima, VideoPromo, Red, NovedadFoto, NovedadUruku, GaleriaFoto, GaleriaVideo, FronteraEstado } from "@/lib/data-pure";
 import { UMBRALES } from "@/lib/data-pure";
 import { conMemoriaTtl } from "@/lib/memoria-ttl";
-import { desdeConteo } from "@/lib/comercios-nuevos-pure";
+import { desdeConteo, filtroSinNoComerciales, idsRubrosNoComerciales } from "@/lib/comercios-nuevos-pure";
 
 export * from "@/lib/data-pure";
 import type { Adorno } from "@/lib/adornos";
@@ -54,6 +54,8 @@ export const COLUMNAS_COMERCIO = [
   "monedas_aceptadas", "envios_internacionales", "pedido_minimo", "tiene_factura",
   "horario", "horario_estimado", "tiene_stock", "acepta_reservas", "tiene_pasero", "talles_especiales",
   "prod_obs_human", "prod_det_ia", "subcategoria", "contacto_ok", "contacto_no", "sin_cartel",
+  // 0196: el enlace a la página de origen de los lugares para visitar. Primero la migración, después el deploy.
+  "fuente_url",
 ].join(", ");
 
 /** La búsqueda, distinguiendo error (`null`) de «sin resultados» (`[]`). Sin base
@@ -120,8 +122,15 @@ export async function getVolumenes(): Promise<Volumenes> {
  * `null`: la línea sale sin número, nunca con uno inventado.
  */
 const contarComerciosNuevos = conMemoriaTtl(5 * 60_000, async (): Promise<number> => {
-  const { count, error } = await supabase.from("comercios")
+  // Los rubros NO comerciales (baños, «Para visitar»…) no cuentan: promover un lugar no es un comercio
+  // nuevo. Si esa lectura falla se lanza: contar de más sería inventar el número (la línea sale sin él).
+  const { data: rubros, error: errRubros } = await supabase.from("rubros").select("id, comercial");
+  if (errRubros) throw errRubros;
+  const filtro = filtroSinNoComerciales(idsRubrosNoComerciales((rubros ?? []) as { id: string; comercial?: boolean | null }[]));
+  let q = supabase.from("comercios")
     .select("id", { count: "exact", head: true }).eq("activo", true).gte("created_at", desdeConteo());
+  if (filtro) q = q.or(filtro);
+  const { count, error } = await q;
   if (error) throw error;
   return count ?? 0;
 });
@@ -557,8 +566,8 @@ export async function getComercioBySlug(slug: string): Promise<Comercio | null> 
     // Query chica aparte (no embed) — mismo motivo que getComerciosMapa: el
     // embed sobre "comercios" es lento por el import OSM masivo de esa tabla.
     if (comercio.rubro_id) {
-      const { data: rubro } = await supabase.from("rubros").select("slug, nombre").eq("id", comercio.rubro_id).limit(1);
-      if (rubro?.[0]) { comercio.rubro_slug = rubro[0].slug; comercio.rubro_nombre = rubro[0].nombre; }
+      const { data: rubro } = await supabase.from("rubros").select("slug, nombre, comercial").eq("id", comercio.rubro_id).limit(1);
+      if (rubro?.[0]) { comercio.rubro_slug = rubro[0].slug; comercio.rubro_nombre = rubro[0].nombre; comercio.rubro_comercial = rubro[0].comercial !== false; }
     }
     return comercio;
   }
@@ -579,9 +588,9 @@ export async function getComercioBySlugEstricto(slug: string): Promise<Comercio 
   const comercio = data?.[0] as unknown as Comercio | undefined;
   if (!comercio) return null;
   if (comercio.rubro_id) {
-    const { data: rubro, error: errRubro } = await supabase.from("rubros").select("slug, nombre").eq("id", comercio.rubro_id).limit(1);
+    const { data: rubro, error: errRubro } = await supabase.from("rubros").select("slug, nombre, comercial").eq("id", comercio.rubro_id).limit(1);
     if (errRubro) throw new Error(`No se pudo leer el rubro del comercio ${slug}: ${errRubro.message}`);
-    if (rubro?.[0]) { comercio.rubro_slug = rubro[0].slug; comercio.rubro_nombre = rubro[0].nombre; }
+    if (rubro?.[0]) { comercio.rubro_slug = rubro[0].slug; comercio.rubro_nombre = rubro[0].nombre; comercio.rubro_comercial = rubro[0].comercial !== false; }
   }
   return comercio;
 }

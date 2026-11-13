@@ -213,6 +213,9 @@ export type ComercioAgente = {
   /** Fotos de la galería (sin contar la portada). */
   fotos_count?: number | null;
   rubro_slug?: string | null;
+  /** El del rubro principal. `false` = lugar público (baño, plaza, museo): se muestra para que nadie lo vuelva
+   *  a cargar, pero sin plan, sin «Le falta» y sin «Ofrecer». Ausente (servidor anterior) = comercial. */
+  comercial?: boolean;
   id: string; slug: string; nombre: string; whatsapp: string | null; telefono: string | null; modalidad: string | null;
   direccion: string | null; lat: number | null; lng: number | null;
   /** La calle deducida del GPS (0127). Casi ningún comercio tiene dirección

@@ -24,7 +24,8 @@ import { enlaceCanal, enlaceRed, tipoEnlaceWa, urlHttp } from "@/lib/catalogo";
 import {
   absoluteUrl, breadcrumbNode, businessPath, categoryPath, cityPath, jsonLdGraph, localBusinessNode, robotsFor, type MigaItem,
 } from "@/lib/seo";
-import { tituloFicha } from "@/lib/ficha-seo";
+import { textosFicha, tituloFicha } from "@/lib/ficha-seo";
+import { textoMasInformacion, urlFuente } from "@/lib/para-visitar";
 import {
   WhatsApp, Pin, Phone, Globe, Instagram, Facebook, TikTok,
 } from "@/components/icons";
@@ -73,8 +74,13 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
   // una página que existe, y así lo entienden los buscadores y el navegador.
   if (!ficha) notFound();
   const { comercio, ciudad, rubro, productos, que, estadoPar, ciudadConPaginas, descripcion: descripcionMeta,
-          feed, galeria, funcionesPlan, planPublico, turnos: turnosFarmacia } = ficha;
+          feed, galeria, funcionesPlan, planPublico, turnos: turnosFarmacia, lugarPublico } = ficha;
   const ciudadNombre = ciudad.nombre;
+  // Rubro no comercial (plaza, museo, baño…): sin «negocio», sin WhatsApp, sin modalidad. Los textos salen de un solo lugar.
+  const textos = textosFicha(lugarPublico);
+  // El enlace a la página de origen de los datos (turismo), si es una URL web de verdad.
+  const fuenteHref = urlFuente(comercio.fuente_url);
+  const subcategoria = (comercio.subcategoria ?? "").trim();
   // Un taxi, remis o chofer sin parada fija: no hay "cómo llegar", se lo llama.
   const sinParada = comercio.rubro_slug === "taxis" && !comercio.direccion && !comercio.lat;
   const responde = (comercio.contacto_ok ?? 0) >= 3 && (comercio.contacto_ok ?? 0) >= 2 * (comercio.contacto_no ?? 0);
@@ -228,7 +234,9 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
               {comercio.rubro_nombre && <span className="uk-pill green">{sinEmoji(comercio.rubro_nombre)}</span>}
               {responde && <span className="uk-pill green" title="Los que le escribieron dicen que contesta"><Ic n="si" s={13} /> Responde</span>}
               {noResponde && <span className="uk-pill" style={{ color: "#b45309" }} title="Los que le escribieron dicen que no contestó">Últimamente no contesta</span>}
-              {comercio.modalidad && (
+              {/* Un lugar público no es mayorista ni minorista: en su lugar va el tipo («Museo», «Mirador»). */}
+              {lugarPublico && subcategoria && <span className="uk-pill blue">{subcategoria}</span>}
+              {!lugarPublico && comercio.modalidad && (
                 <span className="uk-pill blue">{MODALIDAD_LABEL[comercio.modalidad] ?? comercio.modalidad}</span>
               )}
               <HorarioBadge horario={comercio.horario} estimado={comercio.horario_estimado} />
@@ -292,8 +300,8 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
                  local no tiene WhatsApp o si URUKU no lo cargó, que son dos
                  cosas muy distintas para quien está por cruzar el puente. */
               <div className="uk-ficha-sincontacto">
-                <b>Este local no tiene WhatsApp cargado</b>
-                <span>Hay que ir hasta el local. Fijate cómo llegar acá abajo.</span>
+                <b>{textos.sinContactoTitulo}</b>
+                <span>{textos.sinContactoDetalle}</span>
               </div>
             )}
 
@@ -316,7 +324,7 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={qr} alt={`QR de ${comercio.nombre} en URUKU`} width={88} height={88} />
               <div>
-                <b>El QR de este negocio</b>
+                <b>{textos.qr}</b>
                 <span>Escaneado, abre esta ficha · {urlFicha.replace("https://", "")}</span>
               </div>
             </div>
@@ -329,7 +337,7 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
 
         {/* Sin ofertas ni novedades el comercio igual sirve —tiene teléfono,
             dirección y lo que vende—. Se dice por qué no hay, sin disimular. */}
-        {publicaciones.length === 0 && (
+        {publicaciones.length === 0 && !lugarPublico && (
           <section className="uk-ficha-sec uk-ficha-vacio">
             <p>
               Este negocio todavía no publicó ofertas en URUKU. Escribile por WhatsApp
@@ -355,7 +363,7 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
 
           <aside className="uk-ficha-side">
             <div className="uk-info-card" id="info">
-              <h3>Información del negocio</h3>
+              <h3>{textos.informacion}</h3>
               {comercio.horario && (
                 <div className="uk-info-row">
                   <span className="ic"><Ic n="reloj" s={17} /></span>
@@ -409,6 +417,13 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
                   <span className="ic"><Ic n="comprar" s={17} /></span>
                   <div><b>Pedido mínimo</b>{pedidoMinimo}</div>
                 </div>
+              )}
+              {/* De dónde salen los datos: sólo el enlace (el texto y las fotos de esa página no se copian). */}
+              {fuenteHref && (
+                <a className="uk-info-row" href={fuenteHref} target="_blank" rel="noopener noreferrer" style={{ color: "inherit" }}>
+                  <span className="ic"><Ic n="abrir" s={17} /></span>
+                  <div><b>Fuente</b>{textoMasInformacion(fuenteHref)}</div>
+                </a>
               )}
               {redes.length > 0 && redes.map((r) => {
                 const fila = (
