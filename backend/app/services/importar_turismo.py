@@ -92,6 +92,21 @@ RUBRO_POR_SUBCATEGORIA: dict[str, str] = {
 #: Si ninguna subcategoría tiene rubro, el de la sección entera (sólo donde hay un único rubro posible).
 RUBRO_POR_SECCION: dict[str, str] = {"donde-dormir": "hospedaje"}
 
+#: Rubro `turismo` (agencias, operadoras, guías, complejos turísticos, balnearios): todavía NO existe en las
+#: migraciones; el dueño lo crea desde el panel (Catálogo › Rubros) antes de correr el importador. Si no existe, la
+#: fila queda sin rubro como cualquier otra (la validación de `cargar` lo deja en None).
+RUBRO_TURISMO = "turismo"
+SUBCATEGORIAS_TURISMO = frozenset({"complejos-turisticos", "balneareos-privados", "diversion-en-familia"})
+SECCIONES_TURISMO = frozenset({"operadoras-de-turismo", "agencias-de-viajes", "guias-de-turismo-autorizados"})
+
+#: Subcategorías de «Qué hacer» que NO son comercios sino lugares (plazas, miradores, museos, atractivos): van a
+#: Lugares (docs/lugares-turismo.md), no a Importados. Una entrada se descarta sólo si TODAS sus categorías son de
+#: éstas (una bodega etiquetada también «fuera de la ciudad» sigue siendo un comercio).
+SUBCATEGORIAS_DE_LUGAR = frozenset({
+    "plazas-parques-y-miradores", "museos-y-bibliotecas", "centros-culturales",
+    "dentro-de-la-ciudad", "fuera-de-la-ciudad", "fuera-del-municipio",
+})
+
 MAX_TEXTO = tarjetas.MAX_TEXTO_LEIDO
 
 
@@ -469,6 +484,9 @@ def telefonos_de(entrada: Entrada) -> list[Telefono]:
 def es_util(entrada: Entrada) -> bool:
     """¿Vale la pena traerla? Hace falta teléfono o dirección (las plazas y mercados sin ninguno de los dos quedan
     afuera)."""
+    propias = [c for c in entrada.categorias if c != entrada.seccion]   # «que-hacer» como categoría no cuenta
+    if propias and all(c in SUBCATEGORIAS_DE_LUGAR for c in propias):
+        return False                              # es un lugar, no un comercio: va a Lugares
     return bool(telefonos_de(entrada) or entrada.direccion)
 
 
@@ -478,6 +496,8 @@ def rubro_sugerido(entrada: Entrada) -> str | None:
     for c in entrada.categorias:
         if c in RUBRO_POR_SUBCATEGORIA:
             return RUBRO_POR_SUBCATEGORIA[c]
+    if entrada.seccion in SECCIONES_TURISMO or any(c in SUBCATEGORIAS_TURISMO for c in entrada.categorias):
+        return RUBRO_TURISMO
     return RUBRO_POR_SECCION.get(entrada.seccion)
 
 

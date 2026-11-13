@@ -266,8 +266,9 @@ def test_sin_telefono_ni_direccion_se_descarta():
 
 def test_en_que_hacer_entra_lo_que_trae_telefono_o_direccion_y_queda_afuera_lo_que_no_trae_ninguno():
     es = {e.nombre: e for e in it.leer_pagina(HTML_HACER, URL_HACER)}
-    assert it.es_util(es["Bodega La Angostura"]) and it.es_util(es["Museo San Roque"])
-    assert it.es_util(es["Plaza Campero"])                 # una plaza con dirección entra
+    assert it.es_util(es["Bodega La Angostura"])
+    # Museos y plazas son lugares (docs/lugares-turismo.md): no entran como comercio aunque traigan dirección.
+    assert not it.es_util(es["Museo San Roque"]) and not it.es_util(es["Plaza Campero"])
     assert not it.es_util(es["Cañón del Pilaya"])          # sólo «Información»: ni teléfono ni dirección
 
 
@@ -400,10 +401,11 @@ def test_carga_lo_que_sirve_y_lo_descartado_no(repo, ciudad):
     r = it.cargar(repo, todas_las_entradas(), ciudad)
     nombres = {f["nombre"] for f in repo.importados.values()}
     assert {"Hotel Los Parrales", "Hostal Bolívar", "El Asador Chaqueño", "Salteñería Nanos", "Bodega La Angostura",
-            "Museo San Roque", "Viva Tours"} <= nombres
-    assert not nombres & {"Hotel Fantasma", "Mercado Avaroa", "Cañón del Pilaya", "Pedro Vencido · Guía de turismo"}
-    assert {"Plaza Campero", "Radio Móvil Sol", "Transporte Valle", "Angela Tejerina Castro · Guía de turismo"} <= nombres
-    assert r.leidas == 22 and r.descartadas == 3 and r.utiles == 18 and r.nuevas == 18
+            "Viva Tours"} <= nombres
+    assert not nombres & {"Hotel Fantasma", "Mercado Avaroa", "Cañón del Pilaya", "Pedro Vencido · Guía de turismo",
+                          "Museo San Roque", "Plaza Campero"}
+    assert {"Radio Móvil Sol", "Transporte Valle", "Angela Tejerina Castro · Guía de turismo"} <= nombres
+    assert r.leidas == 22 and r.descartadas == 5 and r.utiles == 16 and r.nuevas == 16
 
 
 def test_la_fila_cumple_el_contrato_de_importados(repo, ciudad):
@@ -431,9 +433,9 @@ def test_la_fila_cumple_el_contrato_de_importados(repo, ciudad):
     (("bodegas-y-vinotecas",), "que-hacer", "bebidas"), (("diversion-nocturna",), "que-hacer", "nocturna"),
     (("complejos-deportivos-y-gimnasios",), "que-hacer", "gimnasios"),
     (("radio-moviles",), "como-moverse", "taxis"), (("transporte-alrededores",), "como-moverse", "taxis"),
-    (("guias",), "guias-de-turismo-autorizados", None),
+    (("guias",), "guias-de-turismo-autorizados", "turismo"),
     (("cocina-italiana-pastas", "pizzeria"), "donde-comer", "restaurantes"),
-    (("operadoras-de-turismo",), "operadoras-de-turismo", None), (("museos-y-bibliotecas",), "que-hacer", None),
+    (("operadoras-de-turismo",), "operadoras-de-turismo", "turismo"), (("museos-y-bibliotecas",), "que-hacer", None),
     (("algo-nuevo",), "donde-dormir", "hospedaje"),                      # sin subcategoría conocida: la de la sección
     (("algo-nuevo",), "donde-comer", None),
 ])
@@ -545,21 +547,21 @@ def test_el_cli_carga_y_cuenta_con_punto_sin_punto_y_repetidas(repo, capsys):
     code = it.main(["--ciudad", "tarija"], repo=repo, descargar=descargador([]), pedir=mapa, dormir=lambda s: None)
     salida = capsys.readouterr().out
     assert code == 0
-    assert len(consultas) == 14 and all(q.endswith("Tarija") for q in consultas)
+    assert len(consultas) == 12 and all(q.endswith("Tarija") for q in consultas)
     con = [f for f in repo.importados.values() if f["lat"] is not None]
     assert [f["nombre"] for f in con] == ["Hotel Los Parrales"] and con[0]["ubicacion"] == "aproximada"
-    assert "Nuevas:                 18" in salida and "Con punto en el mapa:   1" in salida
-    assert "Sin punto:              17" in salida and "Marcadas como repetidas: 1" in salida
+    assert "Nuevas:                 16" in salida and "Con punto en el mapa:   1" in salida
+    assert "Sin punto:              15" in salida and "Marcadas como repetidas: 1" in salida
     # la segunda vez no hay nada nuevo ni se vuelve a preguntar al mapa
     consultas.clear()
     it.main(["--ciudad", "tarija"], repo=repo, descargar=descargador([]), pedir=mapa, dormir=lambda s: None)
-    assert consultas == [] and len(repo.importados) == 18
-    assert "Ya existentes:          18" in capsys.readouterr().out
+    assert consultas == [] and len(repo.importados) == 16
+    assert "Ya existentes:          16" in capsys.readouterr().out
 
 
 def test_el_limite_corta_la_carga(repo, ciudad):
     r = it.cargar(repo, todas_las_entradas(), ciudad, limite=3)
-    assert r.nuevas == 3 and len(repo.importados) == 3 and r.utiles == 18
+    assert r.nuevas == 3 and len(repo.importados) == 3 and r.utiles == 16
 
 
 def test_si_el_mapa_no_contesta_se_sigue_sin_punto_y_se_deja_de_insistir(repo, ciudad):
@@ -570,7 +572,7 @@ def test_si_el_mapa_no_contesta_se_sigue_sin_punto_y_se_deja_de_insistir(repo, c
         raise RuntimeError("sin red")
 
     r = it.cargar(repo, todas_las_entradas(), ciudad, pedir=caido)
-    assert r.nuevas == 18 and r.sin_punto == 18 and r.con_punto == 0
+    assert r.nuevas == 16 and r.sin_punto == 16 and r.con_punto == 0
     assert len(llamadas) == it.FALLAS_NOMINATIM_SEGUIDAS
 
 
@@ -596,9 +598,9 @@ def test_el_listado_filtra_por_fuente_turismo(client, repo, ciudad, datos):
                              "nombre": "De tarjeta", "foto_ref": "privado:x"}
     it.cargar(repo, todas_las_entradas(), ciudad)
     todos = client.get("/admin/importados?limite=500", headers=datos).json()
-    assert todos["total"] == 20
+    assert todos["total"] == 18
     t = client.get("/admin/importados?fuente=turismo&limite=500", headers=datos).json()["items"]
-    assert len(t) == 18 and {i["fuente"] for i in t} == {"turismo"}
+    assert len(t) == 16 and {i["fuente"] for i in t} == {"turismo"}
     assert all(i["tiene_foto"] is False and "foto_ref" not in i for i in t)
     p = next(i for i in t if i["nombre"] == "Hotel Los Parrales")
     assert p["texto_leido"].startswith("Sección: Dónde dormir") and p["lector"] is None
@@ -660,3 +662,31 @@ def test_el_patch_y_ubicar_sirven_para_turismo(client, repo, ciudad, datos, monk
     u = client.post(f"/admin/importados/{iid}/ubicar", json={"direccion": "Calle Bolívar 256"}, headers=datos)
     assert u.status_code == 200 and u.json()["encontrado"] is True
     assert repo.importados[iid]["ubicacion"] == "aproximada" and repo.importados[iid]["lat"] == -22.74
+
+
+# ───────────────────────────── lugares (plazas, museos…) afuera y rubro `turismo`
+
+def _e(seccion: str, *cats: str, telefonos=("70000000",), direccion="Calle 1") -> "it.Entrada":
+    return it.Entrada(nombre="N", direccion=direccion, telefonos=list(telefonos), enlace=None,
+                      subcategoria=cats[0] if cats else None, seccion=seccion, url="https://x/", categorias=tuple(cats))
+
+
+@pytest.mark.parametrize("cat", sorted(it.SUBCATEGORIAS_DE_LUGAR))
+def test_las_subcategorias_de_lugar_no_entran_como_comercio(cat):
+    assert not it.es_util(_e("que-hacer", cat))
+
+
+def test_una_bodega_que_tambien_es_fuera_de_la_ciudad_sigue_entrando():
+    assert it.es_util(_e("que-hacer", "bodegas-y-vinotecas", "fuera-de-la-ciudad"))
+
+
+@pytest.mark.parametrize("seccion,cats", [
+    ("operadoras-de-turismo", ()), ("agencias-de-viajes", ()), ("guias-de-turismo-autorizados", ()),
+    ("que-hacer", ("complejos-turisticos",)), ("que-hacer", ("balneareos-privados",)),
+])
+def test_rubro_turismo_sugerido(seccion, cats):
+    assert it.rubro_sugerido(_e(seccion, *cats)) == it.RUBRO_TURISMO
+
+
+def test_el_rubro_de_la_subcategoria_gana_al_de_turismo():
+    assert it.rubro_sugerido(_e("que-hacer", "bodegas-y-vinotecas", "complejos-turisticos")) == "bebidas"
