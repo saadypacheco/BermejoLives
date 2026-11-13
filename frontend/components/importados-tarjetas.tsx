@@ -25,6 +25,9 @@ import { agregarTiles } from "@/lib/mapa-tiles";
 import { loadLeaflet } from "@/lib/mapa-visual";
 import type { Ciudad, Rubro } from "@/lib/types";
 import {
+  AVISO_PUNTO_ENTRADA, SUBCATEGORIAS_VISITAR, esLugarParaVisitar, pideAvisoPunto, selloParaVisitar, textoVerEnOrigen, urlFuente,
+} from "@/lib/para-visitar";
+import {
   ACCEPT_FOTOS, ENLACE_NEGOCIOS, MAX_ARCHIVOS, chipUbicacion, diffPatch, erroresDeRespuesta, formDeItem, hayCambios,
   mensajeError, puedePromover, resumenCarga, textoUbicar, tienePunto, urlDeOrigen, validarArchivos,
   type ErrorArchivo, type FormTarjeta,
@@ -383,7 +386,9 @@ function MapaPunto({ lat, lng, ciudad, onMover, bloqueado }: {
 
 // ───────────────────────────── Ficha de revisión ─────────────────────────────
 
-const ETIQUETAS: { c: keyof FormTarjeta; t: string; tipo?: string; auto?: string }[] = [
+type Etiqueta = { c: keyof FormTarjeta; t: string; tipo?: string; auto?: string };
+
+const ETIQUETAS: Etiqueta[] = [
   { c: "nombre", t: "Nombre", auto: "off" },
   { c: "direccion", t: "Dirección", auto: "off" },
   { c: "telefono", t: "Teléfono", tipo: "tel" },
@@ -463,7 +468,15 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio }: {
   };
 
   const esTurismo = it.fuente === "turismo";
-  const origen = esTurismo ? urlDeOrigen(it.texto_leido) : null;
+  // Con `fuente_url` (el enlace guardado por el importador) se usa ése; si el servidor es anterior, el del texto leído.
+  const origen = esTurismo ? (urlFuente(it.fuente_url) ?? urlDeOrigen(it.texto_leido)) : null;
+  // Un lugar para visitar (plaza, museo, mirador…) con el rubro puesto en la ficha: si quien revisa lo cambia a otro
+  // rubro, vuelve a ser un negocio y la ficha lo trata como tal.
+  const esLugar = esLugarParaVisitar(it, form.rubro_slug);
+  const subcategoriaVisible = (revisable ? form.subcategoria : it.subcategoria ?? "").trim();
+  const campos: Etiqueta[] = esLugar
+    ? [...ETIQUETAS, { c: "horario", t: "Horario" }]
+    : ETIQUETAS;
   const colorChip = chip.tono === "ok" ? "ok" : chip.tono === "error" ? "error" : "aviso";
 
   return (
@@ -473,7 +486,9 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio }: {
 
         <div style={{ flex: "1 1 280px", minWidth: 0, display: "grid", gap: 8 }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <Insignia icono={esTurismo ? "mapa" : "documentos"} tono="info">{esTurismo ? "Turismo" : "Tarjeta"}</Insignia>
+            {esLugar
+              ? <Insignia icono="para-visitar" tono="info">{selloParaVisitar(subcategoriaVisible)}</Insignia>
+              : <Insignia icono={esTurismo ? "mapa" : "documentos"} tono="info">{esTurismo ? "Turismo" : "Tarjeta"}</Insignia>}
             {it.lector && <span style={{ fontSize: 11.5, color: "var(--txt-3)" }}>leída con {it.lector === "gemini" ? "Gemini" : "Tesseract"}</span>}
             <Insignia icono={chip.icono} tono={colorChip}>{chip.texto}</Insignia>
           </div>
@@ -481,7 +496,7 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio }: {
           {esTurismo && (
             <div style={{ fontSize: 12.5, color: "var(--txt-3)", overflowWrap: "anywhere" }}>
               <Ic n="mapa" s={14} /> De la página de turismo
-              {origen && <>{" · "}<a href={origen} target="_blank" rel="noopener noreferrer" style={{ color: "var(--txt-2)" }}>Ver la página <Ic n="abrir" s={13} /></a></>}
+              {origen && <>{" · "}<a href={origen} target="_blank" rel="noopener noreferrer" style={{ color: "var(--txt-2)" }}>{textoVerEnOrigen(origen)} <Ic n="abrir" s={13} /></a></>}
             </div>
           )}
 
@@ -490,19 +505,35 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio }: {
                    accion={<a href={ENLACE_NEGOCIOS} target="_blank" rel="noopener" className="btn btn-ghost btn-sm" style={{ minHeight: 40 }}>
                      <Ic n="abrir" s={14} /> Ver en Negocios
                    </a>}>
-              <b>Repetido:</b> {esTurismo ? "este negocio parece ser" : "un teléfono de esta tarjeta ya es"} del comercio <code style={{ fontSize: 12 }}>{it.duplicado_de}</code>.
+              <b>Repetido:</b> {esLugar ? "este lugar parece ser" : esTurismo ? "este negocio parece ser" : "un teléfono de esta tarjeta ya es"} del comercio <code style={{ fontSize: 12 }}>{it.duplicado_de}</code>.
             </Aviso>
           )}
 
           {revisable ? (
             <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-              {ETIQUETAS.map(({ c, t, tipo, auto }) => (
+              {campos.map(({ c, t, tipo, auto }) => (
                 <label key={c} style={{ display: "grid", gap: 3, fontSize: 12.5, color: "var(--txt-3)" }}>
-                  {t}
+                  {/* El teléfono de un lugar es el que la Alcaldía publica para LLAMAR (puede ser un celular
+                      personal): no pasa a WhatsApp solo. */}
+                  {esLugar && c === "whatsapp" ? "WhatsApp (sólo si el lugar confirmó que atiende)" : t}
                   <input type={tipo ?? "text"} value={form[c]} autoComplete={auto} disabled={busy}
                          onChange={(e) => setForm((f) => ({ ...f, [c]: e.target.value }))} style={CAMPO} />
                 </label>
               ))}
+              {esLugar && (
+                <label style={{ display: "grid", gap: 3, fontSize: 12.5, color: "var(--txt-3)" }}>
+                  Tipo de lugar
+                  <select value={form.subcategoria} disabled={busy} style={CAMPO}
+                          onChange={(e) => setForm((f) => ({ ...f, subcategoria: e.target.value }))}>
+                    <option value="">(elegí el tipo)</option>
+                    {/* Un valor que ya viene y no está en la lista fija se muestra igual: el servidor lo rechaza al guardar. */}
+                    {form.subcategoria && !(SUBCATEGORIAS_VISITAR as readonly string[]).includes(form.subcategoria) && (
+                      <option value={form.subcategoria}>{form.subcategoria} (no está en la lista)</option>
+                    )}
+                    {SUBCATEGORIAS_VISITAR.map((x) => <option key={x} value={x}>{x}</option>)}
+                  </select>
+                </label>
+              )}
               <label style={{ display: "grid", gap: 3, fontSize: 12.5, color: "var(--txt-3)" }}>
                 Rubro
                 <select value={form.rubro_slug} disabled={busy} style={CAMPO}
@@ -514,7 +545,7 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio }: {
             </div>
           ) : (
             <div style={{ fontSize: 13.5 }}>
-              <b>{it.nombre}</b>{it.direccion && ` · ${it.direccion}`}{it.telefono && ` · ${it.telefono}`}
+              <b>{it.nombre}</b>{esLugar && it.subcategoria && ` · ${it.subcategoria}`}{it.direccion && ` · ${it.direccion}`}{it.telefono && ` · ${it.telefono}`}{esLugar && it.horario && ` · ${it.horario}`}
               {it.motivo && <div style={{ fontSize: 12, color: "var(--txt-3)" }}>{it.motivo}</div>}
             </div>
           )}
@@ -523,6 +554,11 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio }: {
 
       {revisable && (
         <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+          {/* Excursión y Área protegida: el punto que sale de buscar por nombre no sirve (queda lejos o en el medio del
+              área): se pone en la entrada o en el centro de visitantes. */}
+          {esLugar && pideAvisoPunto(form.subcategoria) && (
+            <Aviso tono="aviso"><b>{AVISO_PUNTO_ENTRADA}.</b> El mapa abre centrado en el punto, aunque quede lejos de la ciudad.</Aviso>
+          )}
           <MapaPunto lat={it.lat} lng={it.lng} ciudad={ciudadDeLaFila} onMover={moverPunto} bloqueado={busy || !online} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <button type="button" className="btn btn-ghost btn-sm" style={BTN_GRANDE} disabled={busy || !online} onClick={buscar}>

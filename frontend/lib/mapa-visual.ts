@@ -44,6 +44,8 @@ export const CATEGORY_STYLE: Record<string, { color: string }> = {
   banos: { color: "#0ea5e9" }, estacionamiento: { color: "#0ea5e9" },
   cajeros: { color: "#0ea5e9" }, wifi: { color: "#0ea5e9" },
   emergencias: { color: "#ef4444" }, alquiler: { color: "#8b5cf6" },
+  // Lugares para visitar (rubro no comercial, 0196): familia propia, lima, que ninguna otra usa.
+  "para-visitar": { color: "#65a30d" },
   "servicio-tecnico": { color: "#64748b" },
   taxis: { color: "#eab308" }, "estacion-servicio": { color: "#64748b" },
   "taller-mecanico": { color: "#64748b" }, coca: { color: "#22c55e" },
@@ -84,6 +86,7 @@ export const FAMILIAS: { nombre: string; color: string }[] = [
   { nombre: "Servicios de la ciudad", color: "#0ea5e9" },
   { nombre: "Alquileres", color: "#8b5cf6" },
   { nombre: "Emergencias", color: "#ef4444" },
+  { nombre: "Para visitar", color: "#65a30d" },
   { nombre: "Otros / sin rubro", color: "#FFB020" },
 ];
 export const rubroStyle = (slug: string | null) => (slug && CATEGORY_STYLE[slug]) || DEFAULT_STYLE;

@@ -9,7 +9,7 @@ import type { Ciudad, Rubro } from "@/lib/types";
 import { Ic } from "@/components/ic";
 import { useAdminCiudad } from "@/components/admin-ciudad";
 import { CargarTarjetasModal, FichaTarjeta } from "@/components/importados-tarjetas";
-import { paramFuente, usaFichaEditable, type FuenteFiltro } from "@/lib/tarjetas-pure";
+import { paramFuente, paramRubroImportados, usaFichaEditable, type FuenteFiltro } from "@/lib/tarjetas-pure";
 
 type FilaResumen = { ciudad_id: string | null; estado: string; n: number };
 
@@ -39,6 +39,8 @@ const FUENTES: { key: FuenteFiltro; label: string }[] = [
   { key: "osm", label: "OSM" },
   { key: "tarjeta", label: "Tarjetas" },
   { key: "turismo", label: "Turismo" },
+  // Los lugares (plazas, museos, miradores…): turismo con el rubro `para-visitar` (docs/lugares-turismo.md).
+  { key: "turismo-visitar", label: "Turismo › Para visitar" },
 ];
 
 export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: Ciudad | null }) {
@@ -61,7 +63,7 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
     const mio = ++pedido.current;
     setCargando(true); setErr("");
     try {
-      const r = await listarImportados(estado, q || undefined, ciudadId, paramFuente(fuente));
+      const r = await listarImportados(estado, q || undefined, ciudadId, paramFuente(fuente), paramRubroImportados(fuente));
       if (mio !== pedido.current) return;
       setItems(r.items ?? []);
       setResumen(r.resumen ?? []);
@@ -114,7 +116,8 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
       <div style={{ marginBottom: 14 }}>
         <p style={{ color: "var(--txt-3)", fontSize: 13, lineHeight: 1.5, marginBottom: 10 }}>
           Negocios traídos de <b>OpenStreetMap</b> (licencia ODbL, con atribución), de
-          fotos de <b>tarjetas</b> y de la <b>página de turismo</b> de la Alcaldía.
+          fotos de <b>tarjetas</b> y de la <b>página de turismo</b> de la Alcaldía
+          (negocios y lugares para visitar).
           No están en el mapa: pasan de a uno cuando los promovés. Traen nombre y
           ubicación casi siempre, teléfono a veces, y <b>casi nunca foto</b> — ésa
           la saca alguien parado enfrente.
@@ -179,6 +182,8 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
             ? <>Nada acá. Se llena con «Cargar tarjetas»: subí las fotos de las tarjetas de presentación.</>
             : fuente === "turismo"
             ? <>Nada acá. Se llena corriendo <code>importar_turismo</code> en el servidor (ver <code>docs/importar-turismo.md</code>).</>
+            : fuente === "turismo-visitar"
+            ? <>Nada acá. Se llena corriendo <code>importar_turismo_lugares</code> en el servidor (ver <code>docs/lugares-turismo.md</code>).</>
             : <>Nada acá. Se llena corriendo <code>importar_osm.py</code> con la ciudad, o con «Cargar tarjetas».</>}
         </p>
       )}

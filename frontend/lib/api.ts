@@ -918,18 +918,24 @@ export type ComercioImportado = {
   ubicacion?: "aproximada" | "confirmada" | "no_encontrada" | null;
   texto_leido?: string | null;
   lector?: "tesseract" | "gemini" | null;
+  // Sólo turismo, lugares para visitar (docs/lugares-turismo.md): el tipo de lugar (lista fija) y el enlace a su
+  // página de origen. Opcionales: el servidor que no los manda es uno anterior a la 0196.
+  subcategoria?: string | null;
+  fuente_url?: string | null;
 };
 
 export type PatchImportado = Partial<Record<
-  "nombre" | "direccion" | "telefono" | "whatsapp" | "website" | "email" | "rubro_slug", string>> & { lat?: number; lng?: number };
+  "nombre" | "direccion" | "telefono" | "whatsapp" | "website" | "email" | "rubro_slug" | "subcategoria" | "horario", string>> & { lat?: number; lng?: number };
 
 export async function listarImportados(
-  estado = "nuevo", q?: string, ciudadId?: string, fuente?: string,
+  estado = "nuevo", q?: string, ciudadId?: string, fuente?: string, rubro?: string,
 ): Promise<{ items: ComercioImportado[]; total: number; resumen: { ciudad_id: string | null; estado: string; n: number }[] }> {
   const p = new URLSearchParams({ estado });
   if (q) p.set("q", q);
   if (ciudadId) p.set("ciudad_id", ciudadId);
   if (fuente) p.set("fuente", fuente);
+  // Slug exacto del rubro (`para-visitar`): el filtro «Turismo › Para visitar».
+  if (rubro) p.set("rubro", rubro);
   const res = await authFetch(`/admin/importados?${p}`);
   return res.json();
 }

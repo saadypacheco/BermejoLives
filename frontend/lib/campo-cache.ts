@@ -20,6 +20,7 @@
 import type { ComercioAgente, EstadoPlan } from "@/lib/campo";
 import { calcularFaltas, etiquetasFaltas } from "@/lib/faltas";
 import { olvidarCapaCalles } from "@/lib/calles-cache";
+import { esNoComercial } from "@/lib/para-visitar";
 
 export type ComercioCercano = {
   id: string; nombre: string; lat: number; lng: number;
@@ -29,6 +30,8 @@ export type ComercioCercano = {
    *  antes de esto no los tiene y la lista simplemente no los muestra. */
   plan?: EstadoPlan | null;
   faltan?: string[];
+  /** `false` = lugar público (plaza, museo, baño): sin sello de plan ni «Le falta». Ausente = comercial. */
+  comercial?: boolean;
 };
 
 const CLAVE = "uruku_campo_cercanos_v1";
@@ -44,11 +47,13 @@ export function aCercanos(items: ComercioAgente[]): ComercioCercano[] {
   const r: ComercioCercano[] = [];
   for (const c of items) {
     if (c.lat == null || c.lng == null) continue;
+    // Un lugar público no tiene plan ni «le falta»: se guarda sólo para reconocerlo.
+    const publico = esNoComercial(c);
     r.push({
       id: c.id, nombre: c.nombre ?? "", lat: c.lat, lng: c.lng,
       rubro: c.rubros?.nombre ?? null, thumb: c.portada_thumb_url || c.portada_url || null,
-      plan: c.estado_plan ?? null,
-      faltan: etiquetasFaltas(calcularFaltas(c, c.fotos_count ?? null)),
+      plan: publico ? null : c.estado_plan ?? null,
+      ...(publico ? { comercial: false } : { faltan: etiquetasFaltas(calcularFaltas(c, c.fotos_count ?? null)) }),
     });
   }
   return r;
