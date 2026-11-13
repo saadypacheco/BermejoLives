@@ -551,7 +551,8 @@ def test_el_cli_carga_y_cuenta_con_punto_sin_punto_y_repetidas(repo, capsys):
     code = it.main(["--ciudad", "tarija"], repo=repo, descargar=descargador([]), pedir=mapa, dormir=lambda s: None)
     salida = capsys.readouterr().out
     assert code == 0
-    assert len(consultas) == 12 and all(q.endswith("Tarija") for q in consultas)
+    # 12 direcciones; las que no aparecen limpias se prueban también como vinieron (ubicar_direccion.ubicar)
+    assert 12 <= len(consultas) <= 24 and all(q.endswith("Tarija") for q in consultas)
     con = [f for f in repo.importados.values() if f["lat"] is not None]
     assert [f["nombre"] for f in con] == ["Hotel Los Parrales"] and con[0]["ubicacion"] == "aproximada"
     assert "Nuevas:                 16" in salida and "Con punto en el mapa:   1" in salida

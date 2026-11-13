@@ -470,3 +470,21 @@ def test_el_importador_de_turismo_usa_el_mismo_ubicador(repo):
     assert r.nuevas == 1 and r.con_punto == 1 and r.por_metodo["esquina"] == 1
     fila = next(iter(repo.importados.values()))
     assert fila["ubicacion"] == "aproximada" and ub.distancia_m((fila["lat"], fila["lng"]), esquina_de(0, 0)) < 1
+
+
+def test_si_la_limpia_no_aparece_prueba_el_texto_original():
+    """Una dirección que Nominatim ya encontraba como venía no deja de encontrarse por limpiarla."""
+    from app.services import tarjetas
+    tarjetas.reiniciar_cache()
+    consultas = []
+
+    def mapa(params):
+        consultas.append(params["q"])
+        if "Z/Central" in params["q"]:
+            return [{"lat": "-21.5340", "lon": "-64.7350", "display_name": "x"}]
+        return []
+
+    ciudad = {"id": "c-orig", "nombre": "Tarija", "lat": -21.5355, "lng": -64.7296}
+    punto = ub.ubicar(None, "Z/Central, Calle La Madrid #282", ciudad, tramos=[], pedir=mapa)
+    assert punto and punto["metodo"] == "calle"
+    assert len(consultas) == 2 and "Z/Central" not in consultas[0] and "Z/Central" in consultas[1]

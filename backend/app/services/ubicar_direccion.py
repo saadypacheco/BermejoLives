@@ -482,7 +482,12 @@ def ubicar(repo, direccion: str | None, ciudad: dict | None, *, tramos: "Calles 
 
     if not usar_mapas:
         return None
-    punto = tarjetas.buscar_direccion(consulta_limpia(partes, original), ciudad, pedir=pedir, radio_km=radio_km)
+    limpia = consulta_limpia(partes, original)
+    punto = tarjetas.buscar_direccion(limpia, ciudad, pedir=pedir, radio_km=radio_km)
+    # Si la limpia no aparece, el texto como vino (lo que hacía antes la carga de tarjetas): una dirección que
+    # Nominatim ya encontraba no puede dejar de encontrarse por haberla limpiado.
+    if not punto and limpia.strip().lower() != str(original).strip().lower():
+        punto = tarjetas.buscar_direccion(original, ciudad, pedir=pedir, radio_km=radio_km)
     return {**punto, "metodo": "calle"} if punto else None
 
 
