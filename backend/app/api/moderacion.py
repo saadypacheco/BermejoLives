@@ -1491,12 +1491,13 @@ def listar_importados(
     ciudad_id: str | None = None,
     q: str | None = None,
     limite: int = 200,
-    fuente: Literal["osm", "tarjeta"] | None = None,
+    fuente: Literal["osm", "tarjeta", "turismo"] | None = None,
     _admin: dict = Depends(require_permiso("datos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """El listado de Importados. `fuente` (`osm` | `tarjeta`) filtra por origen; sin él salen todos. Las tarjetas
-    suman `email`, `ubicacion`, `texto_leido`, `lector` y `tiene_foto` (la foto va por `/admin/importados/{id}/foto`)."""
+    """El listado de Importados. `fuente` (`osm` | `tarjeta` | `turismo`) filtra por origen; sin él salen todos. Las
+    tarjetas y las de turismo suman `email`, `ubicacion`, `texto_leido`, `lector` y `tiene_foto` (la foto de una
+    tarjeta va por `/admin/importados/{id}/foto`; las de turismo no tienen foto)."""
     items = repo.list_importados(estado or None, ciudad_id, q, min(limite, 500), fuente)
     nombres = repo.nombres_de_comercios([i["duplicado_de"] for i in items if i.get("duplicado_de")])
     return {"items": [importado_salida(i, nombres) for i in items], "total": len(items),
@@ -1517,8 +1518,9 @@ def promover_importado(
     útil a la ficha— la saca alguien parado enfrente, y ninguna API la da: de
     19.861 negocios medidos, 91 tenían imagen.
 
-    Si viene de una TARJETA (`fuente = 'tarjeta'`) también copia el teléfono, el sitio web, el correo y la
-    dirección que la persona dejó revisados. La foto de la tarjeta NO pasa a la ficha: es privada.
+    Si viene de una TARJETA (`fuente = 'tarjeta'`) o de una página de TURISMO (`fuente = 'turismo'`) también copia
+    el teléfono, el sitio web, el correo y la dirección que la persona dejó revisados. La foto de la tarjeta NO pasa
+    a la ficha: es privada.
     """
     imp = repo.get_importado(importado_id)
     if not imp:
@@ -1535,7 +1537,7 @@ def promover_importado(
     rubro_slug = body.rubro_slug or imp.get("rubro_slug") or "otros"
     from app.core.text import slug_unico, slugify
 
-    es_tarjeta = imp.get("fuente") == "tarjeta"
+    es_tarjeta = imp.get("fuente") in ("tarjeta", "turismo")      # las dos se revisan campo por campo
     if es_tarjeta:
         # El WhatsApp es sólo el celular que la persona dejó como tal: un fijo no abre un chat.
         whatsapp = whatsapp_para_guardar(body.whatsapp or imp.get("whatsapp"))
@@ -1560,7 +1562,7 @@ def promover_importado(
     if es_tarjeta:
         datos["telefono"] = imp.get("telefono")
         datos["email"] = imp.get("email")
-        datos["confiable"] = False                       # una tarjeta nunca publica directo
+        datos["confiable"] = False                       # una tarjeta (o un listado de turismo) nunca publica directo
     comercio = repo.crear_comercio(datos)
     rid = repo.get_rubro_id(rubro_slug)
     if rid:
