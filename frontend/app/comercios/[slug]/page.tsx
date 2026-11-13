@@ -26,6 +26,7 @@ import {
 } from "@/lib/seo";
 import { textosFicha, tituloFicha } from "@/lib/ficha-seo";
 import { textoMasInformacion, urlFuente } from "@/lib/para-visitar";
+import { atiendeSinLocal, destinoComoLlegar, textoDondeAtiende, tienePunto } from "@/lib/ficha-ubicacion-pure";
 import {
   WhatsApp, Pin, Phone, Globe, Instagram, Facebook, TikTok,
 } from "@/components/icons";
@@ -81,8 +82,8 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
   // El enlace a la página de origen de los datos (turismo), si es una URL web de verdad.
   const fuenteHref = urlFuente(comercio.fuente_url);
   const subcategoria = (comercio.subcategoria ?? "").trim();
-  // Un taxi, remis o chofer sin parada fija: no hay "cómo llegar", se lo llama.
-  const sinParada = comercio.rubro_slug === "taxis" && !comercio.direccion && !comercio.lat;
+  // Un taxi, radio móvil o guía de turismo sin local ni punto: no hay "cómo llegar", se lo llama.
+  const sinParada = atiendeSinLocal(comercio, comercio.rubro_slug);
   const responde = (comercio.contacto_ok ?? 0) >= 3 && (comercio.contacto_ok ?? 0) >= 2 * (comercio.contacto_no ?? 0);
   const noResponde = (comercio.contacto_no ?? 0) >= 5 && (comercio.contacto_ok ?? 0) === 0;
   const urlFicha = absoluteUrl(businessPath(comercio.slug));
@@ -170,11 +171,10 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
   ].filter(Boolean) as { n: "pasero" | "envios" | "factura" | "ropa"; texto: string }[];
   const pedidoMinimo = (comercio.pedido_minimo ?? "").trim();
 
-  const mapsHref =
-    urlHttp(comercio.como_llegar) ??
-    (comercio.lat && comercio.lng
-      ? `https://www.google.com/maps/search/?api=1&query=${comercio.lat},${comercio.lng}`
-      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(comercio.direccion ?? ciudadNombre)}`);
+  // `null` = no hay a dónde mandar (sin enlace, sin punto y sin dirección escrita): la ficha no muestra
+  // «Cómo llegar» ni la tarjeta de ubicación. Antes caía en una búsqueda del nombre de la ciudad, y el botón
+  // abría el mapa en el centro como si el local estuviera ahí (comercios cargados «sin ubicación»).
+  const mapsHref = destinoComoLlegar(comercio, ciudadNombre);
 
   // En la ficha de un local cuyo plan trae el chatbot, la ayuda es el
   // asistente de ESE local. En las demás, la de URUKU. Se decide por la
@@ -306,7 +306,7 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
             )}
 
             <div className="uk-ficha-acciones">
-              {!sinParada && (
+              {mapsHref && !sinParada && (
                 <LeadLink className="uk-btn-ghost" href={mapsHref} tipo="mapa" comercioId={comercio.id}>
                   <Pin style={{ width: 16, height: 16 }} /> Cómo llegar
                 </LeadLink>
@@ -446,11 +446,11 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
               <div className="uk-info-card" id="ubicacion">
                 <h3>Dónde atiende</h3>
                 <p style={{ color: "var(--uk-ink-soft)", fontSize: 13, margin: 0 }}>
-                  En toda la ciudad: no tiene parada fija, se pide por WhatsApp{comercio.telefono ? " o por teléfono" : ""}.
+                  {textoDondeAtiende(comercio.rubro_slug, !!comercio.telefono)}
                 </p>
               </div>
             )}
-            {(comercio.direccion || comercio.lat) && (
+            {(comercio.direccion || tienePunto(comercio)) && (
               <div className="uk-info-card" id="ubicacion">
                 <h3>Ubicación</h3>
                 {comercio.direccion && (
@@ -458,9 +458,11 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
                     {comercio.direccion}
                   </p>
                 )}
-                <LeadLink className="uk-btn-wa" href={mapsHref} tipo="mapa" comercioId={comercio.id}>
-                  <Pin style={{ width: 16, height: 16 }} /> Cómo llegar
-                </LeadLink>
+                {mapsHref && (
+                  <LeadLink className="uk-btn-wa" href={mapsHref} tipo="mapa" comercioId={comercio.id}>
+                    <Pin style={{ width: 16, height: 16 }} /> Cómo llegar
+                  </LeadLink>
+                )}
               </div>
             )}
 

@@ -6,6 +6,9 @@ import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { ContactoUruku } from "@/components/contacto-uruku";
 import { AccesosCiudad } from "@/components/accesos-ciudad";
 import { hayParaVisitar } from "@/lib/para-visitar";
+import { VisitaCiudad } from "@/components/visita-ciudad";
+import { cargarVisitaCiudadOpcional, resumenDe } from "@/lib/turismo-ciudad";
+import { accesosVisita, mostrarVisitaCiudad } from "@/lib/turismo-ciudad-pure";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import {
   getCiudades, getCityCategoryPagesCached, getClima, getComerciosNuevos, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado,
@@ -178,6 +181,11 @@ export default async function InicioPage() {
     // Cuántos comercios se sumaron en las últimas 24 h (número real; sin dato, la línea va sin número).
     getComerciosNuevos(),
   ]);
+  // «Visitá {ciudad}»: sólo en una ciudad con lugares para visitar. Lo de la banda (lugares, guías, radio móviles)
+  // sale de una memoria de 10 minutos por ciudad: la home es dinámica y no le pega a la base en cada pedido. Si la
+  // lectura falla, la banda sale igual, sin carrusel y con los accesos que se deducen de los rubros.
+  const conVisita = !!ciudad && mostrarVisitaCiudad(paresCiudad, ciudad.slug);
+  const datosVisita = conVisita && ciudad ? await cargarVisitaCiudadOpcional(ciudad.slug) : null;
   const ciudadesIndexables = [...new Map(paresCiudad.filter((p) => p.indexable).map((p) => [p.city_slug, p])).values()];
   const datosMarca = jsonLdGraph([
     ...conFundador(organizationNodes({
@@ -275,6 +283,12 @@ export default async function InicioPage() {
           )}
         </div>
       </section>
+
+      {/* ===== Visitá {ciudad}: la banda de turismo (sólo si la ciudad tiene lugares para visitar) ===== */}
+      {conVisita && ciudad && (
+        <VisitaCiudad ciudad={{ slug: ciudad.slug, nombre: ciudad.nombre }} lugares={datosVisita?.lugares ?? []}
+                      accesos={accesosVisita(ciudad.slug, paresCiudad, resumenDe(datosVisita))} />
+      )}
 
       {/* ===== Farmacias de turno hoy (sólo si la ciudad tiene turnos cargados) ===== */}
       <TarjetaTurnoHoy turnos={turnosHoy} contenedor />
