@@ -21,6 +21,7 @@ from app.core.telefono import normalizar_whatsapp, validar_whatsapp
 from app.db.content_repository import ContentRepo, get_content_repo
 from app.db.repository import Repo, get_repo
 from app.services import archivos_privados, enlaces, tarjetas
+from app.services.importar_turismo_lugares import SUBCATEGORIAS
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -143,6 +144,8 @@ class ImportadoPatch(BaseModel):
     website: str | None = Field(default=None, max_length=300)
     email: str | None = Field(default=None, max_length=120)
     rubro_slug: str | None = Field(default=None, max_length=80)
+    horario: str | None = Field(default=None, max_length=300)
+    subcategoria: str | None = Field(default=None, max_length=40)
     lat: float | None = None
     lng: float | None = None
 
@@ -194,6 +197,15 @@ def corregir_importado(
         if slug and not repo.get_rubro_id(slug):
             raise HTTPException(status_code=400, detail="Ese rubro no existe")
         patch["rubro_slug"] = slug
+    if "horario" in enviados:
+        patch["horario"] = _texto(body.horario)
+    if "subcategoria" in enviados:
+        # Los lugares para visitar (docs/lugares-turismo.md): el tipo sale de una lista fija. Vacío lo borra.
+        tipo = _texto(body.subcategoria)
+        if tipo and tipo not in SUBCATEGORIAS:
+            raise HTTPException(status_code=400, detail="Ese tipo de lugar no está en la lista: "
+                                                        + ", ".join(SUBCATEGORIAS))
+        patch["subcategoria"] = tipo
     if "lat" in enviados or "lng" in enviados:
         lat = body.lat if "lat" in enviados else imp.get("lat")
         lng = body.lng if "lng" in enviados else imp.get("lng")
@@ -234,7 +246,7 @@ def ubicar_importado(
         raise HTTPException(status_code=400, detail="Escribí la dirección completa")
     ciudad = repo.get_ciudad_por_id(imp.get("ciudad_id")) if imp.get("ciudad_id") else None
     try:
-        punto = tarjetas.buscar_direccion(direccion, ciudad)
+        punto = tarjetas.buscar_direccion(direccion, ciudad)       # caja de 15 km: los lejanos se ponen a mano
     except tarjetas.UbicacionNoDisponible:
         raise HTTPException(status_code=503,
                             detail="El servicio de mapas no contestó, probá de nuevo en unos segundos") from None

@@ -347,7 +347,7 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         self._importados_por_clave[clave] = fila
         return True
 
-    def list_importados(self, estado, ciudad_id, q, limite=200, fuente=None):
+    def list_importados(self, estado, ciudad_id, q, limite=200, fuente=None, rubro=None):
         out = list(self.importados.values())
         if estado:
             out = [i for i in out if i["estado"] == estado]
@@ -355,6 +355,8 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
             out = [i for i in out if i.get("ciudad_id") == ciudad_id]
         if fuente:
             out = [i for i in out if i.get("fuente") == fuente]
+        if rubro:
+            out = [i for i in out if i.get("rubro_slug") == rubro]
         if q:
             out = [i for i in out if q.lower() in (i.get("nombre") or "").lower()]
         return out[:limite]
@@ -2125,8 +2127,12 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
                   for v in conteo.values()]
         return sorted(salida, key=lambda x: -x["veces"])[:limite]
 
+    #: Los rubros no comerciales de la base real (`rubros.comercial = false`): puntos de la ciudad, no negocios.
+    RUBROS_NO_COMERCIALES = frozenset({"banos", "emergencias", "estacionamiento", "cajeros", "wifi", "para-visitar"})
+
     def list_rubros(self):
-        return [{"slug": s, "nombre": s.title()} for s in self.rubros]
+        return [{"slug": s, "nombre": s.title(), "comercial": s not in self.RUBROS_NO_COMERCIALES}
+                for s in self.rubros]
 
     def sugerir_rubros_por_texto(self, texto):
         if not texto or not texto.strip():

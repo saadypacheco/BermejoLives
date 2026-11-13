@@ -441,20 +441,23 @@ def _numero(valor) -> float | None:
     return n if math.isfinite(n) else None
 
 
-def buscar_direccion(direccion: str, ciudad: dict | None, *, pedir: Callable[[dict], list] | None = None) -> dict | None:
+def buscar_direccion(direccion: str, ciudad: dict | None, *, pedir: Callable[[dict], list] | None = None,
+                     radio_km: float = RADIO_CIUDAD_KM) -> dict | None:
     """El punto de una dirección DENTRO de la ciudad, o None si Nominatim no la encuentra.
 
     Devuelve `{lat, lng, display_name}`. Con el centro de la ciudad (`ciudades.lat/lng`) la búsqueda va acotada a
-    una caja de ~15 km (`bounded=1`): una calle con el mismo nombre en otra ciudad no cuenta. Sin centro se agrega
-    el nombre de la ciudad a la consulta. Sólo Bolivia y Argentina. Caché por consulta; un pedido por segundo en todo
-    el proceso. Lanza `UbicacionNoDisponible` si el servicio no contesta (eso no se cachea)."""
+    una caja de ~`radio_km` (por defecto 15 km; `bounded=1`): una calle con el mismo nombre en otra ciudad no
+    cuenta. Los lugares de afuera de la ciudad (docs/lugares-turismo.md) piden una caja más grande. Sin centro se
+    agrega el nombre de la ciudad a la consulta. Sólo Bolivia y Argentina. Caché por consulta Y radio (la misma
+    consulta con otra caja es otra respuesta); un pedido por segundo en todo el proceso. Lanza
+    `UbicacionNoDisponible` si el servicio no contesta (eso no se cachea)."""
     global _ultimo_pedido
     texto = re.sub(r"\s+", " ", str(direccion or "")).strip()[:MAX_DIRECCION]
     if len(texto) < 4:
         return None
     nombre_ciudad = str((ciudad or {}).get("nombre") or "").strip()
     lat_c, lng_c = _numero((ciudad or {}).get("lat")), _numero((ciudad or {}).get("lng"))
-    clave = (texto.lower(), str((ciudad or {}).get("id") or ""))
+    clave = (texto.lower(), str((ciudad or {}).get("id") or ""), float(radio_km))
     ahora = time.monotonic()
     with _candado:
         visto = _cache.get(clave)
@@ -465,7 +468,7 @@ def buscar_direccion(direccion: str, ciudad: dict | None, *, pedir: Callable[[di
                   "countrycodes": PAISES, "addressdetails": 0}
         caja = None
         if lat_c is not None and lng_c is not None:
-            caja = caja_de_la_ciudad(lat_c, lng_c)
+            caja = caja_de_la_ciudad(lat_c, lng_c, float(radio_km))
             params["viewbox"] = ",".join(f"{v:.6f}" for v in caja)
             params["bounded"] = 1
         # El candado se mantiene durante la espera y el pedido: así el intervalo vale para TODOS los hilos.

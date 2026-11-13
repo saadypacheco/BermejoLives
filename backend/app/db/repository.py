@@ -317,7 +317,8 @@ class Repo(Protocol):
     # ---- comercios importados de fuentes externas ----
     def upsert_importado(self, row: dict) -> bool: ...
     def list_importados(self, estado: str | None, ciudad_id: str | None,
-                        q: str | None, limite: int, fuente: str | None = None) -> list[dict]: ...
+                        q: str | None, limite: int, fuente: str | None = None,
+                        rubro: str | None = None) -> list[dict]: ...
     def get_importado(self, importado_id: str) -> dict | None: ...
     def get_importado_por_fuente(self, fuente: str, fuente_id: str) -> dict | None: ...
     def crear_importado(self, row: dict) -> dict | None: ...
@@ -462,7 +463,7 @@ _COLS_COMERCIO_CAMPO = (
     # Para calcular `estado_plan` (docs/que-hay-aca.md). NO salen al agente: los quita
     # `que_hay_aca.enriquecer`, que deja sólo el sello, sin precios ni `paga_hasta`.
     "plan, plan_cortesia, paga_hasta, suspendido, "
-    "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), "
+    "rubros!comercios_rubro_id_fkey(nombre, slug, comercial), ciudades(nombre, slug), "
     "comercio_rubros(rubros(nombre, slug)), "
     "lugares(nombre, tipo, lat, lng, portada_thumb_url)"
 )
@@ -637,7 +638,8 @@ class SupabaseRepo(IntegracionRepoMixin):
         return True
 
     def list_importados(self, estado: str | None, ciudad_id: str | None,
-                        q: str | None, limite: int = 200, fuente: str | None = None) -> list[dict]:
+                        q: str | None, limite: int = 200, fuente: str | None = None,
+                        rubro: str | None = None) -> list[dict]:
         sel = self._db.table("comercios_importados").select("*")
         if estado:
             sel = sel.eq("estado", estado)
@@ -645,6 +647,8 @@ class SupabaseRepo(IntegracionRepoMixin):
             sel = sel.eq("ciudad_id", ciudad_id)
         if fuente:
             sel = sel.eq("fuente", fuente)
+        if rubro:
+            sel = sel.eq("rubro_slug", rubro)          # slug exacto (p. ej. `para-visitar`)
         if q:
             sel = sel.ilike("nombre", f"%{q}%")
         # Las tarjetas se revisan por tanda: lo último que se subió primero. Los de OSM, por nombre.

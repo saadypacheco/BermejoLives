@@ -1492,16 +1492,25 @@ def listar_importados(
     q: str | None = None,
     limite: int = 200,
     fuente: Literal["osm", "tarjeta", "turismo"] | None = None,
+    rubro: str | None = Query(default=None, max_length=80),
     _admin: dict = Depends(require_permiso("datos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """El listado de Importados. `fuente` (`osm` | `tarjeta` | `turismo`) filtra por origen; sin él salen todos. Las
-    tarjetas y las de turismo suman `email`, `ubicacion`, `texto_leido`, `lector` y `tiene_foto` (la foto de una
-    tarjeta va por `/admin/importados/{id}/foto`; las de turismo no tienen foto)."""
-    items = repo.list_importados(estado or None, ciudad_id, q, min(limite, 500), fuente)
+    """El listado de Importados. `fuente` (`osm` | `tarjeta` | `turismo`) filtra por origen; sin él salen todos.
+    `rubro` (slug exacto, p. ej. `para-visitar`) filtra por el rubro sugerido. Las tarjetas y las de turismo suman
+    `email`, `ubicacion`, `texto_leido`, `lector` y `tiene_foto` (la foto de una tarjeta va por
+    `/admin/importados/{id}/foto`; las de turismo no tienen foto). Cada item trae también `subcategoria` y
+    `fuente_url` (los lugares para visitar: docs/lugares-turismo.md)."""
+    items = repo.list_importados(estado or None, ciudad_id, q, min(limite, 500), fuente, (rubro or "").strip() or None)
     nombres = repo.nombres_de_comercios([i["duplicado_de"] for i in items if i.get("duplicado_de")])
     return {"items": [importado_salida(i, nombres) for i in items], "total": len(items),
             "resumen": repo.resumen_importados()}
+
+
+def _rubro_no_comercial(repo: Repo, rubro_slug: str) -> bool:
+    """¿El rubro existe y es NO comercial (`rubros.comercial = false`)? Un rubro que no se encuentra cuenta como
+    comercial: es lo que siempre fue."""
+    return any(r.get("slug") == rubro_slug and r.get("comercial") is False for r in repo.list_rubros())
 
 
 @router.post("/admin/importados/{importado_id}/promover")
@@ -1521,6 +1530,11 @@ def promover_importado(
     Si viene de una TARJETA (`fuente = 'tarjeta'`) o de una página de TURISMO (`fuente = 'turismo'`) también copia
     el teléfono, el sitio web, el correo y la dirección que la persona dejó revisados. La foto de la tarjeta NO pasa
     a la ficha: es privada.
+
+    Si el rubro final es NO COMERCIAL (`rubros.comercial = false`: `para-visitar`, baños, cajeros…, docs/lugares-
+    turismo.md) copia además la subcategoría y el enlace de origen (`fuente_url`); el teléfono va a `telefono` y el
+    `whatsapp` sólo sale del body (un número publicado para llamar no es un chat abierto); y el rubro queda marcado
+    como revisado por una persona, así lo masivo no se lo cambia. Nunca sale confiable.
     """
     imp = repo.get_importado(importado_id)
     if not imp:
@@ -1538,7 +1552,10 @@ def promover_importado(
     from app.core.text import slug_unico, slugify
 
     es_tarjeta = imp.get("fuente") in ("tarjeta", "turismo")      # las dos se revisan campo por campo
-    if es_tarjeta:
+    no_comercial = _rubro_no_comercial(repo, rubro_slug)
+    if no_comercial:
+        whatsapp = whatsapp_para_guardar(body.whatsapp)          # sólo si la persona lo confirmó a mano
+    elif es_tarjeta:
         # El WhatsApp es sólo el celular que la persona dejó como tal: un fijo no abre un chat.
         whatsapp = whatsapp_para_guardar(body.whatsapp or imp.get("whatsapp"))
     else:
@@ -1559,14 +1576,19 @@ def promover_importado(
         # y la diferencia importa para la licencia y para la confianza.
         "cargado_por": f"import:{imp.get('fuente', 'osm')}",
     }
-    if es_tarjeta:
+    if es_tarjeta or no_comercial:
         datos["telefono"] = imp.get("telefono")
         datos["email"] = imp.get("email")
         datos["confiable"] = False                       # una tarjeta (o un listado de turismo) nunca publica directo
+    if no_comercial:
+        datos["subcategoria"] = imp.get("subcategoria")
+        datos["fuente_url"] = imp.get("fuente_url")
     comercio = repo.crear_comercio(datos)
     rid = repo.get_rubro_id(rubro_slug)
     if rid:
         repo.set_comercio_rubros(comercio["id"], [rid])
+    if no_comercial:
+        repo.marcar_rubro_revisado(comercio["id"], admin["email"])   # lo masivo no le cambia el rubro
     calles_mapa.invalidar(imp.get("ciudad_id"))      # el mapa de calles cuenta este comercio
 
     repo.marcar_importado(importado_id, {

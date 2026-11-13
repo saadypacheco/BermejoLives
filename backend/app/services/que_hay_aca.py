@@ -79,6 +79,16 @@ def rubro_de(comercio: dict) -> tuple[str | None, str | None]:
     return None, None
 
 
+def comercial_de(comercio: dict) -> bool:
+    """¿El rubro principal es comercial? Un baño, una plaza o un museo (rubros con `comercial = false`) son puntos
+    de la ciudad, no negocios: no llevan sello de plan, ni «Le falta», ni «Ofrecer». Si el rubro no viene (o no trae
+    la marca) se trata como comercio: es lo que siempre fue."""
+    r = comercio.get("rubros")
+    if isinstance(r, dict) and r.get("comercial") is False:
+        return False
+    return True
+
+
 def _lleno(valor) -> bool:
     return bool(str(valor).strip()) if valor is not None else False
 
@@ -124,7 +134,7 @@ def _plan_pago_de(repo, slugs: Iterable[str | None]) -> dict[str, bool]:
 
 
 def enriquecer(repo, comercios: list[dict]) -> list[dict]:
-    """Copia de cada comercio con `estado_plan`, `fotos_count` y `rubro_slug`, SIN las columnas
+    """Copia de cada comercio con `estado_plan`, `fotos_count`, `rubro_slug` y `comercial`, SIN las columnas
     que usó para calcularlas (`plan`, `plan_cortesia`, `paga_hasta`, `suspendido`).
 
     Rendimiento: es la lista de toda la ciudad. Los planes se leen una vez y las fotos se
@@ -140,6 +150,7 @@ def enriquecer(repo, comercios: list[dict]) -> list[dict]:
         limpio["estado_plan"] = estado_plan(c, pagos.get(c.get("plan") or "gratis", False), hoy)
         limpio["fotos_count"] = int(fotos.get(str(c["id"]), 0))
         limpio["rubro_slug"] = rubro_de(c)[0]
+        limpio["comercial"] = comercial_de(c)
         salida.append(limpio)
     return salida
 
