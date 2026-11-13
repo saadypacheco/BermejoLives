@@ -546,7 +546,7 @@ _VACIAS = frozenset({"de", "la", "el", "los", "las", "y", "e", "del", "en", "a"}
 _GENERICAS = frozenset({
     "hotel", "hostal", "hostel", "residencial", "apart", "alojamiento", "restaurante", "restaurant", "resto", "bar",
     "cafe", "cafeteria", "pizzeria", "tarija", "tours", "tour", "viajes", "agencia", "turismo", "bodega", "bodegas",
-    "complejo", "central", "centro", "plaza", "resort", "boutique",
+    "complejo", "central", "centro", "plaza", "resort", "boutique", "guia",
 })
 
 
@@ -560,8 +560,10 @@ def _palabras(nombre: str | None) -> set[str]:
 
 def mismo_nombre(a: str | None, b: str | None) -> bool:
     """¿Se parece lo bastante como para marcarlo como posible repetido? Mismas palabras distintivas (sin acentos,
-    mayúsculas ni el tipo de local), o las de uno contenidas en las del otro si son al menos dos (o una de seis
-    letras o más). Es una MARCA para el revisor, no una decisión."""
+    mayúsculas ni el tipo de local), o las de uno contenidas en las del otro si son al menos dos. Una sola palabra
+    contenida no alcanza: «Kevin Deheza Martínez · Guía» no es «Agencia Martínez», ni «Leydi Margarita Cardozo» es
+    «Margarita boutique» (pasaba con la regla vieja de «una de seis letras o más»). Es una MARCA para el revisor,
+    no una decisión."""
     pa, pb = _palabras(a), _palabras(b)
     if not pa or not pb:
         return False
@@ -570,7 +572,7 @@ def mismo_nombre(a: str | None, b: str | None) -> bool:
     chica, grande = (pa, pb) if len(pa) <= len(pb) else (pb, pa)
     if not chica <= grande:
         return False
-    return len(chica) >= 2 or len(next(iter(chica))) >= 6
+    return len(chica) >= 2
 
 
 def indice_nombres(repo, ciudad_id: str) -> list[dict]:

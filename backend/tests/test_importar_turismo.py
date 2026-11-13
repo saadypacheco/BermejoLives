@@ -492,6 +492,10 @@ def test_un_nombre_parecido_en_la_misma_ciudad_marca_el_repetido(repo, ciudad):
     ("Café Ñandú", "Cafe Nandu", True), ("Hotel Los Ceibos", "Resort Hotel Los Ceibos", True),
     ("Hotel Central", "Mercado Central", False), ("Hotel Los Parrales", "Hotel Las Panosas", False),
     ("Pizzería Sol", "Sol y Luna", False), ("", "Hotel X", False),
+    # una sola palabra contenida no alcanza (marcas falsas que se vieron en QA el 13/11)
+    ("Kevin Mijael Deheza Martinez · Guía de turismo", "Agencia Martínez", False),
+    ("Leydi Margarita Cardozo · Guía de turismo", "Margarita boutique", False),
+    ("Hotel Mitru", "Mitru Restaurante", True),               # misma palabra distintiva sola en los dos: sí
 ])
 def test_mismo_nombre(a, b, esperado):
     assert it.mismo_nombre(a, b) is esperado
