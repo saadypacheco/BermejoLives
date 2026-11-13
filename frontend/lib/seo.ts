@@ -316,6 +316,24 @@ export function collectionPageNode(o: { name: string; path: string; description?
   };
 }
 
+/** `TouristDestination` de una ciudad (la página /{ciudad}/turismo). Sin números de comercios. `@id` fijo para que
+ *  el `CollectionPage` de la misma página pueda apuntarle con `about`. */
+export function touristDestinationNode(o: {
+  nombre: string; departamento?: string | null; pais?: string | null; path: string; description?: string;
+  lat?: number | null; lng?: number | null;
+}): JsonLdNode {
+  return {
+    "@type": "TouristDestination",
+    "@id": `${absoluteUrl(o.path)}#destino`,
+    name: o.nombre,
+    url: absoluteUrl(o.path),
+    ...(o.description ? { description: o.description } : {}),
+    ...(o.departamento ? { containedInPlace: { "@type": "AdministrativeArea", name: o.departamento, addressCountry: paisIso(o.pais) } } : {}),
+    ...(typeof o.lat === "number" && typeof o.lng === "number"
+      ? { geo: { "@type": "GeoCoordinates", latitude: o.lat, longitude: o.lng } } : {}),
+  };
+}
+
 /** `FAQPage`: debe llevar EXACTAMENTE las preguntas visibles en la página. Textos planos. */
 export function faqPageNode(preguntas: readonly { pregunta: string; respuesta: string }[]): JsonLdNode {
   return {

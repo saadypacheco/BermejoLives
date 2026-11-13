@@ -4,6 +4,7 @@ import { getBusinessesForSitemap, getCiudadesConTurnos, getCityCategoryPagesOrNu
 import { absoluteUrl, businessPath, categoryPath, cityPath } from "@/lib/seo";
 import { LEGAL_PUBLICADO } from "@/lib/legal-pure";
 import { conMemoriaTtl } from "@/lib/memoria-ttl";
+import { mostrarVisitaCiudad } from "@/lib/turismo-ciudad-pure";
 
 /**
  * El mapa del sitio para los buscadores (docs/visibilidad-buscadores-ia.md §3.7).
@@ -99,6 +100,13 @@ async function armarSitemap(): Promise<MetadataRoute.Sitemap> {
       url: absoluteUrl(categoryPath(p.city_slug, p.category_slug)),
       changeFrequency: "weekly", priority: 0.7, lastModified: aFecha(p.last_modified),
     });
+  }
+  // /{ciudad}/turismo («Visitá»): una por ciudad con lugares para visitar. Si el rubro `turismo` de esa ciudad ya
+  // es indexable, la URL es la misma que salió arriba (la página nueva la reemplaza): no se repite.
+  const yaEstan = new Set(out.map((e) => e.url));
+  for (const slug of new Set(pares.map((p) => p.city_slug))) {
+    const url = absoluteUrl(`/${slug}/turismo`);
+    if (mostrarVisitaCiudad(pares, slug) && !yaEstan.has(url)) out.push({ url, changeFrequency: "weekly", priority: 0.8 });
   }
   for (const c of ciudadesTurnos) {
     out.push({ url: absoluteUrl(`/${c.slug}/farmacias-de-turno`), changeFrequency: "daily", priority: 0.8 });

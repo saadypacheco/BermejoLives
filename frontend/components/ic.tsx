@@ -125,6 +125,12 @@ export const ICONOS = {
   "para-visitar": "Binoculars",
   // Guías, agencias, operadoras y complejos turísticos: negocios de turismo (rubro comercial, 0197).
   turismo: "Compass",
+  // «Visitá {ciudad}» (home y /{ciudad}/turismo): un ícono por tipo de lugar y por acceso. Las claves son
+  // lo que significan acá; varias comparten dibujo con otras (excursión = `salir`) a propósito.
+  visita_plaza: "Park", visita_parque: "Tree", visita_mirador: "Binoculars", visita_museo: "Bank",
+  visita_biblioteca: "Books", visita_iglesia: "Church", visita_patrimonio: "Columns",
+  visita_cultural: "MaskHappy", visita_excursion: "Mountains", visita_area: "Leaf",
+  visita_guia: "IdentificationBadge", visita_vino: "Wine",
   // La cruz de la farmacia de turno (pin del mapa, sello de la ficha y tarjetas).
   // Aparte de `farmacia` (la pastilla, el rubro): esto es «está de turno».
   turno_farmacia: "FirstAid",
