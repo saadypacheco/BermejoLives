@@ -20,7 +20,7 @@ from app.core.auth import require_permiso
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp
 from app.db.content_repository import ContentRepo, get_content_repo
 from app.db.repository import Repo, get_repo
-from app.services import archivos_privados, enlaces, tarjetas
+from app.services import archivos_privados, enlaces, tarjetas, ubicar_direccion
 from app.services.importar_turismo_lugares import SUBCATEGORIAS
 
 router = APIRouter()
@@ -234,7 +234,8 @@ def ubicar_importado(
     admin: dict = Depends(_permiso),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """Busca la dirección en OpenStreetMap (Nominatim), dentro de la ciudad del importado.
+    """Ubica la dirección dentro de la ciudad del importado: por esquina o cuadra con las calles cargadas
+    (`metodo` 'esquina' o 'cuadra') o, si no, en OpenStreetMap (Nominatim, `metodo` 'calle').
 
     Si la encuentra, el punto queda guardado como `aproximada` junto con la dirección buscada. Si no, NO cambia
     nada y contesta `encontrado: false`. Si el servicio de mapas no contesta, 503 (se puede reintentar)."""
@@ -246,14 +247,15 @@ def ubicar_importado(
         raise HTTPException(status_code=400, detail="Escribí la dirección completa")
     ciudad = repo.get_ciudad_por_id(imp.get("ciudad_id")) if imp.get("ciudad_id") else None
     try:
-        punto = tarjetas.buscar_direccion(direccion, ciudad)       # caja de 15 km: los lejanos se ponen a mano
+        punto = ubicar_direccion.ubicar(repo, direccion, ciudad)   # esquina/cuadra o Nominatim; caja de 15 km
     except tarjetas.UbicacionNoDisponible:
         raise HTTPException(status_code=503,
                             detail="El servicio de mapas no contestó, probá de nuevo en unos segundos") from None
     if not punto:
-        return {"lat": None, "lng": None, "aproximada": False, "encontrado": False, "display_name": None}
+        return {"lat": None, "lng": None, "aproximada": False, "encontrado": False, "display_name": None,
+                "metodo": None}
     repo.marcar_importado(importado_id, {"lat": punto["lat"], "lng": punto["lng"], "direccion": direccion,
                                          "ubicacion": "aproximada"})
     logger.info("importado.ubicado", importado=importado_id, by=admin.get("email"))
     return {"lat": punto["lat"], "lng": punto["lng"], "aproximada": True, "encontrado": True,
-            "display_name": punto["display_name"]}
+            "display_name": punto["display_name"], "metodo": punto["metodo"]}
