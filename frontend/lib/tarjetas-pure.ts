@@ -167,6 +167,28 @@ export function puedePromover(
   return { ok: true, motivo: "" };
 }
 
+/** Las fuentes que pueden promoverse sin punto (docs/turismo-home-y-repetidos.md §2): guías y radio móviles de la
+ *  página de turismo no tienen dirección; las tarjetas a veces tampoco. Las de OSM siempre traen punto. */
+export function admiteSinUbicacion(i: { fuente: string }): boolean {
+  return i.fuente === "tarjeta" || i.fuente === "turismo";
+}
+
+export const AVISO_SIN_UBICACION = "No va a aparecer en el mapa; sí en su ficha, la búsqueda y las listas";
+
+/** «Promover sin ubicación»: el botón secundario que aparece cuando falta el punto y la fuente lo admite. `visible`
+ *  es si se muestra; `ok` si se puede apretar (hay nombre y nada sin guardar). Con punto no se ofrece: se promueve
+ *  con el punto. */
+export function puedePromoverSinUbicacion(
+  i: { fuente: string; lat: number | null; lng: number | null },
+  form: Pick<FormTarjeta, "nombre">,
+  sinGuardar: boolean,
+): { visible: boolean; ok: boolean; motivo: string } {
+  if (!admiteSinUbicacion(i) || tienePunto(i)) return { visible: false, ok: false, motivo: "" };
+  if (sinGuardar) return { visible: true, ok: false, motivo: "Guardá los cambios antes de promover" };
+  if (!form.nombre.trim()) return { visible: true, ok: false, motivo: "Falta el nombre del negocio" };
+  return { visible: true, ok: true, motivo: "" };
+}
+
 // ── Listado ──────────────────────────────────────────────────────────────────
 
 export type FuenteFiltro = "todas" | "osm" | "tarjeta" | "turismo" | "turismo-visitar";

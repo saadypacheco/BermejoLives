@@ -18,9 +18,13 @@ import { Ic } from "@/components/ic";
 import { nombreCiudad, useAdminCiudad } from "@/components/admin-ciudad";
 import { Aviso, BTN_GRANDE, Insignia, SinConexion, useOnline } from "@/components/content/content-ui";
 import {
-  descartarImportado, editarImportado, getFotoImportado, promoverImportado, subirTarjetas, ubicarImportado,
-  type ComercioImportado,
+  completarImportado, descartarImportado, editarImportado, getFotoImportado, noEsRepetidoImportado, promoverImportado,
+  subirTarjetas, ubicarImportado, type ComercioImportado,
 } from "@/lib/api";
+import { CompararCompletar } from "@/components/importados-comparar";
+import {
+  AVISO_PROMOVER_REPETIDO, mensajeComparador, nombreRepetido, repetidoPendiente, textoCompletado, type BodyCompletar,
+} from "@/lib/completar-pure";
 import { agregarTiles } from "@/lib/mapa-tiles";
 import { loadLeaflet } from "@/lib/mapa-visual";
 import type { Ciudad, Rubro } from "@/lib/types";
@@ -28,8 +32,8 @@ import {
   AVISO_PUNTO_ENTRADA, SUBCATEGORIAS_VISITAR, esLugarParaVisitar, pideAvisoPunto, selloParaVisitar, textoVerEnOrigen, urlFuente,
 } from "@/lib/para-visitar";
 import {
-  ACCEPT_FOTOS, ENLACE_NEGOCIOS, MAX_ARCHIVOS, chipUbicacion, diffPatch, erroresDeRespuesta, formDeItem, hayCambios,
-  mensajeError, puedePromover, resumenCarga, textoUbicar, tienePunto, urlDeOrigen, validarArchivos,
+  ACCEPT_FOTOS, AVISO_SIN_UBICACION, ENLACE_NEGOCIOS, MAX_ARCHIVOS, chipUbicacion, diffPatch, erroresDeRespuesta, formDeItem,
+  hayCambios, mensajeError, puedePromover, puedePromoverSinUbicacion, resumenCarga, textoUbicar, tienePunto, urlDeOrigen, validarArchivos,
   type ErrorArchivo, type FormTarjeta,
 } from "@/lib/tarjetas-pure";
 
@@ -397,8 +401,10 @@ const ETIQUETAS: Etiqueta[] = [
   { c: "email", t: "Email", tipo: "email" },
 ];
 
-export function FichaTarjeta({ item, rubros, ciudad, onCambio }: {
+export function FichaTarjeta({ item, rubros, ciudad, onCambio, onCompletado }: {
   item: ComercioImportado; rubros: Rubro[]; ciudad: Ciudad | null; onCambio: () => void;
+  /** Se completó el comercio existente: el panel muestra el mensaje y vuelve a pedir la lista (la fila se va). */
+  onCompletado?: (mensaje: string) => void;
 }) {
   const { ciudades } = useAdminCiudad();
   const online = useOnline();
@@ -408,6 +414,7 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio }: {
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
   const [texto, setTexto] = useState(false);
+  const [comparando, setComparando] = useState(false);
 
   // Si la lista se vuelve a pedir, la fila nueva manda; lo que se estaba escribiendo se pierde
   // sólo cuando el servidor trae otra versión de la fila.
@@ -423,6 +430,8 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio }: {
   const sinGuardar = hayCambios(parche);
   const chip = chipUbicacion(it.ubicacion);
   const regla = puedePromover(it, form, sinGuardar);
+  const sinPunto = puedePromoverSinUbicacion(it, form, sinGuardar);
+  const repetido = repetidoPendiente(it);
   const ciudadDeLaFila = (it.ciudad_id ? ciudades.find((c) => c.id === it.ciudad_id) : null) ?? ciudad;
 
   function actualizar(nueva: ComercioImportado) {
@@ -455,9 +464,35 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio }: {
     setInfo(textoUbicar(r));
   });
 
-  const promover = () => correr(async () => {
-    await promoverImportado(it.id, { nombre: form.nombre.trim() || undefined, rubro_slug: form.rubro_slug || undefined, whatsapp: form.whatsapp.trim() || undefined });
+  const promover = (sinUbicacion = false) => correr(async () => {
+    await promoverImportado(it.id, {
+      nombre: form.nombre.trim() || undefined, rubro_slug: form.rubro_slug || undefined, whatsapp: form.whatsapp.trim() || undefined,
+      ...(sinUbicacion ? { sin_ubicacion: true } : {}),
+    });
     onCambio();
+  });
+
+  const completar = (body: BodyCompletar, nombreExistente: string) => correr(async () => {
+    try {
+      const r = await completarImportado(it.id, body);
+      const mensaje = textoCompletado(r.comercio?.nombre ?? nombreExistente, r.cambiados);
+      if (onCompletado) onCompletado(mensaje); else onCambio();
+    } catch (e) {
+      setErr(mensajeComparador(e, "No se pudo completar"));
+    }
+  });
+
+  // «No es el mismo»: el servidor devuelve la fila sin `duplicado_de`. Se actualiza sólo ese dato: lo que se estaba
+  // escribiendo en el formulario no se pierde.
+  const noEsElMismo = () => correr(async () => {
+    try {
+      const nueva = await noEsRepetidoImportado(it.id);
+      setIt((a) => ({ ...a, duplicado_de: nueva.duplicado_de ?? null, duplicado_nombre: null }));
+      setComparando(false);
+      setInfo("Listo: queda como un negocio nuevo y se puede promover.");
+    } catch (e) {
+      setErr(mensajeComparador(e, "No se pudo marcar"));
+    }
   });
 
   const descartar = () => {
@@ -500,13 +535,25 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio }: {
             </div>
           )}
 
-          {it.duplicado_de && (
+          {repetido && (
             <Aviso tono="aviso"
-                   accion={<a href={ENLACE_NEGOCIOS} target="_blank" rel="noopener" className="btn btn-ghost btn-sm" style={{ minHeight: 40 }}>
-                     <Ic n="abrir" s={14} /> Ver en Negocios
-                   </a>}>
-              <b>Repetido:</b> {esLugar ? "este lugar parece ser" : esTurismo ? "este negocio parece ser" : "un teléfono de esta tarjeta ya es"} del comercio <code style={{ fontSize: 12 }}>{it.duplicado_de}</code>.
+                   accion={
+                     <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
+                       <button type="button" className="btn btn-primary btn-sm" style={{ minHeight: 40 }} aria-expanded={comparando}
+                               disabled={busy || !online} onClick={() => setComparando((v) => !v)}>
+                         <Ic n="documentos" s={14} /> Comparar y completar
+                       </button>
+                       <a href={ENLACE_NEGOCIOS} target="_blank" rel="noopener" className="btn btn-ghost btn-sm" style={{ minHeight: 40 }}>
+                         <Ic n="abrir" s={14} /> Ver en Negocios
+                       </a>
+                     </span>}>
+              <b>Repetido:</b> {esLugar ? "este lugar parece ser" : esTurismo ? "este negocio parece ser" : "esta tarjeta parece ser"} <b>{nombreRepetido(it)}</b>, que ya está en URUKU.
             </Aviso>
+          )}
+
+          {repetido && comparando && (
+            <CompararCompletar item={it} rubros={rubros} busy={busy} online={online}
+                               onCompletar={completar} onNoEsElMismo={noEsElMismo} onCerrar={() => setComparando(false)} />
           )}
 
           {revisable ? (
@@ -567,10 +614,19 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio }: {
             <button type="button" className="btn btn-ghost btn-sm" style={BTN_GRANDE} disabled={busy || !online || !sinGuardar} onClick={guardar}>
               <Ic n="si" s={15} /> Guardar cambios
             </button>
-            <button type="button" className="btn btn-primary" style={BTN_GRANDE} disabled={busy || !online || !regla.ok}
-                    aria-describedby={regla.ok ? undefined : `why-${it.id}`} onClick={promover}>
-              <Ic n="mapa" s={15} /> Promover
+            {/* Con un repetido sin resolver, «Promover» pasa a secundario: crearía un segundo comercio. */}
+            <button type="button" className={repetido ? "btn btn-ghost btn-sm" : "btn btn-primary"} style={BTN_GRANDE}
+                    disabled={busy || !online || !regla.ok}
+                    aria-describedby={[regla.ok ? "" : `why-${it.id}`, repetido ? `rep-${it.id}` : ""].filter(Boolean).join(" ") || undefined}
+                    onClick={() => promover()}>
+              <Ic n="mapa" s={15} /> {repetido ? "Promover como nuevo" : "Promover"}
             </button>
+            {sinPunto.visible && (
+              <button type="button" className="btn btn-ghost btn-sm" style={BTN_GRANDE} disabled={busy || !online || !sinPunto.ok}
+                      aria-describedby={`sinub-${it.id}`} onClick={() => promover(true)}>
+                <Ic n="ubicacion" s={15} /> Promover sin ubicación
+              </button>
+            )}
             <button type="button" className="link-more" disabled={busy || !online}
                     style={{ color: "var(--pink)", padding: "0 8px", fontSize: 13.5, minHeight: 44 }} onClick={descartar}>
               Descartar
@@ -578,6 +634,16 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio }: {
           </div>
           {!regla.ok && (
             <span id={`why-${it.id}`} style={{ fontSize: 12.5, color: "var(--txt-3)" }}><Ic n="dato" s={14} /> {regla.motivo}</span>
+          )}
+          {sinPunto.visible && (
+            <span id={`sinub-${it.id}`} style={{ fontSize: 12.5, color: "var(--txt-3)" }}>
+              <Ic n="ubicacion" s={14} /> Promover sin ubicación: {AVISO_SIN_UBICACION}.
+            </span>
+          )}
+          {repetido && (
+            <span id={`rep-${it.id}`} role="note" style={{ fontSize: 12.5, color: "var(--amber)" }}>
+              <Ic n="aviso" s={14} /> {AVISO_PROMOVER_REPETIDO}
+            </span>
           )}
           {!online && <span style={{ fontSize: 12.5, color: "var(--txt-3)" }}><Ic n="aviso" s={14} /> Sin conexión: las acciones esperan a que vuelva la señal.</span>}
           {info && <span role="status" style={{ fontSize: 12.5, color: "var(--txt-2)" }}><Ic n="dato" s={14} /> {info}</span>}

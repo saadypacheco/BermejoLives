@@ -8,6 +8,7 @@ import {
 import type { Ciudad, Rubro } from "@/lib/types";
 import { Ic } from "@/components/ic";
 import { useAdminCiudad } from "@/components/admin-ciudad";
+import { Aviso } from "@/components/content/content-ui";
 import { CargarTarjetasModal, FichaTarjeta } from "@/components/importados-tarjetas";
 import { paramFuente, paramRubroImportados, usaFichaEditable, type FuenteFiltro } from "@/lib/tarjetas-pure";
 
@@ -54,6 +55,8 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
   const [ocultarDup, setOcultarDup] = useState(true);
   const [fuente, setFuente] = useState<FuenteFiltro>("todas");
   const [modalTarjetas, setModalTarjetas] = useState(false);
+  // «Se completó Hotel Plaza: dirección, teléfono»: queda a la vista después de que la fila sale de la lista.
+  const [completado, setCompletado] = useState("");
   // Al cambiar de ciudad o de búsqueda salen consultas seguidas; si la vieja
   // llega después de la nueva, pisaría la lista con otra ciudad.
   const pedido = useRef(0);
@@ -172,6 +175,14 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
         )}
       </div>
 
+      {completado && (
+        <div style={{ marginBottom: 10 }}>
+          <Aviso tono="ok" accion={
+            <button type="button" className="btn btn-ghost btn-sm" style={{ minHeight: 40 }} onClick={() => setCompletado("")}>Cerrar</button>}>
+            {completado}
+          </Aviso>
+        </div>
+      )}
       {err && <p style={{ color: "salmon", fontSize: 13 }}>{err}</p>}
       {cargando && <p style={{ color: "var(--txt-3)" }}>Cargando…</p>}
       {/* Sólo sin error: con la carga fallida, «Nada acá» afirma un vacío que
@@ -190,7 +201,8 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
 
       {visibles.map((i) => (
         usaFichaEditable(i)
-          ? <FichaTarjeta key={i.id} item={i} rubros={rubros} ciudad={ciudad} onCambio={cargar} />
+          ? <FichaTarjeta key={i.id} item={i} rubros={rubros} ciudad={ciudad} onCambio={cargar}
+                        onCompletado={(m) => { setCompletado(m); void cargar(); }} />
           : <Fila key={i.id} item={i} rubros={rubros} onCambio={cargar} />
       ))}
 
