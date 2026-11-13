@@ -26,7 +26,7 @@ import { loadLeaflet } from "@/lib/mapa-visual";
 import type { Ciudad, Rubro } from "@/lib/types";
 import {
   ACCEPT_FOTOS, ENLACE_NEGOCIOS, MAX_ARCHIVOS, chipUbicacion, diffPatch, erroresDeRespuesta, formDeItem, hayCambios,
-  mensajeError, puedePromover, resumenCarga, textoUbicar, tienePunto, validarArchivos,
+  mensajeError, puedePromover, resumenCarga, textoUbicar, tienePunto, urlDeOrigen, validarArchivos,
   type ErrorArchivo, type FormTarjeta,
 } from "@/lib/tarjetas-pure";
 
@@ -457,31 +457,40 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio }: {
 
   const descartar = () => {
     // Cancelar el cuadro devuelve null: no se descarta nada.
-    const motivo = window.prompt("¿Por qué se descarta? (repetido, no es un comercio, foto ilegible…)");
+    const motivo = window.prompt("¿Por qué se descarta? (repetido, no es un comercio, datos ilegibles…)");
     if (motivo === null) return;
     void correr(async () => { await descartarImportado(it.id, motivo); onCambio(); });
   };
 
+  const esTurismo = it.fuente === "turismo";
+  const origen = esTurismo ? urlDeOrigen(it.texto_leido) : null;
   const colorChip = chip.tono === "ok" ? "ok" : chip.tono === "error" ? "error" : "aviso";
 
   return (
     <div style={{ padding: "14px 0", borderBottom: "1px solid var(--border)", opacity: busy ? 0.6 : 1 }} aria-busy={busy}>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
-        {it.tiene_foto !== false && <FotoTarjeta id={it.id} />}
+        {it.tiene_foto === true && <FotoTarjeta id={it.id} />}
 
         <div style={{ flex: "1 1 280px", minWidth: 0, display: "grid", gap: 8 }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <Insignia icono="documentos" tono="info">Tarjeta</Insignia>
+            <Insignia icono={esTurismo ? "mapa" : "documentos"} tono="info">{esTurismo ? "Turismo" : "Tarjeta"}</Insignia>
             {it.lector && <span style={{ fontSize: 11.5, color: "var(--txt-3)" }}>leída con {it.lector === "gemini" ? "Gemini" : "Tesseract"}</span>}
             <Insignia icono={chip.icono} tono={colorChip}>{chip.texto}</Insignia>
           </div>
+
+          {esTurismo && (
+            <div style={{ fontSize: 12.5, color: "var(--txt-3)", overflowWrap: "anywhere" }}>
+              <Ic n="mapa" s={14} /> De la página de turismo
+              {origen && <>{" · "}<a href={origen} target="_blank" rel="noopener noreferrer" style={{ color: "var(--txt-2)" }}>Ver la página <Ic n="abrir" s={13} /></a></>}
+            </div>
+          )}
 
           {it.duplicado_de && (
             <Aviso tono="aviso"
                    accion={<a href={ENLACE_NEGOCIOS} target="_blank" rel="noopener" className="btn btn-ghost btn-sm" style={{ minHeight: 40 }}>
                      <Ic n="abrir" s={14} /> Ver en Negocios
                    </a>}>
-              <b>Repetido:</b> un teléfono de esta tarjeta ya es del comercio <code style={{ fontSize: 12 }}>{it.duplicado_de}</code>.
+              <b>Repetido:</b> {esTurismo ? "este negocio parece ser" : "un teléfono de esta tarjeta ya es"} del comercio <code style={{ fontSize: 12 }}>{it.duplicado_de}</code>.
             </Aviso>
           )}
 
