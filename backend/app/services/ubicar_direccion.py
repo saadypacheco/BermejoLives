@@ -116,6 +116,20 @@ def _es_parte(a: tuple[str, ...], b: tuple[str, ...]) -> bool:
     return larga[:len(corta)] == corta or larga[-len(corta):] == corta
 
 
+def _con_iniciales(a: tuple[str, ...], b: tuple[str, ...]) -> bool:
+    """«Fray M. Mingo» = «Fray Manuel Mingo»: mismas palabras, salvo que alguna es la inicial de la otra (al menos
+    una palabra entera de 4 letras o más en común, para que «J. P.» no sea cualquier cosa)."""
+    if a == b or len(a) != len(b):
+        return False
+    enteras = 0
+    for x, y in zip(a, b):
+        if x == y:
+            enteras += len(x) >= 4
+        elif not ((len(x) == 1 and y.startswith(x)) or (len(y) == 1 and x.startswith(y))):
+            return False
+    return enteras >= 1
+
+
 def _distancia_edicion_a_lo_sumo_1(a: str, b: str) -> bool:
     """¿Se pasa de a a b con a lo sumo una inserción, borrado o cambio de letra?"""
     if a == b:
@@ -440,7 +454,7 @@ class Calles:
         # Nivel 3: el nombre a medias («Saracho» = «Juan Misael Saracho», «Víctor Paz» = «Víctor Paz Estenssoro»,
         # «Fray Manuel Mingo» = «Manuel Mingo»): uno es el principio o el final del otro, con 4 letras o más en
         # la parte corta y una sola calle candidata.
-        candidatas = [k for k in self._por_clave if _es_parte(q0, k)]
+        candidatas = [k for k in self._por_clave if _es_parte(q0, k) or _con_iniciales(q0, k)]
         if len(candidatas) == 1:
             return candidatas[0], self._por_clave[candidatas[0]]
         return None

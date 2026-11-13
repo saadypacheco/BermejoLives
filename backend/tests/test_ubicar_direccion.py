@@ -543,7 +543,14 @@ def test_nombre_a_medias_encuentra_la_calle_si_hay_una_sola():
     assert calles.buscar("saracho")[1]["nombre"] == "Calle Juan Misael Saracho"
     assert calles.buscar("victor paz")[1]["nombre"] == "Avenida Víctor Paz Estenssoro"
     assert calles.buscar("fray manuel mingo")[1]["nombre"] == "Calle Manuel Mingo"
+    assert calles.buscar("juan m saracho")[1]["nombre"] == "Calle Juan Misael Saracho"     # inicial
     assert calles.buscar("lema") is None                      # Virginio Lema y Julio Lema: empate, no se elige
     assert calles.buscar("15") is None                        # un número no es parte de «15 de Abril»
     assert calles.buscar("general") is None                   # un título solo no es una calle
     assert calles.buscar("paz") is None                       # menos de 4 letras
+
+
+def test_inicial_abreviada_en_el_mapa():
+    calles = ub.Calles(grilla(eo=["Calle Fray M. Mingo", "Calle Sucre", "Calle Bolívar", "Calle Méndez"]))
+    assert calles.buscar("fray manuel mingo")[1]["nombre"] == "Calle Fray M. Mingo"
+    assert calles.buscar("fray pedro mingo") is None
