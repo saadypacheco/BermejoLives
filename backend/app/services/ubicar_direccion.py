@@ -102,6 +102,20 @@ def clave_sin_titulos(nombre: str | None) -> tuple[str, ...]:
     return tuple(t for t in clave_exacta(nombre) if t not in _TITULOS)
 
 
+def _es_parte(a: tuple[str, ...], b: tuple[str, ...]) -> bool:
+    """¿La clave más corta es el principio o el final (por palabras enteras) de la otra? La parte corta necesita
+    4 letras o más y ningún número («15» no es «15 de Abril»); los títulos no cuentan como parte («General»)."""
+    if a == b or not a or not b:
+        return False
+    corta, larga = (a, b) if len(a) < len(b) else (b, a)
+    if len(corta) == len(larga):
+        return False
+    letras = "".join(corta)
+    if len(letras) < 4 or any(ch.isdigit() for ch in letras) or all(t in _TITULOS for t in corta):
+        return False
+    return larga[:len(corta)] == corta or larga[-len(corta):] == corta
+
+
 def _distancia_edicion_a_lo_sumo_1(a: str, b: str) -> bool:
     """¿Se pasa de a a b con a lo sumo una inserción, borrado o cambio de letra?"""
     if a == b:
@@ -146,7 +160,8 @@ _RE_PEGADO = re.compile(r"([a-záéíóúüñ])(?=(?:Av\.|Av\s|Avenida\b|Calle\b
 _RE_NUMERO = re.compile(r"(?:#|\bN[º°o]\.?|\bNro\.?)\s*(\d{1,6})", re.IGNORECASE)
 #: Referencias que no son la dirección: «pasando la Av. Fuerza…», «Frente al Avión».
 _RE_REFERENCIA = re.compile(r"\b(?:pasando|frente|enfrente|diagonal|cerca|al\s+lado|junto|detr[aá]s|contiguo|"
-                            r"pr[oó]ximo|saliendo|a\s+(?:una|dos|media|\d+)\s+cuadras?|a\s+media\s+cuadra)\b.*$",
+                            r"pr[oó]ximo|saliendo|a\s+(?:una|dos|media|\d+)\s+cuadras?|a\s+media\s+cuadra|"
+                            r"edif|edificio|piso|galer[ií]a|oficina|local|bloque|dpto|departamento|paralela)\b.*$",
                             re.IGNORECASE)
 _RE_CLAVE = re.compile(r"\b(entre|esquina|esq|casi)\b\.?", re.IGNORECASE)
 _RE_ELIPSIS = re.compile(r"…|\.{3,}")
@@ -154,17 +169,17 @@ _RE_ELIPSIS = re.compile(r"…|\.{3,}")
 #: Lo demás («, Mercado Central», «, Piso 2», «, Edificio X») es referencia y se corta ahí.
 _RE_SIGUE = re.compile(r"^\s*(?:(?:entre|esquina|esq|casi)\b|y\s|#|(?:n[º°o]|nro)\.?\s*\d|\d{1,5}\s*$)",
                        re.IGNORECASE)
-#: «Final Bolívar», «Final Av. X»: el final de la calle, no parte del nombre.
-_RE_FINAL = re.compile(r"^\s*final\s+", re.IGNORECASE)
-#: «Av. Belgrano y Federico Ávila»: la «y» entre dos calles es una esquina.
-_RE_Y = re.compile(r"\s+y\s+", re.IGNORECASE)
+#: «Final Bolívar», «Final Av. X», «Bolívar final»: el final de la calle, no parte del nombre.
+_RE_FINAL = re.compile(r"^\s*final\s+|\s+final\s*$", re.IGNORECASE)
+#: «Av. Belgrano y Federico Ávila», «Bolívar e Ingavi»: la «y» (o «e») entre dos calles es una esquina.
+_RE_Y = re.compile(r"\s+[ye]\s+", re.IGNORECASE)
 
 
 def _nombre_de(texto: str | None) -> tuple[str | None, str | None]:
     """`(nombre normalizado, tipo)` de un pedazo como «C/Avaroa» o «Av. Los Ceibos». Un nombre con menos de 3
     letras (y sin números) es basura de un texto cortado y se descarta."""
     t = (texto or "").strip(" ,.;:-")
-    t = re.sub(r"\s+y\s*$", "", t, flags=re.IGNORECASE).strip(" ,.;:-")
+    t = re.sub(r"\s+[ye]\s*$", "", t, flags=re.IGNORECASE).strip(" ,.;:-")
     t = _RE_FINAL.sub("", t)
     tipo = None
     m = _RE_TIPO_INICIO.match(t)
@@ -266,7 +281,7 @@ def partir_direccion(texto: str | None) -> Partes:
         siguiente = _RE_CLAVE.search(resto)                # «esq. X entre …»: sólo vale lo primero
         if siguiente:
             resto = resto[:siguiente.start()]
-        piezas = re.split(r"\s+y\s+", resto.strip(), maxsplit=1) if modo == "entre" else [resto]
+        piezas = _RE_Y.split(resto.strip(), maxsplit=1) if modo == "entre" else [resto]
         if truncada and piezas and piezas[-1].strip():     # la última palabra quedó cortada: no se confía
             piezas[-1] = " ".join(piezas[-1].split()[:-1])
         nombres = [n for n in (_nombre_de(p)[0] for p in piezas) if n]
@@ -420,6 +435,14 @@ class Calles:
                          and _distancia_edicion_a_lo_sumo_1(unida, " ".join(k))]
             if len(parecidas) == 1:
                 return parecidas[0], self._por_clave[parecidas[0]]
+            if parecidas:
+                return None
+        # Nivel 3: el nombre a medias («Saracho» = «Juan Misael Saracho», «Víctor Paz» = «Víctor Paz Estenssoro»,
+        # «Fray Manuel Mingo» = «Manuel Mingo»): uno es el principio o el final del otro, con 4 letras o más en
+        # la parte corta y una sola calle candidata.
+        candidatas = [k for k in self._por_clave if _es_parte(q0, k)]
+        if len(candidatas) == 1:
+            return candidatas[0], self._por_clave[candidatas[0]]
         return None
 
 

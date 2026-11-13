@@ -523,3 +523,27 @@ def test_comando_solo_esquinas_no_llama_a_nominatim_y_lista_las_calles_que_falta
     texto = "\n".join(salida)
     assert "Por esquina:     1" in texto and "Sin encontrar:   2" in texto
     assert "no están en el mapa" in texto and "  1  inventada" in texto
+
+
+@pytest.mark.parametrize("texto, calle, esquina", [
+    ("C/ Bolivar e Ingavi", "bolivar", "ingavi"),
+    ("Calle La Madrid e Ingavi #120", "la madrid", "ingavi"),
+    ("Calle Bolivar final esq. Ingavi", "bolivar", "ingavi"),
+    ("Calle Domingo Paz Edif. Veramendi Primer Piso esq. Sucre", "domingo paz", None),
+])
+def test_e_como_esquina_final_al_final_y_edificio_como_referencia(texto, calle, esquina):
+    p = partir_direccion(texto)
+    assert (p.calle, p.esquina) == (calle, esquina), texto
+
+
+def test_nombre_a_medias_encuentra_la_calle_si_hay_una_sola():
+    calles = ub.Calles(grilla(eo=["Calle Juan Misael Saracho", "Avenida Víctor Paz Estenssoro", "Calle Manuel Mingo",
+                                  "Calle Virginio Lema"],
+                              ns=["Calle Julio Lema", "Calle 15 de Abril", "Calle General Trigo", "Calle Sucre"]))
+    assert calles.buscar("saracho")[1]["nombre"] == "Calle Juan Misael Saracho"
+    assert calles.buscar("victor paz")[1]["nombre"] == "Avenida Víctor Paz Estenssoro"
+    assert calles.buscar("fray manuel mingo")[1]["nombre"] == "Calle Manuel Mingo"
+    assert calles.buscar("lema") is None                      # Virginio Lema y Julio Lema: empate, no se elige
+    assert calles.buscar("15") is None                        # un número no es parte de «15 de Abril»
+    assert calles.buscar("general") is None                   # un título solo no es una calle
+    assert calles.buscar("paz") is None                       # menos de 4 letras
