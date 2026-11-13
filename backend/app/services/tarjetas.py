@@ -11,7 +11,8 @@ Pasos de UNA foto (`procesar`):
 3. leer el texto: Tesseract (gratis, por defecto) o Gemini (sólo con el interruptor `gemini_tarjetas` prendido
    Y con GEMINI_API_KEY; ante una falla de Gemini se sigue con Tesseract);
 4. sacar los campos con reglas simples. NUNCA se inventa nada: lo que no se encuentra queda en null;
-5. buscar la ubicación con Nominatim, acotada a la ciudad elegida (sólo si hay dirección);
+5. ubicar la dirección (esquina o cuadra con las calles de la ciudad y, si no, Nominatim acotado a la ciudad
+   elegida; `services/ubicar_direccion.py`), sólo si hay dirección;
 6. marcar el repetido si algún teléfono ya es de un comercio activo;
 7. guardar la foto en el disco PRIVADO (`privado:`) y la fila.
 
@@ -556,7 +557,8 @@ def procesar(repo, crepo, data: bytes, ciudad: dict, indice: dict[str, dict], *,
     punto = None
     if campos.direccion:
         try:
-            punto = buscar_direccion(campos.direccion, ciudad, pedir=pedir)
+            from app.services import ubicar_direccion        # acá adentro: ubicar_direccion importa este módulo
+            punto = ubicar_direccion.ubicar(repo, campos.direccion, ciudad, pedir=pedir)
         except UbicacionNoDisponible:
             punto = None                                  # queda «no_encontrada»: la persona lo reintenta
     repetido = buscar_repetido(repo, campos.telefonos, indice)

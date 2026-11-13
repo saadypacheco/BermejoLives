@@ -709,7 +709,7 @@ def test_ubicar_encuentra_y_guarda_el_punto_aproximado(client, repo, datos, monk
     r = client.post(f"/admin/importados/{iid}/ubicar", headers=datos, json={"direccion": "Sucre 100"})
     assert r.status_code == 200, r.text
     assert r.json() == {"lat": -22.739, "lng": -64.341, "aproximada": True, "encontrado": True,
-                        "display_name": "Calle Sucre 100, Bermejo, Bolivia"}
+                        "display_name": "Calle Sucre 100, Bermejo, Bolivia", "metodo": "calle"}
     f = repo.importados[iid]
     assert f["lat"] == -22.739 and f["ubicacion"] == "aproximada" and f["direccion"] == "Sucre 100"
 

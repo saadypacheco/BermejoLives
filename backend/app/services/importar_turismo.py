@@ -46,7 +46,7 @@ import structlog
 
 from app.core.telefonos_foto import Telefono, extraer
 from app.core.text import slugify
-from app.services import enlaces, tarjetas
+from app.services import enlaces, tarjetas, ubicar_direccion
 
 logger = structlog.get_logger()
 
@@ -597,6 +597,7 @@ class Resumen:
     ya_existentes: int = 0
     con_punto: int = 0
     sin_punto: int = 0
+    por_metodo: Counter = field(default_factory=Counter)         # esquina · cuadra · calle
     repetidas: int = 0
     por_seccion: Counter = field(default_factory=Counter)        # entradas leídas por sección
     utiles_por_seccion: Counter = field(default_factory=Counter)
@@ -629,6 +630,7 @@ def cargar(repo, entradas: list[Entrada], ciudad: dict, *, dry_run: bool = False
     comercios = indice_nombres(repo, ciudad["id"])
     rubros: dict[str, bool] = {}
     ubicar = not dry_run
+    calles = None                              # las cuadras de la ciudad se leen UNA vez (sólo si hace falta)
     fallas = 0
     for e in utiles:
         fid = fuente_id_de(e)
@@ -645,7 +647,9 @@ def cargar(repo, entradas: list[Entrada], ciudad: dict, *, dry_run: bool = False
         punto = None
         if ubicar and e.direccion:
             try:
-                punto = tarjetas.buscar_direccion(e.direccion, ciudad, pedir=pedir)
+                if calles is None:
+                    calles = ubicar_direccion.cargar_calles(repo, ciudad)
+                punto = ubicar_direccion.ubicar(repo, e.direccion, ciudad, tramos=calles, pedir=pedir)
                 fallas = 0
             except tarjetas.UbicacionNoDisponible:
                 fallas += 1
@@ -664,6 +668,8 @@ def cargar(repo, entradas: list[Entrada], ciudad: dict, *, dry_run: bool = False
         r.nuevas += 1
         r.con_punto += 1 if punto else 0
         r.sin_punto += 0 if punto else 1
+        if punto:
+            r.por_metodo[punto["metodo"]] += 1
         r.repetidas += 1 if repetido else 0
         logger.info("importar_turismo.cargada", seccion=e.seccion, subcategoria=e.subcategoria,
                     con_punto=bool(punto), repetida=bool(repetido), sucursal=e.sucursal)
@@ -729,6 +735,7 @@ def _imprimir_resumen(r: Resumen, dry_run: bool) -> None:
     print(f"Nuevas:                 {r.nuevas}")
     print(f"Ya existentes:          {r.ya_existentes}")
     print(f"Con punto en el mapa:   {r.con_punto}")
+    print(f"  por esquina / cuadra / calle: {r.por_metodo['esquina']} / {r.por_metodo['cuadra']} / {r.por_metodo['calle']}")
     print(f"Sin punto:              {r.sin_punto}")
     print(f"Marcadas como repetidas: {r.repetidas}")
 
