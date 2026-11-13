@@ -9,7 +9,7 @@ import type { Ciudad, Rubro } from "@/lib/types";
 import { Ic } from "@/components/ic";
 import { useAdminCiudad } from "@/components/admin-ciudad";
 import { CargarTarjetasModal, FichaTarjeta } from "@/components/importados-tarjetas";
-import { esTarjeta, paramFuente, type FuenteFiltro } from "@/lib/tarjetas-pure";
+import { paramFuente, usaFichaEditable, type FuenteFiltro } from "@/lib/tarjetas-pure";
 
 type FilaResumen = { ciudad_id: string | null; estado: string; n: number };
 
@@ -38,6 +38,7 @@ const FUENTES: { key: FuenteFiltro; label: string }[] = [
   { key: "todas", label: "Todas" },
   { key: "osm", label: "OSM" },
   { key: "tarjeta", label: "Tarjetas" },
+  { key: "turismo", label: "Turismo" },
 ];
 
 export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: Ciudad | null }) {
@@ -103,8 +104,8 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
   // Los que ya están cargados en URUKU (mismo nombre a menos de 120 m) se
   // esconden por defecto: si no, el que revisa mira doscientas fichas que ya
   // tiene y abandona antes de llegar a las que sirven.
-  // Las tarjetas no se esconden: su «repetido» se ve en la ficha y es justamente lo que hay que mirar.
-  const ocultables = (i: ComercioImportado) => !!i.duplicado_de && !esTarjeta(i);
+  // Tarjetas y turismo no se esconden: su «repetido» se ve en la ficha y es justamente lo que hay que mirar.
+  const ocultables = (i: ComercioImportado) => !!i.duplicado_de && !usaFichaEditable(i);
   const visibles = ocultarDup ? items.filter((i) => !ocultables(i)) : items;
   const nDup = items.filter(ocultables).length;
 
@@ -112,7 +113,8 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
     <div>
       <div style={{ marginBottom: 14 }}>
         <p style={{ color: "var(--txt-3)", fontSize: 13, lineHeight: 1.5, marginBottom: 10 }}>
-          Negocios traídos de <b>OpenStreetMap</b> (licencia ODbL, con atribución).
+          Negocios traídos de <b>OpenStreetMap</b> (licencia ODbL, con atribución), de
+          fotos de <b>tarjetas</b> y de la <b>página de turismo</b> de la Alcaldía.
           No están en el mapa: pasan de a uno cuando los promovés. Traen nombre y
           ubicación casi siempre, teléfono a veces, y <b>casi nunca foto</b> — ésa
           la saca alguien parado enfrente.
@@ -175,12 +177,14 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
         <p style={{ color: "var(--txt-3)", fontSize: 13.5 }}>
           {fuente === "tarjeta"
             ? <>Nada acá. Se llena con «Cargar tarjetas»: subí las fotos de las tarjetas de presentación.</>
+            : fuente === "turismo"
+            ? <>Nada acá. Se llena corriendo <code>importar_turismo</code> en el servidor (ver <code>docs/importar-turismo.md</code>).</>
             : <>Nada acá. Se llena corriendo <code>importar_osm.py</code> con la ciudad, o con «Cargar tarjetas».</>}
         </p>
       )}
 
       {visibles.map((i) => (
-        esTarjeta(i)
+        usaFichaEditable(i)
           ? <FichaTarjeta key={i.id} item={i} rubros={rubros} ciudad={ciudad} onCambio={cargar} />
           : <Fila key={i.id} item={i} rubros={rubros} onCambio={cargar} />
       ))}

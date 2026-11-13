@@ -903,7 +903,7 @@ export async function soltarGrupo(comercioId: string, grupoJid: string) {
 // Comercios traídos de fuentes externas (OpenStreetMap). NO son comercios de
 // URUKU: son una lista de qué existe y dónde, que pasa al mapa de a uno.
 export type ComercioImportado = {
-  id: string; fuente: string; fuente_id: string; nombre: string | null;
+  id: string; fuente: "osm" | "tarjeta" | "turismo" | (string & {}); fuente_id: string; nombre: string | null;
   categoria: string | null; rubro_slug: string | null;
   lat: number | null; lng: number | null;
   telefono: string | null; whatsapp: string | null; website: string | null;
@@ -911,7 +911,8 @@ export type ComercioImportado = {
   estado: "nuevo" | "promovido" | "descartado";
   duplicado_de: string | null; comercio_id: string | null; motivo: string | null;
   ciudad_id?: string | null;
-  // Sólo las filas de tarjeta (docs/carga-tarjetas.md): el resto no los trae.
+  // Sólo las filas de tarjeta y turismo (docs/carga-tarjetas.md, docs/importar-turismo.md): el resto no los trae.
+  // Turismo viene con `tiene_foto: false` y `lector: null`.
   email?: string | null;
   tiene_foto?: boolean;
   ubicacion?: "aproximada" | "confirmada" | "no_encontrada" | null;

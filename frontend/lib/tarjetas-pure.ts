@@ -165,7 +165,7 @@ export function puedePromover(
 
 // ── Listado ──────────────────────────────────────────────────────────────────
 
-export type FuenteFiltro = "todas" | "osm" | "tarjeta";
+export type FuenteFiltro = "todas" | "osm" | "tarjeta" | "turismo";
 
 /** El valor del query param `fuente`; con «todas» no se manda. */
 export function paramFuente(f: FuenteFiltro): string | undefined {
@@ -175,6 +175,27 @@ export function paramFuente(f: FuenteFiltro): string | undefined {
 /** Sólo `fuente === "tarjeta"` tiene la ficha de revisión de tarjetas. */
 export function esTarjeta(i: { fuente: string }): boolean {
   return i.fuente === "tarjeta";
+}
+
+/** Tienen la ficha editable (campos, mapa, promover): las tarjetas y lo traído de la página de turismo
+ *  (docs/importar-turismo.md). La de turismo es la misma ficha pero sin foto. */
+export function usaFichaEditable(i: { fuente: string }): boolean {
+  return i.fuente === "tarjeta" || i.fuente === "turismo";
+}
+
+/** La primera `http(s)://...` del texto leído: en turismo es la página de origen. null si no hay.
+ *  Se le sacan los signos que suelen pegarse al final de una URL en un texto corrido. */
+export function urlDeOrigen(texto: string | null | undefined): string | null {
+  if (!texto) return null;
+  const m = /https?:\/\/[^\s<>"']+/i.exec(texto);
+  if (!m) return null;
+  const url = m[0].replace(/[.,;:!?)\]]+$/, "");
+  try {
+    const u = new URL(url);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Enlace al panel de negocios para ver el comercio con el que se repite. */
