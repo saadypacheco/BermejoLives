@@ -45,11 +45,13 @@ def test_las_palabras_son_solo_las_inequivocas():
                   r"on conflict \(rubro_slug, patron\) do nothing;", sql, re.S)
     assert m, "no inserta las palabras (con la constraint única de la 0045)"
     patron = m.group(1)
-    for palabra in ("museo", "mirador", "centro cultural", "area protegida", "reserva biologica", "parque nacional"):
+    for palabra in ("area protegida", "reserva biologica", "parque nacional"):
         assert palabra in patron
     # «plaza», «parque» e «iglesia» a secas clasificarían mal a «Comercial Plaza» o «Parque Industrial»
     alternativas = set(re.search(r"\\m\((.*)\)", patron).group(1).split("|"))
     assert not alternativas & {"plaza", "parque", "iglesia"}
+    # «museo», «mirador», «centro cultural»: nombres de hoteles y restaurantes («Hotel El Mirador»)
+    assert not alternativas & {"museo", "mirador", "centro cultural"}
     assert patron == patron.lower()                      # las palabras van en minúsculas y sin acentos
     assert not re.search(r"[áéíóúñ]", patron)
 

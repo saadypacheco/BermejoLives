@@ -22,8 +22,10 @@ values ('para-visitar', 'Para visitar', null, 62, false)
 on conflict (slug) do update set nombre = excluded.nombre, comercial = false, activo = true;
 
 -- ───────────────────────────────────────────── 2. palabras (sin acentos, minúsculas)
+-- «museo», «mirador» y «centro cultural» NO van: hay hoteles, restaurantes y peñas que se llaman así
+-- («Hotel El Mirador») y la clasificación masiva los pasaría a para-visitar. El nombre igual se encuentra por texto.
 insert into public.rubro_palabras (rubro_slug, patron) values
-  ('para-visitar', '\m(museo|mirador|centro cultural|area protegida|reserva biologica|parque nacional|lugares turisticos|que visitar)')
+  ('para-visitar', '\m(area protegida|reserva biologica|parque nacional|lugares turisticos|que visitar)')
 on conflict (rubro_slug, patron) do nothing;
 
 -- ───────────────────────────────────────────── 3. el enlace de origen, público por columna
