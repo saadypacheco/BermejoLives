@@ -554,3 +554,51 @@ def test_inicial_abreviada_en_el_mapa():
     calles = ub.Calles(grilla(eo=["Calle Fray M. Mingo", "Calle Sucre", "Calle Bolívar", "Calle Méndez"]))
     assert calles.buscar("fray manuel mingo")[1]["nombre"] == "Calle Fray M. Mingo"
     assert calles.buscar("fray pedro mingo") is None
+
+
+def test_nominatim_que_devuelve_la_ciudad_o_el_barrio_no_cuenta():
+    def ciudad(params):
+        return [{"lat": str(LAT0), "lon": str(LNG0), "display_name": "Tarija, Cercado", "place_rank": 16}]
+    assert ub.ubicar(None, "Calle Inexistente 123", CIUDAD, tramos=[], pedir=ciudad) is None
+
+    def barrio(params):
+        return [{"lat": str(LAT0), "lon": str(LNG0), "display_name": "Zona Central", "place_rank": 20}]
+    assert ub.ubicar(None, "Calle Inexistente 124", CIUDAD, tramos=[], pedir=barrio) is None
+
+    def calle(params):
+        return [{"lat": str(LAT0), "lon": str(LNG0), "display_name": "Calle Sucre", "place_rank": 26}]
+    assert ub.ubicar(None, "Calle Sucre 125", CIUDAD, tramos=[], pedir=calle)["metodo"] == "calle"
+
+
+def test_buscar_direccion_sin_rango_minimo_acepta_la_ciudad():
+    # Los lugares de afuera (un pueblo, rango 16-19) siguen usando buscar_direccion sin piso
+    def pueblo(params):
+        return [{"lat": str(LAT0), "lon": str(LNG0), "display_name": "San Lorenzo", "place_rank": 16}]
+    assert tarjetas.buscar_direccion("San Lorenzo", CIUDAD, pedir=pueblo) is not None
+
+
+def test_rehacer_recalcula_los_aproximados_y_saca_los_que_ya_no_se_sostienen(repo):
+    _cargar_grilla(repo)
+    bien = _importado(repo, 1, "Calle La Madrid #282 esq. Sucre", lat=-21.5, lng=-64.7, ubicacion="aproximada")
+    malo = _importado(repo, 2, "Calle Inexistente 99", lat=-21.5, lng=-64.7, ubicacion="aproximada")
+    mano = _importado(repo, 3, "Calle Inexistente 98", lat=-21.4, lng=-64.6, ubicacion="confirmada")
+
+    def centro(params):
+        return [{"lat": str(LAT0), "lon": str(LNG0), "display_name": "Tarija", "place_rank": 16}]
+
+    salida = []
+    assert ub.main(["--ciudad", "tarija", "--rehacer"], repo, pedir=centro, mostrar=salida.append) == 0
+    assert ub.distancia_m((repo.importados[bien]["lat"], repo.importados[bien]["lng"]), esquina_de(0, 0)) < 1
+    assert repo.importados[malo]["lat"] is None and repo.importados[malo]["ubicacion"] == "no_encontrada"
+    assert repo.importados[mano]["lat"] == -21.4                                  # lo confirmado no se toca
+    assert "Punto sacado:    1" in "\n".join(salida)
+
+
+def test_rehacer_no_saca_el_punto_si_nominatim_no_contesta(repo):
+    malo = _importado(repo, 2, "Calle Inexistente 99", lat=-21.5, lng=-64.7, ubicacion="aproximada")
+
+    def caido(params):
+        raise RuntimeError("timeout")
+
+    assert ub.main(["--ciudad", "tarija", "--rehacer"], repo, pedir=caido, mostrar=lambda s: None) == 0
+    assert repo.importados[malo]["lat"] == -21.5

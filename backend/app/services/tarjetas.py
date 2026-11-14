@@ -443,7 +443,7 @@ def _numero(valor) -> float | None:
 
 
 def buscar_direccion(direccion: str, ciudad: dict | None, *, pedir: Callable[[dict], list] | None = None,
-                     radio_km: float = RADIO_CIUDAD_KM) -> dict | None:
+                     radio_km: float = RADIO_CIUDAD_KM, rango_minimo: int | None = None) -> dict | None:
     """El punto de una dirección DENTRO de la ciudad, o None si Nominatim no la encuentra.
 
     Devuelve `{lat, lng, display_name}`. Con el centro de la ciudad (`ciudades.lat/lng`) la búsqueda va acotada a
@@ -451,14 +451,18 @@ def buscar_direccion(direccion: str, ciudad: dict | None, *, pedir: Callable[[di
     cuenta. Los lugares de afuera de la ciudad (docs/lugares-turismo.md) piden una caja más grande. Sin centro se
     agrega el nombre de la ciudad a la consulta. Sólo Bolivia y Argentina. Caché por consulta Y radio (la misma
     consulta con otra caja es otra respuesta); un pedido por segundo en todo el proceso. Lanza
-    `UbicacionNoDisponible` si el servicio no contesta (eso no se cachea)."""
+    `UbicacionNoDisponible` si el servicio no contesta (eso no se cachea).
+
+    `rango_minimo` (el `place_rank` de Nominatim: 16 ciudad, 18-22 barrio, 26-27 calle, 30 edificio): un
+    resultado más grueso que eso no cuenta. Cuando Nominatim no encuentra la calle devuelve la ciudad o el barrio,
+    y para un local eso no es una ubicación (13/11: 16 negocios de Tarija cayeron todos en el centro)."""
     global _ultimo_pedido
     texto = re.sub(r"\s+", " ", str(direccion or "")).strip()[:MAX_DIRECCION]
     if len(texto) < 4:
         return None
     nombre_ciudad = str((ciudad or {}).get("nombre") or "").strip()
     lat_c, lng_c = _numero((ciudad or {}).get("lat")), _numero((ciudad or {}).get("lng"))
-    clave = (texto.lower(), str((ciudad or {}).get("id") or ""), float(radio_km))
+    clave = (texto.lower(), str((ciudad or {}).get("id") or ""), float(radio_km), rango_minimo)
     ahora = time.monotonic()
     with _candado:
         visto = _cache.get(clave)
@@ -489,6 +493,9 @@ def buscar_direccion(direccion: str, ciudad: dict | None, *, pedir: Callable[[di
                 continue
             if caja and not (caja[0] <= lng <= caja[2] and caja[3] <= lat <= caja[1]):
                 continue                                    # no se confía: tiene que caer dentro de la ciudad
+            rango = _numero((fila or {}).get("place_rank"))
+            if rango_minimo is not None and rango is not None and rango < rango_minimo:
+                continue                                    # la ciudad o el barrio entero: no es una dirección
             resultado = {"lat": round(lat, 6), "lng": round(lng, 6),
                          "display_name": str((fila or {}).get("display_name") or "")[:300]}
         _cache[clave] = (time.monotonic(), resultado)

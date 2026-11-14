@@ -83,6 +83,7 @@ Sin servicios nuevos: la geometría ya está en la base.
 docker exec buscadonde-backend python -m app.services.ubicar_direccion --ciudad tarija --dry-run --solo-esquinas   # segundos: sin Nominatim, lista las calles que no reconoce
 docker exec buscadonde-backend python -m app.services.ubicar_direccion --ciudad tarija --dry-run
 docker exec buscadonde-backend python -m app.services.ubicar_direccion --ciudad tarija
+docker exec buscadonde-backend python -m app.services.ubicar_direccion --ciudad tarija --rehacer   # recalcula los aproximados (nunca los confirmados) y saca los que caían en el centro
 ```
 
 Recorre `comercios_importados` con `estado = 'nuevo'`, `fuente in ('turismo','tarjeta')`, sin `lat` y con

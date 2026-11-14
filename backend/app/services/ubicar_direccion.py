@@ -27,6 +27,9 @@ COMANDO (se corre a mano dentro del contenedor del backend)
 Vuelve a ubicar los importados `estado='nuevo'` de fuente turismo/tarjeta que quedaron sin punto y tienen
 dirección. Sin `--dry-run` guarda `lat`/`lng` con `ubicacion='aproximada'`. Si Nominatim falla 5 veces seguidas
 deja de pedirle, pero sigue con las esquinas.
+
+Con `--rehacer` también vuelve a calcular los puntos `aproximada` (nunca los `confirmada`): si la dirección ya no
+se encuentra (p. ej. Nominatim había devuelto el centro de la ciudad), le saca el punto.
 """
 from __future__ import annotations
 
@@ -52,6 +55,8 @@ AGRUPAR_M = 2 * ESQUINA_TOL_M   # los puntos de una esquina (avenidas de doble m
 CUADRA_MAX_M = 600.0            # «entre A y B»: las dos esquinas no pueden estar más lejos que esto
 FALLAS_NOMINATIM_SEGUIDAS = 5
 TOPE_LISTADO = 1000             # PostgREST corta en 1000 sin avisar
+#: El `place_rank` mínimo de Nominatim para un local: 26 = calle. La ciudad (16) o el barrio (18-22) no sirven.
+RANGO_MINIMO_DIRECCION = 26
 
 
 # ═══════════════════════════════════════════════════════════ normalizar nombres de calle
@@ -537,11 +542,13 @@ def ubicar(repo, direccion: str | None, ciudad: dict | None, *, tramos: "Calles 
     if not usar_mapas:
         return None
     limpia = consulta_limpia(partes, original)
-    punto = tarjetas.buscar_direccion(limpia, ciudad, pedir=pedir, radio_km=radio_km)
+    punto = tarjetas.buscar_direccion(limpia, ciudad, pedir=pedir, radio_km=radio_km,
+                                      rango_minimo=RANGO_MINIMO_DIRECCION)
     # Si la limpia no aparece, el texto como vino (lo que hacía antes la carga de tarjetas): una dirección que
     # Nominatim ya encontraba no puede dejar de encontrarse por haberla limpiado.
     if not punto and limpia.strip().lower() != str(original).strip().lower():
-        punto = tarjetas.buscar_direccion(original, ciudad, pedir=pedir, radio_km=radio_km)
+        punto = tarjetas.buscar_direccion(original, ciudad, pedir=pedir, radio_km=radio_km,
+                                          rango_minimo=RANGO_MINIMO_DIRECCION)
     return {**punto, "metodo": "calle"} if punto else None
 
 
@@ -568,6 +575,9 @@ def main(argv: list[str] | None = None, repo=None, *, pedir: Callable[[dict], li
     ap.add_argument("--ciudad", required=True, help="slug de la ciudad (p. ej. tarija)")
     ap.add_argument("--dry-run", action="store_true", help="muestra lo que ubicaría, sin guardar nada")
     ap.add_argument("--limite", type=int, default=None, help="probar sólo con los primeros N")
+    ap.add_argument("--rehacer", action="store_true",
+                    help="vuelve a calcular también los puntos aproximados (nunca los confirmados a mano); "
+                         "si ya no se encuentra, le saca el punto")
     ap.add_argument("--solo-esquinas", action="store_true",
                     help="no consulta Nominatim: sólo esquina y cuadra (tarda segundos; para revisar las calles)")
     args = ap.parse_args(argv)
@@ -587,12 +597,14 @@ def main(argv: list[str] | None = None, repo=None, *, pedir: Callable[[dict], li
         filas = repo.list_importados("nuevo", ciudad["id"], None, limite=TOPE_LISTADO, fuente=fuente)
         if len(filas) >= TOPE_LISTADO:
             mostrar(f"Aviso: hay {TOPE_LISTADO} o más de fuente «{fuente}»; volver a correr para seguir con el resto.")
-        candidatos += [f for f in filas if f.get("lat") is None and len(str(f.get("direccion") or "").strip()) >= 4]
+        candidatos += [f for f in filas if len(str(f.get("direccion") or "").strip()) >= 4
+                       and (f.get("lat") is None or (args.rehacer and f.get("ubicacion") == "aproximada"))]
     if args.limite is not None:
         candidatos = candidatos[: args.limite]
 
     calles = cargar_calles(repo, ciudad)
-    mostrar(f"Ciudad: {ciudad['nombre']} · {len(candidatos)} importados sin punto con dirección · "
+    mostrar(f"Ciudad: {ciudad['nombre']} · {len(candidatos)} importados "
+            f"{'sin punto o aproximados' if args.rehacer else 'sin punto'} con dirección · "
             f"{len(calles)} calles cargadas{' · SIMULACIÓN' if args.dry_run else ''}")
     if not calles:
         mostrar("Esta ciudad no tiene calles cargadas (se importan desde el panel, «Calles y horarios»): "
@@ -614,16 +626,22 @@ def main(argv: list[str] | None = None, repo=None, *, pedir: Callable[[dict], li
     cuenta: Counter = Counter()
     sin_punto: list[dict] = []
     for f in candidatos:
+        no_contesto = False
         try:
             punto = ubicar(repo, f["direccion"], ciudad, tramos=calles, pedir=contado, usar_mapas=usar_mapas)
         except tarjetas.UbicacionNoDisponible:
             punto = None
+            no_contesto = True
             if usar_mapas and fallas >= FALLAS_NOMINATIM_SEGUIDAS:
                 usar_mapas = False
                 mostrar(f"Nominatim falló {fallas} veces seguidas: se deja de pedirle, se sigue sólo con las esquinas.")
         if not punto:
             cuenta["sin_punto"] += 1
             sin_punto.append(f)
+            if f.get("lat") is not None and usar_mapas and not no_contesto:   # --rehacer: el punto viejo era malo
+                cuenta["sacados"] += 1
+                if not args.dry_run:
+                    repo.marcar_importado(f["id"], {"lat": None, "lng": None, "ubicacion": "no_encontrada"})
             continue
         cuenta[punto["metodo"]] += 1
         mostrar(f"  [{punto['metodo']:7}] {str(f.get('nombre') or '-')[:34]:34} | {str(f['direccion'])[:60]}")
@@ -637,6 +655,8 @@ def main(argv: list[str] | None = None, repo=None, *, pedir: Callable[[dict], li
     mostrar(f"Por cuadra:      {cuenta['cuadra']}")
     mostrar(f"Por calle:       {cuenta['calle']}")
     mostrar(f"Sin encontrar:   {cuenta['sin_punto']}")
+    if args.rehacer:
+        mostrar(f"Punto sacado:    {cuenta['sacados']}  (tenían uno aproximado que ya no se sostiene)")
     for f in sin_punto:
         mostrar(f"  - {str(f.get('nombre') or '-')[:34]:34} | {str(f['direccion'])[:70]}")
     no_reconocidas = calles_no_reconocidas(calles, [f["direccion"] for f in sin_punto]) if calles else Counter()
