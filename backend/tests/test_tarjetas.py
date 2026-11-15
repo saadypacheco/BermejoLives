@@ -304,7 +304,7 @@ def test_una_direccion_que_nominatim_encuentra_queda_aproximada_dentro_de_la_ciu
     lector(monkeypatch, [TEXTO_COMPLETO])
     item = subir(client, datos, [("a.jpg", imagen())]).json()["items"][0]
     assert item["ubicacion"] == "aproximada" and item["lat"] == -22.74 and item["lng"] == -64.34
-    p = llamadas[0]
+    p = llamadas[-1]                            # la primera es por el nombre del negocio; ésta, la dirección
     assert p["countrycodes"] == "bo,ar" and p["bounded"] == 1 and p["limit"] == 1 and p["format"] == "jsonv2"
     assert "Bermejo" in p["q"] and "Costanera" in p["q"]
     oeste, norte, este, sur = (float(v) for v in p["viewbox"].split(","))

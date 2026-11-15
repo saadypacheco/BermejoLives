@@ -565,7 +565,7 @@ def procesar(repo, crepo, data: bytes, ciudad: dict, indice: dict[str, dict], *,
     if campos.direccion:
         try:
             from app.services import ubicar_direccion        # acá adentro: ubicar_direccion importa este módulo
-            punto = ubicar_direccion.ubicar(repo, campos.direccion, ciudad, pedir=pedir)
+            punto = ubicar_direccion.ubicar(repo, campos.direccion, ciudad, pedir=pedir, nombre=campos.nombre)
         except UbicacionNoDisponible:
             punto = None                                  # queda «no_encontrada»: la persona lo reintenta
     repetido = buscar_repetido(repo, campos.telefonos, indice)

@@ -63,6 +63,11 @@ En la carga real de Tarija, Nominatim ubicó 25 de 343: las direcciones vienen c
 «Z/», «B/», «esq.» ni «entre»; y aun limpiando, Tarija no tiene numeración en OpenStreetMap (cae en la calle, no en
 el número). La forma boliviana de dar una dirección es la esquina o la cuadra, así que se ubica así:
 
+0. **Por el nombre del negocio** en OpenStreetMap (mismo Nominatim, gratis): «AREA17, Tarija». Sólo cuenta un
+   objeto puntual (`place_rank` 30) dentro de la ciudad cuyo nombre coincide sin las palabras genéricas («Hotel Los
+   Ceibos» = «Los Ceibos», ≠ «Farmacia Los Ceibos»). Punto exacto si alguien ya marcó el local en OSM. **Nunca
+   Google**: el mapa de las fichas de tarijaturismo es una búsqueda de Google por nombre (no trae coordenadas) y sus
+   condiciones prohíben sacar puntos de sus mapas, también de la imagen.
 1. **Partir la dirección** (`partir_direccion`): calle principal, número, `esquina` («esq.», «esquina», «casi»),
    `entre A y B`; se descartan zona y barrio («Z/…», «B/…», «Barrio …», «Zona …»), «C/», «Calle», «Av.»,
    «Nº», «#». Nombres normalizados (minúsculas, sin tildes, «Gral.» = «General», «O'Connor» / «O´connor» /
@@ -71,7 +76,10 @@ el número). La forma boliviana de dar una dirección es la esquina o la cuadra,
    geometría): «A esq. B» → el punto donde se tocan una cuadra de A y una de B; «A entre B y C» → el punto medio
    entre la esquina A–B y la esquina A–C (si las dos existen y están a menos de 600 m). Nombres comparados con
    tolerancia (una tilde o una abreviatura no impiden el match), sin adivinar: si hay dudas, no hay punto.
-3. **Si no**, Nominatim con la dirección limpia («Calle La Madrid 282»): punto aproximado sobre la calle.
+   Una esquina también es un punto del trazado que las dos calles comparten en el medio de un tramo largo (las
+   calles importadas sin cortar por esquina).
+3. **Si no**, Nominatim con la dirección limpia («Calle La Madrid 282»): punto aproximado sobre la calle. Se
+   descarta lo que no sea una calle o algo más fino (`place_rank` < 26: la ciudad o el barrio entero).
 4. **Si no**, sin punto (se marca a mano).
 
 Todo punto sigue entrando como **aproximado** (`ubicacion = 'aproximada'`) hasta que una persona lo confirma.

@@ -247,7 +247,7 @@ def ubicar_importado(
         raise HTTPException(status_code=400, detail="Escribí la dirección completa")
     ciudad = repo.get_ciudad_por_id(imp.get("ciudad_id")) if imp.get("ciudad_id") else None
     try:
-        punto = ubicar_direccion.ubicar(repo, direccion, ciudad)   # esquina/cuadra o Nominatim; caja de 15 km
+        punto = ubicar_direccion.ubicar(repo, direccion, ciudad, nombre=imp.get("nombre"))  # nombre, esquina, calle
     except tarjetas.UbicacionNoDisponible:
         raise HTTPException(status_code=503,
                             detail="El servicio de mapas no contestó, probá de nuevo en unos segundos") from None

@@ -649,7 +649,7 @@ def cargar(repo, entradas: list[Entrada], ciudad: dict, *, dry_run: bool = False
             try:
                 if calles is None:
                     calles = ubicar_direccion.cargar_calles(repo, ciudad)
-                punto = ubicar_direccion.ubicar(repo, e.direccion, ciudad, tramos=calles, pedir=pedir)
+                punto = ubicar_direccion.ubicar(repo, e.direccion, ciudad, tramos=calles, pedir=pedir, nombre=e.nombre)
                 fallas = 0
             except tarjetas.UbicacionNoDisponible:
                 fallas += 1

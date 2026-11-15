@@ -49,7 +49,7 @@ from app.services.calles_mapa import proyector
 
 logger = structlog.get_logger()
 
-METODOS = ("esquina", "cuadra", "calle")
+METODOS = ("nombre", "esquina", "cuadra", "calle")
 ESQUINA_TOL_M = 20.0            # dos extremos de cuadras a esta distancia o menos son la misma esquina
 VERTICE_TOL_M = 3.0             # un punto del trazado compartido por las dos calles (el nodo del cruce en OSM)
 AGRUPAR_M = 2 * ESQUINA_TOL_M   # los puntos de una esquina (avenidas de doble mano) se juntan a esta distancia
@@ -58,6 +58,13 @@ FALLAS_NOMINATIM_SEGUIDAS = 5
 TOPE_LISTADO = 1000             # PostgREST corta en 1000 sin avisar
 #: El `place_rank` mínimo de Nominatim para un local: 26 = calle. La ciudad (16) o el barrio (18-22) no sirven.
 RANGO_MINIMO_DIRECCION = 26
+#: Buscar el negocio por su NOMBRE en OpenStreetMap: sólo un objeto puntual (30 = edificio, local, comercio).
+RANGO_MINIMO_NOMBRE = 30
+#: Palabras que dicen QUÉ es, no CUÁL es: no cuentan al comparar nombres («Hotel Los Ceibos» = «Los Ceibos»).
+_GENERICOS = {"hotel", "hostal", "hostel", "residencial", "alojamiento", "apart", "aparthotel", "suites", "inn",
+              "restaurante", "restaurant", "resto", "cafe", "cafeteria", "bar", "pub", "pizzeria", "heladeria",
+              "salteneria", "pension", "complejo", "deportivo", "gimnasio", "gym", "fitness", "club", "tours",
+              "tour", "agencia", "viajes", "operadora", "turismo", "travel", "bodega", "boutique", "y"}
 
 
 # ═══════════════════════════════════════════════════════════ normalizar nombres de calle
@@ -543,6 +550,39 @@ def _por_geometria(calles: Calles, partes: Partes) -> tuple[str, tuple[float, fl
 _PALABRA_TIPO = {"calle": "Calle", "avenida": "Avenida", "pasaje": "Pasaje"}
 
 
+def _clave_nombre(texto: str | None) -> tuple[str, ...]:
+    return tuple(t.replace("'", "") for t in normalizar(texto).split() if t not in _RELLENO and t not in _GENERICOS)
+
+
+def nombre_coincide(nombre: str | None, display_name: str | None) -> bool:
+    """¿El objeto de OpenStreetMap («Area 17, Carretera a San Jacinto, Tarija…») es el negocio «AREA17»?
+
+    Se compara el nombre del objeto (lo de antes de la primera coma) sin las palabras genéricas («hotel»,
+    «restaurante»…): las palabras que quedan tienen que ser LAS MISMAS (o lo mismo pegado: «area17» = «area 17»).
+    «Hotel Los Ceibos» = «Los Ceibos Hotel», pero ≠ «Farmacia Los Ceibos». Hace falta algo distintivo: 4 letras o
+    más una vez sacadas las genéricas («Hotel» solo no coincide con nada)."""
+    a = _clave_nombre(nombre)
+    b = _clave_nombre(str(display_name or "").split(",")[0])
+    if not a or not b or len("".join(a)) < 4:
+        return False
+    return set(a) == set(b) or "".join(a) == "".join(b)
+
+
+def por_nombre(nombre: str | None, ciudad: dict | None, *, pedir: Callable[[dict], list] | None = None,
+               radio_km: float = tarjetas.RADIO_CIUDAD_KM) -> dict | None:
+    """El punto del negocio buscándolo por su NOMBRE en OpenStreetMap (gratis, mismo Nominatim): un local, hotel o
+    gimnasio que alguien ya marcó en el mapa tiene su punto exacto. Sólo objetos puntuales (`place_rank` 30) dentro
+    de la ciudad cuyo nombre coincide (`nombre_coincide`). No se usa Google: sus condiciones no permiten sacar
+    puntos de sus mapas, ni siquiera de la imagen."""
+    texto = " ".join(str(nombre or "").split())
+    if len(texto) < 4 or not _clave_nombre(texto):
+        return None
+    punto = tarjetas.buscar_direccion(texto, ciudad, pedir=pedir, radio_km=radio_km, rango_minimo=RANGO_MINIMO_NOMBRE)
+    if punto and nombre_coincide(texto, punto.get("display_name")):
+        return {**punto, "metodo": "nombre"}
+    return None
+
+
 def consulta_limpia(partes: Partes, original: str) -> str:
     """La dirección para Nominatim: «Calle la madrid 282». Si no se entendió la calle, el texto original."""
     if not partes.calle:
@@ -552,15 +592,27 @@ def consulta_limpia(partes: Partes, original: str) -> str:
 
 def ubicar(repo, direccion: str | None, ciudad: dict | None, *, tramos: "Calles | list[dict] | None" = None,
            pedir: Callable[[dict], list] | None = None, radio_km: float = tarjetas.RADIO_CIUDAD_KM,
-           usar_mapas: bool = True) -> dict | None:
+           usar_mapas: bool = True, nombre: str | None = None) -> dict | None:
     """El punto de una dirección dentro de la ciudad: `{lat, lng, display_name, metodo}` o None.
 
     `metodo` es 'esquina', 'cuadra' (con las calles de la ciudad) o 'calle' (Nominatim sobre la dirección
     limpia). `tramos` es la lista de `calles_tramos` o un `Calles` ya armado (la corrida masiva lo lee una sola
     vez); sin él se lee de `repo`, y sólo si la dirección trae esquina o «entre». Con `usar_mapas=False` no se
     consulta Nominatim. Lanza `tarjetas.UbicacionNoDisponible` si hace falta Nominatim y no contesta."""
+    mapas_caidos = False
+    if nombre and usar_mapas:                            # 0. el negocio ya marcado en OpenStreetMap: punto exacto
+        try:
+            hallado = por_nombre(nombre, ciudad, pedir=pedir, radio_km=radio_km)
+        except tarjetas.UbicacionNoDisponible:
+            # La esquina no necesita a Nominatim: se sigue, pero sin volver a pedirle (una falla por dirección,
+            # para que la corrida masiva corte a las 5 seguidas) y avisando al final si no hubo punto.
+            hallado, usar_mapas, mapas_caidos = None, False, True
+        if hallado:
+            return hallado
     original = re.sub(r"\s+", " ", str(direccion or "")).strip()[:tarjetas.MAX_DIRECCION]
     if len(original) < 4:
+        if mapas_caidos:
+            raise tarjetas.UbicacionNoDisponible("El servicio de mapas no contestó")
         return None
     partes = partir_direccion(original)
 
@@ -574,6 +626,8 @@ def ubicar(repo, direccion: str | None, ciudad: dict | None, *, tramos: "Calles 
             return {"lat": round(lat, 6), "lng": round(lng, 6), "metodo": metodo,
                     "display_name": (f"{descripcion}, {ciudad_nombre}" if ciudad_nombre else descripcion)[:300]}
 
+    if mapas_caidos:
+        raise tarjetas.UbicacionNoDisponible("El servicio de mapas no contestó")
     if not usar_mapas:
         return None
     limpia = consulta_limpia(partes, original)
@@ -663,7 +717,8 @@ def main(argv: list[str] | None = None, repo=None, *, pedir: Callable[[dict], li
     for f in candidatos:
         no_contesto = False
         try:
-            punto = ubicar(repo, f["direccion"], ciudad, tramos=calles, pedir=contado, usar_mapas=usar_mapas)
+            punto = ubicar(repo, f["direccion"], ciudad, tramos=calles, pedir=contado, usar_mapas=usar_mapas,
+                           nombre=f.get("nombre"))
         except tarjetas.UbicacionNoDisponible:
             punto = None
             no_contesto = True
@@ -686,6 +741,7 @@ def main(argv: list[str] | None = None, repo=None, *, pedir: Callable[[dict], li
                     guardado=not args.dry_run)
 
     mostrar(f"\nRevisados:       {len(candidatos)}")
+    mostrar(f"Por nombre:      {cuenta['nombre']}  (el negocio ya está marcado en OpenStreetMap)")
     mostrar(f"Por esquina:     {cuenta['esquina']}")
     mostrar(f"Por cuadra:      {cuenta['cuadra']}")
     mostrar(f"Por calle:       {cuenta['calle']}")

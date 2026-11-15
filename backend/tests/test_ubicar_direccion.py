@@ -393,7 +393,7 @@ def test_comando_en_dry_run_cuenta_y_no_guarda_nada(repo):
     assert "Por esquina:     1" in texto and "Por cuadra:      1" in texto
     assert "Por calle:       1" in texto and "Sin encontrar:   1" in texto
     assert "Negocio 4" in texto.split("Sin encontrar:")[1]                       # lista los que no encontró
-    assert pedidos == ["Z/Central, Tarija", "Calle Bolívar 100, Tarija"]         # sólo lo que las calles no resolvieron
+    assert [q for q in pedidos if not q.startswith("Negocio")] == ["Z/Central, Tarija", "Calle Bolívar 100, Tarija"]         # sólo lo que las calles no resolvieron
     assert e and c and k and n
 
 
@@ -626,3 +626,49 @@ def test_dos_calles_paralelas_que_no_se_tocan_no_dan_esquina():
              _tramo_largo("Calle Bolívar", [esquina_de(0.3, c) for c in range(4)], 2)]
     assert ub.esquinas_entre(ub.Calles(filas).buscar("sucre")[1]["cuadras"],
                              ub.Calles(filas).buscar("bolivar")[1]["cuadras"]) == []
+
+
+@pytest.mark.parametrize("nombre, objeto, coincide", [
+    ("AREA17", "Area 17, Carretera a San Jacinto, Tarija", True),
+    ("Hotel Los Ceibos", "Los Ceibos, Avenida Víctor Paz, Tarija", True),
+    ("Hotel Los Ceibos", "Farmacia Los Ceibos, Calle Sucre, Tarija", False),
+    ("Hotel", "Hotel Viña del Sur, Tarija", False),
+    ("Onfit", "ONFIT, Calle Campero, Tarija", True),
+    ("Pollos Copacabana", "Copacabana, Calle Sucre, Tarija", False),
+])
+def test_nombre_coincide(nombre, objeto, coincide):
+    assert ub.nombre_coincide(nombre, objeto) is coincide
+
+
+def test_ubicar_por_nombre_primero_si_el_negocio_esta_en_osm():
+    pedidos = []
+
+    def pedir(params):
+        pedidos.append(params)
+        if params["q"].startswith("AREA17"):
+            return [{"lat": str(LAT0 + 0.001), "lon": str(LNG0), "display_name": "Area 17, Tarija", "place_rank": 30}]
+        return []
+
+    p = ub.ubicar(None, "Calle La Madrid #282 esq. Sucre", CIUDAD, tramos=grilla(), pedir=pedir, nombre="AREA17")
+    assert p["metodo"] == "nombre" and cerca(p, (LAT0 + 0.001, LNG0))
+    assert len(pedidos) == 1
+
+
+def test_por_nombre_ignora_calles_y_nombres_distintos():
+    def calle(params):
+        return [{"lat": str(LAT0), "lon": str(LNG0), "display_name": "Calle AREA17, Tarija", "place_rank": 26}]
+    p = ub.ubicar(None, "Calle La Madrid #282 esq. Sucre", CIUDAD, tramos=grilla(), pedir=calle, nombre="AREA17")
+    assert p["metodo"] == "esquina"                       # una calle (rango 26) no es el negocio
+
+    def otro(params):
+        return [{"lat": str(LAT0), "lon": str(LNG0), "display_name": "Otro Negocio, Tarija", "place_rank": 30}]
+    p = ub.ubicar(None, "Calle La Madrid #282 esq. Sucre", CIUDAD, tramos=grilla(), pedir=otro, nombre="AREA17")
+    assert p["metodo"] == "esquina"
+
+
+def test_sin_mapas_no_busca_por_nombre():
+    def pedir(params):
+        raise AssertionError("no debía consultar")
+    p = ub.ubicar(None, "Calle La Madrid #282 esq. Sucre", CIUDAD, tramos=grilla(), pedir=pedir, nombre="AREA17",
+                  usar_mapas=False)
+    assert p["metodo"] == "esquina"
