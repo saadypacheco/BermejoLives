@@ -602,3 +602,27 @@ def test_rehacer_no_saca_el_punto_si_nominatim_no_contesta(repo):
 
     assert ub.main(["--ciudad", "tarija", "--rehacer"], repo, pedir=caido, mostrar=lambda s: None) == 0
     assert repo.importados[malo]["lat"] == -21.5
+
+
+def _tramo_largo(nombre, puntos, way):
+    return {"ciudad_id": "ciudad-tarija", "osm_way_id": way, "parte": 0, "nombre": nombre, "tipo": "residential",
+            "geom": [list(p) for p in puntos], "longitud_m": 300, "activo": True, "id": str(uuid.uuid4())}
+
+
+def test_esquina_en_el_medio_de_un_tramo_largo_sin_cortar():
+    """Calles guardadas como un solo tramo que cruza varias calles (13/11, «15 de Abril» con 2 tramos)."""
+    filas = [_tramo_largo("Calle 15 de Abril", [esquina_de(0, c) for c in range(4)], 1),
+             _tramo_largo("Calle Sucre", [esquina_de(r, 1) for r in range(-1, 3)], 2),
+             _tramo_largo("Calle Colón", [esquina_de(r, 2) for r in range(-1, 3)], 3)]
+    calles = ub.Calles(filas)
+    p = ub.ubicar(None, "Calle 15 de abril esq. Sucre", CIUDAD, tramos=calles, usar_mapas=False)
+    assert p["metodo"] == "esquina" and cerca(p, esquina_de(0, 1))
+    p = ub.ubicar(None, "Calle 15 de Abril entre Sucre y Colón", CIUDAD, tramos=calles, usar_mapas=False)
+    assert p["metodo"] == "cuadra" and cerca(p, esquina_de(0, 1.5))
+
+
+def test_dos_calles_paralelas_que_no_se_tocan_no_dan_esquina():
+    filas = [_tramo_largo("Calle Sucre", [esquina_de(0, c) for c in range(4)], 1),
+             _tramo_largo("Calle Bolívar", [esquina_de(0.3, c) for c in range(4)], 2)]
+    assert ub.esquinas_entre(ub.Calles(filas).buscar("sucre")[1]["cuadras"],
+                             ub.Calles(filas).buscar("bolivar")[1]["cuadras"]) == []

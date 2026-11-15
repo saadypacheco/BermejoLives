@@ -51,6 +51,7 @@ logger = structlog.get_logger()
 
 METODOS = ("esquina", "cuadra", "calle")
 ESQUINA_TOL_M = 20.0            # dos extremos de cuadras a esta distancia o menos son la misma esquina
+VERTICE_TOL_M = 3.0             # un punto del trazado compartido por las dos calles (el nodo del cruce en OSM)
 AGRUPAR_M = 2 * ESQUINA_TOL_M   # los puntos de una esquina (avenidas de doble mano) se juntan a esta distancia
 CUADRA_MAX_M = 600.0            # «entre A y B»: las dos esquinas no pueden estar más lejos que esto
 FALLAS_NOMINATIM_SEGUIDAS = 5
@@ -363,8 +364,11 @@ def esquinas_entre(cuadras_a: list[list], cuadras_b: list[list],
                    tol_m: float = ESQUINA_TOL_M) -> list[tuple[float, float]]:
     """Los lugares donde se tocan las calles A y B: un punto por esquina (centro), o [] si no se tocan.
 
-    Una esquina es un extremo de cuadra de A y un extremo de cuadra de B a `tol_m` o menos. Las avenidas de doble
-    mano dan varios pares pegados: se juntan en uno solo."""
+    Una esquina es (a) un extremo de cuadra de A y un extremo de cuadra de B a `tol_m` o menos, o (b) un punto
+    del trazado que las dos calles comparten (a `VERTICE_TOL_M`), aunque esté en el MEDIO de un tramo: las calles
+    importadas antes del corte por esquinas (y las vías que OSM no corta) son tramos largos que cruzan varias
+    calles (13/11: «15 de Abril» = 2 tramos que cruzan Sucre, Colón, Trigo…). Las avenidas de doble mano dan
+    varios pares pegados: se juntan en uno solo."""
     pa, pb = extremos(cuadras_a), extremos(cuadras_b)
     if not pa or not pb:
         return []
@@ -374,7 +378,38 @@ def esquinas_entre(cuadras_a: list[list], cuadras_b: list[list],
     for (la, a), (lb, b) in ((x, y) for x in zip(pa, qa) for y in zip(pb, qb)):
         if math.hypot(a[0] - b[0], a[1] - b[1]) <= tol_m:
             medios.append(((la[0] + lb[0]) / 2, (la[1] + lb[1]) / 2))
+    medios += _vertices_compartidos(vertices(cuadras_a), vertices(cuadras_b), xy)
     return _agrupar(medios, AGRUPAR_M)
+
+
+def vertices(cuadras: list[list]) -> list[tuple[float, float]]:
+    """Todos los puntos del trazado de las cuadras, sin repetir."""
+    vistos: dict[tuple[float, float], tuple[float, float]] = {}
+    for geom in cuadras:
+        for p in geom or ():
+            pt = _punto(p)
+            if pt:
+                vistos.setdefault((round(pt[0], 6), round(pt[1], 6)), pt)
+    return list(vistos.values())
+
+
+def _vertices_compartidos(va: list[tuple[float, float]], vb: list[tuple[float, float]], xy) -> list[tuple[float, float]]:
+    """Los puntos de A que tienen un punto de B a `VERTICE_TOL_M` o menos (grilla de celdas: lineal, no A×B)."""
+    celda = VERTICE_TOL_M
+    grilla: dict[tuple[int, int], list] = {}
+    for p in vb:
+        x, y = xy(*p)
+        grilla.setdefault((int(x // celda), int(y // celda)), []).append((x, y, p))
+    salida = []
+    for p in va:
+        x, y = xy(*p)
+        cx, cy = int(x // celda), int(y // celda)
+        for i in (cx - 1, cx, cx + 1):
+            for j in (cy - 1, cy, cy + 1):
+                for bx, by, q in grilla.get((i, j), ()):
+                    if math.hypot(x - bx, y - by) <= VERTICE_TOL_M:
+                        salida.append(((p[0] + q[0]) / 2, (p[1] + q[1]) / 2))
+    return salida
 
 
 def distancia_m(a: tuple[float, float], b: tuple[float, float]) -> float:
