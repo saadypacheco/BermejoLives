@@ -79,7 +79,9 @@ el número). La forma boliviana de dar una dirección es la esquina o la cuadra,
    Una esquina también es un punto del trazado que las dos calles comparten en el medio de un tramo largo (las
    calles importadas sin cortar por esquina).
 3. **Si no**, Nominatim con la dirección limpia («Calle La Madrid 282»): punto aproximado sobre la calle. Se
-   descarta lo que no sea una calle o algo más fino (`place_rank` < 26: la ciudad o el barrio entero).
+   descarta lo que no sea una calle o algo más fino (`place_rank` < 26: la ciudad o el barrio entero) y la calle
+   que mide más de 800 m (`CALLE_MAX_M`, diagonal del `boundingbox`): su punto del medio no ubica a nadie y todos
+   los negocios de esa avenida caían juntos (16/11: nueve de la Av. Panamericana en el mismo punto).
 4. **Si no**, sin punto (se marca a mano).
 
 Todo punto sigue entrando como **aproximado** (`ubicacion = 'aproximada'`) hasta que una persona lo confirma.

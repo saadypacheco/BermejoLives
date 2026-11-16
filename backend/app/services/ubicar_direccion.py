@@ -58,6 +58,9 @@ FALLAS_NOMINATIM_SEGUIDAS = 5
 TOPE_LISTADO = 1000             # PostgREST corta en 1000 sin avisar
 #: El `place_rank` mínimo de Nominatim para un local: 26 = calle. La ciudad (16) o el barrio (18-22) no sirven.
 RANGO_MINIMO_DIRECCION = 26
+# Una calle que Nominatim devuelve más larga que esto (diagonal de su caja) no ubica: su punto del medio puede
+# quedar a un kilómetro del negocio, y todos los de esa avenida caen juntos (16/11, Av. Panamericana de Tarija).
+CALLE_MAX_M = 800.0
 #: Buscar el negocio por su NOMBRE en OpenStreetMap: sólo un objeto puntual (30 = edificio, local, comercio).
 RANGO_MINIMO_NOMBRE = 30
 #: Palabras que dicen QUÉ es, no CUÁL es: no cuentan al comparar nombres («Hotel Los Ceibos» = «Los Ceibos»).
@@ -596,7 +599,7 @@ def ubicar(repo, direccion: str | None, ciudad: dict | None, *, tramos: "Calles 
     """El punto de una dirección dentro de la ciudad: `{lat, lng, display_name, metodo}` o None.
 
     `metodo` es 'esquina', 'cuadra' (con las calles de la ciudad) o 'calle' (Nominatim sobre la dirección
-    limpia). `tramos` es la lista de `calles_tramos` o un `Calles` ya armado (la corrida masiva lo lee una sola
+    limpia; una calle de más de `CALLE_MAX_M` no cuenta). `tramos` es la lista de `calles_tramos` o un `Calles` ya armado (la corrida masiva lo lee una sola
     vez); sin él se lee de `repo`, y sólo si la dirección trae esquina o «entre». Con `usar_mapas=False` no se
     consulta Nominatim. Lanza `tarjetas.UbicacionNoDisponible` si hace falta Nominatim y no contesta."""
     mapas_caidos = False
@@ -632,12 +635,12 @@ def ubicar(repo, direccion: str | None, ciudad: dict | None, *, tramos: "Calles 
         return None
     limpia = consulta_limpia(partes, original)
     punto = tarjetas.buscar_direccion(limpia, ciudad, pedir=pedir, radio_km=radio_km,
-                                      rango_minimo=RANGO_MINIMO_DIRECCION)
+                                      rango_minimo=RANGO_MINIMO_DIRECCION, largo_maximo_m=CALLE_MAX_M)
     # Si la limpia no aparece, el texto como vino (lo que hacía antes la carga de tarjetas): una dirección que
     # Nominatim ya encontraba no puede dejar de encontrarse por haberla limpiado.
     if not punto and limpia.strip().lower() != str(original).strip().lower():
         punto = tarjetas.buscar_direccion(original, ciudad, pedir=pedir, radio_km=radio_km,
-                                          rango_minimo=RANGO_MINIMO_DIRECCION)
+                                          rango_minimo=RANGO_MINIMO_DIRECCION, largo_maximo_m=CALLE_MAX_M)
     return {**punto, "metodo": "calle"} if punto else None
 
 

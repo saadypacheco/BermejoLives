@@ -570,6 +570,40 @@ def test_nominatim_que_devuelve_la_ciudad_o_el_barrio_no_cuenta():
     assert ub.ubicar(None, "Calle Sucre 125", CIUDAD, tramos=[], pedir=calle)["metodo"] == "calle"
 
 
+def _calle_con_caja(largo_grados_lat):
+    def pedir(params):
+        return [{"lat": str(LAT0), "lon": str(LNG0), "display_name": "Avenida Panamericana, Tarija", "place_rank": 26,
+                 "boundingbox": [str(LAT0 - largo_grados_lat / 2), str(LAT0 + largo_grados_lat / 2),
+                                 str(LNG0), str(LNG0)]}]
+    return pedir
+
+
+def test_largo_de_la_caja_de_nominatim():
+    assert tarjetas.largo_de(["-21.5", "-21.49", "-64.7", "-64.7"]) == pytest.approx(1113.2, rel=0.01)
+    assert tarjetas.largo_de(None) is None
+    assert tarjetas.largo_de(["a", "b", "c", "d"]) is None
+    assert tarjetas.largo_de(["-21.5", "-21.49"]) is None
+
+
+def test_una_avenida_larga_no_ubica_a_sus_negocios():
+    # Av. Panamericana de Tarija (16/11): nueve negocios caían en el punto del medio de una avenida de kilómetros
+    assert ub.ubicar(None, "Av. Panamericana N° 1544", CIUDAD, tramos=[], pedir=_calle_con_caja(0.03)) is None
+    # una calle corta (unas cuadras) sí
+    corta = ub.ubicar(None, "Av. Panamericana N° 1545", CIUDAD, tramos=[], pedir=_calle_con_caja(0.004))
+    assert corta["metodo"] == "calle"
+    # sin caja (como antes) se acepta
+    assert ub.ubicar(None, "Calle Sucre 126", CIUDAD, tramos=[], pedir=lambda p: [
+        {"lat": str(LAT0), "lon": str(LNG0), "display_name": "Calle Sucre", "place_rank": 26}])["metodo"] == "calle"
+
+
+def test_rehacer_saca_el_punto_de_una_avenida_larga(repo):
+    larga = _importado(repo, 1, "Av. Panamericana N° 1544", lat=-21.56, lng=-64.68, ubicacion="aproximada")
+    salida = []
+    assert ub.main(["--ciudad", "tarija", "--rehacer"], repo, pedir=_calle_con_caja(0.03), mostrar=salida.append) == 0
+    assert repo.importados[larga]["lat"] is None and repo.importados[larga]["ubicacion"] == "no_encontrada"
+    assert "Punto sacado:    1" in "\n".join(salida)
+
+
 def test_buscar_direccion_sin_rango_minimo_acepta_la_ciudad():
     # Los lugares de afuera (un pueblo, rango 16-19) siguen usando buscar_direccion sin piso
     def pueblo(params):

@@ -434,6 +434,19 @@ def _pedir_nominatim(params: dict) -> list:
     return datos if isinstance(datos, list) else []
 
 
+def largo_de(caja) -> float | None:
+    """La diagonal en metros del `boundingbox` de Nominatim (`[lat_min, lat_max, lng_min, lng_max]`, como texto).
+    None si no vino o no se entiende."""
+    if not isinstance(caja, (list, tuple)) or len(caja) != 4:
+        return None
+    lat1, lat2, lng1, lng2 = (_numero(v) for v in caja)
+    if None in (lat1, lat2, lng1, lng2):
+        return None
+    dy = (lat2 - lat1) * 111_320.0
+    dx = (lng2 - lng1) * 111_320.0 * math.cos(math.radians((lat1 + lat2) / 2))
+    return math.hypot(dx, dy)
+
+
 def _numero(valor) -> float | None:
     try:
         n = float(valor)
@@ -443,7 +456,8 @@ def _numero(valor) -> float | None:
 
 
 def buscar_direccion(direccion: str, ciudad: dict | None, *, pedir: Callable[[dict], list] | None = None,
-                     radio_km: float = RADIO_CIUDAD_KM, rango_minimo: int | None = None) -> dict | None:
+                     radio_km: float = RADIO_CIUDAD_KM, rango_minimo: int | None = None,
+                     largo_maximo_m: float | None = None) -> dict | None:
     """El punto de una dirección DENTRO de la ciudad, o None si Nominatim no la encuentra.
 
     Devuelve `{lat, lng, display_name}`. Con el centro de la ciudad (`ciudades.lat/lng`) la búsqueda va acotada a
@@ -455,14 +469,19 @@ def buscar_direccion(direccion: str, ciudad: dict | None, *, pedir: Callable[[di
 
     `rango_minimo` (el `place_rank` de Nominatim: 16 ciudad, 18-22 barrio, 26-27 calle, 30 edificio): un
     resultado más grueso que eso no cuenta. Cuando Nominatim no encuentra la calle devuelve la ciudad o el barrio,
-    y para un local eso no es una ubicación (13/11: 16 negocios de Tarija cayeron todos en el centro)."""
+    y para un local eso no es una ubicación (13/11: 16 negocios de Tarija cayeron todos en el centro).
+
+    `largo_maximo_m`: si lo que encontró mide más que eso (la diagonal de su `boundingbox`), no cuenta. Una
+    avenida de varios kilómetros devuelve su punto del medio, y ahí caían todos los negocios de la avenida
+    (16/11: nueve de la Av. Panamericana de Tarija en el mismo punto)."""
     global _ultimo_pedido
     texto = re.sub(r"\s+", " ", str(direccion or "")).strip()[:MAX_DIRECCION]
     if len(texto) < 4:
         return None
     nombre_ciudad = str((ciudad or {}).get("nombre") or "").strip()
     lat_c, lng_c = _numero((ciudad or {}).get("lat")), _numero((ciudad or {}).get("lng"))
-    clave = (texto.lower(), str((ciudad or {}).get("id") or ""), float(radio_km), rango_minimo)
+    clave = (texto.lower(), str((ciudad or {}).get("id") or ""), float(radio_km), rango_minimo,
+                 largo_maximo_m)
     ahora = time.monotonic()
     with _candado:
         visto = _cache.get(clave)
@@ -496,6 +515,9 @@ def buscar_direccion(direccion: str, ciudad: dict | None, *, pedir: Callable[[di
             rango = _numero((fila or {}).get("place_rank"))
             if rango_minimo is not None and rango is not None and rango < rango_minimo:
                 continue                                    # la ciudad o el barrio entero: no es una dirección
+            largo = largo_de((fila or {}).get("boundingbox"))
+            if largo_maximo_m is not None and largo is not None and largo > largo_maximo_m:
+                continue                                    # una calle larga: su punto del medio no ubica a nadie
             resultado = {"lat": round(lat, 6), "lng": round(lng, 6),
                          "display_name": str((fila or {}).get("display_name") or "")[:300]}
         _cache[clave] = (time.monotonic(), resultado)
