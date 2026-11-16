@@ -572,7 +572,7 @@ def nombre_coincide(nombre: str | None, display_name: str | None) -> bool:
 
 
 def por_nombre(nombre: str | None, ciudad: dict | None, *, pedir: Callable[[dict], list] | None = None,
-               radio_km: float = tarjetas.RADIO_CIUDAD_KM) -> dict | None:
+               radio_km: float = tarjetas.RADIO_CIUDAD_KM, repo=None) -> dict | None:
     """El punto del negocio buscándolo por su NOMBRE en OpenStreetMap (gratis, mismo Nominatim): un local, hotel o
     gimnasio que alguien ya marcó en el mapa tiene su punto exacto. Sólo objetos puntuales (`place_rank` 30) dentro
     de la ciudad cuyo nombre coincide (`nombre_coincide`). No se usa Google: sus condiciones no permiten sacar
@@ -580,7 +580,8 @@ def por_nombre(nombre: str | None, ciudad: dict | None, *, pedir: Callable[[dict
     texto = " ".join(str(nombre or "").split())
     if len(texto) < 4 or not _clave_nombre(texto):
         return None
-    punto = tarjetas.buscar_direccion(texto, ciudad, pedir=pedir, radio_km=radio_km, rango_minimo=RANGO_MINIMO_NOMBRE)
+    punto = tarjetas.buscar_direccion(texto, ciudad, pedir=pedir, radio_km=radio_km, rango_minimo=RANGO_MINIMO_NOMBRE,
+                                      repo=repo)
     if punto and nombre_coincide(texto, punto.get("display_name")):
         return {**punto, "metodo": "nombre"}
     return None
@@ -605,7 +606,7 @@ def ubicar(repo, direccion: str | None, ciudad: dict | None, *, tramos: "Calles 
     mapas_caidos = False
     if nombre and usar_mapas:                            # 0. el negocio ya marcado en OpenStreetMap: punto exacto
         try:
-            hallado = por_nombre(nombre, ciudad, pedir=pedir, radio_km=radio_km)
+            hallado = por_nombre(nombre, ciudad, pedir=pedir, radio_km=radio_km, repo=repo)
         except tarjetas.UbicacionNoDisponible:
             # La esquina no necesita a Nominatim: se sigue, pero sin volver a pedirle (una falla por dirección,
             # para que la corrida masiva corte a las 5 seguidas) y avisando al final si no hubo punto.
@@ -635,12 +636,14 @@ def ubicar(repo, direccion: str | None, ciudad: dict | None, *, tramos: "Calles 
         return None
     limpia = consulta_limpia(partes, original)
     punto = tarjetas.buscar_direccion(limpia, ciudad, pedir=pedir, radio_km=radio_km,
-                                      rango_minimo=RANGO_MINIMO_DIRECCION, largo_maximo_m=CALLE_MAX_M)
+                                      rango_minimo=RANGO_MINIMO_DIRECCION, largo_maximo_m=CALLE_MAX_M,
+                                      repo=repo)
     # Si la limpia no aparece, el texto como vino (lo que hacía antes la carga de tarjetas): una dirección que
     # Nominatim ya encontraba no puede dejar de encontrarse por haberla limpiado.
     if not punto and limpia.strip().lower() != str(original).strip().lower():
         punto = tarjetas.buscar_direccion(original, ciudad, pedir=pedir, radio_km=radio_km,
-                                          rango_minimo=RANGO_MINIMO_DIRECCION, largo_maximo_m=CALLE_MAX_M)
+                                          rango_minimo=RANGO_MINIMO_DIRECCION, largo_maximo_m=CALLE_MAX_M,
+                                      repo=repo)
     return {**punto, "metodo": "calle"} if punto else None
 
 

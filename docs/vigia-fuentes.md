@@ -97,7 +97,8 @@ Sección «Novedades de fuentes» en Importados:
 
 ## Fases
 
-1. `geocache`, y que `ubicar_direccion` lo use. Arregla ya el problema del 16/11.
+1. **Hecha.** `geocache` (migración 0198), usado por todo `buscar_direccion` cuando recibe `repo`. Guarda la respuesta
+   cruda: los filtros se aplican después. Si la tabla no está, ubica igual sin caché.
 2. Vigía de `turismo`: comparar, cambios, ausentes, corridas, comando a mano y loop apagado.
 3. Panel «Novedades de fuentes».
 4. OSM diario, y el paso «por nombre» contra OSM local.

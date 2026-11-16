@@ -470,13 +470,13 @@ def armar_fila(l: Lugar, *, base: str, ciudad_id: str, punto: dict | None, repet
 
 # ───────────────────────────────────────────────────────────── ubicación y repetidos
 
-def ubicar(l: Lugar, ciudad: dict, *, pedir: Callable[[dict], list] | None = None) -> dict | None:
+def ubicar(l: Lugar, ciudad: dict, *, pedir: Callable[[dict], list] | None = None, repo=None) -> dict | None:
     """El punto aproximado del lugar: primero por NOMBRE y, si no aparece, por dirección. Caja de `l.radio_km`
     alrededor del centro de la ciudad. Como mucho 2 consultas. `UbicacionNoDisponible` si el mapa no contesta."""
     for consulta in (l.nombre, l.direccion):
         if not consulta or len(consulta.strip()) < 4:
             continue
-        punto = tarjetas.buscar_direccion(consulta, ciudad, pedir=pedir, radio_km=l.radio_km)
+        punto = tarjetas.buscar_direccion(consulta, ciudad, pedir=pedir, radio_km=l.radio_km, repo=repo)
         if punto and not es_punto_del_pie(punto["lat"], punto["lng"]):
             return punto
     return None
@@ -552,7 +552,7 @@ def cargar(repo, lugares: list[Lugar], ciudad: dict, base: str, *, dry_run: bool
         punto = None
         if ubicando:
             try:
-                punto = ubicar(l, ciudad, pedir=pedir)
+                punto = ubicar(l, ciudad, pedir=pedir, repo=repo)
                 fallas = 0
             except tarjetas.UbicacionNoDisponible:
                 fallas += 1

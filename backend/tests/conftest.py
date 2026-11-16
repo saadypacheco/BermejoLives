@@ -247,6 +247,7 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         self.videos_promo: list[dict] = []
         self.novedades_uruku: dict[str, dict] = {}    # id -> fila (0150)
         self.calles_tramos: dict[str, dict] = {}      # id -> fila (0152)
+        self.geocache: dict[str, dict] = {}           # clave -> fila (0198)
         self.turnos_farmacia: dict[str, dict] = {}    # id -> fila (0154)
         self.calles_marcas: list[dict] = []           # registro de marcas (0152)
         self.redes: list[dict] = [
@@ -1855,6 +1856,13 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
                 t["activo"] = False
                 n += 1
         return n
+
+    def get_geocache(self, clave):
+        fila = self.geocache.get(clave)
+        return {"resultado": fila.get("resultado"), "consultado_at": fila.get("consultado_at")} if fila else None
+
+    def guardar_geocache(self, row):
+        self.geocache[row["clave"]] = dict(row)
 
     def list_calles_tramos(self, ciudad_id):
         return [dict(t) for t in self.calles_tramos.values()

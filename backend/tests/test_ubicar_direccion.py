@@ -706,3 +706,71 @@ def test_sin_mapas_no_busca_por_nombre():
     p = ub.ubicar(None, "Calle La Madrid #282 esq. Sucre", CIUDAD, tramos=grilla(), pedir=pedir, nombre="AREA17",
                   usar_mapas=False)
     assert p["metodo"] == "esquina"
+
+
+# ───────────────────────────────────────────── caché permanente de Nominatim (0198)
+
+def _contador(fila):
+    llamadas = []
+
+    def pedir(params):
+        llamadas.append(params)
+        return [fila] if fila else []
+    return pedir, llamadas
+
+
+def test_geocache_no_vuelve_a_preguntar_entre_corridas(repo):
+    pedir, llamadas = _contador({"lat": str(LAT0), "lon": str(LNG0), "display_name": "Calle Sucre", "place_rank": 26})
+    assert tarjetas.buscar_direccion("Calle Sucre 300", CIUDAD, pedir=pedir, repo=repo) is not None
+    tarjetas.reiniciar_cache()                           # otra corrida: la memoria se pierde, la base no
+    assert tarjetas.buscar_direccion("Calle Sucre 300", CIUDAD, pedir=pedir, repo=repo) is not None
+    assert len(llamadas) == 1
+    assert len(repo.geocache) == 1
+
+
+def test_geocache_guarda_tambien_el_no_encontrado(repo):
+    pedir, llamadas = _contador(None)
+    assert tarjetas.buscar_direccion("Calle Inexistente 1", CIUDAD, pedir=pedir, repo=repo) is None
+    tarjetas.reiniciar_cache()
+    assert tarjetas.buscar_direccion("Calle Inexistente 1", CIUDAD, pedir=pedir, repo=repo) is None
+    assert len(llamadas) == 1
+
+
+def test_geocache_vencido_se_vuelve_a_preguntar(repo):
+    pedir, llamadas = _contador({"lat": str(LAT0), "lon": str(LNG0), "display_name": "Calle Sucre", "place_rank": 26})
+    tarjetas.buscar_direccion("Calle Sucre 301", CIUDAD, pedir=pedir, repo=repo)
+    for fila in repo.geocache.values():
+        fila["consultado_at"] = "2020-01-01T00:00:00+00:00"
+    tarjetas.reiniciar_cache()
+    tarjetas.buscar_direccion("Calle Sucre 301", CIUDAD, pedir=pedir, repo=repo)
+    assert len(llamadas) == 2
+
+
+def test_geocache_aplica_los_filtros_despues(repo):
+    # se guarda la respuesta cruda: el mismo texto con otro filtro no pregunta de nuevo
+    pedir, llamadas = _contador({"lat": str(LAT0), "lon": str(LNG0), "display_name": "Calle Sucre", "place_rank": 26})
+    assert tarjetas.buscar_direccion("Calle Sucre 302", CIUDAD, pedir=pedir, repo=repo, rango_minimo=30) is None
+    assert tarjetas.buscar_direccion("Calle Sucre 302", CIUDAD, pedir=pedir, repo=repo, rango_minimo=26) is not None
+    assert len(llamadas) == 1
+
+
+def test_geocache_con_la_base_caida_sigue_ubicando(repo, monkeypatch):
+    def rota(*a, **k):
+        raise RuntimeError("relation geocache does not exist")
+    monkeypatch.setattr(repo, "get_geocache", rota)
+    monkeypatch.setattr(repo, "guardar_geocache", rota)
+    pedir, llamadas = _contador({"lat": str(LAT0), "lon": str(LNG0), "display_name": "Calle Sucre", "place_rank": 26})
+    assert tarjetas.buscar_direccion("Calle Sucre 303", CIUDAD, pedir=pedir, repo=repo) is not None
+    assert len(llamadas) == 1
+
+
+def test_rehacer_dos_veces_la_segunda_no_pregunta_nada(repo):
+    _importado(repo, 1, "Calle Inexistente 77")
+    _importado(repo, 2, "Av. Panamericana N° 10")
+    pedir, llamadas = _contador({"lat": str(LAT0), "lon": str(LNG0), "display_name": "Calle X", "place_rank": 26})
+    assert ub.main(["--ciudad", "tarija", "--rehacer"], repo, pedir=pedir, mostrar=lambda _: None) == 0
+    antes = len(llamadas)
+    assert antes > 0
+    tarjetas.reiniciar_cache()
+    assert ub.main(["--ciudad", "tarija", "--rehacer"], repo, pedir=pedir, mostrar=lambda _: None) == 0
+    assert len(llamadas) == antes
