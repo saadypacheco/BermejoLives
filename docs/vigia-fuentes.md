@@ -35,11 +35,31 @@ equipo) puede ser más nuevo que el de la página.
 
 ## Fuentes
 
-| Fuente | Cómo se lee | Qué trae |
-|---|---|---|
-| `turismo` (tarijaturismo.com) | Las 7 páginas de lista (`SITIOS`) | Nombre, dirección, teléfonos, rubro |
-| Fichas de «Qué hacer» | Sólo la ficha de un negocio nuevo o cambiado | Horario y dirección completa |
-| `osm` (OpenStreetMap, Overpass) | **Una** consulta por ciudad | Negocios con punto exacto, horario, web |
+Catálogo revisado el 16/11, leyendo las condiciones de uso de cada sitio. Solo entran fuentes que permiten
+leerlas y guardarlas.
+
+| Fuente | Licencia | Cada cuánto cambia | Cómo se lee | Qué trae |
+|---|---|---|---|---|
+| `overture` (Overture Maps Places) | CDLA-Permissive 2.0 / Apache 2.0 / CC0 por fila: uso comercial permitido | Mensual | GeoParquet público en S3, filtrado por la caja de cada ciudad (DuckDB) | Nombre, categoría, punto, teléfono, web, redes, dirección, `confidence`. **Sin horario.** Medido: ~290 lugares en Bermejo y ~3.800 en Tarija (OSM: 68 en Bermejo) |
+| `osm` (OpenStreetMap) | ODbL: atribución y share-alike | Diario | **Una** consulta Overpass por ciudad | Punto exacto, horario, web |
+| `turismo` (tarijaturismo.com) | Sin licencia, `robots.txt` abierto: zona gris leve; solo datos y enlace | Sin fecha | Las 7 páginas de lista (`SITIOS`) | Nombre, dirección, teléfonos, rubro |
+| Fichas de «Qué hacer» | Ídem | Ídem | Solo la ficha de un negocio nuevo o cambiado | Horario y dirección completa |
+| `anh` (estaciones de servicio) | Sin términos ni `robots.txt` | Sin fecha | HTML por departamento, una vez por semana | Razón social, dirección, teléfono, combustibles (sin punto: se ubica) |
+
+**Pedir por escrito antes de automatizar:**
+- **SEPREC**, Directorio de Unidades Económicas: es la fuente más completa, pero no tiene descarga ni términos publicados.
+- **Viceministerio de Turismo (SIRETUR)**: solo se puede consultar con usuario.
+- **Alcaldías**: hay que pedirles sus listas. Ya está pendiente la nota a la Secretaría de Turismo de Tarija.
+
+**Prohibidas, porque sus condiciones lo dicen por escrito:**
+- **No se pueden leer automáticamente:** TripAdvisor, Booking, Airbnb, Expedia, Hostelworld, PedidosYa, Facebook, Instagram y TikTok.
+- **Prohíben copiar o redistribuir:** los directorios Amarillas.bo, BoliviaEmpresas, BoliviaYP y Bolivia en Tus Manos.
+- **Tienen API pero no dejan guardar los datos:** Google, TripAdvisor, Foursquare, Mapbox y HERE.
+- **Única vía legal para estas fuentes:** el enlace que da el propio comercio.
+
+**Overture se lee una vez por mes.** Una release nueva cada mes. El vigía mira todos los días si hay release nueva y, si
+la hay, la procesa. Entra solo con `confidence` ≥ 0.5 y siempre a la cola de revisión, nunca publicado. Casi
+todo viene de las páginas de negocios de Meta: puede haber cerrados (`operating_status` viene vacío en Bolivia).
 
 **Agregar una fuente = un lector nuevo.** Cada fuente tiene una función que devuelve la misma `Entrada`
 (nombre, dirección, teléfonos, enlace, horario…). El resto (comparar, cambios, ubicar, resumen) es común.
@@ -99,8 +119,11 @@ Sección «Novedades de fuentes» en Importados:
 
 1. **Hecha.** `geocache` (migración 0198), usado por todo `buscar_direccion` cuando recibe `repo`. Guarda la respuesta
    cruda: los filtros se aplican después. Si la tabla no está, ubica igual sin caché.
-2. Vigía de `turismo`: comparar, cambios, ausentes, corridas, comando a mano y loop apagado.
-3. Panel «Novedades de fuentes».
-4. OSM diario, y el paso «por nombre» contra OSM local.
-5. Fichas de «Qué hacer»: horario y dirección completa.
-6. Más fuentes, según las que haya.
+2. Lector de **Overture** por ciudad (el salto grande de datos), con dependencia nueva `duckdb`: es la única forma
+   razonable de leer GeoParquet de S3 por caja sin bajar el mundo entero. Entra como fuente `overture` a Importados,
+   marcando repetidos contra comercios y OSM.
+3. Vigía común: comparar, cambios, ausentes, corridas, comando a mano y loop apagado. Primero para `turismo`
+   y `overture`.
+4. Panel «Novedades de fuentes».
+5. OSM diario, y el paso «por nombre» contra los datos locales (OSM y Overture) antes que Nominatim.
+6. Fichas de «Qué hacer» (horario) y ANH.
