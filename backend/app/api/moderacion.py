@@ -1503,12 +1503,12 @@ def listar_importados(
     ciudad_id: str | None = None,
     q: str | None = None,
     limite: int = 200,
-    fuente: Literal["osm", "tarjeta", "turismo"] | None = None,
+    fuente: Literal["osm", "tarjeta", "turismo", "overture"] | None = None,
     rubro: str | None = Query(default=None, max_length=80),
     _admin: dict = Depends(require_permiso("datos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """El listado de Importados. `fuente` (`osm` | `tarjeta` | `turismo`) filtra por origen; sin él salen todos.
+    """El listado de Importados. `fuente` (`osm` | `tarjeta` | `turismo` | `overture`) filtra por origen; sin él salen todos.
     `rubro` (slug exacto, p. ej. `para-visitar`) filtra por el rubro sugerido. Las tarjetas y las de turismo suman
     `email`, `ubicacion`, `texto_leido`, `lector` y `tiene_foto` (la foto de una tarjeta va por
     `/admin/importados/{id}/foto`; las de turismo no tienen foto). Cada item trae también `subcategoria` y
@@ -1608,7 +1608,7 @@ def promover_importado(
     nombre = (body.nombre or imp.get("nombre") or "").strip()
     if not nombre:
         raise HTTPException(status_code=400, detail="Sin nombre no se puede crear el comercio")
-    es_tarjeta = imp.get("fuente") in ("tarjeta", "turismo")      # las dos se revisan campo por campo
+    es_tarjeta = imp.get("fuente") in ("tarjeta", "turismo", "overture")   # se revisan campo por campo
     if imp.get("lat") is None or imp.get("lng") is None:
         if not body.sin_ubicacion:
             raise HTTPException(status_code=400, detail="Sin coordenadas no va al mapa")
@@ -1656,6 +1656,13 @@ def promover_importado(
         etiqueta = subcategoria_de_importado({**imp, "subcategoria": None})
         if etiqueta:
             datos["subcategoria"] = etiqueta
+    if imp.get("fuente") == "overture":
+        # Facebook, Instagram y TikTok que trajo Overture (docs/vigia-fuentes.md): a su campo, no al sitio web.
+        redes = (((imp.get("tags") or {}).get("overture") or {}).get("redes_por_red")) or {}
+        for campo in ("facebook_url", "instagram_url", "tiktok_url"):
+            valor = enlaces.sanear_red(redes.get(campo), enlaces.CAMPOS_RED[campo])
+            if valor:
+                datos[campo] = valor
     comercio = repo.crear_comercio(datos)
     rid = repo.get_rubro_id(rubro_slug)
     if rid:

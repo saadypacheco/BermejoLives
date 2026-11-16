@@ -191,7 +191,7 @@ export function puedePromoverSinUbicacion(
 
 // ── Listado ──────────────────────────────────────────────────────────────────
 
-export type FuenteFiltro = "todas" | "osm" | "tarjeta" | "turismo" | "turismo-visitar";
+export type FuenteFiltro = "todas" | "osm" | "tarjeta" | "turismo" | "turismo-visitar" | "overture";
 
 /** El valor del query param `fuente`; con «todas» no se manda. «Turismo › Para visitar» es `fuente=turismo` + `rubro`. */
 export function paramFuente(f: FuenteFiltro): string | undefined {
@@ -209,10 +209,10 @@ export function esTarjeta(i: { fuente: string }): boolean {
   return i.fuente === "tarjeta";
 }
 
-/** Tienen la ficha editable (campos, mapa, promover): las tarjetas y lo traído de la página de turismo
- *  (docs/importar-turismo.md). La de turismo es la misma ficha pero sin foto. */
+/** Tienen la ficha editable (campos, mapa, promover): las tarjetas, lo traído de la página de turismo
+ *  (docs/importar-turismo.md) y lo de Overture Maps (docs/vigia-fuentes.md). Las dos últimas, sin foto. */
 export function usaFichaEditable(i: { fuente: string }): boolean {
-  return i.fuente === "tarjeta" || i.fuente === "turismo";
+  return i.fuente === "tarjeta" || i.fuente === "turismo" || i.fuente === "overture";
 }
 
 /** La primera `http(s)://...` del texto leído: en turismo es la página de origen. null si no hay.

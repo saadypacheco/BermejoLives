@@ -33,6 +33,11 @@ COPY data ./data
 # volumen NUEVO herede el dueño; los volúmenes que ya existen en el VPS (creados
 # cuando corría como root) se arreglan una vez con `chown -R 1001:1001`
 # (ver docker-compose.prod.yml).
+# DuckDB (importar_overture) baja su extensión httpfs a ~/.duckdb, y el usuario 1001 no tiene carpeta
+# personal: se instala acá, como root, en una carpeta fija que el proceso sólo lee.
+ENV DUCKDB_EXT_DIR=/opt/duckdb
+RUN python -c "import duckdb; c = duckdb.connect(); c.execute(\"SET extension_directory='/opt/duckdb'\"); c.execute('INSTALL httpfs')" \
+ && chmod -R a+rX /opt/duckdb
 RUN groupadd --gid 1001 app \
  && useradd --uid 1001 --gid 1001 --no-create-home --shell /usr/sbin/nologin app \
  && mkdir -p /models /data/fotos /data/content /data/wa_received \

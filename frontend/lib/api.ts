@@ -904,7 +904,7 @@ export async function soltarGrupo(comercioId: string, grupoJid: string) {
 // Comercios traídos de fuentes externas (OpenStreetMap). NO son comercios de
 // URUKU: son una lista de qué existe y dónde, que pasa al mapa de a uno.
 export type ComercioImportado = {
-  id: string; fuente: "osm" | "tarjeta" | "turismo" | (string & {}); fuente_id: string; nombre: string | null;
+  id: string; fuente: "osm" | "tarjeta" | "turismo" | "overture" | (string & {}); fuente_id: string; nombre: string | null;
   categoria: string | null; rubro_slug: string | null;
   lat: number | null; lng: number | null;
   telefono: string | null; whatsapp: string | null; website: string | null;

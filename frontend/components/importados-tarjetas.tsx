@@ -503,6 +503,7 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio, onCompletado }: {
   };
 
   const esTurismo = it.fuente === "turismo";
+  const esOverture = it.fuente === "overture";
   // Con `fuente_url` (el enlace guardado por el importador) se usa ése; si el servidor es anterior, el del texto leído.
   const origen = esTurismo ? (urlFuente(it.fuente_url) ?? urlDeOrigen(it.texto_leido)) : null;
   // Un lugar para visitar (plaza, museo, mirador…) con el rubro puesto en la ficha: si quien revisa lo cambia a otro
@@ -523,7 +524,7 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio, onCompletado }: {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             {esLugar
               ? <Insignia icono="para-visitar" tono="info">{selloParaVisitar(subcategoriaVisible)}</Insignia>
-              : <Insignia icono={esTurismo ? "mapa" : "documentos"} tono="info">{esTurismo ? "Turismo" : "Tarjeta"}</Insignia>}
+              : <Insignia icono={esTurismo || esOverture ? "mapa" : "documentos"} tono="info">{esTurismo ? "Turismo" : esOverture ? "Overture" : "Tarjeta"}</Insignia>}
             {it.lector && <span style={{ fontSize: 11.5, color: "var(--txt-3)" }}>leída con {it.lector === "gemini" ? "Gemini" : "Tesseract"}</span>}
             <Insignia icono={chip.icono} tono={colorChip}>{chip.texto}</Insignia>
           </div>
@@ -547,7 +548,7 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio, onCompletado }: {
                          <Ic n="abrir" s={14} /> Ver en Negocios
                        </a>
                      </span>}>
-              <b>Repetido:</b> {esLugar ? "este lugar parece ser" : esTurismo ? "este negocio parece ser" : "esta tarjeta parece ser"} <b>{nombreRepetido(it)}</b>, que ya está en URUKU.
+              <b>Repetido:</b> {esLugar ? "este lugar parece ser" : esTurismo || esOverture ? "este negocio parece ser" : "esta tarjeta parece ser"} <b>{nombreRepetido(it)}</b>, que ya está en URUKU.
             </Aviso>
           )}
 

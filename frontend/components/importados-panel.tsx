@@ -42,6 +42,8 @@ const FUENTES: { key: FuenteFiltro; label: string }[] = [
   { key: "turismo", label: "Turismo" },
   // Los lugares (plazas, museos, miradores…): turismo con el rubro `para-visitar` (docs/lugares-turismo.md).
   { key: "turismo-visitar", label: "Turismo › Para visitar" },
+  // Overture Maps: la base abierta mensual (docs/vigia-fuentes.md). Se llena con importar_overture.
+  { key: "overture", label: "Overture" },
 ];
 
 export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: Ciudad | null }) {
@@ -193,6 +195,8 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
             ? <>Nada acá. Se llena con «Cargar tarjetas»: subí las fotos de las tarjetas de presentación.</>
             : fuente === "turismo"
             ? <>Nada acá. Se llena corriendo <code>importar_turismo</code> en el servidor (ver <code>docs/importar-turismo.md</code>).</>
+            : fuente === "overture"
+            ? <>Nada acá. Se llena corriendo <code>importar_overture</code> en el servidor (ver <code>docs/vigia-fuentes.md</code>).</>
             : fuente === "turismo-visitar"
             ? <>Nada acá. Se llena corriendo <code>importar_turismo_lugares</code> en el servidor (ver <code>docs/lugares-turismo.md</code>).</>
             : <>Nada acá. Se llena corriendo <code>importar_osm.py</code> con la ciudad, o con «Cargar tarjetas».</>}

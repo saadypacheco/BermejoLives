@@ -115,11 +115,31 @@ Sección «Novedades de fuentes» en Importados:
 - No se manda ningún mensaje a los comercios.
 - Nominatim: un pedido por segundo y siempre a través del caché.
 
+### Overture: cómo se corre
+
+```bash
+docker exec buscadonde-backend python -m app.services.importar_overture --ciudad tarija --dry-run
+docker exec buscadonde-backend python -m app.services.importar_overture --ciudad tarija
+```
+
+- **Radio por ciudad** (`RADIOS`): Santa Cruz 12 km, Cochabamba 9, La Paz 8 (no llega al centro de El Alto),
+  Tarija 7, Oruro 6, Bermejo 4. Se cambia con `--radio-km`.
+- **Qué entra:** `confidence` >= 0.5, con nombre, sin estar cerrado. No entran templos, escuelas, oficinas
+  públicas, plazas ni accidentes geográficos (`NO_COMERCIO`). Volver a correrlo no duplica nada.
+- **Redes:** Facebook, Instagram y TikTok van a `tags.overture.redes_por_red`. Al promover pasan a
+  `facebook_url`, `instagram_url` y `tiktok_url`. El sitio web solo toma dominios reales.
+- **Medido en Tarija el 16/11:**
+  - 2.290 leídos y 1.931 que entran;
+  - 1.580 con WhatsApp y 1.840 con dirección;
+  - 760 sin rubro: se elige en el panel.
+- **Pendiente:** mostrar la atribución en el sitio («Datos: Overture Maps Foundation, CDLA-Permissive-2.0»)
+  antes de publicar comercios de esta fuente. La licencia lo pide al compartir los datos.
+
 ## Fases
 
 1. **Hecha.** `geocache` (migración 0198), usado por todo `buscar_direccion` cuando recibe `repo`. Guarda la respuesta
    cruda: los filtros se aplican después. Si la tabla no está, ubica igual sin caché.
-2. Lector de **Overture** por ciudad (el salto grande de datos), con dependencia nueva `duckdb`: es la única forma
+2. **Hecha.** Lector de **Overture** por ciudad (el salto grande de datos), con dependencia nueva `duckdb`: es la única forma
    razonable de leer GeoParquet de S3 por caja sin bajar el mundo entero. Entra como fuente `overture` a Importados,
    marcando repetidos contra comercios y OSM.
 3. Vigía común: comparar, cambios, ausentes, corridas, comando a mano y loop apagado. Primero para `turismo`
