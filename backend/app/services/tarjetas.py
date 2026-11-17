@@ -11,7 +11,8 @@ Pasos de UNA foto (`procesar`):
 3. leer el texto: Tesseract (gratis, por defecto) o Gemini (sólo con el interruptor `gemini_tarjetas` prendido
    Y con GEMINI_API_KEY; ante una falla de Gemini se sigue con Tesseract);
 4. sacar los campos con reglas simples. NUNCA se inventa nada: lo que no se encuentra queda en null;
-5. buscar la ubicación con Nominatim, acotada a la ciudad elegida (sólo si hay dirección);
+5. ubicar la dirección (esquina o cuadra con las calles de la ciudad y, si no, Nominatim acotado a la ciudad
+   elegida; `services/ubicar_direccion.py`), sólo si hay dirección;
 6. marcar el repetido si algún teléfono ya es de un comercio activo;
 7. guardar la foto en el disco PRIVADO (`privado:`) y la fila.
 
@@ -31,6 +32,7 @@ import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 
 import structlog
@@ -433,6 +435,19 @@ def _pedir_nominatim(params: dict) -> list:
     return datos if isinstance(datos, list) else []
 
 
+def largo_de(caja) -> float | None:
+    """La diagonal en metros del `boundingbox` de Nominatim (`[lat_min, lat_max, lng_min, lng_max]`, como texto).
+    None si no vino o no se entiende."""
+    if not isinstance(caja, (list, tuple)) or len(caja) != 4:
+        return None
+    lat1, lat2, lng1, lng2 = (_numero(v) for v in caja)
+    if None in (lat1, lat2, lng1, lng2):
+        return None
+    dy = (lat2 - lat1) * 111_320.0
+    dx = (lng2 - lng1) * 111_320.0 * math.cos(math.radians((lat1 + lat2) / 2))
+    return math.hypot(dx, dy)
+
+
 def _numero(valor) -> float | None:
     try:
         n = float(valor)
@@ -441,56 +456,137 @@ def _numero(valor) -> float | None:
     return n if math.isfinite(n) else None
 
 
-def buscar_direccion(direccion: str, ciudad: dict | None, *, pedir: Callable[[dict], list] | None = None) -> dict | None:
+GEOCACHE_DIAS = 90                 # una respuesta guardada vale 90 días (0198)…
+GEOCACHE_DIAS_SIN_RESULTADO = 30   # …y un «no encontrado», 30: OSM se completa de a poco
+_CAMPOS_CRUDOS = ("lat", "lon", "display_name", "place_rank", "boundingbox")
+
+
+def _clave_geocache(texto: str, ciudad: dict | None, radio_km: float) -> str:
+    base = f"{texto.lower()}|{(ciudad or {}).get('id') or ''}|{float(radio_km):g}"
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+
+def _vigente(consultado_at, con_resultado: bool) -> bool:
+    try:
+        cuando = datetime.fromisoformat(str(consultado_at).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return False
+    if cuando.tzinfo is None:
+        cuando = cuando.replace(tzinfo=timezone.utc)
+    dias = GEOCACHE_DIAS if con_resultado else GEOCACHE_DIAS_SIN_RESULTADO
+    return datetime.now(timezone.utc) - cuando < timedelta(days=dias)
+
+
+def _de_la_base(repo, clave: str) -> tuple[bool, dict | None]:
+    """`(hay, fila_cruda)` del caché permanente. Si la tabla no está (deploy antes de la 0198) o la base falla,
+    se sigue sin caché: ubicar no puede depender de él."""
+    if repo is None or not hasattr(repo, "get_geocache"):
+        return False, None
+    try:
+        guardado = repo.get_geocache(clave)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("tarjetas.geocache_lectura_fallo", error=type(exc).__name__)
+        return False, None
+    if not guardado:
+        return False, None
+    cruda = guardado.get("resultado")
+    if not _vigente(guardado.get("consultado_at"), cruda is not None):
+        return False, None
+    return True, cruda
+
+
+def _a_la_base(repo, clave: str, texto: str, ciudad: dict | None, cruda: dict | None) -> None:
+    if repo is None or not hasattr(repo, "guardar_geocache"):
+        return
+    try:
+        repo.guardar_geocache({"clave": clave, "consulta": texto, "ciudad_id": (ciudad or {}).get("id"),
+                               "resultado": cruda, "consultado_at": datetime.now(timezone.utc).isoformat()})
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("tarjetas.geocache_escritura_fallo", error=type(exc).__name__)
+
+
+def _filtrar(fila: dict | None, caja, rango_minimo: int | None, largo_maximo_m: float | None) -> dict | None:
+    """La fila cruda de Nominatim → `{lat, lng, display_name}`, o None si no sirve con estos filtros."""
+    if not isinstance(fila, dict):
+        return None
+    lat, lng = _numero(fila.get("lat")), _numero(fila.get("lon"))
+    if lat is None or lng is None or not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        return None
+    if caja and not (caja[0] <= lng <= caja[2] and caja[3] <= lat <= caja[1]):
+        return None                                     # no se confía: tiene que caer dentro de la ciudad
+    rango = _numero(fila.get("place_rank"))
+    if rango_minimo is not None and rango is not None and rango < rango_minimo:
+        return None                                     # la ciudad o el barrio entero: no es una dirección
+    largo = largo_de(fila.get("boundingbox"))
+    if largo_maximo_m is not None and largo is not None and largo > largo_maximo_m:
+        return None                                     # una calle larga: su punto del medio no ubica a nadie
+    return {"lat": round(lat, 6), "lng": round(lng, 6), "display_name": str(fila.get("display_name") or "")[:300]}
+
+
+def buscar_direccion(direccion: str, ciudad: dict | None, *, pedir: Callable[[dict], list] | None = None,
+                     radio_km: float = RADIO_CIUDAD_KM, rango_minimo: int | None = None,
+                     largo_maximo_m: float | None = None, repo=None) -> dict | None:
     """El punto de una dirección DENTRO de la ciudad, o None si Nominatim no la encuentra.
 
     Devuelve `{lat, lng, display_name}`. Con el centro de la ciudad (`ciudades.lat/lng`) la búsqueda va acotada a
-    una caja de ~15 km (`bounded=1`): una calle con el mismo nombre en otra ciudad no cuenta. Sin centro se agrega
-    el nombre de la ciudad a la consulta. Sólo Bolivia y Argentina. Caché por consulta; un pedido por segundo en todo
-    el proceso. Lanza `UbicacionNoDisponible` si el servicio no contesta (eso no se cachea)."""
+    una caja de ~`radio_km` (por defecto 15 km; `bounded=1`): una calle con el mismo nombre en otra ciudad no
+    cuenta. Los lugares de afuera de la ciudad (docs/lugares-turismo.md) piden una caja más grande. Sin centro se
+    agrega el nombre de la ciudad a la consulta. Sólo Bolivia y Argentina. Un pedido por segundo en todo el
+    proceso. Lanza `UbicacionNoDisponible` si el servicio no contesta (eso no se guarda).
+
+    Caché en dos niveles, por consulta Y radio (la misma consulta con otra caja es otra respuesta): en memoria y,
+    con `repo`, en la tabla `geocache` (0198), que sobrevive entre corridas: la misma dirección no se le vuelve a
+    preguntar a Nominatim por 90 días (16/11: dejó de contestar después de cuatro corridas de ~700 pedidos). Se
+    guarda la respuesta CRUDA; los filtros de abajo se aplican después.
+
+    `rango_minimo` (el `place_rank` de Nominatim: 16 ciudad, 18-22 barrio, 26-27 calle, 30 edificio): un
+    resultado más grueso que eso no cuenta. Cuando Nominatim no encuentra la calle devuelve la ciudad o el barrio,
+    y para un local eso no es una ubicación (13/11: 16 negocios de Tarija cayeron todos en el centro).
+
+    `largo_maximo_m`: si lo que encontró mide más que eso (la diagonal de su `boundingbox`), no cuenta. Una
+    avenida de varios kilómetros devuelve su punto del medio, y ahí caían todos los negocios de la avenida
+    (16/11: nueve de la Av. Panamericana de Tarija en el mismo punto)."""
     global _ultimo_pedido
     texto = re.sub(r"\s+", " ", str(direccion or "")).strip()[:MAX_DIRECCION]
     if len(texto) < 4:
         return None
     nombre_ciudad = str((ciudad or {}).get("nombre") or "").strip()
     lat_c, lng_c = _numero((ciudad or {}).get("lat")), _numero((ciudad or {}).get("lng"))
-    clave = (texto.lower(), str((ciudad or {}).get("id") or ""))
+    caja = caja_de_la_ciudad(lat_c, lng_c, float(radio_km)) if lat_c is not None and lng_c is not None else None
+    clave = (texto.lower(), str((ciudad or {}).get("id") or ""), float(radio_km))
     ahora = time.monotonic()
     with _candado:
         visto = _cache.get(clave)
         if visto and ahora - visto[0] < CACHE_SEG:
             _cache.move_to_end(clave)
-            return visto[1]
+            return _filtrar(visto[1], caja, rango_minimo, largo_maximo_m)
+    clave_db = _clave_geocache(texto, ciudad, radio_km)
+    hay, cruda = _de_la_base(repo, clave_db)
+    if not hay:
         params = {"q": f"{texto}, {nombre_ciudad}" if nombre_ciudad else texto, "format": "jsonv2", "limit": 1,
                   "countrycodes": PAISES, "addressdetails": 0}
-        caja = None
-        if lat_c is not None and lng_c is not None:
-            caja = caja_de_la_ciudad(lat_c, lng_c)
+        if caja:
             params["viewbox"] = ",".join(f"{v:.6f}" for v in caja)
             params["bounded"] = 1
-        # El candado se mantiene durante la espera y el pedido: así el intervalo vale para TODOS los hilos.
-        espera = INTERVALO_NOMINATIM - (time.monotonic() - _ultimo_pedido)
-        if espera > 0:
-            _dormir(espera)
-        _ultimo_pedido = time.monotonic()
-        try:
-            filas = (pedir or _pedir_nominatim)(params)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("tarjetas.nominatim_fallo", error=type(exc).__name__)
-            raise UbicacionNoDisponible("El servicio de mapas no contestó") from None
-        resultado = None
-        for fila in filas[:1]:
-            lat, lng = _numero((fila or {}).get("lat")), _numero((fila or {}).get("lon"))
-            if lat is None or lng is None or not (-90 <= lat <= 90 and -180 <= lng <= 180):
-                continue
-            if caja and not (caja[0] <= lng <= caja[2] and caja[3] <= lat <= caja[1]):
-                continue                                    # no se confía: tiene que caer dentro de la ciudad
-            resultado = {"lat": round(lat, 6), "lng": round(lng, 6),
-                         "display_name": str((fila or {}).get("display_name") or "")[:300]}
-        _cache[clave] = (time.monotonic(), resultado)
+        with _candado:
+            # El candado se mantiene durante la espera y el pedido: así el intervalo vale para TODOS los hilos.
+            espera = INTERVALO_NOMINATIM - (time.monotonic() - _ultimo_pedido)
+            if espera > 0:
+                _dormir(espera)
+            _ultimo_pedido = time.monotonic()
+            try:
+                filas = (pedir or _pedir_nominatim)(params)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("tarjetas.nominatim_fallo", error=type(exc).__name__)
+                raise UbicacionNoDisponible("El servicio de mapas no contestó") from None
+        primera = (filas or [None])[0]
+        cruda = {k: primera[k] for k in _CAMPOS_CRUDOS if k in primera} if isinstance(primera, dict) else None
+        _a_la_base(repo, clave_db, texto, ciudad, cruda)
+    with _candado:
+        _cache[clave] = (time.monotonic(), cruda)
         while len(_cache) > CACHE_MAX:
             _cache.popitem(last=False)
-        return resultado
+    return _filtrar(cruda, caja, rango_minimo, largo_maximo_m)
 
 
 # ───────────────────────────────────────────────────────────── una tarjeta completa
@@ -553,7 +649,8 @@ def procesar(repo, crepo, data: bytes, ciudad: dict, indice: dict[str, dict], *,
     punto = None
     if campos.direccion:
         try:
-            punto = buscar_direccion(campos.direccion, ciudad, pedir=pedir)
+            from app.services import ubicar_direccion        # acá adentro: ubicar_direccion importa este módulo
+            punto = ubicar_direccion.ubicar(repo, campos.direccion, ciudad, pedir=pedir, nombre=campos.nombre)
         except UbicacionNoDisponible:
             punto = None                                  # queda «no_encontrada»: la persona lo reintenta
     repetido = buscar_repetido(repo, campos.telefonos, indice)
@@ -589,4 +686,8 @@ def importado_salida(fila: dict, nombres_repetidos: dict[str, str] | None = None
         out.setdefault(k, None)
     if fila.get("duplicado_de"):
         out["duplicado_nombre"] = (nombres_repetidos or {}).get(fila["duplicado_de"])
+    if fila.get("fuente") == "turismo":
+        # La subcategoría con la que va a quedar el comercio al promoverlo (Guía de turismo, Radio móvil…).
+        from app.services.subcategorias_turismo import subcategoria_de_importado
+        out["subcategoria_legible"] = subcategoria_de_importado(fila)
     return out

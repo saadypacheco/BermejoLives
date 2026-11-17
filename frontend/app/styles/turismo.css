@@ -1,0 +1,187 @@
+/* «Visitá {ciudad}»: la banda de turismo de la home y la página /{ciudad}/turismo
+   (docs/turismo-home-y-repetidos.md §3). Componentes: components/visita-ciudad.tsx y
+   app/[city]/turismo/page.tsx.
+
+   Es a propósito otra cosa que las grillas grises del resto de la home: banda a todo el ancho con fondo
+   propio —el verde de marca—, título enorme, un sol dorado (el dorado del logo, sólo como adorno: nunca en
+   textos) y una cordillera abajo. Mobile primero: la mayoría entra por el celular.
+
+   Los colores salen de los tokens de uruku.css. El fondo de la banda NO sigue a --uk-page (es verde en los dos
+   temas): de noche es el mismo verde, más hondo. Texto crema del manual (#F9F6ED) sobre verde oscuro: contraste
+   por encima de 7:1. Los accesos son tarjetas CLARAS (--uk-surface) para que resalten sobre el verde. */
+
+.uk-visita {
+  --visita-a: #0F5A38; --visita-b: #146C43; --visita-c: #1D8D52;
+  --visita-crema: #F9F6ED;
+  position: relative; overflow: hidden; isolation: isolate;
+  margin-top: 28px;
+  color: var(--visita-crema);
+  background:
+    radial-gradient(120% 70% at 85% 0%, rgba(246,211,138,.20), transparent 55%),
+    linear-gradient(165deg, var(--visita-a) 0%, var(--visita-b) 52%, var(--visita-c) 100%);
+}
+.uk[data-theme="dark"] .uk-visita {
+  --visita-a: #0A2417; --visita-b: #0F3322; --visita-c: #16472F;
+}
+.uk-visita-in { position: relative; z-index: 2; padding-block: 44px 76px; }
+
+/* El sol: un disco dorado con dos halos. Atrás del texto (z-index menor) y chico en el celular. */
+.uk-visita-sol {
+  position: absolute; z-index: 1; top: 26px; right: 6%;
+  width: 76px; height: 76px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--uk-gold-a, #F6D38A), var(--uk-gold-b, #C98E38));
+  box-shadow: 0 0 0 16px rgba(246,211,138,.14), 0 0 0 40px rgba(246,211,138,.07);
+  opacity: .92;
+}
+@media (min-width: 760px) {
+  .uk-visita-sol { top: 40px; right: 9%; width: 148px; height: 148px; box-shadow: 0 0 0 30px rgba(246,211,138,.14), 0 0 0 76px rgba(246,211,138,.07); }
+  .uk-visita-in { padding-block: 64px 100px; }
+}
+
+/* La cordillera, pegada al borde de abajo: dos capas crema translúcidas. */
+.uk-visita-cordillera { position: absolute; z-index: 1; left: 0; bottom: 0; width: 100%; height: 56px; color: var(--visita-crema); pointer-events: none; }
+.uk-visita-cordillera .atras { fill: currentColor; opacity: .10; }
+.uk-visita-cordillera .frente { fill: currentColor; opacity: .16; }
+@media (min-width: 760px) { .uk-visita-cordillera { height: 88px; } }
+
+.uk-visita-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px; margin: 0 0 14px;
+  padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 700; letter-spacing: .02em;
+  background: rgba(249,246,237,.14); border: 1px solid rgba(249,246,237,.28);
+}
+.uk-visita-h {
+  margin: 0 0 14px; font-size: clamp(44px, 12.5vw, 88px); font-weight: 800; line-height: .98; letter-spacing: -.035em;
+  text-shadow: 0 2px 22px rgba(0,0,0,.22);
+  display: block;
+}
+.uk-visita-h span { display: block; }
+@media (min-width: 560px) { .uk-visita-h span { display: inline; } }
+.uk-visita-bajada { margin: 0 0 22px; max-width: 640px; font-size: 17px; line-height: 1.55; color: rgba(249,246,237,.92); }
+@media (min-width: 760px) { .uk-visita-bajada { font-size: 19px; } }
+
+.uk-visita-cta { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 34px; }
+.uk .uk-visita-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 52px; padding: 0 22px;
+  border-radius: var(--uk-radius-btn); font-size: 16px; font-weight: 700; cursor: pointer;
+  background: var(--visita-crema); color: #0F4E31; box-shadow: 0 8px 22px rgba(0,0,0,.22);
+}
+.uk .uk-visita-btn:hover { background: #fff; }
+.uk .uk-visita-btn.ghost { background: transparent; color: var(--visita-crema); border: 1.5px solid rgba(249,246,237,.55); box-shadow: none; }
+.uk .uk-visita-btn.ghost:hover { background: rgba(249,246,237,.12); }
+@media (max-width: 420px) { .uk-visita-btn { flex: 1 1 100%; } }
+.uk-visita a:focus-visible, .uk-visita button:focus-visible { outline: 3px solid var(--uk-gold-a, #F6D38A); outline-offset: 3px; }
+
+/* ---- Carrusel de lugares ---- */
+.uk-visita-lugares { margin: 0 0 34px; }
+.uk-visita-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin: 0 0 14px; }
+.uk-visita-cab h3 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+.uk .uk-visita-cab a { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; font-size: 15px; font-weight: 700; color: var(--uk-gold-a, #F6D38A); white-space: nowrap; }
+.uk .uk-visita-cab a:hover { text-decoration: underline; }
+.uk-visita .uk-carrusel-item { flex-basis: 74%; }
+@media (min-width: 560px) { .uk-visita .uk-carrusel-item { flex-basis: calc((100% - 32px) / 3); } }
+@media (min-width: 1000px) { .uk-visita .uk-carrusel-item { flex-basis: calc((100% - 64px) / 5); } }
+
+.uk .uk-visita-lugar {
+  position: relative; display: block; height: 100%; min-height: 300px; overflow: hidden; isolation: isolate;
+  border-radius: var(--uk-radius); color: #fff;
+  background: linear-gradient(155deg, #1D8D52 0%, #10623E 55%, #0B3F28 100%);
+  box-shadow: 0 14px 30px rgba(0,0,0,.28); transition: transform .18s ease;
+}
+.uk .uk-visita-lugar:hover { transform: translateY(-3px); }
+.uk-visita-lugar img { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover; }
+.uk-visita-lugar::after { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(0deg, rgba(4,24,14,.92) 0%, rgba(4,24,14,.35) 48%, rgba(4,24,14,0) 72%); }
+.uk-visita-lugar .uk-visita-lugar-ic { position: absolute; z-index: 0; right: -10px; top: 26%; width: 150px; height: 150px; opacity: .22; color: var(--visita-crema); }
+.uk-visita-tipo {
+  position: absolute; z-index: 2; top: 14px; left: 14px; display: inline-flex; align-items: center; gap: 6px;
+  max-width: calc(100% - 28px); padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  background: var(--visita-crema); color: #0F4E31;
+}
+.uk-visita-lugar-pie { position: absolute; z-index: 2; left: 16px; right: 14px; bottom: 16px; display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.uk-visita-lugar-nombre { font-size: 22px; font-weight: 700; line-height: 1.12; letter-spacing: -.01em; text-shadow: 0 1px 10px rgba(0,0,0,.45); overflow-wrap: anywhere; }
+.uk-visita-ir { flex-shrink: 0; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--uk-gold-a, #F6D38A); color: #3A2A08; }
+
+/* ---- Accesos grandes ---- */
+.uk-visita-accesos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (min-width: 720px) { .uk-visita-accesos { grid-template-columns: repeat(3, 1fr); gap: 14px; } }
+@media (min-width: 1100px) { .uk-visita-accesos { grid-template-columns: repeat(6, 1fr); } }
+.uk .uk-visita-acceso {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; height: 100%; min-height: 148px;
+  padding: 16px 14px 14px; border-radius: var(--uk-radius); background: var(--uk-surface); color: var(--uk-ink);
+  box-shadow: 0 10px 24px rgba(0,0,0,.20); transition: transform .18s ease, box-shadow .18s ease;
+}
+.uk .uk-visita-acceso:hover { transform: translateY(-3px); box-shadow: 0 16px 30px rgba(0,0,0,.26); }
+.uk-visita-acceso-ic {
+  display: grid; place-items: center; width: 54px; height: 54px; margin-bottom: 8px; border-radius: 18px;
+  background: var(--uk-green-soft); color: var(--uk-green-ic);
+}
+.uk-visita-acceso b { font-size: 16px; line-height: 1.2; padding-right: 22px; }
+.uk-visita-acceso small { font-size: 13px; line-height: 1.35; color: var(--uk-ink-soft); }
+.uk-visita-acceso-flecha { position: absolute; right: 12px; bottom: 12px; color: var(--uk-green-ic); }
+
+@media (prefers-reduced-motion: reduce) {
+  .uk .uk-visita-lugar, .uk .uk-visita-acceso { transition: none; }
+  .uk .uk-visita-lugar:hover, .uk .uk-visita-acceso:hover { transform: none; }
+}
+
+/* ============================================================
+   La página /{ciudad}/turismo
+   ============================================================ */
+.uk-visita-pag { margin-top: 0; }
+.uk-visita-pag .uk-visita-in { padding-block: 28px 84px; }
+.uk-visita-pag .uk-visita-h { font-size: clamp(36px, 9.5vw, 68px); }
+.uk-visita-pag .uk-migas { color: rgba(249,246,237,.85); margin-bottom: 18px; }
+.uk-visita-pag .uk-migas a { color: var(--uk-gold-a, #F6D38A); }
+.uk-visita-pag .uk-migas [aria-current="page"] { color: var(--visita-crema); }
+.uk-visita-pag .uk-migas li + li::before { color: rgba(249,246,237,.6); }
+
+/* El índice de anclas: chips que se deslizan de costado (sin saltos de línea en el celular). */
+.uk-tur-nav { display: flex; gap: 8px; margin: 0; padding: 0; list-style: none; overflow-x: auto; scrollbar-width: none; }
+.uk-tur-nav::-webkit-scrollbar { display: none; }
+.uk .uk-tur-nav a {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 999px; white-space: nowrap;
+  font-size: 15px; font-weight: 700; background: rgba(249,246,237,.14); border: 1px solid rgba(249,246,237,.32); color: var(--visita-crema);
+}
+.uk .uk-tur-nav a:hover { background: rgba(249,246,237,.26); }
+
+.uk-tur-sec { padding-block: 34px 6px; scroll-margin-top: 84px; }
+.uk-tur-sec h2 { margin: 0 0 6px; display: flex; align-items: center; gap: 10px; font-size: clamp(24px, 6vw, 32px); letter-spacing: -.02em; }
+.uk-tur-sec h2 .ic { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: var(--uk-green-soft); color: var(--uk-green-ic); flex-shrink: 0; }
+.uk-tur-sec > p { margin: 0 0 16px; max-width: 680px; font-size: 15.5px; line-height: 1.55; color: var(--uk-ink-soft); }
+
+.uk-tur-lista { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 760px) { .uk-tur-lista { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1100px) { .uk-tur-lista { grid-template-columns: repeat(3, 1fr); } }
+.uk-tur-item {
+  display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: var(--uk-radius);
+  background: var(--uk-surface); border: 1px solid var(--uk-line); box-shadow: var(--uk-shadow-soft);
+}
+.uk .uk-tur-nombre { font-size: 18px; font-weight: 700; line-height: 1.25; color: var(--uk-green-ic); overflow-wrap: anywhere; }
+.uk .uk-tur-nombre:hover { text-decoration: underline; }
+.uk-tur-sub { display: inline-block; margin-top: 4px; font-size: 13px; color: var(--uk-ink-soft); }
+.uk-tur-acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+.uk .uk-tur-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 46px; padding: 0 16px; flex: 1 1 auto;
+  border-radius: var(--uk-radius-btn); font-size: 15px; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--uk-line); background: var(--uk-surface); color: var(--uk-ink);
+}
+.uk .uk-tur-btn:hover { border-color: var(--uk-green); }
+.uk .uk-tur-btn.wa { border: 0; color: #fff; background: linear-gradient(135deg, #1fae59, #0e7d3d); }
+.uk .uk-tur-btn.ghost { flex: 0 1 auto; color: var(--uk-green-ic); }
+
+/* Los enlaces a las listas que ya existen (visitar, dormir, comer, vinos): tarjetas grandes. */
+.uk-tur-enlaces { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 760px) { .uk-tur-enlaces { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1100px) { .uk-tur-enlaces.cuatro { grid-template-columns: repeat(4, 1fr); } }
+.uk .uk-tur-enlace {
+  display: flex; align-items: center; gap: 14px; min-height: 92px; padding: 16px; height: 100%; scroll-margin-top: 84px;
+  border-radius: var(--uk-radius); background: var(--uk-surface); border: 1px solid var(--uk-line); box-shadow: var(--uk-shadow-soft); color: var(--uk-ink);
+}
+.uk .uk-tur-enlace:hover { border-color: var(--uk-green); }
+.uk-tur-enlace .ic { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 18px; background: var(--uk-green-soft); color: var(--uk-green-ic); flex-shrink: 0; }
+.uk-tur-enlace b { display: block; font-size: 18px; line-height: 1.2; }
+.uk-tur-enlace small { display: block; margin-top: 3px; font-size: 14px; line-height: 1.35; color: var(--uk-ink-soft); }
+.uk-tur-enlace .ir { margin-left: auto; color: var(--uk-green-ic); }
+.uk-tur-sec-enlace { scroll-margin-top: 84px; }
+.uk-tur-sub-nota { margin: 12px 0 0; font-size: 14px; color: var(--uk-ink-soft); }
+.uk .uk-tur-sub-nota a { color: var(--uk-green-ic); font-weight: 700; }
+.uk-tur-pie { padding-block: 36px 40px; }

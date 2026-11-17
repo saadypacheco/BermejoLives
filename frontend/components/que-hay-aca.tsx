@@ -43,6 +43,7 @@ import { CallePanel, EstadoCalleTag, LeyendaCalles } from "@/components/calle-pa
 import { PermisoUbicacion } from "@/components/permiso-ubicacion";
 import { Ic } from "@/components/ic";
 import { Pin } from "@/components/icons";
+import { esNoComercial } from "@/lib/para-visitar";
 
 /** Hasta dónde llega la lista al abrir, y hasta dónde con «Ver más lejos». */
 export const RADIO_CERCA_M = 150;
@@ -60,6 +61,8 @@ type ItemAca = {
   plan: EstadoPlan | null;
   /** null = no se sabe (dato viejo guardado antes de «Qué hay acá»). */
   faltan: string[] | null;
+  /** `false` = lugar público (plaza, museo, baño): sin sello de plan ni «Le falta». */
+  comercial: boolean;
   /** El comercio completo; null si sólo hay lo guardado (sin señal). */
   c: ComercioAgente | null;
   d: number;
@@ -69,11 +72,13 @@ type ItemAca = {
 
 function desdeComercio(c: ComercioAgente, aqui: PosicionAca | null): ItemAca | null {
   if (c.lat == null || c.lng == null) return null;
+  const publico = esNoComercial(c);
   return {
     id: c.id, nombre: c.nombre ?? "", lat: c.lat, lng: c.lng,
     rubro: c.rubros?.nombre ?? null, thumb: c.portada_thumb_url || c.portada_url || null,
-    plan: c.estado_plan ?? null,
-    faltan: etiquetasFaltas(calcularFaltas(c, c.fotos_count ?? null)),
+    plan: publico ? null : c.estado_plan ?? null,
+    faltan: publico ? null : etiquetasFaltas(calcularFaltas(c, c.fotos_count ?? null)),
+    comercial: !publico,
     c, d: aqui ? metros(aqui.lat, aqui.lng, c.lat, c.lng) : Infinity,
     aprox: c.ubicacion_aproximada === true,
   };
@@ -82,7 +87,8 @@ function desdeComercio(c: ComercioAgente, aqui: PosicionAca | null): ItemAca | n
 function desdeGuardado(x: ComercioCercano, aqui: PosicionAca | null): ItemAca {
   return {
     id: x.id, nombre: x.nombre, lat: x.lat, lng: x.lng, rubro: x.rubro, thumb: x.thumb,
-    plan: x.plan ?? null, faltan: x.faltan ?? null, c: null,
+    plan: esNoComercial(x) ? null : x.plan ?? null, faltan: esNoComercial(x) ? null : x.faltan ?? null,
+    comercial: !esNoComercial(x), c: null,
     d: aqui ? metros(aqui.lat, aqui.lng, x.lat, x.lng) : Infinity,
     aprox: false,
   };
@@ -423,7 +429,11 @@ export function QueHayAca({ cabecera, onCargarNuevo, onMisComercios, onSubirPend
               <span style={{ fontSize: 12, color: "var(--txt-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.rubro ?? "Sin rubro"}</span>
               <span style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                 <span style={{ fontSize: 12.5, color: "var(--neon)", fontWeight: 700 }}>{metrosTxt(x.d)}</span>
-                <SelloPlan plan={x.plan} />
+                {x.comercial
+                  ? <SelloPlan plan={x.plan} />
+                  : <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 700, color: "var(--txt-2)" }}>
+                      <Ic n="para-visitar" s={12} /> Lugar público
+                    </span>}
               </span>
               {x.aprox && (
                 <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--amber)", lineHeight: 1.3 }}>

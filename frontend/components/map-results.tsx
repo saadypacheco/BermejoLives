@@ -11,6 +11,7 @@ import { adornoHTML, MEDIDAS, ZOOM_MIN_ADORNOS, type Adorno } from "@/lib/adorno
 import { getAdornosMapa, getFarmaciasDeTurnoAhora } from "@/lib/data-client";
 import { etiquetaHasta } from "@/lib/turnos-farmacia";
 import { PIN_TURNO, pinTurnoHtml, selloTurnoHtml } from "@/lib/mapa-turno";
+import { esParaVisitar, pinesParaEncuadre } from "@/lib/para-visitar";
 
 // Dónde arranca el mapa si la ciudad no trae coordenadas. Bermejo fue la
 // primera; con otra ciudad elegida manda la suya (ver `centro`).
@@ -262,7 +263,18 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
       // Se usa la miniatura si está: el globo la muestra a 220px de ancho y la
       // grande pesa diez veces más para verse igual.
       const foto = r.portada_thumb_url ?? r.portada_url ?? r.logo_url;
-      const popup = `
+      // Un lugar para visitar (plaza, museo, mirador…) no es un local: sin modalidad ni WhatsApp, con su tipo
+      // (la subcategoría) y «Ver lugar».
+      const popup = esParaVisitar(r.rubro_slug) ? `
+        <div class="map-pop">
+          ${foto ? `<img class="map-pop-img" src="${escapeAttr(foto)}" alt="" loading="lazy">` : ""}
+          <b>${escapeAttr(r.nombre)}</b>
+          <span>${escapeAttr((r.subcategoria ?? "").trim() || r.rubro_nombre || "Lugar para visitar")}</span>
+          <div class="map-pop-act">
+            <a href="${comoLlegarHref(r)}" target="_blank" rel="noopener" data-lead-comercio="${r.id}" data-lead-tipo="mapa">Cómo llegar</a>
+            <a href="/comercios/${r.slug}">Ver lugar</a>
+          </div>
+        </div>` : `
         <div class="map-pop">
           ${foto ? `<img class="map-pop-img" src="${escapeAttr(foto)}" alt="" loading="lazy">` : ""}
           <b>${escapeAttr(r.nombre)}${r.estrella ? `<span class="map-pop-estrella" role="img" aria-label="Verificado por URUKU" title="Verificado por URUKU">${SVG_ESTRELLA}</span>` : ""}</b>
@@ -280,8 +292,11 @@ export function MapResults({ results, hayFiltro = true, ciudad = null, ubicacion
       bounds.push([r.lat as number, r.lng as number]);
     }
     if (!encuadrar) return;
-    if (bounds.length > 1) mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
-    else if (bounds.length === 1) mapRef.current.setView(bounds[0], 16);
+    // El encuadre sólo cuenta los pines a 30 km o menos del centro de la ciudad: una excursión a 76 km se ve
+    // (se puede arrastrar hasta ella) pero no aleja el mapa hasta que la ciudad queda en un solo cúmulo.
+    const paraEncuadre = pinesParaEncuadre(bounds, ciudad?.lat != null && ciudad?.lng != null ? centro : null);
+    if (paraEncuadre.length > 1) mapRef.current.fitBounds(paraEncuadre, { padding: [40, 40], maxZoom: 16 });
+    else if (paraEncuadre.length === 1) mapRef.current.setView(paraEncuadre[0], 16);
     // Sin ningún pin (una ciudad que se está cargando), el mapa se queda en
     // su ciudad y no en la de la búsqueda anterior.
     else mapRef.current.setView(centro, 14);

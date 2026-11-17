@@ -3,6 +3,7 @@ import { normalizarCapa, type CapaCalles, type EstadoMarca } from "@/lib/calles"
 import { camposOpcionesFoto, postFormData, respuestaPortada, subirConProgreso, type OpcionesFoto, type RespuestaPortada } from "@/lib/upload";
 import { rutaPrivada } from "@/lib/archivo-privado";
 import { leerEntradaAdmin, leerEntradasDelEquipo, type EntradaAdmin, type EntradaDelEquipo } from "@/lib/entrar-como";
+import type { BodyCompletar, Comparacion } from "@/lib/completar-pure";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_admin_token";
 
@@ -903,38 +904,47 @@ export async function soltarGrupo(comercioId: string, grupoJid: string) {
 // Comercios traídos de fuentes externas (OpenStreetMap). NO son comercios de
 // URUKU: son una lista de qué existe y dónde, que pasa al mapa de a uno.
 export type ComercioImportado = {
-  id: string; fuente: string; fuente_id: string; nombre: string | null;
+  id: string; fuente: "osm" | "tarjeta" | "turismo" | "overture" | (string & {}); fuente_id: string; nombre: string | null;
   categoria: string | null; rubro_slug: string | null;
   lat: number | null; lng: number | null;
   telefono: string | null; whatsapp: string | null; website: string | null;
   horario: string | null; direccion: string | null;
   estado: "nuevo" | "promovido" | "descartado";
   duplicado_de: string | null; comercio_id: string | null; motivo: string | null;
+  // El nombre del comercio con el que se repite (el servidor lo suma en tarjeta y turismo): el aviso lo dice con nombre, no con código.
+  duplicado_nombre?: string | null;
   ciudad_id?: string | null;
-  // Sólo las filas de tarjeta (docs/carga-tarjetas.md): el resto no los trae.
+  // Sólo las filas de tarjeta y turismo (docs/carga-tarjetas.md, docs/importar-turismo.md): el resto no los trae.
+  // Turismo viene con `tiene_foto: false` y `lector: null`.
   email?: string | null;
   tiene_foto?: boolean;
   ubicacion?: "aproximada" | "confirmada" | "no_encontrada" | null;
   texto_leido?: string | null;
   lector?: "tesseract" | "gemini" | null;
+  // Sólo turismo, lugares para visitar (docs/lugares-turismo.md): el tipo de lugar (lista fija) y el enlace a su
+  // página de origen. Opcionales: el servidor que no los manda es uno anterior a la 0196.
+  subcategoria?: string | null;
+  fuente_url?: string | null;
 };
 
 export type PatchImportado = Partial<Record<
-  "nombre" | "direccion" | "telefono" | "whatsapp" | "website" | "email" | "rubro_slug", string>> & { lat?: number; lng?: number };
+  "nombre" | "direccion" | "telefono" | "whatsapp" | "website" | "email" | "rubro_slug" | "subcategoria" | "horario", string>> & { lat?: number; lng?: number };
 
 export async function listarImportados(
-  estado = "nuevo", q?: string, ciudadId?: string, fuente?: string,
+  estado = "nuevo", q?: string, ciudadId?: string, fuente?: string, rubro?: string,
 ): Promise<{ items: ComercioImportado[]; total: number; resumen: { ciudad_id: string | null; estado: string; n: number }[] }> {
   const p = new URLSearchParams({ estado });
   if (q) p.set("q", q);
   if (ciudadId) p.set("ciudad_id", ciudadId);
   if (fuente) p.set("fuente", fuente);
+  // Slug exacto del rubro (`para-visitar`): el filtro «Turismo › Para visitar».
+  if (rubro) p.set("rubro", rubro);
   const res = await authFetch(`/admin/importados?${p}`);
   return res.json();
 }
 
 export async function promoverImportado(
-  id: string, body: { nombre?: string; rubro_slug?: string; whatsapp?: string },
+  id: string, body: { nombre?: string; rubro_slug?: string; whatsapp?: string; sin_ubicacion?: boolean },
 ) {
   const res = await authFetch(`/admin/importados/${id}/promover`, {
     method: "POST",
@@ -1019,6 +1029,32 @@ export async function ubicarImportado(id: string, direccion: string): Promise<Re
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ direccion }),
   });
+  return res.json();
+}
+
+/** Los dos lado a lado: el comercio ya cargado y lo que trae el importado (GET /admin/importados/{id}/comparar).
+ *  Sin `comercioId` el servidor usa `duplicado_de`. */
+export async function compararImportado(id: string, comercioId?: string): Promise<Comparacion> {
+  const q = comercioId ? `?comercio_id=${encodeURIComponent(comercioId)}` : "";
+  const res = await authFetch(`/admin/importados/${encodeURIComponent(id)}/comparar${q}`);
+  return res.json();
+}
+
+/** Completa el comercio existente con lo del importado y deja el importado como promovido. */
+export async function completarImportado(
+  id: string, body: BodyCompletar,
+): Promise<{ ok: boolean; comercio: { id: string; nombre: string; slug?: string | null }; cambiados: string[] }> {
+  const res = await authFetch(`/admin/importados/${encodeURIComponent(id)}/completar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
+/** «No es el mismo»: quita el repetido y deja el importado para promover como nuevo. Devuelve la fila. */
+export async function noEsRepetidoImportado(id: string): Promise<ComercioImportado> {
+  const res = await authFetch(`/admin/importados/${encodeURIComponent(id)}/no-es-repetido`, { method: "POST" });
   return res.json();
 }
 

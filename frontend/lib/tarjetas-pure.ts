@@ -5,6 +5,8 @@
 // validar; esto evita mandar 200 MB para que digan que no), el texto del estado de la
 // ubicación, qué campos cambiaron para el PATCH y la regla de cuándo se puede promover.
 
+import { RUBRO_PARA_VISITAR } from "./para-visitar";
+
 export const MAX_ARCHIVOS = 20;
 export const MAX_BYTES = 10 * 1024 * 1024;
 export const TIPOS_FOTO = ["image/jpeg", "image/png", "image/webp"] as const;
@@ -118,7 +120,9 @@ export function textoUbicar(r: { encontrado?: boolean; display_name?: string | n
 
 // ── Formulario ↔ PATCH ───────────────────────────────────────────────────────
 
-export const CAMPOS_EDITABLES = ["nombre", "direccion", "telefono", "whatsapp", "website", "email", "rubro_slug"] as const;
+// `subcategoria` y `horario` son de los lugares para visitar (docs/lugares-turismo.md): en el resto de las filas no
+// se tocan, así que el parche no los manda.
+export const CAMPOS_EDITABLES = ["nombre", "direccion", "telefono", "whatsapp", "website", "email", "rubro_slug", "subcategoria", "horario"] as const;
 export type CampoEditable = (typeof CAMPOS_EDITABLES)[number];
 export type FormTarjeta = Record<CampoEditable, string>;
 export type PatchTarjeta = Partial<Record<CampoEditable, string>> & { lat?: number; lng?: number };
@@ -163,18 +167,67 @@ export function puedePromover(
   return { ok: true, motivo: "" };
 }
 
+/** Las fuentes que pueden promoverse sin punto (docs/turismo-home-y-repetidos.md §2): guías y radio móviles de la
+ *  página de turismo no tienen dirección; las tarjetas a veces tampoco. Las de OSM siempre traen punto. */
+export function admiteSinUbicacion(i: { fuente: string }): boolean {
+  return i.fuente === "tarjeta" || i.fuente === "turismo";
+}
+
+export const AVISO_SIN_UBICACION = "No va a aparecer en el mapa; sí en su ficha, la búsqueda y las listas";
+
+/** «Promover sin ubicación»: el botón secundario que aparece cuando falta el punto y la fuente lo admite. `visible`
+ *  es si se muestra; `ok` si se puede apretar (hay nombre y nada sin guardar). Con punto no se ofrece: se promueve
+ *  con el punto. */
+export function puedePromoverSinUbicacion(
+  i: { fuente: string; lat: number | null; lng: number | null },
+  form: Pick<FormTarjeta, "nombre">,
+  sinGuardar: boolean,
+): { visible: boolean; ok: boolean; motivo: string } {
+  if (!admiteSinUbicacion(i) || tienePunto(i)) return { visible: false, ok: false, motivo: "" };
+  if (sinGuardar) return { visible: true, ok: false, motivo: "Guardá los cambios antes de promover" };
+  if (!form.nombre.trim()) return { visible: true, ok: false, motivo: "Falta el nombre del negocio" };
+  return { visible: true, ok: true, motivo: "" };
+}
+
 // ── Listado ──────────────────────────────────────────────────────────────────
 
-export type FuenteFiltro = "todas" | "osm" | "tarjeta";
+export type FuenteFiltro = "todas" | "osm" | "tarjeta" | "turismo" | "turismo-visitar" | "overture";
 
-/** El valor del query param `fuente`; con «todas» no se manda. */
+/** El valor del query param `fuente`; con «todas» no se manda. «Turismo › Para visitar» es `fuente=turismo` + `rubro`. */
 export function paramFuente(f: FuenteFiltro): string | undefined {
-  return f === "todas" ? undefined : f;
+  if (f === "todas") return undefined;
+  return f === "turismo-visitar" ? "turismo" : f;
+}
+
+/** El valor del query param `rubro` (slug exacto): sólo el filtro «Turismo › Para visitar» lo manda. */
+export function paramRubroImportados(f: FuenteFiltro): string | undefined {
+  return f === "turismo-visitar" ? RUBRO_PARA_VISITAR : undefined;
 }
 
 /** Sólo `fuente === "tarjeta"` tiene la ficha de revisión de tarjetas. */
 export function esTarjeta(i: { fuente: string }): boolean {
   return i.fuente === "tarjeta";
+}
+
+/** Tienen la ficha editable (campos, mapa, promover): las tarjetas, lo traído de la página de turismo
+ *  (docs/importar-turismo.md) y lo de Overture Maps (docs/vigia-fuentes.md). Las dos últimas, sin foto. */
+export function usaFichaEditable(i: { fuente: string }): boolean {
+  return i.fuente === "tarjeta" || i.fuente === "turismo" || i.fuente === "overture";
+}
+
+/** La primera `http(s)://...` del texto leído: en turismo es la página de origen. null si no hay.
+ *  Se le sacan los signos que suelen pegarse al final de una URL en un texto corrido. */
+export function urlDeOrigen(texto: string | null | undefined): string | null {
+  if (!texto) return null;
+  const m = /https?:\/\/[^\s<>"']+/i.exec(texto);
+  if (!m) return null;
+  const url = m[0].replace(/[.,;:!?)\]]+$/, "");
+  try {
+    const u = new URL(url);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Enlace al panel de negocios para ver el comercio con el que se repite. */

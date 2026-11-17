@@ -78,7 +78,9 @@ def test_un_compilado_ya_publicado_lista_lo_posteado_y_su_link_deja_de_abrir(rep
     r = content_consent.efectos_del_retiro(crepo, "s3", "ana@uruku.bo")
     assert r["published_posts"] == [{"network": "tiktok", "post_url": "https://www.tiktok.com/@u/video/9"}]
     assert crepo.pieces[p["id"]]["status"] == "published"
-    assert crepo.pieces[p["id"]]["share_expires_at"] <= datetime.now(timezone.utc).isoformat()
+    # Como fechas, no como texto: `isoformat()` omite los microsegundos cuando son 0 y la comparación de cadenas
+    # fallaba de vez en cuando justo en el cambio de segundo.
+    assert datetime.fromisoformat(crepo.pieces[p["id"]]["share_expires_at"]) <= datetime.now(timezone.utc)
     assert client.get(f"/public/pieces/{'t' * 22}").status_code == 410
 
 
@@ -441,7 +443,9 @@ def test_retirar_la_autorizacion_vence_el_link_del_comerciante_al_instante(clien
     p = _publicada(repo, crepo)
     assert client.get(f"/public/pieces/{TOKEN}").status_code == 200
     content_consent.aplicar(crepo, "com-1", False, "admin", "ana@uruku.bo")
-    assert crepo.pieces[p["id"]]["share_expires_at"] <= datetime.now(timezone.utc).isoformat()
+    # Como fechas, no como texto: `isoformat()` omite los microsegundos cuando son 0 y la comparación de cadenas
+    # fallaba de vez en cuando justo en el cambio de segundo.
+    assert datetime.fromisoformat(crepo.pieces[p["id"]]["share_expires_at"]) <= datetime.now(timezone.utc)
     assert client.get(f"/public/pieces/{TOKEN}").status_code == 410
 
 

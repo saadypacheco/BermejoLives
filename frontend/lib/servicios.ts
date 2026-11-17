@@ -11,7 +11,7 @@
 // "estacionamiento" no devuelva estaciones de servicio.
 import type { NombreIcono } from "@/components/ic";
 
-export type TipoServicio = "baño" | "estacionamiento" | "cajero" | "wifi" | "emergencias" | "alquiler" | "servicio-tecnico";
+export type TipoServicio = "baño" | "estacionamiento" | "cajero" | "wifi" | "emergencias" | "alquiler" | "servicio-tecnico" | "para-visitar";
 
 export const SERVICIOS: Record<TipoServicio, { rubro: string; nombre: string; plural: string; icono: NombreIcono; patron: RegExp }> = {
   "baño":          { rubro: "banos", nombre: "Baño público", plural: "Baños públicos", icono: "banos", patron: /\bba[ñn]os?\b|sanitarios? p[uú]blicos?|inodoro|\bwc\b/ },
@@ -21,6 +21,9 @@ export const SERVICIOS: Record<TipoServicio, { rubro: string; nombre: string; pl
   emergencias:     { rubro: "emergencias", nombre: "Policía o emergencia", plural: "Policía y emergencias", icono: "policia", patron: /\bpolic[ií]a\b|comisar[ií]a|bomberos?|\bfelcc\b|\bhospital\b|posta sanitaria|centro de salud|emergencias?\b/ },
   alquiler:        { rubro: "alquiler", nombre: "Alquiler", plural: "Alquileres", icono: "alquiler", patron: /\balquil|inmobiliaria|arriendo|anticr[eé]tico|departamento en alquiler|habitaci[oó]n en alquiler/ },
   "servicio-tecnico": { rubro: "servicio-tecnico", nombre: "Servicio técnico", plural: "Servicio técnico", icono: "servicio-tecnico", patron: /servicio t[eé]cnico|reparaci[oó]n de|arreglo de (celular|tel[eé]fono|compu|notebook|heladera|lavarropas|tv)|t[eé]cnico (en|de) (celulares|computadoras|heladeras|aire)|electricista|plomero|gasista|refrigeraci[oó]n/ },
+  // Lugares turísticos (0196). El patrón va ANCLADO a la búsqueda entera: «museos» o «qué visitar en Tarija» van al
+  // rubro, pero «museo san roque» sigue siendo una búsqueda por nombre (el rubro la dejaría sin el texto).
+  "para-visitar": { rubro: "para-visitar", nombre: "Lugar para visitar", plural: "Lugares para visitar", icono: "para-visitar", patron: /^(?:que (?:visitar|ver|conocer)|lugar(?:es)? (?:para visitar|turisticos?)|atractivos? turisticos?|sitios? turisticos?|para visitar|museos?|miradores?|que hay para visitar)(?: en [a-zñ ]+)?$/ },
 };
 
 function norm(s: string): string {

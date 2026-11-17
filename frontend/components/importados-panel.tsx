@@ -8,8 +8,9 @@ import {
 import type { Ciudad, Rubro } from "@/lib/types";
 import { Ic } from "@/components/ic";
 import { useAdminCiudad } from "@/components/admin-ciudad";
+import { Aviso } from "@/components/content/content-ui";
 import { CargarTarjetasModal, FichaTarjeta } from "@/components/importados-tarjetas";
-import { esTarjeta, paramFuente, type FuenteFiltro } from "@/lib/tarjetas-pure";
+import { paramFuente, paramRubroImportados, usaFichaEditable, type FuenteFiltro } from "@/lib/tarjetas-pure";
 
 type FilaResumen = { ciudad_id: string | null; estado: string; n: number };
 
@@ -38,6 +39,11 @@ const FUENTES: { key: FuenteFiltro; label: string }[] = [
   { key: "todas", label: "Todas" },
   { key: "osm", label: "OSM" },
   { key: "tarjeta", label: "Tarjetas" },
+  { key: "turismo", label: "Turismo" },
+  // Los lugares (plazas, museos, miradores…): turismo con el rubro `para-visitar` (docs/lugares-turismo.md).
+  { key: "turismo-visitar", label: "Turismo › Para visitar" },
+  // Overture Maps: la base abierta mensual (docs/vigia-fuentes.md). Se llena con importar_overture.
+  { key: "overture", label: "Overture" },
 ];
 
 export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: Ciudad | null }) {
@@ -51,6 +57,8 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
   const [ocultarDup, setOcultarDup] = useState(true);
   const [fuente, setFuente] = useState<FuenteFiltro>("todas");
   const [modalTarjetas, setModalTarjetas] = useState(false);
+  // «Se completó Hotel Plaza: dirección, teléfono»: queda a la vista después de que la fila sale de la lista.
+  const [completado, setCompletado] = useState("");
   // Al cambiar de ciudad o de búsqueda salen consultas seguidas; si la vieja
   // llega después de la nueva, pisaría la lista con otra ciudad.
   const pedido = useRef(0);
@@ -60,7 +68,7 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
     const mio = ++pedido.current;
     setCargando(true); setErr("");
     try {
-      const r = await listarImportados(estado, q || undefined, ciudadId, paramFuente(fuente));
+      const r = await listarImportados(estado, q || undefined, ciudadId, paramFuente(fuente), paramRubroImportados(fuente));
       if (mio !== pedido.current) return;
       setItems(r.items ?? []);
       setResumen(r.resumen ?? []);
@@ -103,8 +111,8 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
   // Los que ya están cargados en URUKU (mismo nombre a menos de 120 m) se
   // esconden por defecto: si no, el que revisa mira doscientas fichas que ya
   // tiene y abandona antes de llegar a las que sirven.
-  // Las tarjetas no se esconden: su «repetido» se ve en la ficha y es justamente lo que hay que mirar.
-  const ocultables = (i: ComercioImportado) => !!i.duplicado_de && !esTarjeta(i);
+  // Tarjetas y turismo no se esconden: su «repetido» se ve en la ficha y es justamente lo que hay que mirar.
+  const ocultables = (i: ComercioImportado) => !!i.duplicado_de && !usaFichaEditable(i);
   const visibles = ocultarDup ? items.filter((i) => !ocultables(i)) : items;
   const nDup = items.filter(ocultables).length;
 
@@ -112,7 +120,9 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
     <div>
       <div style={{ marginBottom: 14 }}>
         <p style={{ color: "var(--txt-3)", fontSize: 13, lineHeight: 1.5, marginBottom: 10 }}>
-          Negocios traídos de <b>OpenStreetMap</b> (licencia ODbL, con atribución).
+          Negocios traídos de <b>OpenStreetMap</b> (licencia ODbL, con atribución), de
+          fotos de <b>tarjetas</b> y de la <b>página de turismo</b> de la Alcaldía
+          (negocios y lugares para visitar).
           No están en el mapa: pasan de a uno cuando los promovés. Traen nombre y
           ubicación casi siempre, teléfono a veces, y <b>casi nunca foto</b> — ésa
           la saca alguien parado enfrente.
@@ -167,6 +177,14 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
         )}
       </div>
 
+      {completado && (
+        <div style={{ marginBottom: 10 }}>
+          <Aviso tono="ok" accion={
+            <button type="button" className="btn btn-ghost btn-sm" style={{ minHeight: 40 }} onClick={() => setCompletado("")}>Cerrar</button>}>
+            {completado}
+          </Aviso>
+        </div>
+      )}
       {err && <p style={{ color: "salmon", fontSize: 13 }}>{err}</p>}
       {cargando && <p style={{ color: "var(--txt-3)" }}>Cargando…</p>}
       {/* Sólo sin error: con la carga fallida, «Nada acá» afirma un vacío que
@@ -175,13 +193,20 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
         <p style={{ color: "var(--txt-3)", fontSize: 13.5 }}>
           {fuente === "tarjeta"
             ? <>Nada acá. Se llena con «Cargar tarjetas»: subí las fotos de las tarjetas de presentación.</>
+            : fuente === "turismo"
+            ? <>Nada acá. Se llena corriendo <code>importar_turismo</code> en el servidor (ver <code>docs/importar-turismo.md</code>).</>
+            : fuente === "overture"
+            ? <>Nada acá. Se llena corriendo <code>importar_overture</code> en el servidor (ver <code>docs/vigia-fuentes.md</code>).</>
+            : fuente === "turismo-visitar"
+            ? <>Nada acá. Se llena corriendo <code>importar_turismo_lugares</code> en el servidor (ver <code>docs/lugares-turismo.md</code>).</>
             : <>Nada acá. Se llena corriendo <code>importar_osm.py</code> con la ciudad, o con «Cargar tarjetas».</>}
         </p>
       )}
 
       {visibles.map((i) => (
-        esTarjeta(i)
-          ? <FichaTarjeta key={i.id} item={i} rubros={rubros} ciudad={ciudad} onCambio={cargar} />
+        usaFichaEditable(i)
+          ? <FichaTarjeta key={i.id} item={i} rubros={rubros} ciudad={ciudad} onCambio={cargar}
+                        onCompletado={(m) => { setCompletado(m); void cargar(); }} />
           : <Fila key={i.id} item={i} rubros={rubros} onCambio={cargar} />
       ))}
 

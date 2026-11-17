@@ -317,7 +317,8 @@ class Repo(Protocol):
     # ---- comercios importados de fuentes externas ----
     def upsert_importado(self, row: dict) -> bool: ...
     def list_importados(self, estado: str | None, ciudad_id: str | None,
-                        q: str | None, limite: int, fuente: str | None = None) -> list[dict]: ...
+                        q: str | None, limite: int, fuente: str | None = None,
+                        rubro: str | None = None) -> list[dict]: ...
     def get_importado(self, importado_id: str) -> dict | None: ...
     def get_importado_por_fuente(self, fuente: str, fuente_id: str) -> dict | None: ...
     def crear_importado(self, row: dict) -> dict | None: ...
@@ -342,6 +343,7 @@ class Repo(Protocol):
     def marcar_mensaje_leido(self, mensaje_id: str, comercio_id: str) -> dict: ...
     def list_todos_comercios(self, verificado: bool | None, limit: int) -> list[dict]: ...
     def update_comercio(self, comercio_id: str, patch: dict, rubro_slugs: list[str] | None) -> dict: ...
+    def actualizar_campos_comercio(self, comercio_id: str, patch: dict) -> dict: ...
     def poner_horario_en_lote(self, ids: list[str], horario: str, estimado: bool) -> int: ...
     def crear_lugar(self, row: dict) -> dict: ...
     def list_lugares(self, ciudad_id: str | None) -> list[dict]: ...
@@ -436,6 +438,8 @@ class Repo(Protocol):
     def upsert_calles_tramos(self, filas: list[dict]) -> int: ...
     def baja_calles_tramos_ausentes(self, ciudad_id: str, claves: set[tuple[int, int]]) -> int: ...
     def list_calles_tramos(self, ciudad_id: str) -> list[dict]: ...
+    def get_geocache(self, clave: str) -> dict | None: ...
+    def guardar_geocache(self, row: dict) -> None: ...
     def get_calle_tramo(self, tramo_id: str) -> dict | None: ...
     def list_calles_marcas_ultimas(self, ciudad_id: str) -> list[dict]: ...
     def crear_calle_marca(self, row: dict) -> dict: ...
@@ -462,7 +466,7 @@ _COLS_COMERCIO_CAMPO = (
     # Para calcular `estado_plan` (docs/que-hay-aca.md). NO salen al agente: los quita
     # `que_hay_aca.enriquecer`, que deja sólo el sello, sin precios ni `paga_hasta`.
     "plan, plan_cortesia, paga_hasta, suspendido, "
-    "rubros!comercios_rubro_id_fkey(nombre, slug), ciudades(nombre, slug), "
+    "rubros!comercios_rubro_id_fkey(nombre, slug, comercial), ciudades(nombre, slug), "
     "comercio_rubros(rubros(nombre, slug)), "
     "lugares(nombre, tipo, lat, lng, portada_thumb_url)"
 )
@@ -637,7 +641,8 @@ class SupabaseRepo(IntegracionRepoMixin):
         return True
 
     def list_importados(self, estado: str | None, ciudad_id: str | None,
-                        q: str | None, limite: int = 200, fuente: str | None = None) -> list[dict]:
+                        q: str | None, limite: int = 200, fuente: str | None = None,
+                        rubro: str | None = None) -> list[dict]:
         sel = self._db.table("comercios_importados").select("*")
         if estado:
             sel = sel.eq("estado", estado)
@@ -645,6 +650,8 @@ class SupabaseRepo(IntegracionRepoMixin):
             sel = sel.eq("ciudad_id", ciudad_id)
         if fuente:
             sel = sel.eq("fuente", fuente)
+        if rubro:
+            sel = sel.eq("rubro_slug", rubro)          # slug exacto (p. ej. `para-visitar`)
         if q:
             sel = sel.ilike("nombre", f"%{q}%")
         # Las tarjetas se revisan por tanda: lo último que se subió primero. Los de OSM, por nombre.
@@ -3457,6 +3464,14 @@ class SupabaseRepo(IntegracionRepoMixin):
                 self.set_comercio_rubros(comercio_id, rubro_ids)
         return self.get_comercio(comercio_id) or {}
 
+    def actualizar_campos_comercio(self, comercio_id: str, patch: dict) -> dict:
+        """UPDATE de columnas sueltas del comercio, sin tocar rubros ni rearmar el slug (a diferencia de
+        `update_comercio`). Lo usa «completar el existente» (docs/turismo-home-y-repetidos.md): el slug es el
+        enlace que ya se compartió y no se mueve. Devuelve la fila actualizada."""
+        if patch:
+            self._db.table("comercios").update(dict(patch)).eq("id", comercio_id).execute()
+        return self.get_comercio(comercio_id) or {}
+
     # ---- lugares (mercados / galerías / paseos: contenedores de puestos) ----
     def poner_horario_en_lote(self, ids: list[str], horario: str, estimado: bool) -> int:
         """El mismo horario a muchos comercios de una.
@@ -4024,6 +4039,16 @@ class SupabaseRepo(IntegracionRepoMixin):
             (self._db.table("calles_tramos").update({"activo": False})
              .eq("ciudad_id", ciudad_id).in_("id", obsoletos[i:i + 100]).execute())
         return len(obsoletos)
+
+    def get_geocache(self, clave: str) -> dict | None:
+        """La respuesta guardada de Nominatim (`resultado`, `consultado_at`) o None (0198)."""
+        res = (self._db.table("geocache").select("resultado, consultado_at")
+               .eq("clave", clave).limit(1).execute())
+        return res.data[0] if res.data else None
+
+    def guardar_geocache(self, row: dict) -> None:
+        """Guarda o pisa la respuesta de una consulta (único por `clave`)."""
+        self._db.table("geocache").upsert(row, on_conflict="clave").execute()
 
     def list_calles_tramos(self, ciudad_id: str) -> list[dict]:
         """Los tramos activos de la ciudad. Pagina: PostgREST corta en 1000 sin avisar."""

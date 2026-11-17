@@ -98,3 +98,25 @@ export function descripcionFicha(o: {
   if (vende) return `${nombre} en ${o.ciudad}: vende ${vende}.${wa}`;
   return `${nombre}, ${o.que ? `${o.que} ` : ""}en ${o.ciudad} (${o.departamento}). Ubicación en el mapa y cómo llegar.${wa}`;
 }
+
+/**
+ * Los textos de la ficha que cambian si el rubro es NO comercial (plazas, museos, baños…): un lugar
+ * público no tiene WhatsApp ni «negocio». Los baños los mostraban con el texto de un local.
+ */
+export function textosFicha(lugarPublico: boolean): {
+  sinContactoTitulo: string; sinContactoDetalle: string; qr: string; informacion: string;
+} {
+  return lugarPublico
+    ? {
+        sinContactoTitulo: "Es un lugar público",
+        sinContactoDetalle: "Fijate cómo llegar acá abajo.",
+        qr: "El QR de este lugar",
+        informacion: "Información del lugar",
+      }
+    : {
+        sinContactoTitulo: "Este local no tiene WhatsApp cargado",
+        sinContactoDetalle: "Hay que ir hasta el local. Fijate cómo llegar acá abajo.",
+        qr: "El QR de este negocio",
+        informacion: "Información del negocio",
+      };
+}

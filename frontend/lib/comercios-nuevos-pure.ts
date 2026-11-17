@@ -24,3 +24,17 @@ export function lineaComerciosNuevos(n: number | null | undefined): string {
     ? "1 comercio nuevo en las últimas 24 horas"
     : `${cantidad} comercios nuevos en las últimas 24 horas`;
 }
+
+/** Los ids de los rubros NO comerciales (`rubros.comercial = false`: baños, emergencias, «Para visitar»…).
+ *  Un lugar que se promueve no es un comercio que se suma: no cuenta (docs/lugares-turismo.md, criterio 9). */
+export function idsRubrosNoComerciales(rubros: readonly { id: string; comercial?: boolean | null }[]): string[] {
+  return rubros.filter((r) => r.comercial === false).map((r) => r.id);
+}
+
+/** El filtro `or` de PostgREST que deja afuera esos rubros pero NO a los comercios sin rubro
+ *  (`rubro_id is null`: un `not in` solo los descartaría, porque null no es «distinto de» nada).
+ *  `null` si no hay rubros no comerciales: no hace falta filtrar. */
+export function filtroSinNoComerciales(ids: readonly string[]): string | null {
+  const limpios = ids.filter((id) => /^[\w-]+$/.test(id));
+  return limpios.length > 0 ? `rubro_id.is.null,rubro_id.not.in.(${limpios.join(",")})` : null;
+}

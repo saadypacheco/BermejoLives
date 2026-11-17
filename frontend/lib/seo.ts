@@ -196,6 +196,8 @@ export const RUBRO_SCHEMA_TYPE: Readonly<Record<string, string>> = {
   carpinteria: "HomeAndConstructionBusiness", herreria: "HomeAndConstructionBusiness",
   emergencias: "EmergencyService",
   banos: "PublicToilet",
+  // Lugares turísticos (plazas, museos, miradores, excursiones…): rubro no comercial, 0196.
+  "para-visitar": "TouristAttraction",
   estacionamiento: "ParkingFacility",
   lavadero: "LocalBusiness", salones: "LocalBusiness", envios: "LocalBusiness", taxis: "LocalBusiness",
   wifi: "LocalBusiness", alquiler: "LocalBusiness", "servicio-tecnico": "LocalBusiness",
@@ -211,7 +213,7 @@ export const SCHEMA_TYPE_WHITELIST: readonly string[] = [
   "SportingGoodsStore", "Florist", "Pharmacy", "Optician", "HairSalon", "HealthAndBeautyBusiness",
   "ExerciseGym", "Restaurant", "FastFoodRestaurant", "CafeOrCoffeeShop", "Bakery", "LodgingBusiness",
   "NightClub", "AutoRepair", "GasStation", "FinancialService", "AutomatedTeller", "Locksmith",
-  "HomeAndConstructionBusiness", "EmergencyService", "PublicToilet", "ParkingFacility",
+  "HomeAndConstructionBusiness", "EmergencyService", "PublicToilet", "ParkingFacility", "TouristAttraction",
 ];
 
 /** El tipo de la ficha para un rubro; sin mapeo (o sin rubro) → `LocalBusiness`. */
@@ -311,6 +313,24 @@ export function collectionPageNode(o: { name: string; path: string; description?
     inLanguage: "es",
     ...(o.description ? { description: o.description } : {}),
     mainEntity: itemListNode(o.items),
+  };
+}
+
+/** `TouristDestination` de una ciudad (la página /{ciudad}/turismo). Sin números de comercios. `@id` fijo para que
+ *  el `CollectionPage` de la misma página pueda apuntarle con `about`. */
+export function touristDestinationNode(o: {
+  nombre: string; departamento?: string | null; pais?: string | null; path: string; description?: string;
+  lat?: number | null; lng?: number | null;
+}): JsonLdNode {
+  return {
+    "@type": "TouristDestination",
+    "@id": `${absoluteUrl(o.path)}#destino`,
+    name: o.nombre,
+    url: absoluteUrl(o.path),
+    ...(o.description ? { description: o.description } : {}),
+    ...(o.departamento ? { containedInPlace: { "@type": "AdministrativeArea", name: o.departamento, addressCountry: paisIso(o.pais) } } : {}),
+    ...(typeof o.lat === "number" && typeof o.lng === "number"
+      ? { geo: { "@type": "GeoCoordinates", latitude: o.lat, longitude: o.lng } } : {}),
   };
 }
 

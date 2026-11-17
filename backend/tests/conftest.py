@@ -247,6 +247,7 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         self.videos_promo: list[dict] = []
         self.novedades_uruku: dict[str, dict] = {}    # id -> fila (0150)
         self.calles_tramos: dict[str, dict] = {}      # id -> fila (0152)
+        self.geocache: dict[str, dict] = {}           # clave -> fila (0198)
         self.turnos_farmacia: dict[str, dict] = {}    # id -> fila (0154)
         self.calles_marcas: list[dict] = []           # registro de marcas (0152)
         self.redes: list[dict] = [
@@ -347,7 +348,7 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         self._importados_por_clave[clave] = fila
         return True
 
-    def list_importados(self, estado, ciudad_id, q, limite=200, fuente=None):
+    def list_importados(self, estado, ciudad_id, q, limite=200, fuente=None, rubro=None):
         out = list(self.importados.values())
         if estado:
             out = [i for i in out if i["estado"] == estado]
@@ -355,6 +356,8 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
             out = [i for i in out if i.get("ciudad_id") == ciudad_id]
         if fuente:
             out = [i for i in out if i.get("fuente") == fuente]
+        if rubro:
+            out = [i for i in out if i.get("rubro_slug") == rubro]
         if q:
             out = [i for i in out if q.lower() in (i.get("nombre") or "").lower()]
         return out[:limite]
@@ -1854,6 +1857,13 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
                 n += 1
         return n
 
+    def get_geocache(self, clave):
+        fila = self.geocache.get(clave)
+        return {"resultado": fila.get("resultado"), "consultado_at": fila.get("consultado_at")} if fila else None
+
+    def guardar_geocache(self, row):
+        self.geocache[row["clave"]] = dict(row)
+
     def list_calles_tramos(self, ciudad_id):
         return [dict(t) for t in self.calles_tramos.values()
                 if t["ciudad_id"] == ciudad_id and t.get("activo", True)]
@@ -2125,8 +2135,12 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
                   for v in conteo.values()]
         return sorted(salida, key=lambda x: -x["veces"])[:limite]
 
+    #: Los rubros no comerciales de la base real (`rubros.comercial = false`): puntos de la ciudad, no negocios.
+    RUBROS_NO_COMERCIALES = frozenset({"banos", "emergencias", "estacionamiento", "cajeros", "wifi", "para-visitar"})
+
     def list_rubros(self):
-        return [{"slug": s, "nombre": s.title()} for s in self.rubros]
+        return [{"slug": s, "nombre": s.title(), "comercial": s not in self.RUBROS_NO_COMERCIALES}
+                for s in self.rubros]
 
     def sugerir_rubros_por_texto(self, texto):
         if not texto or not texto.strip():
@@ -2491,6 +2505,13 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         c.update(patch)
         if rubro_slugs:
             c["rubros"] = list(rubro_slugs)
+        return c
+
+    def actualizar_campos_comercio(self, comercio_id, patch):
+        c = self.comercios.get(comercio_id)
+        if c is None:
+            return {}
+        c.update(patch)
         return c
 
     # ---- leads ----

@@ -48,6 +48,12 @@ NO_VAN_EN_LA_0145 = tuple(c for c in NO_VAN_EN_LA_LISTA
                          if c not in CERRADAS_POR_0148 and c not in CERRADAS_POR_0186)
 
 
+# Columnas que nacieron DESPUÉS de la 0145 y se dieron a anon por columna en su propia migración (regla 11 de
+# AGENTS.md). No están en la lista de la 0145, pero el sitio público las puede pedir.
+#   fuente_url (0196, docs/lugares-turismo.md): el enlace a la página de origen de un lugar para visitar.
+DADAS_DESPUES_DE_LA_0145 = {"fuente_url": "0196_lugares_para_visitar.sql"}
+
+
 def _0145(carpeta="supabase/migrations") -> str:
     return (RAIZ / carpeta / "0145_comercios_columnas_publicas.sql").read_text(encoding="utf-8")
 
@@ -69,8 +75,13 @@ def _columnas_dadas() -> list[str]:
 
 
 def _columnas_publicas() -> list[str]:
-    """Lo que anon puede leer HOY: la lista de la 0145 menos lo que cierran la 0148 y la 0186."""
+    """Lo que anon podía leer tras la 0145 + 0148 + 0186: la lista de la 0145 menos lo que cierran la 0148 y la 0186."""
     return [c for c in _columnas_dadas() if c not in CERRADAS_POR_0148 and c not in CERRADAS_POR_0186]
+
+
+def _columnas_publicas_hoy() -> list[str]:
+    """Lo que anon puede leer HOY: las de `_columnas_publicas` más las que dieron migraciones posteriores."""
+    return _columnas_publicas() + list(DADAS_DESPUES_DE_LA_0145)
 
 
 # ───────────────────────────────────────────────────── la migración 0145
@@ -154,7 +165,7 @@ def test_la_0145_cubre_todas_las_columnas_de_comercios_menos_las_privadas():
     dadas = set(_columnas_dadas())
     assert "plan_cortesia" in existentes and "paga_hasta" in existentes     # el parseo ve todo
     assert dadas <= existentes, f"la 0145 da columnas que no existen: {sorted(dadas - existentes)}"
-    faltan = existentes - dadas - set(NO_VAN_EN_LA_LISTA)
+    faltan = existentes - dadas - set(NO_VAN_EN_LA_LISTA) - set(DADAS_DESPUES_DE_LA_0145)
     assert not faltan, f"columnas de comercios sin decidir (¿públicas? ¿privadas?): {sorted(faltan)}"
 
 
@@ -230,7 +241,7 @@ def test_el_buscador_de_archivos_anon_encuentra_los_que_son():
 
 
 def test_ningun_select_anon_sobre_comercios_usa_asterisco_ni_columnas_privadas_ni_no_dadas():
-    dadas = set(_columnas_publicas())
+    dadas = set(_columnas_publicas_hoy())
     vistos = 0
     for f in _archivos_anon():
         texto = f.read_text(encoding="utf-8")
@@ -278,7 +289,7 @@ def test_columnas_comercio_del_frontend_estan_todas_dadas():
     assert m, "lib/data.ts tiene que exportar COLUMNAS_COMERCIO"
     cols = re.findall(r'"(\w+)"', m.group(1))
     assert len(cols) == len(set(cols)), "columnas repetidas en COLUMNAS_COMERCIO"
-    dadas = set(_columnas_publicas())
+    dadas = set(_columnas_publicas_hoy())
     assert set(cols) <= dadas, f"COLUMNAS_COMERCIO pide columnas sin permiso: {sorted(set(cols) - dadas)}"
     assert "codigo" not in cols          # 0148: el código es sólo del admin
     # Lo que lee la ficha pública.
@@ -514,3 +525,19 @@ def test_0145_en_postgres_si_falta_una_columna_no_se_aplica_nada(pg):
     # Quedó como antes de intentarlo: anon sigue leyendo la tabla entera.
     pg("select paga_hasta from comercios;", rol="anon")
     pg(_0145())
+
+
+# ───────────────────────────────────────────────────── columnas dadas después de la 0145 (fuente_url, 0196)
+
+def test_cada_columna_dada_despues_de_la_0145_tiene_su_grant_por_columna_en_su_migracion():
+    """Si una columna está en `DADAS_DESPUES_DE_LA_0145`, su migración tiene que dársela a anon POR COLUMNA (nunca a
+    toda la tabla) y existir idéntica en las dos carpetas; y no puede ser una de las privadas."""
+    for columna, archivo in DADAS_DESPUES_DE_LA_0145.items():
+        assert columna in _columnas_de_comercios_en_las_migraciones(), columna
+        assert columna not in NO_VAN_EN_LA_LISTA, columna
+        a = (RAIZ / "supabase/migrations" / archivo).read_bytes()
+        b = (RAIZ / "selfhost/postgres-init" / archivo).read_bytes()
+        assert a == b and a, archivo
+        sql = _sin_comentarios_sql(a.decode("utf-8"))
+        assert re.search(rf"grant select \({columna}\) on public\.comercios to anon, authenticated;", sql), archivo
+        assert not re.search(r"grant\s+select\s+on\s+(public\.)?comercios\s+to\s+[^;]*anon", sql, re.I), archivo
