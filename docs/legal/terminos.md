@@ -23,6 +23,8 @@ URUKU (uruku.bo) es una **guía de comercios** de Bermejo y la frontera: muestra
 
 URUKU **no es una tienda en línea**: no vende, no compra, no cobra al comprador, no recibe pagos por cuenta de los comercios, no hace envíos y **no intermedia** entre el comprador y el comercio.
 
+Parte de los datos de las fichas (nombre, rubro, dirección, punto en el mapa y contacto) sale de **fuentes de datos abiertos**: OpenStreetMap (© colaboradores de OpenStreetMap, licencia ODbL) y Overture Maps Foundation (licencias CDLA-Permissive-2.0, Apache-2.0 y CC0). Esos datos los revisa una persona de URUKU antes de mostrarlos. Si tu comercio aparece y algo está mal, avisanos y lo corregimos.
+
 Al usar URUKU aceptás estos términos. Si no estás de acuerdo, no lo uses.
 
 ## 2. Quién puede usarlo

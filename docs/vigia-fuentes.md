@@ -132,7 +132,7 @@ docker exec buscadonde-backend python -m app.services.importar_overture --ciudad
   - 2.290 leídos y 1.931 que entran;
   - 1.580 con WhatsApp y 1.840 con dirección;
   - 760 sin rubro: se elige en el panel.
-- **Pendiente:** mostrar la atribución en el sitio («Datos: Overture Maps Foundation, CDLA-Permissive-2.0»)
+- **Hecho (17/11):** la atribución está en los términos, §1 («fuentes de datos abiertos»: OpenStreetMap y Overture Maps Foundation, con sus licencias).
   antes de publicar comercios de esta fuente. La licencia lo pide al compartir los datos.
 
 ## Fases
