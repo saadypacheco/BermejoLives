@@ -137,7 +137,7 @@ def leer_overture(lat: float, lng: float, radio_km: float, *, release: str = REL
         con.execute(f"SET extension_directory='{ext}'")
     tmp = tempfile.gettempdir().replace("\\", "/").replace("'", "")
     con.execute(f"SET home_directory='{tmp}'; SET temp_directory='{tmp}/duckdb';"
-                " SET memory_limit='1GB'; SET threads=2;")
+                " SET memory_limit='1GB'; SET threads=2; SET enable_progress_bar=false;")
     try:
         con.execute("LOAD httpfs")
     except Exception:  # noqa: BLE001 — sin la extensión preinstalada (PC de desarrollo): se baja
@@ -148,8 +148,8 @@ def leer_overture(lat: float, lng: float, radio_km: float, *, release: str = REL
         select id, names.primary as nombre, basic_category as categoria, taxonomy.primary as taxonomia,
                confidence as confianza, (bbox.xmin + bbox.xmax) / 2 as lng, (bbox.ymin + bbox.ymax) / 2 as lat,
                phones, websites, socials, emails, addresses, operating_status,
-               list_distinct(list_transform(sources, s -> s.dataset)) as fuentes,
-               list_distinct(list_transform(sources, s -> s.license)) as licencias
+               list_distinct(list_transform(sources, lambda s: s.dataset)) as fuentes,
+               list_distinct(list_transform(sources, lambda s: s.license)) as licencias
         from read_parquet('{origen}', hive_partitioning = 1)
         where bbox.xmin between {oeste:.6f} and {este:.6f}
           and bbox.ymin between {sur:.6f} and {norte:.6f}
