@@ -33,7 +33,7 @@ import {
 } from "@/lib/para-visitar";
 import {
   ACCEPT_FOTOS, AVISO_SIN_UBICACION, ENLACE_NEGOCIOS, MAX_ARCHIVOS, chipUbicacion, diffPatch, erroresDeRespuesta, formDeItem,
-  hayCambios, mensajeError, puedePromover, puedePromoverSinUbicacion, resumenCarga, textoUbicar, tienePunto, urlDeOrigen, validarArchivos,
+  hayCambios, mensajeError, nombreFuente, puedePromover, puedePromoverSinUbicacion, resumenCarga, textoUbicar, tienePunto, urlDeOrigen, validarArchivos,
   type ErrorArchivo, type FormTarjeta,
 } from "@/lib/tarjetas-pure";
 
@@ -529,9 +529,9 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio, onCompletado }: {
             <Insignia icono={chip.icono} tono={colorChip}>{chip.texto}</Insignia>
           </div>
 
-          {esTurismo && (
+          {(esTurismo || esOverture) && (
             <div style={{ fontSize: 12.5, color: "var(--txt-3)", overflowWrap: "anywhere" }}>
-              <Ic n="mapa" s={14} /> De la página de turismo
+              <Ic n="mapa" s={14} /> Fuente: <b style={{ color: "var(--txt-2)" }}>{nombreFuente(it)}</b>
               {origen && <>{" · "}<a href={origen} target="_blank" rel="noopener noreferrer" style={{ color: "var(--txt-2)" }}>{textoVerEnOrigen(origen)} <Ic n="abrir" s={13} /></a></>}
             </div>
           )}

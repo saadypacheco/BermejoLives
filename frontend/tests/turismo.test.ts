@@ -38,7 +38,7 @@ test("urlDeOrigen no devuelve esquemas raros", () => {
 test("la ficha no pide la foto si no hay (tiene_foto) y el panel lista la fuente turismo", () => {
   const ficha = readFileSync(resolve(process.cwd(), "components/importados-tarjetas.tsx"), "utf8");
   assert.match(ficha, /tiene_foto === true && <FotoTarjeta/);
-  assert.match(ficha, /De la página de turismo/);
+  assert.match(ficha, /Fuente: <b[^>]*>\{nombreFuente\(it\)\}/);
   const panel = readFileSync(resolve(process.cwd(), "components/importados-panel.tsx"), "utf8");
   assert.match(panel, /key: "turismo", label: "Turismo"/);
   assert.equal(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(ficha + panel), false);

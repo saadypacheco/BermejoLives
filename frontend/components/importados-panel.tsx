@@ -10,7 +10,7 @@ import { Ic } from "@/components/ic";
 import { useAdminCiudad } from "@/components/admin-ciudad";
 import { Aviso } from "@/components/content/content-ui";
 import { CargarTarjetasModal, FichaTarjeta } from "@/components/importados-tarjetas";
-import { paramFuente, paramRubroImportados, usaFichaEditable, type FuenteFiltro } from "@/lib/tarjetas-pure";
+import { nombreFuente, paramFuente, paramRubroImportados, usaFichaEditable, type FuenteFiltro } from "@/lib/tarjetas-pure";
 
 type FilaResumen = { ciudad_id: string | null; estado: string; n: number };
 
@@ -269,6 +269,7 @@ function Fila({ item, rubros, onCambio }: {
         {/* La fuente a la vista, siempre. En seis meses nadie puede distinguir
             un local caminado de uno traído de un mapa abierto si no está
             escrito — y la diferencia importa para la licencia y la confianza. */}
+        <div style={{ fontSize: 12, color: "var(--txt-3)", marginTop: 2 }}>Fuente: {nombreFuente(item)}</div>
         <div style={{ fontSize: 11, color: "var(--txt-3)", opacity: 0.7, fontFamily: "monospace", marginTop: 2 }}>
           {item.fuente}:{item.fuente_id}
           {item.lat != null && ` · ${item.lat.toFixed(5)}, ${item.lng?.toFixed(5)}`}

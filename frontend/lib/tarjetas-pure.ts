@@ -5,7 +5,7 @@
 // validar; esto evita mandar 200 MB para que digan que no), el texto del estado de la
 // ubicación, qué campos cambiaron para el PATCH y la regla de cuándo se puede promover.
 
-import { RUBRO_PARA_VISITAR } from "./para-visitar";
+import { RUBRO_PARA_VISITAR, dominioFuente } from "./para-visitar";
 
 export const MAX_ARCHIVOS = 20;
 export const MAX_BYTES = 10 * 1024 * 1024;
@@ -227,6 +227,43 @@ export function urlDeOrigen(texto: string | null | undefined): string | null {
     return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
   } catch {
     return null;
+  }
+}
+
+// ── De dónde salió ───────────────────────────────────────────────────────────
+
+/** Quién publica cada página de la que se importa, por dominio. Una página nueva sin entrada acá se nombra por su
+ *  dominio. */
+export const ORGANISMOS: Record<string, string> = {
+  "tarijaturismo.com": "Secretaría de Turismo de Tarija (Alcaldía)",
+};
+
+/** Los que aportaron un lugar a Overture, leídos del texto del importador («Datos de: meta, Overture»). Overture
+ *  mismo no cuenta: es quien los junta. */
+export function aportesOverture(texto: string | null | undefined): string[] {
+  const m = /^Datos de: (.+)$/m.exec(texto ?? "");
+  if (!m) return [];
+  const nombres: Record<string, string> = { meta: "Meta", microsoft: "Microsoft", foursquare: "Foursquare" };
+  return m[1].split(",").map((s) => s.trim()).filter((s) => s && s !== "-" && s.toLowerCase() !== "overture")
+    .map((s) => nombres[s.toLowerCase()] ?? s);
+}
+
+/** La fuente con nombre y apellido, para quien revisa: «Secretaría de Turismo de Tarija (Alcaldía)», «Overture Maps
+ *  Foundation (datos de Meta)», «OpenStreetMap». */
+export function nombreFuente(i: { fuente: string; fuente_url?: string | null; texto_leido?: string | null }): string {
+  switch (i.fuente) {
+    case "turismo": {
+      const d = dominioFuente(i.fuente_url) ?? dominioFuente(urlDeOrigen(i.texto_leido));
+      if (!d) return "Página de turismo";
+      return ORGANISMOS[d] ?? `Página de turismo (${d})`;
+    }
+    case "overture": {
+      const a = aportesOverture(i.texto_leido);
+      return a.length ? `Overture Maps Foundation (datos de ${a.join(", ")})` : "Overture Maps Foundation";
+    }
+    case "osm": return "OpenStreetMap";
+    case "tarjeta": return "Tarjeta de presentación";
+    default: return i.fuente;
   }
 }
 
