@@ -6,11 +6,28 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   MAX_ARCHIVOS, MAX_BYTES, MSG_SIN_RUTAS, chipUbicacion, diffPatch, erroresDeRespuesta, esRutaAusente, esTarjeta,
-  formDeItem, hayCambios, mensajeError, paramFuente, puedePromover, resumenCarga, textoUbicar, tienePunto,
+  aportesOverture, formDeItem, hayCambios, mensajeError, nombreFuente, paramFuente, puedePromover, resumenCarga, textoUbicar, tienePunto,
   tipoPermitido, validarArchivos,
 } from "../lib/tarjetas-pure";
 
 const f = (name: string, size: number, type: string) => ({ name, size, type });
+
+test("nombreFuente: la página de turismo de Tarija es la Secretaría de Turismo, por el enlace guardado o el del texto", () => {
+  const sec = "Secretaría de Turismo de Tarija (Alcaldía)";
+  assert.equal(nombreFuente({ fuente: "turismo", fuente_url: "https://www.tarijaturismo.com/hoteles/x" }), sec);
+  assert.equal(nombreFuente({ fuente: "turismo", texto_leido: "Hotel X\nhttps://tarijaturismo.com/x." }), sec);
+  assert.equal(nombreFuente({ fuente: "turismo", fuente_url: "https://otra.bo/x" }), "Página de turismo (otra.bo)");
+  assert.equal(nombreFuente({ fuente: "turismo", fuente_url: "javascript:alert(1)" }), "Página de turismo");
+});
+
+test("nombreFuente: Overture con quien aportó el dato; OSM y tarjeta con su nombre", () => {
+  const texto = "Overture Maps · release 2026-10-21.0 · confianza 0.85\nCategoría: restaurant\nDatos de: meta, Overture";
+  assert.deepEqual(aportesOverture(texto), ["Meta"]);
+  assert.equal(nombreFuente({ fuente: "overture", texto_leido: texto }), "Overture Maps Foundation (datos de Meta)");
+  assert.equal(nombreFuente({ fuente: "overture", texto_leido: "Datos de: -" }), "Overture Maps Foundation");
+  assert.equal(nombreFuente({ fuente: "osm" }), "OpenStreetMap");
+  assert.equal(nombreFuente({ fuente: "tarjeta" }), "Tarjeta de presentación");
+});
 
 test("validarArchivos: acepta JPEG, PNG y WebP; rechaza el resto con motivo", () => {
   const r = validarArchivos([
