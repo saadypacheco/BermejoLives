@@ -143,6 +143,9 @@ export type ResultadoBusqueda = {
   /** Dónde recortar la portada: el % vertical que va al centro. NULL = nadie lo
    *  ajustó y se usa el centro, que es lo que hacía siempre. */
   portada_pos: number | null;
+  /** La portada con diseño de publicidad (1600×1000, ya encuadrada), armada desde el panel (0200).
+   *  Si está, va de foto principal en la ficha y la original pasa a la galería. */
+  portada_diseno_url?: string | null;
   whatsapp: string;
   direccion: string | null;
   lat: number | null;

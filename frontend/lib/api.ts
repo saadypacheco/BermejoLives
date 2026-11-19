@@ -802,6 +802,40 @@ export async function adminUsarComoPortada(comercioId: string, fotoId: string): 
   return respuestaPortada<FotoComercio>(await okDe(res, "cambiar la portada"));
 }
 
+/** La portada con diseño de publicidad (docs/portada-diseno.md). Las cuatro rutas devuelven las dos
+ *  URLs: la que ya se usa en la ficha pública y la propuesta pendiente (sólo la ve el panel). */
+export type PortadaDiseno = { portada_diseno_url: string | null; portada_diseno_propuesta_url: string | null };
+
+function portadaDiseno(d: { portada_diseno_url?: string | null; portada_diseno_propuesta_url?: string | null }): PortadaDiseno {
+  return { portada_diseno_url: d.portada_diseno_url ?? null, portada_diseno_propuesta_url: d.portada_diseno_propuesta_url ?? null };
+}
+
+/** Arma la PROPUESTA (`POST .../portada-diseno?ia=`). Con `ia` la IA mejora la foto antes (cuesta unos
+ *  US$ 0,03 y puede tardar 20-40 s); sin `ia` es la plantilla, gratis. El 409 («el interruptor está
+ *  apagado») y el 400 («no tiene foto de portada») llegan como `Error` con el mensaje del servidor. */
+export async function armarPortadaDiseno(comercioId: string, ia: boolean): Promise<PortadaDiseno> {
+  const res = await authFetch(`/admin/comercio/${encodeURIComponent(comercioId)}/portada-diseno?ia=${ia ? "true" : "false"}`, { method: "POST" });
+  return portadaDiseno(await okDe(res, "armar la portada de diseño"));
+}
+
+/** «Usar en la ficha»: la propuesta pasa a ser la portada de diseño pública. */
+export async function usarPortadaDiseno(comercioId: string): Promise<PortadaDiseno> {
+  const res = await authFetch(`/admin/comercio/${encodeURIComponent(comercioId)}/portada-diseno`, { method: "PUT" });
+  return portadaDiseno(await okDe(res, "usar la portada de diseño"));
+}
+
+/** «Descartar»: la propuesta queda vacía; la portada que ya está en la ficha no se toca. */
+export async function descartarPropuestaDiseno(comercioId: string): Promise<PortadaDiseno> {
+  const res = await authFetch(`/admin/comercio/${encodeURIComponent(comercioId)}/portada-diseno/propuesta`, { method: "DELETE" });
+  return portadaDiseno(await okDe(res, "descartar la propuesta"));
+}
+
+/** «Volver a la foto original»: la ficha vuelve a mostrar la foto de portada sin diseño. */
+export async function quitarPortadaDiseno(comercioId: string): Promise<PortadaDiseno> {
+  const res = await authFetch(`/admin/comercio/${encodeURIComponent(comercioId)}/portada-diseno`, { method: "DELETE" });
+  return portadaDiseno(await okDe(res, "volver a la foto original"));
+}
+
 export async function adminBorrarFoto(comercioId: string, fotoId: string): Promise<void> {
   await authFetch(`/admin/comercio/${comercioId}/fotos/${fotoId}`, { method: "DELETE" });
 }

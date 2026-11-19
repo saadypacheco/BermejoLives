@@ -17,6 +17,7 @@ import QRCode from "qrcode";
 import { cargarFicha } from "@/lib/ficha-data";
 import { FichaGaleria } from "@/components/ficha-galeria";
 import { GaleriaTienda } from "@/components/galeria-tienda";
+import { fotosDeFicha } from "@/lib/portada-diseno";
 import { VistaLogger } from "@/components/vista-logger";
 import { VolverAResultados } from "@/components/volver-a-resultados";
 import { MODALIDAD_LABEL } from "@/lib/types";
@@ -184,6 +185,8 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
   // qué cara mostrar. Si la lectura del plan falla, queda sin chatbot, como
   // si el plan no lo tuviera: mejor no mostrarlo que mostrar uno que da 403.
   const conChatbot = funcionesPlan?.asistente_24_7 === true;
+  // Con portada de diseño (0200) esa va arriba y la foto original pasa a «Fotos del local».
+  const fotosFicha = fotosDeFicha(comercio, galeria.fotos);
   return (
     <UrukuShell showCatnav={false} fixedCity={ciudad}
                 asistente={conChatbot ? { id: comercio.id, nombre: comercio.nombre } : undefined}>
@@ -208,10 +211,10 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
         {/* ===== Arriba: la galería y la tarjeta de contacto ===== */}
         <div className="uk-ficha-top">
           <FichaGaleria
-            portada={comercio.portada_url ?? null}
-            fotos={galeria.fotos}
+            portada={fotosFicha.portada}
+            fotos={fotosFicha.fotos}
             nombre={comercio.nombre}
-            posicion={(comercio as { portada_pos?: number | null }).portada_pos ?? null}
+            posicion={fotosFicha.posicion}
           />
 
           {/* La tarjeta de contacto va ARRIBA y no al final de la página.
@@ -332,7 +335,7 @@ export default async function ComercioPage(props: { params: Promise<{ slug: stri
         </div>
 
         {/* ===== Las fotos del local, como una tienda: a todo el ancho ===== */}
-        <GaleriaTienda fotos={galeria.fotos} videos={galeria.videos} publicaciones={publicaciones}
+        <GaleriaTienda fotos={fotosFicha.fotos} videos={galeria.videos} publicaciones={publicaciones}
                        nombre={comercio.nombre} comercioId={comercio.id} comercioWhatsapp={comercio.whatsapp ?? null} />
 
         {/* Sin ofertas ni novedades el comercio igual sirve —tiene teléfono,

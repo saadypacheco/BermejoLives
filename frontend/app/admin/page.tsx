@@ -56,6 +56,7 @@ import { ContentBankPanel } from "@/components/content/content-bank-panel";
 import { ContentRedesPanel } from "@/components/content/content-redes-panel";
 import { TelefonosFotosPanel } from "@/components/admin/telefonos-fotos-panel";
 import { SubscribersPanel } from "@/components/subscribers/subscribers-panel";
+import { PortadaDisenoBloque } from "@/components/admin/portada-diseno-bloque";
 import { ManualesPanel } from "@/components/admin/manuales-panel";
 import { puedo } from "@/lib/api";
 import { linkWhatsapp, mensajePasarQr, mensajePedirFotos, whatsappValido } from "@/lib/ficha-whatsapp";
@@ -2917,6 +2918,22 @@ function ModalEditar({
                 </summary>
                 <div style={{ paddingBottom: 10 }}>
                   <AnalisisComercio comercioId={comercio.id} onAplicado={aplicarIA} />
+                </div>
+              </details>
+
+              {/* La portada con diseño de publicidad: se arma, se mira y recién ahí va a la ficha. */}
+              <details style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "4px 12px" }}>
+                <summary style={{ cursor: "pointer", minHeight: 44, display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 600 }}>
+                  <Ic n="foto" s={15} /> Portada de diseño
+                </summary>
+                <div style={{ paddingBottom: 10 }}>
+                  <PortadaDisenoBloque
+                    comercioId={comercio.id}
+                    portadaUrl={portada.url}
+                    inicial={comercio as { portada_diseno_url?: string | null; portada_diseno_propuesta_url?: string | null }}
+                    puedeEditar={puedeEditar}
+                    onCambio={() => { cambioEnServidor.current = true; }}
+                  />
                 </div>
               </details>
             </fieldset>
