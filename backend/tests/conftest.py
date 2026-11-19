@@ -2136,7 +2136,8 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         return sorted(salida, key=lambda x: -x["veces"])[:limite]
 
     #: Los rubros no comerciales de la base real (`rubros.comercial = false`): puntos de la ciudad, no negocios.
-    RUBROS_NO_COMERCIALES = frozenset({"banos", "emergencias", "estacionamiento", "cajeros", "wifi", "para-visitar"})
+    RUBROS_NO_COMERCIALES = frozenset({"banos", "emergencias", "estacionamiento", "cajeros", "wifi", "para-visitar",
+                                       "aduana"})
 
     def list_rubros(self):
         return [{"slug": s, "nombre": s.title(), "comercial": s not in self.RUBROS_NO_COMERCIALES}

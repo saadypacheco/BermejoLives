@@ -1503,12 +1503,12 @@ def listar_importados(
     ciudad_id: str | None = None,
     q: str | None = None,
     limite: int = 200,
-    fuente: Literal["osm", "tarjeta", "turismo", "overture"] | None = None,
+    fuente: Literal["osm", "tarjeta", "turismo", "overture", "anh", "aduana"] | None = None,
     rubro: str | None = Query(default=None, max_length=80),
     _admin: dict = Depends(require_permiso("datos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """El listado de Importados. `fuente` (`osm` | `tarjeta` | `turismo` | `overture`) filtra por origen; sin él salen todos.
+    """El listado de Importados. `fuente` (`osm` | `tarjeta` | `turismo` | `overture` | `anh` | `aduana`) filtra por origen; sin él salen todos.
     `rubro` (slug exacto, p. ej. `para-visitar`) filtra por el rubro sugerido. Las tarjetas y las de turismo suman
     `email`, `ubicacion`, `texto_leido`, `lector` y `tiene_foto` (la foto de una tarjeta va por
     `/admin/importados/{id}/foto`; las de turismo no tienen foto). Cada item trae también `subcategoria` y
@@ -1608,11 +1608,11 @@ def promover_importado(
     nombre = (body.nombre or imp.get("nombre") or "").strip()
     if not nombre:
         raise HTTPException(status_code=400, detail="Sin nombre no se puede crear el comercio")
-    es_tarjeta = imp.get("fuente") in ("tarjeta", "turismo", "overture")   # se revisan campo por campo
+    es_tarjeta = imp.get("fuente") in ("tarjeta", "turismo", "overture", "anh", "aduana")   # se revisan campo por campo
     if imp.get("lat") is None or imp.get("lng") is None:
         if not body.sin_ubicacion:
             raise HTTPException(status_code=400, detail="Sin coordenadas no va al mapa")
-        if not es_tarjeta:
+        if not es_tarjeta or imp.get("fuente") == "anh":      # una estación de la ANH tiene que tener punto
             raise HTTPException(status_code=400,
                                 detail="Sólo las tarjetas y las páginas de turismo se promueven sin ubicación")
 

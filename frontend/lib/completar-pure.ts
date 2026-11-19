@@ -190,6 +190,8 @@ export function repetidoPendiente(i: { estado: string; duplicado_de: string | nu
 /** El título de la columna de lo importado. */
 export function tituloColumnaNuevo(fuente: string): string {
   if (fuente === "overture") return "Lo que trae Overture";
+  if (fuente === "anh") return "Lo que trae la ANH";
+  if (fuente === "aduana") return "Lo que trae la Aduana";
   return fuente === "turismo" ? "Lo que trae turismo" : "Lo que trae la tarjeta";
 }
 

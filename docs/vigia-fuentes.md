@@ -135,6 +135,75 @@ docker exec buscadonde-backend python -m app.services.importar_overture --ciudad
 - **Hecho (17/11):** la atribución está en los términos, §1 («fuentes de datos abiertos»: OpenStreetMap y Overture Maps Foundation, con sus licencias).
   antes de publicar comercios de esta fuente. La licencia lo pide al compartir los datos.
 
+### ANH: cómo se corre
+
+Estaciones de servicio de la Agencia Nacional de Hidrocarburos (`fuente='anh'`), por departamento. Entran a
+Importados como `estado='nuevo'`; nada se publica solo.
+
+```bash
+docker exec buscadonde-backend python -m app.services.importar_anh --departamento tarija --dry-run
+docker exec buscadonde-backend python -m app.services.importar_anh --departamento tarija
+```
+
+- **Fuente:** `https://www.anh.gob.bo/w2019/contenido.php?s=40&R=<actividad>&D=<departamento>` (el sitio redirige a
+  `/w2026/`; se sigue sólo dentro de `www.anh.gob.bo`). `R=1` es combustibles líquidos en estación de servicio y `R=2`
+  GNV: la misma estación aparece en las dos y se une en una fila. Dos pedidos por departamento, con 2 s de pausa y
+  un User-Agent genérico (`URUKU-importador/1.0`).
+- **Departamentos (`D=`)**, tal como los enlaza la propia página: 1 Chuquisaca, 2 La Paz, 3 Cochabamba, 4 Oruro,
+  5 Potosí, 6 Tarija, 7 Santa Cruz, 8 Beni, 9 Pando. `--departamento` acepta el slug (`santa-cruz`, `potosi`).
+- **Ciudad:** la ANH no trae municipio (la columna «Ubicación» repite el departamento). Se asigna por el municipio
+  que abre la dirección (`YACUIBA, AVDA…`) y, si no, por el punto dentro del radio de la ciudad (los de `RADIOS` de
+  Overture). Lo que no cae en una ciudad de la tabla `ciudades` se cuenta como `fuera_de_ciudad`: no se inventa una.
+- **Punto:** la página sí trae uno por estación (`setMark`). Entra como `ubicacion='aproximada'`, a confirmar. Con
+  `--sin-punto` se ignora y la fila sale sin punto, para el ubicador (`python -m app.services.ubicar_direccion
+  --ciudad tarija`, que también levanta las de `anh`; `--rehacer` no les toca el punto que trajo la ANH).
+- **Rubro:** `estacion-servicio` (migración 0076). Teléfonos: los fijos vienen con 7 dígitos y se les antepone el
+  código de área del departamento; un celular va a `whatsapp`, un fijo a `telefono`.
+- **Repetidos:** por teléfono o por nombre parecido (cerca, o en la misma ciudad si no hay punto): se marca
+  `duplicado_de`. Volver a correrlo no duplica: la `fuente_id` es `anh:<departamento>:<código de licencia>` (sin el
+  «LIC09/2026», que cambia en cada renovación).
+- **Promover:** como una tarjeta (el teléfono y la dirección que quedaron revisados), pero una estación **no** se
+  promueve sin punto.
+- Si la ANH cambia el diseño de la página (no hay tabla o faltan columnas) el comando sale con error 1 y no carga nada.
+
+### Aduana: cómo se corre
+
+Oficinas de la Aduana Nacional (fronteras, aeropuertos, aduanas interiores, gerencias regionales; `fuente='aduana'`),
+todo el país en una corrida. Entran a Importados como `estado='nuevo'`; nada se publica solo.
+
+```bash
+docker exec buscadonde-backend python -m app.services.importar_aduana --dry-run
+docker exec buscadonde-backend python -m app.services.importar_aduana
+```
+
+- **Antes del primer deploy: correr la migración 0199** (`0199_rubro_aduana.sql`: el rubro NO comercial `aduana`) con
+  `--sql`, como las demás. Sin ella el comando funciona, pero las filas quedan sin rubro y la persona lo tiene que
+  elegir a mano. La clave de ícono que necesita el frontend (`IcRubro`) es `aduana`.
+- **Fuente** (el `robots.txt` sólo bloquea `/admin`, `/search` y el login): `https://www.aduana.gob.bo/pagina-de-direcciones`
+  (4 páginas, `?page=N`: nombre, dirección, teléfono y el punto del mapa) y `https://www.aduana.gob.bo/horariosAduana`
+  (una tabla por gerencia: oficina, lugar de atención y horarios). Cinco pedidos con 2 s de pausa y un User-Agent
+  genérico (`URUKU-importador/1.0`). Sólo se toman los datos y el enlace de origen: ningún texto de la página se copia.
+- **Qué se guarda:** nombre de la oficina, dirección, teléfono, **horario** (una línea: `Lugar: lunes a viernes 8:30 a
+  16:30; sábado… · Otro lugar: …`; el detalle por lugar queda en `tags.aduana.horarios`), tipo en `subcategoria`
+  (Frontera, Interior, Aeropuerto, Postal, Zona franca, Gerencia regional…) y el enlace en `fuente_url`. Las oficinas
+  que sólo figuran en la página de horarios (sin dirección) no entran: el resumen dice cuántas son.
+- **Ciudad:** la que nombra la oficina («Aduana Frontera Bermejo») o es el primer o el último tramo de su dirección
+  (un «Carretera a Oruro» es un camino, no la localidad); si no, la que contiene su punto. Lo que no cae en una ciudad
+  de la tabla `ciudades` se cuenta como `fuera_de_ciudad`: no se inventa una (Tambo Quemado, Pisiga, Patacamaya…).
+  Un nombre que el punto contradice (Cañada Oruro está en el Chaco, no en Oruro) tampoco vale.
+- **Punto:** el de la Aduana (el marcador de OpenStreetMap de cada tarjeta) entra como `aproximada`, a confirmar, sólo
+  si queda a menos de 25 km de su ciudad. Algunas oficinas copian el punto de otra: ese punto no decide la ciudad.
+  Con `--sin-punto` se ignora; las que quedan sin punto las levanta el ubicador
+  (`python -m app.services.ubicar_direccion --ciudad X`, que también toma `aduana`; `--rehacer` no les toca el que
+  trajo la Aduana).
+- **Teléfonos:** siempre a `telefono`, nunca a `whatsapp` (es el número para llamar). Se descartan el fax y los
+  internos; un fijo de 7 dígitos lleva el código de área que escribe la página o el del departamento.
+- **Repetidos:** por teléfono o por nombre parecido en la misma ciudad (`duplicado_de`). Volver a correrlo no
+  duplica: la `fuente_id` es `aduana:<nombre de la oficina>`.
+- **Promover:** como un lugar no comercial (`para-visitar`, docs/lugares-turismo.md): sin plan, sin WhatsApp (sólo si la
+  persona lo escribe), `confiable = false`, el rubro queda como revisado y se copian horario, subcategoría y enlace.
+- Si la Aduana cambia el diseño (no hay tarjetas o falta la tabla de horarios) el comando sale con error 1 y no carga nada.
+
 ## Fases
 
 1. **Hecha.** `geocache` (migración 0198), usado por todo `buscar_direccion` cuando recibe `repo`. Guarda la respuesta

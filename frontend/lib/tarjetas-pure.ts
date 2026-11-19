@@ -169,8 +169,9 @@ export function puedePromover(
 
 /** Las fuentes que pueden promoverse sin punto (docs/turismo-home-y-repetidos.md §2): guías y radio móviles de la
  *  página de turismo no tienen dirección; las tarjetas a veces tampoco. Las de OSM siempre traen punto. */
+/** La Aduana también: hay oficinas cuya página no trae punto. Una estación de la ANH no: tiene que estar en el mapa. */
 export function admiteSinUbicacion(i: { fuente: string }): boolean {
-  return i.fuente === "tarjeta" || i.fuente === "turismo";
+  return i.fuente === "tarjeta" || i.fuente === "turismo" || i.fuente === "aduana";
 }
 
 export const AVISO_SIN_UBICACION = "No va a aparecer en el mapa; sí en su ficha, la búsqueda y las listas";
@@ -191,7 +192,7 @@ export function puedePromoverSinUbicacion(
 
 // ── Listado ──────────────────────────────────────────────────────────────────
 
-export type FuenteFiltro = "todas" | "osm" | "tarjeta" | "turismo" | "turismo-visitar" | "overture";
+export type FuenteFiltro = "todas" | "osm" | "tarjeta" | "turismo" | "turismo-visitar" | "overture" | "anh" | "aduana";
 
 /** El valor del query param `fuente`; con «todas» no se manda. «Turismo › Para visitar» es `fuente=turismo` + `rubro`. */
 export function paramFuente(f: FuenteFiltro): string | undefined {
@@ -212,7 +213,7 @@ export function esTarjeta(i: { fuente: string }): boolean {
 /** Tienen la ficha editable (campos, mapa, promover): las tarjetas, lo traído de la página de turismo
  *  (docs/importar-turismo.md) y lo de Overture Maps (docs/vigia-fuentes.md). Las dos últimas, sin foto. */
 export function usaFichaEditable(i: { fuente: string }): boolean {
-  return i.fuente === "tarjeta" || i.fuente === "turismo" || i.fuente === "overture";
+  return ["tarjeta", "turismo", "overture", "anh", "aduana"].includes(i.fuente);
 }
 
 /** La primera `http(s)://...` del texto leído: en turismo es la página de origen. null si no hay.
@@ -261,6 +262,8 @@ export function nombreFuente(i: { fuente: string; fuente_url?: string | null; te
       const a = aportesOverture(i.texto_leido);
       return a.length ? `Overture Maps Foundation (datos de ${a.join(", ")})` : "Overture Maps Foundation";
     }
+    case "anh": return "ANH (Agencia Nacional de Hidrocarburos)";
+    case "aduana": return "Aduana Nacional de Bolivia";
     case "osm": return "OpenStreetMap";
     case "tarjeta": return "Tarjeta de presentación";
     default: return i.fuente;
