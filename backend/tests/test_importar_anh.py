@@ -420,6 +420,21 @@ def test_leer_anh_pide_las_dos_actividades_con_pausa(monkeypatch):
     assert all("/w2026/" in f["url"] for f in filas)                      # la URL de origen es la final
 
 
+def test_departamento_sin_gnv_lee_solo_liquidos(monkeypatch):
+    """Potosí, Beni y Pando no tienen GNV: la página de GNV viene sin ninguna tabla."""
+    monkeypatch.setattr(ia.time, "sleep", lambda s: None)
+    sin_tabla = pagina(con_tabla=False)
+    filas = ia.leer_anh(TARIJA, pedir=lambda url: ((sin_tabla if "R=2" in url else LIQUIDOS), url))
+    assert filas and {f["actividad"] for f in filas} == {"liquidos"}
+
+
+def test_liquidos_sin_tabla_sigue_siendo_un_error(monkeypatch):
+    monkeypatch.setattr(ia.time, "sleep", lambda s: None)
+    sin_tabla = pagina(con_tabla=False)
+    with pytest.raises(ia.PaginaInesperada):
+        ia.leer_anh(TARIJA, pedir=lambda url: ((GNV if "R=2" in url else sin_tabla), url))
+
+
 # ───────────────────────────────────────────── ubicador
 
 def test_el_ubicador_levanta_las_filas_de_la_anh_sin_punto(repo):

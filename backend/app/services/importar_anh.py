@@ -299,6 +299,10 @@ def leer_anh(depto: Departamento, *, pedir: Callable[[str], tuple[str, str]] | N
         if i:
             time.sleep(pausa)
         html, url = (pedir or _pedir)(BASE_URL.format(actividad=actividad, codigo=depto.codigo))
+        # Un departamento sin estaciones de GNV (Potosí, Beni, Pando, visto el 19/11/2026) trae la página de GNV sin
+        # ninguna tabla: son cero estaciones, no un cambio de diseño. La de líquidos sí tiene que traerla siempre.
+        if nombre != "liquidos" and "<table" not in html.lower():
+            continue
         filas += parsear_pagina(html, url=url, actividad=nombre)
     return filas
 
