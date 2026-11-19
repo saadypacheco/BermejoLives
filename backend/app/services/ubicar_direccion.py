@@ -24,7 +24,7 @@ COMANDO (se corre a mano dentro del contenedor del backend)
     python -m app.services.ubicar_direccion --ciudad tarija [--limite N]
     python -m app.services.ubicar_direccion --ciudad tarija --dry-run --solo-esquinas   (segundos, sin Nominatim)
 
-Vuelve a ubicar los importados `estado='nuevo'` de fuente turismo/tarjeta/anh que quedaron sin punto y tienen
+Vuelve a ubicar los importados `estado='nuevo'` de fuente turismo/tarjeta/anh/aduana que quedaron sin punto y tienen
 dirección. Sin `--dry-run` guarda `lat`/`lng` con `ubicacion='aproximada'`. Si Nominatim falla 5 veces seguidas
 deja de pedirle, pero sigue con las esquinas.
 
@@ -660,13 +660,15 @@ def calles_no_reconocidas(calles: Calles, direcciones: list[str]) -> Counter:
 
 # ═══════════════════════════════════════════════════════════ línea de comandos
 
-FUENTES = ("turismo", "tarjeta", "anh")
+FUENTES = ("turismo", "tarjeta", "anh", "aduana")
+#: Fuentes que traen su propio punto (el de la ANH o el de la Aduana): `--rehacer` no se lo cambia ni se lo saca.
+PUNTO_PROPIO = frozenset({"anh", "aduana"})
 
 
 def main(argv: list[str] | None = None, repo=None, *, pedir: Callable[[dict], list] | None = None,
          mostrar: Callable[[str], None] = print) -> int:
     ap = argparse.ArgumentParser(prog="ubicar_direccion", description="Vuelve a ubicar los importados sin punto "
-                                 "(fuente turismo, tarjeta o anh) por esquina, cuadra o calle.")
+                                 "(fuente turismo, tarjeta, anh o aduana) por esquina, cuadra o calle.")
     ap.add_argument("--ciudad", required=True, help="slug de la ciudad (p. ej. tarija)")
     ap.add_argument("--dry-run", action="store_true", help="muestra lo que ubicaría, sin guardar nada")
     ap.add_argument("--limite", type=int, default=None, help="probar sólo con los primeros N")
@@ -692,8 +694,7 @@ def main(argv: list[str] | None = None, repo=None, *, pedir: Callable[[dict], li
         filas = repo.list_importados("nuevo", ciudad["id"], None, limite=TOPE_LISTADO, fuente=fuente)
         if len(filas) >= TOPE_LISTADO:
             mostrar(f"Aviso: hay {TOPE_LISTADO} o más de fuente «{fuente}»; volver a correr para seguir con el resto.")
-        # El punto de una estación de la ANH es el que publica la propia ANH: `--rehacer` no se lo cambia ni se lo saca.
-        rehacer = args.rehacer and fuente != "anh"
+        rehacer = args.rehacer and fuente not in PUNTO_PROPIO
         candidatos += [f for f in filas if len(str(f.get("direccion") or "").strip()) >= 4
                        and (f.get("lat") is None or (rehacer and f.get("ubicacion") == "aproximada"))]
     if args.limite is not None:

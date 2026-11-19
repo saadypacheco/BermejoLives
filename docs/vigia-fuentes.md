@@ -166,6 +166,44 @@ docker exec buscadonde-backend python -m app.services.importar_anh --departament
   promueve sin punto.
 - Si la ANH cambia el diseño de la página (no hay tabla o faltan columnas) el comando sale con error 1 y no carga nada.
 
+### Aduana: cómo se corre
+
+Oficinas de la Aduana Nacional (fronteras, aeropuertos, aduanas interiores, gerencias regionales; `fuente='aduana'`),
+todo el país en una corrida. Entran a Importados como `estado='nuevo'`; nada se publica solo.
+
+```bash
+docker exec buscadonde-backend python -m app.services.importar_aduana --dry-run
+docker exec buscadonde-backend python -m app.services.importar_aduana
+```
+
+- **Antes del primer deploy: correr la migración 0199** (`0199_rubro_aduana.sql`: el rubro NO comercial `aduana`) con
+  `--sql`, como las demás. Sin ella el comando funciona, pero las filas quedan sin rubro y la persona lo tiene que
+  elegir a mano. La clave de ícono que necesita el frontend (`IcRubro`) es `aduana`.
+- **Fuente** (el `robots.txt` sólo bloquea `/admin`, `/search` y el login): `https://www.aduana.gob.bo/pagina-de-direcciones`
+  (4 páginas, `?page=N`: nombre, dirección, teléfono y el punto del mapa) y `https://www.aduana.gob.bo/horariosAduana`
+  (una tabla por gerencia: oficina, lugar de atención y horarios). Cinco pedidos con 2 s de pausa y un User-Agent
+  genérico (`URUKU-importador/1.0`). Sólo se toman los datos y el enlace de origen: ningún texto de la página se copia.
+- **Qué se guarda:** nombre de la oficina, dirección, teléfono, **horario** (una línea: `Lugar: lunes a viernes 8:30 a
+  16:30; sábado… · Otro lugar: …`; el detalle por lugar queda en `tags.aduana.horarios`), tipo en `subcategoria`
+  (Frontera, Interior, Aeropuerto, Postal, Zona franca, Gerencia regional…) y el enlace en `fuente_url`. Las oficinas
+  que sólo figuran en la página de horarios (sin dirección) no entran: el resumen dice cuántas son.
+- **Ciudad:** la que nombra la oficina («Aduana Frontera Bermejo») o es el primer o el último tramo de su dirección
+  (un «Carretera a Oruro» es un camino, no la localidad); si no, la que contiene su punto. Lo que no cae en una ciudad
+  de la tabla `ciudades` se cuenta como `fuera_de_ciudad`: no se inventa una (Tambo Quemado, Pisiga, Patacamaya…).
+  Un nombre que el punto contradice (Cañada Oruro está en el Chaco, no en Oruro) tampoco vale.
+- **Punto:** el de la Aduana (el marcador de OpenStreetMap de cada tarjeta) entra como `aproximada`, a confirmar, sólo
+  si queda a menos de 25 km de su ciudad. Algunas oficinas copian el punto de otra: ese punto no decide la ciudad.
+  Con `--sin-punto` se ignora; las que quedan sin punto las levanta el ubicador
+  (`python -m app.services.ubicar_direccion --ciudad X`, que también toma `aduana`; `--rehacer` no les toca el que
+  trajo la Aduana).
+- **Teléfonos:** siempre a `telefono`, nunca a `whatsapp` (es el número para llamar). Se descartan el fax y los
+  internos; un fijo de 7 dígitos lleva el código de área que escribe la página o el del departamento.
+- **Repetidos:** por teléfono o por nombre parecido en la misma ciudad (`duplicado_de`). Volver a correrlo no
+  duplica: la `fuente_id` es `aduana:<nombre de la oficina>`.
+- **Promover:** como un lugar no comercial (`para-visitar`, docs/lugares-turismo.md): sin plan, sin WhatsApp (sólo si la
+  persona lo escribe), `confiable = false`, el rubro queda como revisado y se copian horario, subcategoría y enlace.
+- Si la Aduana cambia el diseño (no hay tarjetas o falta la tabla de horarios) el comando sale con error 1 y no carga nada.
+
 ## Fases
 
 1. **Hecha.** `geocache` (migración 0198), usado por todo `buscar_direccion` cuando recibe `repo`. Guarda la respuesta
