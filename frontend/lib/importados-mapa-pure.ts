@@ -94,7 +94,8 @@ export type ResumenPuntos = { total: number; sin_punto: number; truncado: boolea
 export function resumenMapa(r: ResumenPuntos, mostrados: number): string {
   const partes: string[] = [];
   if (r.truncado) {
-    partes.push(`Se muestran ${miles(mostrados)} de ${miles(Math.max(r.total, mostrados))} en el mapa: el servidor corta en el tope, filtrá por fuente para ver el resto`);
+    // El servidor no cuenta lo que quedó afuera (`total` es lo que mandó): sólo se sabe que hay más.
+    partes.push(`Se muestran los primeros ${miles(mostrados)} en el mapa y hay más: filtrá por fuente para ver el resto`);
   } else {
     partes.push(`${miles(r.total)} en el mapa`);
   }

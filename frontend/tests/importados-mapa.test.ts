@@ -73,8 +73,8 @@ test("miles: punto de miles sin depender del ICU", () => {
 test("resumenMapa: «18.670 en el mapa · 12 sin punto»; sin «sin punto» si no hay; avisa si el servidor cortó", () => {
   assert.equal(resumenMapa({ total: 18670, sin_punto: 12, truncado: false }, 18670), "18.670 en el mapa · 12 sin punto");
   assert.equal(resumenMapa({ total: 40, sin_punto: 0, truncado: false }, 40), "40 en el mapa");
-  const t = resumenMapa({ total: 45000, sin_punto: 3, truncado: true }, 30000);
-  assert.match(t, /30\.000 de 45\.000/);
+  const t = resumenMapa({ total: 30000, sin_punto: 3, truncado: true }, 30000);
+  assert.match(t, /primeros 30\.000 en el mapa y hay más/);
   assert.match(t, /3 sin punto/);
   assert.match(t, /filtrá por fuente/);
 });
