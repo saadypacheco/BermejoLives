@@ -404,7 +404,7 @@ MODALIDADES = ("mayorista", "minorista", "ambos")
 
 
 class EditarComercioBody(BaseModel):
-    nombre: str | None = None
+    nombre: str | None = Field(default=None, max_length=200)
     #: "No tiene cartel": la base le arma el nombre con lo que vende y dónde
     #: está, y lo mantiene (0129). Escribirle un nombre lo apaga solo.
     sin_cartel: bool | None = None
@@ -491,6 +491,7 @@ def editar_comercio(
     anterior = None
     if "catalogo_url" in patch:
         anterior = (repo.get_comercio(comercio_id) or {}).get("catalogo_url")
+    diseno_antes = portada_diseno.urls_de(repo.get_comercio(comercio_id) or {})   # ¿vence la portada de diseño?
     updated = repo.update_comercio(comercio_id, patch, body.rubro_slugs)
     if "catalogo_url" in patch:
         # Enlace nuevo o vaciado: si el anterior era un PDF nuestro, se borra del disco.
@@ -509,6 +510,9 @@ def editar_comercio(
     # deducir es pisarle la decisión.
     if body.rubro_slugs is None and {"prod_obs_human", "descripcion", "nombre"} & patch.keys():
         aplicar_rubros(repo, updated, repo.get_comercio_rubros(comercio_id))
+    # Si cambió el nombre, el rubro o la ciudad, el repo ya vació las columnas de la portada de diseño: acá se
+    # sueltan sus archivos (los que ninguna columna apunta más).
+    portada_diseno.soltar_huerfanos(repo, updated, diseno_antes)
     logger.info("moderacion.comercio_editado", comercio=comercio_id, campos=list(patch.keys()), by=admin["email"])
     return {"ok": True, "comercio": updated}
 
@@ -1911,8 +1915,10 @@ def editar_rubros_comercio(
 
     El primero de la lista queda como principal.
     """
-    if not repo.get_comercio(comercio_id):
+    existente = repo.get_comercio(comercio_id)
+    if not existente:
         raise HTTPException(status_code=404, detail="No existe ese comercio")
+    diseno_antes = portada_diseno.urls_de(existente)
 
     ids, desconocidos = [], []
     for slug in body.rubro_slugs:
@@ -1925,6 +1931,7 @@ def editar_rubros_comercio(
                             detail=f"Rubros que no existen: {', '.join(desconocidos)}")
 
     repo.reemplazar_comercio_rubros(comercio_id, ids)
+    portada_diseno.soltar_huerfanos(repo, existente, diseno_antes)    # si cambió el principal, el repo vació el diseño
     logger.info("comercio.rubros_editados", comercio=comercio_id,
                 rubros=body.rubro_slugs, by=admin["email"])
     return {"ok": True, "rubro_slugs": repo.get_comercio_rubros(comercio_id)}
@@ -2118,11 +2125,11 @@ async def admin_armar_portada_diseno(
     mod: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """Arma la portada de diseño y la deja como PROPUESTA (sólo la ve el panel; nada se publica solo).
+    """Arma la portada de diseño y la deja como PROPUESTA (nada se publica solo; el panel la muestra para decidir).
 
     La foto es la portada del comercio, leída del disco del backend; se le hace una mejora automática suave
     (Pillow, gratis, sin IA) y se le pone el diseño. Nombre, rubro y ciudad salen de la base: ningún texto de
-    la imagen lo escribe un modelo de IA.
+    la imagen lo escribe un modelo de IA. Se arma de a una por vez (409 si hay otra en curso).
     """
     comercio = _comercio_o_404(repo, comercio_id)
     if not comercio.get("portada_url"):
@@ -2138,21 +2145,34 @@ async def admin_armar_portada_diseno(
         jpeg = await run_in_threadpool(
             portada_diseno.armar_plantilla, foto, comercio.get("nombre") or "", rubro, ciudad,
             comercio.get("portada_pos"))
+    except portada_diseno.PortadaOcupada as exc:
+        raise HTTPException(status_code=409, detail="Ya se está armando otra portada, probá en unos segundos") from exc
+    except portada_diseno.PortadaInadecuada as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="La foto de portada no es una imagen válida") from exc
     url = await run_in_threadpool(portada_diseno.guardar, comercio["slug"], jpeg)
     if not url:
         raise HTTPException(status_code=502, detail="No se pudo guardar la portada de diseño, probá de nuevo")
 
-    anterior = comercio.get("portada_diseno_propuesta_url")
+    # Armar tarda unos segundos: si en el medio cambió la foto (o los datos que se dibujan), la propuesta sería
+    # de otra foto. Se relee la fila y, si cambió, se suelta el archivo recién creado.
+    fresca = repo.get_comercio(comercio_id) or {}
+    if fresca.get("portada_url") != comercio.get("portada_url"):
+        portada_diseno.soltar_archivo(comercio, url)
+        raise HTTPException(status_code=409, detail="La foto de portada cambió mientras se armaba: armala de nuevo")
+    if any(fresca.get(c) != comercio.get(c) for c in ("nombre", "rubro_id", "ciudad_id", "portada_pos")):
+        portada_diseno.soltar_archivo(comercio, url)
+        raise HTTPException(status_code=409, detail="Los datos del comercio cambiaron mientras se armaba la portada: armala de nuevo")
+
+    anterior = fresca.get("portada_diseno_propuesta_url")
     try:
         actualizado = repo.update_comercio(comercio_id, {"portada_diseno_propuesta_url": url}, None)
     except Exception:
         portada_diseno.soltar_archivo(comercio, url)        # recién creado: que no quede huérfano
         raise
-    if anterior and anterior != url:
-        portada_diseno.soltar_archivo(comercio, anterior)   # la propuesta anterior ya no la apunta nada
-    logger.info("admin.portada_diseno_propuesta", comercio=comercio_id, ia=False, by=mod["email"])
+    portada_diseno.soltar_huerfanos(repo, comercio, [anterior])    # la propuesta anterior ya no la apunta nada
+    logger.info("admin.portada_diseno_propuesta", comercio=comercio_id, by=mod["email"])
     return portada_diseno.respuesta(actualizado or {**comercio, "portada_diseno_propuesta_url": url})
 
 
@@ -2170,8 +2190,7 @@ def admin_usar_portada_diseno(
     vigente = comercio.get("portada_diseno_url")
     actualizado = repo.update_comercio(
         comercio_id, {"portada_diseno_url": propuesta, "portada_diseno_propuesta_url": None}, None)
-    if vigente and vigente != propuesta:
-        portada_diseno.soltar_archivo(comercio, vigente)    # el diseño anterior ya no lo apunta nada
+    portada_diseno.soltar_huerfanos(repo, comercio, [vigente])    # el diseño anterior ya no lo apunta nada
     logger.info("admin.portada_diseno_usada", comercio=comercio_id, by=mod["email"])
     return portada_diseno.respuesta(
         actualizado or {**comercio, "portada_diseno_url": propuesta, "portada_diseno_propuesta_url": None})
@@ -2189,7 +2208,7 @@ def admin_descartar_propuesta_portada_diseno(
     if not propuesta:
         return portada_diseno.respuesta(comercio)
     actualizado = repo.update_comercio(comercio_id, {"portada_diseno_propuesta_url": None}, None)
-    portada_diseno.soltar_archivo(comercio, propuesta)
+    portada_diseno.soltar_huerfanos(repo, comercio, [propuesta])
     logger.info("admin.portada_diseno_descartada", comercio=comercio_id, by=mod["email"])
     return portada_diseno.respuesta(actualizado or {**comercio, "portada_diseno_propuesta_url": None})
 
@@ -2206,7 +2225,7 @@ def admin_quitar_portada_diseno(
     if not vigente:
         return portada_diseno.respuesta(comercio)
     actualizado = repo.update_comercio(comercio_id, {"portada_diseno_url": None}, None)
-    portada_diseno.soltar_archivo(comercio, vigente)
+    portada_diseno.soltar_huerfanos(repo, comercio, [vigente])
     logger.info("admin.portada_diseno_quitada", comercio=comercio_id, by=mod["email"])
     return portada_diseno.respuesta(actualizado or {**comercio, "portada_diseno_url": None})
 
@@ -2268,9 +2287,11 @@ async def analizar_comercio(
     }
 
     if aplicar and propuesta.get("confianza", 0) > 0:
+        diseno_antes = portada_diseno.urls_de(comercio)
         actualizado = repo.update_comercio(comercio_id, _patch_ia(propuesta, repo, comercio), None)
         if propuesta["rubro_slugs"]:
             aplicar_rubros(repo, actualizado, propuesta["rubro_slugs"])
+        portada_diseno.soltar_huerfanos(repo, comercio, diseno_antes)    # la IA pudo cambiar el nombre o el rubro
         resultado["aplicado"] = True
         logger.info("vision.aplicado", comercio=comercio_id, confianza=propuesta.get("confianza"),
                     rubros=propuesta.get("rubro_slugs"), by=admin["email"])
@@ -2378,9 +2399,11 @@ async def analizar_tanda(
             break
 
         if aplicar and propuesta.get("confianza", 0) > 0:
+            diseno_antes = portada_diseno.urls_de(repo.get_comercio(comercio["id"]) or {})
             actualizado = repo.update_comercio(comercio["id"], _patch_ia(propuesta, repo, comercio), None)
             if propuesta["rubro_slugs"]:
                 aplicar_rubros(repo, actualizado, propuesta["rubro_slugs"])
+            portada_diseno.soltar_huerfanos(repo, comercio, diseno_antes)
             fila["aplicado"] = True
         else:
             # Confianza 0 con respuesta válida: el modelo miró y no reconoció

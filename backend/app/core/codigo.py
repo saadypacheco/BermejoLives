@@ -84,7 +84,8 @@ def extraer_codigo(texto: str | None) -> str | None:
 #: (0149, lo guarda para las publicaciones que entraron antes del cambio) y el id con
 #: que el celular del agente reintenta un alta (0149).
 #: `nota_interna` (0154): dudas del equipo sobre la ficha; nunca sale en una respuesta de comercio ni de campo.
-_SOLO_ADMIN = ("codigo", "codigo_formateado", "codigo_anterior", "alta_uid", "nota_interna")
+_SOLO_ADMIN = ("codigo", "codigo_formateado", "codigo_anterior", "alta_uid", "nota_interna",
+               "portada_diseno_propuesta_url")
 
 
 def sin_codigo(fila: dict | None) -> dict | None:

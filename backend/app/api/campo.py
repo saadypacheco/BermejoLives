@@ -889,7 +889,7 @@ def usar_como_portada_mi_comercio(
 ) -> dict:
     """Una foto de la galería pasa a ser la portada (intercambio, sin tocar archivos)."""
     comercio = _propio_o_404(repo, comercio_id, agente)
-    actualizado = portada.usar_de_galeria(repo, comercio, body.foto_id)
+    actualizado = portada.usar_de_galeria(repo, comercio, body.foto_id, conservar_archivos=True)   # el agente no borra
     logger.info("campo.portada_de_galeria", comercio=comercio_id, agente=agente["email"])
     return portada.respuesta(repo, actualizado)
 

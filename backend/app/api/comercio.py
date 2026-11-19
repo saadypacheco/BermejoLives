@@ -25,7 +25,7 @@ from app.core.text import slug_unico, slugify
 from app.db.repository import Repo, get_repo
 from app.models.schemas import LoginBody, PublicarBody
 from app.services.clasificador import clasificar, generar_texto_comercio, sugerir_rubros
-from app.services import calles_mapa
+from app.services import calles_mapa, portada_diseno
 from app.services.lugares import elegir_lugar
 from app.services.imagenes import (
     guardar_foto_local, procesar_imagen, subir_foto_comercio,
@@ -124,7 +124,7 @@ def _admin_con_cuenta(admin: dict = Depends(auth.require_admin), repo: Repo = De
 
 @router.post("/auth/comercio/registro")
 async def comercio_registro(
-    nombre: str = Form(...),
+    nombre: str = Form(..., max_length=200),
     whatsapp: str = Form(...),
     modalidad: str = Form("mayorista"),
     rubro_slugs: list[str] = Form(default=[]),
@@ -798,7 +798,7 @@ def _perfil_dict(repo: Repo, comercio: dict) -> dict:
 
 
 class PerfilUpdate(BaseModel):
-    nombre: str | None = None
+    nombre: str | None = Field(default=None, max_length=200)
     descripcion: str | None = None
     prod_obs_human: str | None = None
     whatsapp: str | None = None
@@ -892,6 +892,7 @@ def update_perfil(
     anterior = None
     if "catalogo_url" in patch:
         anterior = (repo.get_comercio(claims["comercio_id"]) or {}).get("catalogo_url")
+    diseno_antes = portada_diseno.urls_de(repo.get_comercio(claims["comercio_id"]) or {})   # ¿vence la portada de diseño?
     comercio = repo.update_comercio(claims["comercio_id"], patch, body.rubro_slugs)
     if "catalogo_url" in patch:
         # Cambió el catálogo (enlace nuevo o vaciado): si el anterior era un PDF
@@ -903,6 +904,8 @@ def update_perfil(
     # curó a mano, ese trabajo no se pisa.
     if {"prod_obs_human", "descripcion", "nombre"} & patch.keys():
         aplicar_rubros(repo, comercio, repo.get_comercio_rubros(comercio["id"]))
+    # Si cambió el nombre o el rubro, el repo ya vació la portada de diseño: se sueltan sus archivos.
+    portada_diseno.soltar_huerfanos(repo, comercio, diseno_antes)
     _sync_vendedor_tienda(comercio, patch)
     return _perfil_dict(repo, comercio)
 

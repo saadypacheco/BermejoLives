@@ -510,6 +510,31 @@ _COLS_EJEMPLO = (
 #: Con 5000 el panel se cortó el 2/11/2026 (había 5932 activos, por las importaciones).
 LIMITE_COMERCIOS_TODOS = 50000
 
+#: Lo que se dibuja en la portada de diseño (docs/portada-diseno.md): el nombre, el rubro principal y la ciudad.
+#: Si alguno CAMBIA, el diseño quedó vencido y se vacía (`diseno_vencido`).
+CAMPOS_DEL_DISENO = ("nombre", "rubro_id", "ciudad_id")
+
+
+def _comparable(valor):
+    return valor.strip() if isinstance(valor, str) else (valor or "")
+
+
+def diseno_vencido(actual: dict | None, cambios: dict) -> dict:
+    """`{portada_diseno_url: None, portada_diseno_propuesta_url: None}` si `cambios` modifica el nombre, el rubro
+    principal o la ciudad de un comercio que TIENE portada de diseño (vigente o propuesta); `{}` si no.
+
+    Vive en el repositorio y no en cada endpoint porque son muchos los caminos que cambian esos datos (el panel,
+    Mi comercio, el agente, el aplicar de la IA, el rubro automático, lo que completa un importado): ninguno puede
+    dejar una portada con el nombre viejo. Guardar el MISMO valor no vence nada. No toca archivos: quien conoce al
+    actor los suelta (el agente no borra)."""
+    if not actual or not (actual.get("portada_diseno_url") or actual.get("portada_diseno_propuesta_url")):
+        return {}
+    for campo in CAMPOS_DEL_DISENO:
+        if campo in cambios and _comparable(cambios[campo]) != _comparable(actual.get(campo)):
+            return {"portada_diseno_url": None, "portada_diseno_propuesta_url": None}
+    return {}
+
+
 _COLS_COMERCIO_ADMIN = (
     "id, slug, nombre, whatsapp, telefono, modalidad, descripcion, prod_obs_human, "
     "prod_det_ia, subcategoria, sinonimos, codigo, direccion, calle, lat, lng, horario, horario_estimado, "
@@ -1925,8 +1950,9 @@ class SupabaseRepo(IntegracionRepoMixin):
         if ids:
             self._db.table("comercio_rubros").insert(
                 [{"comercio_id": comercio_id, "rubro_id": r} for r in ids]).execute()
-        self._db.table("comercios").update(
-            {"rubro_id": ids[0] if ids else None}).eq("id", comercio_id).execute()
+        principal = {"rubro_id": ids[0] if ids else None}
+        principal.update(diseno_vencido(self.get_comercio(comercio_id), principal))
+        self._db.table("comercios").update(principal).eq("id", comercio_id).execute()
 
     def list_rubros(self) -> list[dict]:
         # `comercial` viaja con el rubro porque de eso depende cómo se trata cada
@@ -3503,20 +3529,25 @@ class SupabaseRepo(IntegracionRepoMixin):
 
     def update_comercio(self, comercio_id: str, patch: dict, rubro_slugs: list[str] | None) -> dict:
         patch = dict(patch)  # copia: no mutamos el dict del caller
+        rubro_ids = ([rid for rid in (self.get_rubro_id(s) for s in rubro_slugs if s) if rid]
+                     if rubro_slugs is not None else None)
+        # La fila de antes: para rearmar el slug genérico y para saber si el diseño de la portada quedó vencido.
+        actual = None
+        if {"nombre", "rubro_id", "ciudad_id"} & patch.keys() or rubro_ids:
+            actual = self.get_comercio(comercio_id)
         # Si le ponen un NOMBRE real y el slug actual todavía es genérico
         # (comercio / comercio-N), rearmamos el slug desde ese nombre. Los slugs
         # ya "buenos" no se tocan, así no se rompen los links ya compartidos.
         nombre_nuevo = patch.get("nombre")
         if nombre_nuevo and nombre_nuevo.strip() and "slug" not in patch:
-            actual = self.get_comercio(comercio_id)
             if actual and _SLUG_GENERICO.match(actual.get("slug") or ""):
                 base = slugify(nombre_nuevo)
                 if base and base != "comercio":
                     patch["slug"] = slug_unico(self, base)
+        patch = {**diseno_vencido(actual, {**patch, **({"rubro_id": rubro_ids[0]} if rubro_ids else {})}), **patch}
         if patch:
             self._db.table("comercios").update(patch).eq("id", comercio_id).execute()
         if rubro_slugs is not None:
-            rubro_ids = [rid for rid in (self.get_rubro_id(s) for s in rubro_slugs if s) if rid]
             if rubro_ids:
                 # Actualiza rubro principal + tabla N:M
                 self._db.table("comercios").update({"rubro_id": rubro_ids[0]}).eq("id", comercio_id).execute()
@@ -3528,8 +3559,11 @@ class SupabaseRepo(IntegracionRepoMixin):
         """UPDATE de columnas sueltas del comercio, sin tocar rubros ni rearmar el slug (a diferencia de
         `update_comercio`). Lo usa «completar el existente» (docs/turismo-home-y-repetidos.md): el slug es el
         enlace que ya se compartió y no se mueve. Devuelve la fila actualizada."""
+        patch = dict(patch)
+        if {"nombre", "rubro_id", "ciudad_id"} & patch.keys():
+            patch = {**diseno_vencido(self.get_comercio(comercio_id), patch), **patch}
         if patch:
-            self._db.table("comercios").update(dict(patch)).eq("id", comercio_id).execute()
+            self._db.table("comercios").update(patch).eq("id", comercio_id).execute()
         return self.get_comercio(comercio_id) or {}
 
     # ---- lugares (mercados / galerías / paseos: contenedores de puestos) ----

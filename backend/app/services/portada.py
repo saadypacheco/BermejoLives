@@ -21,7 +21,8 @@ tres perfiles (admin, agente, comerciante) igual:
 En las dos, `portada_pos` vuelve a null: el recorte que alguien eligió para la
 foto anterior no corresponde a la nueva. Lo mismo pasa con la portada de diseño
 (`portada_diseno_url` y su propuesta, docs/portada-diseno.md): era de la foto anterior,
-así que las dos columnas vuelven a null y sus archivos se sueltan del disco.
+así que las dos columnas vuelven a null. Sus archivos (`<slug>/diseno-*.jpg`, nunca una foto) se sueltan del
+disco, salvo cuando quien cambia la portada es el AGENTE (que no borra nada): ahí sólo se vacían las columnas.
 """
 from __future__ import annotations
 
@@ -43,7 +44,7 @@ def _url(valor) -> str | None:
     return str(valor).strip() or None if valor else None
 
 
-def usar_de_galeria(repo, comercio: dict, foto_id: str) -> dict:
+def usar_de_galeria(repo, comercio: dict, foto_id: str, *, conservar_archivos: bool = False) -> dict:
     """Intercambia la portada con una foto de la galería. Devuelve el comercio actualizado.
 
     - 404 si la foto no es de ESTE comercio.
@@ -51,7 +52,9 @@ def usar_de_galeria(repo, comercio: dict, foto_id: str) -> dict:
     - Sin portada anterior, la foto elegida sale de la galería (queda una menos).
     - Si la portada anterior ya figura en otra fila de la galería, no se la
       vuelve a meter (quedaría repetida): sólo sale la elegida.
-    - Nunca borra archivos: todo lo que se veía antes se sigue viendo.
+    - Nunca borra FOTOS: todo lo que se veía antes se sigue viendo. Lo único que se suelta del disco es el
+      archivo de la portada de diseño que quedó vencida (el diseño era de la portada anterior), y no con
+      `conservar_archivos=True` (el agente no borra nada: sólo se vacían las columnas).
     """
     cid = comercio["id"]
     diseno_viejo = portada_diseno.urls_de(comercio)
@@ -102,7 +105,8 @@ def usar_de_galeria(repo, comercio: dict, foto_id: str) -> dict:
         # puntero se dejara "inactivo" la foto saldría repetida (portada + galería).
         repo.delete_foto_comercio(foto["id"], cid)
 
-    portada_diseno.soltar_archivos(comercio, diseno_viejo)    # el diseño era de la portada anterior
+    if not conservar_archivos:
+        portada_diseno.soltar_huerfanos(repo, comercio, diseno_viejo)    # el diseño era de la portada anterior
     logger.info("comercio.portada_de_galeria", comercio=cid, foto=foto["id"],
                 intercambio=bool(vieja_url and not vieja_ya_esta))
     return actualizado or {**comercio, **patch}
@@ -118,7 +122,7 @@ def poner_nueva(repo, comercio: dict, portada_url: str, portada_thumb: str | Non
       disco, salvo que la galería, otro comercio o una publicación activa los usen.
     - `conservar_anterior=True` (el AGENTE, que sólo sube y no borra): la portada
       anterior pasa a la galería —aunque eso supere el tope del plan: ya existía—
-      y no se borra ningún archivo.
+      y no se borra ningún archivo (tampoco los de la portada de diseño: sólo se vacían sus columnas).
 
     Si no se puede guardar la portada nueva, los archivos recién subidos se borran
     (no quedan huérfanos en el disco) y el error sigue su camino.
@@ -148,8 +152,8 @@ def poner_nueva(repo, comercio: dict, portada_url: str, portada_thumb: str | Non
         logger.warning("comercio.portada_nueva_fallo", comercio=cid, exc_info=True)
         raise
 
-    portada_diseno.soltar_archivos(comercio, diseno_viejo)    # el diseño era de la portada anterior
     if not conservar_anterior:
+        portada_diseno.soltar_huerfanos(repo, comercio, diseno_viejo)    # el diseño era de la portada anterior
         try:
             _soltar_archivos_viejos(repo, actualizado, vieja_url, vieja_thumb)
         except Exception:  # noqa: BLE001 — limpiar el disco no puede romper el cambio de portada

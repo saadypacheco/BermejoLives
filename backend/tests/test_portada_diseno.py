@@ -5,13 +5,12 @@ Sin IA (decisión del 19/11/2026): todo es Pillow y no hay llamadas a la red.
 import random
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 from PIL import Image, ImageStat
 
 from app.core.config import settings
-from app.services import cost_switches, portada, portada_diseno as pd
+from app.services import portada, portada_diseno as pd
 from app.services.imagenes import guardar_foto_local
 
 BASE = "https://api.test/fotos"
@@ -70,7 +69,7 @@ URL = "/admin/comercio/com-d/portada-diseno"
 
 # ══════════════════════════════════════════ la plantilla (Pillow)
 
-@pytest.mark.parametrize("w,h", [(600, 1800), (2400, 800), (120, 90), (1600, 1000)])
+@pytest.mark.parametrize("w,h", [(600, 1800), (2400, 800), (300, 220), (200, 200), (1600, 1000)])
 def test_plantilla_devuelve_jpeg_1600x1000_con_foto_vertical_apaisada_chica(w, h):
     out = pd.armar_plantilla(_jpeg(w, h), "Ferretería El Tornillo", "Ferretería", "Bermejo", None)
     img = _abrir(out)
@@ -82,7 +81,7 @@ def test_nombre_larguisimo_no_rompe_y_no_se_sale_del_cuadro():
     out = pd.armar_plantilla(_jpeg(), nombre, "Almacén", "Bermejo", 20)
     assert _abrir(out).size == (1600, 1000)
     px, lineas = pd.ajustar_nombre(pd.limpiar_texto(nombre), 1440)
-    assert len(lineas) <= 2 and lineas[-1].endswith("…") and px == 52
+    assert len(lineas) <= 2 and lineas[-1].endswith("…") and not lineas[-1].endswith(" …") and px == 52
     assert all(pd._largo(l, "bold", px) <= 1440 for l in lineas)
 
 
@@ -123,17 +122,40 @@ def test_el_logo_se_dibuja_arriba_a_la_derecha():
     assert _media(esquina) < 250
 
 
-def test_pos_mueve_el_centro_vertical_del_recorte():
-    foto = Image.new("RGB", (1000, 3000), (200, 0, 0))
-    foto.paste(Image.new("RGB", (1000, 1500), (0, 0, 200)), (0, 1500))      # arriba rojo, abajo azul
+def _bandas(alto=3000, corte=900):
+    """Una foto de 1000 x `alto`: azul arriba de `corte` y roja de ahí para abajo."""
+    foto = Image.new("RGB", (1000, alto), (0, 0, 200))
+    foto.paste(Image.new("RGB", (1000, alto - corte), (200, 0, 0)), (0, corte))
     buf = BytesIO()
-    foto.save(buf, format="JPEG", quality=95)
-    arriba = _abrir(pd.armar_plantilla(buf.getvalue(), "X", None, None, 0, mejorar=False)).getpixel((800, 400))
-    abajo = _abrir(pd.armar_plantilla(buf.getvalue(), "X", None, None, 100, mejorar=False)).getpixel((800, 400))
-    sin = _abrir(pd.armar_plantilla(buf.getvalue(), "X", None, None, None, mejorar=False)).getpixel((800, 400))
-    assert arriba[0] > 150 and arriba[2] < 60
-    assert abajo[2] > 150 and abajo[0] < 60
-    assert sin[0] > 150 or sin[2] > 150       # 50 = el centro: justo la mitad roja y la mitad azul
+    foto.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _color_en(png, pos, y=400):
+    out = _abrir(pd.armar_plantilla(png, "X", None, None, pos, mejorar=False))
+    return out.getpixel((800, y))
+
+
+def test_pos_es_el_object_position_de_css_no_el_centro_del_recorte():
+    """`object-position: center 30%` (lo que dibujan el panel y la ficha): el recorte arranca en 30 % del tramo que
+    sobra. Foto 1000 x 3000 -> escala 1,6; se ve un tramo de 625 px y sobran 2375: con pos=30 arranca en y=712 y la
+    fila 400 de la salida cae en 712 + 400/1,6 = 962 (rojo). Centrado en 30 % arrancaría en 588 -> 838 (azul)."""
+    png = _bandas()
+    rojo = _color_en(png, 30)
+    assert rojo[0] > 150 and rojo[2] < 60
+    # con pos=20 arranca en 475 -> la fila 400 cae en 725 (azul): el corte está donde dice la fórmula
+    azul = _color_en(png, 20)
+    assert azul[2] > 150 and azul[0] < 60
+
+
+def test_pos_en_los_extremos_y_sin_pos():
+    png = _bandas(corte=1500)           # arriba azul, abajo rojo, partido a la mitad
+    assert _color_en(png, 0)[2] > 150                      # arranca arriba
+    assert _color_en(png, 100)[0] > 150                    # termina abajo
+    assert _color_en(png, None)[2] > 150                   # 50: arranca en 1187 -> fila 400 cae en 1437 (azul)
+    assert _color_en(png, 50) == _color_en(png, None)
+    assert _abrir(pd.armar_plantilla(png, "X", None, None, 999)).size == (1600, 1000)   # fuera de rango: se acota
+    assert _abrir(pd.armar_plantilla(png, "X", None, None, -5)).size == (1600, 1000)
 
 
 def test_foto_corrupta_es_value_error():
@@ -279,25 +301,6 @@ def test_los_endpoints_piden_permiso_y_login(client, repo, agente_token):
         assert getattr(client, metodo)(ruta, headers=_h(comercio_token(comercio_id="com-d"))).status_code in (401, 403)
 
 
-# ══════════════════════════════════════════ sin IA (decisión del 19/11/2026)
-
-def test_no_hay_ia_en_la_portada_de_diseno():
-    """«Mejorar con IA» quedó afuera por costo: ni el servicio, ni el interruptor, ni la config la ofrecen."""
-    from app.core.config import Settings
-    assert not hasattr(pd, "mejorar_con_ia")
-    assert "gemini_portada_diseno" not in cost_switches.CATALOGO
-    assert "gemini_image_model" not in Settings.model_fields
-
-
-def test_el_parametro_ia_se_ignora_y_no_llama_a_nadie(client, repo, admin_token, monkeypatch):
-    llamadas = MagicMock()
-    monkeypatch.setattr("httpx.post", llamadas)
-    _comercio(repo)
-    r = client.post(f"{URL}?ia=true", headers=_h(admin_token))
-    assert r.status_code == 200 and r.json()["portada_diseno_propuesta_url"]
-    llamadas.assert_not_called()
-
-
 # ══════════════════════════════════════════ cambiar la foto de portada limpia el diseño
 
 def _con_diseno(client, repo, admin_token):
@@ -404,3 +407,409 @@ def test_0200_sin_borrado_fisico_y_en_transaccion():
     assert "delete from" not in sql and "truncate" not in sql and "drop " not in sql
     assert "begin;" in sql and "commit;" in sql
     assert sql.rstrip().endswith("notify pgrst, 'reload schema';")
+
+
+# ══════════════════════════════════════════ revisión: defensas (OOM, costo, un render a la vez)
+
+@pytest.mark.parametrize("w,h", [(1, 1280), (1280, 1), (199, 900), (900, 150), (4100, 1000), (50, 50)])
+def test_fotos_muy_chicas_o_muy_angostas_se_rechazan_sin_agrandarlas(w, h, monkeypatch):
+    """1 x 1280 pedía un resize de gigapíxeles (OOM del único worker): se rechaza mirando el encabezado."""
+    resizes = []
+    original = Image.Image.resize
+    monkeypatch.setattr(Image.Image, "resize", lambda self, *a, **kw: resizes.append(self.size) or original(self, *a, **kw))
+    with pytest.raises(pd.PortadaInadecuada) as e:
+        pd.armar_plantilla(_jpeg(w, h), "X", None, None, None)
+    assert str(e.value) == "La foto de portada es muy chica o muy angosta para armar el diseño"
+    assert resizes == []
+
+
+@pytest.mark.parametrize("w,h", [(200, 800), (800, 200), (1000, 1000), (1280, 960)])
+def test_los_limites_aceptados_dan_siempre_1600x1000(w, h, monkeypatch):
+    """Recorta ANTES de escalar: el único resize grande es a 1600 x 1000, con `box`, y nunca hay un intermedio enorme."""
+    tamanos = []
+    original = Image.Image.resize
+    monkeypatch.setattr(Image.Image, "resize",
+                        lambda self, size, *a, **kw: tamanos.append(tuple(size)) or original(self, size, *a, **kw))
+    out = pd.armar_plantilla(_jpeg(w, h), "X", None, None, 40)
+    assert _abrir(out).size == (1600, 1000)
+    assert max(t[0] * t[1] for t in tamanos) <= 1600 * 1000
+
+
+@pytest.mark.parametrize("w,h", [(1, 1280), (1280, 1)])
+def test_endpoint_rechaza_la_portada_muy_angosta_con_400_en_espanol(client, repo, admin_token, w, h):
+    c = _comercio(repo)
+    guardar_foto_local("local-d/orig.jpg", _jpeg(w, h))
+    r = client.post(URL, headers=_h(admin_token))
+    assert r.status_code == 400
+    assert r.json()["detail"] == "La foto de portada es muy chica o muy angosta para armar el diseño"
+    assert not repo.comercios[c["id"]].get("portada_diseno_propuesta_url")
+
+
+def test_endpoint_con_una_portada_normal_sigue_andando(client, repo, admin_token):
+    _comercio(repo)
+    assert client.post(URL, headers=_h(admin_token)).status_code == 200
+
+
+def test_foto_ilegible_o_de_otro_formato_dice_no_es_una_imagen_valida_sin_el_texto_de_pillow():
+    buf = BytesIO()
+    Image.new("RGB", (400, 300)).save(buf, format="GIF")
+    for malo in (b"basura", buf.getvalue()):
+        with pytest.raises(ValueError) as e:
+            pd.armar_plantilla(malo, "X", None, None, None)
+        assert not isinstance(e.value, pd.PortadaInadecuada)
+        assert str(e.value) == "El archivo no es una imagen válida"
+
+
+def test_demasiados_pixeles_dice_no_es_una_imagen_valida(monkeypatch):
+    from app.services import imagenes
+    monkeypatch.setattr(imagenes, "MAX_PIXELES", 1000)
+    with pytest.raises(ValueError) as e:
+        pd.armar_plantilla(_jpeg(400, 300), "X", None, None, None)
+    assert str(e.value) == "El archivo no es una imagen válida" and "demasiado" not in str(e.value)
+
+
+def test_nombre_de_5000_caracteres_sin_espacios_arma_en_menos_de_2_segundos():
+    import time
+    t0 = time.perf_counter()
+    out = pd.armar_plantilla(_jpeg(), "W" * 5000, "R" * 3000, "C" * 3000, None)
+    assert time.perf_counter() - t0 < 2.0
+    assert _abrir(out).size == (1600, 1000)
+
+
+def test_nombre_de_5000_caracteres_con_palabras_tambien():
+    import time
+    t0 = time.perf_counter()
+    assert _abrir(pd.armar_plantilla(_jpeg(), "Distribuidora " * 400, "Rubro", "Ciudad", None)).size == (1600, 1000)
+    assert time.perf_counter() - t0 < 2.0
+
+
+def test_el_corte_con_puntos_suspensivos_va_pegado():
+    for texto in ("Palabra " * 40, "X" * 300):
+        px, lineas = pd.ajustar_nombre(texto.strip(), 1440)
+        assert lineas[-1].endswith("…") and not lineas[-1].endswith(" …")
+    assert pd._cortar("Hola", "bold", 52, 1440) == "Hola"
+    assert pd._cortar("Hola " * 80, "bold", 52, 600).endswith("…")
+
+
+def test_el_nombre_tiene_tope_de_200_caracteres_en_los_tres_lugares_de_alta_y_edicion():
+    from app.api.comercio import PerfilUpdate
+    from app.api.moderacion import EditarComercioBody
+    from pydantic import ValidationError
+    for modelo in (PerfilUpdate, EditarComercioBody):
+        assert modelo(nombre="a" * 200).nombre == "a" * 200
+        with pytest.raises(ValidationError):
+            modelo(nombre="a" * 201)
+
+
+def test_registro_anonimo_rechaza_nombre_de_mas_de_200(client):
+    r = client.post("/auth/comercio/registro",
+                    data={"nombre": "n" * 201, "whatsapp": "59170000009", "lat": "-22.7", "lng": "-64.3"},
+                    files={"foto": ("f.jpg", BytesIO(_jpeg()), "image/jpeg")})
+    assert r.status_code == 422
+
+
+def test_un_render_a_la_vez_si_esta_ocupado_es_409(client, repo, admin_token, monkeypatch):
+    c = _comercio(repo)
+    monkeypatch.setattr(pd, "ESPERA_RENDER", 0.05)
+    assert pd._RENDER.acquire(timeout=1)
+    try:
+        r = client.post(URL, headers=_h(admin_token))
+    finally:
+        pd._RENDER.release()
+    assert r.status_code == 409 and r.json()["detail"] == "Ya se está armando otra portada, probá en unos segundos"
+    assert not repo.comercios[c["id"]].get("portada_diseno_propuesta_url")
+    assert client.post(URL, headers=_h(admin_token)).status_code == 200      # y se libera
+
+
+def test_el_candado_se_libera_aunque_falle_el_armado():
+    with pytest.raises(ValueError):
+        pd.armar_plantilla(b"roto", "X", None, None, None)
+    assert pd._RENDER.acquire(timeout=0.1)
+    pd._RENDER.release()
+
+
+def test_dos_armados_a_la_vez_se_serializan():
+    import threading, time
+    activos, maximo, lock = [0], [0], threading.Lock()
+    original = pd._diseno
+
+    def lento(*a, **kw):
+        with lock:
+            activos[0] += 1
+            maximo[0] = max(maximo[0], activos[0])
+        time.sleep(0.15)
+        try:
+            return original(*a, **kw)
+        finally:
+            with lock:
+                activos[0] -= 1
+
+    pd._diseno = lento
+    try:
+        hilos = [threading.Thread(target=pd.armar_plantilla, args=(_jpeg(), "X", None, None, None)) for _ in range(3)]
+        [h.start() for h in hilos]
+        [h.join() for h in hilos]
+    finally:
+        pd._diseno = original
+    assert maximo[0] == 1
+
+
+# ══════════════════════════════════════════ revisión: lectura estricta de la portada
+
+def test_leer_portada_valida_la_ruta(repo):
+    _comercio(repo)
+    c = repo.comercios["com-d"]
+    assert pd.leer_portada(c)
+    for malo in (f"{BASE}/local-d/../local-d/orig.jpg", f"{BASE}/local-d/x.jpg?y=1", f"{BASE}/../etc/passwd",
+                 "https://otro.sitio/local-d/orig.jpg", f"{BASE}-evil/local-d/orig.jpg", f"{BASE}/local-d/orig.png", None, ""):
+        assert pd.leer_portada({"portada_url": malo}) is None, malo
+
+
+def test_leer_portada_no_lee_un_archivo_enorme(monkeypatch):
+    guardar_foto_local("local-d/grande.jpg", b"x" * 100)
+    monkeypatch.setattr(pd, "MAX_BYTES_FOTO", 50)
+    assert pd.leer_portada({"portada_url": f"{BASE}/local-d/grande.jpg"}) is None
+
+
+# ══════════════════════════════════════════ revisión: no borrar un archivo que algo apunta (TOCTOU)
+
+def test_soltar_huerfanos_relee_la_fila_y_no_borra_lo_que_otra_columna_apunta(repo):
+    c = _comercio(repo)
+    guardar_foto_local("local-d/diseno-aaa.jpg", b"x")
+    url = f"{BASE}/local-d/diseno-aaa.jpg"
+    # entre el update y el borrado, otro pedido volvió a apuntar el archivo
+    repo.comercios["com-d"]["portada_diseno_propuesta_url"] = url
+    pd.soltar_huerfanos(repo, c, [url])
+    assert _en_disco(url)
+    repo.comercios["com-d"]["portada_diseno_propuesta_url"] = None
+    repo.comercios["com-d"]["portada_diseno_url"] = url
+    pd.soltar_huerfanos(repo, c, [url])
+    assert _en_disco(url)
+    repo.comercios["com-d"]["portada_diseno_url"] = None
+    pd.soltar_huerfanos(repo, c, [url, None, url])
+    assert not _en_disco(url)
+
+
+def test_soltar_huerfanos_no_borra_si_no_puede_releer(repo):
+    c = _comercio(repo)
+    guardar_foto_local("local-d/diseno-bbb.jpg", b"x")
+
+    class Roto:
+        def get_comercio(self, _):
+            raise RuntimeError("base caída")
+
+    pd.soltar_huerfanos(Roto(), c, [f"{BASE}/local-d/diseno-bbb.jpg"])
+    assert _en_disco(f"{BASE}/local-d/diseno-bbb.jpg")
+
+
+def test_usar_con_otro_pedido_que_reapunta_el_viejo_no_lo_borra(client, repo, admin_token, monkeypatch):
+    """PUT: el diseño vigente anterior se suelta sólo si, al releer, ninguna columna lo apunta."""
+    _comercio(repo)
+    client.post(URL, headers=_h(admin_token))
+    viejo = client.put(URL, headers=_h(admin_token)).json()["portada_diseno_url"]
+    client.post(URL, headers=_h(admin_token))
+    original = pd.soltar_huerfanos
+
+    def reapunta(repo_, comercio, urls):
+        repo.comercios["com-d"]["portada_diseno_propuesta_url"] = viejo     # otro pedido lo volvió a proponer
+        return original(repo_, comercio, urls)
+
+    monkeypatch.setattr(pd, "soltar_huerfanos", reapunta)
+    assert client.put(URL, headers=_h(admin_token)).status_code == 200
+    assert _en_disco(viejo)
+
+
+# ══════════════════════════════════════════ revisión: la portada cambió mientras se armaba
+
+def test_si_la_portada_cambia_mientras_se_arma_es_409_y_no_queda_archivo(client, repo, admin_token, monkeypatch):
+    c = _comercio(repo)
+    original = pd.guardar
+    nuevas = []
+
+    def guarda_y_cambia(slug, jpeg):
+        url = original(slug, jpeg)
+        nuevas.append(url)
+        # a esta altura otro pedido cambió la foto de portada
+        repo.comercios["com-d"] = {**repo.comercios["com-d"], "portada_url": f"{BASE}/local-d/otra.jpg"}
+        return url
+
+    monkeypatch.setattr(pd, "guardar", guarda_y_cambia)
+    r = client.post(URL, headers=_h(admin_token))
+    assert r.status_code == 409
+    assert r.json()["detail"] == "La foto de portada cambió mientras se armaba: armala de nuevo"
+    assert nuevas and not _en_disco(nuevas[0])
+    assert not repo.comercios["com-d"].get("portada_diseno_propuesta_url")
+
+
+def test_si_cambia_el_nombre_mientras_se_arma_tambien_es_409(client, repo, admin_token, monkeypatch):
+    _comercio(repo)
+    original = pd.guardar
+
+    def guarda_y_renombra(slug, jpeg):
+        url = original(slug, jpeg)
+        repo.comercios["com-d"] = {**repo.comercios["com-d"], "nombre": "Otro nombre"}
+        return url
+
+    monkeypatch.setattr(pd, "guardar", guarda_y_renombra)
+    r = client.post(URL, headers=_h(admin_token))
+    assert r.status_code == 409 and "cambiaron" in r.json()["detail"]
+
+
+# ══════════════════════════════════════════ revisión: el agente no borra archivos
+
+AGENTE = "agente@bermejolive.com"
+
+
+def _con_diseno_en_disco(repo, **kw):
+    c = _comercio(repo, cargado_por=AGENTE, **kw)
+    guardar_foto_local("local-d/diseno-v.jpg", b"x")
+    guardar_foto_local("local-d/diseno-p.jpg", b"x")
+    c["portada_diseno_url"] = f"{BASE}/local-d/diseno-v.jpg"
+    c["portada_diseno_propuesta_url"] = f"{BASE}/local-d/diseno-p.jpg"
+    return c
+
+
+def _vacio(repo):
+    c = repo.comercios["com-d"]
+    return c["portada_diseno_url"] is None and c["portada_diseno_propuesta_url"] is None
+
+
+def test_agente_portada_nueva_vacia_las_columnas_pero_no_borra_los_archivos(client, repo, agente_token):
+    _con_diseno_en_disco(repo)
+    r = client.post("/campo/mis-comercios/com-d/foto", headers=_h(agente_token),
+                    files={"foto": ("f.jpg", BytesIO(_jpeg()), "image/jpeg")})
+    assert r.status_code == 200, r.text
+    assert _vacio(repo)
+    assert _en_disco(f"{BASE}/local-d/diseno-v.jpg") and _en_disco(f"{BASE}/local-d/diseno-p.jpg")
+    assert "portada_diseno_propuesta_url" not in r.json()["comercio"]          # punto 8: no viaja al agente
+
+
+def test_agente_elegir_de_la_galeria_vacia_las_columnas_pero_no_borra_los_archivos(client, repo, agente_token):
+    _con_diseno_en_disco(repo)
+    guardar_foto_local("local-d/otra.jpg", _jpeg(color="red"))
+    repo.comercio_fotos.append({"id": "f1", "comercio_id": "com-d", "url": f"{BASE}/local-d/otra.jpg",
+                                "thumb_url": f"{BASE}/local-d/otra_t3.jpg", "orden": 0,
+                                "created_at": "2026-01-01T00:00:00+00:00"})
+    r = client.put("/campo/mis-comercios/com-d/portada", headers=_h(agente_token), json={"foto_id": "f1"})
+    assert r.status_code == 200, r.text
+    assert _vacio(repo)
+    assert _en_disco(f"{BASE}/local-d/diseno-v.jpg") and _en_disco(f"{BASE}/local-d/diseno-p.jpg")
+
+
+def test_comerciante_portada_nueva_si_suelta_los_archivos(client, repo):
+    from tests.conftest import comercio_token
+    _con_diseno_en_disco(repo)
+    r = client.put("/comercio/perfil/foto", headers=_h(comercio_token(comercio_id="com-d")),
+                   files={"foto": ("f.jpg", BytesIO(_jpeg()), "image/jpeg")})
+    assert r.status_code == 200, r.text
+    assert _vacio(repo)
+    assert not _en_disco(f"{BASE}/local-d/diseno-v.jpg") and not _en_disco(f"{BASE}/local-d/diseno-p.jpg")
+
+
+def test_la_respuesta_del_agente_no_trae_la_propuesta(client, repo, agente_token):
+    _con_diseno_en_disco(repo)
+    r = client.patch("/campo/mis-comercios/com-d", headers=_h(agente_token), json={"horario": "Lun a Vie 9 a 18"})
+    assert r.status_code == 200, r.text
+    assert "portada_diseno_propuesta_url" not in r.json()["comercio"]
+    from app.core.codigo import sin_codigo
+    assert "portada_diseno_propuesta_url" not in sin_codigo({"portada_diseno_propuesta_url": "x", "nombre": "n"})
+
+
+# ══════════════════════════════════════════ revisión: el diseño vence si cambia nombre, rubro o ciudad
+
+def test_admin_cambiar_el_nombre_vence_el_diseno_y_suelta_los_archivos(client, repo, admin_token):
+    _con_diseno_en_disco(repo)
+    r = client.put("/admin/comercio/com-d", headers=_h(admin_token), json={"nombre": "Ferretería El Clavo"})
+    assert r.status_code == 200, r.text
+    assert _vacio(repo)
+    assert not _en_disco(f"{BASE}/local-d/diseno-v.jpg") and not _en_disco(f"{BASE}/local-d/diseno-p.jpg")
+
+
+def test_admin_guardar_el_mismo_nombre_no_vence_nada(client, repo, admin_token):
+    _con_diseno_en_disco(repo)
+    r = client.put("/admin/comercio/com-d", headers=_h(admin_token),
+                   json={"nombre": "  Ferretería El Tornillo ", "horario": "Lun a Vie"})
+    assert r.status_code == 200, r.text
+    assert not _vacio(repo) and _en_disco(f"{BASE}/local-d/diseno-v.jpg")
+
+
+def test_admin_cambiar_el_rubro_principal_vence_el_diseno(client, repo, admin_token):
+    _con_diseno_en_disco(repo)
+    repo.rubros["kiosco"] = "rub-kiosco"
+    r = client.put("/admin/comercio/com-d", headers=_h(admin_token), json={"rubro_slugs": ["kiosco"]})
+    assert r.status_code == 200, r.text
+    assert _vacio(repo) and not _en_disco(f"{BASE}/local-d/diseno-v.jpg")
+
+
+def test_admin_dejar_el_mismo_rubro_principal_no_vence(client, repo, admin_token):
+    _con_diseno_en_disco(repo)
+    r = client.put("/admin/comercio/com-d", headers=_h(admin_token), json={"rubro_slugs": ["ferreteria"]})
+    assert r.status_code == 200, r.text
+    assert not _vacio(repo)
+
+
+def test_admin_cambiar_los_rubros_con_el_endpoint_de_rubros_vence_si_cambia_el_principal(client, repo, admin_token):
+    _con_diseno_en_disco(repo)
+    repo.rubros["kiosco"] = "rub-kiosco"
+    r = client.put("/admin/comercio/com-d/rubros", headers=_h(admin_token), json={"rubro_slugs": ["ferreteria", "kiosco"]})
+    assert r.status_code == 200, r.text
+    assert not _vacio(repo)                                  # el principal sigue siendo ferretería
+    r = client.put("/admin/comercio/com-d/rubros", headers=_h(admin_token), json={"rubro_slugs": ["kiosco"]})
+    assert r.status_code == 200, r.text
+    assert _vacio(repo) and not _en_disco(f"{BASE}/local-d/diseno-v.jpg")
+
+
+def test_mi_comercio_cambiar_el_nombre_vence_el_diseno_y_suelta_los_archivos(client, repo):
+    from tests.conftest import comercio_token
+    _con_diseno_en_disco(repo)
+    r = client.put("/comercio/perfil", headers=_h(comercio_token(comercio_id="com-d")), json={"nombre": "Nuevo Nombre SRL"})
+    assert r.status_code == 200, r.text
+    assert _vacio(repo) and not _en_disco(f"{BASE}/local-d/diseno-v.jpg")
+
+
+def test_agente_cambiar_el_nombre_vence_pero_no_borra_los_archivos(client, repo, agente_token):
+    _con_diseno_en_disco(repo)
+    r = client.patch("/campo/mis-comercios/com-d", headers=_h(agente_token), json={"nombre": "Nombre del Agente"})
+    assert r.status_code == 200, r.text
+    assert _vacio(repo)
+    assert _en_disco(f"{BASE}/local-d/diseno-v.jpg") and _en_disco(f"{BASE}/local-d/diseno-p.jpg")
+
+
+def test_el_repo_vence_el_diseno_si_cambia_la_ciudad_y_en_actualizar_campos(repo):
+    _con_diseno_en_disco(repo)
+    repo.actualizar_campos_comercio("com-d", {"horario": "x"})
+    assert not _vacio(repo)
+    repo.actualizar_campos_comercio("com-d", {"ciudad_id": "ciu-1"})        # la misma
+    assert not _vacio(repo)
+    repo.actualizar_campos_comercio("com-d", {"ciudad_id": "ciu-santa-cruz"})
+    assert _vacio(repo)
+
+
+def test_aplicar_rubros_que_cambia_el_principal_vence_el_diseno(repo):
+    from app.services.rubros import aplicar_rubros
+    c = _con_diseno_en_disco(repo, rubro_id="rub-otros")
+    repo.rubros["otros"] = "rub-otros"
+    repo.rubros["kiosco"] = "rub-kiosco"
+    aplicar_rubros(repo, c, ["kiosco"])
+    assert repo.comercios["com-d"]["rubro_id"] == "rub-ferre"      # el primero de los deducidos del nombre
+    assert _vacio(repo)
+
+
+def test_ia_aplicar_cambia_el_nombre_o_el_rubro_y_vence_el_diseno(client, repo, admin_token, monkeypatch):
+    """Analizar con aplicar=true: la propuesta de la IA pone el nombre (si el comercio no tiene uno de verdad)."""
+    from app.api import moderacion
+    _con_diseno_en_disco(repo)
+    repo.comercios["com-d"]["rubro_id"] = "rub-ferre"
+    propuesta = {"confianza": 0.9, "rubro_slugs": [], "productos": "x", "subcategoria": "y"}
+    monkeypatch.setattr(moderacion, "analizar_fotos", lambda *a, **k: propuesta)
+    monkeypatch.setattr(moderacion, "_patch_ia", lambda p, r, c: {"nombre": "Nombre de la IA", "ia_analizado_at": "2026-11-19"})
+    r = client.post("/admin/comercio/com-d/analizar?aplicar=true", headers=_h(admin_token))
+    assert r.status_code == 200, r.text
+    assert _vacio(repo) and not _en_disco(f"{BASE}/local-d/diseno-v.jpg")
+
+
+def test_una_edicion_que_no_toca_nombre_rubro_ni_ciudad_no_vence_nada(client, repo, admin_token):
+    _con_diseno_en_disco(repo)
+    for body in ({"horario": "Lun a Vie 9 a 18"}, {"descripcion": "vende de todo"}, {"portada_pos": 20}):
+        assert client.put("/admin/comercio/com-d", headers=_h(admin_token), json=body).status_code == 200
+    assert not _vacio(repo)

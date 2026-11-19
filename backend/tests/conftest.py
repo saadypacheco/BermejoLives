@@ -422,6 +422,8 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         ids = [r for r in dict.fromkeys(rubro_ids) if r]
         c = self.comercios.get(comercio_id)
         if c is not None:
+            from app.db.repository import diseno_vencido as _vencido
+            c.update(_vencido(c, {"rubro_id": ids[0] if ids else None}))
             c["rubros"] = ids
             c["rubro_id"] = ids[0] if ids else None
 
@@ -2514,6 +2516,10 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         if not c:
             return {}
         patch = dict(patch)
+        # Espeja al repo real: si cambia el nombre, el rubro principal o la ciudad, la portada de diseño vence.
+        from app.db.repository import diseno_vencido as _vencido
+        _rid = self.rubros.get(rubro_slugs[0]) if rubro_slugs else None
+        patch = {**_vencido(c, {**patch, **({"rubro_id": _rid} if _rid else {})}), **patch}
         # Espeja al repo real: rearma el slug si es genérico y le ponen nombre real.
         import re as _re
         from app.core.text import slugify as _slugify, slug_unico as _slug_unico
@@ -2532,7 +2538,8 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         c = self.comercios.get(comercio_id)
         if c is None:
             return {}
-        c.update(patch)
+        from app.db.repository import diseno_vencido as _vencido
+        c.update({**_vencido(c, patch), **patch})
         return c
 
     # ---- leads ----

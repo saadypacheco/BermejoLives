@@ -16,17 +16,26 @@ SIN IA, GRATIS
 «Mejorar con IA» (Gemini) quedó afuera el 19/11/2026 por costo (docs/portada-diseno.md).
 
 Guardar en el disco de fotos es `guardar` (un archivo `<slug>/diseno-<token>.jpg`).
+
+DEFENSAS (el backend corre con UN solo worker: un pedido pesado frena a todos)
+==============================================================================
+- La foto se RECORTA antes de escalar (`resize(..., box=)`): la salida es siempre 1600 x 1000 y nunca hay un
+  intermedio enorme. Una portada de 1 x 1280 px pediría gigapíxeles si se agrandara entera antes de recortar.
+- Se rechazan las fotos con el lado menor < 200 px o de proporción mayor a 4:1 (`PortadaInadecuada`).
+- Los textos se cortan (120 caracteres el nombre) ANTES de medirlos, y el ajuste de renglones usa búsqueda binaria.
+- Se arma de a UNA portada por vez (`_RENDER`): si hay otra en curso, `PortadaOcupada` (el endpoint dice 409).
 """
 from __future__ import annotations
 
 import secrets
+import threading
 import unicodedata
 from io import BytesIO
 
 import structlog
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps, ImageStat
 
-from app.services import fotos_galeria, imagenes, vision
+from app.services import fotos_galeria, imagenes
 from app.services.content_render_job import ASSETS, RenderError, fuente, sin_emojis
 
 logger = structlog.get_logger()
@@ -40,8 +49,30 @@ GRIS_CLARO = (226, 232, 228)
 #: jamás toca una foto de galería ni una portada.
 PREFIJO_ARCHIVO = "diseno-"
 
-#: Las dos columnas de `comercios` que se vacían juntas cuando la foto de portada cambia o se vuelve atrás.
+#: Las dos columnas de `comercios` que se vacían juntas cuando la foto de portada cambia, se vuelve atrás o el
+#: diseño queda vencido (cambió el nombre, el rubro o la ciudad).
 COLUMNAS_VACIAS = {"portada_diseno_url": None, "portada_diseno_propuesta_url": None}
+
+#: Largo máximo de lo que se dibuja (igual que `tarjetas.MAX_NOMBRE`; no se importa ese módulo por su peso).
+MAX_NOMBRE = 120
+MAX_SUBTITULO = 80
+#: Lo que se acepta como foto de entrada y lo que se lee del disco.
+FORMATOS = ("JPEG", "PNG", "WEBP")
+MAX_BYTES_FOTO = 8 * 1024 * 1024
+LADO_MENOR_MIN = 200
+PROPORCION_MAX = 4
+
+#: Una sola portada a la vez, y cuánto se espera si hay otra en curso.
+_RENDER = threading.Lock()
+ESPERA_RENDER = 5.0
+
+
+class PortadaInadecuada(ValueError):
+    """La foto de portada es muy chica o muy angosta para armar el diseño. El endpoint responde 400 con este texto."""
+
+
+class PortadaOcupada(RuntimeError):
+    """Ya se está armando otra portada. El endpoint responde 409."""
 
 
 # ───────────────────────────────────────────────────────────── texto
@@ -74,13 +105,36 @@ def _largo(texto: str, peso: str, px: int) -> float:
     return fuente(peso, px).getlength(texto)
 
 
+def _prefijo_que_entra(texto: str, peso: str, px: int, ancho: int, minimo: int = 1) -> int:
+    """El largo del prefijo más largo de `texto` que entra en `ancho` px (búsqueda binaria: O(n log n), no O(n²)).
+    Nunca menos de `minimo` caracteres."""
+    lo, hi = minimo, max(len(texto), minimo)
+    while lo < hi:
+        medio = (lo + hi + 1) // 2
+        if _largo(texto[:medio], peso, px) <= ancho:
+            lo = medio
+        else:
+            hi = medio - 1
+    return lo
+
+
+def _con_puntos(texto: str, peso: str, px: int, ancho: int) -> str:
+    """`texto` terminado en «…» (pegado, sin espacio antes) y recortado para que entre en `ancho` px."""
+    if _largo(texto.rstrip() + "…", peso, px) <= ancho:
+        return texto.rstrip() + "…"
+    lo, hi = 0, len(texto)
+    while lo < hi:
+        medio = (lo + hi + 1) // 2
+        if _largo(texto[:medio].rstrip() + "…", peso, px) <= ancho:
+            lo = medio
+        else:
+            hi = medio - 1
+    return texto[:lo].rstrip() + "…"
+
+
 def _cortar(texto: str, peso: str, px: int, ancho: int) -> str:
-    """Corta con «…» para que `texto` entre en `ancho` px."""
-    if _largo(texto, peso, px) <= ancho:
-        return texto
-    while texto and _largo(texto + "…", peso, px) > ancho:
-        texto = texto[:-1]
-    return texto.rstrip() + "…"
+    """Corta con «…» para que `texto` entre en `ancho` px (si ya entra, queda igual)."""
+    return texto if _largo(texto, peso, px) <= ancho else _con_puntos(texto, peso, px, ancho)
 
 
 def _envolver(texto: str, peso: str, px: int, ancho: int) -> list[str]:
@@ -89,10 +143,8 @@ def _envolver(texto: str, peso: str, px: int, ancho: int) -> list[str]:
     lineas: list[str] = []
     actual = ""
     for palabra in texto.split():
-        while _largo(palabra, peso, px) > ancho and len(palabra) > 1:
-            n = len(palabra)
-            while n > 1 and _largo(palabra[:n], peso, px) > ancho:
-                n -= 1
+        while len(palabra) > 1 and _largo(palabra, peso, px) > ancho:
+            n = _prefijo_que_entra(palabra, peso, px, ancho)
             if actual:
                 lineas.append(actual)
                 actual = ""
@@ -112,7 +164,7 @@ def _envolver(texto: str, peso: str, px: int, ancho: int) -> list[str]:
 def ajustar_nombre(texto: str, ancho: int, maximo: int = 104, minimo: int = 52,
                    max_lineas: int = 2) -> tuple[int, list[str]]:
     """El tamaño más grande (hasta `maximo`) con el que el nombre entra en `max_lineas` de `ancho` px.
-    Al mínimo, si todavía no entra, corta la última línea con «…»."""
+    Al mínimo, si todavía no entra, corta la última línea con «…» (pegado al texto)."""
     for px in range(maximo, minimo - 1, -4):
         lineas = _envolver(texto, "bold", px, ancho)
         if len(lineas) <= max_lineas:
@@ -120,7 +172,7 @@ def ajustar_nombre(texto: str, ancho: int, maximo: int = 104, minimo: int = 52,
     lineas = _envolver(texto, "bold", minimo, ancho)
     if len(lineas) > max_lineas:
         lineas = lineas[:max_lineas]
-        lineas[-1] = _cortar(lineas[-1] + " …", "bold", minimo, ancho)
+        lineas[-1] = _con_puntos(lineas[-1], "bold", minimo, ancho)
     return minimo, lineas or [""]
 
 
@@ -146,29 +198,41 @@ def mejorar_gratis(img: Image.Image) -> Image.Image:
 
 def _abrir(foto: bytes) -> Image.Image:
     """Abre la foto con los mismos topes de seguridad que las subidas (bomba de descompresión).
-    ValueError si no es una imagen."""
+
+    - `PortadaInadecuada` si es muy chica (lado menor < 200 px) o muy angosta (proporción > 4:1); se mira el
+      ENCABEZADO, antes de decodificar nada.
+    - `ValueError` («no es una imagen válida») para todo lo demás: otro formato, archivo roto o gigante. El texto
+      es siempre el mismo: nunca se devuelve el mensaje interno de Pillow.
+    """
     try:
         imagenes._preparar_pillow()
-        img = Image.open(BytesIO(foto))
+        img = Image.open(BytesIO(foto), formats=FORMATOS)
         imagenes._exigir_tamano_razonable(img)
+        menor, mayor = sorted(img.size)
+        if menor < LADO_MENOR_MIN or mayor > PROPORCION_MAX * menor:
+            raise PortadaInadecuada("La foto de portada es muy chica o muy angosta para armar el diseño")
         img.load()
         return ImageOps.exif_transpose(img).convert("RGB")
-    except ValueError:
+    except PortadaInadecuada:
         raise
     except Exception as exc:  # noqa: BLE001
         raise ValueError("El archivo no es una imagen válida") from exc
 
 
 def _cubrir(img: Image.Image, pos: int | None) -> Image.Image:
-    """La foto recortada para llenar 1600 x 1000. `pos` (0..100) es el centro vertical del recorte; sin él, 50."""
+    """La foto recortada para llenar 1600 x 1000, SIN agrandarla entera antes: se calcula la caja que se ve
+    sobre la foto original y se escala sólo eso (`resize(..., box=)`).
+
+    `pos` (0..100) es lo mismo que el CSS `object-position: center <pos>%` que usan el panel y la ficha: el recorte
+    arranca en `pos %` del tramo que sobra (arriba = pos/100 * (alto escalado - 1000)), NO centrado en `pos`.
+    Sin `pos`, 50 (el centro). Horizontalmente siempre va centrado."""
     pos = 50 if pos is None else max(0, min(100, int(pos)))
-    escala = max(ANCHO / img.width, ALTO / img.height)
-    w, h = max(ANCHO, round(img.width * escala)), max(ALTO, round(img.height * escala))
-    img = img.resize((w, h), Image.LANCZOS)
-    izq = (w - ANCHO) // 2
-    arriba = round(pos / 100 * h - ALTO / 2)
-    arriba = max(0, min(h - ALTO, arriba))
-    return img.crop((izq, arriba, izq + ANCHO, arriba + ALTO))
+    ancho, alto = img.size
+    escala = max(ANCHO / ancho, ALTO / alto)
+    caja_w, caja_h = min(ancho, ANCHO / escala), min(alto, ALTO / escala)
+    x0 = max(0.0, min(ancho - caja_w, (ancho - caja_w) / 2))
+    y0 = max(0.0, min(alto - caja_h, pos / 100 * (alto - caja_h)))
+    return img.resize((ANCHO, ALTO), Image.LANCZOS, box=(x0, y0, x0 + caja_w, y0 + caja_h))
 
 
 def _degradado(base: Image.Image, desde_y: int, alfa_max: int, hacia_abajo: bool = True) -> None:
@@ -188,9 +252,11 @@ def _degradado(base: Image.Image, desde_y: int, alfa_max: int, hacia_abajo: bool
 def _diseno(base: Image.Image, nombre: str, rubro: str | None, ciudad: str | None) -> Image.Image:
     """Pone la franja, los textos y el logo sobre la foto ya encuadrada."""
     ancho_texto = ANCHO - 2 * MARGEN
-    nombre = limpiar_texto(nombre) or "Comercio"
+    # Se corta ANTES de limpiar y medir: lo que llega de afuera (el registro anónimo) puede ser larguísimo.
+    nombre = limpiar_texto((nombre or "")[:MAX_NOMBRE]) or "Comercio"
     px, lineas = ajustar_nombre(nombre, ancho_texto)
-    partes = [p for p in (limpiar_texto(rubro), limpiar_texto(ciudad)) if p]
+    partes = [p for p in (limpiar_texto((rubro or "")[:MAX_SUBTITULO]),
+                          limpiar_texto((ciudad or "")[:MAX_SUBTITULO])) if p]
     sub = _cortar(" · ".join(partes), "medium", 44, ancho_texto) if partes else ""
 
     paso = round(px * 1.18)
@@ -224,14 +290,24 @@ def _jpeg(img: Image.Image) -> bytes:
 def armar_plantilla(foto: bytes, nombre: str, rubro: str | None, ciudad: str | None, pos: int | None,
                     *, mejorar: bool = True) -> bytes:
     """La portada de diseño en JPEG 1600 x 1000. `mejorar=False` salta la mejora automática (sólo para pruebas
-    que miran los colores de la foto tal cual). ValueError si `foto` no es una imagen."""
-    img = _cubrir(_abrir(foto), pos)
-    if mejorar:
-        img = mejorar_gratis(img)
+    que miran los colores de la foto tal cual).
+
+    - `PortadaInadecuada` (400): la foto es muy chica o muy angosta.
+    - `ValueError` (400): `foto` no es una imagen válida.
+    - `PortadaOcupada` (409): ya se está armando otra; se espera `ESPERA_RENDER` segundos antes de rendirse.
+    """
+    if not _RENDER.acquire(timeout=ESPERA_RENDER):
+        raise PortadaOcupada("Ya se está armando otra portada, probá en unos segundos")
     try:
-        return _jpeg(_diseno(img, nombre, rubro, ciudad))
-    except RenderError as exc:      # falta una fuente del paquete: error del servidor, no de la foto
-        raise RuntimeError(str(exc)) from exc
+        img = _cubrir(_abrir(foto), pos)
+        if mejorar:
+            img = mejorar_gratis(img)
+        try:
+            return _jpeg(_diseno(img, nombre, rubro, ciudad))
+        except RenderError as exc:      # falta una fuente del paquete: error del servidor, no de la foto
+            raise RuntimeError(str(exc)) from exc
+    finally:
+        _RENDER.release()
 
 
 # ───────────────────────────────────────────────────────────── disco
@@ -258,16 +334,34 @@ def urls_de(comercio: dict) -> list[str | None]:
     return [comercio.get(col) for col in COLUMNAS_VACIAS]
 
 
-def soltar_archivos(comercio: dict, urls: list[str | None]) -> None:
-    """Borra del disco los archivos de diseño `urls` de `comercio` (los que `urls_de` anotó antes de vaciar las columnas)."""
-    for url in urls:
-        soltar_archivo(comercio, url)
+def soltar_huerfanos(repo, comercio: dict, urls: list[str | None]) -> None:
+    """Borra del disco los archivos de diseño `urls` que YA NO apunta ninguna de las dos columnas.
+
+    Relee la fila DESPUÉS de escribir (no confía en la copia que se leyó antes): si otro pedido volvió a
+    apuntar uno de esos archivos mientras tanto, no se borra. Si no se puede releer la fila, no se borra nada
+    (un archivo de más es barato; uno de menos es una portada rota)."""
+    try:
+        fresca = repo.get_comercio(comercio["id"]) or {}
+    except Exception:  # noqa: BLE001
+        logger.warning("portada_diseno.releer_fallo", comercio=comercio.get("id"), exc_info=True)
+        return
+    vigentes = {fresca.get(col) for col in COLUMNAS_VACIAS}
+    for url in dict.fromkeys(u for u in urls if u):
+        if url not in vigentes:
+            soltar_archivo(comercio, url)
 
 
 def leer_portada(comercio: dict) -> bytes | None:
-    """Los bytes de la foto de portada, leídos del disco del backend. None si no hay portada o no está en el disco."""
-    url = comercio.get("portada_url")
-    return vision._leer_local(url) if url else None
+    """Los bytes de la foto de portada, leídos del disco del backend con la validación ESTRICTA de rutas
+    (`fotos_galeria._ruta_en_disco`: nuestra URL, `<carpeta>/<archivo>.jpg`, sin `..` ni enlaces que salgan del
+    volumen). None si no hay portada, no es una foto nuestra, no está en el disco o pesa de más."""
+    try:
+        ruta = fotos_galeria._ruta_en_disco(comercio.get("portada_url"))
+        if ruta is None or not ruta.is_file() or ruta.stat().st_size > MAX_BYTES_FOTO:
+            return None
+        return ruta.read_bytes()
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def respuesta(comercio: dict) -> dict:

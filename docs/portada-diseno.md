@@ -32,8 +32,32 @@ nitidez, sin IA** (suave: autocontraste mezclado con la foto, sube el brillo só
 4. «Volver a la foto original» → `portada_diseno_url` queda vacía.
 5. **Si cambia la foto de portada** (subir una nueva o elegir otra de la galería, desde cualquier perfil), las dos
    columnas de diseño quedan vacías: el diseño era de la foto anterior.
+6. **Si cambia el nombre, el rubro principal o la ciudad** del comercio (desde el panel, Mi comercio, el agente, la
+   IA que clasifica, el rubro automático o lo que completa un importado), las dos columnas también quedan vacías:
+   el diseño tiene esos textos dibujados y quedó vencido. Guardar el mismo valor no vence nada. Lo hace el
+   repositorio (`diseno_vencido`), así que ningún camino se lo salta. Los archivos del disco se sueltan salvo
+   cuando el que cambia es el **agente** (que no borra nada: `docs/portada-y-permisos.md`).
 
-Nada se publica solo: la propuesta sólo la ve el panel.
+Nada se publica solo: la propuesta no se muestra en la ficha hasta que una persona aprieta «Usar en la ficha».
+
+**Privacidad de la propuesta.** «Privada» quiere decir que la columna `portada_diseno_propuesta_url` no se da a anon
+(ni la lee el sitio público) y que las respuestas al agente y a Mi comercio no la traen. El **archivo**, en cambio, se
+sirve por `/fotos/<slug>/diseno-<token>.jpg` como cualquier foto, sin login: lo protege sólo que el nombre lleva 64 bits
+al azar y no se lista en ningún lado. Quien tenga el link lo ve.
+
+## Límites (el backend corre con un solo worker)
+
+- La foto de portada se **recorta antes de escalar**: la salida es siempre 1600 × 1000 y no hay intermedios enormes.
+- Se rechaza (400) una portada con el lado menor < 200 px o de proporción mayor a 4:1: «La foto de portada es muy
+  chica o muy angosta para armar el diseño».
+- `portada_pos` se aplica como el CSS `object-position: center <pos>%`: el recorte arranca en `pos %` del tramo que
+  sobra (no queda centrado en `pos`). Sin `pos`, el centro.
+- El nombre se corta a 120 caracteres antes de dibujarlo; en el alta anónima, Mi comercio y el panel el nombre admite
+  hasta 200.
+- Se arma de a **una** portada por vez: si hay otra en curso, 409 «Ya se está armando otra portada, probá en unos
+  segundos».
+- Si mientras se armaba cambió la foto de portada (o el nombre, rubro, ciudad o recorte), el POST devuelve 409 y el
+  archivo recién creado se borra.
 
 ## En la ficha pública
 
@@ -52,7 +76,7 @@ Nada se publica solo: la propuesta sólo la ve el panel.
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| POST | `/admin/comercio/{id}/portada-diseno` | Arma la propuesta. 400 sin foto de portada |
+| POST | `/admin/comercio/{id}/portada-diseno` | Arma la propuesta. 400 sin foto de portada, o si es muy chica o angosta; 409 si hay otra en curso o la foto cambió mientras se armaba |
 | PUT | `/admin/comercio/{id}/portada-diseno` | Usa la propuesta en la ficha. 400 si no hay propuesta |
 | DELETE | `/admin/comercio/{id}/portada-diseno/propuesta` | Descarta la propuesta |
 | DELETE | `/admin/comercio/{id}/portada-diseno` | Vuelve a la foto original |
