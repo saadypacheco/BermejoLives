@@ -1519,6 +1519,34 @@ def listar_importados(
             "resumen": repo.resumen_importados()}
 
 
+TOPE_PUNTOS_MAPA = 30_000          # más que los ~19.000 de Santa Cruz; evita una respuesta sin techo
+
+
+@router.get("/admin/importados/puntos")
+def puntos_importados(
+    ciudad_id: str = Query(min_length=1, max_length=64),
+    estado: Literal["nuevo", "promovido", "descartado"] = "nuevo",
+    fuente: Literal["osm", "tarjeta", "turismo", "overture", "anh", "aduana"] | None = None,
+    rubro: str | None = Query(default=None, max_length=80),
+    _admin: dict = Depends(require_permiso("datos")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Los puntos de TODOS los importados de una ciudad para dibujar el mapa del panel, sin las filas completas.
+    `sin_punto` cuenta los que cumplen los mismos filtros pero no tienen coordenadas; `truncado` avisa que se cortó
+    en `TOPE_PUNTOS_MAPA`. Va declarada antes de las rutas `/admin/importados/{importado_id}/...`."""
+    rubro = (rubro or "").strip() or None
+    filas = repo.puntos_importados(ciudad_id, estado, fuente, rubro, TOPE_PUNTOS_MAPA + 1)   # +1 para saber si se cortó
+    truncado = len(filas) > TOPE_PUNTOS_MAPA
+    items = [{
+        "id": f["id"], "nombre": f.get("nombre"), "fuente": f.get("fuente"),
+        "lat": round(float(f["lat"]), 6), "lng": round(float(f["lng"]), 6),
+        "rubro_slug": f.get("rubro_slug"), "repetido": f.get("duplicado_de") is not None,
+        "ubicacion": f.get("ubicacion"),
+    } for f in filas[:TOPE_PUNTOS_MAPA]]
+    sin_punto = repo.contar_importados_sin_punto(ciudad_id, estado, fuente, rubro)
+    return {"items": items, "total": len(items), "sin_punto": sin_punto, "truncado": truncado}
+
+
 def _rubro_no_comercial(repo: Repo, rubro_slug: str) -> bool:
     """¿El rubro existe y es NO comercial (`rubros.comercial = false`)? Un rubro que no se encuentra cuenta como
     comercial: es lo que siempre fue."""

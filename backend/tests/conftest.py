@@ -365,6 +365,21 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
     def get_importado(self, importado_id):
         return self.importados.get(importado_id)
 
+    def _importados_filtrados(self, ciudad_id, estado, fuente, rubro):
+        return [i for i in self.importados.values()
+                if i.get("ciudad_id") == ciudad_id and i.get("estado") == estado
+                and (not fuente or i.get("fuente") == fuente) and (not rubro or i.get("rubro_slug") == rubro)]
+
+    def puntos_importados(self, ciudad_id, estado, fuente, rubro, tope):
+        out = [i for i in self._importados_filtrados(ciudad_id, estado, fuente, rubro)
+               if i.get("lat") is not None and i.get("lng") is not None]
+        out.sort(key=lambda i: i["id"])
+        return out[:tope]
+
+    def contar_importados_sin_punto(self, ciudad_id, estado, fuente, rubro):
+        return sum(1 for i in self._importados_filtrados(ciudad_id, estado, fuente, rubro)
+                   if i.get("lat") is None or i.get("lng") is None)
+
     def get_importado_por_fuente(self, fuente, fuente_id):
         return self._importados_por_clave.get((fuente, fuente_id))
 
