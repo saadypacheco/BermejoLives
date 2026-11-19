@@ -26,6 +26,8 @@ test("nombreFuente: Overture con quien aportó el dato; OSM y tarjeta con su nom
   assert.equal(nombreFuente({ fuente: "overture", texto_leido: texto }), "Overture Maps Foundation (datos de Meta)");
   assert.equal(nombreFuente({ fuente: "overture", texto_leido: "Datos de: -" }), "Overture Maps Foundation");
   assert.equal(nombreFuente({ fuente: "osm" }), "OpenStreetMap");
+  assert.equal(nombreFuente({ fuente: "anh" }), "ANH (Agencia Nacional de Hidrocarburos)");
+  assert.equal(nombreFuente({ fuente: "aduana" }), "Aduana Nacional de Bolivia");
   assert.equal(nombreFuente({ fuente: "tarjeta" }), "Tarjeta de presentación");
 });
 

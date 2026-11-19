@@ -46,6 +46,7 @@ export const CATEGORY_STYLE: Record<string, { color: string }> = {
   banos: { color: "#0ea5e9" }, estacionamiento: { color: "#0ea5e9" },
   cajeros: { color: "#0ea5e9" }, wifi: { color: "#0ea5e9" },
   emergencias: { color: "#ef4444" }, alquiler: { color: "#8b5cf6" },
+  aduana: { color: "#0ea5e9" },
   // Lugares para visitar (rubro no comercial, 0196): familia propia, lima, que ninguna otra usa.
   "para-visitar": { color: "#65a30d" },
   "servicio-tecnico": { color: "#64748b" },

@@ -502,15 +502,17 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio, onCompletado }: {
     void correr(async () => { await descartarImportado(it.id, motivo); onCambio(); });
   };
 
-  const esTurismo = it.fuente === "turismo";
   const esOverture = it.fuente === "overture";
+  const esTarjetaFoto = it.fuente === "tarjeta";
+  const etiquetaFuente: Record<string, string> = { turismo: "Turismo", overture: "Overture", anh: "ANH", aduana: "Aduana" };
   // Con `fuente_url` (el enlace guardado por el importador) se usa ése; si el servidor es anterior, el del texto leído.
-  const origen = esTurismo ? (urlFuente(it.fuente_url) ?? urlDeOrigen(it.texto_leido)) : null;
+  const origen = esTarjetaFoto || esOverture ? null : (urlFuente(it.fuente_url) ?? urlDeOrigen(it.texto_leido));
   // Un lugar para visitar (plaza, museo, mirador…) con el rubro puesto en la ficha: si quien revisa lo cambia a otro
   // rubro, vuelve a ser un negocio y la ficha lo trata como tal.
   const esLugar = esLugarParaVisitar(it, form.rubro_slug);
   const subcategoriaVisible = (revisable ? form.subcategoria : it.subcategoria ?? "").trim();
-  const campos: Etiqueta[] = esLugar
+  // Las oficinas de la Aduana traen horario: se ve y se corrige como el de los lugares.
+  const campos: Etiqueta[] = esLugar || it.fuente === "aduana"
     ? [...ETIQUETAS, { c: "horario", t: "Horario" }]
     : ETIQUETAS;
   const colorChip = chip.tono === "ok" ? "ok" : chip.tono === "error" ? "error" : "aviso";
@@ -524,12 +526,12 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio, onCompletado }: {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             {esLugar
               ? <Insignia icono="para-visitar" tono="info">{selloParaVisitar(subcategoriaVisible)}</Insignia>
-              : <Insignia icono={esTurismo || esOverture ? "mapa" : "documentos"} tono="info">{esTurismo ? "Turismo" : esOverture ? "Overture" : "Tarjeta"}</Insignia>}
+              : <Insignia icono={esTarjetaFoto ? "documentos" : "mapa"} tono="info">{etiquetaFuente[it.fuente] ?? "Tarjeta"}</Insignia>}
             {it.lector && <span style={{ fontSize: 11.5, color: "var(--txt-3)" }}>leída con {it.lector === "gemini" ? "Gemini" : "Tesseract"}</span>}
             <Insignia icono={chip.icono} tono={colorChip}>{chip.texto}</Insignia>
           </div>
 
-          {(esTurismo || esOverture) && (
+          {!esTarjetaFoto && (
             <div style={{ fontSize: 12.5, color: "var(--txt-3)", overflowWrap: "anywhere" }}>
               <Ic n="mapa" s={14} /> Fuente: <b style={{ color: "var(--txt-2)" }}>{nombreFuente(it)}</b>
               {origen && <>{" · "}<a href={origen} target="_blank" rel="noopener noreferrer" style={{ color: "var(--txt-2)" }}>{textoVerEnOrigen(origen)} <Ic n="abrir" s={13} /></a></>}
@@ -548,7 +550,7 @@ export function FichaTarjeta({ item, rubros, ciudad, onCambio, onCompletado }: {
                          <Ic n="abrir" s={14} /> Ver en Negocios
                        </a>
                      </span>}>
-              <b>Repetido:</b> {esLugar ? "este lugar parece ser" : esTurismo || esOverture ? "este negocio parece ser" : "esta tarjeta parece ser"} <b>{nombreRepetido(it)}</b>, que ya está en URUKU.
+              <b>Repetido:</b> {esLugar ? "este lugar parece ser" : !esTarjetaFoto ? "este negocio parece ser" : "esta tarjeta parece ser"} <b>{nombreRepetido(it)}</b>, que ya está en URUKU.
             </Aviso>
           )}
 

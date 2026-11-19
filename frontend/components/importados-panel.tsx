@@ -44,6 +44,9 @@ const FUENTES: { key: FuenteFiltro; label: string }[] = [
   { key: "turismo-visitar", label: "Turismo › Para visitar" },
   // Overture Maps: la base abierta mensual (docs/vigia-fuentes.md). Se llena con importar_overture.
   { key: "overture", label: "Overture" },
+  // Estaciones de servicio de la ANH y oficinas de la Aduana Nacional (docs/vigia-fuentes.md).
+  { key: "anh", label: "ANH" },
+  { key: "aduana", label: "Aduana" },
 ];
 
 export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: Ciudad | null }) {
@@ -197,6 +200,10 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
             ? <>Nada acá. Se llena corriendo <code>importar_turismo</code> en el servidor (ver <code>docs/importar-turismo.md</code>).</>
             : fuente === "overture"
             ? <>Nada acá. Se llena corriendo <code>importar_overture</code> en el servidor (ver <code>docs/vigia-fuentes.md</code>).</>
+            : fuente === "anh"
+            ? <>Nada acá. Se llena corriendo <code>importar_anh</code> en el servidor (ver <code>docs/vigia-fuentes.md</code>).</>
+            : fuente === "aduana"
+            ? <>Nada acá. Se llena corriendo <code>importar_aduana</code> en el servidor (ver <code>docs/vigia-fuentes.md</code>).</>
             : fuente === "turismo-visitar"
             ? <>Nada acá. Se llena corriendo <code>importar_turismo_lugares</code> en el servidor (ver <code>docs/lugares-turismo.md</code>).</>
             : <>Nada acá. Se llena corriendo <code>importar_osm.py</code> con la ciudad, o con «Cargar tarjetas».</>}
