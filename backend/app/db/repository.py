@@ -77,6 +77,25 @@ def tapar_no_sin_votantes(no: int, filas: list[dict], ahora) -> tuple[int, int]:
         no = min(no, TOPE_NO_SIN_VOTANTES)
     return no, len(votantes)
 
+# Columnas que pide el mapa de importados del panel (sin `select *`).
+COLUMNAS_PUNTOS_IMPORTADOS = "id,nombre,fuente,lat,lng,rubro_slug,duplicado_de,ubicacion"
+PAGINA_POSTGREST = 1000          # PGRST_DB_MAX_ROWS: PostgREST corta ahí sin avisar
+
+
+def paginar_rango(pedir, tope: int, pagina: int = PAGINA_POSTGREST) -> list[dict]:
+    """Junta filas de a `pagina` con `pedir(inicio, fin)` (rango inclusivo, como `.range()`) hasta que una página
+    venga incompleta o se llegue a `tope` filas. Nunca devuelve más de `tope`."""
+    filas: list[dict] = []
+    while len(filas) < tope:
+        inicio = len(filas)
+        fin = min(inicio + pagina, tope) - 1
+        lote = pedir(inicio, fin) or []
+        filas.extend(lote)
+        if len(lote) < fin - inicio + 1:
+            break
+    return filas[:tope]
+
+
 class CredencialDuplicada(Exception):
     """Dos personas emitieron la credencial del mismo agente a la vez: el índice
     único parcial dejó pasar a una sola."""
@@ -326,6 +345,10 @@ class Repo(Protocol):
     def nombres_de_comercios(self, ids: list[str]) -> dict[str, str]: ...
     def marcar_importado(self, importado_id: str, patch: dict) -> dict | None: ...
     def resumen_importados(self) -> list[dict]: ...
+    def puntos_importados(self, ciudad_id: str, estado: str, fuente: str | None,
+                          rubro: str | None, tope: int) -> list[dict]: ...
+    def contar_importados_sin_punto(self, ciudad_id: str, estado: str, fuente: str | None,
+                                    rubro: str | None) -> int: ...
     def comercios_con_coords(self, ciudad_id: str | None) -> list[dict]: ...
     def agregar_numero_comercio(self, comercio_id: str, numero: str, etiqueta: str | None, by: str) -> dict: ...
     def numero_autorizado_por_codigo(self, numero: str) -> bool: ...
@@ -707,6 +730,33 @@ class SupabaseRepo(IntegracionRepoMixin):
             k = (r.get("ciudad_id"), r.get("estado"))
             cuenta[k] = cuenta.get(k, 0) + 1
         return [{"ciudad_id": c, "estado": e, "n": n} for (c, e), n in cuenta.items()]
+
+    def puntos_importados(self, ciudad_id: str, estado: str, fuente: str | None,
+                          rubro: str | None, tope: int) -> list[dict]:
+        """Los importados CON punto de una ciudad, sólo las columnas que dibuja el mapa del panel (no `select *`).
+        Pagina de a 1000 (PostgREST corta ahí sin avisar) hasta juntarlos todos o llegar a `tope` filas."""
+        def pedir(inicio: int, fin: int) -> list[dict]:
+            q = (self._db.table("comercios_importados").select(COLUMNAS_PUNTOS_IMPORTADOS)
+                 .eq("ciudad_id", ciudad_id).eq("estado", estado)
+                 .not_.is_("lat", "null").not_.is_("lng", "null"))
+            if fuente:
+                q = q.eq("fuente", fuente)
+            if rubro:
+                q = q.eq("rubro_slug", rubro)
+            return q.order("id").range(inicio, fin).execute().data or []
+
+        return paginar_rango(pedir, tope)
+
+    def contar_importados_sin_punto(self, ciudad_id: str, estado: str, fuente: str | None,
+                                    rubro: str | None) -> int:
+        """Cuántos importados con esos filtros NO tienen punto (falta `lat` o `lng`), sin traer filas."""
+        q = (self._db.table("comercios_importados").select("id", count="exact")
+             .eq("ciudad_id", ciudad_id).eq("estado", estado).or_("lat.is.null,lng.is.null"))
+        if fuente:
+            q = q.eq("fuente", fuente)
+        if rubro:
+            q = q.eq("rubro_slug", rubro)
+        return q.limit(1).execute().count or 0
 
     def comercios_con_coords(self, ciudad_id: str | None) -> list[dict]:
         """Los que ya están cargados, para detectar duplicados al importar."""
