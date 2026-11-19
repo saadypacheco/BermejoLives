@@ -28,13 +28,17 @@ const TEXTO_ESPERA: Record<Accion, string> = {
   quitar: "Volviendo a la foto original…",
 };
 
-export function PortadaDisenoBloque({ comercioId, portadaUrl, inicial, puedeEditar = true, onCambio }: {
+export function PortadaDisenoBloque({ comercioId, portadaUrl, inicial, puedeEditar = true, encuadreSinGuardar = false, onCambio, onArmando }: {
   comercioId: string;
   portadaUrl: string | null;
   inicial?: Partial<PortadaDiseno>;
   puedeEditar?: boolean;
+  /** El encuadre del modal es distinto del guardado: el servidor arma con el guardado, así que primero hay que guardarlo. */
+  encuadreSinGuardar?: boolean;
   /** Algo cambió en el servidor: el listado de atrás tiene que recargarse. */
   onCambio?: () => void;
+  /** Hay una acción en curso: el modal no debería dejar cambiar la portada mientras tanto. */
+  onArmando?: (armando: boolean) => void;
 }) {
   const [estado, setEstado] = useState<PortadaDiseno>({
     portada_diseno_url: inicial?.portada_diseno_url ?? null,
@@ -43,11 +47,15 @@ export function PortadaDisenoBloque({ comercioId, portadaUrl, inicial, puedeEdit
   const [ocupado, setOcupado] = useState<Accion | null>(null);
   const [err, setErr] = useState("");
   const [aviso, setAviso] = useState("");
-  const primera = useRef(true);
+  // La portada anterior, para reaccionar sólo a un cambio real (en StrictMode el efecto corre dos veces al montar).
+  const prev = useRef(portadaUrl);
+
+  useEffect(() => { onArmando?.(ocupado !== null); }, [ocupado, onArmando]);
 
   // Foto de portada nueva: el servidor vació las dos columnas.
   useEffect(() => {
-    if (primera.current) { primera.current = false; return; }
+    if (prev.current === portadaUrl) return;
+    prev.current = portadaUrl;
     setEstado({ portada_diseno_url: null, portada_diseno_propuesta_url: null });
     setErr(""); setAviso("");
   }, [portadaUrl]);
@@ -60,7 +68,8 @@ export function PortadaDisenoBloque({ comercioId, portadaUrl, inicial, puedeEdit
       setAviso(listo);
       onCambio?.();
     } catch (e) {
-      // El 400 de «sin foto» y demás errores traen el motivo en español: se muestra tal cual.
+      // Los errores del servidor traen el motivo en español (400 «sin foto» o «muy chica», 409 «ya se está
+      // armando otra» o «la portada cambió»): se muestra tal cual.
       setErr(e instanceof Error && e.message ? e.message : "No se pudo completar la acción. Probá de nuevo.");
     } finally { setOcupado(null); }
   }
@@ -68,6 +77,7 @@ export function PortadaDisenoBloque({ comercioId, portadaUrl, inicial, puedeEdit
   const { portada_diseno_url: actual, portada_diseno_propuesta_url: propuesta } = estado;
   const sinFoto = !portadaUrl;
   const quieto = ocupado !== null || !puedeEditar;
+  const sinGuardar = encuadreSinGuardar && !sinFoto;
 
   return (
     <div style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 14, display: "grid", gap: 12 }}>
@@ -82,9 +92,15 @@ export function PortadaDisenoBloque({ comercioId, portadaUrl, inicial, puedeEdit
         </div>
       )}
 
+      {sinGuardar && (
+        <div role="status" style={{ fontSize: 12.5, color: "var(--amber)" }}>
+          <Ic n="aviso" s={14} /> Guardá el encuadre antes de armar la portada.
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button type="button" className="btn btn-primary btn-sm" style={{ minHeight: 44 }}
-          disabled={quieto || sinFoto}
+          disabled={quieto || sinFoto || sinGuardar}
           onClick={() => correr("armar", () => armarPortadaDiseno(comercioId), "Propuesta lista: mirala abajo antes de usarla.")}>
           <Ic n="documento" s={15} /> Armar portada de diseño (gratis)
         </button>

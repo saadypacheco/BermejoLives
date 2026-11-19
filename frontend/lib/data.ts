@@ -57,6 +57,8 @@ export const COLUMNAS_COMERCIO = [
   // 0196: el enlace a la página de origen de los lugares para visitar. Primero la migración, después el deploy.
   "fuente_url",
   // 0200: la portada con diseño de publicidad (la propuesta, en cambio, es privada: sólo la ve el panel).
+  // Primero la migración 0200, después el deploy: si el front sale antes, PostgREST contesta 42703 y se caen
+  // la ficha y los listados.
   "portada_diseno_url",
 ].join(", ");
 

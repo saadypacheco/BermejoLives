@@ -2445,6 +2445,8 @@ function ModalEditar({
   // Algo ya cambió en el servidor sin pasar por «Guardar» (portada, clasificación):
   // al cerrar hay que refrescar la lista de negocios.
   const cambioEnServidor = useRef(false);
+  // Se está armando la portada de diseño: no se puede cambiar la foto de portada hasta que termine.
+  const [armandoDiseno, setArmandoDiseno] = useState(false);
   const [codigoCopiado, setCodigoCopiado] = useState<"si" | "no" | null>(null);
 
   function cerrar() {
@@ -2644,7 +2646,7 @@ function ModalEditar({
           <div style={{ marginTop: 12 }}>
             <FotoPrincipal
               url={portada.url ?? portada.thumb}
-              soloLectura={!puedeEditar}
+              soloLectura={!puedeEditar || armandoDiseno}
               textoBoton="Subir otra"
               compacto
               aspecto="2 / 1"
@@ -2775,7 +2777,7 @@ function ModalEditar({
             <FotosComercio
               comercioId={comercio.id}
               portada={portada}
-              puedeEditar={puedeEditar}
+              puedeEditar={puedeEditar && !armandoDiseno}
               onPortada={(pt) => { setPortada(pt); setPortadaPos(null); cambioEnServidor.current = true; }}
             />
 
@@ -2932,7 +2934,11 @@ function ModalEditar({
                     portadaUrl={portada.url}
                     inicial={comercio as { portada_diseno_url?: string | null; portada_diseno_propuesta_url?: string | null }}
                     puedeEditar={puedeEditar}
+                    // El servidor arma con el encuadre guardado: si en el modal se movió y no se guardó, no sirve.
+                    encuadreSinGuardar={portadaPos !== (portada.url === (comercio.portada_url ?? null)
+                      ? (((comercio as Record<string, unknown>).portada_pos as number | null | undefined) ?? null) : null)}
                     onCambio={() => { cambioEnServidor.current = true; }}
+                    onArmando={setArmandoDiseno}
                   />
                 </div>
               </details>
