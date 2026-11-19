@@ -11,8 +11,7 @@ import {
  * «Portada de diseño» (docs/portada-diseno.md): la foto del local con una franja de publicidad
  * (nombre, rubro y ciudad). Se arma acá, se MIRA, y recién con «Usar en la ficha» se publica.
  *
- * El texto de la imagen sale de la base; la IA sólo mejora la foto (luz y encuadre) y cuesta, así que
- * tiene su propio botón. Mientras se arma (la IA tarda 20-40 s) los botones quedan quietos.
+ * El texto de la imagen sale de la base. Mientras se arma, los botones quedan quietos.
  *
  * Si el listado del panel no trae las dos columnas, arranca mostrando sólo los botones y se pone al día
  * con lo que contesta cada acción (todas devuelven las dos URLs).
@@ -20,11 +19,10 @@ import {
  * `portadaUrl`: si cambia la foto de portada el servidor borra el diseño (era de la foto anterior),
  * así que el bloque vuelve a empezar vacío.
  */
-type Accion = "plantilla" | "ia" | "usar" | "descartar" | "quitar";
+type Accion = "armar" | "usar" | "descartar" | "quitar";
 
 const TEXTO_ESPERA: Record<Accion, string> = {
-  plantilla: "Armando la portada…",
-  ia: "Mejorando la foto con IA y armando la portada… puede tardar hasta un minuto.",
+  armar: "Armando la portada…",
   usar: "Poniéndola en la ficha…",
   descartar: "Descartando…",
   quitar: "Volviendo a la foto original…",
@@ -62,7 +60,7 @@ export function PortadaDisenoBloque({ comercioId, portadaUrl, inicial, puedeEdit
       setAviso(listo);
       onCambio?.();
     } catch (e) {
-      // El 409 de la IA apagada y el 400 de «sin foto» traen el motivo en español: se muestra tal cual.
+      // El 400 de «sin foto» y demás errores traen el motivo en español: se muestra tal cual.
       setErr(e instanceof Error && e.message ? e.message : "No se pudo completar la acción. Probá de nuevo.");
     } finally { setOcupado(null); }
   }
@@ -87,13 +85,8 @@ export function PortadaDisenoBloque({ comercioId, portadaUrl, inicial, puedeEdit
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button type="button" className="btn btn-primary btn-sm" style={{ minHeight: 44 }}
           disabled={quieto || sinFoto}
-          onClick={() => correr("plantilla", () => armarPortadaDiseno(comercioId, false), "Propuesta lista: mirala abajo antes de usarla.")}>
-          <Ic n="documento" s={15} /> Armar con plantilla (gratis)
-        </button>
-        <button type="button" className="btn btn-ghost btn-sm" style={{ minHeight: 44 }}
-          disabled={quieto || sinFoto}
-          onClick={() => correr("ia", () => armarPortadaDiseno(comercioId, true), "Propuesta con IA lista: mirala abajo antes de usarla.")}>
-          <Ic n="destacado" s={15} /> Mejorar con IA (unos US$ 0,03)
+          onClick={() => correr("armar", () => armarPortadaDiseno(comercioId), "Propuesta lista: mirala abajo antes de usarla.")}>
+          <Ic n="documento" s={15} /> Armar portada de diseño (gratis)
         </button>
       </div>
 

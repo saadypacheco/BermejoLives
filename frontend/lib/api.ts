@@ -810,11 +810,10 @@ function portadaDiseno(d: { portada_diseno_url?: string | null; portada_diseno_p
   return { portada_diseno_url: d.portada_diseno_url ?? null, portada_diseno_propuesta_url: d.portada_diseno_propuesta_url ?? null };
 }
 
-/** Arma la PROPUESTA (`POST .../portada-diseno?ia=`). Con `ia` la IA mejora la foto antes (cuesta unos
- *  US$ 0,03 y puede tardar 20-40 s); sin `ia` es la plantilla, gratis. El 409 («el interruptor está
- *  apagado») y el 400 («no tiene foto de portada») llegan como `Error` con el mensaje del servidor. */
-export async function armarPortadaDiseno(comercioId: string, ia: boolean): Promise<PortadaDiseno> {
-  const res = await authFetch(`/admin/comercio/${encodeURIComponent(comercioId)}/portada-diseno?ia=${ia ? "true" : "false"}`, { method: "POST" });
+/** Arma la PROPUESTA con la plantilla (`POST .../portada-diseno`, gratis). Un 400 («no tiene foto de
+ *  portada») llega como `Error` con el mensaje del servidor. */
+export async function armarPortadaDiseno(comercioId: string): Promise<PortadaDiseno> {
+  const res = await authFetch(`/admin/comercio/${encodeURIComponent(comercioId)}/portada-diseno`, { method: "POST" });
   return portadaDiseno(await okDe(res, "armar la portada de diseño"));
 }
 
