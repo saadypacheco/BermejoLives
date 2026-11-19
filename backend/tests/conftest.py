@@ -1941,7 +1941,8 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
     _COLS_LISTADO_ADMIN = (
         "id", "slug", "nombre", "whatsapp", "telefono", "modalidad", "descripcion",
         "prod_obs_human", "prod_det_ia", "subcategoria", "codigo", "direccion", "lat", "lng", "verificado", "suspendido",
-        "paga_hasta", "portada_url", "portada_thumb_url", "portada_pos", "cargado_por", "created_at",
+        "paga_hasta", "portada_url", "portada_thumb_url", "portada_pos", "portada_diseno_url",
+        "portada_diseno_propuesta_url", "cargado_por", "created_at",
         "lugar_id", "puesto", "ia_analizado_at",
     )
 
@@ -2379,6 +2380,10 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
 
     def get_rubro_nombre(self, slug):
         return slug.title() if self.rubros.get(slug) else None
+
+    def get_rubro_por_id(self, rubro_id):
+        slug = next((s for s, i in self.rubros.items() if i == rubro_id), None)
+        return {"slug": slug, "nombre": slug.title()} if slug else None
 
     def list_ciudades(self):
         return [{"id": "ciu-1", "slug": "bermejo", "nombre": "Bermejo", "activa": True, "es_frontera": True},

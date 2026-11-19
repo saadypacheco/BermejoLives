@@ -16,20 +16,15 @@ Una imagen apaisada de **1600 × 1000** (JPEG) con:
 Todo el texto sale de la base (`comercios`, `rubros`, `ciudades`): **ningún texto de la imagen lo escribe un
 modelo de IA**. Sin emojis (la fuente no los tiene y el manual los prohíbe).
 
-## Dos formas de armarla
+## Cómo se arma
 
-| | Plantilla | Mejorar con IA |
-|---|---|---|
-| Qué hace | La foto tal cual + el diseño | Gemini mejora la foto (luz, nitidez, encuadre) y después se le pone el MISMO diseño |
-| Costo | 0 (Pillow en el backend) | ~US$ 0,034 por imagen (`gemini-3.1-flash-lite-image`, precio del 19/11/2026) |
-| Interruptor | — | `gemini_portada_diseno` en `cost_switches`, **apagado** por defecto |
-
-El pedido a Gemini prohíbe agregar, quitar o cambiar objetos, carteles, productos o texto: sólo luz, color,
-nitidez y encuadre. Igual una persona mira la propuesta antes de usarla.
+**Plantilla, gratis (Pillow en el backend).** La foto pasa primero por una **mejora automática de luz, color y
+nitidez, sin IA** (suave: autocontraste mezclado con la foto, sube el brillo sólo si la foto es oscura, color
++12 %, nitidez +30 %; una foto ya clara no se toca) y después se le pone el diseño. Costo: 0.
 
 ## Flujo
 
-1. En el panel (análisis del comercio) → «Armar portada de diseño» → **Plantilla (gratis)** o **Mejorar con IA**.
+1. En el panel (análisis del comercio) → «Armar portada de diseño».
 2. El backend arma la imagen, la guarda en el disco de fotos y la deja como **propuesta**
    (`comercios.portada_diseno_propuesta_url`, privada). El panel la muestra.
 3. «Usar en la ficha» → pasa a `comercios.portada_diseno_url` (pública) y la propuesta queda vacía.
@@ -57,9 +52,11 @@ Nada se publica solo: la propuesta sólo la ve el panel.
 
 | Método | Ruta | Qué hace |
 |---|---|---|
-| POST | `/admin/comercio/{id}/portada-diseno?ia=false` | Arma la propuesta. 400 sin foto de portada; 409 con `ia=true` y el interruptor apagado; 503 sin `GEMINI_API_KEY` |
+| POST | `/admin/comercio/{id}/portada-diseno` | Arma la propuesta. 400 sin foto de portada |
 | PUT | `/admin/comercio/{id}/portada-diseno` | Usa la propuesta en la ficha. 400 si no hay propuesta |
 | DELETE | `/admin/comercio/{id}/portada-diseno/propuesta` | Descarta la propuesta |
 | DELETE | `/admin/comercio/{id}/portada-diseno` | Vuelve a la foto original |
 
 Las cuatro devuelven `{portada_diseno_url, portada_diseno_propuesta_url}`.
+
+Mejorar con IA (Gemini, ~US$ 0,034 por imagen) quedó afuera el 19/11/2026 por costo: son decenas de miles de comercios. Si se retoma, va detrás de un interruptor de `cost_switches` apagado.

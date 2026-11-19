@@ -234,6 +234,7 @@ class Repo(Protocol):
     def get_zona_id(self, slug: str) -> str | None: ...
     def get_rubro_id(self, slug: str) -> str | None: ...
     def get_rubro_nombre(self, slug: str) -> str | None: ...
+    def get_rubro_por_id(self, rubro_id: str | None) -> dict | None: ...
     def get_ciudad_por_id(self, ciudad_id: str | None) -> dict | None: ...
     def list_ciudades(self) -> list[dict]: ...
     # El equipo y sus roles (0126)
@@ -514,6 +515,8 @@ _COLS_COMERCIO_ADMIN = (
     "prod_det_ia, subcategoria, sinonimos, codigo, direccion, calle, lat, lng, horario, horario_estimado, "
     "sin_cartel, "
     "verificado, suspendido, paga_hasta, portada_url, portada_thumb_url, portada_pos, cargado_por, "
+    # La portada de diseño (0200): la vigente y la propuesta que el panel todavía no aprobó.
+    "portada_diseno_url, portada_diseno_propuesta_url, "
     "created_at, lugar_id, puesto, "
     # «Lo que suma» en la ficha: el modal «Editar negocio» los lee de esta lista.
     "canal_wa_url, catalogo_url, tiene_pasero, envios_internacionales, tiene_factura, "
@@ -1589,6 +1592,13 @@ class SupabaseRepo(IntegracionRepoMixin):
     def get_rubro_nombre(self, slug: str) -> str | None:
         res = self._db.table("rubros").select("nombre").eq("slug", slug).limit(1).execute()
         return res.data[0]["nombre"] if res.data else None
+
+    def get_rubro_por_id(self, rubro_id: str | None) -> dict | None:
+        """`{slug, nombre}` del rubro con ese id (el rubro principal de un comercio), o None."""
+        if not rubro_id:
+            return None
+        res = self._db.table("rubros").select("slug, nombre").eq("id", rubro_id).limit(1).execute()
+        return res.data[0] if res.data else None
 
     def ciudad_mas_cercana(self, lat: float, lng: float) -> dict | None:
         """La ciudad activa más cercana a un punto. Para el alta de un negocio:

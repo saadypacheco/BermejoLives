@@ -19,7 +19,9 @@ tres perfiles (admin, agente, comerciante) igual:
                       portada anterior pasa a la galería, aunque eso supere el tope.
 
 En las dos, `portada_pos` vuelve a null: el recorte que alguien eligió para la
-foto anterior no corresponde a la nueva.
+foto anterior no corresponde a la nueva. Lo mismo pasa con la portada de diseño
+(`portada_diseno_url` y su propuesta, docs/portada-diseno.md): era de la foto anterior,
+así que las dos columnas vuelven a null y sus archivos se sueltan del disco.
 """
 from __future__ import annotations
 
@@ -27,7 +29,7 @@ import structlog
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from app.services import fotos_galeria
+from app.services import fotos_galeria, portada_diseno
 
 logger = structlog.get_logger()
 
@@ -52,6 +54,7 @@ def usar_de_galeria(repo, comercio: dict, foto_id: str) -> dict:
     - Nunca borra archivos: todo lo que se veía antes se sigue viendo.
     """
     cid = comercio["id"]
+    diseno_viejo = portada_diseno.urls_de(comercio)
     fotos = repo.list_fotos_comercio(cid)
     foto = next((f for f in fotos if str(f.get("id")) == str(foto_id)), None)
     if foto is None:
@@ -68,7 +71,8 @@ def usar_de_galeria(repo, comercio: dict, foto_id: str) -> dict:
     if vieja_url == nueva_url:
         return comercio     # ya es la portada
 
-    patch = {"portada_url": nueva_url, "portada_thumb_url": nueva_thumb, "portada_pos": None}
+    patch = {"portada_url": nueva_url, "portada_thumb_url": nueva_thumb, "portada_pos": None,
+             **portada_diseno.COLUMNAS_VACIAS}
 
     # ¿La portada anterior ya está en la galería, en otra fila? Entonces no se repite.
     otras = [f for f in fotos if str(f.get("id")) != str(foto_id)]
@@ -98,6 +102,7 @@ def usar_de_galeria(repo, comercio: dict, foto_id: str) -> dict:
         # puntero se dejara "inactivo" la foto saldría repetida (portada + galería).
         repo.delete_foto_comercio(foto["id"], cid)
 
+    portada_diseno.soltar_archivos(comercio, diseno_viejo)    # el diseño era de la portada anterior
     logger.info("comercio.portada_de_galeria", comercio=cid, foto=foto["id"],
                 intercambio=bool(vieja_url and not vieja_ya_esta))
     return actualizado or {**comercio, **patch}
@@ -119,10 +124,12 @@ def poner_nueva(repo, comercio: dict, portada_url: str, portada_thumb: str | Non
     (no quedan huérfanos en el disco) y el error sigue su camino.
     """
     cid = comercio["id"]
+    diseno_viejo = portada_diseno.urls_de(comercio)
     vieja_url = _url(comercio.get("portada_url"))
     vieja_thumb = _url(comercio.get("portada_thumb_url"))
 
-    patch = {"portada_url": portada_url, "portada_thumb_url": portada_thumb, "portada_pos": None}
+    patch = {"portada_url": portada_url, "portada_thumb_url": portada_thumb, "portada_pos": None,
+             **portada_diseno.COLUMNAS_VACIAS}
 
     fila_nueva = None
     if conservar_anterior and vieja_url:
@@ -141,6 +148,7 @@ def poner_nueva(repo, comercio: dict, portada_url: str, portada_thumb: str | Non
         logger.warning("comercio.portada_nueva_fallo", comercio=cid, exc_info=True)
         raise
 
+    portada_diseno.soltar_archivos(comercio, diseno_viejo)    # el diseño era de la portada anterior
     if not conservar_anterior:
         try:
             _soltar_archivos_viejos(repo, actualizado, vieja_url, vieja_thumb)

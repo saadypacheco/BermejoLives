@@ -31,10 +31,12 @@ PRIVADAS = ("plan_cortesia", "paga_hasta", "cargado_por", "capturado_en")
 # `baja_motivo` (0147): por qué está dado de baja un comercio; dato interno, nace privada (regla 11).
 # `codigo_anterior` y `alta_uid` (0149): el código de antes de la regeneración y el id con que el
 # celular del agente reintenta un alta; nacen privadas.
+# `portada_diseno_propuesta_url` (0200, docs/portada-diseno.md): la portada de diseño que el panel todavía no aprobó; nace privada.
 # `ubicacion_aproximada` y `nota_interna` (0154, docs/farmacias-de-turno.md): si el punto del mapa se
 # calculó desde la dirección y las dudas internas del equipo sobre la ficha; nacen privadas.
 PRIVADAS_EXTRA = ("consentimiento_dueno", "consentimiento_dueno_en", "fotos_extra", "wa_jid", "rubro_revisado_por", "baja_motivo", "codigo",
-                  "codigo_anterior", "alta_uid", "ubicacion_aproximada", "nota_interna")
+                  "codigo_anterior", "alta_uid", "ubicacion_aproximada", "nota_interna",
+                  "portada_diseno_propuesta_url")
 # Internas que la 0145 sí dio y la 0186 (paso 0 de la revisión de seguridad de noviembre) le quita a
 # anon y authenticated: el sitio público no las usa. El backend (service_role) las sigue leyendo.
 CERRADAS_POR_0186 = ("email", "origen_importacion", "ia_analizado_at", "rubro_revisado_at",
@@ -51,7 +53,9 @@ NO_VAN_EN_LA_0145 = tuple(c for c in NO_VAN_EN_LA_LISTA
 # Columnas que nacieron DESPUÉS de la 0145 y se dieron a anon por columna en su propia migración (regla 11 de
 # AGENTS.md). No están en la lista de la 0145, pero el sitio público las puede pedir.
 #   fuente_url (0196, docs/lugares-turismo.md): el enlace a la página de origen de un lugar para visitar.
-DADAS_DESPUES_DE_LA_0145 = {"fuente_url": "0196_lugares_para_visitar.sql"}
+#   portada_diseno_url (0200, docs/portada-diseno.md): la portada con diseño que muestra la ficha pública.
+DADAS_DESPUES_DE_LA_0145 = {"fuente_url": "0196_lugares_para_visitar.sql",
+                            "portada_diseno_url": "0200_portada_diseno.sql"}
 
 
 def _0145(carpeta="supabase/migrations") -> str:

@@ -21,7 +21,7 @@ from app.services import archivos_privados, site_metrics, turnos_farmacia
 from app.services import completar_importado as completar_svc
 from app.services.subcategorias_turismo import subcategoria_de_importado
 from app.services.tarjetas import importado_salida
-from app.services import calles_mapa, enlaces, ficha_catalogo as catalogo_svc, fotos_galeria, portada, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
+from app.services import calles_mapa, enlaces, ficha_catalogo as catalogo_svc, fotos_galeria, portada, portada_diseno, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
@@ -2109,6 +2109,106 @@ async def admin_subir_portada(
     actualizado = portada.poner_nueva(repo, comercio, url, thumb)
     logger.info("admin.portada_nueva", comercio=comercio_id, by=mod["email"])
     return {"ok": True, "comercio": actualizado}
+
+
+# ---- Portada de diseño de la ficha pública (docs/portada-diseno.md) ----
+@router.post("/admin/comercio/{comercio_id}/portada-diseno")
+async def admin_armar_portada_diseno(
+    comercio_id: str,
+    mod: dict = Depends(require_permiso("comercios.editar")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Arma la portada de diseño y la deja como PROPUESTA (sólo la ve el panel; nada se publica solo).
+
+    La foto es la portada del comercio, leída del disco del backend; se le hace una mejora automática suave
+    (Pillow, gratis, sin IA) y se le pone el diseño. Nombre, rubro y ciudad salen de la base: ningún texto de
+    la imagen lo escribe un modelo de IA.
+    """
+    comercio = _comercio_o_404(repo, comercio_id)
+    if not comercio.get("portada_url"):
+        raise HTTPException(status_code=400, detail="El comercio no tiene foto de portada")
+    foto = await run_in_threadpool(portada_diseno.leer_portada, comercio)
+    if foto is None:
+        raise HTTPException(status_code=400, detail="No se pudo leer la foto de portada desde el servidor")
+
+    rubro = (repo.get_rubro_por_id(comercio.get("rubro_id")) or {}).get("nombre")
+    ciudad = (repo.get_ciudad_por_id(comercio.get("ciudad_id")) or {}).get("nombre")
+
+    try:
+        jpeg = await run_in_threadpool(
+            portada_diseno.armar_plantilla, foto, comercio.get("nombre") or "", rubro, ciudad,
+            comercio.get("portada_pos"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="La foto de portada no es una imagen válida") from exc
+    url = await run_in_threadpool(portada_diseno.guardar, comercio["slug"], jpeg)
+    if not url:
+        raise HTTPException(status_code=502, detail="No se pudo guardar la portada de diseño, probá de nuevo")
+
+    anterior = comercio.get("portada_diseno_propuesta_url")
+    try:
+        actualizado = repo.update_comercio(comercio_id, {"portada_diseno_propuesta_url": url}, None)
+    except Exception:
+        portada_diseno.soltar_archivo(comercio, url)        # recién creado: que no quede huérfano
+        raise
+    if anterior and anterior != url:
+        portada_diseno.soltar_archivo(comercio, anterior)   # la propuesta anterior ya no la apunta nada
+    logger.info("admin.portada_diseno_propuesta", comercio=comercio_id, ia=False, by=mod["email"])
+    return portada_diseno.respuesta(actualizado or {**comercio, "portada_diseno_propuesta_url": url})
+
+
+@router.put("/admin/comercio/{comercio_id}/portada-diseno")
+def admin_usar_portada_diseno(
+    comercio_id: str,
+    mod: dict = Depends(require_permiso("comercios.editar")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """La propuesta pasa a la ficha pública (`portada_diseno_url`) y la propuesta queda vacía."""
+    comercio = _comercio_o_404(repo, comercio_id)
+    propuesta = comercio.get("portada_diseno_propuesta_url")
+    if not propuesta:
+        raise HTTPException(status_code=400, detail="No hay una propuesta de portada de diseño para usar")
+    vigente = comercio.get("portada_diseno_url")
+    actualizado = repo.update_comercio(
+        comercio_id, {"portada_diseno_url": propuesta, "portada_diseno_propuesta_url": None}, None)
+    if vigente and vigente != propuesta:
+        portada_diseno.soltar_archivo(comercio, vigente)    # el diseño anterior ya no lo apunta nada
+    logger.info("admin.portada_diseno_usada", comercio=comercio_id, by=mod["email"])
+    return portada_diseno.respuesta(
+        actualizado or {**comercio, "portada_diseno_url": propuesta, "portada_diseno_propuesta_url": None})
+
+
+@router.delete("/admin/comercio/{comercio_id}/portada-diseno/propuesta")
+def admin_descartar_propuesta_portada_diseno(
+    comercio_id: str,
+    mod: dict = Depends(require_permiso("comercios.editar")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Descarta la propuesta (no toca la portada de diseño vigente). Sin propuesta no hay nada que hacer."""
+    comercio = _comercio_o_404(repo, comercio_id)
+    propuesta = comercio.get("portada_diseno_propuesta_url")
+    if not propuesta:
+        return portada_diseno.respuesta(comercio)
+    actualizado = repo.update_comercio(comercio_id, {"portada_diseno_propuesta_url": None}, None)
+    portada_diseno.soltar_archivo(comercio, propuesta)
+    logger.info("admin.portada_diseno_descartada", comercio=comercio_id, by=mod["email"])
+    return portada_diseno.respuesta(actualizado or {**comercio, "portada_diseno_propuesta_url": None})
+
+
+@router.delete("/admin/comercio/{comercio_id}/portada-diseno")
+def admin_quitar_portada_diseno(
+    comercio_id: str,
+    mod: dict = Depends(require_permiso("comercios.editar")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Vuelve a la foto original: la ficha deja de usar la portada de diseño (la propuesta, si hay, no se toca)."""
+    comercio = _comercio_o_404(repo, comercio_id)
+    vigente = comercio.get("portada_diseno_url")
+    if not vigente:
+        return portada_diseno.respuesta(comercio)
+    actualizado = repo.update_comercio(comercio_id, {"portada_diseno_url": None}, None)
+    portada_diseno.soltar_archivo(comercio, vigente)
+    logger.info("admin.portada_diseno_quitada", comercio=comercio_id, by=mod["email"])
+    return portada_diseno.respuesta(actualizado or {**comercio, "portada_diseno_url": None})
 
 
 # ---- Clasificar un comercio desde sus fotos ----
