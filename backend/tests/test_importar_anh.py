@@ -155,6 +155,19 @@ def test_tabla_vacia_no_es_un_error():
     assert ia.parsear_pagina(pagina()) == []
 
 
+def test_tabla_de_gnv_con_id_vacio_se_lee():
+    """En la página de GNV de Oruro (y otros cuatro departamentos) la tabla viene con `id=''`."""
+    html = pagina(ALAMOS).replace("<table class='table' id='search_table'>",
+                                  "<table class='table table-bordered' id=''>")
+    filas = ia.parsear_pagina(html, actividad="gnv")
+    assert [f["nombre"] for f in filas] == ['ESTACION DE SERVICIO "LOS ALAMOS" S.R.L.']
+
+
+def test_una_tabla_cualquiera_sin_las_columnas_sigue_siendo_un_error():
+    with pytest.raises(ia.PaginaInesperada):
+        ia.parsear_pagina("<table class='table table-bordered'><thead><tr><th>FECHA</th></tr></thead></table>")
+
+
 # ───────────────────────────────────────────── normalizar
 
 def test_combustibles_de():

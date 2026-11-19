@@ -161,7 +161,11 @@ class _Tabla(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
-        if tag == "table" and a.get("id") == "search_table":
+        # La tabla de la ANH es `id='search_table'`, pero en la de GNV de Oruro, Chuquisaca, Potosí, Beni y Pando el
+        # id viene vacío (`id=''`, visto el 19/11/2026): también vale la primera `table-bordered`. Que sea la tabla
+        # de estaciones lo deciden después sus columnas (razón social y contacto).
+        es_la_tabla = a.get("id") == "search_table" or "table-bordered" in (a.get("class") or "").split()
+        if tag == "table" and es_la_tabla and not self.encontrada:
             self._en_tabla = self.encontrada = True
         elif not self._en_tabla:
             return
