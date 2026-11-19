@@ -56,6 +56,8 @@ export const COLUMNAS_COMERCIO = [
   "prod_obs_human", "prod_det_ia", "subcategoria", "contacto_ok", "contacto_no", "sin_cartel",
   // 0196: el enlace a la página de origen de los lugares para visitar. Primero la migración, después el deploy.
   "fuente_url",
+  // 0200: la portada con diseño de publicidad (la propuesta, en cambio, es privada: sólo la ve el panel).
+  "portada_diseno_url",
 ].join(", ");
 
 /** La búsqueda, distinguiendo error (`null`) de «sin resultados» (`[]`). Sin base
