@@ -943,6 +943,39 @@ export async function listarImportados(
   return res.json();
 }
 
+// Un importado como punto del mapa (Importados › Mapa): sólo lo mínimo para dibujarlo.
+export type PuntoImportado = {
+  id: string; nombre: string | null; fuente: ComercioImportado["fuente"];
+  lat: number; lng: number; rubro_slug: string | null;
+  // Hay uno parecido ya cargado en URUKU (mismo nombre a menos de 120 m).
+  repetido: boolean;
+  ubicacion: "aproximada" | "confirmada" | "no_encontrada" | null;
+};
+
+export type PuntosImportados = {
+  items: PuntoImportado[];
+  // Cuántos hay con punto en total, cuántos no tienen punto y si el servidor cortó en su tope (30.000).
+  total: number; sin_punto: number; truncado: boolean;
+};
+
+/** Todos los importados de UNA ciudad con su punto, para dibujarlos en el mapa (GET /admin/importados/puntos).
+ *  `ciudadId` es obligatorio. Un 404/405 es un servidor anterior a esta ruta: lo decide la pantalla (`esRutaAusente`). */
+export async function puntosImportados(
+  ciudadId: string, estado = "nuevo", fuente?: string, rubro?: string,
+): Promise<PuntosImportados> {
+  const p = new URLSearchParams({ ciudad_id: ciudadId, estado });
+  if (fuente) p.set("fuente", fuente);
+  if (rubro) p.set("rubro", rubro);
+  const res = await authFetch(`/admin/importados/puntos?${p}`);
+  const d = await res.json().catch(() => ({} as Partial<PuntosImportados>));
+  return {
+    items: Array.isArray(d.items) ? d.items : [],
+    total: typeof d.total === "number" ? d.total : 0,
+    sin_punto: typeof d.sin_punto === "number" ? d.sin_punto : 0,
+    truncado: d.truncado === true,
+  };
+}
+
 export async function promoverImportado(
   id: string, body: { nombre?: string; rubro_slug?: string; whatsapp?: string; sin_ubicacion?: boolean },
 ) {

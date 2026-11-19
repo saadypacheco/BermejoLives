@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   listarImportados, promoverImportado, descartarImportado,
-  type ComercioImportado,
+  type ComercioImportado, type PuntoImportado,
 } from "@/lib/api";
 import type { Ciudad, Rubro } from "@/lib/types";
 import { Ic } from "@/components/ic";
 import { useAdminCiudad } from "@/components/admin-ciudad";
 import { Aviso } from "@/components/content/content-ui";
 import { CargarTarjetasModal, FichaTarjeta } from "@/components/importados-tarjetas";
+import { ImportadosMapa } from "@/components/importados-mapa";
+import { MSG_ELEGI_CIUDAD, busquedaDeFicha } from "@/lib/importados-mapa-pure";
 import { nombreFuente, paramFuente, paramRubroImportados, usaFichaEditable, type FuenteFiltro } from "@/lib/tarjetas-pure";
 
 type FilaResumen = { ciudad_id: string | null; estado: string; n: number };
@@ -60,6 +62,8 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
   const [ocultarDup, setOcultarDup] = useState(true);
   const [fuente, setFuente] = useState<FuenteFiltro>("todas");
   const [modalTarjetas, setModalTarjetas] = useState(false);
+  // «Lista» (las fichas, una por una) o «Mapa» (todos los de la ciudad como puntos).
+  const [vista, setVista] = useState<"lista" | "mapa">("lista");
   // «Se completó Hotel Plaza: dirección, teléfono»: queda a la vista después de que la fila sale de la lista.
   const [completado, setCompletado] = useState("");
   // Al cambiar de ciudad o de búsqueda salen consultas seguidas; si la vieja
@@ -111,6 +115,16 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
     .map((r) => ({ id: r.ciudad_id, n: r.n, ciudad: ciudades.find((c) => c.id === r.ciudad_id) ?? null }))
     .sort((a, b) => b.n - a.n);
 
+  // «Ver la ficha» del popup del mapa: vuelve a la lista con el nombre en la búsqueda y la fuente del punto,
+  // para que la ficha quede arriba. El repetido se muestra aunque «ocultar» esté tildado: justo ése se busca.
+  function verFicha(p: PuntoImportado) {
+    const b = busquedaDeFicha(p);
+    setQ(b.q);
+    if (b.fuente) setFuente(b.fuente);
+    setOcultarDup(false);
+    setVista("lista");
+  }
+
   // Los que ya están cargados en URUKU (mismo nombre a menos de 120 m) se
   // esconden por defecto: si no, el que revisa mira doscientas fichas que ya
   // tiene y abandona antes de llegar a las que sirven.
@@ -140,9 +154,25 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
               {e.label} {totalDe(e.key) > 0 && <b>{totalDe(e.key)}</b>}
             </button>
           ))}
-          <input value={q} onChange={(ev) => setQ(ev.target.value)} placeholder="Buscar por nombre…"
-                 style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border)",
-                          background: "var(--panel)", color: "var(--txt-1)", fontSize: 13 }} />
+          {/* La búsqueda es de la lista: el mapa muestra todos los de la ciudad. */}
+          {vista === "lista" && (
+            <input value={q} onChange={(ev) => setQ(ev.target.value)} placeholder="Buscar por nombre…"
+                   style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border)",
+                            background: "var(--panel)", color: "var(--txt-1)", fontSize: 13 }} />
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 10 }}>
+          <span style={{ fontSize: 12.5, color: "var(--txt-3)" }}>Vista:</span>
+          <button type="button" aria-pressed={vista === "lista"} style={{ minHeight: 40 }}
+                  className={`btn btn-sm ${vista === "lista" ? "btn-primary" : "btn-ghost"}`}
+                  onClick={() => setVista("lista")}>
+            <Ic n="menu" s={15} /> Lista
+          </button>
+          <button type="button" aria-pressed={vista === "mapa"} style={{ minHeight: 40 }}
+                  className={`btn btn-sm ${vista === "mapa" ? "btn-primary" : "btn-ghost"}`}
+                  onClick={() => setVista("mapa")}>
+            <Ic n="mapa" s={15} /> Mapa
+          </button>
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 10 }}>
           <span style={{ fontSize: 12.5, color: "var(--txt-3)" }}>Fuente:</span>
@@ -172,7 +202,7 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
             ))}
           </div>
         )}
-        {nDup > 0 && estado === "nuevo" && (
+        {vista === "lista" && nDup > 0 && estado === "nuevo" && (
           <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12.5, color: "var(--txt-3)" }}>
             <input type="checkbox" checked={ocultarDup} onChange={() => setOcultarDup((v) => !v)} />
             Ocultar {nDup} que parecen ya estar cargados
@@ -188,6 +218,12 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
           </Aviso>
         </div>
       )}
+      {vista === "mapa" && (
+        ciudad
+          ? <ImportadosMapa ciudad={ciudad} estado={estado} fuente={fuente} onVerFicha={verFicha} />
+          : <Aviso tono="info">{MSG_ELEGI_CIUDAD}. Se elige en el selector de ciudad del panel{porCiudad.length > 0 ? ", o tocá una de «Por ciudad»" : ""}.</Aviso>
+      )}
+      {vista === "lista" && <>
       {err && <p style={{ color: "salmon", fontSize: 13 }}>{err}</p>}
       {cargando && <p style={{ color: "var(--txt-3)" }}>Cargando…</p>}
       {/* Sólo sin error: con la carga fallida, «Nada acá» afirma un vacío que
@@ -216,6 +252,7 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
                         onCompletado={(m) => { setCompletado(m); void cargar(); }} />
           : <Fila key={i.id} item={i} rubros={rubros} onCambio={cargar} />
       ))}
+      </>}
 
       {modalTarjetas && (
         <CargarTarjetasModal ciudadInicial={ciudad} onCerrar={() => setModalTarjetas(false)} onTerminado={cargar} />
