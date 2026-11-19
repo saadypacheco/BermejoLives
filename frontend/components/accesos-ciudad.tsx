@@ -12,23 +12,27 @@ import { listaAccesos } from "@/lib/accesos-ciudad";
  * deshaga lo que acaba de hacer. En una pantalla de resultados esta fila es
  * más útil que en el home, no menos.
  *
+ * Un acceso a un rubro sin comercios en la ciudad no sale: abriría un mapa
+ * vacío. Hoteles y boliches van primero (19/11/2026).
+ *
  * Son todos RUBROS —baños, cajeros, estacionamientos y wifi son rubros no
  * comerciales (0083, 0113)—, así que cada acceso trae exactamente lo cargado
  * bajo ese rubro y no lo que el texto libre encuentre («estacionamiento»
  * devolvía estaciones de servicio).
  */
 
-export function AccesosCiudad({ conGuia, ofertas, paraVisitar = false }: {
+export function AccesosCiudad({ conGuia, ofertas, rubros }: {
   conGuia: boolean;
-  /** Sale sólo si la ciudad tiene lugares para visitar cargados: ver `hayParaVisitar` (lib/para-visitar.ts). */
-  paraVisitar?: boolean;
+  /** Los rubros con comercios en la ciudad (`rubrosDeCiudad`, lib/accesos-ciudad.ts): un acceso a un rubro
+   *  sin comercios no sale. `null` = no se sabe (falló la lectura): salen los de siempre. */
+  rubros: ReadonlySet<string> | null;
   /** Suma «Ofertas» como primer acceso. Se usa en los RESULTADOS, donde si no
    *  no hay ninguna puerta a las ofertas: el home tiene el botón grande del
    *  hero y la pantalla de resultados no tenía nada. Si se pasa un rubro, va
    *  a las ofertas de ESE rubro, que es lo que la persona está mirando. */
   ofertas?: boolean | string;
 }) {
-  const lista = listaAccesos(conGuia, paraVisitar);
+  const lista = listaAccesos(conGuia, rubros);
   const href = typeof ofertas === "string" && ofertas
     ? `/ofertas?rubro=${encodeURIComponent(ofertas)}`
     : "/ofertas";

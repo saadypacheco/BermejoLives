@@ -5,7 +5,7 @@ import { Ic, IcRubro, climaIcono, type NombreIcono } from "@/components/ic";
 import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { ContactoUruku } from "@/components/contacto-uruku";
 import { AccesosCiudad } from "@/components/accesos-ciudad";
-import { hayParaVisitar } from "@/lib/para-visitar";
+import { accesoConComercios, rubrosDeCiudad } from "@/lib/accesos-ciudad";
 import { VisitaCiudad } from "@/components/visita-ciudad";
 import { cargarVisitaCiudadOpcional, resumenDe } from "@/lib/turismo-ciudad";
 import { accesosVisita, mostrarVisitaCiudad } from "@/lib/turismo-ciudad-pure";
@@ -199,6 +199,9 @@ export default async function InicioPage() {
     ...videoObjectNodes(videosUruku, { ciudad: ciudad?.nombre ?? null }),
   ]);
   const nombre = ciudad?.nombre ?? "Bermejo";
+  // Los rubros con comercios en la ciudad: un acceso o una tarjeta que abre un mapa vacío no sale.
+  const rubros = rubrosDeCiudad(paresCiudad, ciudad?.slug);
+  const servicios = (conGuia ? SERVICIOS : SERVICIOS_SIN_GUIA).filter((s) => accesoConComercios(s.href, rubros));
   // La foto del hero es de la ciudad; sin foto propia, la de Bermejo sólo en
   // Bermejo. Otra ciudad sin foto va con el fondo liso, no con el río de otra.
   // Sin vencidas: `feed_publico` no filtra por vencimiento. Se parte del feed y, si
@@ -236,7 +239,7 @@ export default async function InicioPage() {
     <UrukuShell activeCat="Todos" activeNav="Inicio">
       <JsonLd data={datosMarca} />
       {/* ===== Los accesos rápidos, debajo del buscador ===== */}
-      <AccesosCiudad conGuia={conGuia} paraVisitar={hayParaVisitar(paresCiudad, ciudad?.slug)} />
+      <AccesosCiudad conGuia={conGuia} rubros={rubros} />
 
       {/* ===== Hero: qué es esto, y cómo está Bermejo hoy ===== */}
       <section className="uk-hero uk-home-hero">
@@ -299,14 +302,15 @@ export default async function InicioPage() {
       {/* ===== La comunidad (sólo cuando hay enlace cargado; es la de los que cruzan a Bermejo) ===== */}
       {conGuia && <UnirmeComunidad variante="banner" />}
 
-      {/* ===== Servicios útiles ===== */}
+      {/* ===== Servicios útiles (sólo los que traen algo en la ciudad) ===== */}
+      {servicios.length > 0 && (
       <section className="uk-container uk-home-sec">
         <div className="uk-section-head">
           <h2>Servicios útiles <small>Encontrá rápido lo que necesitás en {nombre}.</small></h2>
           <Link href="/guia#mapa">Ver todos →</Link>
         </div>
         <div className="uk-home-grid uk-home-grid-4">
-          {(conGuia ? SERVICIOS : SERVICIOS_SIN_GUIA).map((s) => (
+          {servicios.map((s) => (
             <Link key={s.t} href={s.href} className="uk-home-card">
               <span className="uk-home-ic"><Ic n={s.i} s={26} /></span>
               <b>{s.t}</b><small>{s.d}</small>
@@ -314,6 +318,7 @@ export default async function InicioPage() {
           ))}
         </div>
       </section>
+      )}
 
       {/* ===== Antes de comprar + Herramientas ===== */}
       <section className={`uk-container uk-home-sec${conGuia ? " uk-home-dos" : ""}`}>

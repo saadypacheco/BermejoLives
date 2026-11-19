@@ -165,9 +165,9 @@ test("el acceso sale sólo si existe el par (ciudad, para-visitar)", () => {
   assert.equal(hayParaVisitar(null, "tarija"), false, "si la lectura de los pares falló, no sale");
 });
 
-test("la fila de accesos: con el par suma «Para visitar» antes de las guías; sin el par queda como estaba", () => {
-  const sin = listaAccesos(true, false);
-  const con = listaAccesos(true, true);
+test("la fila de accesos: con el par suma «Para visitar» antes de las guías; sin el par no sale", () => {
+  const sin = listaAccesos(true, new Set(["banos", "farmacia"]));
+  const con = listaAccesos(true, new Set(["banos", "farmacia", "para-visitar"]));
   assert.equal(sin.some((a) => a.href === HREF_PARA_VISITAR), false);
   assert.equal(con.length, sin.length + 1);
   const i = con.findIndex((a) => a.href === HREF_PARA_VISITAR);
@@ -177,15 +177,18 @@ test("la fila de accesos: con el par suma «Para visitar» antes de las guías; 
   assert.ok(con[i + 1].href.startsWith("/guia"), "va antes de Transporte y Frontera");
   assert.equal(HREF_PARA_VISITAR, "/buscar?rubro=para-visitar&vista=mapa");
   // Ciudad sin guía (Tarija): al final, sin romper el orden del resto.
-  const sinGuia = listaAccesos(false, true);
+  const sinGuia = listaAccesos(false, new Set(["banos", "para-visitar"]));
   assert.equal(sinGuia[sinGuia.length - 1].href, HREF_PARA_VISITAR);
-  assert.equal(listaAccesos(false, false).length, sinGuia.length - 1);
+  assert.equal(listaAccesos(false, new Set(["banos"])).length, sinGuia.length - 1);
+  // Si la lectura falló (`null`), «Para visitar» no sale.
+  assert.equal(listaAccesos(false, null).some((a) => a.href === HREF_PARA_VISITAR), false);
   // Todos los íconos existen en el catálogo (si no, el acceso saldría con el paquete genérico).
-  for (const a of con) assert.ok(tieneIcono(a.i), `falta el ícono ${a.i}`);
+  const todos = listaAccesos(true, new Set(["hospedaje", "nocturna", "banos", "farmacia", "cajeros", "estacionamiento", "taxis", "wifi", "emergencias", "para-visitar"]));
+  for (const a of todos) assert.ok(tieneIcono(a.i), `falta el ícono ${a.i}`);
 });
 
 test("el acceso no lleva números ni emojis", () => {
-  const a = listaAccesos(false, true).find((x) => x.href === HREF_PARA_VISITAR);
+  const a = listaAccesos(false, new Set(["para-visitar"])).find((x) => x.href === HREF_PARA_VISITAR);
   assert.ok(a);
   assert.doesNotMatch(a.t, /\d/);
   assert.doesNotMatch(a.t, /\p{Extended_Pictographic}/u);
