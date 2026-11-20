@@ -231,7 +231,8 @@ El cartel va **adentro** del botón, a la derecha del nombre, como una pastilla 
   tarjetas de los comercios que ya tienen portada. Va despacio, lee del disco y nunca borra la portada original.
 - **En el front:**
   - los carruseles usan `portada_card_url` y, si no hay, `portada_thumb_url`;
-  - si el comercio tiene portada de diseño, se usa esa;
+  - la portada de diseño NO va en los carruseles: ya trae el nombre impreso y quedaría repetido con el texto encima
+    (decidido el 20/11 en la revisión); el orden es tarjeta → miniatura;
   - el nombre y «rubro · ciudad/distancia» van **encima de la foto**, sobre un degradé oscuro;
   - el cartel «Abierto» va blanco, arriba a la izquierda;
   - en pantallas táctiles no hay flechas sobre las fotos (abajo van unos puntitos); en la compu, las flechas quedan
