@@ -27,7 +27,7 @@ from app.core.errores_integracion import IntegracionError
 from app.core.ip import ip_cliente
 from app.core.limite_cuerpo import LimiteCuerpoMiddleware
 from app.core.registro import configurar_logging
-from app.services.clima import fetch_clima_bermejo
+from app.services.clima import actualizar_clima_ciudades, fetch_clima_bermejo
 from app.services import site_metrics
 from app.services.observabilidad import registrar_error, registrar_perf
 from app.db.repository import get_repo
@@ -40,7 +40,7 @@ site_metrics.instalar_filtro_access_log()
 
 async def _clima_loop():
     """Refresca el clima de Bermejo desde open-meteo cada 30 min, salvo que
-    haya un override manual del publicador vigente."""
+    haya un override manual del publicador vigente. Y el de todas las ciudades activas (clima_ciudades)."""
     while True:
         try:
             repo = get_repo()
@@ -59,6 +59,11 @@ async def _clima_loop():
                     await run_in_threadpool(repo.update_clima, data)
         except Exception as exc:  # noqa: BLE001
             logger.warning("clima_loop.error", error=str(exc))
+        # El clima de las demás ciudades (tabla `clima_ciudades`): aparte de Bermejo, para que una falla no frene la otra.
+        try:
+            await actualizar_clima_ciudades(get_repo())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("clima_loop.ciudades_error", error=str(exc))
         await asyncio.sleep(1800)  # 30 min
 
 

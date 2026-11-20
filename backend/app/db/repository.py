@@ -448,6 +448,9 @@ class Repo(Protocol):
     def marcar_conversacion(self, conversacion_id: str, cambios: dict) -> dict | None: ...
     def contar_conversaciones_sesion_hoy(self, sesion: str) -> int: ...
     def update_clima(self, patch: dict) -> dict | None: ...
+    # Clima por ciudad (tabla `clima_ciudades`, migración 0201)
+    def list_ciudades_con_coordenadas(self) -> list[dict]: ...
+    def upsert_clima_ciudad(self, ciudad_id: str, temp_c: float | None, descripcion: str | None) -> dict | None: ...
     def list_videos_promo(self, solo_activos: bool = False) -> list[dict]: ...
     def add_video_promo(self, row: dict) -> dict: ...
     def delete_video_promo(self, video_id: str) -> bool: ...
@@ -3838,6 +3841,25 @@ class SupabaseRepo(IntegracionRepoMixin):
         )
         return res.data[0] if res.data else None
 
+    def list_ciudades_con_coordenadas(self) -> list[dict]:
+        """Las ciudades activas con lat y lng cargadas (las que el loop de clima consulta)."""
+        res = self._db.table("ciudades").select("id, slug, lat, lng").eq("activa", True).order("orden").execute()
+        return [c for c in (res.data or []) if c.get("lat") is not None and c.get("lng") is not None]
+
+    def upsert_clima_ciudad(self, ciudad_id: str, temp_c: float | None, descripcion: str | None) -> dict | None:
+        """Guarda el clima de una ciudad (una fila por ciudad, se pisa en cada vuelta)."""
+        from datetime import datetime, timezone
+        res = (
+            self._db.table("clima_ciudades")
+            .upsert(
+                {"ciudad_id": ciudad_id, "temp_c": temp_c, "descripcion": descripcion,
+                 "actualizado_en": datetime.now(timezone.utc).isoformat()},
+                on_conflict="ciudad_id",
+            )
+            .execute()
+        )
+        return res.data[0] if res.data else None
+
     # ------------------------------------------------------------ Uruku Ayuda
     def buscar_comercios(self, q: str, limite: int = 5, rubro: str | None = None, ciudad: str | None = None) -> list[dict]:
         """La MISMA búsqueda del sitio (la función `buscar_comercios` de la
@@ -3869,7 +3891,8 @@ class SupabaseRepo(IntegracionRepoMixin):
         sel = (
             "id, comercio_id, tipo, titulo, descripcion, precio, moneda, vence_el, terminos_ia, approved_at, "
             "comercios!inner(id, slug, nombre, whatsapp, direccion, lat, lng, horario, subcategoria, "
-            "descripcion, prod_obs_human, prod_det_ia, sinonimos, activo, suspendido, plan, plan_cortesia, paga_hasta, ciudad_id)"
+            "descripcion, prod_obs_human, prod_det_ia, sinonimos, activo, suspendido, plan, plan_cortesia, paga_hasta, ciudad_id, "
+            "portada_url, portada_thumb_url)"
         )
         q = (self._db.table("publicaciones").select(sel)
              .eq("estado", "aprobado").eq("activo", True).in_("tipo", ["oferta", "novedad"])

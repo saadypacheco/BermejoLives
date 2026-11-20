@@ -85,6 +85,8 @@ def preguntar(body: PreguntaIn, repo: Repo = Depends(get_repo)) -> dict:
         "fuentes": r.fuentes, "sugerencias": r.sugerencias, "sin_respuesta": r.sin_respuesta,
         # Sólo con chatbot de comercio, sin respuesta y con WhatsApp cargado.
         "derivar": r.derivar,
+        # Hacia dónde lleva «Ver comercios ›» (URL relativa del sitio); null si no es una lista de comercios.
+        "ver_url": r.ver_url,
     }
 
 
