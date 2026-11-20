@@ -11,6 +11,8 @@ import { useAdminCiudad } from "@/components/admin-ciudad";
 import { Aviso } from "@/components/content/content-ui";
 import { CargarTarjetasModal, FichaTarjeta } from "@/components/importados-tarjetas";
 import { ImportadosMapa } from "@/components/importados-mapa";
+import { AprobarLote } from "@/components/admin/aprobar-lote";
+import { ofreceAprobarEnBloque } from "@/lib/aprobar-lote-pure";
 import { MSG_ELEGI_CIUDAD, busquedaDeFicha } from "@/lib/importados-mapa-pure";
 import { nombreFuente, paramFuente, paramRubroImportados, usaFichaEditable, type FuenteFiltro } from "@/lib/tarjetas-pure";
 
@@ -188,6 +190,15 @@ export function ImportadosPanel({ rubros, ciudad }: { rubros: Rubro[]; ciudad: C
             <Ic n="subir" s={15} /> Cargar tarjetas
           </button>
         </div>
+        {/* «Aprobar en bloque» (docs/home-ciudades.md §14): sólo con una fuente puesta. Simula, muestra los números y pide confirmar
+            acá mismo. El `key` reinicia el flujo si cambia la ciudad, la fuente o el estado. */}
+        {ofreceAprobarEnBloque(fuente, estado) && (
+          <div style={{ marginTop: 10 }}>
+            <AprobarLote key={`${ciudadId ?? "todas"}|${fuente}|${estado}`} fuente={paramFuente(fuente) ?? fuente}
+                         nombreFuente={FUENTES.find((f) => f.key === fuente)?.label ?? fuente}
+                         ciudadId={ciudadId ?? null} ciudadNombre={ciudad?.nombre ?? null} onAprobado={cargar} />
+          </div>
+        )}
         {porCiudad.length > 0 && (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 10, fontSize: 12.5, color: "var(--txt-3)" }}>
             <span>Por ciudad:</span>

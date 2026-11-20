@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import {
   candidatosCarrusel, configCarrusel, consultaDeBusqueda, bienvenidaDax, franjaAhora, franjaDe, hrefRubro,
   intencionesDeCiudad, ordenIntenciones, prepararCarrusel, resaltadoDeFranja, saludoDeFranja, sugerenciasDeFranja,
-  tilesQueHacer, type ComercioCarrusel, type ComercioDeLaCiudad, type DatosIntenciones, type Franja, type RubroCatalogo,
+  type ComercioCarrusel, type ComercioDeLaCiudad, type DatosIntenciones, type Franja, type RubroCatalogo,
 } from "../lib/home-ciudad-pure";
 
 const FRANJAS: Franja[] = ["madrugada", "manana", "mediodia", "tarde", "noche"];
@@ -223,31 +223,6 @@ test("prepararCarrusel: los metros sólo con «Más cerca» y ubicación; sin ub
 test("prepararCarrusel: hasta 12", () => {
   const lista = Array.from({ length: 30 }, (_, i) => cand(`c${i}`));
   assert.equal(prepararCarrusel(lista, { abiertos: false, cerca: false, ubicacion: null, ahora: AHORA }).length, 12);
-});
-
-// ── «Qué podés hacer» ────────────────────────────────────────────────────────
-
-const SIN_FOTOS = { visitar: null, nocturna: null, restaurantes: null, plazaParque: [] };
-
-test("tiles: cada uno sale sólo si la ciudad tiene datos; sin ninguno, ninguno", () => {
-  assert.deepEqual(tilesQueHacer(new Set(["calzado"]), SIN_FOTOS), []);
-  assert.deepEqual(tilesQueHacer(null, SIN_FOTOS), []);
-  const t = tilesQueHacer(new Set(["para-visitar", "nocturna", "restaurantes"]), { visitar: "v.jpg", nocturna: "n.jpg", restaurantes: null, plazaParque: [{ sub: "Plaza", foto: "p.jpg" }] });
-  assert.deepEqual(t.map((x) => x.id), ["visitar", "nocturna", "comer", "plazas"]);
-  assert.deepEqual(t.map((x) => x.foto), ["v.jpg", "n.jpg", null, "p.jpg"]);
-  assert.equal(t[0].href, "/buscar?rubro=para-visitar&vista=mapa");
-  assert.equal(t[1].href, "/buscar?rubro=nocturna&vista=mapa");
-  assert.equal(t[3].href, "/buscar?rubro=para-visitar&sub=Plaza&vista=mapa");
-});
-
-test("tiles: «Plazas y parques» sólo con plazas o parques cargados; la foto es siempre de un comercio de ese rubro", () => {
-  const sinPlazas = tilesQueHacer(new Set(["para-visitar"]), { ...SIN_FOTOS, visitar: "v.jpg" });
-  assert.deepEqual(sinPlazas.map((x) => x.id), ["visitar"]);
-  const soloParque = tilesQueHacer(new Set(["para-visitar"]), { ...SIN_FOTOS, plazaParque: [{ sub: "Parque", foto: null }] });
-  assert.equal(soloParque.find((x) => x.id === "plazas")?.href, "/buscar?rubro=para-visitar&sub=Parque&vista=mapa");
-  assert.equal(soloParque.find((x) => x.id === "plazas")?.foto, null);
-  // Sin foto de su rubro: el ícono solo (nunca la foto de otro rubro).
-  assert.equal(tilesQueHacer(new Set(["nocturna"]), { ...SIN_FOTOS, restaurantes: "r.jpg" })[0].foto, null);
 });
 
 // ── Dax ──────────────────────────────────────────────────────────────────────

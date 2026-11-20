@@ -12,7 +12,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
   RUBROS_COMER, RUBROS_DORMIR, bienvenidaDax, candidatosCarrusel, franjaAhora, franjaDe, hrefRubro, intencionesDeCiudad,
-  ordenIntenciones, resaltadoDeFranja, sugerenciasDeFranja, tilesQueHacer,
+  ordenIntenciones, resaltadoDeFranja, sugerenciasDeFranja,
   type ComercioDeLaCiudad, type DatosIntenciones, type Franja, type RubroCatalogo,
 } from "../lib/home-ciudad-pure";
 import { conFiltros, SIN_FILTROS, type FiltrosRapidos } from "../lib/filtros-rapidos";
@@ -190,24 +190,6 @@ test("C2 · «Negocios» sólo trae rubros comerciales de la ciudad que no son d
   assert.deepEqual(intencionesDeCiudad(datos("tarde", { rubros: new Set(), hayTurnos: false, productosFrecuentes: [] })), []);
 });
 
-test("C2 · «Qué podés hacer»: cada tarjeta sólo con su rubro (y plazas sólo con «para-visitar»), nunca la foto de otro rubro", () => {
-  const FOTOS = { visitar: "v.jpg", nocturna: "n.jpg", restaurantes: "r.jpg", plazaParque: [{ sub: "Plaza" as const, foto: "p.jpg" }] };
-  for (const rubros of subconjuntos(200, 3)) {
-    const t = tilesQueHacer(rubros, FOTOS);
-    const ids = t.map((x) => x.id);
-    assert.equal(ids.includes("visitar"), rubros.has("para-visitar"));
-    assert.equal(ids.includes("plazas"), rubros.has("para-visitar"));
-    assert.equal(ids.includes("nocturna"), rubros.has("nocturna"));
-    assert.equal(ids.includes("comer"), rubros.has("restaurantes"));
-    for (const x of t) {
-      const propia: Record<string, string> = { visitar: "v.jpg", nocturna: "n.jpg", comer: "r.jpg", plazas: "p.jpg" };
-      assert.equal(x.foto, propia[x.id], `la foto de «${x.id}» tiene que ser de su rubro`);
-      assert.ok(x.href.startsWith("/buscar?rubro="));
-    }
-  }
-  assert.deepEqual(tilesQueHacer(new Set(), FOTOS), [], "sin ninguna tarjeta el bloque no aparece");
-});
-
 test("C2 · carrusel de comercios: items sólo con foto y de los rubros de la franja; si no hay, respaldo comercial; si tampoco, vacío", () => {
   const azar = azarSemilla(99);
   const rubrosPosibles = ["cafeteria", "panaderia", "restaurantes", "comida-rapida", "nocturna", "farmacia", "calzado", "ropa", "banos", "cajeros"];
@@ -296,7 +278,6 @@ test("C3 · conFiltros sobre TODOS los enlaces que genera el home: busca/mapa ll
     }
     hrefs.add(candidatosCarrusel([], f, "Tarija", new Set()).verTodos);
   }
-  for (const t of tilesQueHacer(TODOS_LOS_RUBROS, { visitar: null, nocturna: null, restaurantes: null, plazaParque: [{ sub: "Parque", foto: null }] })) hrefs.add(t.href);
   for (const h of hrefs) {
     for (const f of COMBOS) {
       const r = conFiltros(h, f);

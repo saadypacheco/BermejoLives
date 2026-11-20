@@ -2,15 +2,14 @@
 // probarlo con `npm test` (docs/home-ciudades.md).
 //
 // Acá están: las franjas del día (hora de Bolivia), el orden y el cartel de los botones de intención, sus
-// opciones, el carrusel de comercios (rubros, títulos y orden), los bloques de «Qué podés hacer», y el
+// opciones, el carrusel de comercios (rubros, títulos, foto y orden) y el
 // saludo y las sugerencias de Dax. Regla de todo el archivo: NUNCA un acceso a un rubro sin comercios en la
 // ciudad y NUNCA una cantidad de comercios.
 import type { NombreIcono } from "@/components/ic";
 import { accesoConComercios } from "./accesos-ciudad";
 import { distanciaMetros } from "./distancia";
 import { abiertoAhora, ahoraEnBolivia } from "./horario";
-import { ordenarCerca } from "./orden-cerca";
-import { HREF_PARA_VISITAR, RUBRO_PARA_VISITAR } from "./para-visitar";
+import { RUBRO_PARA_VISITAR } from "./para-visitar";
 
 // ── Las franjas del día ─────────────────────────────────────────────────────
 
@@ -188,8 +187,12 @@ export type ComercioCarrusel = {
   id: string;
   slug: string;
   nombre: string;
+  /** La foto de la tarjeta (ver `fotoDeTarjeta`). */
   foto: string;
+  /** El encuadre vertical (`object-position`) SÓLO si la foto es la miniatura: la de tarjeta y la de diseño ya vienen recortadas. */
   fotoPos: number | null;
+  /** `portada_calidad` (0 a 100); `null` = la portada todavía no tiene puntaje. */
+  calidad?: number | null;
   rubro: string;
   rubroNombre: string;
   horario: string | null;
@@ -207,6 +210,11 @@ export type ComercioDeLaCiudad = {
   nombre: string;
   portada_thumb_url: string | null;
   portada_pos: number | null;
+  /** Migración 0202: la portada recortada 4:3 y mejorada (800 px) y su puntaje. Ausentes antes de aplicarla: se cae a la miniatura. */
+  portada_card_url?: string | null;
+  portada_calidad?: number | null;
+  /** 0200: la portada con diseño de publicidad (ya encuadrada). */
+  portada_diseno_url?: string | null;
   rubro_slug: string | null;
   rubro_nombre: string | null;
   subcategoria?: string | null;
@@ -248,6 +256,21 @@ export type CandidatosCarrusel = {
 
 const MAX_CANDIDATOS = 80;
 
+type FotoTarjeta = { url: string; recortada: boolean };
+
+/** La foto de la tarjeta del carrusel (§11): la versión «tarjeta» (4:3, 800 px, mejorada); si no hay, la portada con
+ *  diseño (ya encuadrada); y si tampoco, la miniatura de 200 px. `null` = el comercio no tiene ninguna foto.
+ *  `recortada` = ya viene encuadrada: no lleva `object-position`. */
+export function fotoDeTarjeta(c: Pick<ComercioDeLaCiudad, "portada_card_url" | "portada_diseno_url" | "portada_thumb_url">): FotoTarjeta | null {
+  const limpia = (u: string | null | undefined): string | null => (typeof u === "string" && u.trim() ? u : null);
+  const tarjeta = limpia(c.portada_card_url);
+  if (tarjeta) return { url: tarjeta, recortada: true };
+  const diseno = limpia(c.portada_diseno_url);
+  if (diseno) return { url: diseno, recortada: true };
+  const miniatura = limpia(c.portada_thumb_url);
+  return miniatura ? { url: miniatura, recortada: false } : null;
+}
+
 /** Los comercios que pueden salir en el carrusel de la franja (con foto), sin decidir todavía cuáles están
  *  abiertos: eso lo hace el navegador, que conoce la hora y la ubicación. Sin ninguno de los rubros de la
  *  franja, el respaldo son los comerciales con foto y el título pasa a «Comercios de {ciudad}». */
@@ -258,9 +281,11 @@ export function candidatosCarrusel(
   porRubro: Readonly<Record<string, readonly ComercioDeLaCiudad[]>> = {},
 ): CandidatosCarrusel {
   const cfg = configCarrusel(franja, ciudad);
-  const conFoto = comercios.filter((c) => c.portada_thumb_url && c.rubro_slug);
+  const conFoto = comercios.filter((c) => fotoDeTarjeta(c) && c.rubro_slug);
   const aItem = (c: ComercioDeLaCiudad): ComercioCarrusel => ({
-    id: c.id, slug: c.slug, nombre: c.nombre, foto: c.portada_thumb_url as string, fotoPos: c.portada_pos,
+    id: c.id, slug: c.slug, nombre: c.nombre, foto: fotoDeTarjeta(c)?.url ?? "",
+    fotoPos: fotoDeTarjeta(c)?.recortada === false ? c.portada_pos : null,
+    calidad: typeof c.portada_calidad === "number" ? c.portada_calidad : null,
     rubro: c.rubro_slug as string, rubroNombre: limpio(c.rubro_nombre ?? c.rubro_slug ?? ""),
     horario: c.horario, horarioEstimado: c.horario_estimado === true, lat: c.lat, lng: c.lng,
     estrella: c.estrella === true, plan_orden: c.plan_orden ?? 0,
@@ -272,7 +297,7 @@ export function candidatosCarrusel(
     const lista: ComercioDeLaCiudad[] = [];
     for (const r of rubros) {
       for (const c of porRubro[r] ?? comercios) {
-        if (c.rubro_slug !== r || !c.portada_thumb_url || vistos.has(c.id)) continue;
+        if (c.rubro_slug !== r || !fotoDeTarjeta(c) || vistos.has(c.id)) continue;
         vistos.add(c.id);
         lista.push(c);
       }
@@ -297,9 +322,27 @@ export type TarjetaComercio = ComercioCarrusel & { metros: number | null };
 
 export const MAX_CARRUSEL = 12;
 
+/** El orden de los carruseles (§11): primero los abiertos (un horario que falta o no se entiende cuenta como abierto para
+ *  ordenar, como en `ordenarCerca`), después el plan estrella (el más caro arriba), después `portada_calidad` de mayor a
+ *  menor (sin puntaje, al final de su grupo) y, sólo con «Más cerca» prendido, la distancia. Lo demás queda como venía. */
+export function ordenarCarrusel<T extends ComercioCarrusel>(
+  lista: readonly T[], distancia: ((c: T) => number | null) | null, ahora: Date = ahoraEnBolivia(),
+): T[] {
+  const filas = lista.map((c) => ({
+    c,
+    cerrado: abiertoAhora(c.horario, ahora).estado === "cerrado" ? 1 : 0,
+    estrella: c.estrella ? 1 : 0,
+    plan: c.estrella ? c.plan_orden : 0,
+    calidad: c.calidad ?? -1,
+    d: distancia ? distancia(c) ?? 1e12 : 0,
+  }));
+  filas.sort((a, b) => a.cerrado - b.cerrado || b.estrella - a.estrella || b.plan - a.plan || b.calidad - a.calidad || a.d - b.d);
+  return filas.map((f) => f.c);
+}
+
 /** Lo que se ve en el carrusel ahora: con «Abiertos» sólo los abiertos (un horario que no se entiende no es
- *  «abierto»: mandar a alguien a una puerta cerrada cuesta la confianza), y en el orden de «Cerca de mí»
- *  (`ordenarCerca`: abiertos, plan estrella, distancia si hay ubicación). Los metros sólo con «Más cerca». */
+ *  «abierto»: mandar a alguien a una puerta cerrada cuesta la confianza), en el orden de `ordenarCarrusel`. Los metros
+ *  (y la distancia en el orden) sólo con «Más cerca». */
 export function prepararCarrusel(
   candidatos: readonly ComercioCarrusel[],
   o: { abiertos: boolean; cerca: boolean; ubicacion: { lat: number; lng: number } | null; ahora?: Date; max?: number },
@@ -308,47 +351,8 @@ export function prepararCarrusel(
   const base = o.abiertos ? candidatos.filter((c) => abiertoAhora(c.horario, ahora).estado === "abierto") : [...candidatos];
   const dist = (c: ComercioCarrusel): number | null =>
     o.ubicacion && c.lat != null && c.lng != null ? distanciaMetros(o.ubicacion.lat, o.ubicacion.lng, c.lat, c.lng) : null;
-  return ordenarCerca(base, dist, ahora).slice(0, o.max ?? MAX_CARRUSEL)
+  return ordenarCarrusel(base, o.cerca ? dist : null, ahora).slice(0, o.max ?? MAX_CARRUSEL)
     .map((c) => ({ ...c, metros: o.cerca ? dist(c) : null }));
-}
-
-// ── «Qué podés hacer en {ciudad}» ───────────────────────────────────────────
-
-export type TileQueHacer = { id: string; titulo: string; detalle: string; icono: NombreIcono; href: string; foto: string | null };
-
-/** Lo que hace falta de cada rubro de los bloques: una foto (la miniatura de un comercio DE ESE RUBRO) y,
- *  para plazas y parques, qué subcategoría hay. */
-export type FotosQueHacer = {
-  visitar: string | null;
-  nocturna: string | null;
-  restaurantes: string | null;
-  /** Subcategorías de «Para visitar» presentes en la ciudad, con la foto del primero que la tiene. */
-  plazaParque: { sub: "Plaza" | "Parque"; foto: string | null }[];
-};
-
-/** Las tarjetas del bloque oscuro. Cada una sale sólo si la ciudad tiene datos; la foto nunca es de otro rubro. */
-export function tilesQueHacer(rubros: ReadonlySet<string> | null, fotos: FotosQueHacer): TileQueHacer[] {
-  const tiene = (r: string): boolean => rubros !== null && rubros.has(r);
-  const out: TileQueHacer[] = [];
-  if (tiene(RUBRO_PARA_VISITAR)) {
-    out.push({ id: "visitar", titulo: "Para visitar", detalle: "Plazas, museos, miradores", icono: "para-visitar", href: HREF_PARA_VISITAR, foto: fotos.visitar });
-  }
-  if (tiene("nocturna")) {
-    out.push({ id: "nocturna", titulo: "Boliches y karaoke", detalle: "Ver en el mapa", icono: "nocturna", href: hrefRubro("nocturna"), foto: fotos.nocturna });
-  }
-  if (tiene("restaurantes")) {
-    out.push({ id: "comer", titulo: "Dónde comer", detalle: "Ver en el mapa", icono: "restaurantes", href: hrefRubro("restaurantes"), foto: fotos.restaurantes });
-  }
-  if (tiene(RUBRO_PARA_VISITAR) && fotos.plazaParque.length > 0) {
-    // El buscador filtra por UNA subcategoría: se lleva a la primera que la ciudad tiene.
-    const p = fotos.plazaParque.find((x) => x.sub === "Plaza") ?? fotos.plazaParque[0];
-    const foto = p.foto ?? fotos.plazaParque.find((x) => x.foto)?.foto ?? null;
-    out.push({
-      id: "plazas", titulo: "Plazas y parques", detalle: "Ver en el mapa", icono: "visita_plaza",
-      href: `/buscar?rubro=${RUBRO_PARA_VISITAR}&sub=${encodeURIComponent(p.sub)}&vista=mapa`, foto,
-    });
-  }
-  return out;
 }
 
 // ── Dax: saludo y sugerencias ───────────────────────────────────────────────

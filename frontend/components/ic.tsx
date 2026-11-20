@@ -104,7 +104,7 @@ export const ICONOS = {
   "ropa-americana": "TShirt", "calzado-usado": "Sneaker", usados: "Recycle",
   alquiler: "House", "servicio-tecnico": "Toolbox", taxis: "Taxi",
   "estacion-servicio": "GasPump", "taller-mecanico": "Wrench", coca: "Leaf",
-  nocturna: "Martini", carpinteria: "Tree", herreria: "Hammer", limpieza: "Broom",
+  nocturna: "Martini", bodegas: "Wine", carpinteria: "Tree", herreria: "Hammer", limpieza: "Broom",
   telas: "Needle", gimnasios: "Barbell", funeraria: "Flower", carniceria: "ForkKnife",
   salones: "Confetti", agro: "Tractor", kiosco: "Cookie", lenceria: "Pants",
   blanqueria: "Bed", marroquineria: "Suitcase", floreria: "Flower", otros: "Package",

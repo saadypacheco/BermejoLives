@@ -10,7 +10,7 @@ import type { ModoCiudad } from "@/components/admin-ciudad";
 
 export type SeccionAdmin =
   | "inicio"
-  | "negocios" | "calles" | "lugares" | "importados" | "adornos" | "cambio-numero" | "telefonos-fotos"
+  | "negocios" | "calles" | "lugares" | "importados" | "platos" | "adornos" | "cambio-numero" | "telefonos-fotos"
   | "publicaciones" | "whatsapp" | "difusion" | "reclamos" | "banco" | "redes"
   | "catalogo" | "rubros" | "revision-rubros"
   | "cargas"
@@ -43,6 +43,8 @@ export const MENU: GrupoMenu[] = [
     { id: "calles", label: "Calles y horarios", icono: "reloj", permiso: "moderar", ciudad: "filtra" },
     { id: "lugares", label: "Lugares", icono: "mercado", permiso: "lugares", ciudad: "filtra" },
     { id: "importados", label: "Importados", icono: "descargar", permiso: "datos", ciudad: "filtra" },
+    // Platos típicos de la ciudad (docs/home-ciudades.md §15): se revisan y aprueban acá, y salen en /{ciudad}/sabores.
+    { id: "platos", label: "Platos típicos", icono: "restaurantes", permiso: "datos", ciudad: "filtra" },
     { id: "adornos", label: "Adornos", icono: "destacado", permiso: "lugares", ciudad: "filtra" },
     { id: "cambio-numero", label: "Cambios de número", icono: "telefono", permiso: "comercios.cuenta", ciudad: "pendiente" },
     // Números leídos en las portadas (docs/telefonos-en-fotos.md). Mismo permiso que «Editar negocio»:

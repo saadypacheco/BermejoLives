@@ -146,6 +146,9 @@ export type ResultadoBusqueda = {
   /** La portada con diseño de publicidad (1600×1000, ya encuadrada), armada desde el panel (0200).
    *  Si está, va de foto principal en la ficha y la original pasa a la galería. */
   portada_diseno_url?: string | null;
+  /** 0202: la portada recortada 4:3 y mejorada (800 px) que usan los carruseles, y su puntaje de calidad (0 a 100). Ausentes hasta aplicar la 0202. */
+  portada_card_url?: string | null;
+  portada_calidad?: number | null;
   whatsapp: string;
   direccion: string | null;
   lat: number | null;

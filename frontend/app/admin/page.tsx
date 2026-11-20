@@ -41,6 +41,7 @@ import { PanelVisitas } from "@/components/panel-visitas";
 import { LugaresEditor } from "@/components/lugares-editor";
 import { AdornosEditor } from "@/components/adornos-editor";
 import { ImportadosPanel } from "@/components/importados-panel";
+import { PlatosPanel } from "@/components/admin/platos-panel";
 import { AdminCiudadProvider, useAdminCiudad } from "@/components/admin-ciudad";
 import { VencimientosPanel } from "@/components/vencimientos-panel";
 import { RubrosPanel } from "@/components/rubros-panel";
@@ -532,6 +533,7 @@ function AdminPanel() {
       {permitida && seccion === "manuales" && <ManualesPanel />}
       {permitida && seccion === "cargas" && ciudadLista && <CargasPanel />}
       {permitida && seccion === "importados" && ciudadLista && <ImportadosPanel rubros={rubros} ciudad={ciudad} />}
+      {permitida && seccion === "platos" && ciudadLista && <PlatosPanel ciudad={ciudad} />}
       {permitida && seccion === "vencimientos" && <VencimientosPanel />}
       {permitida && seccion === "banco" && <ContentBankPanel />}
       {permitida && seccion === "redes" && <ContentRedesPanel />}

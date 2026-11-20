@@ -14,8 +14,8 @@ import { useFiltrosRapidos } from "./use-filtros-rapidos";
 /**
  * El carrusel de comercios del home de las ciudades (docs/home-ciudades.md §7). El servidor manda los
  * candidatos de la franja del día (con foto); acá se decide cuáles se ven, porque hace falta la hora, la
- * ubicación y los interruptores de la persona: con «Abiertos» sólo los abiertos, y el orden es el de
- * «Cerca de mí» (abiertos, plan estrella, distancia). Con «Más cerca» cada tarjeta dice a cuántos metros queda.
+ * ubicación y los interruptores de la persona: con «Abiertos» sólo los abiertos, y el orden es abiertos, plan estrella,
+ * calidad de la foto y, con «Más cerca», la distancia (cada tarjeta dice a cuántos metros queda).
  *
  * El primer dibujo usa la hora del servidor (`ahoraIso`), así no hay diferencias con el HTML; después de
  * montar, sigue la hora real y se refresca cada minuto.
@@ -66,11 +66,11 @@ export function CarruselComercios({ candidatos, titulo, subtitulo, verTodos, ciu
           {tarjetas.map((c) => (
             <div role="listitem" key={c.id} className="uk-hc-item">
               <Link href={`/comercios/${encodeURIComponent(c.slug)}`} className="uk-hc-com">
-                <span className="uk-hc-com-foto">
-                  <img src={c.foto} alt="" loading="lazy" decoding="async"
-                       style={c.fotoPos != null ? { objectPosition: `center ${c.fotoPos}%` } : undefined} />
-                  <HorarioBadge horario={c.horario} estimado={c.horarioEstimado} />
-                </span>
+                {/* La foto ya viene recortada 4:3 (versión «tarjeta»); sólo la miniatura de respaldo lleva encuadre. El nombre va
+                    ENCIMA, sobre un degradé oscuro (en el CSS), así la tarjeta es una sola imagen. */}
+                <img src={c.foto} alt="" loading="lazy" decoding="async"
+                     style={c.fotoPos != null ? { objectPosition: `center ${c.fotoPos}%` } : undefined} />
+                <HorarioBadge horario={c.horario} estimado={c.horarioEstimado} />
                 <span className="uk-hc-com-txt">
                   <b>{c.nombre}</b>
                   <small>

@@ -4,6 +4,8 @@ import { camposOpcionesFoto, postFormData, respuestaPortada, subirConProgreso, t
 import { rutaPrivada } from "@/lib/archivo-privado";
 import { leerEntradaAdmin, leerEntradasDelEquipo, type EntradaAdmin, type EntradaDelEquipo } from "@/lib/entrar-como";
 import type { BodyCompletar, Comparacion } from "@/lib/completar-pure";
+import { resultadoDeRespuesta, type ResultadoLote } from "@/lib/aprobar-lote-pure";
+import { platoDeFila, type CambiosPlato, type EstadoPlato, type PlatoTipico } from "@/lib/platos-pure";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "bermejo_admin_token";
 
@@ -1922,5 +1924,38 @@ export async function adminMarcarCalle(id: string, estado: EstadoMarca, nota?: s
   if (nota && nota.trim()) body.nota = nota.trim().slice(0, 200);
   await authFetch(`/admin/calles/${encodeURIComponent(id)}/marca`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+}
+
+// ---- Importados: aprobar en bloque (docs/home-ciudades.md §14) ----
+
+/** `POST /admin/importados/aprobar-lote`. Con `simular: true` el servidor cuenta y NO escribe nada; con `false` aprueba fila por
+ *  fila por el mismo camino que «Al mapa» (mismo rubro, mismas validaciones) y saltea repetidos, sin rubro y sin punto. Tope de
+ *  1000 filas por llamada: si hay más, se repite. */
+export async function aprobarLoteImportados(
+  body: { fuente: string; ciudad_id: string; solo_con_punto: boolean; simular: boolean },
+): Promise<ResultadoLote> {
+  const res = await authFetch(`/admin/importados/aprobar-lote`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  return resultadoDeRespuesta(await res.json().catch(() => null));
+}
+
+// ---- Platos típicos (docs/home-ciudades.md §15) ----
+
+/** `GET /admin/platos?ciudad_id=&estado=`: los platos de una ciudad (todos los estados si `estado` va vacío). Una fila rota se descarta. */
+export async function adminListarPlatos(ciudadId: string, estado: EstadoPlato | ""): Promise<PlatoTipico[]> {
+  const p = new URLSearchParams({ ciudad_id: ciudadId });
+  if (estado) p.set("estado", estado);
+  const res = await authFetch(`/admin/platos?${p}`);
+  const d: unknown = await res.json().catch(() => null);
+  const filas = Array.isArray(d) ? d : (typeof d === "object" && d !== null && Array.isArray((d as { items?: unknown }).items) ? (d as { items: unknown[] }).items : []);
+  return filas.map(platoDeFila).filter((x): x is PlatoTipico => x !== null);
+}
+
+/** `PATCH /admin/platos/{id}` con cualquiera de `nombre`, `descripcion`, `estado`, `activo`. */
+export async function adminEditarPlato(id: string, cambios: CambiosPlato): Promise<void> {
+  await authFetch(`/admin/platos/${encodeURIComponent(id)}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cambios),
   });
 }

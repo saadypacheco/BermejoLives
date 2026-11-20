@@ -10,7 +10,8 @@ import { IntencionesCiudad } from "@/components/home-ciudad/intenciones-ciudad";
 import { CarruselProductos } from "@/components/home-ciudad/carrusel-productos";
 import { CarruselComercios } from "@/components/home-ciudad/carrusel-comercios";
 import { QueHacer } from "@/components/home-ciudad/que-hacer";
-import { candidatosCarrusel, franjaAhora, intencionesDeCiudad, tilesQueHacer } from "@/lib/home-ciudad-pure";
+import { candidatosCarrusel, franjaAhora, intencionesDeCiudad } from "@/lib/home-ciudad-pure";
+import { planesDeCiudad } from "@/lib/planes-ciudad-pure";
 import { productosFrecuentes, tarjetasDeLocales, tarjetasDeProductos } from "@/lib/home-productos-pure";
 import { VisitaCiudad } from "@/components/visita-ciudad";
 import { cargarVisitaCiudadOpcional, resumenDe } from "@/lib/turismo-ciudad";
@@ -341,7 +342,9 @@ export default async function InicioPage() {
     });
     const carrusel = candidatosCarrusel(datosCiudad.comercios, franja, ciudad.nombre, comerciales, datosCiudad.porRubro);
     const bloqueProductos = <CarruselProductos tarjetas={tarjetasProductos} ciudad={ciudad.nombre} />;
-    const bloqueQueHacer = <QueHacer tiles={tilesQueHacer(rubros, datosCiudad.fotos)} ciudad={ciudad.nombre} />;
+    const bloqueQueHacer = <QueHacer ciudad={ciudad.nombre} planes={planesDeCiudad({
+      ciudadSlug: ciudad.slug, ciudadNombre: ciudad.nombre, rubros, subcategorias: datosCiudad.subcategoriasVisitar, hayPlatos: datosCiudad.hayPlatos,
+    })} />;
     return (
       <UrukuShell activeCat="Todos" activeNav="Inicio">
         <JsonLd data={datosMarca} />

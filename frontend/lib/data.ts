@@ -5,8 +5,9 @@ import { UMBRALES } from "@/lib/data-pure";
 import { conMemoriaTtl } from "@/lib/memoria-ttl";
 import { desdeConteo, filtroSinNoComerciales, idsRubrosNoComerciales } from "@/lib/comercios-nuevos-pure";
 import { climaVigente, type ClimaCiudad } from "@/lib/clima-ciudad-pure";
-import { RUBROS_DE_FRANJAS, hayTurnosCargados, type ComercioDeLaCiudad, type FotosQueHacer, type RubroCatalogo } from "@/lib/home-ciudad-pure";
+import { RUBROS_DE_FRANJAS, hayTurnosCargados, type ComercioDeLaCiudad, type RubroCatalogo } from "@/lib/home-ciudad-pure";
 import { crearMemoPorClave } from "@/lib/memo-por-clave";
+import { platoDeFila, type PlatoTipico } from "@/lib/platos-pure";
 import type { FilaProducto } from "@/lib/home-productos-pure";
 
 export * from "@/lib/data-pure";
@@ -1113,7 +1114,10 @@ export type DatosHomeCiudad = {
    *  de arriba pueden no traer ninguna farmacia aunque la ciudad las tenga. */
   porRubro: Record<string, ComercioDeLaCiudad[]>;
   productos: FilaProducto[];
-  fotos: FotosQueHacer;
+  /** Las subcategorías de «Para visitar» que la ciudad tiene (Plaza, Mirador…): deciden qué planes ilustrados salen (§12). */
+  subcategoriasVisitar: string[];
+  /** ¿La ciudad tiene platos típicos aprobados? Decide el plan «Sabores» (§15). `false` también si la tabla todavía no existe. */
+  hayPlatos: boolean;
   catalogo: RubroCatalogo[];
   /** `false` si no se supo qué rubros tiene la ciudad: no se pidieron los de cada franja y el resultado no se recuerda. */
   completo: boolean;
@@ -1133,34 +1137,32 @@ const memoHomeCiudad = crearMemoPorClave<DatosHomeCiudad>({
 export function getHomeCiudad(
   ciudad: { id: string; slug: string }, rubros: ReadonlySet<string> | null,
 ): Promise<DatosHomeCiudad> {
-  const vacio: DatosHomeCiudad = { comercios: [], porRubro: {}, productos: [], fotos: { visitar: null, nocturna: null, restaurantes: null, plazaParque: [] }, catalogo: [], completo: false };
+  const vacio: DatosHomeCiudad = { comercios: [], porRubro: {}, productos: [], subcategoriasVisitar: [], hayPlatos: false, catalogo: [], completo: false };
   if (!hasSupabase) return Promise.resolve(vacio);
   return memoHomeCiudad(ciudad.slug, async () => {
     try {
       const tiene = (r: string) => rubros !== null && rubros.has(r);
-      const primeraFoto = (l: ResultadoBusqueda[]): string | null => l.find((c) => c.portada_thumb_url)?.portada_thumb_url ?? null;
-      const pedir = (rubro: string, extra: { subcategoria?: string } = {}, n = 40) =>
-        tiene(rubro) ? buscarComercios({ ciudad: ciudad.slug, rubro, ...extra }, n, 0) : Promise.resolve([] as ResultadoBusqueda[]);
-      const [comercios, productos, catalogo, listas, visitar, plaza, parque] = await Promise.all([
+      const pedir = (rubro: string, n = 40) =>
+        tiene(rubro) ? buscarComercios({ ciudad: ciudad.slug, rubro }, n, 0) : Promise.resolve([] as ResultadoBusqueda[]);
+      const [comercios, productos, catalogo, listas, visitar, hayPlatos] = await Promise.all([
         buscarComercios({ ciudad: ciudad.slug }, 500, 0),
         getProductosCiudad(ciudad.id),
         getRubros(),
         Promise.all(RUBROS_DE_FRANJAS.map((r) => pedir(r))),
-        pedir("para-visitar"),
-        pedir("para-visitar", { subcategoria: "Plaza" }, 20),
-        pedir("para-visitar", { subcategoria: "Parque" }, 20),
+        // Todos los lugares para visitar de la ciudad (hasta 500: son pocos): sólo se miran sus subcategorías, para saber
+        // qué planes ilustrados tienen datos. Una consulta liviana, recordada 5 minutos con el resto.
+        pedir("para-visitar", 500),
+        ciudadTienePlatos(ciudad.id),
       ]);
       const porRubro: Record<string, ResultadoBusqueda[]> = {};
       RUBROS_DE_FRANJAS.forEach((r, i) => { porRubro[r] = listas[i]; });
-      const plazaParque: FotosQueHacer["plazaParque"] = [];
-      if (plaza.length > 0) plazaParque.push({ sub: "Plaza", foto: primeraFoto(plaza) });
-      if (parque.length > 0) plazaParque.push({ sub: "Parque", foto: primeraFoto(parque) });
       return {
         comercios,
         porRubro,
         productos,
         catalogo: catalogo.map((r) => ({ slug: r.slug, nombre: r.nombre, comercial: r.comercial })),
-        fotos: { visitar: primeraFoto(visitar), nocturna: primeraFoto(porRubro.nocturna ?? []), restaurantes: primeraFoto(porRubro.restaurantes ?? []), plazaParque },
+        subcategoriasVisitar: [...new Set(visitar.map((c) => c.subcategoria).filter((x): x is string => typeof x === "string" && x.trim() !== ""))],
+        hayPlatos,
         completo: rubros !== null,
       };
     } catch {
@@ -1185,4 +1187,35 @@ export async function getCiudadTieneTurnos(ciudadId: string | null | undefined, 
     }
   });
   return r === true;
+}
+
+// ── Platos típicos (docs/home-ciudades.md §15) ──────────────────────────────
+
+/** Los códigos con los que PostgREST/Postgres dicen «esa tabla no existe» (la migración 0202 todavía no se aplicó). */
+const TABLA_AUSENTE = new Set(["PGRST205", "PGRST200", "42P01"]);
+
+/** Los platos aprobados y activos de una ciudad (sólo eso ve el público: RLS). `[]` si la tabla todavía no existe (antes de
+ *  la 0202). Ante cualquier otro error LANZA: la página con ISR sigue sirviendo la anterior y no cachea un 404 nacido de un fallo. */
+export async function getPlatosAprobados(ciudadId: string): Promise<PlatoTipico[]> {
+  if (!hasSupabase) return [];
+  const { data, error } = await supabase.from("platos_tipicos")
+    .select("id, ciudad_id, tipo, nombre, descripcion, fuente_url, estado, activo, updated_at")
+    .eq("ciudad_id", ciudadId).eq("estado", "aprobado").eq("activo", true).order("nombre").limit(200);
+  if (error) {
+    if (TABLA_AUSENTE.has(error.code ?? "")) return [];
+    throw new Error(`No se pudieron leer los platos típicos: ${error.message}`);
+  }
+  return ((data ?? []) as unknown[]).map(platoDeFila).filter((p): p is PlatoTipico => p !== null);
+}
+
+/** ¿La ciudad tiene algún plato aprobado? Para el plan «Sabores» del home: ante un fallo (o sin tabla) es `false`, nunca lanza. */
+async function ciudadTienePlatos(ciudadId: string): Promise<boolean> {
+  if (!hasSupabase) return false;
+  try {
+    const { data, error } = await supabase.from("platos_tipicos").select("id")
+      .eq("ciudad_id", ciudadId).eq("estado", "aprobado").eq("activo", true).limit(1);
+    return !error && (data ?? []).length > 0;
+  } catch {
+    return false;
+  }
 }

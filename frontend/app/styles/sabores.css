@@ -1,0 +1,23 @@
+/* /{ciudad}/sabores: platos, reposteria y bebidas tipicas (docs/home-ciudades.md §15). Sin fotos: cada tarjeta lleva la
+   ilustracion de su tipo (components/ilustraciones), que trae su propio fondo y se ve igual en los dos temas. El resto sale
+   de los tokens --uk-* de uruku.css. */
+.uk-sab-h { margin: 0 0 10px; font-size: clamp(30px, 8vw, 44px); font-weight: 800; line-height: 1.1; letter-spacing: -.02em; }
+.uk-sab-bajada { margin: 0 0 18px; max-width: 680px; font-size: 16px; line-height: 1.55; color: var(--uk-ink-soft); }
+.uk .uk-sab-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 12px 20px; border-radius: 14px;
+  background: var(--uk-green-2); color: #fff; font-weight: 700; font-size: 15px; }
+.uk[data-theme="dark"] .uk-sab-btn { background: var(--uk-green); }
+.uk .uk-sab-btn:hover { filter: brightness(1.08); }
+.uk .uk-sab-btn:focus-visible { outline: 3px solid var(--uk-green-ic); outline-offset: 3px; }
+.uk-sab-sec { margin-top: 32px; }
+.uk-sab-sec h2 { margin: 0 0 4px; font-size: 24px; font-weight: 800; }
+.uk-sab-sec-bajada { margin: 0 0 14px; font-size: 14px; color: var(--uk-ink-soft); }
+.uk-sab-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: 1fr; }
+@media (min-width: 640px) { .uk-sab-lista { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 980px) { .uk-sab-lista { grid-template-columns: repeat(3, 1fr); } }
+.uk-sab-item { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--uk-line); border-radius: 18px; background: var(--uk-surface); }
+.uk-sab-dib { display: block; width: 100%; height: auto; aspect-ratio: 170 / 110; }
+.uk-sab-txt { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px 16px; }
+.uk-sab-txt h3 { margin: 0; font-size: 17px; line-height: 1.25; }
+.uk-sab-txt p { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--uk-ink-soft); }
+.uk-sab-fuente { margin: 36px 0 0; font-size: 13px; color: var(--uk-ink-soft); }
+.uk .uk-sab-fuente a { color: var(--uk-green-ic); text-decoration: underline; }

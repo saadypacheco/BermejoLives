@@ -1,5 +1,6 @@
 import { cache } from "react";
-import { buscarComerciosOrNull, getCiudades, getCiudadesReales, getCityCategoryPagesOrNull, getTurnosFarmacia } from "@/lib/data";
+import { buscarComerciosOrNull, getCiudades, getCiudadesReales, getCityCategoryPagesOrNull, getPlatosAprobados, getTurnosFarmacia } from "@/lib/data";
+import { SUBCATEGORIAS_COMIDA_TIPICA, hrefDondeComer, type PlatoTipico } from "@/lib/platos-pure";
 import { esSlugPublico, type CityCategoryPage } from "@/lib/seo";
 import { hasSupabase, supabase } from "@/lib/supabase";
 import { rangoTurnos } from "@/lib/turnos-farmacia";
@@ -90,3 +91,24 @@ export async function ciudadTieneTurnos(ciudadId: string): Promise<boolean | nul
   const { turnos } = await cargarTurnos(ciudadId, 30);
   return turnos === null ? null : turnos.length > 0;
 }
+
+/** Los platos típicos aprobados de la ciudad (`/{ciudad}/sabores`). Lanza si la lectura falla (ver la regla de arriba); sin la
+ *  tabla todavía (antes de la 0202) devuelve `[]`. */
+export const cargarPlatos = cache(async (ciudadId: string): Promise<PlatoTipico[]> => getPlatosAprobados(ciudadId));
+
+/** A dónde lleva «Dónde comer comida típica ›»: los restaurantes de la primera subcategoría típica (Comida boliviana /
+ *  Regional / Criolla) que la ciudad tenga; si no, todos los restaurantes; si no hay restaurantes, `null`. Nunca lanza:
+ *  un fallo de esta lectura sólo hace que el botón lleve a todos los restaurantes. */
+export const cargarDondeComer = cache(async (ciudadSlug: string, hayRestaurantes: boolean): Promise<string | null> => {
+  if (!hayRestaurantes) return null;
+  let conLocales: string | null = null;
+  try {
+    const filas = await Promise.all(SUBCATEGORIAS_COMIDA_TIPICA.map((sub) =>
+      buscarComerciosOrNull({ ciudad: ciudadSlug, rubro: "restaurantes", subcategoria: sub }, 1, 0)));
+    const i = filas.findIndex((f) => f !== null && f.length > 0);
+    conLocales = i >= 0 ? SUBCATEGORIAS_COMIDA_TIPICA[i] : null;
+  } catch {
+    conLocales = null;
+  }
+  return hrefDondeComer(conLocales, hayRestaurantes);
+});
