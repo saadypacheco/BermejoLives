@@ -409,6 +409,50 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         self._importados_por_clave[clave] = fila
         return fila
 
+    def list_comercios_con_portada(self, ciudad_id, despues_de, limite):
+        out = [c for c in self.comercios.values()
+               if c.get("activo", True) and c.get("portada_url")
+               and (not ciudad_id or c.get("ciudad_id") == ciudad_id)
+               and (not despues_de or c["id"] > despues_de)]
+        out.sort(key=lambda c: c["id"])
+        return [dict(c) for c in out[:limite]]
+
+    # ---- platos típicos (0202) ----
+    def _platos(self):
+        if not hasattr(self, "platos"):
+            self.platos = {}
+        return self.platos
+
+    def list_platos(self, ciudad_id, estado, limite=500):
+        out = [p for p in self._platos().values()
+               if (not ciudad_id or p["ciudad_id"] == ciudad_id) and (not estado or p["estado"] == estado)]
+        out.sort(key=lambda p: (p["tipo"], p["nombre"]))
+        return [dict(p) for p in out[:limite]]
+
+    def get_plato(self, plato_id):
+        p = self._platos().get(plato_id)
+        return dict(p) if p else None
+
+    def update_plato(self, plato_id, patch):
+        p = self._platos().get(plato_id)
+        if not p:
+            return None
+        p.update(patch)
+        p["updated_at"] = "2026-11-20T10:00:00+00:00"
+        return dict(p)
+
+    def crear_plato(self, row):
+        import uuid
+        if any(p["ciudad_id"] == row["ciudad_id"] and p["nombre"] == row["nombre"] for p in self._platos().values()):
+            return None
+        fila = {"id": str(uuid.uuid4()), "estado": "pendiente", "activo": True, "descripcion": None,
+                "fuente_url": None, "updated_at": "2026-11-20T10:00:00+00:00", **row}
+        self._platos()[fila["id"]] = fila
+        return dict(fila)
+
+    def nombres_de_platos(self, ciudad_id):
+        return {p["nombre"] for p in self._platos().values() if p["ciudad_id"] == ciudad_id}
+
     def list_telefonos_comercios(self):
         return [{"id": c["id"], "nombre": c.get("nombre"), "whatsapp": c.get("whatsapp"), "telefono": c.get("telefono")}
                 for c in self.comercios.values() if c.get("activo", True)]

@@ -430,7 +430,7 @@ def test_la_fila_cumple_el_contrato_de_importados(repo, ciudad):
     (("hoteles",), "donde-dormir", "hospedaje"), (("hostels",), "donde-dormir", "hospedaje"),
     (("residenciales",), "donde-dormir", "hospedaje"), (("churrasquerias",), "donde-comer", "restaurantes"),
     (("saltenerias",), "donde-comer", "comida-rapida"), (("heladerias-dulces",), "donde-comer", "cafeteria"),
-    (("bodegas-y-vinotecas",), "que-hacer", "bebidas"), (("diversion-nocturna",), "que-hacer", "nocturna"),
+    (("bodegas-y-vinotecas",), "que-hacer", "bodegas"), (("diversion-nocturna",), "que-hacer", "nocturna"),
     (("complejos-deportivos-y-gimnasios",), "que-hacer", "gimnasios"),
     (("radio-moviles",), "como-moverse", "taxis"), (("transporte-alrededores",), "como-moverse", "taxis"),
     (("guias",), "guias-de-turismo-autorizados", "turismo"),
@@ -693,5 +693,12 @@ def test_rubro_turismo_sugerido(seccion, cats):
     assert it.rubro_sugerido(_e(seccion, *cats)) == it.RUBRO_TURISMO
 
 
+def test_bodegas_y_vinotecas_van_al_rubro_propio_bodegas():
+    """docs/home-ciudades.md §13: el rubro `bodegas` (migración 0202) ya no es `bebidas`."""
+    assert it.RUBRO_POR_SUBCATEGORIA["bodegas-y-vinotecas"] == "bodegas"
+    assert it.rubro_sugerido(_e("que-hacer", "bodegas-y-vinotecas")) == "bodegas"
+    assert it.RUBRO_POR_SUBCATEGORIA["diversion-nocturna"] == "nocturna"           # el vecino no se movió
+
+
 def test_el_rubro_de_la_subcategoria_gana_al_de_turismo():
-    assert it.rubro_sugerido(_e("que-hacer", "bodegas-y-vinotecas", "complejos-turisticos")) == "bebidas"
+    assert it.rubro_sugerido(_e("que-hacer", "bodegas-y-vinotecas", "complejos-turisticos")) == "bodegas"

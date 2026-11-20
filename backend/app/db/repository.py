@@ -384,6 +384,13 @@ class Repo(Protocol):
     def buscar_comercios_por_nombre(self, q: str) -> list[dict]: ...
     def list_comercios_por_agente(self, email: str, limit: int) -> list[dict]: ...
     def list_comercios_de_ciudad(self, ciudad_id: str, limit: int = 4000) -> list[dict]: ...
+    def list_comercios_con_portada(self, ciudad_id: str | None, despues_de: str | None, limite: int) -> list[dict]: ...
+    # Platos típicos (0202, docs/home-ciudades.md §15)
+    def list_platos(self, ciudad_id: str | None, estado: str | None, limite: int = 500) -> list[dict]: ...
+    def get_plato(self, plato_id: str) -> dict | None: ...
+    def update_plato(self, plato_id: str, patch: dict) -> dict | None: ...
+    def crear_plato(self, row: dict) -> dict | None: ...
+    def nombres_de_platos(self, ciudad_id: str) -> set[str]: ...
     def get_comercio_campo(self, comercio_id: str) -> dict | None: ...
     # Farmacias de turno (0154, docs/farmacias-de-turno.md).
     def get_comercio_por_slug(self, slug: str) -> dict | None: ...
@@ -546,6 +553,8 @@ _COLS_COMERCIO_ADMIN = (
     "verificado, suspendido, paga_hasta, portada_url, portada_thumb_url, portada_pos, cargado_por, "
     # La portada de diseño (0200): la vigente y la propuesta que el panel todavía no aprobó.
     "portada_diseno_url, portada_diseno_propuesta_url, "
+    # La tarjeta de la portada (0202): la versión 4:3 de 800 px y su puntaje.
+    "portada_card_url, portada_calidad, "
     "created_at, lugar_id, puesto, "
     # «Lo que suma» en la ficha: el modal «Editar negocio» los lee de esta lista.
     "canal_wa_url, catalogo_url, tiene_pasero, envios_internacionales, tiene_factura, "
@@ -3356,6 +3365,53 @@ class SupabaseRepo(IntegracionRepoMixin):
                 if len(lote) < 1000:
                     break
         return filas[:limit]
+
+    def list_comercios_con_portada(self, ciudad_id: str | None, despues_de: str | None, limite: int) -> list[dict]:
+        """Los comercios ACTIVOS con portada, de a `limite` y por `id` (paginado por teclado: `despues_de` es el último
+        `id` visto). Lo usa el comando que arma las tarjetas (`services/fotos_tarjeta.py`)."""
+        sel = (self._db.table("comercios")
+               .select("id, slug, nombre, ciudad_id, portada_url, portada_pos, portada_card_url, portada_calidad")
+               .eq("activo", True).not_.is_("portada_url", "null"))
+        if ciudad_id:
+            sel = sel.eq("ciudad_id", ciudad_id)
+        if despues_de:
+            sel = sel.gt("id", despues_de)
+        return sel.order("id").limit(max(1, min(limite, 1000))).execute().data or []
+
+    # ---- platos típicos (0202) ----
+    _COLS_PLATO = "id, ciudad_id, tipo, nombre, descripcion, fuente_url, estado, activo, updated_at"
+
+    def list_platos(self, ciudad_id: str | None, estado: str | None, limite: int = 500) -> list[dict]:
+        sel = self._db.table("platos_tipicos").select(self._COLS_PLATO)
+        if ciudad_id:
+            sel = sel.eq("ciudad_id", ciudad_id)
+        if estado:
+            sel = sel.eq("estado", estado)
+        return sel.order("tipo").order("nombre").limit(max(1, min(limite, 1000))).execute().data or []
+
+    def get_plato(self, plato_id: str) -> dict | None:
+        res = self._db.table("platos_tipicos").select(self._COLS_PLATO).eq("id", plato_id).limit(1).execute()
+        return res.data[0] if res.data else None
+
+    def update_plato(self, plato_id: str, patch: dict) -> dict | None:
+        res = (self._db.table("platos_tipicos").update({**patch, "updated_at": datetime.now(timezone.utc).isoformat()})
+               .eq("id", plato_id).execute())
+        return self.get_plato(plato_id) if res.data else None
+
+    def crear_plato(self, row: dict) -> dict | None:
+        """INSERT puro. None si ya existía ese `(ciudad_id, nombre)` (el único)."""
+        try:
+            res = self._db.table("platos_tipicos").insert(row).execute()
+        except Exception as exc:  # noqa: BLE001
+            if "23505" in str(exc) or "duplicate key" in str(exc).lower():
+                return None
+            raise
+        return res.data[0] if res.data else None
+
+    def nombres_de_platos(self, ciudad_id: str) -> set[str]:
+        """Los nombres que ya hay en la ciudad (cualquier estado, activos o no): el importador no los repite."""
+        res = self._db.table("platos_tipicos").select("nombre").eq("ciudad_id", ciudad_id).limit(1000).execute()
+        return {r["nombre"] for r in (res.data or [])}
 
     def list_comercios_de_ciudad(self, ciudad_id: str, limit: int = 4000) -> list[dict]:
         """TODOS los comercios de una ciudad, para la app de campo.

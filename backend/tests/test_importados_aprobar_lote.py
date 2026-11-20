@@ -1,0 +1,239 @@
+"""`POST /admin/importados/aprobar-lote` (docs/home-ciudades.md §14): aprobar en bloque, por el MISMO camino que
+aprobar de a uno, salteando repetidos, sin rubro y sin punto; simular no escribe; el tope; el permiso."""
+import pytest
+
+from app.api import moderacion
+from app.core import auth
+
+URL = "/admin/importados/aprobar-lote"
+CIUDAD = "ciu-tj"
+
+
+def h(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def datos():
+    return h(auth.make_token("datos@uruku.bo", rol="x", roles=["x"], permisos=["datos"]))
+
+
+def _imp(repo, id, **kw):
+    fila = {"id": id, "fuente": "turismo", "estado": "nuevo", "ciudad_id": CIUDAD, "nombre": f"Negocio {id}",
+            "rubro_slug": "restaurantes", "lat": -21.53, "lng": -64.73, "duplicado_de": None,
+            "telefono": "59144400000", "email": None, "direccion": "Calle Bolívar 1", "website": None, **kw}
+    repo.importados[id] = fila
+    return fila
+
+
+def _cuerpo(**kw):
+    return {"fuente": "turismo", "ciudad_id": CIUDAD, **kw}
+
+
+def _sembrar_mezcla(repo):
+    _imp(repo, "ok-1")
+    _imp(repo, "ok-2", rubro_slug="bodegas")
+    _imp(repo, "rep-1", duplicado_de="com-9")
+    _imp(repo, "rep-2", duplicado_de="com-8")
+    _imp(repo, "sinr-1", rubro_slug=None)
+    _imp(repo, "sinr-2", rubro_slug="  ")
+    _imp(repo, "sinp-1", lat=None, lng=None)
+    _imp(repo, "sinp-2", lat=None, lng=-64.7)
+    # lo que no entra en el lote: otra fuente, otra ciudad, ya revisados
+    _imp(repo, "otra-fuente", fuente="osm")
+    _imp(repo, "otra-ciudad", ciudad_id="ciu-sc")
+    _imp(repo, "ya-promovido", estado="promovido")
+    _imp(repo, "ya-descartado", estado="descartado")
+
+
+# ───────────────────────────────────────────── permiso y validación
+
+def test_sin_token_no_entra(client):
+    assert client.post(URL, json=_cuerpo()).status_code in (401, 403)
+
+
+def test_sin_permiso_datos_es_403(client, repo):
+    sin = h(auth.make_token("otro@uruku.bo", rol="x", roles=["x"], permisos=["pagos"]))
+    assert client.post(URL, json=_cuerpo(), headers=sin).status_code == 403
+
+
+def test_el_permiso_es_el_mismo_que_para_aprobar_de_a_uno(client, repo):
+    """Quien puede aprobar de a uno (`datos`) puede aprobar en bloque, y al revés."""
+    _imp(repo, "ok-1")
+    con_datos = h(auth.make_token("d@uruku.bo", rol="x", roles=["x"], permisos=["datos"]))
+    assert client.post(URL, json=_cuerpo(), headers=con_datos).status_code == 200
+    _imp(repo, "ok-2")
+    sin = h(auth.make_token("otro@uruku.bo", rol="x", roles=["x"], permisos=["moderar"]))
+    assert client.post("/admin/importados/ok-2/promover", json={}, headers=sin).status_code == 403
+    assert client.post(URL, json=_cuerpo(), headers=sin).status_code == 403
+
+
+@pytest.mark.parametrize("cuerpo", [{}, {"fuente": "turismo"}, {"ciudad_id": CIUDAD}, {"fuente": "x", "ciudad_id": CIUDAD},
+                                    {"fuente": "turismo", "ciudad_id": ""}])
+def test_cuerpo_invalido_es_422(client, datos, cuerpo):
+    assert client.post(URL, json=cuerpo, headers=datos).status_code == 422
+
+
+def test_la_ruta_no_choca_con_las_de_importado_id(client, datos, repo):
+    r = client.post(URL, json=_cuerpo(), headers=datos)
+    assert r.status_code == 200 and r.json() == {
+        "aprobados": 0, "salteados": {"repetidos": 0, "sin_rubro": 0, "sin_punto": 0, "error": 0}}
+
+
+# ───────────────────────────────────────────── simular
+
+def test_simular_cuenta_sin_escribir_nada(client, datos, repo):
+    _sembrar_mezcla(repo)
+    antes = {k: dict(v) for k, v in repo.importados.items()}
+    comercios_antes = dict(repo.comercios)
+    r = client.post(URL, json=_cuerpo(simular=True), headers=datos)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"aprobados": 2, "salteados": {"repetidos": 2, "sin_rubro": 2, "sin_punto": 2, "error": 0}}
+    assert repo.importados == antes                      # ni un solo importado cambió
+    assert repo.comercios == comercios_antes             # ni un comercio nuevo
+
+
+def test_simular_y_aprobar_dan_el_mismo_resultado(client, datos, repo):
+    _sembrar_mezcla(repo)
+    simulado = client.post(URL, json=_cuerpo(simular=True), headers=datos).json()
+    real = client.post(URL, json=_cuerpo(), headers=datos).json()
+    assert simulado == real
+
+
+# ───────────────────────────────────────────── aprobar de verdad
+
+def test_aprueba_las_buenas_y_saltea_el_resto(client, datos, repo):
+    _sembrar_mezcla(repo)
+    r = client.post(URL, json=_cuerpo(), headers=datos)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"aprobados": 2, "salteados": {"repetidos": 2, "sin_rubro": 2, "sin_punto": 2, "error": 0}}
+    for ok in ("ok-1", "ok-2"):
+        assert repo.importados[ok]["estado"] == "promovido" and repo.importados[ok]["comercio_id"] in repo.comercios
+        assert repo.importados[ok]["revisado_por"] == "datos@uruku.bo"
+    # los saltados siguen nuevos, sin tocar
+    for salteado in ("rep-1", "rep-2", "sinr-1", "sinr-2", "sinp-1", "sinp-2"):
+        assert repo.importados[salteado]["estado"] == "nuevo" and repo.importados[salteado].get("comercio_id") is None
+    # lo que no es de esta fuente y ciudad, ni lo miró
+    assert repo.importados["otra-fuente"]["estado"] == "nuevo" and repo.importados["otra-ciudad"]["estado"] == "nuevo"
+    assert repo.importados["ya-promovido"].get("comercio_id") is None and repo.importados["ya-descartado"]["estado"] == "descartado"
+    assert len(repo.comercios) == 2
+
+
+def test_los_comercios_salen_igual_que_aprobando_de_a_uno(client, datos, repo):
+    """Mismo camino: un importado aprobado en bloque y otro idéntico aprobado a mano dan el mismo comercio (salvo id
+    y nombre): sin verificar, sin ser confiable, con el mismo origen, rubro, teléfono y dirección."""
+    _imp(repo, "mano", nombre="Bodega Dos", rubro_slug="bodegas")
+    assert client.post("/admin/importados/mano/promover", json={}, headers=datos).status_code == 200
+    _imp(repo, "lote", nombre="Bodega Uno", rubro_slug="bodegas")
+    assert client.post(URL, json=_cuerpo(), headers=datos).json()["aprobados"] == 1
+    a = repo.comercios[repo.importados["lote"]["comercio_id"]]
+    b = repo.comercios[repo.importados["mano"]["comercio_id"]]
+    for campo in ("verificado", "confiable", "cargado_por", "activo", "telefono", "direccion", "whatsapp", "lat", "lng",
+                  "ciudad_id", "horario", "sitio_web", "email"):
+        assert a.get(campo) == b.get(campo), campo
+    assert a["verificado"] is False and a["confiable"] is False and a["cargado_por"] == "import:turismo"
+    assert repo.importados["lote"]["revisado_por"] == repo.importados["mano"]["revisado_por"]
+
+
+def test_aprueba_llamando_a_promover_importado_y_no_a_una_copia(client, datos, repo, monkeypatch):
+    """La prueba de «el mismo camino»: el lote llama a `promover_importado`, una vez por fila aprobable, con el cuerpo
+    por defecto (el rubro y el nombre salen del importado) y el mismo admin."""
+    _sembrar_mezcla(repo)
+    llamadas = []
+    original = moderacion.promover_importado
+
+    def espia(importado_id, body, admin, repo_):
+        llamadas.append((importado_id, body.model_dump(), admin["email"]))
+        return original(importado_id, body, admin, repo_)
+
+    monkeypatch.setattr(moderacion, "promover_importado", espia)
+    client.post(URL, json=_cuerpo(), headers=datos)
+    assert sorted(i for i, _, _ in llamadas) == ["ok-1", "ok-2"]
+    for _, body, email in llamadas:
+        assert body == {"nombre": None, "rubro_slug": None, "whatsapp": None, "sin_ubicacion": False}
+        assert email == "datos@uruku.bo"
+
+
+def test_una_segunda_llamada_no_repite_nada(client, datos, repo):
+    _sembrar_mezcla(repo)
+    client.post(URL, json=_cuerpo(), headers=datos)
+    r = client.post(URL, json=_cuerpo(), headers=datos).json()
+    assert r["aprobados"] == 0 and r["salteados"] == {"repetidos": 2, "sin_rubro": 2, "sin_punto": 2, "error": 0}
+    assert len(repo.comercios) == 2
+
+
+# ───────────────────────────────────────────── solo_con_punto = false
+
+def test_sin_solo_con_punto_las_de_turismo_sin_punto_se_aprueban_sin_ubicacion(client, datos, repo):
+    _sembrar_mezcla(repo)
+    r = client.post(URL, json=_cuerpo(solo_con_punto=False), headers=datos)
+    assert r.json() == {"aprobados": 4, "salteados": {"repetidos": 2, "sin_rubro": 2, "sin_punto": 0, "error": 0}}
+    c = repo.comercios[repo.importados["sinp-1"]["comercio_id"]]
+    assert c["lat"] is None and c["lng"] is None
+
+
+def test_sin_solo_con_punto_una_fuente_que_exige_punto_cuenta_como_error(client, datos, repo):
+    _imp(repo, "anh-1", fuente="anh", lat=None, lng=None)
+    _imp(repo, "anh-2", fuente="anh")
+    cuerpo = {"fuente": "anh", "ciudad_id": CIUDAD, "solo_con_punto": False}
+    sim = client.post(URL, json={**cuerpo, "simular": True}, headers=datos).json()
+    assert sim == {"aprobados": 1, "salteados": {"repetidos": 0, "sin_rubro": 0, "sin_punto": 0, "error": 1}}
+    real = client.post(URL, json=cuerpo, headers=datos).json()
+    assert real == sim
+    assert repo.importados["anh-1"]["estado"] == "nuevo" and repo.importados["anh-2"]["estado"] == "promovido"
+
+
+# ───────────────────────────────────────────── errores y tope
+
+def test_una_fila_sin_nombre_cuenta_como_error_y_las_demas_siguen(client, datos, repo):
+    _imp(repo, "sin-nombre", nombre="  ")
+    _imp(repo, "bien")
+    r = client.post(URL, json=_cuerpo(), headers=datos).json()
+    assert r == {"aprobados": 1, "salteados": {"repetidos": 0, "sin_rubro": 0, "sin_punto": 0, "error": 1}}
+    assert repo.importados["bien"]["estado"] == "promovido" and repo.importados["sin-nombre"]["estado"] == "nuevo"
+
+
+def test_una_falla_de_la_base_en_una_fila_no_frena_el_lote(client, datos, repo, monkeypatch):
+    _imp(repo, "a")
+    _imp(repo, "b")
+    original = repo.crear_comercio
+
+    def falla_la_primera(row):
+        if row["nombre"] == "Negocio a":
+            raise RuntimeError("base caída")
+        return original(row)
+
+    monkeypatch.setattr(repo, "crear_comercio", falla_la_primera)
+    r = client.post(URL, json=_cuerpo(), headers=datos).json()
+    assert r == {"aprobados": 1, "salteados": {"repetidos": 0, "sin_rubro": 0, "sin_punto": 0, "error": 1}}
+    assert repo.importados["a"]["estado"] == "nuevo" and repo.importados["b"]["estado"] == "promovido"
+
+
+def test_el_tope_es_de_1000_filas_por_llamada(client, datos, repo, monkeypatch):
+    for i in range(7):
+        _imp(repo, f"n-{i}")
+    monkeypatch.setattr(moderacion, "TOPE_LOTE_APROBAR", 5)
+    visto = {}
+    original = repo.list_importados
+
+    def espia(estado, ciudad_id, q, limite=200, fuente=None, rubro=None):
+        visto["limite"] = limite
+        return original(estado, ciudad_id, q, limite, fuente, rubro)
+
+    monkeypatch.setattr(repo, "list_importados", espia)
+    r = client.post(URL, json=_cuerpo(), headers=datos).json()
+    assert visto["limite"] == 5 and r["aprobados"] == 5
+    assert client.post(URL, json=_cuerpo(), headers=datos).json()["aprobados"] == 2      # la segunda llamada sigue
+    assert moderacion.TOPE_LOTE_APROBAR == 5
+    monkeypatch.undo()
+    assert moderacion.TOPE_LOTE_APROBAR == 1000
+
+
+def test_deja_registro_con_structlog(client, datos, repo):
+    import structlog
+    _sembrar_mezcla(repo)
+    with structlog.testing.capture_logs() as logs:
+        client.post(URL, json=_cuerpo(simular=True), headers=datos)
+    ev = next(l for l in logs if l["event"] == "importado.aprobar_lote")
+    assert ev["simular"] is True and ev["fuente"] == "turismo" and ev["aprobados"] == 2
+    assert ev["salteados_repetidos"] == 2 and ev["salteados_sin_rubro"] == 2 and ev["by"] == "datos@uruku.bo"

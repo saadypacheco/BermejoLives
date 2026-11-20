@@ -21,7 +21,7 @@ from app.services import archivos_privados, site_metrics, turnos_farmacia
 from app.services import completar_importado as completar_svc
 from app.services.subcategorias_turismo import subcategoria_de_importado
 from app.services.tarjetas import importado_salida
-from app.services import calles_mapa, enlaces, ficha_catalogo as catalogo_svc, fotos_galeria, portada, portada_diseno, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
+from app.services import calles_mapa, enlaces, ficha_catalogo as catalogo_svc, fotos_galeria, fotos_tarjeta, portada, portada_diseno, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
@@ -491,7 +491,8 @@ def editar_comercio(
     anterior = None
     if "catalogo_url" in patch:
         anterior = (repo.get_comercio(comercio_id) or {}).get("catalogo_url")
-    diseno_antes = portada_diseno.urls_de(repo.get_comercio(comercio_id) or {})   # ¿vence la portada de diseño?
+    antes = repo.get_comercio(comercio_id) or {}
+    diseno_antes = portada_diseno.urls_de(antes)   # ¿vence la portada de diseño?
     updated = repo.update_comercio(comercio_id, patch, body.rubro_slugs)
     if "catalogo_url" in patch:
         # Enlace nuevo o vaciado: si el anterior era un PDF nuestro, se borra del disco.
@@ -513,6 +514,12 @@ def editar_comercio(
     # Si cambió el nombre, el rubro o la ciudad, el repo ya vació las columnas de la portada de diseño: acá se
     # sueltan sus archivos (los que ninguna columna apunta más).
     portada_diseno.soltar_huerfanos(repo, updated, diseno_antes)
+    # Cambió el encuadre de la portada: la tarjeta (4:3) se recorta según `portada_pos`, hay que rehacerla. Si falla,
+    # se registra y el guardado sigue (docs/home-ciudades.md §11).
+    if "portada_pos" in patch and patch["portada_pos"] != antes.get("portada_pos"):
+        nueva = fotos_tarjeta.armar_seguro(repo, updated)
+        if nueva:
+            updated = {**updated, **nueva}
     logger.info("moderacion.comercio_editado", comercio=comercio_id, campos=list(patch.keys()), by=admin["email"])
     return {"ok": True, "comercio": updated}
 
@@ -1608,6 +1615,20 @@ def importado_no_es_repetido(
     return importado_salida(fila)
 
 
+def _problema_para_promover(imp: dict, nombre: str, sin_ubicacion: bool) -> str | None:
+    """Por qué NO se puede crear el comercio de este importado (400), o None si se puede. Es la validación de
+    `promover_importado`; la comparte `aprobar_lote_importados` para que simular y aprobar digan lo mismo."""
+    if not nombre:
+        return "Sin nombre no se puede crear el comercio"
+    if imp.get("lat") is None or imp.get("lng") is None:
+        if not sin_ubicacion:
+            return "Sin coordenadas no va al mapa"
+        es_tarjeta = imp.get("fuente") in ("tarjeta", "turismo", "overture", "anh", "aduana")
+        if not es_tarjeta or imp.get("fuente") == "anh":      # una estación de la ANH tiene que tener punto
+            return "Sólo las tarjetas y las páginas de turismo se promueven sin ubicación"
+    return None
+
+
 @router.post("/admin/importados/{importado_id}/promover")
 def promover_importado(
     importado_id: str,
@@ -1638,15 +1659,10 @@ def promover_importado(
         raise HTTPException(status_code=409, detail="Ya está en el mapa")
 
     nombre = (body.nombre or imp.get("nombre") or "").strip()
-    if not nombre:
-        raise HTTPException(status_code=400, detail="Sin nombre no se puede crear el comercio")
     es_tarjeta = imp.get("fuente") in ("tarjeta", "turismo", "overture", "anh", "aduana")   # se revisan campo por campo
-    if imp.get("lat") is None or imp.get("lng") is None:
-        if not body.sin_ubicacion:
-            raise HTTPException(status_code=400, detail="Sin coordenadas no va al mapa")
-        if not es_tarjeta or imp.get("fuente") == "anh":      # una estación de la ANH tiene que tener punto
-            raise HTTPException(status_code=400,
-                                detail="Sólo las tarjetas y las páginas de turismo se promueven sin ubicación")
+    problema = _problema_para_promover(imp, nombre, body.sin_ubicacion)
+    if problema:
+        raise HTTPException(status_code=400, detail=problema)
 
     rubro_slug = body.rubro_slug or imp.get("rubro_slug") or "otros"
     from app.core.text import slug_unico, slugify
@@ -1710,6 +1726,69 @@ def promover_importado(
     logger.info("importado.promovido", importado=importado_id,
                 comercio=comercio["id"], by=admin["email"])
     return {"ok": True, "comercio": comercio}
+
+
+TOPE_LOTE_APROBAR = 1000          # filas que mira una llamada de «Aprobar en bloque»
+
+
+class AprobarLoteBody(BaseModel):
+    """`aprobar-lote`: qué importados sin revisar se aprueban de una vez (docs/home-ciudades.md §14)."""
+    fuente: Literal["osm", "tarjeta", "turismo", "overture", "anh", "aduana"]
+    ciudad_id: str = Field(min_length=1, max_length=64)
+    solo_con_punto: bool = True
+    simular: bool = False
+
+
+@router.post("/admin/importados/aprobar-lote")
+def aprobar_lote_importados(
+    body: AprobarLoteBody,
+    admin: dict = Depends(require_permiso("datos")),
+    repo: Repo = Depends(get_repo),
+) -> dict:
+    """Aprueba («promueve») de una vez los importados SIN REVISAR de una fuente y una ciudad. Mismo permiso que
+    aprobar de a uno (`datos`).
+
+    Cada fila se aprueba llamando a `promover_importado` con el cuerpo por defecto: el MISMO camino que aprobar de
+    a uno (mismo rubro, mismas validaciones, comercio sin verificar ni confiable, importado marcado promovido). Se
+    saltean, sin tocarlas, las marcadas como repetidas (`duplicado_de`), las que no tienen rubro y, con
+    `solo_con_punto`, las que no tienen coordenadas. Una fila que el aprobar de a uno rechazaría (sin nombre, o sin
+    punto con `solo_con_punto` apagado en una fuente que lo exige) o que falla al guardarse cuenta en `error`.
+
+    Mira como mucho `TOPE_LOTE_APROBAR` (1000) filas por llamada, en el orden del panel (por nombre): si quedan más,
+    se vuelve a llamar. Con `simular` cuenta lo mismo pero no escribe nada.
+
+    Devuelve `{aprobados, salteados: {repetidos, sin_rubro, sin_punto, error}}`; con `simular`, `aprobados` es
+    cuántos se aprobarían.
+    """
+    filas = repo.list_importados("nuevo", body.ciudad_id, None, TOPE_LOTE_APROBAR, body.fuente, None)[:TOPE_LOTE_APROBAR]
+    salteados = {"repetidos": 0, "sin_rubro": 0, "sin_punto": 0, "error": 0}
+    aprobados = 0
+    for fila in filas:
+        if fila.get("duplicado_de") is not None:
+            salteados["repetidos"] += 1
+        elif not (fila.get("rubro_slug") or "").strip():
+            salteados["sin_rubro"] += 1
+        elif body.solo_con_punto and (fila.get("lat") is None or fila.get("lng") is None):
+            salteados["sin_punto"] += 1
+        elif body.simular:
+            if _problema_para_promover(fila, (fila.get("nombre") or "").strip(), not body.solo_con_punto):
+                salteados["error"] += 1
+            else:
+                aprobados += 1
+        else:
+            try:
+                promover_importado(fila["id"], PromoverBody(sin_ubicacion=not body.solo_con_punto), admin, repo)
+                aprobados += 1
+            except HTTPException as exc:
+                salteados["error"] += 1
+                logger.info("importado.aprobar_lote_fila_rechazada", importado=fila["id"], motivo=exc.detail)
+            except Exception:  # noqa: BLE001 — una fila que falla no frena a las demás
+                salteados["error"] += 1
+                logger.warning("importado.aprobar_lote_fila_fallo", importado=fila["id"], exc_info=True)
+    logger.info("importado.aprobar_lote", fuente=body.fuente, ciudad=body.ciudad_id, simular=body.simular,
+                solo_con_punto=body.solo_con_punto, revisados=len(filas), aprobados=aprobados,
+                **{f"salteados_{k}": v for k, v in salteados.items()}, by=admin["email"])
+    return {"aprobados": aprobados, "salteados": salteados}
 
 
 @router.post("/admin/importados/{importado_id}/descartar")
