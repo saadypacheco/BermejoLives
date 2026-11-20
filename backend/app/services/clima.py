@@ -1,5 +1,8 @@
 """Clima desde open-meteo (gratis, sin API key). El de Bermejo se guarda en la tabla `clima` y el de las demás
 ciudades en `clima_ciudades`; el frontend lee de ahí (no pega a open-meteo)."""
+import asyncio
+import math
+
 import httpx
 import structlog
 from starlette.concurrency import run_in_threadpool
@@ -45,11 +48,19 @@ async def fetch_clima_bermejo() -> dict | None:
         return None
 
 
+# Lo que se acepta como temperatura (°C): fuera de este rango es un dato roto de la fuente, no un clima.
+TEMP_MIN_C, TEMP_MAX_C = -60.0, 60.0
+# Tiempo máximo de TODA la consulta (conexión, respuesta y lectura juntas): el loop no se puede quedar colgado.
+PLAZO_TOTAL_S = 20
+
+
 def _numero(v) -> float | None:
-    """Un valor de open-meteo como número, o None si falta o no es número (un bool no cuenta)."""
+    """Un valor de open-meteo como número FINITO, o None si falta, no es número, es NaN o infinito (un bool no
+    cuenta)."""
     if isinstance(v, bool) or not isinstance(v, (int, float)):
         return None
-    return float(v)
+    v = float(v)
+    return v if math.isfinite(v) else None
 
 
 def parsear_clima_ciudades(ciudades: list[dict], payload) -> dict[str, dict]:
@@ -77,8 +88,12 @@ def parsear_clima_ciudades(ciudades: list[dict], payload) -> dict[str, dict]:
         temp = _numero(cur.get("temperature_2m"))
         if temp is None:
             continue
-        code = cur.get("weather_code")
-        desc, _icono = _desc(int(code) if _numero(code) is not None else -1)
+        if not TEMP_MIN_C <= temp <= TEMP_MAX_C:
+            # Un valor absurdo de UNA ciudad se ignora (queda su dato anterior); el resto del lote sigue.
+            logger.warning("clima_ciudades.temperatura_absurda", ciudad=ciudad.get("slug") or ciudad.get("id"), temp_c=temp)
+            continue
+        code = _numero(cur.get("weather_code"))
+        desc, _icono = _desc(int(code) if code is not None else -1)
         out[str(ciudad["id"])] = {"temp_c": temp, "descripcion": desc}
     return out
 
@@ -86,7 +101,9 @@ def parsear_clima_ciudades(ciudades: list[dict], payload) -> dict[str, dict]:
 async def fetch_clima_ciudades(ciudades: list[dict]) -> dict[str, dict]:
     """El clima actual de varias ciudades en UNA sola llamada a open-meteo (`latitude=a,b,…&longitude=…`).
     `ciudades`: filas con `id`, `lat` y `lng`. Nunca levanta: ante un error o un timeout devuelve `{}`."""
-    validas = [c for c in ciudades if _numero(c.get("lat")) is not None and _numero(c.get("lng")) is not None]
+    validas = [c for c in ciudades
+               if _numero(c.get("lat")) is not None and _numero(c.get("lng")) is not None
+               and -90 <= c["lat"] <= 90 and -180 <= c["lng"] <= 180]
     if not validas:
         return {}
     lats = ",".join(f"{float(c['lat']):.4f}" for c in validas)
@@ -95,9 +112,13 @@ async def fetch_clima_ciudades(ciudades: list[dict]) -> dict[str, dict]:
         f"https://api.open-meteo.com/v1/forecast?latitude={lats}&longitude={lons}"
         "&current=temperature_2m,weather_code&timezone=auto"
     )
+    async def _pedir() -> httpx.Response:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10, connect=5)) as client:
+            return await client.get(url)
+
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.get(url)
+        # Además de los timeouts de httpx (que valen por operación), un plazo total: no se cuelga el loop.
+        r = await asyncio.wait_for(_pedir(), PLAZO_TOTAL_S)
         if r.status_code != 200:
             logger.warning("clima_ciudades.http_error", status=r.status_code)
             return {}

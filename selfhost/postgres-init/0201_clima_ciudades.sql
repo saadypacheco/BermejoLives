@@ -35,10 +35,10 @@ create policy clima_ciudades_lectura_publica on public.clima_ciudades
   using (true);
 
 -- ───────────────────────────────────────────── 3. GRANTs explícitos (sin DELETE)
--- Los privilegios por defecto del esquema (0090) le dan todo a service_role: se le saca lo que no se usa.
-revoke all on public.clima_ciudades from public, anon, authenticated;
+-- Los privilegios por defecto del esquema (0090) le dan todo a service_role: se le saca todo y se le da sólo lo
+-- que usa el backend (leer, insertar y actualizar).
+revoke all on public.clima_ciudades from public, anon, authenticated, service_role;
 grant select on public.clima_ciudades to anon, authenticated;
-revoke delete, truncate on public.clima_ciudades from service_role;
 grant select, insert, update on public.clima_ciudades to service_role;
 
 -- ───────────────────────────────────────────── 4. comprobación
@@ -60,8 +60,9 @@ begin
      or not has_table_privilege('service_role', 'public.clima_ciudades', 'update') then
     raise exception '0201: service_role no puede escribir en clima_ciudades';
   end if;
-  if has_table_privilege('service_role', 'public.clima_ciudades', 'delete') then
-    raise exception '0201: service_role puede borrar en clima_ciudades y no tiene que poder';
+  if has_table_privilege('service_role', 'public.clima_ciudades', 'delete')
+     or has_table_privilege('service_role', 'public.clima_ciudades', 'truncate') then
+    raise exception '0201: service_role puede borrar o vaciar clima_ciudades y no tiene que poder';
   end if;
   if not (select relrowsecurity from pg_class where oid = 'public.clima_ciudades'::regclass) then
     raise exception '0201: clima_ciudades sin RLS';
