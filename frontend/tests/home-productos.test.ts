@@ -43,8 +43,8 @@ test("hasta 12 tarjetas de la tabla, en el orden que vienen (los más nuevos pri
   assert.equal(t[0].id, "p1");
 });
 
-test("productosDelLocal: los primeros productos, lo humano antes que lo de la IA", () => {
-  assert.deepEqual(productosDelLocal(local(1, "Zapatillas, botines", "Sandalias, medias")), ["Zapatillas", "botines", "Sandalias"]);
+test("productosDelLocal: los primeros productos; lo que leyó la IA antes que lo que escribió el comerciante (sin moderar)", () => {
+  assert.deepEqual(productosDelLocal(local(1, "Zapatillas, botines", "Sandalias, medias")), ["Sandalias", "medias", "Zapatillas"]);
   assert.deepEqual(productosDelLocal(local(1, null, "Celulares; cargadores")), ["Celulares", "cargadores"]);
   assert.deepEqual(productosDelLocal(local(1, null, null)), []);
 });
@@ -79,7 +79,7 @@ test("sin ninguna de las dos cosas, no hay tarjetas (el carrusel no aparece)", (
   assert.deepEqual(tarjetasDeLocales([]), []);
 });
 
-test("productosFrecuentes: los más repetidos, en minúscula, sin repetir y con empates por orden alfabético", () => {
+test("productosFrecuentes: los más repetidos, en minúscula, sin repetir y con empates por orden alfabético (ver también el filtro de seguridad)", () => {
   const f = productosFrecuentes([
     { prod_obs_human: "Zapatillas, Ropa", prod_det_ia: "zapatillas" },   // un local cuenta una sola vez por producto
     { prod_obs_human: "ZAPATILLAS, Celulares", prod_det_ia: null },
@@ -87,14 +87,15 @@ test("productosFrecuentes: los más repetidos, en minúscula, sin repetir y con 
     { prod_obs_human: "Zapatillas", prod_det_ia: null },
   ]);
   assert.deepEqual(f.slice(0, 2), ["zapatillas", "ropa"]);
-  assert.ok(f.includes("celulares") && f.includes("cargadores"));
+  assert.ok(f.includes("cargadores"), "lo que detectó la IA se conserva aunque sea de un solo local");
+  assert.ok(!f.includes("celulares"), "un texto del comerciante en UN solo local no llega a la portada");
   assert.equal(new Set(f).size, f.length);
   for (const p of f) assert.equal(p, p.toLowerCase());
 });
 
 test("productosFrecuentes: hasta 12 y sin frases largas", () => {
-  const muchos = Array.from({ length: 40 }, (_, i) => ({ prod_obs_human: `producto${String.fromCharCode(97 + (i % 26))}${i}`, prod_det_ia: null }));
+  const muchos = Array.from({ length: 40 }, (_, i) => ({ prod_obs_human: null, prod_det_ia: `producto${String.fromCharCode(97 + (i % 26))}${i}` }));
   assert.equal(productosFrecuentes(muchos).length, 12);
-  assert.deepEqual(productosFrecuentes([{ prod_obs_human: "Venta de todo tipo de artículos para el hogar y la oficina", prod_det_ia: null }]), []);
+  assert.deepEqual(productosFrecuentes([{ prod_obs_human: null, prod_det_ia: "Venta de todo tipo de artículos para el hogar y la oficina" }]), []);
   assert.deepEqual(productosFrecuentes([]), []);
 });

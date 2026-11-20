@@ -1162,7 +1162,7 @@
   background: transparent; color: var(--uk-ink); font: inherit; font-size: 14px; }
 .uk-ayuda-form button { padding: 0 14px; border: 0; border-radius: var(--uk-radius-btn); background: var(--uk-green); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
 .uk-ayuda-form button:disabled { opacity: .5; cursor: default; }
-@media (max-width: 900px) {
+@media (max-width: 899px) {
   /* La barra de abajo mide ~64px: el botón va arriba de ella. El panel es una hoja desde abajo (styles/home-ciudad.css). */
   .uk-ayuda-btn { bottom: 78px; }
 }

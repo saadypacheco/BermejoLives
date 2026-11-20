@@ -119,7 +119,10 @@ function sobraTexto(seg: string): boolean {
  *  `parseOpeningHours`: un solo parser, para que lo que dice el badge y lo que
  *  declara el JSON-LD no puedan contradecirse. */
 function construirRangos(horario: string): { rangos: Rango[]; entendido: boolean } {
-  const texto = norm(horario);
+  // «24 horas», «24hs», «24 h» = de 0 a 24. Antes `norm` se llevaba el «horas» y quedaba un «24» suelto: sin rangos,
+  // el local nunca figuraba abierto. No se toca un «24» que es el final de un rango («8 a 24 hs», «8-24 h»).
+  const texto = norm(horario.replace(/\b24\s*(?:h|hs|horas?)\b/gi, (m, desde: number, todo: string) =>
+    /\d\s*(?:a|-|–|—)\s*$/.test(todo.slice(0, desde)) ? m : "0-24"));
 
   // Segmentos por · , ; | + / salto de línea (cada uno con sus días+horas).
   // El «+» se usa al cargar («Mar-Sab 9:30-13 16-20 + Dom 9:30-13»): sin

@@ -11,7 +11,7 @@ type FilaClima = { temp_c: unknown; descripcion?: unknown; actualizado_en?: unkn
  *  o es más vieja que 3 horas. Nunca tira. */
 export function climaVigente(fila: FilaClima, ahora: Date = new Date()): ClimaCiudad | null {
   if (!fila) return null;
-  const temp = typeof fila.temp_c === "number" ? fila.temp_c : typeof fila.temp_c === "string" ? Number(fila.temp_c) : NaN;
+  const temp = typeof fila.temp_c === "number" ? fila.temp_c : typeof fila.temp_c === "string" && fila.temp_c.trim() !== "" ? Number(fila.temp_c) : NaN; // "" y "  " no son 0 °C
   if (!Number.isFinite(temp)) return null;
   const cuando = typeof fila.actualizado_en === "string" ? Date.parse(fila.actualizado_en) : NaN;
   if (!Number.isFinite(cuando)) return null;

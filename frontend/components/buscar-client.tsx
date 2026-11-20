@@ -77,9 +77,9 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
     setCiudad(ciudadInicial);
   }, [ciudadInicial]);
   const [soloOfertas, setSoloOfertas] = useState(false);
-  // «Abiertos» (?abierto=1): sólo los locales abiertos ahora. Es el mismo interruptor del encabezado de las
-  // ciudades (docs/home-ciudades.md §3): lo que se prende allá se refleja acá y al revés.
-  const [abiertos, setAbiertos] = useState(false);
+  // «Abiertos» (?abierto=1): sólo los locales abiertos ahora. Fuera de Bermejo es EL MISMO interruptor del encabezado
+  // (docs/home-ciudades.md §3) y vive en la sesión (más abajo, `abiertos`); en Bermejo es un estado local.
+  const [abiertosLocal, setAbiertosLocal] = useState(false);
   const [vista, setVista] = useState<"lista" | "mapa">("lista");
   // El mapa necesita TODOS los que coinciden, no la página cargada. La lista
   // disimula el recorte porque tiene "Ver más"; el mapa no: se veían diez pines
@@ -117,12 +117,17 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
   // Los interruptores del encabezado sólo existen fuera de Bermejo: allá este bloque no hace nada.
   const [rapidos, setRapidos] = useFiltrosRapidos();
   const conInterruptores = (ciudad || ciudadInicial || "bermejo") !== "bermejo";
+  // UNA sola fuente de verdad para «Abiertos»: con interruptores es la sesión (el encabezado y el chip la comparten);
+  // la URL sólo puede PRENDERLA (un enlace con `abierto=1`) y el chip y el encabezado la apagan. La URL, a su vez,
+  // refleja el estado (más abajo, el efecto que la escribe): así una navegación del cliente y una carga completa
+  // dan lo mismo.
+  const abiertos = conInterruptores ? rapidos.abiertos : abiertosLocal;
+  const setAbiertos = (v: boolean) => { if (conInterruptores) setRapidos({ abiertos: v }); else setAbiertosLocal(v); };
   const rapidosPrevios = useRef(rapidos);
   useEffect(() => {
     const antes = rapidosPrevios.current;
     rapidosPrevios.current = rapidos;
     if (!conInterruptores) return;
-    if (antes.abiertos !== rapidos.abiertos) setAbiertos(rapidos.abiertos);
     if (antes.cerca !== rapidos.cerca) {
       if (rapidos.cerca) setCercaPedido(true);
       else setCerca(false);
@@ -302,8 +307,10 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
     setModalidad(g("modalidad") ?? "");
     if (g("vista") === "mapa") setVista("mapa");
     if (g("cerca") === "1") setCercaPedido(true);
-    // Un enlace con «abierto=1» prende el filtro (el encabezado se entera por el efecto de abajo).
-    setAbiertos(g("abierto") === "1");
+    // Un enlace con «abierto=1» prende el filtro (y el interruptor del encabezado, que es el mismo). Sin el parámetro,
+    // con interruptores no se apaga nada: lo que manda es el interruptor de la sesión.
+    if (g("abierto") === "1") setAbiertos(true);
+    else if (!conInterruptores) setAbiertos(false);
     if (g("debug") === "1") setDebug(true);
     // `of=1` es el enlace de "Ofertas" del menú, que antes iba a /mapa.
     setSoloOfertas(g("of") === "1");
@@ -747,7 +754,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
 
         <button type="button" className={`uk-chip uk-chip-abiertos${abiertos ? " active" : ""}`} aria-pressed={abiertos}
                 title="Sólo los locales abiertos ahora"
-                onClick={() => { setAbiertos(!abiertos); if (conInterruptores) setRapidos({ abiertos: !abiertos }); }}>
+                onClick={() => setAbiertos(!abiertos)}>
           <Ic n={abiertos ? "si" : "reloj"} s={16} /> Abiertos
         </button>
         <button type="button" className={`uk-chip uk-chip-cerca${cerca ? " active" : ""}`}

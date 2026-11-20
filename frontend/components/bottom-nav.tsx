@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Ic } from "@/components/ic";
 import { conFiltros } from "@/lib/filtros-rapidos";
 import { useFiltrosRapidos } from "@/components/home-ciudad/use-filtros-rapidos";
 
@@ -41,7 +42,12 @@ const ITEMS_CON_DAX = [
   { key: "Guardados", href: "/guardados", d: "M6 3h12v18l-6-4-6 4V3z" },
 ];
 
-export function BottomNav({ active = "Mapa", conGuia = true, conDax = false }: { active?: string; conGuia?: boolean; conDax?: boolean }) {
+export function BottomNav({ active = "Mapa", conGuia = true, conDax = false, conLocal = false }: {
+  active?: string; conGuia?: boolean; conDax?: boolean;
+  /** En la ficha de un local con su propio chatbot el panel que se abre es el del LOCAL, no el de Dax: la pestaña se
+   *  llama «Preguntar» y no lleva la cara de Dax (decirle «Dax» y abrir otro asistente sería mentir). */
+  conLocal?: boolean;
+}) {
   const [rapidos] = useFiltrosRapidos();
   if (conDax) {
     return (
@@ -52,10 +58,13 @@ export function BottomNav({ active = "Mapa", conGuia = true, conDax = false }: {
             {ic(it.d)}<span>{it.key}</span>
           </Link>
         ) : (
-          <button key="Dax" type="button" className="bn-item bn-dax" aria-haspopup="dialog" aria-label="Abrir Dax, tu guía"
+          <button key="Dax" type="button" className="bn-item bn-dax" aria-haspopup="dialog"
+                  aria-label={conLocal ? "Preguntarle al local" : "Abrir Dax, tu guía"}
                   onClick={() => window.dispatchEvent(new CustomEvent("uk-abrir-ayuda"))}>
-            <img className="bn-dax-cara" src="/dax-avatar.png" alt="" width={46} height={46} />
-            <span>Dax</span>
+            {conLocal
+              ? <span className="bn-dax-cara bn-dax-icono"><Ic n="ayuda" s={26} /></span>
+              : <img className="bn-dax-cara" src="/dax-avatar.png" alt="" width={46} height={46} />}
+            <span>{conLocal ? "Preguntar" : "Dax"}</span>
           </button>
         ))}
       </nav>

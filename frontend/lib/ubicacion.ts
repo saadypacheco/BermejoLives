@@ -17,7 +17,11 @@ export function ubicacionGuardada(): Ubicacion | null {
     const raw = localStorage.getItem(CLAVE);
     if (!raw) return null;
     const u = JSON.parse(raw) as Ubicacion;
-    if (!u || typeof u.lat !== "number" || Date.now() - u.en > VIGENCIA_MS) return null;
+    if (!u || typeof u.lat !== "number" || Date.now() - u.en > VIGENCIA_MS) {
+      // Vencida (o rota): se borra, así no queda una posición vieja guardada en el navegador.
+      try { localStorage.removeItem(CLAVE); } catch { /* modo privado */ }
+      return null;
+    }
     return u;
   } catch {
     return null;

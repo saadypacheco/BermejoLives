@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { marcarUtilAsistente, preguntarAsistente, type RespuestaAsistente } from "@/lib/api";
 import { Ic } from "@/components/ic";
 import { WaLeadLink } from "@/components/wa-lead-link";
-import { rutaInternaSegura } from "@/lib/ruta-interna";
+import { useRouter } from "next/navigation";
+import { esFotoSegura, esUrlWeb, rutaPropia } from "@/lib/enlace-propio";
 import { useHoja } from "@/components/home-ciudad/use-hoja";
 import { bienvenidaDax, consultaDeBusqueda, franjaAhora, sugerenciasDeFranja } from "@/lib/home-ciudad-pure";
 
@@ -42,6 +43,9 @@ const MASCOTA = { imagen: "/dax-avatar.png", grande: "/dax-avatar.png", nombre: 
 
 const CLAVE_SESION = "uk-ayuda-sesion";
 
+/** El celular: de 899 px para abajo (la barra de abajo se esconde desde 900). Un solo corte para todo. */
+const MEDIA_CELULAR = "(max-width: 899px)";
+
 function sesionId(): string {
   try {
     let s = localStorage.getItem(CLAVE_SESION);
@@ -76,7 +80,19 @@ export function Asistente({ comercio, ciudad, rubros = null, flotanteMovil = tru
   const input = useRef<HTMLInputElement>(null);
 
   const panel = useRef<HTMLDivElement>(null);
-  const { cerrar } = useHoja(abierto, () => setAbierto(false));
+  // El panel es MODAL (con velo) sólo en el celular, donde tapa la pantalla; en la compu es un panel al costado.
+  // Sólo el modal toca el historial (para que «atrás» lo cierre) y declara `aria-modal`.
+  const [modal, setModal] = useState(false);
+  const { cerrar } = useHoja(abierto, () => setAbierto(false), () => window.matchMedia(MEDIA_CELULAR).matches);
+  useEffect(() => { if (abierto) setModal(window.matchMedia(MEDIA_CELULAR).matches); }, [abierto]);
+  const router = useRouter();
+  /** Un enlace interno de adentro del panel: el panel baja PRIMERO (sacando su entrada del historial) y recién
+   *  después se navega; así no queda un «atrás» de más. Con Ctrl, Cmd, Shift o botón del medio se deja al navegador. */
+  const navegar = (e: React.MouseEvent<HTMLAnchorElement>, ruta: string) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    cerrar(() => router.push(ruta));
+  };
   // La franja del día (hora de Bolivia) se toma al abrir: el saludo y las sugerencias son de ese momento.
   const franja = useMemo(() => franjaAhora(), [abierto]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -94,7 +110,7 @@ export function Asistente({ comercio, ciudad, rubros = null, flotanteMovil = tru
   }, []);
   // Al abrir en la compu el cursor va al campo; en el celular NO: el teclado taparía la conversación.
   useEffect(() => {
-    if (abierto && window.matchMedia?.("(min-width: 901px)").matches) setTimeout(() => input.current?.focus(), 50);
+    if (abierto && window.matchMedia?.("(min-width: 900px)").matches) setTimeout(() => input.current?.focus(), 50);
   }, [abierto]);
   useEffect(() => { fin.current?.scrollIntoView({ block: "end" }); }, [mensajes, pensando]);
 
@@ -169,7 +185,7 @@ export function Asistente({ comercio, ciudad, rubros = null, flotanteMovil = tru
       {abierto && (
         <>
         <div className="uk-hoja-velo uk-ayuda-velo" onClick={() => cerrar()} aria-hidden="true" />
-        <div ref={panel} className="uk-hoja uk-ayuda" role="dialog" aria-modal="true"
+        <div ref={panel} className="uk-hoja uk-ayuda" role="dialog" aria-modal={modal ? "true" : undefined}
              aria-label={comercio ? `Asistente de ${comercio.nombre}` : "Uruku Ayuda"}>
           <button type="button" className="uk-hoja-tirador" aria-label="Cerrar" onClick={() => cerrar()} />
           <div className="uk-ayuda-cab">
@@ -186,17 +202,23 @@ export function Asistente({ comercio, ciudad, rubros = null, flotanteMovil = tru
                 {m.de === "uruku" && !comercio && (
                   <img className="uk-ayuda-mascota-msg" src={MASCOTA.imagen} alt="" width={26} height={26} />
                 )}
-                <div className="uk-ayuda-burbuja">{linkear(m.texto)}</div>
+                <div className="uk-ayuda-burbuja">{linkear(m.texto, navegar)}</div>
                 {m.de === "uruku" && !comercio && m.fuentes && m.fuentes.some((f) => f.tipo === "comercio" && f.url) && (
-                  <TarjetaComercios fuentes={m.fuentes} ciudad={ciudad} pregunta={m.pregunta} verUrl={m.verUrl} />
+                  <TarjetaComercios fuentes={m.fuentes} ciudad={ciudad} pregunta={m.pregunta} verUrl={m.verUrl} navegar={navegar} />
                 )}
                 {m.de === "uruku" && m.fuentes && m.fuentes.filter((f) => f.tipo === "comercio" && f.url).length > 0 && (
                   <div className="uk-ayuda-fuentes">
-                    {m.fuentes.filter((f) => f.tipo === "comercio" && f.url).slice(0, 5).map((f) => (
-                      <a key={f.url} href={f.url.replace("https://uruku.bo", "")}>
-                        <b>{f.nombre}</b>{f.detalle ? <span>{f.detalle}</span> : null}
-                      </a>
-                    ))}
+                    {m.fuentes.filter((f) => f.tipo === "comercio" && f.url).slice(0, 5).map((f) => {
+                      const ruta = rutaPropia(f.url);
+                      // Una dirección que no es del sitio ni web (otro esquema) no se dibuja como enlace.
+                      if (!ruta && !esUrlWeb(f.url)) return null;
+                      return (
+                        <a key={f.url} href={ruta ?? f.url} onClick={ruta ? (e) => navegar(e, ruta) : undefined}
+                           target={ruta ? undefined : "_blank"} rel={ruta ? undefined : "noopener noreferrer"}>
+                          <b>{f.nombre}</b>{f.detalle ? <span>{f.detalle}</span> : null}
+                        </a>
+                      );
+                    })}
                   </div>
                 )}
                 {/* Cuando el chatbot del local no supo, el comprador no se queda
@@ -246,8 +268,9 @@ export function Asistente({ comercio, ciudad, rubros = null, flotanteMovil = tru
 
 /** Una respuesta con comercios, como tarjeta: la foto del primero (si el servidor la manda), su nombre y el
  *  botón «Ver comercios ›» a la búsqueda. Sin cantidades. La lista de `fuentes` sigue debajo, con cada local. */
-function TarjetaComercios({ fuentes, ciudad, pregunta, verUrl }: {
+function TarjetaComercios({ fuentes, ciudad, pregunta, verUrl, navegar }: {
   fuentes: RespuestaAsistente["fuentes"];
+  navegar: Navegar;
   ciudad?: { slug: string; nombre: string };
   pregunta?: string;
   verUrl?: string | null;
@@ -256,34 +279,37 @@ function TarjetaComercios({ fuentes, ciudad, pregunta, verUrl }: {
   const primero = comercios[0];
   if (!primero) return null;
   const q = pregunta ? consultaDeBusqueda(pregunta) : "";
-  const propia = rutaInternaSegura(verUrl ? verUrl.replace("https://uruku.bo", "") : null);
+  const propia = rutaPropia(verUrl);
   const ver = propia
     ? propia
     : q ? `/buscar?q=${encodeURIComponent(q)}${ciudad ? `&ciudad=${encodeURIComponent(ciudad.slug)}` : ""}` : "/buscar?vista=mapa";
   return (
     <div className="uk-ayuda-resp">
       <span className="uk-ayuda-resp-foto">
-        {primero.foto ? <img src={primero.foto} alt="" loading="lazy" decoding="async" /> : <Ic n="comercios" s={28} />}
+        {esFotoSegura(primero.foto) ? <img src={primero.foto} alt="" loading="lazy" decoding="async" /> : <Ic n="comercios" s={28} />}
       </span>
       <div>
         <b>{primero.nombre}</b>
         <span>{comercios.length > 1 ? `y otros locales${ciudad ? ` de ${ciudad.nombre}` : ""}` : primero.detalle ?? (ciudad ? `En ${ciudad.nombre}` : "En el mapa")}</span>
-        <a className="uk-ayuda-resp-btn" href={ver}>Ver comercios ›</a>
+        <a className="uk-ayuda-resp-btn" href={ver} onClick={(e) => navegar(e, ver)}>Ver comercios ›</a>
       </div>
     </div>
   );
 }
 
-/** Las direcciones que vienen en el texto, como enlaces. Las de uruku.bo, sin
- *  salir del sitio; las de WhatsApp y Maps, en otra pestaña. */
-function linkear(texto: string) {
+type Navegar = (e: React.MouseEvent<HTMLAnchorElement>, ruta: string) => void;
+
+/** Las direcciones que vienen en el texto, como enlaces. Las del sitio (`rutaPropia`: sólo `https://uruku.bo` y su
+ *  ruta, pasada por `rutaInternaSegura`) navegan sin salir; todo lo demás —WhatsApp, Maps, y cualquier cosa rara como
+ *  `https://uruku.bo//otro-sitio`— va en otra pestaña. */
+function linkear(texto: string, navegar: Navegar) {
   const partes = texto.split(/(https?:\/\/[^\s)]+)/g);
   return partes.map((p, i) => {
     if (!/^https?:\/\//.test(p)) return <span key={i}>{p}</span>;
-    const propia = p.startsWith("https://uruku.bo");
+    const propia = rutaPropia(p);
     return (
-      <a key={i} href={propia ? p.replace("https://uruku.bo", "") : p}
-         target={propia ? undefined : "_blank"} rel={propia ? undefined : "noopener"}>
+      <a key={i} href={propia ?? p} onClick={propia ? (e) => navegar(e, propia) : undefined}
+         target={propia ? undefined : "_blank"} rel={propia ? undefined : "noopener noreferrer"}>
         {p.replace(/^https?:\/\//, "").replace(/^www\./, "")}
       </a>
     );

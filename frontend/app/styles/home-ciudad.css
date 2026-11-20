@@ -79,13 +79,13 @@
 /* ── Dax: el panel (todas las ciudades) ───────────────────────────────────────────────────────── */
 /* Celular (≤ 900 px): hoja del 64 % del alto sobre un velo. El campo de escribir queda abajo: `--uk-teclado`
    (lo pone el componente con visualViewport) sube la hoja lo que mide el teclado y achica su alto. */
-@media (max-width: 900px) {
-  .uk-ayuda.uk-hoja { left: 0; right: 0; width: 100%; max-width: none; max-height: none;
+@media (max-width: 899px) {
+  .uk-ayuda.uk-hoja { left: 0; right: 0; bottom: var(--uk-teclado, 0px); width: 100%; max-width: none; max-height: none;
     height: 64vh; height: min(64dvh, calc(100dvh - var(--uk-teclado, 0px) - 12px)); border-radius: 26px 26px 0 0; border: 0; }
   .uk-ayuda-btn-compu { display: none; }
 }
 /* Computadora: un panel a la derecha, con el mismo encabezado y «× Cerrar» arriba. Sin velo ni rayita. */
-@media (min-width: 901px) {
+@media (min-width: 900px) {
   .uk-ayuda.uk-hoja { left: auto; right: 14px; bottom: 18px; margin: 0; width: min(400px, calc(100vw - 28px)); max-width: none;
     height: min(78vh, 680px); max-height: none; border: 1px solid var(--uk-line); border-radius: var(--uk-radius); padding-bottom: 0;
     background: var(--uk-surface); animation-name: uk-panel-in; }
@@ -118,6 +118,7 @@
 #ukroot[data-theme] .bottomnav-dax .bn-dax { color: var(--uk-ink); font-weight: 600; padding-top: 0; }
 .bn-dax-cara { width: 46px; height: 46px; margin-top: -24px; border-radius: 50%; border: 3px solid var(--uk-green-ic);
   background: #fff; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,.25); }
+.bn-dax-cara.bn-dax-icono { display: grid; place-items: center; background: var(--uk-green); color: #fff; }
 
 /* ── Carruseles del home: productos y comercios ───────────────────────────────────────────────── */
 .uk-hc-sec { margin-top: 14px; }

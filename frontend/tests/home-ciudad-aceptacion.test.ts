@@ -355,7 +355,9 @@ test("C3 · todo enlace al buscador o al mapa del home pasa por conFiltros (barr
 
 test("C3 · /buscar: el parámetro abierto=1 se lee, se escribe en la URL y hay chip «Abiertos» junto a «Cerca de mí»", () => {
   const b = leer("components/buscar-client.tsx");
-  assert.match(b, /setAbiertos\(g\("abierto"\) === "1"\)/);
+  // Una sola fuente de verdad: la URL sólo PRENDE el filtro (y el interruptor de la sesión); el chip y el encabezado lo apagan.
+  assert.match(b, /if \(g\("abierto"\) === "1"\) setAbiertos\(true\)/);
+  assert.match(b, /const abiertos = conInterruptores \? rapidos\.abiertos : abiertosLocal;/);
   assert.match(b, /if \(abiertos\) p\.set\("abierto", "1"\)/);
   assert.match(b, /soloAbiertos\(/);
   assert.ok(b.indexOf("uk-chip-abiertos") > -1 && b.indexOf("uk-chip-abiertos") < b.indexOf("uk-chip-cerca"), "chip Abiertos antes que Cerca");
@@ -415,7 +417,9 @@ test("C1 · Bermejo conserva el encabezado, la barra de abajo y el botón flotan
   const shell = leer("components/uruku-shell.tsx");
   assert.match(shell, /<header className=\{`uk-header\$\{esBermejo \? "" : " uk-header-ciudad"\}`\}>/);
   assert.match(shell, /const hayTira = esBermejo && /);
-  assert.match(shell, /const climaCiudad = esBermejo \? null : await getClimaCiudad\(ciudad\?\.id\);/);
+  // El clima se pide EN PARALELO con el resto (no en serie), y sólo si la ciudad no es Bermejo.
+  assert.match(shell, /c && c\.slug !== "bermejo" \? getClimaCiudad\(c\.id\) : null/);
+  assert.match(shell, /rubrosNav, climaCiudad\] = await Promise\.all\(/);
   assert.match(shell, /\{!esBermejo && \(\s*<div className="uk-head-fila2">/);
   assert.match(shell, /\{!esBermejo && climaCiudad && \(/);
   assert.match(shell, /conDax=\{!esBermejo && asistente !== false\}/);
@@ -423,7 +427,7 @@ test("C1 · Bermejo conserva el encabezado, la barra de abajo y el botón flotan
   // La barra de Bermejo (Inicio, Mapa, Ofertas, Guía, Cambio) no cambió.
   const nav = leer("components/bottom-nav.tsx");
   for (const k of ['key: "Inicio"', 'key: "Mapa"', 'key: "Ofertas"', 'key: "Guía"', 'key: "Cambio"']) assert.ok(nav.includes(k), k);
-  assert.match(nav, /export function BottomNav\(\{ active = "Mapa", conGuia = true, conDax = false \}/, "conDax apagado por defecto");
+  assert.match(nav, /export function BottomNav\(\{ active = "Mapa", conGuia = true, conDax = false, conLocal = false \}/, "conDax apagado por defecto");
 });
 
 test("C1 · la barra de abajo sin Bermejo es Inicio · Mapa · Dax · Novedades · Guardados, con Dax al centro", () => {
@@ -467,11 +471,11 @@ test("C5 · el panel de Dax: hoja desde abajo con «× Cerrar», velo, rayita, E
   assert.match(a, /window\.dispatchEvent|addEventListener\("uk-abrir-ayuda"/, "el evento uk-abrir-ayuda se sigue usando");
   assert.match(a, /visualViewport/, "el teclado no tapa el campo");
   const hoja = leer("components/home-ciudad/use-hoja.ts");
-  assert.match(hoja, /history\.pushState\(\{ ukHoja: true \}, ""\)/);
+  assert.match(leer("lib/control-hoja.ts"), /pushState\(\{ ukHoja: true \}, ""\)/);
   assert.match(hoja, /addEventListener\("popstate", alAtras\)/);
   assert.match(hoja, /e\.key === "Escape"/);
   const css = leer("app/styles/home-ciudad.css");
-  assert.match(css, /@media \(max-width: 900px\) \{\s*\.uk-ayuda\.uk-hoja \{[^}]*height: 64vh/, "64 % del alto en el celular");
+  assert.match(css, /@media \(max-width: 899px\) \{\s*\.uk-ayuda\.uk-hoja \{[^}]*bottom: var\(--uk-teclado, 0px\);[^}]*height: 64vh/, "64 % del alto en el celular");
   assert.match(css, /\.uk-ayuda-btn-compu \{ display: none; \}/, "sin Bermejo, en el celular no hay botón flotante");
 });
 
@@ -574,7 +578,7 @@ test("C7 · temperaturas negativas y cero son datos válidos (0° no es «sin da
 
 // BUG (bajo, endurecimiento): un texto vacío o de espacios en `temp_c` se lee como 0°C porque Number("") === 0.
 // PostgREST nunca manda "" para un numeric, así que hoy no se dispara; pero «0°» inventado es peor que nada.
-test("C7 · temp_c vacío o en blanco NO es 0 °C", { todo: "BUG-3: Number('') === 0 en lib/clima-ciudad-pure.ts:18" }, () => {
+test("C7 · temp_c vacío o en blanco NO es 0 °C", () => {
   assert.equal(climaVigente({ temp_c: "", descripcion: "x", actualizado_en: hace(1) }, AHORA), null);
   assert.equal(climaVigente({ temp_c: "   ", descripcion: "x", actualizado_en: hace(1) }, AHORA), null);
 });

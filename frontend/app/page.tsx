@@ -17,7 +17,7 @@ import { cargarVisitaCiudadOpcional, resumenDe } from "@/lib/turismo-ciudad";
 import { accesosVisita, mostrarVisitaCiudad } from "@/lib/turismo-ciudad-pure";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import {
-  getCiudades, getCityCategoryPagesCached, getClima, getComerciosNuevos, getHomeCiudad, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado,
+  getCiudades, getCityCategoryPagesCached, getClima, getComerciosNuevos, getHomeCiudad, getCiudadTieneTurnos, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado,
   getNovedadesUruku, getPublicaciones, getRedes, getVideosPromo,
 } from "@/lib/data";
 import { JsonLd } from "@/components/json-ld";
@@ -72,11 +72,6 @@ const SERVICIOS: Acceso[] = [
   { i: "policia", t: "Policía y emergencias", d: "Dónde están, y los teléfonos", href: "/buscar?rubro=emergencias&vista=mapa" },
 ];
 
-// Sin frontera: el cambio es un rubro más (casas de cambio en el mapa), no
-// la página de pesos argentinos.
-const SERVICIOS_SIN_GUIA = SERVICIOS.map((s) =>
-  s.href === "/cambio" ? { ...s, d: "Dólares y otras monedas", href: "/buscar?rubro=cambio&vista=mapa" } : s);
-
 const GUIAS: Acceso[] = [
   { i: "aduana", t: "Aduana", d: "Franquicia, qué podés pasar y qué no.", href: "/guia#aduana" },
   { i: "documentos", t: "Documentación", d: "DNI, pasaporte y viaje con menores.", href: "/guia#documentos" },
@@ -89,12 +84,6 @@ const HERRAMIENTAS: Acceso[] = [
   { i: "salir", t: "Cómo salir de la ciudad", href: "/guia#transporte" },
   { i: "reloj", t: "Qué está abierto ahora", href: "/guia#comercios" },
   { i: "ubicacion", t: "Qué hay cerca tuyo", href: "/buscar?cerca=1" },
-];
-const HERRAMIENTAS_SIN_GUIA: Acceso[] = [
-  { i: "ubicacion", t: "Qué hay cerca tuyo", href: "/buscar?cerca=1" },
-  { i: "mapa", t: "Todo en el mapa", href: "/buscar?vista=mapa" },
-  { i: "ofertas", t: "Las ofertas de hoy", href: "/ofertas" },
-  { i: "novedades", t: "Novedades", href: "/novedades" },
 ];
 
 const INFO: Acceso[] = [
@@ -174,8 +163,9 @@ export default async function InicioPage() {
     getPublicaciones("oferta", 60, ciudad?.slug),
     getNovedadesUruku(ciudad?.id, 4), conGuia ? getVideosPromo(6) : Promise.resolve([]),
     conGuia ? getFronteraEstado(ciudad?.id) : Promise.resolve(null), conGuia ? getClima() : Promise.resolve(null), getCotizaciones(),
-    // Las farmacias de turno hoy: la tarjeta sólo aparece si la ciudad tiene turnos cargados.
-    getFarmaciasDeTurnoAhora(ciudad?.id),
+    // Las farmacias de turno hoy (sólo Bermejo; en las demás ciudades «De turno hoy» es una opción del botón Farmacias):
+    // la tarjeta sólo aparece si la ciudad tiene turnos cargados.
+    conGuia ? getFarmaciasDeTurnoAhora(ciudad?.id) : Promise.resolve(null),
     // Los destacados (comercios con plan) y sus productos, para el carrusel.
     getPromo(ciudad?.slug),
     // Para «Ciudades» y el JSON-LD de la marca: sólo ciudades con páginas indexables.
@@ -190,7 +180,8 @@ export default async function InicioPage() {
   // «Visitá {ciudad}»: sólo en una ciudad con lugares para visitar. Lo de la banda (lugares, guías, radio móviles)
   // sale de una memoria de 10 minutos por ciudad: la home es dinámica y no le pega a la base en cada pedido. Si la
   // lectura falla, la banda sale igual, sin carrusel y con los accesos que se deducen de los rubros.
-  const conVisita = !!ciudad && mostrarVisitaCiudad(paresCiudad, ciudad.slug);
+  // (La banda es del home de Bermejo: en las demás ciudades la reemplaza «Qué podés hacer»; no se lee su memoria.)
+  const conVisita = conGuia && !!ciudad && mostrarVisitaCiudad(paresCiudad, ciudad.slug);
   const datosVisita = conVisita && ciudad ? await cargarVisitaCiudadOpcional(ciudad.slug) : null;
   const ciudadesIndexables = [...new Map(paresCiudad.filter((p) => p.indexable).map((p) => [p.city_slug, p])).values()];
   const datosMarca = jsonLdGraph([
@@ -209,8 +200,12 @@ export default async function InicioPage() {
   const rubros = rubrosDeCiudad(paresCiudad, ciudad?.slug);
   // Lo que lee el home de las ciudades (productos, comercios de la franja, fotos de «Qué podés hacer»): una memoria
   // de 5 minutos por ciudad. Bermejo no lo usa.
-  const datosCiudad = !conGuia && ciudad ? await getHomeCiudad({ id: ciudad.id, slug: ciudad.slug }, rubros) : null;
-  const servicios = (conGuia ? SERVICIOS : SERVICIOS_SIN_GUIA).filter((s) => accesoConComercios(s.href, rubros));
+  // `hayTurnos`: si la ciudad tiene turnos de farmacia CARGADOS (de hoy o de los próximos días), no sólo de turno ahora:
+  // entre un turno y otro la opción «De turno hoy» no puede desaparecer.
+  const [datosCiudad, hayTurnos] = !conGuia && ciudad
+    ? await Promise.all([getHomeCiudad({ id: ciudad.id, slug: ciudad.slug }, rubros), getCiudadTieneTurnos(ciudad.id)])
+    : ([null, false] as const);
+  const servicios = SERVICIOS.filter((s) => accesoConComercios(s.href, rubros));
   // La foto del hero es de la ciudad; sin foto propia, la de Bermejo sólo en
   // Bermejo. Otra ciudad sin foto va con el fondo liso, no con el río de otra.
   // Sin vencidas: `feed_publico` no filtra por vencimiento. Se parte del feed y, si
@@ -341,10 +336,10 @@ export default async function InicioPage() {
     const desdeTabla = tarjetasDeProductos(datosCiudad.productos);
     const tarjetasProductos = desdeTabla.length > 0 ? desdeTabla : tarjetasDeLocales(datosCiudad.comercios);
     const intenciones = intencionesDeCiudad({
-      franja, ciudadSlug: ciudad.slug, rubros, catalogo, hayTurnos: (turnosHoy ?? []).length > 0,
+      franja, ciudadSlug: ciudad.slug, rubros, catalogo, hayTurnos,
       productosFrecuentes: productosFrecuentes(datosCiudad.comercios),
     });
-    const carrusel = candidatosCarrusel(datosCiudad.comercios, franja, ciudad.nombre, comerciales);
+    const carrusel = candidatosCarrusel(datosCiudad.comercios, franja, ciudad.nombre, comerciales, datosCiudad.porRubro);
     const bloqueProductos = <CarruselProductos tarjetas={tarjetasProductos} ciudad={ciudad.nombre} />;
     const bloqueQueHacer = <QueHacer tiles={tilesQueHacer(rubros, datosCiudad.fotos)} ciudad={ciudad.nombre} />;
     return (
@@ -373,27 +368,26 @@ export default async function InicioPage() {
     <UrukuShell activeCat="Todos" activeNav="Inicio">
       <JsonLd data={datosMarca} />
       {/* ===== Los accesos rápidos, debajo del buscador ===== */}
-      <AccesosCiudad conGuia={conGuia} rubros={rubros} />
+      <AccesosCiudad conGuia rubros={rubros} />
 
       {/* ===== Hero: qué es esto, y cómo está Bermejo hoy ===== */}
       <section className="uk-hero uk-home-hero">
         <div className="uk-container uk-home-hero-grid">
           <div>
             <h1>Todo <span>{nombre}</span><br />en un solo lugar</h1>
-            <p>{conGuia ? "Comercios, ofertas, cambio, servicios y datos útiles para tu visita." : `Comercios, ofertas y servicios de ${nombre}, en el mapa y con el WhatsApp de cada local.`}</p>
+            <p>Comercios, ofertas, cambio, servicios y datos útiles para tu visita.</p>
             <div className="uk-hero-actions">
               <Link href="/ofertas" className="uk-btn uk-btn-primary"><Ic n="ofertas" s={18} /> Ver ofertas del día</Link>
-              <Link href={conGuia ? "/guia" : "/buscar?vista=mapa"} className="uk-btn uk-btn-ghost uk-home-btn-claro"><><Ic n={conGuia ? "explorar" : "mapa"} s={18} /> {conGuia ? "Explorar servicios" : "Ver el mapa"}</></Link>
+              <Link href="/guia" className="uk-btn uk-btn-ghost uk-home-btn-claro"><><Ic n="explorar" s={18} /> Explorar servicios</></Link>
             </div>
             <p className="uk-home-nuevos"><span aria-hidden="true" />{lineaComerciosNuevos(comerciosNuevos)}</p>
             <div className="uk-home-props">
               <div><b>Comercios locales</b><span>Locales con productos y ofertas</span></div>
               <div><b>Información confiable</b><span>Cargada por gente de {nombre}</span></div>
-              <div><b>{conGuia ? "Tu visita más fácil" : "Directo al WhatsApp"}</b><span>{conGuia ? "Todo lo que necesitás, en un solo lugar" : "Le escribís al local y sabés cómo llegar"}</span></div>
+              <div><b>Tu visita más fácil</b><span>Todo lo que necesitás, en un solo lugar</span></div>
             </div>
           </div>
 
-          {(conGuia || t.usd_bob != null) && (
           <aside className="uk-home-hoy">
             <div className="uk-home-hoy-cab">
               <h3>Hoy en {nombre}</h3>
@@ -413,11 +407,8 @@ export default async function InicioPage() {
               )}
               {frontera?.nota && <li className="uk-home-hoy-nota">{frontera.nota}</li>}
             </ul>
-            {conGuia
-              ? <Link href="/cambio" className="uk-home-hoy-link"><Ic n="ubicacion" s={16} /> Casas de cambio y calculadora <span>›</span></Link>
-              : <Link href="/buscar?rubro=cambio&vista=mapa" className="uk-home-hoy-link"><Ic n="ubicacion" s={16} /> Casas de cambio en el mapa <span>›</span></Link>}
+            <Link href="/cambio" className="uk-home-hoy-link"><Ic n="ubicacion" s={16} /> Casas de cambio y calculadora <span>›</span></Link>
           </aside>
-          )}
         </div>
       </section>
 
@@ -434,7 +425,7 @@ export default async function InicioPage() {
       <ContactoUruku />
 
       {/* ===== La comunidad (sólo cuando hay enlace cargado; es la de los que cruzan a Bermejo) ===== */}
-      {conGuia && <UnirmeComunidad variante="banner" />}
+      <UnirmeComunidad variante="banner" />
 
       {/* ===== Servicios útiles (sólo los que traen algo en la ciudad) ===== */}
       {servicios.length > 0 && (
@@ -455,8 +446,7 @@ export default async function InicioPage() {
       )}
 
       {/* ===== Antes de comprar + Herramientas ===== */}
-      <section className={`uk-container uk-home-sec${conGuia ? " uk-home-dos" : ""}`}>
-        {conGuia && (
+      <section className="uk-container uk-home-sec uk-home-dos">
         <div>
           <div className="uk-section-head">
             <h2>Antes de comprar <small>Lo que hay que saber para tu visita.</small></h2>
@@ -475,13 +465,12 @@ export default async function InicioPage() {
             <Link href="/comprar-en-bermejo"><Ic n="comprar" s={16} /> Comprar en Bermejo desde Argentina: qué conviene, cómo cruzar y cómo pagar →</Link>
           </p>
         </div>
-        )}
         <div>
           <div className="uk-section-head">
-            <h2>Herramientas útiles <small>{conGuia ? "Planeá tu visita." : `Para moverte por ${nombre}.`}</small></h2>
+            <h2>Herramientas útiles <small>Planeá tu visita.</small></h2>
           </div>
-          <div className={`uk-home-grid ${conGuia ? "uk-home-grid-2" : "uk-home-grid-4"}`}>
-            {(conGuia ? HERRAMIENTAS : HERRAMIENTAS_SIN_GUIA).map((h) => (
+          <div className="uk-home-grid uk-home-grid-2">
+            {HERRAMIENTAS.map((h) => (
               <Link key={h.t} href={h.href} className="uk-home-card uk-home-card-c">
                 <span className="uk-home-ic"><Ic n={h.i} s={26} /></span>
                 <b>{h.t}</b>
@@ -539,8 +528,7 @@ export default async function InicioPage() {
           (antes eran dos: «Videos de URUKU» y «Recorrimos Bermejo»). Sin ninguno no dibuja nada. ===== */}
       <VideosUruku videos={videosUruku} recorridos={videos} nombre={nombre} />
 
-      {/* ===== Información para tu visita (lo de la guía: sólo en la frontera) ===== */}
-      {conGuia && (
+      {/* ===== Información para tu visita (lo de la guía: este home es el de Bermejo) ===== */}
       <section className="uk-container uk-home-sec">
         <div className="uk-section-head">
           <h2>Información para tu visita <small>Consejos y recursos.</small></h2>
@@ -554,7 +542,6 @@ export default async function InicioPage() {
           ))}
         </div>
       </section>
-      )}
 
       {/* ===== Ciudades (sólo las que tienen páginas para indexar) ===== */}
       {seccionCiudades}

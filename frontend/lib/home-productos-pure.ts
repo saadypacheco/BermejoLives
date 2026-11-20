@@ -64,9 +64,11 @@ export type LocalConProductos = {
   prod_det_ia: string | null;
 };
 
-/** Los dos o tres primeros productos del local, con el mismo corte que la ficha (`productosDeFicha`). */
+/** Los dos o tres primeros productos del local, con el mismo corte que la ficha (`productosDeFicha`). Primero lo que
+ *  leyó la IA de la foto (`prod_det_ia`) y después lo que escribió el comerciante (`prod_obs_human`): ese texto es
+ *  editable sin moderación y llega al home de la ciudad, así que no manda en la tarjeta. */
 export function productosDelLocal(l: Pick<LocalConProductos, "prod_obs_human" | "prod_det_ia">, max = 3): string[] {
-  return productosDeFicha(l.prod_obs_human, l.prod_det_ia, max);
+  return productosDeFicha(l.prod_det_ia, l.prod_obs_human, max);
 }
 
 /** Mezcla (Fisher-Yates con `azar`); no toca el original. */
@@ -99,23 +101,35 @@ function clave(s: string): string {
 }
 
 /** Los productos más repetidos entre los comercios de la ciudad, en minúscula y sin repetir, hasta `max`.
- *  Cada comercio cuenta una vez por producto. Empates: orden alfabético (para que no baile entre visitas). */
+ *  Cada comercio cuenta una vez por producto. Empates: orden alfabético (para que no baile entre visitas).
+ *  Seguridad: `prod_obs_human` lo edita el comerciante sin moderación, y estos términos llegan a los chips del home y
+ *  a la búsqueda. Sólo se conserva un término si lo detectó la IA (`prod_det_ia`) o si lo declaran al menos DOS
+ *  comercios distintos: un texto puesto por uno solo no llega a la portada. */
 export function productosFrecuentes(locales: readonly Pick<LocalConProductos, "prod_obs_human" | "prod_det_ia">[], max = 12): string[] {
-  const cuenta = new Map<string, { texto: string; n: number }>();
+  const cuenta = new Map<string, { texto: string; n: number; deIa: boolean }>();
   for (const l of locales) {
     const vistosDelLocal = new Set<string>();
-    for (const t of productosDeFicha(l.prod_obs_human, l.prod_det_ia, 20)) {
+    // La IA primero: si un término está en las dos listas del local, cuenta como de la IA.
+    const terminos = [
+      ...productosDeFicha(l.prod_det_ia, null, 20).map((t) => ({ t, ia: true })),
+      ...productosDeFicha(l.prod_obs_human, null, 20).map((t) => ({ t, ia: false })),
+    ];
+    for (const { t, ia } of terminos) {
       // Un producto es una o pocas palabras: una frase larga es una descripción, no algo para buscar.
       if (t.split(/\s+/).length > 4) continue;
       const k = clave(t);
-      if (vistosDelLocal.has(k)) continue;
-      vistosDelLocal.add(k);
       const previo = cuenta.get(k);
-      if (previo) previo.n += 1;
-      else cuenta.set(k, { texto: t.toLowerCase(), n: 1 });
+      if (vistosDelLocal.has(k)) {
+        if (previo && ia) previo.deIa = true;
+        continue;
+      }
+      vistosDelLocal.add(k);
+      if (previo) { previo.n += 1; previo.deIa = previo.deIa || ia; }
+      else cuenta.set(k, { texto: t.toLowerCase(), n: 1, deIa: ia });
     }
   }
   return [...cuenta.values()]
+    .filter((x) => x.deIa || x.n >= 2)
     .sort((a, b) => b.n - a.n || a.texto.localeCompare(b.texto, "es"))
     .slice(0, max)
     .map((x) => x.texto);

@@ -42,6 +42,14 @@ export const RUBROS_SERVICIOS: readonly string[] = [
 export const RUBROS_BANCOS: readonly string[] = ["cajeros", "cambio"];
 export const RUBRO_FARMACIA = "farmacia";
 
+/** Los rubros de los carruseles de las franjas (menos los comerciales de la tarde): se piden uno por uno a la base. */
+export const RUBROS_DE_FRANJAS: readonly string[] = ["cafeteria", "panaderia", "restaurantes", "comida-rapida", "nocturna", "farmacia"];
+
+/** ¿La ciudad tiene turnos de farmacia cargados (de hoy o de los próximos días)? `null` = no se pudo leer: no se afirma. */
+export function hayTurnosCargados(turnos: readonly unknown[] | null | undefined): boolean {
+  return Array.isArray(turnos) && turnos.length > 0;
+}
+
 /** Los rubros que ya tienen su propio botón: «Negocios» no los repite. */
 const RUBROS_CON_BOTON_PROPIO = new Set<string>([
   ...RUBROS_COMER, ...RUBROS_DORMIR, ...RUBROS_SERVICIOS, ...RUBROS_BANCOS, RUBRO_FARMACIA, "otros",
@@ -163,7 +171,11 @@ export function intencionesDeCiudad(d: DatosIntenciones): Intencion[] {
   };
 
   const { id: resaltado, cartel } = RESALTADO[d.franja];
+  // Sin saber qué rubros tiene la ciudad (falló la lectura de los pares) sólo salen los botones que ya existían como
+  // accesos (Farmacias y Bancos y cajeros): los nuevos podrían abrir un mapa vacío.
+  const SIN_DATO_PERMITIDOS: readonly IdIntencion[] = ["farmacias", "bancos"];
   return ORDEN[d.franja]
+    .filter((id) => rubros !== null || SIN_DATO_PERMITIDOS.includes(id))
     .map((id) => todas[id])
     .filter((x) => (x.tipo === "productos" ? x.productos.length > 0 : x.opciones.length > 0))
     .map((x) => (x.id === resaltado ? { ...x, cartel } : x));
@@ -241,6 +253,9 @@ const MAX_CANDIDATOS = 80;
  *  franja, el respaldo son los comerciales con foto y el título pasa a «Comercios de {ciudad}». */
 export function candidatosCarrusel(
   comercios: readonly ComercioDeLaCiudad[], franja: Franja, ciudad: string, comerciales: ReadonlySet<string>,
+  /** Los comercios de cada rubro pedidos POR RUBRO a la base (`getHomeCiudad`): en una ciudad grande los de `comercios`
+   *  (una muestra) pueden no traer ninguno de los rubros de la franja. Sin esto se filtra `comercios`. */
+  porRubro: Readonly<Record<string, readonly ComercioDeLaCiudad[]>> = {},
 ): CandidatosCarrusel {
   const cfg = configCarrusel(franja, ciudad);
   const conFoto = comercios.filter((c) => c.portada_thumb_url && c.rubro_slug);
@@ -252,8 +267,20 @@ export function candidatosCarrusel(
   });
   const esComercial = (c: ComercioDeLaCiudad) => comerciales.has(c.rubro_slug as string);
 
+  const deLaFranja = (rubros: readonly string[]): ComercioDeLaCiudad[] => {
+    const vistos = new Set<string>();
+    const lista: ComercioDeLaCiudad[] = [];
+    for (const r of rubros) {
+      for (const c of porRubro[r] ?? comercios) {
+        if (c.rubro_slug !== r || !c.portada_thumb_url || vistos.has(c.id)) continue;
+        vistos.add(c.id);
+        lista.push(c);
+      }
+    }
+    return lista;
+  };
   const delasFranja = cfg.rubros
-    ? conFoto.filter((c) => (cfg.rubros as readonly string[]).includes(c.rubro_slug as string))
+    ? deLaFranja(cfg.rubros)
     : conFoto.filter((c) => esComercial(c) && !RUBROS_COMER.includes(c.rubro_slug as string));
   if (delasFranja.length > 0) {
     const primero = cfg.rubros ? cfg.rubros.find((r) => delasFranja.some((c) => c.rubro_slug === r)) : null;
@@ -378,9 +405,12 @@ export function sugerenciasDeFranja(f: Franja, rubros: ReadonlySet<string> | nul
   return [...lista, "¿Qué hay abierto ahora?", "¿Cómo publico mi negocio?"].slice(0, Math.max(2, lista.length + 1));
 }
 
+export const MAX_PALABRAS_CONSULTA = 4;
+export const MAX_CARACTERES_CONSULTA = 60;
+
 /** Del mensaje de la persona a una búsqueda: sin signos ni palabras de relleno («¿Dónde hay una farmacia?» →
- *  «farmacia»). Para el botón «Ver comercios ›» cuando el servidor no manda su propio enlace. Si no queda
- *  nada, `""` (el botón lleva a la búsqueda sin texto). */
+ *  «farmacia»), hasta 4 palabras y 60 caracteres. Para el botón «Ver comercios ›» cuando el servidor no manda su
+ *  propio enlace. Si no queda nada, `""` (el botón lleva a la búsqueda sin texto). */
 export function consultaDeBusqueda(pregunta: string): string {
   const RELLENO = new Set([
     "donde", "dónde", "hay", "una", "un", "unos", "unas", "el", "la", "los", "las", "de", "del", "en", "para", "por",
@@ -388,6 +418,15 @@ export function consultaDeBusqueda(pregunta: string): string {
     "abierto", "abierta", "abiertos", "abiertas", "ahora", "conseguir", "consigo", "encuentro", "comprar", "compro",
     "tenés", "tenes", "tiene", "algún", "algun", "alguna", "alguno", "es", "son", "y", "o", "a",
   ]);
-  return pregunta
-    .replace(/[¿?¡!.,;:()"]/g, " ").split(/\s+/).filter((p) => p && !RELLENO.has(p.toLowerCase())).join(" ").trim();
+  const palabras = pregunta
+    .replace(/[¿?¡!.,;:()"]/g, " ").split(/\s+/).filter((p) => p && !RELLENO.has(p.toLowerCase()))
+    .slice(0, MAX_PALABRAS_CONSULTA);
+  // Hasta 4 palabras y 60 caracteres (en límite de palabra): lo que escribe la persona puede tener 500 y no es una búsqueda.
+  let q = "";
+  for (const p of palabras) {
+    const siguiente = q ? `${q} ${p}` : p;
+    if (siguiente.length > MAX_CARACTERES_CONSULTA) break;
+    q = siguiente;
+  }
+  return q;
 }

@@ -5,7 +5,8 @@ import { UMBRALES } from "@/lib/data-pure";
 import { conMemoriaTtl } from "@/lib/memoria-ttl";
 import { desdeConteo, filtroSinNoComerciales, idsRubrosNoComerciales } from "@/lib/comercios-nuevos-pure";
 import { climaVigente, type ClimaCiudad } from "@/lib/clima-ciudad-pure";
-import type { ComercioDeLaCiudad, FotosQueHacer, RubroCatalogo } from "@/lib/home-ciudad-pure";
+import { RUBROS_DE_FRANJAS, hayTurnosCargados, type ComercioDeLaCiudad, type FotosQueHacer, type RubroCatalogo } from "@/lib/home-ciudad-pure";
+import { crearMemoPorClave } from "@/lib/memo-por-clave";
 import type { FilaProducto } from "@/lib/home-productos-pure";
 
 export * from "@/lib/data-pure";
@@ -628,15 +629,20 @@ export async function getClima(): Promise<Clima | null> {
  */
 export async function getClimaCiudad(ciudadId: string | null | undefined, ahora: Date = new Date()): Promise<ClimaCiudad | null> {
   if (!hasSupabase || !ciudadId) return null;
-  try {
-    const { data, error } = await supabase.from("clima_ciudades")
-      .select("temp_c, descripcion, actualizado_en").eq("ciudad_id", ciudadId).limit(1);
-    if (error) return null;
-    return climaVigente((data as { temp_c: unknown; descripcion: unknown; actualizado_en: unknown }[] | null)?.[0], ahora);
-  } catch {
-    return null;
-  }
+  // Se llama desde el marco, o sea en CADA página: una memoria de 5 minutos por ciudad (el backend lo refresca cada 30).
+  // Sin dato (o sin tabla todavía) se recuerda 60 s, para no pegarle a la base en cada visita.
+  return memoClimaCiudad(ciudadId, async () => {
+    try {
+      const { data, error } = await supabase.from("clima_ciudades")
+        .select("temp_c, descripcion, actualizado_en").eq("ciudad_id", ciudadId).limit(1);
+      if (error) return null;
+      return climaVigente((data as { temp_c: unknown; descripcion: unknown; actualizado_en: unknown }[] | null)?.[0], ahora);
+    } catch {
+      return null;
+    }
+  });
 }
+const memoClimaCiudad = crearMemoPorClave<ClimaCiudad | null>({ ttlMs: 5 * 60_000, esCacheable: (v) => v !== null, ttlIncompletoMs: 60_000 });
 export async function getRedes(): Promise<Red[]> {
   if (!hasSupabase) return [];
   const { data } = await supabase.from("redes_sociales").select("clave, etiqueta, url, orden").order("orden");
@@ -1101,53 +1107,82 @@ async function getProductosCiudad(ciudadId: string, limit = 12): Promise<FilaPro
 
 export type DatosHomeCiudad = {
   /** Los comercios de la ciudad (hasta 500, los de plan primero): de ahí salen las tarjetas de productos, los
-   *  productos frecuentes y los candidatos del carrusel. */
+   *  productos frecuentes y los candidatos de la franja de la tarde. */
   comercios: ComercioDeLaCiudad[];
+  /** Los comercios de cada rubro de las franjas (cafetería, farmacia…), pedidos POR RUBRO: en una ciudad grande los 500
+   *  de arriba pueden no traer ninguna farmacia aunque la ciudad las tenga. */
+  porRubro: Record<string, ComercioDeLaCiudad[]>;
   productos: FilaProducto[];
   fotos: FotosQueHacer;
   catalogo: RubroCatalogo[];
+  /** `false` si no se supo qué rubros tiene la ciudad: no se pidieron los de cada franja y el resultado no se recuerda. */
+  completo: boolean;
 };
 
-const memoHomeCiudad = new Map<string, { hasta: number; valor: DatosHomeCiudad }>();
+const memoHomeCiudad = crearMemoPorClave<DatosHomeCiudad>({
+  ttlMs: 5 * 60_000,
+  // Sin comercios, sin catálogo de rubros o sin saber qué rubros hay: casi seguro fue un fallo. No se recuerda más de 30 s
+  // (así una base caída no recibe una ráfaga de lecturas, y la ciudad vuelve a verse completa apenas responde).
+  esCacheable: (d) => d.comercios.length > 0 && d.catalogo.length > 0 && d.completo,
+  ttlIncompletoMs: 30_000,
+});
 
-/** Todo lo que el home de una ciudad lee, recordado 5 minutos por ciudad: la portada es dinámica y no tiene que
- *  pegarle a la base con cinco consultas en cada visita. `rubros` son los rubros con comercios de la ciudad:
- *  sólo se buscan fotos de los bloques que la ciudad tiene. Un fallo no se recuerda y devuelve vacío. */
-export async function getHomeCiudad(
+/** Todo lo que el home de una ciudad lee, recordado 5 minutos POR CIUDAD (la clave es sólo el slug): la portada es
+ *  dinámica y no tiene que pegarle a la base con una decena de consultas en cada visita. `rubros` son los rubros con
+ *  comercios de la ciudad: sólo se piden los de las franjas que la ciudad tiene. */
+export function getHomeCiudad(
   ciudad: { id: string; slug: string }, rubros: ReadonlySet<string> | null,
 ): Promise<DatosHomeCiudad> {
-  const clave = `${ciudad.slug}|${rubros ? [...rubros].sort().join(",") : "-"}`;
-  const hoy = Date.now();
-  const guardado = memoHomeCiudad.get(clave);
-  if (guardado && hoy < guardado.hasta) return guardado.valor;
-  const vacio: DatosHomeCiudad = { comercios: [], productos: [], fotos: { visitar: null, nocturna: null, restaurantes: null, plazaParque: [] }, catalogo: [] };
-  if (!hasSupabase) return vacio;
-  try {
-    const tiene = (r: string) => rubros !== null && rubros.has(r);
-    const primeraFoto = (l: ResultadoBusqueda[]): string | null => l.find((c) => c.portada_thumb_url)?.portada_thumb_url ?? null;
-    const [comercios, productos, catalogo, visitar, nocturna, restaurantes, plaza, parque] = await Promise.all([
-      buscarComercios({ ciudad: ciudad.slug }, 500, 0),
-      getProductosCiudad(ciudad.id),
-      getRubros(),
-      tiene("para-visitar") ? buscarComercios({ ciudad: ciudad.slug, rubro: "para-visitar" }, 40, 0) : Promise.resolve([]),
-      tiene("nocturna") ? buscarComercios({ ciudad: ciudad.slug, rubro: "nocturna" }, 40, 0) : Promise.resolve([]),
-      tiene("restaurantes") ? buscarComercios({ ciudad: ciudad.slug, rubro: "restaurantes" }, 40, 0) : Promise.resolve([]),
-      tiene("para-visitar") ? buscarComercios({ ciudad: ciudad.slug, rubro: "para-visitar", subcategoria: "Plaza" }, 20, 0) : Promise.resolve([]),
-      tiene("para-visitar") ? buscarComercios({ ciudad: ciudad.slug, rubro: "para-visitar", subcategoria: "Parque" }, 20, 0) : Promise.resolve([]),
-    ]);
-    const plazaParque: FotosQueHacer["plazaParque"] = [];
-    if (plaza.length > 0) plazaParque.push({ sub: "Plaza", foto: primeraFoto(plaza) });
-    if (parque.length > 0) plazaParque.push({ sub: "Parque", foto: primeraFoto(parque) });
-    const valor: DatosHomeCiudad = {
-      comercios,
-      productos,
-      catalogo: catalogo.map((r) => ({ slug: r.slug, nombre: r.nombre, comercial: r.comercial })),
-      fotos: { visitar: primeraFoto(visitar), nocturna: primeraFoto(nocturna), restaurantes: primeraFoto(restaurantes), plazaParque },
-    };
-    // Una lectura que vino toda vacía no se recuerda: casi seguro fue un fallo, y la próxima visita reintenta.
-    if (comercios.length > 0) memoHomeCiudad.set(clave, { hasta: hoy + 5 * 60_000, valor });
-    return valor;
-  } catch {
-    return vacio;
-  }
+  const vacio: DatosHomeCiudad = { comercios: [], porRubro: {}, productos: [], fotos: { visitar: null, nocturna: null, restaurantes: null, plazaParque: [] }, catalogo: [], completo: false };
+  if (!hasSupabase) return Promise.resolve(vacio);
+  return memoHomeCiudad(ciudad.slug, async () => {
+    try {
+      const tiene = (r: string) => rubros !== null && rubros.has(r);
+      const primeraFoto = (l: ResultadoBusqueda[]): string | null => l.find((c) => c.portada_thumb_url)?.portada_thumb_url ?? null;
+      const pedir = (rubro: string, extra: { subcategoria?: string } = {}, n = 40) =>
+        tiene(rubro) ? buscarComercios({ ciudad: ciudad.slug, rubro, ...extra }, n, 0) : Promise.resolve([] as ResultadoBusqueda[]);
+      const [comercios, productos, catalogo, listas, visitar, plaza, parque] = await Promise.all([
+        buscarComercios({ ciudad: ciudad.slug }, 500, 0),
+        getProductosCiudad(ciudad.id),
+        getRubros(),
+        Promise.all(RUBROS_DE_FRANJAS.map((r) => pedir(r))),
+        pedir("para-visitar"),
+        pedir("para-visitar", { subcategoria: "Plaza" }, 20),
+        pedir("para-visitar", { subcategoria: "Parque" }, 20),
+      ]);
+      const porRubro: Record<string, ResultadoBusqueda[]> = {};
+      RUBROS_DE_FRANJAS.forEach((r, i) => { porRubro[r] = listas[i]; });
+      const plazaParque: FotosQueHacer["plazaParque"] = [];
+      if (plaza.length > 0) plazaParque.push({ sub: "Plaza", foto: primeraFoto(plaza) });
+      if (parque.length > 0) plazaParque.push({ sub: "Parque", foto: primeraFoto(parque) });
+      return {
+        comercios,
+        porRubro,
+        productos,
+        catalogo: catalogo.map((r) => ({ slug: r.slug, nombre: r.nombre, comercial: r.comercial })),
+        fotos: { visitar: primeraFoto(visitar), nocturna: primeraFoto(porRubro.nocturna ?? []), restaurantes: primeraFoto(porRubro.restaurantes ?? []), plazaParque },
+        completo: rubros !== null,
+      };
+    } catch {
+      return vacio;
+    }
+  });
+}
+
+const memoTurnosCiudad = crearMemoPorClave<boolean | null>({ ttlMs: 5 * 60_000, esCacheable: (v) => v !== null, ttlIncompletoMs: 30_000 });
+
+/** ¿La ciudad tiene turnos de farmacia cargados (de hoy o de los próximos días)? Es lo que decide si el panel de
+ *  Farmacias ofrece «De turno hoy»: no depende de la hora (entre un turno y otro la página de turnos sigue sirviendo). */
+export async function getCiudadTieneTurnos(ciudadId: string | null | undefined, ahora: Date = new Date()): Promise<boolean> {
+  if (!hasSupabase || !ciudadId) return false;
+  const r = await memoTurnosCiudad(ciudadId, async () => {
+    try {
+      const { desde, hasta } = rangoTurnos(ahora, 30);
+      const turnos = await getTurnosFarmacia(ciudadId, desde, hasta);
+      return turnos === null ? null : hayTurnosCargados(turnos);
+    } catch {
+      return null;
+    }
+  });
+  return r === true;
 }

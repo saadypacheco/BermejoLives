@@ -79,11 +79,17 @@ export async function UrukuShell({
    *  sigue listando todas. */
   fixedCity?: Ciudad;
 }) {
-  const [{ ciudad, ciudades }, clima, cotizaciones, redes, pares, rubrosNav] = await Promise.all([
-    fixedCity ? ciudadFija(fixedCity) : ciudadActual(), getClima(), getCotizaciones(), getRedes(),
+  // La ciudad se resuelve una sola vez; el clima de la ciudad (que no es Bermejo) se pide en paralelo con el resto,
+  // apenas se sabe cuál es (no en serie después de todo, en cada página).
+  const ciudadPendiente = fixedCity ? ciudadFija(fixedCity) : ciudadActual();
+  const climaPendiente = ciudadPendiente.then(({ ciudad: c }) =>
+    c && c.slug !== "bermejo" ? getClimaCiudad(c.id) : null);
+  const [{ ciudad, ciudades }, clima, cotizaciones, redes, pares, rubrosNav, climaCiudad] = await Promise.all([
+    ciudadPendiente, getClima(), getCotizaciones(), getRedes(),
     paresDeCiudades((showFooter && !fill) || asistente !== false),
     // Los rubros de la barra, en el HTML del servidor (no los arma el navegador).
     showCatnav ? getRubros().catch(() => []) : Promise.resolve([]),
+    climaPendiente,
   ]);
   // Pie «Ciudades»: sólo las que tienen una página que se indexa (enlace interno
   // a /{ciudad}). Sin ninguna, el bloque no aparece.
@@ -91,7 +97,6 @@ export async function UrukuShell({
   const ciudadesPie = ciudades.filter((c) => c.activa && slugsIndexables.has(c.slug));
   // El encabezado, la barra de abajo y el home nuevos son de toda ciudad que NO es Bermejo (docs/home-ciudades.md §1).
   const esBermejo = (ciudad?.slug ?? "bermejo") === "bermejo";
-  const climaCiudad = esBermejo ? null : await getClimaCiudad(ciudad?.id);
   // Los rubros con comercios de la ciudad: Dax sólo sugiere lo que la ciudad puede contestar.
   const rubrosCiudad = rubrosDeCiudad(pares, ciudad?.slug);
   const rubrosAsistente = rubrosCiudad ? [...rubrosCiudad] : null;
@@ -291,7 +296,7 @@ export async function UrukuShell({
       )}
 
       {!fill && <div style={{ height: 20 }} />}
-      <BottomNav active={activeNav ?? ""} conGuia={conGuia} conDax={!esBermejo && asistente !== false} />
+      <BottomNav active={activeNav ?? ""} conGuia={conGuia} conDax={!esBermejo && asistente !== false} conLocal={!!asistente} />
       {asistente !== false && (
         <Asistente comercio={asistente || undefined}
                    ciudad={ciudad ? { slug: ciudad.slug, nombre: ciudad.nombre, con_guia: conGuia } : undefined}
