@@ -23,6 +23,11 @@ foto anterior no corresponde a la nueva. Lo mismo pasa con la portada de diseño
 (`portada_diseno_url` y su propuesta, docs/portada-diseno.md): era de la foto anterior,
 así que las dos columnas vuelven a null. Sus archivos (`<slug>/diseno-*.jpg`, nunca una foto) se sueltan del
 disco, salvo cuando quien cambia la portada es el AGENTE (que no borra nada): ahí sólo se vacían las columnas.
+
+La TARJETA de la portada (`portada_card_url` y `portada_calidad`, docs/home-ciudades.md §11) también era de la foto
+anterior: las dos columnas vuelven a null en el mismo cambio, se suelta del disco el archivo `card-*.jpg` viejo (es un
+derivado que se regenera: lo suelta también el agente) y se arma la tarjeta de la portada nueva. Si armarla falla, se
+registra y el cambio de portada sigue: la tarjeta nunca lo rompe (`fotos_tarjeta.armar_seguro`).
 """
 from __future__ import annotations
 
@@ -30,7 +35,7 @@ import structlog
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from app.services import fotos_galeria, portada_diseno
+from app.services import fotos_galeria, fotos_tarjeta, portada_diseno
 
 logger = structlog.get_logger()
 
@@ -58,6 +63,7 @@ def usar_de_galeria(repo, comercio: dict, foto_id: str, *, conservar_archivos: b
     """
     cid = comercio["id"]
     diseno_viejo = portada_diseno.urls_de(comercio)
+    tarjeta_vieja = comercio.get("portada_card_url")
     fotos = repo.list_fotos_comercio(cid)
     foto = next((f for f in fotos if str(f.get("id")) == str(foto_id)), None)
     if foto is None:
@@ -75,7 +81,7 @@ def usar_de_galeria(repo, comercio: dict, foto_id: str, *, conservar_archivos: b
         return comercio     # ya es la portada
 
     patch = {"portada_url": nueva_url, "portada_thumb_url": nueva_thumb, "portada_pos": None,
-             **portada_diseno.COLUMNAS_VACIAS}
+             **portada_diseno.COLUMNAS_VACIAS, **fotos_tarjeta.COLUMNAS_VACIAS}
 
     # ¿La portada anterior ya está en la galería, en otra fila? Entonces no se repite.
     otras = [f for f in fotos if str(f.get("id")) != str(foto_id)]
@@ -109,7 +115,7 @@ def usar_de_galeria(repo, comercio: dict, foto_id: str, *, conservar_archivos: b
         portada_diseno.soltar_huerfanos(repo, comercio, diseno_viejo)    # el diseño era de la portada anterior
     logger.info("comercio.portada_de_galeria", comercio=cid, foto=foto["id"],
                 intercambio=bool(vieja_url and not vieja_ya_esta))
-    return actualizado or {**comercio, **patch}
+    return _rehacer_tarjeta(repo, actualizado or {**comercio, **patch}, tarjeta_vieja)
 
 
 def poner_nueva(repo, comercio: dict, portada_url: str, portada_thumb: str | None,
@@ -129,11 +135,12 @@ def poner_nueva(repo, comercio: dict, portada_url: str, portada_thumb: str | Non
     """
     cid = comercio["id"]
     diseno_viejo = portada_diseno.urls_de(comercio)
+    tarjeta_vieja = comercio.get("portada_card_url")
     vieja_url = _url(comercio.get("portada_url"))
     vieja_thumb = _url(comercio.get("portada_thumb_url"))
 
     patch = {"portada_url": portada_url, "portada_thumb_url": portada_thumb, "portada_pos": None,
-             **portada_diseno.COLUMNAS_VACIAS}
+             **portada_diseno.COLUMNAS_VACIAS, **fotos_tarjeta.COLUMNAS_VACIAS}
 
     fila_nueva = None
     if conservar_anterior and vieja_url:
@@ -159,7 +166,18 @@ def poner_nueva(repo, comercio: dict, portada_url: str, portada_thumb: str | Non
         except Exception:  # noqa: BLE001 — limpiar el disco no puede romper el cambio de portada
             logger.warning("comercio.portada_limpieza_fallo", comercio=cid, exc_info=True)
     logger.info("comercio.portada_nueva", comercio=cid, anterior_a_galeria=bool(fila_nueva))
-    return actualizado
+    return _rehacer_tarjeta(repo, actualizado, tarjeta_vieja)
+
+
+def _rehacer_tarjeta(repo, comercio: dict, tarjeta_vieja: str | None) -> dict:
+    """Después de cambiar la portada: suelta la tarjeta vieja (si nada más la apunta) y arma la de la portada nueva.
+    Nunca lanza. Devuelve el comercio con `portada_card_url` y `portada_calidad` al día (o como quedó, si falló)."""
+    try:
+        fotos_tarjeta.soltar_huerfano(repo, comercio, tarjeta_vieja)
+    except Exception:  # noqa: BLE001
+        logger.warning("comercio.portada_tarjeta_soltar_fallo", comercio=comercio.get("id"), exc_info=True)
+    nueva = fotos_tarjeta.armar_seguro(repo, comercio)
+    return {**comercio, **nueva} if nueva else comercio
 
 
 def _guardar_en_galeria(repo, cid: str, url: str, thumb: str | None) -> dict | None:

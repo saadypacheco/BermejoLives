@@ -29,7 +29,7 @@ from app.services.imagenes import subir_foto_comercio, subir_foto_galeria, subir
 from app.services import cargas, content_consent, planes, que_hay_aca, site_metrics
 from app.services import calles_mapa
 from app.services import enlaces
-from app.services import fotos_galeria, portada
+from app.services import fotos_galeria, fotos_tarjeta, portada
 from app.services import ficha_catalogo as catalogo_svc
 from app.services.cuentas import nueva_clave_comercio
 from app.services.rubros import aplicar_rubros
@@ -382,6 +382,11 @@ async def alta_campo(
     # se ve, y de ahí sale la categoría.
     aplicar_rubros(repo, comercio, rubro_slugs)
     calles_mapa.invalidar(comercio.get("ciudad_id") or fila.get("ciudad_id"))   # el mapa de calles cuenta este comercio
+    if portada_url:
+        # La tarjeta de la portada para los carruseles (§11). Si falla, se registra: el alta no se cae.
+        nueva = await run_in_threadpool(fotos_tarjeta.armar_seguro, repo, comercio)
+        if nueva:
+            comercio = {**comercio, **nueva}
     if social_consent:
         # La autorización para redes queda en su bitácora. Si falla no se cae el alta (el agente está
         # en la calle): se avisa en el log y la registra el admin o el agente en la segunda visita.

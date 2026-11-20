@@ -83,7 +83,8 @@ RUBRO_POR_SUBCATEGORIA: dict[str, str] = {
     "afuera-de-la-ciudad-campestre": "restaurantes", "cocina-italiana-pastas": "restaurantes",
     "saltenerias": "comida-rapida", "comida-rapida": "comida-rapida", "patio-de-comidas": "comida-rapida",
     "cafeteria": "cafeteria", "heladerias-dulces": "cafeteria",
-    "bodegas-y-vinotecas": "bebidas", "diversion-nocturna": "nocturna",
+    "bodegas-y-vinotecas": "bodegas",      # el rubro propio de la 0202 (antes caían en `bebidas`)
+    "diversion-nocturna": "nocturna",
     "complejos-deportivos-y-gimnasios": "gimnasios",
     # tablas de «Cómo moverse»: `taxis` es «Taxis y movilidad» (0083, activo). `transporte` (0011) quedó dado de baja
     # en la 0042: un comercio promovido ahí no aparecería en ninguna categoría.

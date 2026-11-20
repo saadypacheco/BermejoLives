@@ -54,8 +54,11 @@ NO_VAN_EN_LA_0145 = tuple(c for c in NO_VAN_EN_LA_LISTA
 # AGENTS.md). No están en la lista de la 0145, pero el sitio público las puede pedir.
 #   fuente_url (0196, docs/lugares-turismo.md): el enlace a la página de origen de un lugar para visitar.
 #   portada_diseno_url (0200, docs/portada-diseno.md): la portada con diseño que muestra la ficha pública.
+#   portada_card_url y portada_calidad (0202, docs/home-ciudades.md §11): la portada tarjeta y su puntaje, los lee el home.
 DADAS_DESPUES_DE_LA_0145 = {"fuente_url": "0196_lugares_para_visitar.sql",
-                            "portada_diseno_url": "0200_portada_diseno.sql"}
+                            "portada_diseno_url": "0200_portada_diseno.sql",
+                            "portada_card_url": "0202_fotos_planes_platos.sql",
+                            "portada_calidad": "0202_fotos_planes_platos.sql"}
 
 
 def _0145(carpeta="supabase/migrations") -> str:
