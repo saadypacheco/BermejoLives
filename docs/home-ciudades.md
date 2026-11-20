@@ -204,3 +204,151 @@ El cartel va **adentro** del botón, a la derecha del nombre, como una pastilla 
 7. **Clima en Tarija:** el encabezado muestra el clima de la ciudad. Si no hay dato o está viejo, no muestra nada.
 8. **Admin:** el selector de saber local muestra todas las ciudades activas.
 9. **Calidad:** `npm test` y `tsc --noEmit` sin errores; tests del backend en verde; tests nuevos para la lógica pura (franjas, orden, filtros, sugerencias, armado de tarjetas, clima por ciudad).
+
+---
+
+# Parte 2 (20/11/2026): fotos lindas, planes ilustrados, bodegas, aprobación en bloque y platos típicos
+
+> Acordado con el dueño después de ver el home nuevo en QA y la maqueta
+> `propuesta-fotos-planes-v2.png`. Los eventos de tarijaturismo.com quedan **afuera**: el último publicado es de
+> agosto de 2026, así que no hay ninguno por venir.
+
+## 11. Las fotos de los carruseles
+
+- **Versión «tarjeta» de la portada:** 800 px de ancho, recortada a **4:3** según `portada_pos` (la misma regla del
+  CSS `object-position: center X%`), pasada por `mejorar_gratis` (services/portada_diseno.py) y guardada en JPEG con
+  calidad 80, como `/fotos/<slug>/card-<token>.jpg`.
+  - Se arma al subir o cambiar la portada y al cambiar el encuadre.
+  - El archivo anterior se suelta igual que en la portada de diseño.
+- **Puntaje de calidad `portada_calidad`** (0 a 100), calculado al armar la tarjeta sobre la imagen ya mejorada:
+  - colorido (métrica de Hasler-Süsstrunk), nitidez (varianza del laplaciano) y luz media sin extremos;
+  - normalizado y documentado en el código. Sin IA.
+- **Migración 0202:**
+  - `comercios.portada_card_url text` y `comercios.portada_calidad smallint`, las dos **públicas** con grant por
+    columna (regla 11);
+  - suma las dos columnas a `buscar_comercios` si hace falta para que lleguen al front.
+- **Relleno:** el comando `python -m app.services.fotos_tarjeta --todas [--ciudad <slug>] [--rehacer]` arma las
+  tarjetas de los comercios que ya tienen portada. Va despacio, lee del disco y nunca borra la portada original.
+- **En el front:**
+  - los carruseles usan `portada_card_url` y, si no hay, `portada_thumb_url`;
+  - si el comercio tiene portada de diseño, se usa esa;
+  - el nombre y «rubro · ciudad/distancia» van **encima de la foto**, sobre un degradé oscuro;
+  - el cartel «Abierto» va blanco, arriba a la izquierda;
+  - en pantallas táctiles no hay flechas sobre las fotos (abajo van unos puntitos); en la compu, las flechas quedan
+    fuera de la foto.
+- **Orden de los carruseles:** primero los abiertos, después el plan estrella, después **`portada_calidad`
+  descendente** y después la distancia si «Más cerca» está prendido.
+
+## 12. «Qué podés hacer en {ciudad}»: planes ilustrados
+
+- **Un catálogo fijo de ilustraciones SVG propias** en `components/ilustraciones/`, en el estilo de la maqueta
+  (planos, colores de la marca, sin fotos de terceros ni IA):
+  - vino, centro histórico, miradores, cascadas y ríos, noche, sabores, lagunas y montaña, parques, museos y
+    mercados.
+  - Cada ilustración tiene `aria-hidden`, con el título al lado.
+- **Planes definidos en código** (`lib/planes-ciudad-pure.ts`). Cada plan tiene título, bajada, ilustración y
+  destino. **Sale solo si la ciudad tiene datos para ese destino**: un plan sin datos no aparece y la ciudad no se
+  configura a mano.
+
+| Plan | Destino | Sale si |
+|---|---|---|
+| **La ruta del vino y el singani** (tarjeta grande, con el recorrido dibujado) | `/buscar?rubro=bodegas&vista=mapa` | la ciudad tiene `bodegas` |
+| Centro histórico | `para-visitar` con sub Plaza, Iglesia o Patrimonio (la primera que haya) | alguna de esas |
+| Miradores | `para-visitar` · Mirador | hay miradores |
+| Parques | `para-visitar` · Parque | hay parques |
+| Museos | `para-visitar` · Museo o Centro cultural | hay alguno |
+| Cascadas y ríos | `para-visitar` · Excursión | hay excursiones |
+| Lagunas y montaña | `para-visitar` · Área protegida | hay áreas protegidas |
+| Noche {gentilicio} | `nocturna` | hay boliches |
+| Sabores {gentilicio} | `/{ciudad}/sabores` (§15) | hay platos aprobados en la ciudad |
+
+- **Gentilicios** en un mapa chico: tarija → chapaca, santa-cruz → cruceña, la-paz → paceña,
+  cochabamba → cochabambina, oruro → orureña, sucre → sucrense, potosi → potosina, bermejo → bermejeña, y
+  «de {ciudad}» para el resto («Noche de Trinidad»).
+- **La tarjeta grande** es la del primer plan con datos, en este orden: ruta del vino, centro histórico, noche. El
+  resto va en una grilla de 2 columnas, hasta 6.
+- **Al final**, «Ver todos los planes en el mapa ›» a `/buscar?rubro=para-visitar&vista=mapa`, si hay.
+- **El recorrido de la ruta del vino** es parte de la ilustración, no un mapa real. Las paradas dicen Viñedos,
+  Bodegas y Singani, sin nombres de comercios.
+
+## 13. Rubro «Bodegas y vinotecas»
+
+- **Migración 0202:**
+  - rubro `bodegas` («Bodegas y vinotecas»), comercial, con sus palabras para la clasificación (bodega, vinoteca,
+    viñedo, singani artesanal, cata de vinos), sin pisar `bebidas`;
+  - pasa a `bodegas` las filas de `comercios_importados` con `fuente='turismo'`, subcategoría `bodegas-y-vinotecas`
+    y `estado='nuevo'`. Es idempotente.
+- **Importador:** `RUBRO_POR_SUBCATEGORIA["bodegas-y-vinotecas"] = "bodegas"`.
+- **Ícono:** se suma `bodegas` al catálogo de `ic.tsx` (copa de vino, Phosphor) y se corre `npm run iconos`.
+
+## 14. Aprobar en bloque en Importados
+
+- **Endpoint `POST /admin/importados/aprobar-lote`**, con el mismo permiso que aprobar de a uno. Cuerpo:
+  `{ fuente, ciudad_id, solo_con_punto: true, simular: bool }`.
+  - Aprueba **por el mismo camino que aprobar de a uno**, fila por fila, con el mismo rubro y las mismas
+    validaciones.
+  - Saltea las filas marcadas como repetidas, las que no tienen rubro y las que no tienen punto si
+    `solo_con_punto`.
+  - Devuelve `{ aprobados, salteados: { repetidos, sin_rubro, sin_punto, error } }`.
+  - Con `simular: true` cuenta y no escribe nada.
+  - Tope de 1000 filas por llamada. Deja registro con structlog.
+- **En el panel:** en Importados, con un filtro de fuente puesto, aparece el botón «Aprobar en bloque».
+  - Primero muestra el resultado de la simulación («Se aprueban N; se saltean …») y pide confirmar en la misma
+    pantalla. Recién ahí aprueba.
+  - Nada se publica sin que la persona confirme.
+
+## 15. Platos típicos (Sabores {gentilicio})
+
+- **Fuente:** las notas de gastronomía de tarijaturismo.com (categorías `platos`, `reposteria-tradicional` y
+  `bebidas-tipicas`).
+  - **No se copian sus textos ni sus fotos.** Se toma el nombre del plato y el enlace.
+  - La IA escribe un texto **original**, de 2 a 3 frases en voseo, con los ingredientes y cómo se come. Recibe como
+    datos el texto de la nota y la orden de no copiar frases ni inventar datos.
+  - El texto de la nota no se guarda en la base.
+- **Costo:** usa el cliente de Gemini del proyecto, detrás de `cost_switches`, con una fila nueva `gemini_gastronomia`
+  apagada por defecto. Son unos 50 textos cortos; el comando informa cuántos pidió.
+- **Migración 0202:** tabla `platos_tipicos`:
+
+  | Columna | Tipo |
+  |---|---|
+  | `id` | uuid |
+  | `ciudad_id` | → `ciudades` |
+  | `tipo` | `plato`, `reposteria` o `bebida` |
+  | `nombre` | text |
+  | `descripcion` | text |
+  | `fuente_url` | text |
+  | `estado` | `pendiente`, `aprobado` o `rechazado` |
+  | `activo` | boolean |
+  | `created_at` / `updated_at` | timestamptz |
+
+  - RLS: anon lee solo `estado='aprobado' and activo`.
+  - service_role: select, insert y update. Sin delete (borrado lógico).
+  - `unique (ciudad_id, nombre)`.
+- **Comando:** `python -m app.services.importar_gastronomia --ciudad tarija [--simular]`. Deja todo como `pendiente`
+  y no repite lo que ya existe.
+- **Admin:** sección «Platos típicos»: lista por ciudad y estado; se puede editar nombre y texto, aprobar y rechazar.
+- **Página `/{ciudad}/sabores`:**
+  - Título «Sabores {gentilicio}».
+  - Platos, repostería y bebidas, con el nombre, el texto y la ilustración del tipo (sin fotos).
+  - Un botón «Dónde comer comida típica ›» a los restaurantes con subcategoría Boliviana / Regional / Criolla, o a
+    `restaurantes` si no hay.
+  - Fuente citada al pie: «Datos: Turismo de Tarija» con enlace.
+  - SSG + ISR. Si la ciudad no tiene platos aprobados, 404.
+
+## 16. Criterios de aceptación (parte 2)
+
+1. **Fotos de los carruseles:** usan la versión tarjeta de 800 px mejorada; el nombre va encima de la foto; no hay
+   flechas sobre las fotos en el celular; las de más calidad salen primero.
+2. **Relleno de tarjetas:** el comando arma las tarjetas de las portadas existentes sin borrar ninguna original.
+3. **Planes:** «Qué podés hacer» muestra planes ilustrados y cada uno aparece solo si hay datos. La ruta del vino
+   sale en Tarija cuando hay bodegas aprobadas.
+4. **Bodegas:** las 16 bodegas de turismo quedan con el rubro `bodegas` en Importados.
+5. **Aprobación en bloque:** simula primero, pide confirmar y aprueba por el mismo camino que de a uno, salteando
+   repetidos, sin rubro y sin punto.
+6. **Platos típicos:**
+   - quedan pendientes hasta que se aprueban;
+   - `/tarija/sabores` muestra solo los aprobados;
+   - ningún texto de tarijaturismo.com aparece copiado;
+   - con el interruptor apagado, el comando no gasta.
+7. **Calidad:** `tsc` limpio, `npm test` y pytest en verde, con tests nuevos para el puntaje de calidad, el recorte
+   4:3, los planes por datos, los gentilicios, la aprobación en bloque y la escritura de platos con Gemini simulada.
