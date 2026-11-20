@@ -323,9 +323,11 @@ test("QA §14: tras un resultado o un error, volver a empezar obliga a simular o
 });
 
 test("QA §14: el botón sale para toda fuente que el servidor acepta y manda el valor que el servidor espera", () => {
-  const literal = /fuente: Literal\[([^\]]*)\]\s*\n\s*ciudad_id/.exec(BACK("app", "api", "moderacion.py"));
-  assert.ok(literal, "no se encontró el Literal de AprobarLoteBody.fuente");
+  // Las fuentes que el servidor acepta en bloque viven en la tupla FUENTES_LOTE (las oficiales).
+  const literal = /^FUENTES_LOTE = \(([^)]*)\)/m.exec(BACK("app", "api", "moderacion.py"));
+  assert.ok(literal, "no se encontró FUENTES_LOTE en moderacion.py");
   const aceptadas = [...literal![1].matchAll(/"([a-z]+)"/g)].map((m) => m[1]);
+  assert.deepEqual([...aceptadas].sort(), ["aduana", "anh", "turismo"], "sólo las fuentes oficiales van en bloque");
   const filtros: FuenteFiltro[] = ["todas", "osm", "tarjeta", "turismo", "turismo-visitar", "overture", "anh", "aduana"];
   for (const f of filtros) {
     if (!ofreceAprobarEnBloque(f, "nuevo")) continue;
