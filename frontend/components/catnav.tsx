@@ -6,6 +6,8 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { getRubros } from "@/lib/data-client";
 import type { Rubro } from "@/lib/types";
+import { conFiltros as sumarFiltros } from "@/lib/filtros-rapidos";
+import { useFiltrosRapidos } from "@/components/home-ciudad/use-filtros-rapidos";
 
 /** Nav de categorías tipo carrusel: scroll horizontal + flechas. La flecha derecha
  * avanza y, si ya estás al final, vuelve al principio (loop). La izquierda aparece
@@ -22,8 +24,10 @@ import type { Rubro } from "@/lib/types";
  * Ahora enlaza a `?rubro=<slug>`, que es el filtro real — el diagnóstico confirmó
  * que los 36 rubros devuelven exactamente los comercios que tienen. Y al venir de
  * la base, una categoría nueva aparece sola, sin tocar código. */
-export function CatNav({ active, rubrosIniciales }: {
+export function CatNav({ active, rubrosIniciales, conFiltros = false }: {
   active?: string;
+  /** En las ciudades con interruptores («Abiertos», «Más cerca»), los enlaces de la barra los llevan puestos. */
+  conFiltros?: boolean;
   /** Los rubros leídos en el servidor: así los enlaces están en el HTML y un
    *  rastreador sin JavaScript ve la barra entera, no sólo «Todos». */
   rubrosIniciales?: Rubro[];
@@ -33,6 +37,8 @@ export function CatNav({ active, rubrosIniciales }: {
   // trescientos resultados de «Moda y ropa» con «Todos» resaltado arriba.
   // En el home no hay `?rubro`, así que ahí sigue mandando la prop.
   const sp = useSearchParams();
+  const [rapidos] = useFiltrosRapidos();
+  const href = (h: string) => (conFiltros ? sumarFiltros(h, rapidos) : h);
   const activo = sp?.get("rubro") || active;
   const soloComerciales = (rs: Rubro[]) => rs.filter((r) => r.comercial !== false);
   const [rubros, setRubros] = useState<Rubro[]>(rubrosIniciales ? soloComerciales(rubrosIniciales) : []);
@@ -84,9 +90,9 @@ export function CatNav({ active, rubrosIniciales }: {
           <button type="button" className="uk-catnav-arrow" onClick={prev} aria-label="Categorías anteriores">‹</button>
         )}
         <div className="uk-catnav-scroll" ref={ref} onScroll={update}>
-          <Link href="/buscar" className={!activo || activo === "Todos" ? "active" : ""}>Todos</Link>
+          <Link href={href("/buscar")} className={!activo || activo === "Todos" ? "active" : ""}>Todos</Link>
           {rubros.map((r) => (
-            <Link key={r.slug} href={`/buscar?rubro=${r.slug}`}
+            <Link key={r.slug} href={href(`/buscar?rubro=${r.slug}`)}
                   className={activo === r.slug ? "active" : ""}>
               {sinEmoji(r.nombre)}
             </Link>

@@ -16,16 +16,17 @@ const SECCIONES: [string, string][] = [
   ["general", "General (sólo el asistente)"], ["frontera", "Frontera"], ["documentos", "Documentos"], ["aduana", "Aduana"],
   ["comercios", "Comercios y pagos"], ["transporte", "Transporte"], ["seguridad", "Seguridad"], ["conectividad", "Chip e internet"],
 ];
-/** De qué frontera es lo que se está cargando. Vacío = todas: la aduana
+/** De qué ciudad es lo que se está cargando. Vacío = todas: la aduana
  *  boliviana o cómo funciona URUKU sirven en cualquier ciudad; las chalanas,
- *  sólo en Bermejo (0124). */
+ *  sólo en Bermejo (0124). Lista TODAS las ciudades activas, no sólo las de frontera:
+ *  Dax contesta con saber local de cada ciudad (docs/home-ciudades.md §8). */
 function SelectCiudad({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [ciudades, setCiudades] = useState<{ slug: string; nombre: string }[]>([]);
-  useEffect(() => { getCiudades().then((cs) => setCiudades(cs.filter((c) => c.es_frontera && c.activa))).catch(() => {}); }, []);
+  useEffect(() => { getCiudades().then((cs) => setCiudades(cs.filter((c) => c.activa))).catch(() => {}); }, []);
   if (ciudades.length < 2 && !value) return null;
   return (
     <select className="adm-input" style={{ width: "auto" }} value={value} onChange={(e) => onChange(e.target.value)} title="De qué ciudad es">
-      <option value="">Todas las fronteras</option>
+      <option value="">Todas las ciudades</option>
       {ciudades.map((c) => <option key={c.slug} value={c.slug}>{c.nombre}</option>)}
     </select>
   );

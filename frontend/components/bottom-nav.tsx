@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { conFiltros } from "@/lib/filtros-rapidos";
+import { useFiltrosRapidos } from "@/components/home-ciudad/use-filtros-rapidos";
 
 const ic = (d: string) => (
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
@@ -31,7 +33,34 @@ const ITEMS_SIN_GUIA = [
   { key: "Perfil", href: "/perfil", d: "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" },
 ];
 
-export function BottomNav({ active = "Mapa", conGuia = true }: { active?: string; conGuia?: boolean }) {
+// Las ciudades que no son Bermejo (docs/home-ciudades.md §8): Inicio · Mapa · Dax · Novedades · Guardados. Dax va
+// al centro, con su cara en un círculo que sobresale, y abre el panel (el evento lo escucha components/asistente.tsx).
+const ITEMS_CON_DAX = [
+  ITEMS[0], ITEMS[1], null,
+  { key: "Novedades", href: "/novedades", d: "M4 5h16v14H4zM8 9h8M8 13h8M8 17h5" },
+  { key: "Guardados", href: "/guardados", d: "M6 3h12v18l-6-4-6 4V3z" },
+];
+
+export function BottomNav({ active = "Mapa", conGuia = true, conDax = false }: { active?: string; conGuia?: boolean; conDax?: boolean }) {
+  const [rapidos] = useFiltrosRapidos();
+  if (conDax) {
+    return (
+      <nav className="bottomnav bottomnav-dax" aria-label="Navegación principal">
+        {ITEMS_CON_DAX.map((it) => it ? (
+          <Link key={it.key} href={conFiltros(it.href, rapidos)} className={`bn-item ${active === it.key ? "active" : ""}`}
+                aria-current={active === it.key ? "page" : undefined}>
+            {ic(it.d)}<span>{it.key}</span>
+          </Link>
+        ) : (
+          <button key="Dax" type="button" className="bn-item bn-dax" aria-haspopup="dialog" aria-label="Abrir Dax, tu guía"
+                  onClick={() => window.dispatchEvent(new CustomEvent("uk-abrir-ayuda"))}>
+            <img className="bn-dax-cara" src="/dax-avatar.png" alt="" width={46} height={46} />
+            <span>Dax</span>
+          </button>
+        ))}
+      </nav>
+    );
+  }
   return (
     <nav className="bottomnav">
       {(conGuia ? ITEMS : ITEMS_SIN_GUIA).map((it) => (

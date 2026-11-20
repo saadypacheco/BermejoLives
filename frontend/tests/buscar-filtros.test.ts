@@ -43,3 +43,24 @@ test("claveBusqueda: igual para la misma búsqueda, distinta si cambia algo", ()
   assert.notEqual(claveBusqueda(a), claveBusqueda(paramsDeUrl({ q: "jeans" }, "bermejo")));
   assert.notEqual(claveBusqueda(a), claveBusqueda(paramsDeUrl({ q: "jeans", rubro: "ropa" }, "tarija")));
 });
+
+// ── «Abiertos» (?abierto=1) ──────────────────────────────────────────────────
+import { soloAbiertos } from "../lib/buscar-filtros";
+
+test("soloAbiertos: deja sólo los abiertos ahora; sin horario o ilegible no cuenta como abierto", () => {
+  // Miércoles 14:00 (hora de Bolivia: el Date ya trae esos getHours/getDay).
+  const ahora = new Date(2026, 10, 18, 14, 0);
+  const lista = [
+    { id: "abierto", horario: "Lun a Sáb 9-19" },
+    { id: "cerrado", horario: "Lun a Sáb 16-20" },
+    { id: "sin-horario", horario: null },
+    { id: "ilegible", horario: "consultar por WhatsApp" },
+    { id: "domingo", horario: "Dom 9-13" },
+  ];
+  assert.deepEqual(soloAbiertos(lista, ahora).map((c) => c.id), ["abierto"]);
+});
+
+test("soloAbiertos: un boliche que cruza la medianoche está abierto a la 1 de la mañana de su noche", () => {
+  const ahora = new Date(2026, 10, 21, 1, 0); // sábado 1:00 = la noche del viernes
+  assert.deepEqual(soloAbiertos([{ horario: "Vie 22-4" }, { horario: "Sáb 22-4" }], ahora).length, 1);
+});

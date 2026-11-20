@@ -1681,7 +1681,10 @@ export type RespuestaAsistente = {
   texto: string;
   nivel: 0 | 1 | 3;
   intent: string;
-  fuentes: { tipo: "comercio" | "saber"; nombre: string; url: string; detalle?: string }[];
+  fuentes: { tipo: "comercio" | "saber"; nombre: string; url: string; detalle?: string; foto?: string | null }[];
+  /** Opcional (el servidor puede no mandarlo): a dónde lleva «Ver comercios ›». Sin él, el panel arma la
+   *  búsqueda con lo que la persona escribió. */
+  ver_url?: string | null;
   sugerencias: string[];
   sin_respuesta: boolean;
   /** Sólo en el chatbot de un comercio, cuando no supo contestar y el local

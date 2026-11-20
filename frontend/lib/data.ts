@@ -4,6 +4,9 @@ import type { FiltrosDisponibles, Volumenes, Cotizacion, Clima, VideoPromo, Red,
 import { UMBRALES } from "@/lib/data-pure";
 import { conMemoriaTtl } from "@/lib/memoria-ttl";
 import { desdeConteo, filtroSinNoComerciales, idsRubrosNoComerciales } from "@/lib/comercios-nuevos-pure";
+import { climaVigente, type ClimaCiudad } from "@/lib/clima-ciudad-pure";
+import type { ComercioDeLaCiudad, FotosQueHacer, RubroCatalogo } from "@/lib/home-ciudad-pure";
+import type { FilaProducto } from "@/lib/home-productos-pure";
 
 export * from "@/lib/data-pure";
 import type { Adorno } from "@/lib/adornos";
@@ -618,6 +621,22 @@ export async function getClima(): Promise<Clima | null> {
   const { data } = await supabase.from("clima").select("temp_c, descripcion, icono").eq("id", 1).limit(1);
   return (data?.[0] as Clima) ?? null;
 }
+/**
+ * El clima de OTRA ciudad que no es Bermejo (tabla `clima_ciudades`, migración 0201; la refresca el backend
+ * cada 30 minutos). `null` si no hay dato, si tiene más de 3 horas o si la tabla todavía no existe (la
+ * migración se aplica antes que el deploy, pero este lector no tiene que romper nada si no): nunca tira.
+ */
+export async function getClimaCiudad(ciudadId: string | null | undefined, ahora: Date = new Date()): Promise<ClimaCiudad | null> {
+  if (!hasSupabase || !ciudadId) return null;
+  try {
+    const { data, error } = await supabase.from("clima_ciudades")
+      .select("temp_c, descripcion, actualizado_en").eq("ciudad_id", ciudadId).limit(1);
+    if (error) return null;
+    return climaVigente((data as { temp_c: unknown; descripcion: unknown; actualizado_en: unknown }[] | null)?.[0], ahora);
+  } catch {
+    return null;
+  }
+}
 export async function getRedes(): Promise<Red[]> {
   if (!hasSupabase) return [];
   const { data } = await supabase.from("redes_sociales").select("clave, etiqueta, url, orden").order("orden");
@@ -1060,4 +1079,75 @@ export async function getBusinessesForSitemap(): Promise<NegocioSitemap[] | null
     return null;
   }
   return out;
+}
+
+// ── El home de las ciudades (docs/home-ciudades.md) ─────────────────────────
+
+/** Los productos cargados (tabla `productos`: activos, con foto, de comercios activos y no suspendidos de la
+ *  ciudad), los más nuevos primero. `[]` ante cualquier error: el carrusel usa el respaldo de los textos. */
+async function getProductosCiudad(ciudadId: string, limit = 12): Promise<FilaProducto[]> {
+  try {
+    const { data, error } = await supabase.from("productos")
+      .select("id, nombre, precio, moneda, foto_url, comercio:comercios!inner(slug, nombre, ciudad_id, activo, suspendido)")
+      .eq("activo", true).not("foto_url", "is", null)
+      .eq("comercio.ciudad_id", ciudadId).eq("comercio.activo", true).eq("comercio.suspendido", false)
+      .order("created_at", { ascending: false }).limit(limit);
+    if (error) return [];
+    return (data ?? []) as unknown as FilaProducto[];
+  } catch {
+    return [];
+  }
+}
+
+export type DatosHomeCiudad = {
+  /** Los comercios de la ciudad (hasta 500, los de plan primero): de ahí salen las tarjetas de productos, los
+   *  productos frecuentes y los candidatos del carrusel. */
+  comercios: ComercioDeLaCiudad[];
+  productos: FilaProducto[];
+  fotos: FotosQueHacer;
+  catalogo: RubroCatalogo[];
+};
+
+const memoHomeCiudad = new Map<string, { hasta: number; valor: DatosHomeCiudad }>();
+
+/** Todo lo que el home de una ciudad lee, recordado 5 minutos por ciudad: la portada es dinámica y no tiene que
+ *  pegarle a la base con cinco consultas en cada visita. `rubros` son los rubros con comercios de la ciudad:
+ *  sólo se buscan fotos de los bloques que la ciudad tiene. Un fallo no se recuerda y devuelve vacío. */
+export async function getHomeCiudad(
+  ciudad: { id: string; slug: string }, rubros: ReadonlySet<string> | null,
+): Promise<DatosHomeCiudad> {
+  const clave = `${ciudad.slug}|${rubros ? [...rubros].sort().join(",") : "-"}`;
+  const hoy = Date.now();
+  const guardado = memoHomeCiudad.get(clave);
+  if (guardado && hoy < guardado.hasta) return guardado.valor;
+  const vacio: DatosHomeCiudad = { comercios: [], productos: [], fotos: { visitar: null, nocturna: null, restaurantes: null, plazaParque: [] }, catalogo: [] };
+  if (!hasSupabase) return vacio;
+  try {
+    const tiene = (r: string) => rubros !== null && rubros.has(r);
+    const primeraFoto = (l: ResultadoBusqueda[]): string | null => l.find((c) => c.portada_thumb_url)?.portada_thumb_url ?? null;
+    const [comercios, productos, catalogo, visitar, nocturna, restaurantes, plaza, parque] = await Promise.all([
+      buscarComercios({ ciudad: ciudad.slug }, 500, 0),
+      getProductosCiudad(ciudad.id),
+      getRubros(),
+      tiene("para-visitar") ? buscarComercios({ ciudad: ciudad.slug, rubro: "para-visitar" }, 40, 0) : Promise.resolve([]),
+      tiene("nocturna") ? buscarComercios({ ciudad: ciudad.slug, rubro: "nocturna" }, 40, 0) : Promise.resolve([]),
+      tiene("restaurantes") ? buscarComercios({ ciudad: ciudad.slug, rubro: "restaurantes" }, 40, 0) : Promise.resolve([]),
+      tiene("para-visitar") ? buscarComercios({ ciudad: ciudad.slug, rubro: "para-visitar", subcategoria: "Plaza" }, 20, 0) : Promise.resolve([]),
+      tiene("para-visitar") ? buscarComercios({ ciudad: ciudad.slug, rubro: "para-visitar", subcategoria: "Parque" }, 20, 0) : Promise.resolve([]),
+    ]);
+    const plazaParque: FotosQueHacer["plazaParque"] = [];
+    if (plaza.length > 0) plazaParque.push({ sub: "Plaza", foto: primeraFoto(plaza) });
+    if (parque.length > 0) plazaParque.push({ sub: "Parque", foto: primeraFoto(parque) });
+    const valor: DatosHomeCiudad = {
+      comercios,
+      productos,
+      catalogo: catalogo.map((r) => ({ slug: r.slug, nombre: r.nombre, comercial: r.comercial })),
+      fotos: { visitar: primeraFoto(visitar), nocturna: primeraFoto(nocturna), restaurantes: primeraFoto(restaurantes), plazaParque },
+    };
+    // Una lectura que vino toda vacía no se recuerda: casi seguro fue un fallo, y la próxima visita reintenta.
+    if (comercios.length > 0) memoHomeCiudad.set(clave, { hasta: hoy + 5 * 60_000, valor });
+    return valor;
+  } catch {
+    return vacio;
+  }
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import "@/app/uruku.css";
+import "@/app/styles/home-ciudad.css";
 import { ThemeToggle, ThemeNoFlash, POR_DEFECTO } from "@/components/uruku-theme";
 import { CitySelector } from "@/components/city-selector";
 import { IngresarMenu } from "@/components/ingresar-menu";
@@ -12,7 +13,10 @@ import { SocialLinks, money } from "@/components/uruku-ui";
 import { WA_URUKU_TEXTO, waUruku } from "@/lib/contacto";
 import { Ic, climaIcono } from "@/components/ic";
 import { MicrofonoBusqueda } from "@/components/microfono-busqueda";
-import { getCiudades, getCityCategoryPagesCached, getClima, getCotizaciones, getRedes, getRubros } from "@/lib/data";
+import { getCiudades, getCityCategoryPagesCached, getClima, getClimaCiudad, getCotizaciones, getRedes, getRubros } from "@/lib/data";
+import { rubrosDeCiudad } from "@/lib/accesos-ciudad";
+import { FiltrosRapidosToggles } from "@/components/home-ciudad/filtros-rapidos-toggles";
+import { CamposFiltrosBusqueda } from "@/components/home-ciudad/campos-filtros-busqueda";
 import { ciudadActual } from "@/lib/ciudad-server";
 import { CambioArsProvider } from "@/components/precio-ars";
 import { tasasDe } from "@/lib/cambio";
@@ -21,11 +25,11 @@ import { versionLabel } from "@/lib/version";
 import { URUKU_SVG } from "@/lib/adornos";
 import { LEGAL_PUBLICADO } from "@/lib/legal-pure";
 
-/** Los slugs de las ciudades con alguna página indexable (pie «Ciudades»). Salen de
- *  `getCityCategoryPagesCached`: el pie está en casi todas las páginas y no vale una
- *  consulta a la base por cada una (la memoria y su regla del build viven ahí). */
-async function slugsCiudadesIndexables(): Promise<ReadonlySet<string>> {
-  return new Set((await getCityCategoryPagesCached()).filter((p) => p.indexable).map((p) => p.city_slug));
+/** Los pares ciudad-rubro con comercios (`getCityCategoryPagesCached`: el pie y Dax están en casi todas las
+ *  páginas y no vale una consulta a la base por cada una; la memoria y su regla del build viven ahí). De acá
+ *  salen las ciudades con alguna página indexable (pie «Ciudades») y los rubros que Dax puede sugerir. */
+async function paresDeCiudades(necesarios: boolean) {
+  return necesarios ? getCityCategoryPagesCached() : [];
 }
 
 /** Lo mismo que `ciudadActual()` pero con la ciudad dada y sin tocar cookies. */
@@ -75,15 +79,22 @@ export async function UrukuShell({
    *  sigue listando todas. */
   fixedCity?: Ciudad;
 }) {
-  const [{ ciudad, ciudades }, clima, cotizaciones, redes, slugsIndexables, rubrosNav] = await Promise.all([
+  const [{ ciudad, ciudades }, clima, cotizaciones, redes, pares, rubrosNav] = await Promise.all([
     fixedCity ? ciudadFija(fixedCity) : ciudadActual(), getClima(), getCotizaciones(), getRedes(),
-    showFooter && !fill ? slugsCiudadesIndexables() : Promise.resolve<ReadonlySet<string>>(new Set()),
+    paresDeCiudades((showFooter && !fill) || asistente !== false),
     // Los rubros de la barra, en el HTML del servidor (no los arma el navegador).
     showCatnav ? getRubros().catch(() => []) : Promise.resolve([]),
   ]);
   // Pie «Ciudades»: sólo las que tienen una página que se indexa (enlace interno
   // a /{ciudad}). Sin ninguna, el bloque no aparece.
+  const slugsIndexables = new Set(pares.filter((p) => p.indexable).map((p) => p.city_slug));
   const ciudadesPie = ciudades.filter((c) => c.activa && slugsIndexables.has(c.slug));
+  // El encabezado, la barra de abajo y el home nuevos son de toda ciudad que NO es Bermejo (docs/home-ciudades.md §1).
+  const esBermejo = (ciudad?.slug ?? "bermejo") === "bermejo";
+  const climaCiudad = esBermejo ? null : await getClimaCiudad(ciudad?.id);
+  // Los rubros con comercios de la ciudad: Dax sólo sugiere lo que la ciudad puede contestar.
+  const rubrosCiudad = rubrosDeCiudad(pares, ciudad?.slug);
+  const rubrosAsistente = rubrosCiudad ? [...rubrosCiudad] : null;
   const nombre = ciudad?.nombre ?? "tu ciudad";
   // Dos preguntas distintas. `esFrontera` (columna de la ciudad): si el
   // peso argentino le importa. `conGuia`: si lo que hoy está cargado —la
@@ -103,7 +114,7 @@ export async function UrukuShell({
   // Sin clima ni cotización la tira no se dibuja: vacía, en el celular dejaba un
   // renglón de aire entre el logo y el buscador.
   const arsPorBs = esFrontera && (ciudad?.moneda_vecina ?? "ARS") === "ARS" ? tasasDe(cotizaciones).ars_bob : null;
-  const hayTira =(conGuia && clima?.temp_c != null) || cot2.length > 0;
+  const hayTira = esBermejo && ((conGuia && clima?.temp_c != null) || cot2.length > 0);
 
   const showFoot = showFooter && !fill;
 
@@ -113,7 +124,7 @@ export async function UrukuShell({
 
       {/* Header: fila 1 = logo + ciudad + Ingresar + tema · fila 2 = redes + clima +
           cotización · fila 3 = buscador */}
-      <header className="uk-header">
+      <header className={`uk-header${esBermejo ? "" : " uk-header-ciudad"}`}>
         <div className="uk-container uk-headwrap">
           {/* Una sola fila en compu y tablet: logo · redes y cotización al
               centro · ciudad e Ingresar. Eran dos filas y la segunda estaba
@@ -156,25 +167,48 @@ export async function UrukuShell({
 
             <div className="uk-head-actions">
               <CitySelector actual={ciudad} ciudades={ciudades} />
+              {/* El clima de la ciudad (migración 0201): sin dato, o con más de 3 horas, no se dibuja nada. */}
+              {!esBermejo && climaCiudad && (
+                <span className="uk-top-item uk-clima-ciudad" title={climaCiudad.descripcion ?? "Clima"}>
+                  <Ic n={climaIcono(climaCiudad.descripcion)} s={16} /> {Math.round(climaCiudad.temp_c)}°
+                </span>
+              )}
               <IngresarMenu />
               <ThemeToggle iconOnly />
             </div>
           </div>
 
+          {/* Fila 2 de las ciudades: los interruptores «Abiertos» y «Más cerca» y la cotización (el dólar siempre;
+              la moneda vecina sólo si la ciudad es de frontera, como hoy). */}
+          {!esBermejo && (
+            <div className="uk-head-fila2">
+              <FiltrosRapidosToggles />
+              {cot2.length > 0 && (
+                <div className="uk-cotiz">
+                  {cot2.map((c) => (
+                    <Link key={c.clave} href="/buscar?rubro=cambio&vista=mapa" className="uk-top-item" title="Casas de cambio en el mapa">{c.detalle} = <b>{money(c.valor)}</b> {c.unidad}</Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {showSearch && (
           <form className="uk-search" action="/buscar" method="get">
             <Ic n="buscar" />
             <input name="q" placeholder="Probá: zapatillas, celulares, farmacia" aria-label="Buscar: por ejemplo zapatillas, celulares o farmacia" />
+            {!esBermejo && <CamposFiltrosBusqueda />}
             <MicrofonoBusqueda />
             <button type="submit">Buscar</button>
           </form>
           )}
+
         </div>
 
         {/* En Suspense porque CatNav lee el rubro de la URL
             (useSearchParams): sin el límite, TODA la página se renderiza del
             lado del cliente y se pierde el HTML del servidor. */}
-        {showCatnav && <Suspense fallback={null}><CatNav active={activeCat} rubrosIniciales={rubrosNav} /></Suspense>}
+        {showCatnav && <Suspense fallback={null}><CatNav active={activeCat} rubrosIniciales={rubrosNav} conFiltros={!esBermejo} /></Suspense>}
       </header>
 
       <main className={`${fill ? "uk-fill-main" : ""}${mainClass ? " " + mainClass : ""}`.trim() || undefined}>
@@ -257,10 +291,12 @@ export async function UrukuShell({
       )}
 
       {!fill && <div style={{ height: 20 }} />}
-      <BottomNav active={activeNav ?? ""} conGuia={conGuia} />
+      <BottomNav active={activeNav ?? ""} conGuia={conGuia} conDax={!esBermejo && asistente !== false} />
       {asistente !== false && (
         <Asistente comercio={asistente || undefined}
-                   ciudad={ciudad ? { slug: ciudad.slug, nombre: ciudad.nombre, con_guia: conGuia } : undefined} />
+                   ciudad={ciudad ? { slug: ciudad.slug, nombre: ciudad.nombre, con_guia: conGuia } : undefined}
+                   rubros={rubrosAsistente}
+                   flotanteMovil={esBermejo} />
       )}
     </div>
   );

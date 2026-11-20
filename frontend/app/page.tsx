@@ -6,12 +6,18 @@ import { UnirmeComunidad } from "@/components/unirme-comunidad";
 import { ContactoUruku } from "@/components/contacto-uruku";
 import { AccesosCiudad } from "@/components/accesos-ciudad";
 import { accesoConComercios, rubrosDeCiudad } from "@/lib/accesos-ciudad";
+import { IntencionesCiudad } from "@/components/home-ciudad/intenciones-ciudad";
+import { CarruselProductos } from "@/components/home-ciudad/carrusel-productos";
+import { CarruselComercios } from "@/components/home-ciudad/carrusel-comercios";
+import { QueHacer } from "@/components/home-ciudad/que-hacer";
+import { candidatosCarrusel, franjaAhora, intencionesDeCiudad, tilesQueHacer } from "@/lib/home-ciudad-pure";
+import { productosFrecuentes, tarjetasDeLocales, tarjetasDeProductos } from "@/lib/home-productos-pure";
 import { VisitaCiudad } from "@/components/visita-ciudad";
 import { cargarVisitaCiudadOpcional, resumenDe } from "@/lib/turismo-ciudad";
 import { accesosVisita, mostrarVisitaCiudad } from "@/lib/turismo-ciudad-pure";
 import { FECHA_LANZAMIENTO, faltaParaLanzamiento } from "@/lib/lanzamiento";
 import {
-  getCiudades, getCityCategoryPagesCached, getClima, getComerciosNuevos, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado,
+  getCiudades, getCityCategoryPagesCached, getClima, getComerciosNuevos, getHomeCiudad, getCotizaciones, getFarmaciasDeTurnoAhora, getFeed, getFronteraEstado,
   getNovedadesUruku, getPublicaciones, getRedes, getVideosPromo,
 } from "@/lib/data";
 import { JsonLd } from "@/components/json-ld";
@@ -201,6 +207,9 @@ export default async function InicioPage() {
   const nombre = ciudad?.nombre ?? "Bermejo";
   // Los rubros con comercios en la ciudad: un acceso o una tarjeta que abre un mapa vacío no sale.
   const rubros = rubrosDeCiudad(paresCiudad, ciudad?.slug);
+  // Lo que lee el home de las ciudades (productos, comercios de la franja, fotos de «Qué podés hacer»): una memoria
+  // de 5 minutos por ciudad. Bermejo no lo usa.
+  const datosCiudad = !conGuia && ciudad ? await getHomeCiudad({ id: ciudad.id, slug: ciudad.slug }, rubros) : null;
   const servicios = (conGuia ? SERVICIOS : SERVICIOS_SIN_GUIA).filter((s) => accesoConComercios(s.href, rubros));
   // La foto del hero es de la ciudad; sin foto propia, la de Bermejo sólo en
   // Bermejo. Otra ciudad sin foto va con el fondo liso, no con el río de otra.
@@ -234,6 +243,131 @@ export default async function InicioPage() {
   const t = tasasDe(cotizaciones);
   const fechas = [frontera?.actualizado_en, t.actualizado_en].filter(Boolean) as string[];
   const ultima = fechas.length ? fechas.sort()[fechas.length - 1] : null;
+
+  // «Novedades» del home de las ciudades: sólo si hay novedades (la farmacia de turno pasa al panel de Farmacias).
+  const mostrarNovedades = conGuia ? hayNovedades : novUruku.length + novComerciosVisibles.length > 0;
+
+  // Las secciones que comparten el home de Bermejo y el de las demás ciudades.
+  const seccionOfertas = hayOfertas && (
+        <section className="uk-container uk-home-sec">
+          <div className="uk-section-head">
+            <h2>
+              Ofertas destacadas{" "}
+              <small>De comercios de {nombre}.</small>
+            </h2>
+            <Link href="/ofertas">Ver más ofertas →</Link>
+          </div>
+          {/* Grilla de cuatro, fija. Probé que las columnas siguieran a cuántas
+              publicaciones hay y con una sola quedaba una tarjeta enorme que se
+              leía como un banner, no como la primera de una lista. El tamaño no
+              era el problema: era que el texto no se veía. */}
+          <div className="uk-offers">
+            {cards.map((o) => <OfertaCard key={o.id} o={o} />)}
+          </div>
+        </section>
+      );
+
+  const seccionVencen = porVencer.length > 0 && (
+        <section className="uk-container uk-home-sec" aria-labelledby="home-vencen">
+          <div className="uk-section-head">
+            <h2 id="home-vencen">{tituloVencen(porVencer, ahora)} <small>Últimos días para aprovecharlas.</small></h2>
+            <Link href="/ofertas">Ver las ofertas →</Link>
+          </div>
+          <CarruselNovedades>
+            {porVencer.map((o) => <OfertaCard key={o.id} o={o} tag={etiquetaVence(o.vence_el, ahora) ?? undefined} />)}
+          </CarruselNovedades>
+        </section>
+      );
+
+  const seccionDestacados = tarjetasDestacadas.length > 0 && (
+        <section className="uk-container uk-home-sec" aria-labelledby="home-destacados">
+          <div className="uk-section-head">
+            <h2 id="home-destacados">Comercios destacados <small>Locales de {nombre} para conocer.</small></h2>
+            <Link href="/buscar">Ver todos los comercios →</Link>
+          </div>
+          <CarruselNovedades>
+            {tarjetasDestacadas}
+          </CarruselNovedades>
+        </section>
+      );
+
+  const seccionNovedades = mostrarNovedades && (
+        <section className="uk-container uk-home-sec">
+          <div className="uk-section-head">
+            <h2>
+              Novedades{" "}
+              <small>{novUruku.length > 0 ? `De URUKU y de los comercios de ${nombre}.` : `De los comercios de ${nombre}.`}</small>
+            </h2>
+            <Link href="/novedades">Ver todas las novedades →</Link>
+          </div>
+          <CarruselNovedades>
+            {novUruku.map((n) => <NovedadUrukuCard key={n.id} n={n} />)}
+            {novComerciosVisibles.map((o) => (
+              <Link key={o.id} href={`/comercios/${o.comercio_slug}`}
+                className={`uk-offer${o.imagen_url ? "" : " sin-foto"}`}
+                style={o.imagen_url ? { backgroundImage: `url('${o.imagen_url}')` } : undefined}>
+                <span className="uk-offer-tag">{o.zona_nombre || o.comercio_nombre}</span>
+                {!o.imagen_url && <span className="uk-offer-emoji"><IcRubro slug={o.rubro_slug} s={64} peso="fill" /></span>}
+                <div className="uk-offer-body">
+                  <h3>{o.titulo}</h3>
+                  <small>{o.comercio_nombre}</small>
+                </div>
+              </Link>
+            ))}
+            {tarjetasServicios({ turnos: conGuia ? turnosHoy : null, conGuia })}
+          </CarruselNovedades>
+        </section>
+      );
+
+  const seccionCiudades = ciudadesIndexables.length > 0 && (
+        <section className="uk-container uk-home-sec" aria-labelledby="home-ciudades">
+          <div className="uk-section-head"><h2 id="home-ciudades">Ciudades <small>Los comercios de cada ciudad, por rubro.</small></h2></div>
+          <div className="uk-guia-chips">
+            {ciudadesIndexables.map((p) => (
+              <Link key={p.city_slug} href={cityPath(p.city_slug)}><Ic n="ciudad" s={16} /> {p.city_name}</Link>
+            ))}
+          </div>
+        </section>
+      );
+
+  // ===== El home de las ciudades (todas menos Bermejo): docs/home-ciudades.md §2 =====
+  // Bermejo conserva el suyo, más abajo. Las dos mitades comparten las secciones de ofertas, destacados,
+  // novedades y ciudades (las constantes de arriba).
+  if (!conGuia && ciudad && datosCiudad) {
+    const franja = franjaAhora(ahora);
+    const catalogo = datosCiudad.catalogo;
+    const comerciales = new Set(catalogo.filter((r) => r.comercial !== false).map((r) => r.slug));
+    // «Lo que se consigue»: la tabla `productos` si la ciudad tiene 4 o más con foto; si no, los textos de cada local.
+    const desdeTabla = tarjetasDeProductos(datosCiudad.productos);
+    const tarjetasProductos = desdeTabla.length > 0 ? desdeTabla : tarjetasDeLocales(datosCiudad.comercios);
+    const intenciones = intencionesDeCiudad({
+      franja, ciudadSlug: ciudad.slug, rubros, catalogo, hayTurnos: (turnosHoy ?? []).length > 0,
+      productosFrecuentes: productosFrecuentes(datosCiudad.comercios),
+    });
+    const carrusel = candidatosCarrusel(datosCiudad.comercios, franja, ciudad.nombre, comerciales);
+    const bloqueProductos = <CarruselProductos tarjetas={tarjetasProductos} ciudad={ciudad.nombre} />;
+    const bloqueQueHacer = <QueHacer tiles={tilesQueHacer(rubros, datosCiudad.fotos)} ciudad={ciudad.nombre} />;
+    return (
+      <UrukuShell activeCat="Todos" activeNav="Inicio">
+        <JsonLd data={datosMarca} />
+        <IntencionesCiudad intenciones={intenciones} />
+        <div className="uk-container">
+          <p className="uk-home-nuevos"><span aria-hidden="true" />{lineaComerciosNuevos(comerciosNuevos)}</p>
+        </div>
+        {/* A la noche (19 a 24 h), «Qué podés hacer» pasa arriba de los productos. */}
+        {franja === "noche" ? <>{bloqueQueHacer}{bloqueProductos}</> : <>{bloqueProductos}{bloqueQueHacer}</>}
+        <CarruselComercios candidatos={carrusel.items} titulo={carrusel.titulo} subtitulo={carrusel.subtitulo}
+                           verTodos={carrusel.verTodos} ciudad={ciudad.nombre} ahoraIso={ahora.toISOString()} />
+        {seccionOfertas}
+        {seccionVencen}
+        {seccionDestacados}
+        {seccionNovedades}
+        <VideosUruku videos={videosUruku} recorridos={videos} nombre={nombre} />
+        <ContactoUruku />
+        {seccionCiudades}
+      </UrukuShell>
+    );
+  }
 
   return (
     <UrukuShell activeCat="Todos" activeNav="Inicio">
@@ -390,79 +524,16 @@ export default async function InicioPage() {
           </p>
         </section>
       )}
-      {hayOfertas && (
-        <section className="uk-container uk-home-sec">
-          <div className="uk-section-head">
-            <h2>
-              Ofertas destacadas{" "}
-              <small>De comercios de {nombre}.</small>
-            </h2>
-            <Link href="/ofertas">Ver más ofertas →</Link>
-          </div>
-          {/* Grilla de cuatro, fija. Probé que las columnas siguieran a cuántas
-              publicaciones hay y con una sola quedaba una tarjeta enorme que se
-              leía como un banner, no como la primera de una lista. El tamaño no
-              era el problema: era que el texto no se veía. */}
-          <div className="uk-offers">
-            {cards.map((o) => <OfertaCard key={o.id} o={o} />)}
-          </div>
-        </section>
-      )}
+      {seccionOfertas}
 
       {/* ===== Vencen hoy: las ofertas que terminan hoy o mañana (hora de Bolivia) ===== */}
-      {porVencer.length > 0 && (
-        <section className="uk-container uk-home-sec" aria-labelledby="home-vencen">
-          <div className="uk-section-head">
-            <h2 id="home-vencen">{tituloVencen(porVencer, ahora)} <small>Últimos días para aprovecharlas.</small></h2>
-            <Link href="/ofertas">Ver las ofertas →</Link>
-          </div>
-          <CarruselNovedades>
-            {porVencer.map((o) => <OfertaCard key={o.id} o={o} tag={etiquetaVence(o.vence_el, ahora) ?? undefined} />)}
-          </CarruselNovedades>
-        </section>
-      )}
+      {seccionVencen}
 
       {/* ===== Comercios destacados: su propio carrusel, fuera de Novedades ===== */}
-      {tarjetasDestacadas.length > 0 && (
-        <section className="uk-container uk-home-sec" aria-labelledby="home-destacados">
-          <div className="uk-section-head">
-            <h2 id="home-destacados">Comercios destacados <small>Locales de {nombre} para conocer.</small></h2>
-            <Link href="/buscar">Ver todos los comercios →</Link>
-          </div>
-          <CarruselNovedades>
-            {tarjetasDestacadas}
-          </CarruselNovedades>
-        </section>
-      )}
+      {seccionDestacados}
 
       {/* ===== Novedades: las de URUKU primero, después las de los comercios ===== */}
-      {hayNovedades && (
-        <section className="uk-container uk-home-sec">
-          <div className="uk-section-head">
-            <h2>
-              Novedades{" "}
-              <small>{novUruku.length > 0 ? `De URUKU y de los comercios de ${nombre}.` : `De los comercios de ${nombre}.`}</small>
-            </h2>
-            <Link href="/novedades">Ver todas las novedades →</Link>
-          </div>
-          <CarruselNovedades>
-            {novUruku.map((n) => <NovedadUrukuCard key={n.id} n={n} />)}
-            {novComerciosVisibles.map((o) => (
-              <Link key={o.id} href={`/comercios/${o.comercio_slug}`}
-                className={`uk-offer${o.imagen_url ? "" : " sin-foto"}`}
-                style={o.imagen_url ? { backgroundImage: `url('${o.imagen_url}')` } : undefined}>
-                <span className="uk-offer-tag">{o.zona_nombre || o.comercio_nombre}</span>
-                {!o.imagen_url && <span className="uk-offer-emoji"><IcRubro slug={o.rubro_slug} s={64} peso="fill" /></span>}
-                <div className="uk-offer-body">
-                  <h3>{o.titulo}</h3>
-                  <small>{o.comercio_nombre}</small>
-                </div>
-              </Link>
-            ))}
-            {tarjetasServicios({ turnos: turnosHoy, conGuia })}
-          </CarruselNovedades>
-        </section>
-      )}
+      {seccionNovedades}
 
       {/* ===== Videos: UNA sola sección, con los de las redes de URUKU y los recorridos de la ciudad
           (antes eran dos: «Videos de URUKU» y «Recorrimos Bermejo»). Sin ninguno no dibuja nada. ===== */}
@@ -486,16 +557,8 @@ export default async function InicioPage() {
       )}
 
       {/* ===== Ciudades (sólo las que tienen páginas para indexar) ===== */}
-      {ciudadesIndexables.length > 0 && (
-        <section className="uk-container uk-home-sec" aria-labelledby="home-ciudades">
-          <div className="uk-section-head"><h2 id="home-ciudades">Ciudades <small>Los comercios de cada ciudad, por rubro.</small></h2></div>
-          <div className="uk-guia-chips">
-            {ciudadesIndexables.map((p) => (
-              <Link key={p.city_slug} href={cityPath(p.city_slug)}><Ic n="ciudad" s={16} /> {p.city_name}</Link>
-            ))}
-          </div>
-        </section>
-      )}
+      {seccionCiudades}
+
     </UrukuShell>
   );
 }

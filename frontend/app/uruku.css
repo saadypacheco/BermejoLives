@@ -1129,8 +1129,8 @@
   font-weight: 800; font-size: 14px; cursor: pointer; box-shadow: 0 8px 24px rgba(0,0,0,.22); }
 .uk-ayuda-btn.abierto { width: 44px; height: 44px; padding: 0; justify-content: center; font-size: 22px; line-height: 1; }
 .uk-ayuda-btn:hover { filter: brightness(1.06); }
-.uk-ayuda { position: fixed; right: 14px; bottom: 74px; z-index: 55; width: min(380px, calc(100vw - 28px));
-  max-height: min(70vh, 620px); display: flex; flex-direction: column; background: var(--uk-surface);
+.uk-ayuda { position: fixed; right: 14px; bottom: 18px; z-index: 70; width: min(380px, calc(100vw - 28px));
+  max-height: min(78vh, 680px); display: flex; flex-direction: column; background: var(--uk-surface);
   color: var(--uk-ink); border: 1px solid var(--uk-line); border-radius: var(--uk-radius); box-shadow: 0 16px 48px rgba(0,0,0,.28); overflow: hidden; }
 .uk-ayuda-cab { padding: 12px 14px; border-bottom: 1px solid var(--uk-line); display: flex; flex-direction: column; gap: 2px; }
 .uk-ayuda-cab b { font-size: 14.5px; }
@@ -1163,9 +1163,8 @@
 .uk-ayuda-form button { padding: 0 14px; border: 0; border-radius: var(--uk-radius-btn); background: var(--uk-green); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
 .uk-ayuda-form button:disabled { opacity: .5; cursor: default; }
 @media (max-width: 900px) {
-  /* La barra de abajo mide ~64px: el botón y el panel van arriba de ella. */
+  /* La barra de abajo mide ~64px: el botón va arriba de ella. El panel es una hoja desde abajo (styles/home-ciudad.css). */
   .uk-ayuda-btn { bottom: 78px; }
-  .uk-ayuda { bottom: 132px; max-height: min(62vh, 560px); }
 }
 
 /* El botón "dónde estoy" del mapa: mismo tamaño y estilo que el + y el − de

@@ -4,6 +4,7 @@
 // servidor no coincidiría con la que el cliente espera y se pediría dos veces.
 //
 // Módulo puro: sin base, sin React. Lo importan tanto el servidor como el cliente.
+import { abiertoAhora, ahoraEnBolivia } from "./horario";
 import { detectarServicio, SERVICIOS } from "./servicios";
 import type { FiltrosBusqueda, ResultadoBusqueda } from "./types";
 
@@ -63,4 +64,11 @@ export function paramsDeUrl(
     ciudad: s.ciudad === undefined ? ciudadDelSelector : uno(s.ciudad),
     precioMax: uno(s.precio_max),
   };
+}
+
+/** El filtro «Abiertos» (`?abierto=1`): sólo los comercios con `abiertoAhora(horario).estado === "abierto"`, el mismo
+ *  criterio que usa `app/guia/page.tsx`. Un horario que falta o no se entiende NO cuenta como abierto: mandar a
+ *  alguien a una puerta cerrada le cuesta la confianza a URUKU. */
+export function soloAbiertos<T extends { horario: string | null }>(lista: readonly T[], ahora: Date = ahoraEnBolivia()): T[] {
+  return lista.filter((c) => !!c.horario && abiertoAhora(c.horario, ahora).estado === "abierto");
 }

@@ -10,7 +10,8 @@
 //      más lejos. Sin ubicación, al final de todo el grupo.
 //   3. Dentro de cada franja, primero los de estrella (el plan más caro arriba)
 //      y después por distancia, el más cercano primero.
-import { abiertoAhora, ahoraEnBolivia } from "@/lib/horario";
+// Import relativo: los tests (`npm test`) cargan este módulo con Node, que no entiende el alias `@/`.
+import { abiertoAhora, ahoraEnBolivia } from "./horario";
 
 export const FRANJA_CERCA_M = 300;
 export const FRANJA_MEDIA_M = 1000;

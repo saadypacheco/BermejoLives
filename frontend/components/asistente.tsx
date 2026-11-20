@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { marcarUtilAsistente, preguntarAsistente, type RespuestaAsistente } from "@/lib/api";
 import { Ic } from "@/components/ic";
 import { WaLeadLink } from "@/components/wa-lead-link";
+import { rutaInternaSegura } from "@/lib/ruta-interna";
+import { useHoja } from "@/components/home-ciudad/use-hoja";
+import { bienvenidaDax, consultaDeBusqueda, franjaAhora, sugerenciasDeFranja } from "@/lib/home-ciudad-pure";
 
 /**
  * Uruku Ayuda: el botón de abajo a la derecha y el panel de chat.
@@ -14,12 +17,17 @@ import { WaLeadLink } from "@/components/wa-lead-link";
  * los datos del local. Quién puede tenerlo lo decide el servidor: si el plan no
  * lo incluye, el pedido vuelve con 403 y el panel lo dice.
  *
+ * El panel (docs/home-ciudades.md §8): en el celular es una hoja que sube desde abajo (64 % del alto) con
+ * «× Cerrar» arriba; se cierra con el velo, la rayita, Escape y el «atrás» del teléfono. En la compu es un panel
+ * a la derecha. El botón flotante se esconde mientras está abierto; en las ciudades sin Bermejo no hay botón
+ * flotante en el celular (Dax vive en la barra de abajo y abre el panel con el evento `uk-abrir-ayuda`).
+ *
  * La sesión es un id guardado en el navegador. Sirve para el tope de
  * preguntas por día y para nada más: no identifica a nadie.
  */
 type Mensaje =
   | { de: "yo"; texto: string }
-  | { de: "uruku"; texto: string; id?: string; fuentes?: RespuestaAsistente["fuentes"]; sugerencias?: string[]; util?: boolean | null; error?: boolean;
+  | { de: "uruku"; texto: string; id?: string; pregunta?: string; verUrl?: string | null; fuentes?: RespuestaAsistente["fuentes"]; sugerencias?: string[]; util?: boolean | null; error?: boolean;
       derivar?: RespuestaAsistente["derivar"] };
 
 /** DAX: la cara del chat. Es la misma del volante y de los videos — que el
@@ -33,7 +41,6 @@ type Mensaje =
 const MASCOTA = { imagen: "/dax-avatar.png", grande: "/dax-avatar.png", nombre: "Dax" };
 
 const CLAVE_SESION = "uk-ayuda-sesion";
-const CLAVE_ABIERTO = "uk-ayuda-abierto";
 
 function sesionId(): string {
   try {
@@ -51,7 +58,14 @@ function sesionId(): string {
 const SUGERENCIAS = ["¿Dónde cambio dólares?", "¿Qué hay abierto ahora?", "Busco zapatillas", "¿Cómo publico mi negocio?"];
 const SUGERENCIAS_SIN_GUIA = ["¿Dónde hay una farmacia?", "Busco zapatillas", "¿Dónde como?", "¿Cómo publico mi negocio?"];
 
-export function Asistente({ comercio, ciudad }: { comercio?: { id: string; nombre: string }; ciudad?: { slug: string; nombre: string; con_guia: boolean } }) {
+export function Asistente({ comercio, ciudad, rubros = null, flotanteMovil = true }: {
+  comercio?: { id: string; nombre: string };
+  ciudad?: { slug: string; nombre: string; con_guia: boolean };
+  /** Los rubros con comercios de la ciudad: Dax sólo sugiere lo que la ciudad puede contestar. `null` = no se sabe. */
+  rubros?: string[] | null;
+  /** `false` = en el celular no hay botón flotante (la barra de abajo trae a Dax). En la compu siempre se ve. */
+  flotanteMovil?: boolean;
+}) {
   const nombreCiudad = ciudad?.nombre ?? "Bermejo";
   const conGuia = ciudad?.con_guia ?? true;
   const [abierto, setAbierto] = useState(false);
@@ -61,24 +75,55 @@ export function Asistente({ comercio, ciudad }: { comercio?: { id: string; nombr
   const fin = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
 
+  const panel = useRef<HTMLDivElement>(null);
+  const { cerrar } = useHoja(abierto, () => setAbierto(false));
+  // La franja del día (hora de Bolivia) se toma al abrir: el saludo y las sugerencias son de ese momento.
+  const franja = useMemo(() => franjaAhora(), [abierto]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const bienvenida: Mensaje = comercio
     ? { de: "uruku", texto: `Hola, soy el asistente de ${comercio.nombre}. Preguntame por horarios, precios, ofertas o cómo llegar.`,
         sugerencias: ["¿Están abiertos ahora?", "¿Qué ofertas tienen?", "¿Dónde quedan?"] }
-    : { de: "uruku", texto: `¡Hola! Soy Dax y conozco ${nombreCiudad} de memoria. Preguntame dónde conseguir algo, si un local está abierto, ${conGuia ? "a cuánto está el dólar" : "cómo llegar"}, o cómo publicar tu negocio.`,
-        sugerencias: conGuia ? SUGERENCIAS : SUGERENCIAS_SIN_GUIA };
+    : { de: "uruku", texto: bienvenidaDax(franja, nombreCiudad, conGuia),
+        sugerencias: conGuia ? SUGERENCIAS : sugerenciasDeFranja(franja, rubros ? new Set(rubros) : null) };
 
   useEffect(() => {
-    try { if (sessionStorage.getItem(CLAVE_ABIERTO) === "1") setAbierto(true); } catch { /* modo privado */ }
-    // "Preguntale a URUKU" desde el home o donde sea: un evento, sin acoplar.
+    // "Preguntale a URUKU" desde el home, la barra de abajo o donde sea: un evento, sin acoplar.
     const abrir = () => setAbierto(true);
     window.addEventListener("uk-abrir-ayuda", abrir);
     return () => window.removeEventListener("uk-abrir-ayuda", abrir);
   }, []);
+  // Al abrir en la compu el cursor va al campo; en el celular NO: el teclado taparía la conversación.
   useEffect(() => {
-    try { sessionStorage.setItem(CLAVE_ABIERTO, abierto ? "1" : "0"); } catch { /* modo privado */ }
-    if (abierto) setTimeout(() => input.current?.focus(), 50);
+    if (abierto && window.matchMedia?.("(min-width: 901px)").matches) setTimeout(() => input.current?.focus(), 50);
   }, [abierto]);
   useEffect(() => { fin.current?.scrollIntoView({ block: "end" }); }, [mensajes, pensando]);
+
+  // El teclado del celular no achica la pantalla de la página, sólo la visible: sin esto taparía el campo de
+  // escribir. `--uk-teclado` sube la hoja lo que mide el teclado.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!abierto || !vv) return;
+    const ajustar = () => {
+      const teclado = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      panel.current?.style.setProperty("--uk-teclado", `${teclado}px`);
+      if (teclado > 0) fin.current?.scrollIntoView({ block: "end" });
+    };
+    ajustar();
+    vv.addEventListener("resize", ajustar);
+    vv.addEventListener("scroll", ajustar);
+    return () => { vv.removeEventListener("resize", ajustar); vv.removeEventListener("scroll", ajustar); };
+  }, [abierto]);
+
+  // Cambiar de ciudad con el panel abierto: Dax lo dice y las preguntas siguientes van con la ciudad nueva
+  // (`preguntar` lee `ciudad?.slug` del render actual).
+  const slugPrevio = useRef(ciudad?.slug);
+  useEffect(() => {
+    if (slugPrevio.current === ciudad?.slug) return;
+    slugPrevio.current = ciudad?.slug;
+    if (abierto && !comercio && ciudad) {
+      setMensajes((m) => [...m, { de: "uruku", texto: `Ahora te ayudo con ${ciudad.nombre}.` }]);
+    }
+  }, [ciudad?.slug, ciudad, abierto, comercio]);
 
   async function preguntar(p: string) {
     const pregunta = p.trim();
@@ -88,7 +133,7 @@ export function Asistente({ comercio, ciudad }: { comercio?: { id: string; nombr
     setPensando(true);
     try {
       const r = await preguntarAsistente(pregunta, sesionId(), comercio?.id, ciudad?.slug);
-      setMensajes((m) => [...m, { de: "uruku", texto: r.texto, id: r.id, fuentes: r.fuentes, sugerencias: r.sugerencias, util: null, derivar: r.derivar ?? null }]);
+      setMensajes((m) => [...m, { de: "uruku", texto: r.texto, id: r.id, pregunta, verUrl: r.ver_url ?? null, fuentes: r.fuentes, sugerencias: r.sugerencias, util: null, derivar: r.derivar ?? null }]);
     } catch (e) {
       // "Failed to fetch" es lo que dice el navegador cuando no hay señal; no
       // es algo que se le muestre a alguien. Los mensajes que escribimos
@@ -112,24 +157,28 @@ export function Asistente({ comercio, ciudad }: { comercio?: { id: string; nombr
 
   return (
     <>
-      <button type="button" className={`uk-ayuda-btn${abierto ? " abierto" : ""}`} onClick={() => setAbierto((a) => !a)}
-              aria-label={abierto ? "Cerrar la ayuda" : `Preguntale a ${MASCOTA.nombre}`} aria-expanded={abierto}>
-        {abierto ? "×" : (
-          <>
-            <img className="uk-ayuda-mascota" src={MASCOTA.imagen} alt="" width={34} height={34} />
-            <span>Preguntame</span>
-          </>
-        )}
-      </button>
+      {/* El botón flotante se esconde mientras el panel está abierto (el panel tiene su propio «Cerrar»). */}
+      {!abierto && (
+        <button type="button" className={`uk-ayuda-btn${flotanteMovil ? "" : " uk-ayuda-btn-compu"}`} onClick={() => setAbierto(true)}
+                aria-label={`Preguntale a ${MASCOTA.nombre}`} aria-haspopup="dialog" aria-expanded={false}>
+          <img className="uk-ayuda-mascota" src={MASCOTA.imagen} alt="" width={34} height={34} />
+          <span>Preguntame</span>
+        </button>
+      )}
 
       {abierto && (
-        <div className="uk-ayuda" role="dialog" aria-label={comercio ? `Asistente de ${comercio.nombre}` : "Uruku Ayuda"}>
+        <>
+        <div className="uk-hoja-velo uk-ayuda-velo" onClick={() => cerrar()} aria-hidden="true" />
+        <div ref={panel} className="uk-hoja uk-ayuda" role="dialog" aria-modal="true"
+             aria-label={comercio ? `Asistente de ${comercio.nombre}` : "Uruku Ayuda"}>
+          <button type="button" className="uk-hoja-tirador" aria-label="Cerrar" onClick={() => cerrar()} />
           <div className="uk-ayuda-cab">
             {!comercio && <img className="uk-ayuda-mascota-cab" src={MASCOTA.grande} alt="" width={40} height={40} />}
             <div>
-              <b>{comercio ? `Preguntale a ${comercio.nombre}` : `Preguntale a ${MASCOTA.nombre}`}</b>
-              <span>{comercio ? "Contesta con los datos del local" : `Todo ${nombreCiudad}, en un solo lugar`}</span>
+              <b>{comercio ? `Preguntale a ${comercio.nombre}` : MASCOTA.nombre}</b>
+              <span>{comercio ? "Contesta con los datos del local" : `Tu guía en ${nombreCiudad}`}</span>
             </div>
+            <button type="button" className="uk-hoja-cerrar" onClick={() => cerrar()}><Ic n="cerrar" s={15} /> Cerrar</button>
           </div>
           <div className="uk-ayuda-msgs">
             {lista.map((m, i) => (
@@ -138,6 +187,9 @@ export function Asistente({ comercio, ciudad }: { comercio?: { id: string; nombr
                   <img className="uk-ayuda-mascota-msg" src={MASCOTA.imagen} alt="" width={26} height={26} />
                 )}
                 <div className="uk-ayuda-burbuja">{linkear(m.texto)}</div>
+                {m.de === "uruku" && !comercio && m.fuentes && m.fuentes.some((f) => f.tipo === "comercio" && f.url) && (
+                  <TarjetaComercios fuentes={m.fuentes} ciudad={ciudad} pregunta={m.pregunta} verUrl={m.verUrl} />
+                )}
                 {m.de === "uruku" && m.fuentes && m.fuentes.filter((f) => f.tipo === "comercio" && f.url).length > 0 && (
                   <div className="uk-ayuda-fuentes">
                     {m.fuentes.filter((f) => f.tipo === "comercio" && f.url).slice(0, 5).map((f) => (
@@ -183,11 +235,42 @@ export function Asistente({ comercio, ciudad }: { comercio?: { id: string; nombr
           <form className="uk-ayuda-form" onSubmit={(e) => { e.preventDefault(); preguntar(texto); }}>
             <input ref={input} value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={500}
                    placeholder={comercio ? "Preguntale algo al local…" : "¿Qué necesitás?"} aria-label="Tu pregunta" />
-            <button type="submit" disabled={pensando || !texto.trim()}>Enviar</button>
+            <button type="submit" aria-label="Enviar" disabled={pensando || !texto.trim()}><Ic n="enviar" s={20} /></button>
           </form>
         </div>
+        </>
       )}
     </>
+  );
+}
+
+/** Una respuesta con comercios, como tarjeta: la foto del primero (si el servidor la manda), su nombre y el
+ *  botón «Ver comercios ›» a la búsqueda. Sin cantidades. La lista de `fuentes` sigue debajo, con cada local. */
+function TarjetaComercios({ fuentes, ciudad, pregunta, verUrl }: {
+  fuentes: RespuestaAsistente["fuentes"];
+  ciudad?: { slug: string; nombre: string };
+  pregunta?: string;
+  verUrl?: string | null;
+}) {
+  const comercios = fuentes.filter((f) => f.tipo === "comercio" && f.url);
+  const primero = comercios[0];
+  if (!primero) return null;
+  const q = pregunta ? consultaDeBusqueda(pregunta) : "";
+  const propia = rutaInternaSegura(verUrl ? verUrl.replace("https://uruku.bo", "") : null);
+  const ver = propia
+    ? propia
+    : q ? `/buscar?q=${encodeURIComponent(q)}${ciudad ? `&ciudad=${encodeURIComponent(ciudad.slug)}` : ""}` : "/buscar?vista=mapa";
+  return (
+    <div className="uk-ayuda-resp">
+      <span className="uk-ayuda-resp-foto">
+        {primero.foto ? <img src={primero.foto} alt="" loading="lazy" decoding="async" /> : <Ic n="comercios" s={28} />}
+      </span>
+      <div>
+        <b>{primero.nombre}</b>
+        <span>{comercios.length > 1 ? `y otros locales${ciudad ? ` de ${ciudad.nombre}` : ""}` : primero.detalle ?? (ciudad ? `En ${ciudad.nombre}` : "En el mapa")}</span>
+        <a className="uk-ayuda-resp-btn" href={ver}>Ver comercios ›</a>
+      </div>
+    </div>
   );
 }
 

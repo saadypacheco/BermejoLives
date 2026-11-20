@@ -8,7 +8,8 @@ import { MapResults } from "@/components/map-results";
 import { CLAVE_ULTIMA_BUSQUEDA } from "@/components/volver-a-resultados";
 import { buscarComercios, getFiltrosDisponibles, getOfertasDeComercios, getRefinamientos, getRubros, getZonas } from "@/lib/data-client";
 import { APAGADAS, type FiltrosDisponibles } from "@/lib/data-pure";
-import { claveBusqueda, PRIMERAS_BUSQUEDA, type BusquedaInicial } from "@/lib/buscar-filtros";
+import { claveBusqueda, PRIMERAS_BUSQUEDA, soloAbiertos, type BusquedaInicial } from "@/lib/buscar-filtros";
+import { useFiltrosRapidos } from "@/components/home-ciudad/use-filtros-rapidos";
 import { PrecioArs } from "@/components/precio-ars";
 import { type FeedItem, type ResultadoBusqueda, type Rubro, type Zona, MODALIDAD_LABEL, precioFmt, comoLlegarHref, waLink } from "@/lib/types";
 import { productosDe } from "@/lib/productos";
@@ -76,6 +77,9 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
     setCiudad(ciudadInicial);
   }, [ciudadInicial]);
   const [soloOfertas, setSoloOfertas] = useState(false);
+  // «Abiertos» (?abierto=1): sólo los locales abiertos ahora. Es el mismo interruptor del encabezado de las
+  // ciudades (docs/home-ciudades.md §3): lo que se prende allá se refleja acá y al revés.
+  const [abiertos, setAbiertos] = useState(false);
   const [vista, setVista] = useState<"lista" | "mapa">("lista");
   // El mapa necesita TODOS los que coinciden, no la página cargada. La lista
   // disimula el recorte porque tiene "Ver más"; el mapa no: se veían diez pines
@@ -110,6 +114,20 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cercaPedido]);
   const [errUbicacion, setErrUbicacion] = useState("");
+  // Los interruptores del encabezado sólo existen fuera de Bermejo: allá este bloque no hace nada.
+  const [rapidos, setRapidos] = useFiltrosRapidos();
+  const conInterruptores = (ciudad || ciudadInicial || "bermejo") !== "bermejo";
+  const rapidosPrevios = useRef(rapidos);
+  useEffect(() => {
+    const antes = rapidosPrevios.current;
+    rapidosPrevios.current = rapidos;
+    if (!conInterruptores) return;
+    if (antes.abiertos !== rapidos.abiertos) setAbiertos(rapidos.abiertos);
+    if (antes.cerca !== rapidos.cerca) {
+      if (rapidos.cerca) setCercaPedido(true);
+      else setCerca(false);
+    }
+  }, [rapidos, conInterruptores]);
   useEffect(() => {
     const guardada = ubicacionGuardada();
     if (guardada) { setUbicacion(guardada); return; }
@@ -284,6 +302,8 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
     setModalidad(g("modalidad") ?? "");
     if (g("vista") === "mapa") setVista("mapa");
     if (g("cerca") === "1") setCercaPedido(true);
+    // Un enlace con «abierto=1» prende el filtro (el encabezado se entera por el efecto de abajo).
+    setAbiertos(g("abierto") === "1");
     if (g("debug") === "1") setDebug(true);
     // `of=1` es el enlace de "Ofertas" del menú, que antes iba a /mapa.
     setSoloOfertas(g("of") === "1");
@@ -327,6 +347,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
     if (precioMax) p.set("precio_max", precioMax);
     if (vista === "mapa") p.set("vista", "mapa");
     if (soloOfertas) p.set("of", "1");
+    if (abiertos) p.set("abierto", "1");
     if (debug) p.set("debug", "1");
     const nueva = p.toString();
     // Sólo se escribe si de verdad cambió: si no, este efecto y el que LEE la
@@ -360,7 +381,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     // `urlLeida` va en las dependencias: sin él, el efecto no vuelve a correr
     // cuando pasa a true y una URL que no cambia nada más nunca se escribiría.
-  }, [urlLeida, q, rubro, subcategoria, modalidad, zona, ciudad, precioMax, vista, soloOfertas, debug]);
+  }, [urlLeida, q, rubro, subcategoria, modalidad, zona, ciudad, precioMax, vista, soloOfertas, abiertos, debug]);
 
   useEffect(() => {
     clearTimeout(debounce.current);
@@ -455,7 +476,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
   // comercios son dos vueltas; el tope de 4000 es un freno de seguridad para
   // que un filtro roto no descargue la base entera al celular de alguien.
   useEffect(() => {
-    if (vista !== "mapa" && !cerca && !soloOfertas) return;
+    if (vista !== "mapa" && !cerca && !soloOfertas && !abiertos) return;
     let cancelado = false;
     (async () => {
       setCargandoMapa(true);
@@ -469,7 +490,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
     })().catch(() => { if (!cancelado) setCargandoMapa(false); });
     return () => { cancelado = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vista, cerca, q, rubro, subcategoria, modalidad, zona, ciudad, precioMax]);
+  }, [vista, cerca, abiertos, q, rubro, subcategoria, modalidad, zona, ciudad, precioMax]);
 
   async function cargarMas() {
     setCargandoMas(true);
@@ -503,10 +524,10 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
   // local puede abrir o cerrar mientras la lista está a la vista).
   const [minuto, setMinuto] = useState(0);
   useEffect(() => {
-    if (!cerca) return;
+    if (!cerca && !abiertos) return;
     const t = window.setInterval(() => setMinuto((m) => m + 1), 60_000);
     return () => window.clearInterval(t);
-  }, [cerca]);
+  }, [cerca, abiertos]);
   const ordenCerca = useMemo(
     () => (cerca && ubicacion && resultsMapa ? ordenarCerca(resultsMapa, distancia).slice(0, 100) : null),
     // `distancia` sólo depende de `ubicacion`.
@@ -515,10 +536,16 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
   );
   const base = ordenCerca
     ? ordenCerca
-    : soloOfertas && resultsMapa
+    : (soloOfertas || abiertos) && resultsMapa
       ? resultsMapa
       : results;
-  const shown = soloOfertas ? base.filter((r) => r.ofertas > 0) : base;
+  const conOfertasFiltro = soloOfertas ? base.filter((r) => r.ofertas > 0) : base;
+  // `minuto` en las dependencias: un local abre o cierra mientras la lista está a la vista.
+  const shown = useMemo(
+    () => (abiertos ? soloAbiertos(conOfertasFiltro) : conOfertasFiltro),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [abiertos, conOfertasFiltro, minuto],
+  );
 
   // VIGÍA: dos cosas que nunca pueden pasar, y si pasan se avisan al servidor
   // con lo necesario para entenderlas (qué se buscaba, qué había, por dónde
@@ -586,7 +613,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
   /** Si la persona ya pidió algo. El contador de resultados aparece sólo acá:
    *  en la pantalla vacía es de donde se lo sacó, y con razón. */
   const hayBusqueda = Boolean(q.trim() || rubro || subcategoria || modalidad || zona
-                              || precioMax || soloOfertas);
+                              || precioMax || soloOfertas || abiertos);
 
   return (
     <div className="uk-container uk-buscar">
@@ -709,20 +736,26 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
             {/* Con "Ofertas" se cuenta lo que se muestra —los que tienen
                 oferta— y no el total de la búsqueda, que es otro número. */}
             {(() => {
-              const n = soloOfertas ? (resultsMapa ? shown.length : null) : total;
+              const n = soloOfertas || abiertos ? (resultsMapa ? shown.length : null) : total;
               if (n == null) return null;
+              if (abiertos && !soloOfertas) return n === 1 ? "1 abierto ahora" : `${n} abiertos ahora`;
               if (soloOfertas) return n === 1 ? "1 con ofertas" : `${n} con ofertas`;
               return n === 1 ? "1 resultado" : `${n} resultados`;
             })()}
           </span>
         )}
 
+        <button type="button" className={`uk-chip uk-chip-abiertos${abiertos ? " active" : ""}`} aria-pressed={abiertos}
+                title="Sólo los locales abiertos ahora"
+                onClick={() => { setAbiertos(!abiertos); if (conInterruptores) setRapidos({ abiertos: !abiertos }); }}>
+          <Ic n={abiertos ? "si" : "reloj"} s={16} /> Abiertos
+        </button>
         <button type="button" className={`uk-chip uk-chip-cerca${cerca ? " active" : ""}`}
                 title="Ordenar por distancia desde donde estás"
                 onClick={async () => {
-                  if (cerca) { setCerca(false); return; }
+                  if (cerca) { setCerca(false); if (conInterruptores) setRapidos({ cerca: false }); return; }
                   const u = ubicacion ?? await ubicarme(false);
-                  if (u) setCerca(true);
+                  if (u) { setCerca(true); if (conInterruptores) setRapidos({ cerca: true }); }
                 }}>
           <Ic n="ubicacion" s={16} /> Cerca de mí
         </button>
@@ -740,8 +773,11 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
           </div>
         )}
         <MapResults
-          results={soloOfertas ? (resultsMapa ?? results).filter((r) => r.ofertas > 0) : (resultsMapa ?? results)}
-          hayFiltro={Boolean(q.trim() || rubro || subcategoria || modalidad || zona || precioMax || soloOfertas)}
+          results={(() => {
+            const todos = soloOfertas ? (resultsMapa ?? results).filter((r) => r.ofertas > 0) : (resultsMapa ?? results);
+            return abiertos ? soloAbiertos(todos) : todos;
+          })()}
+          hayFiltro={Boolean(q.trim() || rubro || subcategoria || modalidad || zona || precioMax || soloOfertas || abiertos)}
           ciudad={tilesCiudad}
           ubicacion={ubicacion}
           centrarEnMi={centrarEnMi}
@@ -1003,7 +1039,7 @@ export function BuscarClient({ accesos, ciudadInicial = "", tilesCiudad = null, 
         </div>
       )}
 
-      {vista === "lista" && hayMas && !soloOfertas && (
+      {vista === "lista" && hayMas && !soloOfertas && !abiertos && (
         <div style={{ textAlign: "center", marginTop: 22 }}>
           <button className="uk-btn-ghost" style={{ maxWidth: 200, margin: "0 auto" }} onClick={cargarMas} disabled={cargandoMas}>
             {cargandoMas ? "Cargando…" : "Cargar más"}
