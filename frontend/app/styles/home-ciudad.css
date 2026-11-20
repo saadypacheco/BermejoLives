@@ -153,8 +153,8 @@
 .uk-hc-dist { font-style: normal; font-weight: 700; color: var(--uk-green-ic); }
 .uk-hc-com .uk-hc-dist { color: #7FE0A8; }
 .uk-hc-vacio { margin: 4px 0 0; font-size: 13.5px; color: var(--uk-ink-soft); }
-/* Flechas: sólo con mouse y AFUERA de la foto (en los márgenes de la pista). En pantallas táctiles no se dibujan (uruku.css,
-   `hover: none`) y abajo van los puntitos. */
+/* Flechas: sólo con mouse y AFUERA de la foto (en los márgenes de la pista). En pantallas táctiles NO se dibujan y abajo van los
+   puntitos: tanto con `hover: none` como con `pointer: coarse` (una tablet con teclado reporta hover y puntero grueso a la vez). */
 @media (hover: hover) and (pointer: fine) {
   .uk-hc-carrusel { padding-inline: 52px; }
   .uk-hc-carrusel .uk-carrusel-flecha.izq { left: 0; }
@@ -163,7 +163,10 @@
 .uk-hc-puntos { display: none; justify-content: center; gap: 6px; padding-top: 2px; }
 .uk-hc-puntos i { width: 6px; height: 6px; border-radius: 50%; background: var(--uk-line); transition: width .2s, background .2s; }
 .uk-hc-puntos i.on { width: 18px; border-radius: 3px; background: var(--uk-green-ic); }
-@media (hover: none) { .uk-hc-puntos { display: flex; } }
+@media (hover: none), (pointer: coarse) {
+  .uk-hc-carrusel .uk-carrusel-flecha { display: none; }
+  .uk-hc-puntos { display: flex; }
+}
 @media (min-width: 900px) {
   .uk .uk-hc-prod { width: 190px; }
   .uk .uk-hc-com { width: 280px; }

@@ -1,10 +1,12 @@
 // Platos típicos (lib/platos-pure.ts, docs/home-ciudades.md §15) y el catálogo de ilustraciones (components/ilustraciones).
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
-  SUBCATEGORIAS_COMIDA_TIPICA, agruparPlatos, cambiosDeEdicion, hrefDondeComer, platoDeFila, puedeAprobarPlato, rutaSabores,
+  MAX_DESCRIPCION_PLATO, SUBCATEGORIAS_COMIDA_TIPICA, agruparPlatos, cambiosDeEdicion, hrefDondeComer, platoDeFila, puedeAprobarPlato, rutaSabores,
   type PlatoTipico,
 } from "../lib/platos-pure";
 import { ILUSTRACIONES, Ilustracion } from "../components/ilustraciones";
@@ -47,7 +49,7 @@ test("cambiosDeEdicion: sólo lo que cambió, sin espacios de más; el nombre no
   assert.deepEqual(cambiosDeEdicion(p, { nombre: p.nombre, descripcion: " Otro texto. " }), { cambios: { descripcion: "Otro texto." }, error: null });
   assert.match(cambiosDeEdicion(p, { nombre: "   ", descripcion: "x" }).error ?? "", /nombre/);
   assert.match(cambiosDeEdicion(p, { nombre: "A".repeat(121), descripcion: "x" }).error ?? "", /120/);
-  assert.match(cambiosDeEdicion(p, { nombre: "A", descripcion: "x".repeat(601) }).error ?? "", /600/);
+  assert.match(cambiosDeEdicion(p, { nombre: "A", descripcion: "x".repeat(801) }).error ?? "", /800/);
 });
 
 test("puedeAprobarPlato: sin texto propio no se aprueba", () => {
@@ -85,4 +87,14 @@ test("ilustraciones: todas decorativas (aria-hidden), con degradés de id único
 test("ilustraciones: la ruta del vino dice Viñedos, Bodegas y Singani, sin nombres de comercios", () => {
   const html = renderToStaticMarkup(createElement(Ilustracion, { id: "vino" }));
   for (const parada of ["Viñedos", "Bodegas", "Singani"]) assert.ok(html.includes(parada), parada);
+});
+
+test("panel de platos: la fila se libera siempre (finally), el 400 del servidor se muestra tal cual y el texto describe bien a la IA", () => {
+  const panel = readFileSync(resolve(process.cwd(), "components", "admin", "platos-panel.tsx"), "utf8");
+  assert.match(panel, /finally \{[^}]*setOcupado\(false\)/s);
+  assert.match(panel, /status === 400 \? motivo/);
+  assert.doesNotMatch(panel, /a partir del nombre/);
+  assert.match(panel, /nota de origen/);
+  assert.match(panel, /pendiente\s+de tu revisión/);
+  assert.equal(MAX_DESCRIPCION_PLATO, 800);
 });

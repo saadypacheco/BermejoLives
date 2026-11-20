@@ -69,8 +69,8 @@ export function PlatosPanel({ ciudad }: { ciudad: Ciudad | null }) {
   return (
     <div>
       <p style={{ color: "var(--txt-3)", fontSize: 13, lineHeight: 1.5, margin: "0 0 10px" }}>
-        Platos, repostería y bebidas típicas de la ciudad, con un texto escrito por la IA a partir del nombre. Revisá que el texto sea
-        correcto y no copie a la fuente; recién al <b>aprobar</b> aparecen en <code>/{ciudad?.slug ?? "ciudad"}/sabores</code>.
+        Platos, repostería y bebidas típicas de la ciudad, con un texto original que escribe la IA a partir de los datos de la nota de origen (no copia sus frases) y que queda pendiente
+        de tu revisión. Revisá que sea correcto y no copie a la fuente; recién al <b>aprobar</b> aparecen en <code>/{ciudad?.slug ?? "ciudad"}/sabores</code>.
       </p>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
         {ESTADOS_PLATO.map((e) => (
@@ -128,7 +128,11 @@ function FilaPlato({ plato, onGuardar }: { plato: PlatoTipico; onGuardar: (cambi
     try {
       await onGuardar({ ...cambios, ...extra });
     } catch (e) {
-      setErr(`No se pudo guardar: ${e instanceof Error ? e.message : "error desconocido"}`);
+      // El 400 «No se puede aprobar un plato sin texto.» del servidor se muestra tal cual; el resto, con su prefijo.
+      const motivo = e instanceof Error ? e.message : "error desconocido";
+      setErr((e as { status?: number }).status === 400 ? motivo : `No se pudo guardar: ${motivo}`);
+    } finally {
+      // Con o sin error la fila vuelve a estar disponible: guardar sin cambiar de estado no la deja trabada.
       setOcupado(false);
     }
   }

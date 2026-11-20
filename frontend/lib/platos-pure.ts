@@ -81,7 +81,7 @@ export type EdicionPlato = { nombre: string; descripcion: string };
 export type CambiosPlato = Partial<Pick<PlatoTipico, "nombre" | "descripcion" | "estado" | "activo">>;
 
 export const MAX_NOMBRE_PLATO = 120;
-export const MAX_DESCRIPCION_PLATO = 600;
+export const MAX_DESCRIPCION_PLATO = 800;
 
 /** Los campos que de verdad cambiaron (lo que se manda en el PATCH), sin espacios de más. `null` = no se puede guardar
  *  (el nombre no puede quedar vacío), con el motivo en `error`. Sin cambios devuelve `{}`. */

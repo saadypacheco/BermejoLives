@@ -11,14 +11,21 @@ const com = (id: string, rubro: string, extra: Partial<ComercioDeLaCiudad> = {})
 });
 const COMERCIALES = new Set(["cafeteria", "panaderia", "calzado"]);
 
-test("fotoDeTarjeta: tarjeta → diseño → miniatura; sin ninguna, null", () => {
-  const todo = { portada_card_url: "c.jpg", portada_diseno_url: "d.jpg", portada_thumb_url: "t.jpg" };
+test("fotoDeTarjeta: tarjeta → miniatura; sin ninguna, null", () => {
+  const todo = { portada_card_url: "c.jpg", portada_thumb_url: "t.jpg" };
   assert.deepEqual(fotoDeTarjeta(todo), { url: "c.jpg", recortada: true });
-  assert.deepEqual(fotoDeTarjeta({ ...todo, portada_card_url: null }), { url: "d.jpg", recortada: true });
-  assert.deepEqual(fotoDeTarjeta({ ...todo, portada_card_url: "  ", portada_diseno_url: undefined }), { url: "t.jpg", recortada: false });
+  assert.deepEqual(fotoDeTarjeta({ ...todo, portada_card_url: null }), { url: "t.jpg", recortada: false });
+  assert.deepEqual(fotoDeTarjeta({ ...todo, portada_card_url: "  " }), { url: "t.jpg", recortada: false });
   assert.deepEqual(fotoDeTarjeta({ portada_thumb_url: "t.jpg" }), { url: "t.jpg", recortada: false });
   assert.equal(fotoDeTarjeta({ portada_thumb_url: null }), null);
-  assert.equal(fotoDeTarjeta({ portada_card_url: undefined, portada_diseno_url: undefined, portada_thumb_url: "" }), null);
+  assert.equal(fotoDeTarjeta({ portada_card_url: undefined, portada_thumb_url: "" }), null);
+});
+
+test("la portada de diseño (lleva el nombre impreso) NUNCA va en los carruseles, aunque venga en la fila", () => {
+  const fila = { portada_card_url: null, portada_diseno_url: "https://x/d.jpg", portada_thumb_url: "https://x/t.jpg" };
+  assert.deepEqual(fotoDeTarjeta(fila), { url: "https://x/t.jpg", recortada: false });
+  assert.deepEqual(fotoDeTarjeta({ ...fila, portada_card_url: "https://x/c.jpg" }), { url: "https://x/c.jpg", recortada: true });
+  assert.equal(fotoDeTarjeta({ ...fila, portada_thumb_url: null }), null, "sin tarjeta ni miniatura no hay foto: el diseño no la reemplaza");
 });
 
 test("antes de la migración 0202 (sin las columnas nuevas) todo sigue andando con la miniatura y su encuadre", () => {

@@ -1930,10 +1930,11 @@ export async function adminMarcarCalle(id: string, estado: EstadoMarca, nota?: s
 // ---- Importados: aprobar en bloque (docs/home-ciudades.md §14) ----
 
 /** `POST /admin/importados/aprobar-lote`. Con `simular: true` el servidor cuenta y NO escribe nada; con `false` aprueba fila por
- *  fila por el mismo camino que «Al mapa» (mismo rubro, mismas validaciones) y saltea repetidos, sin rubro y sin punto. Tope de
- *  1000 filas por llamada: si hay más, se repite. */
+ *  fila por el mismo camino que «Al mapa» (mismo rubro, mismas validaciones) y saltea repetidos, sin rubro y sin punto.
+ *  Sólo acepta las fuentes `turismo`, `anh` y `aduana` (otra da 422). Aprueba como mucho `max_aprobar` (1 a 200, y 200 si falta)
+ *  por llamada y dice cuántas `restantes` quedan: quien llama repite. Si ya corre otro lote contesta 409. */
 export async function aprobarLoteImportados(
-  body: { fuente: string; ciudad_id: string; solo_con_punto: boolean; simular: boolean },
+  body: { fuente: string; ciudad_id: string; solo_con_punto: boolean; simular: boolean; max_aprobar?: number },
 ): Promise<ResultadoLote> {
   const res = await authFetch(`/admin/importados/aprobar-lote`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),

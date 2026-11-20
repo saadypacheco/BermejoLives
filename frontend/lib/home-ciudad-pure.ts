@@ -189,7 +189,7 @@ export type ComercioCarrusel = {
   nombre: string;
   /** La foto de la tarjeta (ver `fotoDeTarjeta`). */
   foto: string;
-  /** El encuadre vertical (`object-position`) SÓLO si la foto es la miniatura: la de tarjeta y la de diseño ya vienen recortadas. */
+  /** El encuadre vertical (`object-position`) SÓLO si la foto es la miniatura: la de tarjeta ya viene recortada. */
   fotoPos: number | null;
   /** `portada_calidad` (0 a 100); `null` = la portada todavía no tiene puntaje. */
   calidad?: number | null;
@@ -213,8 +213,6 @@ export type ComercioDeLaCiudad = {
   /** Migración 0202: la portada recortada 4:3 y mejorada (800 px) y su puntaje. Ausentes antes de aplicarla: se cae a la miniatura. */
   portada_card_url?: string | null;
   portada_calidad?: number | null;
-  /** 0200: la portada con diseño de publicidad (ya encuadrada). */
-  portada_diseno_url?: string | null;
   rubro_slug: string | null;
   rubro_nombre: string | null;
   subcategoria?: string | null;
@@ -258,15 +256,13 @@ const MAX_CANDIDATOS = 80;
 
 type FotoTarjeta = { url: string; recortada: boolean };
 
-/** La foto de la tarjeta del carrusel (§11): la versión «tarjeta» (4:3, 800 px, mejorada); si no hay, la portada con
- *  diseño (ya encuadrada); y si tampoco, la miniatura de 200 px. `null` = el comercio no tiene ninguna foto.
- *  `recortada` = ya viene encuadrada: no lleva `object-position`. */
-export function fotoDeTarjeta(c: Pick<ComercioDeLaCiudad, "portada_card_url" | "portada_diseno_url" | "portada_thumb_url">): FotoTarjeta | null {
+/** La foto de la tarjeta del carrusel (§11): la versión «tarjeta» (4:3, 800 px, mejorada); si no hay, la miniatura de
+ *  200 px. La portada con diseño NO va acá: lleva el nombre impreso y la tarjeta ya lo muestra encima. `null` = el
+ *  comercio no tiene ninguna foto. `recortada` = ya viene encuadrada: no lleva `object-position`. */
+export function fotoDeTarjeta(c: Pick<ComercioDeLaCiudad, "portada_card_url" | "portada_thumb_url">): FotoTarjeta | null {
   const limpia = (u: string | null | undefined): string | null => (typeof u === "string" && u.trim() ? u : null);
   const tarjeta = limpia(c.portada_card_url);
   if (tarjeta) return { url: tarjeta, recortada: true };
-  const diseno = limpia(c.portada_diseno_url);
-  if (diseno) return { url: diseno, recortada: true };
   const miniatura = limpia(c.portada_thumb_url);
   return miniatura ? { url: miniatura, recortada: false } : null;
 }

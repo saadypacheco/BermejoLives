@@ -182,16 +182,17 @@ test("QA §11: la foto del carrusel es tarjeta → miniatura y sólo la miniatur
   assert.equal(conMini.fotoPos, 80);
 });
 
-test("QA §11: una portada de diseño gana a la tarjeta (spec §11: «si el comercio tiene portada de diseño, se usa esa»)",
-  { todo: "BUG-4: fotoDeTarjeta prioriza la tarjeta (hecha de la foto ORIGINAL) sobre la portada de diseño" }, () => {
-    const r = fotoDeTarjeta({ portada_card_url: "c.jpg", portada_diseno_url: "d.jpg", portada_thumb_url: "t.jpg" });
-    assert.equal(r?.url, "d.jpg");
+test("QA §11 (spec: el diseño no va en carruseles): la tarjeta gana y el diseño se ignora",
+  () => {
+    const fila = { portada_card_url: "c.jpg", portada_diseno_url: "d.jpg", portada_thumb_url: "t.jpg" };
+    assert.equal(fotoDeTarjeta(fila)?.url, "c.jpg");
+    assert.equal(fotoDeTarjeta({ ...fila, portada_card_url: null })?.url, "t.jpg", "sin tarjeta, la miniatura; nunca el diseño");
   });
 
-test("QA §11: la portada de diseño llega al home (buscar_comercios devuelve portada_diseno_url)",
-  { todo: "BUG-4: la RPC buscar_comercios (0202) no devuelve portada_diseno_url: la rama de diseño de fotoDeTarjeta nunca se alimenta en el home" }, () => {
-    assert.match(leer("..", "supabase", "migrations", "0202_fotos_planes_platos.sql"), /portada_diseno_url/);
-  });
+test("QA §11: el home no lee portada_diseno_url (el diseño no entra a los carruseles)", () => {
+  assert.doesNotMatch(leer("lib", "home-ciudad-pure.ts"), /portada_diseno_url??:/);
+  assert.doesNotMatch(leer("components", "home-ciudad", "carrusel-comercios.tsx"), /diseno/);
+});
 
 // ═════════════════════════════════════════════════ §11 · ORDEN DE LOS CARRUSELES (propiedades)
 
@@ -257,7 +258,7 @@ test("QA §11 orden: «Abiertos» no deja pasar cerrados aunque tengan la mejor 
 
 // ═════════════════════════════════════════════════ §14 · APROBAR EN BLOQUE: EL REDUCTOR, SIN ATAJOS
 
-const R = (aprobados: number): ResultadoLote => ({ aprobados, salteados: { repetidos: 0, sin_rubro: 0, sin_punto: 0, error: 0 } });
+const R = (aprobados: number): ResultadoLote => ({ aprobados, salteados: { repetidos: 0, sin_rubro: 0, sin_punto: 0, error: 0 }, restantes: 0 });
 const EVENTOS: EventoLote[] = [
   { tipo: "abrir" }, { tipo: "simulado", resultado: R(0) }, { tipo: "simulado", resultado: R(5) }, { tipo: "confirmar" },
   { tipo: "aprobado", resultado: R(5) }, { tipo: "fallo", mensaje: "x" }, { tipo: "cancelar" },
@@ -337,8 +338,8 @@ test("QA §14: la pantalla sólo manda `simular: false` desde el botón «Sí, a
   const fuente = leer("components", "admin", "aprobar-lote.tsx");
   assert.equal((fuente.match(/simular: false/g) ?? []).length, 1);
   assert.equal((fuente.match(/simular: true/g) ?? []).length, 1);
-  assert.equal((fuente.match(/onClick=\{aprobar\}/g) ?? []).length, 1);
-  const i = fuente.indexOf("onClick={aprobar}");
+  assert.equal((fuente.match(/onClick=\{\(\) => void aprobar\(/g) ?? []).length, 1);
+  const i = fuente.indexOf("onClick={() => void aprobar(");
   const antes = fuente.slice(0, i);
   assert.ok(antes.lastIndexOf('estado.tipo === "confirmar"') > antes.lastIndexOf('estado.tipo === "simulando"'));
   assert.ok(antes.lastIndexOf("estado.simulado.aprobados > 0") > antes.lastIndexOf('estado.tipo === "confirmar"'));
@@ -474,7 +475,10 @@ test("QA §11: las flechas quedan FUERA de la foto con mouse y desaparecen en pa
   assert.match(base, /@media \(hover: none\) \{ \.uk-carrusel-flecha \{ display: none; \} \}/);
   assert.match(css, /@media \(hover: hover\) and \(pointer: fine\) \{[^}]*\.uk-hc-carrusel \{ padding-inline: 52px; \}[^}]*flecha\.izq \{ left: 0; \}[^}]*flecha\.der \{ right: 0; \}/s);
   assert.match(css, /\.uk-hc-puntos \{ display: none;/);
-  assert.match(css, /@media \(hover: none\) \{ \.uk-hc-puntos \{ display: flex; \} \}/);
+  // Híbridos (tablet con hover:hover y pointer:coarse): sin flechas sobre las fotos y con puntitos.
+  assert.match(css, /@media \(hover: none\), \(pointer: coarse\) \{[^}]*\.uk-hc-carrusel \.uk-carrusel-flecha \{ display: none; \}[^}]*\.uk-hc-puntos \{ display: flex; \}/s);
+  // El margen de 52 px sólo es para mouse: con puntero grueso no se reserva.
+  assert.doesNotMatch(css.replace(/@media \(hover: hover\) and \(pointer: fine\) \{[\s\S]*?\n\}/, ""), /padding-inline: 52px/);
   // la flecha mide 40 px y el margen es de 52: no pisa la foto
   assert.match(base, /\.uk-carrusel-flecha \{[^}]*width: 40px; height: 40px;/s);
 });
