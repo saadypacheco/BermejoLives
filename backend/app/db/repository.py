@@ -451,6 +451,7 @@ class Repo(Protocol):
     # Clima por ciudad (tabla `clima_ciudades`, migración 0201)
     def list_ciudades_con_coordenadas(self) -> list[dict]: ...
     def upsert_clima_ciudad(self, ciudad_id: str, temp_c: float | None, descripcion: str | None) -> dict | None: ...
+    def list_rubros_de_ciudad(self, ciudad_slug: str) -> set[str] | None: ...
     def list_videos_promo(self, solo_activos: bool = False) -> list[dict]: ...
     def add_video_promo(self, row: dict) -> dict: ...
     def delete_video_promo(self, video_id: str) -> bool: ...
@@ -3840,6 +3841,19 @@ class SupabaseRepo(IntegracionRepoMixin):
             .eq("id", 1).execute()
         )
         return res.data[0] if res.data else None
+
+    def list_rubros_de_ciudad(self, ciudad_slug: str) -> set[str] | None:
+        """Los rubros con al menos un comercio en la ciudad (`city_category_pages()`, 0180: ciudades y comercios
+        activos, sin conteos). None si no se sabe: la lectura falló o la función no devolvió nada (la base nunca está
+        vacía de verdad), y quien llama no filtra. Un conjunto vacío SÍ es un dato: la ciudad no tiene nada."""
+        try:
+            filas = self._db.rpc("city_category_pages", {}).execute().data or []
+        except Exception as e:  # noqa: BLE001
+            logger.warning("repo.rubros_de_ciudad_fallo", ciudad=ciudad_slug, error=str(e)[:200])
+            return None
+        if not filas:
+            return None
+        return {f["category_slug"] for f in filas if f.get("city_slug") == ciudad_slug and f.get("category_slug")}
 
     def list_ciudades_con_coordenadas(self) -> list[dict]:
         """Las ciudades activas con lat y lng cargadas (las que el loop de clima consulta)."""

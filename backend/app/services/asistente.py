@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import contextvars
 import json
+import time
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -188,15 +189,20 @@ def _fuente(c: dict) -> dict:
             "foto": c.get("portada_thumb_url") or c.get("portada_url") or None}
 
 
-def _ver_url(q: str | None = None, rubro: str | None = None) -> str | None:
+def _ver_url(q: str | None = None, rubro: str | None = None, abierto: bool = False) -> str | None:
     """La URL relativa del botón «Ver comercios ›»: la búsqueda por palabras (`/buscar?q=…`) o, si la respuesta
     fue por rubro, el rubro en el mapa (`/buscar?rubro=…&vista=mapa`), siempre con la ciudad de la pregunta."""
     if rubro:
         url = f"/buscar?rubro={quote_plus(rubro)}&vista=mapa"
     elif q and q.strip():
         url = f"/buscar?q={quote_plus(q.strip())}"
+    elif abierto:
+        url = "/buscar?abierto=1"      # sin palabras: todo lo que está abierto ahora
+        abierto = False
     else:
         return None
+    if abierto:
+        url += "&abierto=1"
     slug = _ciudad_slug()
     return url + (f"&ciudad={quote_plus(slug)}" if slug else "")
 
@@ -279,28 +285,94 @@ SUGERENCIAS_POR_FRANJA: list[tuple[int, int, list[str]]] = [
 ]
 
 
-def sugerencias_iniciales(con_guia: bool, hora: int) -> list[str]:
+# Qué rubro(s) necesita cada sugerencia para tener sentido en una ciudad: con al menos uno de ellos cargado sale;
+# sin ninguno no (un «Cajero cerca» que abre un mapa vacío no sirve). ES EL MISMO MAPA que `SUGERENCIAS` de
+# frontend/lib/home-ciudad-pure.ts: los dos tienen que decir lo mismo. «para-visitar» es RUBRO_PARA_VISITAR.
+RUBROS_DE_SUGERENCIA: dict[str, tuple[str, ...]] = {
+    "¿Dónde desayuno?": ("cafeteria", "panaderia"),
+    "Farmacia abierta cerca": ("farmacia",),
+    "¿Qué visito hoy?": ("para-visitar",),
+    "¿Dónde almuerzo?": ("restaurantes", "comida-rapida"),
+    "Busco zapatillas": ("calzado", "zapatillas"),
+    "Cajero cerca": ("cajeros",),
+    "Necesito un servicio técnico": ("servicio-tecnico",),
+    "¿Qué hago hoy?": ("para-visitar",),
+    "Boliches abiertos esta noche": ("nocturna",),
+    "¿Dónde ceno?": ("restaurantes", "comida-rapida"),
+    "Hotel para esta noche": ("hospedaje",),
+    "Farmacia de turno": ("farmacia",),
+    "¿Dónde duermo?": ("hospedaje",),
+}
+# Las que valen en cualquier ciudad: completan la lista cuando quedan menos de dos (igual que el front).
+SUGERENCIAS_RELLENO = ["¿Qué hay abierto ahora?", "¿Cómo publico mi negocio?"]
+
+
+def sugerencias_iniciales(con_guia: bool, hora: int, rubros: set[str] | frozenset[str] | None = None) -> list[str]:
     """Las sugerencias de arranque. Ciudad con guía (frontera): las de siempre. Sin guía: las de la franja
-    horaria (`hora` = hora de Bolivia, 0 a 23). Devuelve una lista nueva: quien la recibe puede tocarla."""
+    horaria (`hora` = hora de Bolivia, 0 a 23), y de ellas sólo las que la ciudad puede contestar: las que piden un
+    rubro que la ciudad tiene (`rubros` = los rubros con comercios). `rubros=None` = no se sabe (la lectura falló):
+    salen todas, igual que en el panel del sitio. Si quedan menos de dos se completan con las de
+    `SUGERENCIAS_RELLENO`. Devuelve una lista nueva: quien la recibe puede tocarla."""
     if con_guia:
         return list(SUGERENCIAS_INICIALES)
     h = int(hora) % 24
-    for desde, hasta, lista in SUGERENCIAS_POR_FRANJA:
+    lista = list(SUGERENCIAS_INICIALES)  # inalcanzable: las franjas cubren 0..23
+    for desde, hasta, franja in SUGERENCIAS_POR_FRANJA:
         if desde <= h < hasta:
-            return list(lista)
-    return list(SUGERENCIAS_INICIALES)  # inalcanzable: las franjas cubren 0..23
+            lista = list(franja)
+            break
+    if rubros is None:
+        return lista
+    lista = [t for t in lista if any(r in rubros for r in RUBROS_DE_SUGERENCIA.get(t, ()))]
+    if len(lista) >= 2:
+        return lista
+    return (lista + SUGERENCIAS_RELLENO)[:max(2, len(lista) + 1)]
+
+
+# Los rubros con comercios de cada ciudad, en memoria unos minutos: se piden en cada saludo y no cambian a cada
+# rato. Un solo worker (regla 13 de AGENTS.md): el caché es del proceso. Una lectura fallida NO se guarda.
+_RUBROS_TTL = 600.0
+_RUBROS_CACHE: dict[str, tuple[float, frozenset[str]]] = {}
+
+
+def _rubros_de_ciudad(repo, slug: str | None) -> frozenset[str] | None:
+    """Los rubros con comercios de la ciudad, o None si no se sabe (sin ciudad o la lectura falló: entonces las
+    sugerencias salen sin filtrar, como en el panel)."""
+    if not slug or repo is None:
+        return None
+    ahora = time.monotonic()
+    hit = _RUBROS_CACHE.get(slug)
+    if hit and hit[0] > ahora:
+        return hit[1]
+    try:
+        rubros = repo.list_rubros_de_ciudad(slug)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("asistente.rubros_de_ciudad_fallo", ciudad=slug, error=str(e)[:200])
+        return None
+    if rubros is None:
+        return None
+    rubros = frozenset(rubros)
+    _RUBROS_CACHE[slug] = (ahora + _RUBROS_TTL, rubros)
+    return rubros
 
 
 # El "ahora" de la pregunta en curso (el que recibe `responder`), para que las sugerencias por franja salgan de
 # la misma hora que el resto de la respuesta. Sin él, la hora de Bolivia de verdad.
 _AHORA: contextvars.ContextVar[datetime | None] = contextvars.ContextVar("ahora", default=None)
+# El repo de la pregunta en curso: para leer los rubros de la ciudad sólo cuando hacen falta.
+_REPO: contextvars.ContextVar = contextvars.ContextVar("repo_asistente", default=None)
+
+
+def _hora_bolivia() -> int:
+    ahora = _AHORA.get() or datetime.now(TZ)
+    return ahora.hour if ahora.tzinfo is None else ahora.astimezone(TZ).hour  # sin zona: ya es hora de Bolivia
 
 
 def _sugerencias() -> list[str]:
     """Las sugerencias iniciales para la ciudad de la pregunta, a la hora de Bolivia de la pregunta."""
-    ahora = _AHORA.get() or datetime.now(TZ)
-    hora = ahora.hour if ahora.tzinfo is None else ahora.astimezone(TZ).hour  # sin zona: ya es hora de Bolivia
-    return sugerencias_iniciales(_con_guia(), hora)
+    con_guia = _con_guia()
+    rubros = None if con_guia else _rubros_de_ciudad(_REPO.get(), _ciudad_slug())
+    return sugerencias_iniciales(con_guia, _hora_bolivia(), rubros)
 
 
 URL_GUIA = f"{SITIO}/guia"
@@ -385,6 +457,9 @@ def _cotizaciones(repo) -> str | None:
     """Las dos que importan acá: dólar y peso argentino, en bolivianos. La
     tercera (dólar en pesos) es de la otra orilla y sólo confunde."""
     filas = [c for c in (repo.list_cotizaciones() or []) if c.get("valor") and (c.get("unidad") or "Bs") == "Bs"]
+    if not _con_guia():
+        # Sin frontera no hay peso argentino: sólo el dólar (spec §8, «nunca ofrece los pesos»).
+        filas = [c for c in filas if c.get("clave") == "usd_bob"]
     if not filas:
         return None
     partes = [f"{c.get('etiqueta')} {_num(c.get('valor'))} Bs" + (f" (por {c['detalle']})" if c.get("detalle") else "")
@@ -1117,7 +1192,7 @@ def _nivel0_abierto_ahora(repo, pregunta: str, ahora: datetime) -> Respuesta | N
     lineas = [f"• {c.get('nombre')} — {hor.etiqueta(hor.abierto_ahora(c['horario'], ahora), ahora).lower()}" for c in abiertos]
     return Respuesta(texto=("Abiertos ahora" + (f" para «{resto}»" if resto else "") + ":\n" + "\n".join(lineas)),
                      nivel=0, intent="abierto_ahora", fuentes=[_fuente(c) for c in abiertos],
-                     ver_url=_ver_url(q=resto))
+                     ver_url=_ver_url(q=resto, abierto=True))
 
 
 def _nivel0_lugares(repo, pregunta: str) -> Respuesta | None:
@@ -1286,12 +1361,23 @@ def _respuesta_saber(s: dict) -> Respuesta:
                      fuentes=[{"tipo": "saber", "nombre": s.get("pregunta"), "url": ""}])
 
 
+def _saludo_de_dax() -> str:
+    """El saludo de Dax (nombre propio, sin artículo). Ciudad con guía: el de siempre pero con su nombre. Sin guía:
+    «¡Buen día!» (6 a 11), «¡Hola!» (11 a 19) o «¡Buenas noches!» (19 a 6) y «Soy Dax y conozco {ciudad}»; igual
+    que `bienvenidaDax` de frontend/lib/home-ciudad-pure.ts."""
+    if _con_guia():
+        return (f"¡Hola! Soy Dax. Preguntame dónde conseguir algo en {_C()}, "
+                "si un local está abierto, el dólar, o cómo publicar tu negocio.")
+    h = _hora_bolivia()
+    saludo = "¡Buen día!" if 6 <= h < 11 else "¡Hola!" if 11 <= h < 19 else "¡Buenas noches!"
+    cierre = "¿Salís esta noche?" if 19 <= h < 24 else "¿Qué necesitás?"
+    return f"{saludo} Soy Dax y conozco {_C()}. {cierre}"
+
+
 def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     p = _norm(pregunta)
     if re.fullmatch(r"(hola|buenas|buen dia|buenos dias|buenas tardes|buenas noches|hey|holis)( uruku)?", p):
-        return Respuesta(texto=f"¡Hola! Soy la ayuda de URUKU. Preguntame dónde conseguir algo en {_C()}, "
-                               "si un local está abierto, el dólar, o cómo publicar tu negocio.",
-                         nivel=0, intent="saludo", sugerencias=_sugerencias())
+        return Respuesta(texto=_saludo_de_dax(), nivel=0, intent="saludo", sugerencias=_sugerencias())
     if re.fullmatch(r"(gracias|muchas gracias|ok gracias|genial|perfecto|dale)( uruku)?", p):
         return Respuesta(texto="¡De nada! Cualquier otra cosa, acá estoy.", nivel=0, intent="gracias",
                          sugerencias=_sugerencias())
@@ -1316,11 +1402,13 @@ def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     if re.search(r"\bdolar|cotiza|cambio\b|peso(s)? argentino|cuanto esta el peso|blue|conviene cambiar", p):
         t = _cotizaciones(repo)
         if t:
-            fav = _cambio_favorable(repo)
+            fav = _cambio_favorable(repo) if _con_guia() else None   # «por tus pesos»: es de frontera
             if fav:
                 t = t + " " + fav
+            sug = (["¿Cuánto son 10.000 pesos en bolivianos?", "¿Dónde cambio dólares?"] if _con_guia()
+                   else ["¿Dónde cambio dólares?", "¿Qué hay abierto ahora?"])
             return Respuesta(texto=t + f"\nConversor: {URL_CAMBIO} · Casas de cambio, en el mapa: {URL_CASAS_DE_CAMBIO}",
-                             nivel=0, intent="cotizacion", sugerencias=["¿Cuánto son 10.000 pesos en bolivianos?", "¿Dónde cambio dólares?"])
+                             nivel=0, intent="cotizacion", sugerencias=sug)
     if re.search(r"\bclima|\btiempo\b|lluev|llover|calor|frio|temperatura", p):
         t = _clima(repo)
         if t:
@@ -1765,11 +1853,13 @@ def responder(repo, pregunta: str, comercio: dict | None = None, ahora: datetime
     token = _CIUDAD.set(ciudad)
     memo = _MEMO.set({})
     token_ahora = _AHORA.set(ahora)
+    token_repo = _REPO.set(repo)
     try:
         if ciudad and ciudad.get("slug"):
             repo = _RepoEnCiudad(repo, ciudad["slug"])
         return _responder(repo, pregunta, comercio, ahora, con_ia)
     finally:
+        _REPO.reset(token_repo)
         _AHORA.reset(token_ahora)
         _MEMO.reset(memo)
         _CIUDAD.reset(token)

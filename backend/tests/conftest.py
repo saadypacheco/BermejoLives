@@ -30,6 +30,15 @@ def _reset_rate_limit():
 
 
 @pytest.fixture(autouse=True)
+def _rubros_de_ciudad_sin_cache():
+    """El caché de rubros por ciudad del asistente es de módulo: cada test arranca sin él."""
+    from app.services import asistente
+    asistente._RUBROS_CACHE.clear()
+    yield
+    asistente._RUBROS_CACHE.clear()
+
+
+@pytest.fixture(autouse=True)
 def _observabilidad_sin_red(monkeypatch):
     """Los registros de errores y de pedidos lentos (`services/observabilidad`)
     usan `get_supabase()` directo, sin pasar por el repo falso: en los tests
@@ -235,6 +244,7 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         ]
         self.clima: dict = {"id": 1, "temp_c": None, "descripcion": None, "override_hasta": None}
         self.clima_ciudades: dict[str, dict] = {}
+        self.rubros_de_ciudad: dict[str, set[str]] = {}
         self.ciudades_con_coordenadas: list[dict] = [
             {"id": "ciu-1", "slug": "bermejo", "lat": -22.7361, "lng": -64.3433},
             {"id": "ciu-santa-cruz", "slug": "santa-cruz", "lat": -17.7833, "lng": -63.1821},
@@ -1629,6 +1639,11 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
 
     def list_ciudades_con_coordenadas(self):
         return list(self.ciudades_con_coordenadas)
+
+    def list_rubros_de_ciudad(self, ciudad_slug):
+        """`rubros_de_ciudad = {slug: {rubros}}`; una ciudad que no está = no se sabe (None, sin filtrar)."""
+        rubros = self.rubros_de_ciudad.get(ciudad_slug)
+        return None if rubros is None else set(rubros)
 
     def upsert_clima_ciudad(self, ciudad_id, temp_c, descripcion):
         fila = {"ciudad_id": ciudad_id, "temp_c": temp_c, "descripcion": descripcion,

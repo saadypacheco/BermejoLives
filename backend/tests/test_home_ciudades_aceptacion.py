@@ -9,8 +9,7 @@ Complementa test_asistente_sugerencias.py y test_clima_ciudades.py del dev con:
   - el endpoint /asistente/preguntar con una ciudad sin guía y con Bermejo;
   - el clima por ciudad: alineación con coordenadas ausentes en el medio, tolerancia a respuestas raras.
 
-Los tests marcados `xfail(strict=True)` documentan un hallazgo del QA (ver el reporte): cuando se corrija, pasan a XPASS y
-la suite avisa (strict) para sacarles la marca.
+El hallazgo BUG-2 del QA (pesos en la cotización de una ciudad sin frontera) ya está corregido: sus tests corren normales.
 """
 from datetime import datetime, timezone
 
@@ -114,8 +113,7 @@ def _con_cotizaciones(repo):
 
 # HALLAZGO (BUG-2): en una ciudad SIN frontera, «¿a cuánto está el dólar?» contesta con el peso argentino y sugiere
 # «¿Cuánto son 10.000 pesos en bolivianos?». La spec (§8, «Backend») dice: «Nunca ofrece el paso, la aduana ni los pesos
-# en una ciudad sin frontera». Hoy la sugerencia sale de asistente.py (rama `cotizacion`) sin mirar `_con_guia()`.
-@pytest.mark.xfail(strict=True, reason="BUG-2: la respuesta de cotización ofrece pesos argentinos en una ciudad sin frontera (services/asistente.py ~L1323)")
+# en una ciudad sin frontera». Corregido: la rama `cotizacion` de asistente.py mira `_con_guia()`.
 @pytest.mark.parametrize("pregunta", ["a cuánto está el dólar", "cotización", "¿cuánto está el peso argentino?"])
 def test_ciudad_sin_frontera_nunca_ofrece_pesos_en_la_cotizacion(repo, pregunta):
     _con_cotizaciones(repo)
