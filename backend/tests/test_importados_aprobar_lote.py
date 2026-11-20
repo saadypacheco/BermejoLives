@@ -77,7 +77,7 @@ def test_cuerpo_invalido_es_422(client, datos, cuerpo):
 def test_la_ruta_no_choca_con_las_de_importado_id(client, datos, repo):
     r = client.post(URL, json=_cuerpo(), headers=datos)
     assert r.status_code == 200 and r.json() == {
-        "aprobados": 0, "salteados": {"repetidos": 0, "sin_rubro": 0, "sin_punto": 0, "error": 0}}
+        "aprobados": 0, "salteados": {"repetidos": 0, "sin_rubro": 0, "sin_punto": 0, "error": 0}, "restantes": 0}
 
 
 # ───────────────────────────────────────────── simular
@@ -88,7 +88,7 @@ def test_simular_cuenta_sin_escribir_nada(client, datos, repo):
     comercios_antes = dict(repo.comercios)
     r = client.post(URL, json=_cuerpo(simular=True), headers=datos)
     assert r.status_code == 200, r.text
-    assert r.json() == {"aprobados": 2, "salteados": {"repetidos": 2, "sin_rubro": 2, "sin_punto": 2, "error": 0}}
+    assert r.json() == {"aprobados": 2, "salteados": {"repetidos": 2, "sin_rubro": 2, "sin_punto": 2, "error": 0}, "restantes": 0}
     assert repo.importados == antes                      # ni un solo importado cambió
     assert repo.comercios == comercios_antes             # ni un comercio nuevo
 
@@ -106,7 +106,7 @@ def test_aprueba_las_buenas_y_saltea_el_resto(client, datos, repo):
     _sembrar_mezcla(repo)
     r = client.post(URL, json=_cuerpo(), headers=datos)
     assert r.status_code == 200, r.text
-    assert r.json() == {"aprobados": 2, "salteados": {"repetidos": 2, "sin_rubro": 2, "sin_punto": 2, "error": 0}}
+    assert r.json() == {"aprobados": 2, "salteados": {"repetidos": 2, "sin_rubro": 2, "sin_punto": 2, "error": 0}, "restantes": 0}
     for ok in ("ok-1", "ok-2"):
         assert repo.importados[ok]["estado"] == "promovido" and repo.importados[ok]["comercio_id"] in repo.comercios
         assert repo.importados[ok]["revisado_por"] == "datos@uruku.bo"
@@ -167,7 +167,7 @@ def test_una_segunda_llamada_no_repite_nada(client, datos, repo):
 def test_sin_solo_con_punto_las_de_turismo_sin_punto_se_aprueban_sin_ubicacion(client, datos, repo):
     _sembrar_mezcla(repo)
     r = client.post(URL, json=_cuerpo(solo_con_punto=False), headers=datos)
-    assert r.json() == {"aprobados": 4, "salteados": {"repetidos": 2, "sin_rubro": 2, "sin_punto": 0, "error": 0}}
+    assert r.json() == {"aprobados": 4, "salteados": {"repetidos": 2, "sin_rubro": 2, "sin_punto": 0, "error": 0}, "restantes": 0}
     c = repo.comercios[repo.importados["sinp-1"]["comercio_id"]]
     assert c["lat"] is None and c["lng"] is None
 
@@ -177,7 +177,7 @@ def test_sin_solo_con_punto_una_fuente_que_exige_punto_cuenta_como_error(client,
     _imp(repo, "anh-2", fuente="anh")
     cuerpo = {"fuente": "anh", "ciudad_id": CIUDAD, "solo_con_punto": False}
     sim = client.post(URL, json={**cuerpo, "simular": True}, headers=datos).json()
-    assert sim == {"aprobados": 1, "salteados": {"repetidos": 0, "sin_rubro": 0, "sin_punto": 0, "error": 1}}
+    assert sim == {"aprobados": 1, "salteados": {"repetidos": 0, "sin_rubro": 0, "sin_punto": 0, "error": 1}, "restantes": 0}
     real = client.post(URL, json=cuerpo, headers=datos).json()
     assert real == sim
     assert repo.importados["anh-1"]["estado"] == "nuevo" and repo.importados["anh-2"]["estado"] == "promovido"
@@ -189,7 +189,7 @@ def test_una_fila_sin_nombre_cuenta_como_error_y_las_demas_siguen(client, datos,
     _imp(repo, "sin-nombre", nombre="  ")
     _imp(repo, "bien")
     r = client.post(URL, json=_cuerpo(), headers=datos).json()
-    assert r == {"aprobados": 1, "salteados": {"repetidos": 0, "sin_rubro": 0, "sin_punto": 0, "error": 1}}
+    assert r == {"aprobados": 1, "salteados": {"repetidos": 0, "sin_rubro": 0, "sin_punto": 0, "error": 1}, "restantes": 0}
     assert repo.importados["bien"]["estado"] == "promovido" and repo.importados["sin-nombre"]["estado"] == "nuevo"
 
 
@@ -205,28 +205,204 @@ def test_una_falla_de_la_base_en_una_fila_no_frena_el_lote(client, datos, repo, 
 
     monkeypatch.setattr(repo, "crear_comercio", falla_la_primera)
     r = client.post(URL, json=_cuerpo(), headers=datos).json()
-    assert r == {"aprobados": 1, "salteados": {"repetidos": 0, "sin_rubro": 0, "sin_punto": 0, "error": 1}}
+    assert r == {"aprobados": 1, "salteados": {"repetidos": 0, "sin_rubro": 0, "sin_punto": 0, "error": 1}, "restantes": 0}
     assert repo.importados["a"]["estado"] == "nuevo" and repo.importados["b"]["estado"] == "promovido"
 
 
-def test_el_tope_es_de_1000_filas_por_llamada(client, datos, repo, monkeypatch):
+def test_el_tope_por_llamada_es_de_200_y_la_segunda_llamada_sigue(client, datos, repo):
+    assert moderacion.TOPE_LOTE_APROBAR == 200
+    for i in range(205):
+        _imp(repo, f"n-{i:03d}")
+    r1 = client.post(URL, json=_cuerpo(), headers=datos).json()
+    assert r1["aprobados"] == 200 and r1["restantes"] == 5
+    r2 = client.post(URL, json=_cuerpo(), headers=datos).json()
+    assert r2["aprobados"] == 5 and r2["restantes"] == 0
+    assert len(repo.comercios) == 205
+
+
+def test_max_aprobar_limita_lo_que_se_aprueba_y_restantes_cuenta_el_resto(client, datos, repo):
     for i in range(7):
         _imp(repo, f"n-{i}")
-    monkeypatch.setattr(moderacion, "TOPE_LOTE_APROBAR", 5)
-    visto = {}
-    original = repo.list_importados
+    r = client.post(URL, json=_cuerpo(max_aprobar=3), headers=datos).json()
+    assert r["aprobados"] == 3 and r["restantes"] == 4 and len(repo.comercios) == 3
+    r = client.post(URL, json=_cuerpo(max_aprobar=3, simular=True), headers=datos).json()
+    assert r["aprobados"] == 3 and r["restantes"] == 1 and len(repo.comercios) == 3        # simular no escribe
+    r = client.post(URL, json=_cuerpo(max_aprobar=200), headers=datos).json()
+    assert r["aprobados"] == 4 and r["restantes"] == 0
 
-    def espia(estado, ciudad_id, q, limite=200, fuente=None, rubro=None):
-        visto["limite"] = limite
-        return original(estado, ciudad_id, q, limite, fuente, rubro)
 
-    monkeypatch.setattr(repo, "list_importados", espia)
+@pytest.mark.parametrize("valor", [0, -1, 201, "muchos", 1.5])
+def test_max_aprobar_fuera_de_1_a_200_es_422(client, datos, valor):
+    assert client.post(URL, json=_cuerpo(max_aprobar=valor), headers=datos).status_code == 422
+
+
+def test_repetir_la_llamada_avanza_aunque_haya_mil_saltados_antes(client, datos, repo):
+    """BUG-3 (QA): los saltados no ocupan el lugar de los aprobables, que siempre se alcanzan."""
+    for i in range(1000):
+        _imp(repo, f"a{i:04d}", duplicado_de="com-x")              # 1000 repetidos primero (por nombre)
+    for i in range(5):
+        _imp(repo, f"z{i}")                                        # 5 aprobables más abajo
+    r1 = client.post(URL, json=_cuerpo(), headers=datos).json()
+    assert r1["aprobados"] == 5 and r1["restantes"] == 0 and r1["salteados"]["repetidos"] == 1000
+
+
+def test_restantes_no_cuenta_lo_que_falla_al_guardarse_en_esta_llamada(client, datos, repo, monkeypatch):
+    for i in range(3):
+        _imp(repo, f"n-{i}")
+    original = repo.crear_comercio
+
+    def falla_la_primera(row):
+        if row["nombre"] == "Negocio n-0":
+            raise RuntimeError("base caída")
+        return original(row)
+
+    monkeypatch.setattr(repo, "crear_comercio", falla_la_primera)
+    r = client.post(URL, json=_cuerpo(max_aprobar=2), headers=datos).json()
+    assert r == {"aprobados": 1, "salteados": {"repetidos": 0, "sin_rubro": 0, "sin_punto": 0, "error": 1}, "restantes": 1}
+
+
+# ───────────────────────────────────────────── M2: sólo las fuentes oficiales
+
+@pytest.mark.parametrize("fuente", ["tarjeta", "osm", "overture"])
+def test_las_fuentes_no_oficiales_son_422_con_mensaje_claro(client, datos, repo, fuente):
+    _imp(repo, "x", fuente=fuente)
+    r = client.post(URL, json=_cuerpo(fuente=fuente), headers=datos)
+    assert r.status_code == 422
+    texto = str(r.json())
+    assert "sólo vale para las fuentes oficiales" in texto and "turismo, anh y aduana" in texto
+    assert repo.importados["x"]["estado"] == "nuevo"
+
+
+@pytest.mark.parametrize("fuente", ["turismo", "anh", "aduana"])
+def test_las_fuentes_oficiales_entran(client, datos, repo, fuente):
+    _imp(repo, "x", fuente=fuente)
+    r = client.post(URL, json=_cuerpo(fuente=fuente), headers=datos)
+    assert r.status_code == 200 and r.json()["aprobados"] == 1
+
+
+# ───────────────────────────────────────────── M1: una sola aprobación en bloque a la vez y reserva de la fila
+
+def test_si_hay_otra_aprobacion_en_bloque_en_curso_es_409(client, datos, repo):
+    _imp(repo, "x")
+    assert moderacion._LOTE_APROBAR.acquire(blocking=False)
+    try:
+        for simular in (False, True):
+            r = client.post(URL, json=_cuerpo(simular=simular), headers=datos)
+            assert r.status_code == 409 and r.json()["detail"] == "Ya hay una aprobación en bloque en curso."
+    finally:
+        moderacion._LOTE_APROBAR.release()
+    assert repo.importados["x"]["estado"] == "nuevo"
+    assert client.post(URL, json=_cuerpo(), headers=datos).json()["aprobados"] == 1       # soltada, vuelve a andar
+
+
+def test_el_candado_se_suelta_aunque_la_llamada_falle(client, datos, repo, monkeypatch):
+    monkeypatch.setattr(repo, "list_importados_nuevos", lambda c, f: (_ for _ in ()).throw(RuntimeError("base caída")))
+    with pytest.raises(RuntimeError):
+        client.post(URL, json=_cuerpo(), headers=datos)
+    assert moderacion._LOTE_APROBAR.acquire(blocking=False)
+    moderacion._LOTE_APROBAR.release()
+
+
+def test_una_fila_reservada_por_otra_aprobacion_da_409_y_no_crea_un_segundo_comercio(client, datos, repo):
+    _imp(repo, "x")
+    assert repo.reclamar_importado("x")                      # otra persona la está aprobando
+    r = client.post("/admin/importados/x/promover", json={}, headers=datos)
+    assert r.status_code == 409 and repo.comercios == {}
+    # en bloque: la fila reservada cuenta como error y no se aprueba dos veces
     r = client.post(URL, json=_cuerpo(), headers=datos).json()
-    assert visto["limite"] == 5 and r["aprobados"] == 5
-    assert client.post(URL, json=_cuerpo(), headers=datos).json()["aprobados"] == 2      # la segunda llamada sigue
-    assert moderacion.TOPE_LOTE_APROBAR == 5
-    monkeypatch.undo()
-    assert moderacion.TOPE_LOTE_APROBAR == 1000
+    assert r["aprobados"] == 0 and r["salteados"]["error"] == 1 and repo.comercios == {}
+
+
+def test_carrera_aprobar_de_a_uno_mientras_se_crea_el_comercio_solo_gana_una(client, datos, repo, monkeypatch):
+    """Mientras la primera aprobación está creando el comercio (ya reservó la fila), llega la segunda (a mano o en
+    bloque): pierde. Resultado: un solo comercio."""
+    _imp(repo, "x")
+    original = repo.crear_comercio
+    resultados = []
+
+    def crear_y_competir(row):
+        if not resultados:
+            resultados.append(client.post("/admin/importados/x/promover", json={}, headers=datos).status_code)
+            resultados.append(client.post(URL, json=_cuerpo(), headers=datos).json())
+        return original(row)
+
+    monkeypatch.setattr(repo, "crear_comercio", crear_y_competir)
+    assert client.post("/admin/importados/x/promover", json={}, headers=datos).status_code == 200
+    assert resultados[0] == 409
+    assert resultados[1]["aprobados"] == 0 and resultados[1]["salteados"]["error"] == 1
+    assert len(repo.comercios) == 1 and repo.importados["x"]["estado"] == "promovido"
+    assert repo.importados["x"]["aprobando_desde"] is None
+
+
+def test_si_falla_antes_de_crear_el_comercio_se_suelta_la_reserva(client, datos, repo, monkeypatch):
+    _imp(repo, "x")
+    original = repo.crear_comercio
+    monkeypatch.setattr(repo, "crear_comercio", lambda row: (_ for _ in ()).throw(RuntimeError("base caída")))
+    with pytest.raises(RuntimeError):
+        client.post("/admin/importados/x/promover", json={}, headers=datos)
+    assert repo.importados["x"]["estado"] == "nuevo" and repo.importados["x"]["aprobando_desde"] is None
+    monkeypatch.setattr(repo, "crear_comercio", original)
+    assert client.post("/admin/importados/x/promover", json={}, headers=datos).status_code == 200
+
+
+def test_si_el_comercio_ya_se_creo_la_reserva_no_se_suelta(client, datos, repo, monkeypatch):
+    """Si falla después de crear el comercio, soltar la reserva dejaría crear un segundo: se deja vencer."""
+    _imp(repo, "x")
+    monkeypatch.setattr(repo, "marcar_importado", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("base caída")))
+    with pytest.raises(RuntimeError):
+        client.post("/admin/importados/x/promover", json={}, headers=datos)
+    assert len(repo.comercios) == 1 and repo.importados["x"]["aprobando_desde"] is not None
+    assert repo.reclamar_importado("x") is False
+
+
+def test_la_reserva_vence_a_los_10_minutos(repo):
+    from datetime import datetime, timedelta, timezone
+    _imp(repo, "x")
+    assert repo.reclamar_importado("x") is True and repo.reclamar_importado("x") is False
+    repo.importados["x"]["aprobando_desde"] = (datetime.now(timezone.utc) - timedelta(minutes=11)).isoformat()
+    assert repo.reclamar_importado("x") is True
+    repo.importados["x"]["estado"] = "promovido"
+    repo.importados["x"]["aprobando_desde"] = None
+    assert repo.reclamar_importado("x") is False
+
+
+class _Cadena:
+    """Un cliente de PostgREST de mentira: anota los llamados encadenados y contesta con `datos`."""
+
+    def __init__(self, datos):
+        self.llamados, self._datos = [], datos
+
+    def __getattr__(self, nombre):
+        def llamar(*a, **k):
+            self.llamados.append((nombre, a))
+            return self
+        return llamar
+
+    def execute(self):
+        return type("R", (), {"data": self._datos})()
+
+
+def test_la_reserva_real_es_una_actualizacion_condicional_sobre_estado_nuevo():
+    from app.db.repository import SupabaseRepo
+    for datos, esperado in (([{"id": "x"}], True), ([], False)):
+        c = _Cadena(datos)
+        assert SupabaseRepo(client=c).reclamar_importado("x") is esperado
+        nombres = [n for n, _ in c.llamados]
+        assert nombres[:2] == ["table", "update"] and ("eq", ("estado", "nuevo")) in c.llamados
+        assert ("eq", ("id", "x")) in c.llamados
+        o = next(a[0] for n, a in c.llamados if n == "or_")
+        assert o.startswith("aprobando_desde.is.null,aprobando_desde.lt.")
+        assert next(a[0] for n, a in c.llamados if n == "update").keys() == {"aprobando_desde"}
+
+
+def test_la_tarjeta_real_es_una_actualizacion_condicional_sobre_la_portada():
+    from app.db.repository import SupabaseRepo
+    c = _Cadena([{"id": "c"}])
+    assert SupabaseRepo(client=c).actualizar_portada_card("c", {"portada_card_url": "u"}, "https://x/p.jpg", None) is True
+    assert ("eq", ("portada_url", "https://x/p.jpg")) in c.llamados and ("is_", ("portada_pos", "null")) in c.llamados
+    c = _Cadena([])
+    assert SupabaseRepo(client=c).actualizar_portada_card("c", {}, "https://x/p.jpg", 40) is False
+    assert ("eq", ("portada_pos", 40)) in c.llamados
 
 
 def test_deja_registro_con_structlog(client, datos, repo):

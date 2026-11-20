@@ -11,6 +11,11 @@
 --     `pendiente` y una persona los aprueba. RLS: el público sólo lee `estado = 'aprobado' and activo`; el backend
 --     (service_role) lee, inserta y actualiza, sin DELETE (borrado lógico con `activo`).
 --  5. Interruptor de costo `gemini_gastronomia` (apagado): escribir las descripciones con Gemini cuesta plata.
+--  6. `comercios_importados.aprobando_desde`: la RESERVA de una fila mientras se aprueba (promover). Una actualización
+--     condicional (`estado = 'nuevo'` y sin reserva vigente) la toma; así una fila nunca crea dos comercios aunque se
+--     apruebe a la vez de a uno y en bloque. Vence sola a los 10 minutos. Privada como toda la tabla (sólo service_role).
+--  7. `bebidas` ya no se queda con las palabras de `bodegas`: `vino` pasa a `vinos?\M` (no toma «vinoteca») y
+--     `singani` a `singani(?! artesanal)` (el «singani artesanal» es de bodegas; el singani a secas, de bebidas).
 --
 -- Sin borrado físico. Idempotente: se puede correr dos veces. Copia idéntica en supabase/migrations/ y
 -- selfhost/postgres-init/.
@@ -204,6 +209,18 @@ insert into public.rubro_palabras (rubro_slug, patron) values
   ('bodegas', '\m(bodega|vinoteca|vinedo|singani artesanal|cata de vinos)')
 on conflict (rubro_slug, patron) do nothing;
 
+-- `bebidas` tenía `vino` sin borde de palabra (0045): tomaba «vinoteca», y como `rubros_sugeridos` devuelve los rubros
+-- en orden alfabético (`array_agg(distinct)`), `bebidas` le ganaba a `bodegas` como principal. Se reescriben los dos
+-- patrones de bebidas que tocan el tema (las palabras viejas se sacan por un fragmento ASCII, como en la 0097):
+--   `vino`    -> `vinos?\M`            «vino» y «vinos» sí; «vinoteca» no.
+--   `singani` -> `singani(?! artesanal)`  el singani a secas sigue en bebidas; «singani artesanal» es de bodegas.
+delete from rubro_palabras where rubro_slug = 'bebidas' and patron like '%cerveza|vino|jugo%';
+delete from rubro_palabras where rubro_slug = 'bebidas' and patron like '%vodka|singani|whiskeria%';
+insert into public.rubro_palabras (rubro_slug, patron) values
+  ('bebidas', '\m(bebida|gaseosa|cerveza|vinos?\M|jugo|licor|whisky|refresco)'),
+  ('bebidas', '\m(fernet|ron\M|vodka|singani(?! artesanal)|whiskeria|champagne|espumante)')
+on conflict (rubro_slug, patron) do nothing;
+
 -- Las bodegas de la página de turismo que todavía nadie revisó pasan de `bebidas` a `bodegas`. La subcategoría
 -- (`bodegas-y-vinotecas`) está en `categoria` y en `tags.turismo.subcategoria`. Lo ya promovido o descartado no se toca.
 update public.comercios_importados
@@ -212,6 +229,11 @@ update public.comercios_importados
    and estado = 'nuevo'
    and (categoria = 'bodegas-y-vinotecas' or tags #>> '{turismo,subcategoria}' = 'bodegas-y-vinotecas')
    and rubro_slug is distinct from 'bodegas';
+
+-- ───────────────────────────────────────────── 3 bis. la reserva de un importado que se está aprobando
+alter table public.comercios_importados add column if not exists aprobando_desde timestamptz;
+comment on column public.comercios_importados.aprobando_desde is
+  'Reserva: cuándo empezó a aprobarse esta fila (promover). Vence a los 10 minutos. Null = nadie la está aprobando.';
 
 -- ───────────────────────────────────────────── 4. platos típicos
 create table if not exists public.platos_tipicos (
@@ -314,6 +336,23 @@ begin
   end if;
   if exists (select 1 from public.cost_switches where key = 'gemini_gastronomia' and enabled) then
     raise exception '0202: gemini_gastronomia tiene que nacer apagado';
+  end if;
+  foreach v_rol in array array['anon', 'authenticated'] loop
+    if has_column_privilege(v_rol, 'public.comercios_importados', 'aprobando_desde', 'select') then
+      raise exception '0202: % puede leer comercios_importados.aprobando_desde y es privada', v_rol;
+    end if;
+  end loop;
+  if not has_column_privilege('service_role', 'public.comercios_importados', 'aprobando_desde', 'update') then
+    raise exception '0202: service_role no puede escribir comercios_importados.aprobando_desde';
+  end if;
+  if exists (select 1 from public.rubro_palabras where rubro_slug = 'bebidas' and patron like '%cerveza|vino|jugo%')
+     or exists (select 1 from public.rubro_palabras where rubro_slug = 'bebidas' and patron like '%vodka|singani|whiskeria%') then
+    raise exception '0202: quedaron las palabras viejas de bebidas (vino / singani sin borde)';
+  end if;
+  if not 'bodegas' = any (public.rubros_sugeridos('vinoteca el parral'))
+     or 'bebidas' = any (public.rubros_sugeridos('vinoteca el parral'))
+     or 'bebidas' = any (public.rubros_sugeridos('singani artesanal del valle')) then
+    raise exception '0202: la clasificación de bodegas y bebidas no quedó como se esperaba';
   end if;
   -- buscar_comercios devuelve las columnas nuevas y sigue respetando el tope de filas
   perform portada_card_url, portada_calidad from public.buscar_comercios(p_limit => 1);

@@ -31,6 +31,10 @@ CÓMO SE USA (a mano, dentro del contenedor del backend)
 BUENA EDUCACIÓN CON EL SITIO: un pedido por segundo, User-Agent propio (la misma descarga que los importadores de
 turismo). Son 4 pedidos en total.
 
+LÍMITE CONOCIDO: el detector de copias busca 8 palabras seguidas iguales. Una paráfrasis casi literal que cambie una
+palabra cada 7 lo esquiva. Lo mitiga la aprobación humana: todo plato entra `pendiente` y no se publica (ni se puede
+aprobar sin texto) hasta que una persona lo lee en Admin › Platos típicos.
+
 IDEMPOTENTE: no repite un plato que ya está en la ciudad (mismo nombre, sin mirar mayúsculas ni tildes), sea cual
 sea su estado. Todo entra `pendiente`: nada se publica hasta que una persona lo aprueba en Admin › Platos típicos.
 """
@@ -209,11 +213,17 @@ def leer_notas(sitio: dict, pedir: Callable[[str], str]) -> list[Nota]:
 TIPOS_PALABRA = {"plato": "plato típico", "reposteria": "dulce o repostería tradicional", "bebida": "bebida típica"}
 
 
+def neutralizar(texto: str) -> str:
+    """El texto de la fuente sin `<` ni `>` (los cambia por las comillas angulares ‹ ›): así nada de lo que diga la nota
+    puede cerrar la marca `</nota>` ni abrir otra, y lo que sigue no se lee como instrucciones."""
+    return (texto or "").replace("<", "‹").replace(">", "›")
+
+
 def construir_prompt(nota: Nota, objeciones: list[str] | None = None) -> str:
     """El pedido a Gemini. La nota va entre marcas como DATOS: lo que diga adentro no es una orden."""
     texto = [
         "Sos redactor de una guía gastronómica para visitantes. Escribí la descripción de un "
-        f"{TIPOS_PALABRA.get(nota.tipo, 'plato típico')} llamado «{nota.nombre}».",
+        f"{TIPOS_PALABRA.get(nota.tipo, 'plato típico')} llamado «{neutralizar(nota.nombre)}».",
         "",
         "Reglas:",
         f"- Escribí {FRASES_MIN} a {FRASES_MAX} frases en español rioplatense, con voseo (no uses «tú»).",
@@ -229,7 +239,7 @@ def construir_prompt(nota: Nota, objeciones: list[str] | None = None) -> str:
     ]
     if objeciones:
         texto += ["", "El intento anterior se rechazó por esto, corregilo:"] + [f"- {o}" for o in objeciones]
-    texto += ["", "<nota>", nota.texto[:MAX_FUENTE], "</nota>"]
+    texto += ["", "<nota>", neutralizar(nota.texto[:MAX_FUENTE]), "</nota>"]
     return "\n".join(texto)
 
 

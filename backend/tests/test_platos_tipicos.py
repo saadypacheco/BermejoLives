@@ -9,7 +9,8 @@ from app.core import auth
 from app.core.config import settings
 from app.services import content_captions, cost_switches, importar_gastronomia as ig, importar_turismo
 
-CIUDAD = {"id": "ciu-tarija", "slug": "tarija", "nombre": "Tarija"}
+CIUDAD = {"id": "6f1c1c1e-1b1a-4c55-9d3a-0a6c2f9a7b10", "slug": "tarija", "nombre": "Tarija"}
+OTRA_CIUDAD = "9a2b8d6e-3c4d-4e5f-8a7b-1c2d3e4f5a6b"
 BASE = "https://tarijaturismo.com"
 
 
@@ -92,7 +93,7 @@ def test_listar_filtra_por_ciudad_y_estado_y_muestra_todos_los_estados(client, r
     repo.update_plato(p["id"], {"estado": "aprobado"})
     r_ = _plato(repo, nombre="C", tipo="reposteria")
     repo.update_plato(r_["id"], {"estado": "rechazado", "activo": False})
-    _plato(repo, nombre="D", ciudad_id="ciu-otra")
+    _plato(repo, nombre="D", ciudad_id=OTRA_CIUDAD)
     todos = client.get("/admin/platos", params={"ciudad_id": CIUDAD["id"]}, headers=contenido).json()
     assert sorted(x["nombre"] for x in todos) == ["A", "B", "C"]
     assert [x["nombre"] for x in client.get("/admin/platos", params={"ciudad_id": CIUDAD["id"], "estado": "aprobado"},
@@ -142,7 +143,8 @@ def test_errores_404_400_422_409(client, repo, contenido):
     p = _plato(repo)
     otro = _plato(repo, nombre="Chancho a la cruz")
     url = f"/admin/platos/{p['id']}"
-    assert client.patch("/admin/platos/no-existe", json={"estado": "aprobado"}, headers=contenido).status_code == 404
+    assert client.patch("/admin/platos/3d8e1f52-7a40-4b8f-9c11-5e2a6b7c8d90", json={"estado": "aprobado"},
+                        headers=contenido).status_code == 404
     assert client.patch(url, json={}, headers=contenido).status_code == 400
     assert client.patch(url, json={"nombre": "   "}, headers=contenido).status_code == 400
     assert client.patch(url, json={"estado": "publicado"}, headers=contenido).status_code == 422
@@ -160,6 +162,33 @@ def test_editar_deja_registro_con_structlog(client, repo, contenido):
         client.patch(f"/admin/platos/{p['id']}", json={"estado": "aprobado"}, headers=contenido)
     ev = next(l for l in logs if l["event"] == "admin.plato_editado")
     assert ev["plato"] == p["id"] and ev["estado"] == "aprobado" and ev["by"] == "x@uruku.bo"
+
+
+def test_un_id_que_no_es_uuid_es_400_y_no_un_500(client, repo, contenido):
+    for malo in ("no-existe", "123", "x" * 80, "1; drop"):
+        r = client.patch(f"/admin/platos/{malo}", json={"estado": "aprobado"}, headers=contenido)
+        assert r.status_code == 400 and "no es válido" in r.json()["detail"], malo
+    r = client.get("/admin/platos", params={"ciudad_id": "tarija"}, headers=contenido)
+    assert r.status_code == 400 and "ciudad" in r.json()["detail"].lower()
+
+
+def test_aprobar_exige_texto_el_que_ya_tiene_o_el_del_mismo_cuerpo(client, repo, contenido):
+    sin = _plato(repo, descripcion=None)
+    url = f"/admin/platos/{sin['id']}"
+    r = client.patch(url, json={"estado": "aprobado"}, headers=contenido)
+    assert r.status_code == 400 and r.json()["detail"] == "No se puede aprobar un plato sin texto."
+    assert client.patch(url, json={"estado": "aprobado", "descripcion": "   "}, headers=contenido).status_code == 400
+    assert repo.get_plato(sin["id"])["estado"] == "pendiente"
+    # con el texto en el mismo cuerpo, sí
+    r = client.patch(url, json={"estado": "aprobado", "descripcion": "Un guiso de carne y ají."}, headers=contenido)
+    assert r.status_code == 200 and r.json()["estado"] == "aprobado"
+    # y una vez aprobado no se le puede vaciar el texto
+    r = client.patch(url, json={"descripcion": ""}, headers=contenido)
+    assert r.status_code == 400 and repo.get_plato(sin["id"])["descripcion"] == "Un guiso de carne y ají."
+    # rechazar o pendiente no necesitan texto
+    assert client.patch(url, json={"estado": "rechazado", "descripcion": ""}, headers=contenido).status_code == 200
+    con = _plato(repo, nombre="Con texto")
+    assert client.patch(f"/admin/platos/{con['id']}", json={"estado": "aprobado"}, headers=contenido).status_code == 200
 
 
 # ══════════════════════════════════════════ el interruptor de costo
@@ -370,7 +399,7 @@ def test_cargar_guarda_pendientes_con_texto_original_y_sin_el_texto_de_la_nota(r
 
 def test_cargar_no_repite_lo_que_ya_esta_aunque_cambie_mayusculas_o_tildes_ni_pide_texto_de_mas(repo):
     repo.crear_plato({"ciudad_id": CIUDAD["id"], "tipo": "plato", "nombre": "SAICE", "estado": "rechazado"})
-    repo.crear_plato({"ciudad_id": "ciu-otra", "tipo": "bebida", "nombre": "Singani"})        # otra ciudad: no cuenta
+    repo.crear_plato({"ciudad_id": OTRA_CIUDAD, "tipo": "bebida", "nombre": "Singani"})        # otra ciudad: no cuenta
     llamadas = []
     r = ig.cargar(repo, _notas(), CIUDAD, escribir=True, llamar=lambda p: llamadas.append(1) or {"descripcion": ORIGINAL},
                   imprimir=lambda s: None)

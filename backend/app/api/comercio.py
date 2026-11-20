@@ -958,7 +958,7 @@ async def update_perfil_foto(
     if not portada_url:
         raise HTTPException(status_code=502, detail="No se pudo subir la foto, probá de nuevo")
     # Reinicia el recorte y borra del disco la portada anterior si la galería no la usa.
-    updated = portada.poner_nueva(repo, comercio, portada_url, portada_thumb)
+    updated = await run_in_threadpool(portada.poner_nueva, repo, comercio, portada_url, portada_thumb)
     logger.info("comercio.perfil_foto_update", comercio=claims["comercio_id"])
     return _perfil_dict(repo, updated)
 
