@@ -234,6 +234,11 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
             {"clave": "ars_bob", "etiqueta": "Peso argentino", "detalle": "1.000 ARS", "valor": 0, "unidad": "Bs", "orden": 2},
         ]
         self.clima: dict = {"id": 1, "temp_c": None, "descripcion": None, "override_hasta": None}
+        self.clima_ciudades: dict[str, dict] = {}
+        self.ciudades_con_coordenadas: list[dict] = [
+            {"id": "ciu-1", "slug": "bermejo", "lat": -22.7361, "lng": -64.3433},
+            {"id": "ciu-santa-cruz", "slug": "santa-cruz", "lat": -17.7833, "lng": -63.1821},
+        ]
         self.saber_local: dict[str, dict] = {}        # id -> row
         self.contactos_base: dict[tuple, dict] = {}   # (telefono, grupo_slug) -> row
         self.conversaciones: list[dict] = []          # Uruku Ayuda
@@ -1621,6 +1626,15 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
     def update_clima(self, patch):
         self.clima.update(patch)
         return self.clima
+
+    def list_ciudades_con_coordenadas(self):
+        return list(self.ciudades_con_coordenadas)
+
+    def upsert_clima_ciudad(self, ciudad_id, temp_c, descripcion):
+        fila = {"ciudad_id": ciudad_id, "temp_c": temp_c, "descripcion": descripcion,
+                "actualizado_en": "2026-01-01T00:00:00+00:00"}
+        self.clima_ciudades[ciudad_id] = fila
+        return fila
 
     def list_cotizacion_historial(self, clave, limite=8):
         return [h for h in reversed(self.cotizaciones_historial) if h["clave"] == clave][:limite]

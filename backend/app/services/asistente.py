@@ -132,6 +132,9 @@ class Respuesta:
     # WhatsApp: {"whatsapp": "<E.164 sin +>", "texto": "<mensaje ya escrito>"}.
     # El front arma el botón «Preguntarle a {comercio} por WhatsApp» con esto.
     derivar: dict | None = None
+    # Hacia dónde lleva el botón «Ver comercios ›» del panel: una URL RELATIVA del sitio (`/buscar?...`), con
+    # la ciudad de la pregunta. None si la respuesta no es una lista de comercios.
+    ver_url: str | None = None
 
 
 # --------------------------------------------------------------------------- texto
@@ -179,7 +182,23 @@ def _url(c: dict) -> str:
 
 
 def _fuente(c: dict) -> dict:
-    return {"tipo": "comercio", "nombre": c.get("nombre"), "url": _url(c), "detalle": c.get("subcategoria") or c.get("direccion") or ""}
+    """Un comercio como fuente de la respuesta. `foto` es la miniatura de la portada (o la portada), para la
+    tarjeta del panel; sólo columnas públicas, y null si el comercio no tiene. Ni teléfonos ni código."""
+    return {"tipo": "comercio", "nombre": c.get("nombre"), "url": _url(c), "detalle": c.get("subcategoria") or c.get("direccion") or "",
+            "foto": c.get("portada_thumb_url") or c.get("portada_url") or None}
+
+
+def _ver_url(q: str | None = None, rubro: str | None = None) -> str | None:
+    """La URL relativa del botón «Ver comercios ›»: la búsqueda por palabras (`/buscar?q=…`) o, si la respuesta
+    fue por rubro, el rubro en el mapa (`/buscar?rubro=…&vista=mapa`), siempre con la ciudad de la pregunta."""
+    if rubro:
+        url = f"/buscar?rubro={quote_plus(rubro)}&vista=mapa"
+    elif q and q.strip():
+        url = f"/buscar?q={quote_plus(q.strip())}"
+    else:
+        return None
+    slug = _ciudad_slug()
+    return url + (f"&ciudad={quote_plus(slug)}" if slug else "")
 
 
 def _wa(numero: str | None) -> str | None:
@@ -248,6 +267,42 @@ SUGERENCIAS_INICIALES = [
     "¿Qué hay abierto ahora?",
 ]
 
+# Sugerencias para las ciudades SIN guía (las que no son frontera o todavía no la cargaron): por franja horaria
+# de Bolivia (UTC-4), las mismas listas que usa el panel de Dax (docs/home-ciudades.md §8). Nada de paso, aduana
+# ni pesos: eso es de frontera. Cada franja es (desde_hora_incluida, hasta_hora_excluida, sugerencias).
+SUGERENCIAS_POR_FRANJA: list[tuple[int, int, list[str]]] = [
+    (0, 6, ["Farmacia de turno", "Cajero cerca", "¿Dónde duermo?"]),
+    (6, 11, ["¿Dónde desayuno?", "Farmacia abierta cerca", "¿Qué visito hoy?"]),
+    (11, 15, ["¿Dónde almuerzo?", "Busco zapatillas", "Cajero cerca"]),
+    (15, 19, ["Busco zapatillas", "Necesito un servicio técnico", "¿Qué hago hoy?"]),
+    (19, 24, ["Boliches abiertos esta noche", "¿Dónde ceno?", "Hotel para esta noche"]),
+]
+
+
+def sugerencias_iniciales(con_guia: bool, hora: int) -> list[str]:
+    """Las sugerencias de arranque. Ciudad con guía (frontera): las de siempre. Sin guía: las de la franja
+    horaria (`hora` = hora de Bolivia, 0 a 23). Devuelve una lista nueva: quien la recibe puede tocarla."""
+    if con_guia:
+        return list(SUGERENCIAS_INICIALES)
+    h = int(hora) % 24
+    for desde, hasta, lista in SUGERENCIAS_POR_FRANJA:
+        if desde <= h < hasta:
+            return list(lista)
+    return list(SUGERENCIAS_INICIALES)  # inalcanzable: las franjas cubren 0..23
+
+
+# El "ahora" de la pregunta en curso (el que recibe `responder`), para que las sugerencias por franja salgan de
+# la misma hora que el resto de la respuesta. Sin él, la hora de Bolivia de verdad.
+_AHORA: contextvars.ContextVar[datetime | None] = contextvars.ContextVar("ahora", default=None)
+
+
+def _sugerencias() -> list[str]:
+    """Las sugerencias iniciales para la ciudad de la pregunta, a la hora de Bolivia de la pregunta."""
+    ahora = _AHORA.get() or datetime.now(TZ)
+    hora = ahora.hour if ahora.tzinfo is None else ahora.astimezone(TZ).hour  # sin zona: ya es hora de Bolivia
+    return sugerencias_iniciales(_con_guia(), hora)
+
+
 URL_GUIA = f"{SITIO}/guia"
 # "no_aplica" no está en esta tabla a propósito: una frontera sin chalanas ni
 # río no dice nada de ellas (Villazón cruza por un puente peatonal).
@@ -311,7 +366,7 @@ def _guia(repo) -> Respuesta:
                  "cambio y dónde cambiar", "comercios: horarios, cómo pagar, envíos", "transporte desde Orán, Salta y Tarija",
                  "seguridad y teléfonos de emergencia", "chip e internet"]
     return Respuesta(texto="Te puedo contar de: " + "; ".join(secciones) + f". Está todo junto en la guía: {URL_GUIA} — o preguntame lo que necesites.",
-                     nivel=0, intent="guia", sugerencias=SUGERENCIAS_INICIALES)
+                     nivel=0, intent="guia", sugerencias=_sugerencias())
 
 
 # --------------------------------------------------------------------------- Nivel 0: el sitio
@@ -454,7 +509,7 @@ def _casas_de_cambio(repo, ahora: datetime) -> Respuesta:
     texto = (cabeza + "\n" + "\n".join(lineas) +
              f"\nVer todas en el mapa: {URL_CASAS_DE_CAMBIO}" + (f"\n{cot}" if cot else ""))
     return Respuesta(texto=texto, nivel=0, intent="casas_de_cambio", fuentes=[_fuente(c) for c in mostrar],
-                     sugerencias=[f"Horario de {mostrar[0].get('nombre')}", "¿A cuánto está el dólar?"])
+                     ver_url=_ver_url(rubro="cambio"), sugerencias=[f"Horario de {mostrar[0].get('nombre')}", "¿A cuánto está el dólar?"])
 
 
 def _clima(repo) -> str | None:
@@ -902,7 +957,7 @@ def _responder_producto(repo, q: str, ahora: datetime) -> Respuesta:
     # Sin cifras: cuántos locales hay es un dato del panel, no del comprador.
     return Respuesta(texto=f"Encontré esto para «{q}»:\n" + "\n".join(lineas) + f"\nMás en el buscador: {url}",
                      nivel=0, intent="buscar", fuentes=[_fuente(e["c"]) for e in filas],
-                     sugerencias=[f"Horario de {filas[0]['c'].get('nombre')}", f"Dirección de {filas[0]['c'].get('nombre')}"])
+                     ver_url=_ver_url(q=q), sugerencias=[f"Horario de {filas[0]['c'].get('nombre')}", f"Dirección de {filas[0]['c'].get('nombre')}"])
 
 
 def _buscar_y_contestar(repo, q: str, ahora: datetime) -> Respuesta | None:
@@ -934,7 +989,7 @@ def _buscar_y_contestar(repo, q: str, ahora: datetime) -> Respuesta | None:
     cabeza = f"{plural.capitalize()} en {_C()}" + (", para empezar:" if total > len(filas) else ":")
     pie = f"\nHay más, en el mapa: {url}" if total > len(filas) else f"\nEn el mapa: {url}"
     return Respuesta(texto=cabeza + "\n" + "\n".join(lineas) + pie, nivel=0, intent="buscar",
-                     fuentes=[_fuente(c) for c in filas],
+                     fuentes=[_fuente(c) for c in filas], ver_url=_ver_url(rubro=rubro),
                      sugerencias=[f"Horario de {filas[0].get('nombre')}", f"Dirección de {filas[0].get('nombre')}"])
 
 
@@ -984,7 +1039,7 @@ def _nivel0_turno_farmacia(repo, pregunta: str, ahora: datetime) -> Respuesta | 
             texto=(f"Farmacias de turno ahora en {_C()} ({hasta}):\n" + "\n".join(lineas) +
                    f"\nLas de los próximos días y cómo llegar: {URL_FARMACIAS_DE_TURNO}"),
             nivel=0, intent="farmacia_turno", fuentes=[_fuente(t["comercio"]) for t in mostrar if t.get("comercio")],
-            sugerencias=sugerencias)
+            ver_url=_ver_url(rubro="farmacia"), sugerencias=sugerencias)
     # Sin rol cargado: lo de hoy, o sea las farmacias que figuran abiertas ahora.
     farmacias = list(repo.buscar_comercios("", 40, rubro="farmacia") or [])
     abiertas = [c for c in farmacias if c.get("horario") and hor.abierto_ahora(c["horario"], ahora).estado == "abierto"]
@@ -1000,7 +1055,8 @@ def _nivel0_turno_farmacia(repo, pregunta: str, ahora: datetime) -> Respuesta | 
     cabeza = (f"Todavía no tengo cargado el rol de turnos de {_C()}. "
               + ("Estas farmacias figuran abiertas ahora:" if abiertas else "Estas son las farmacias, confirmá el horario por teléfono:"))
     return Respuesta(texto=cabeza + "\n" + "\n".join(lineas) + f"\nLas de turno, cuando estén cargadas: {URL_FARMACIAS_DE_TURNO}",
-                     nivel=0, intent="farmacia_turno", fuentes=[_fuente(c) for c in mostrar], sugerencias=sugerencias)
+                     nivel=0, intent="farmacia_turno", fuentes=[_fuente(c) for c in mostrar],
+                     ver_url=_ver_url(rubro="farmacia"), sugerencias=sugerencias)
 
 
 # --------------------------------------------------------------------------- encargos y guardería
@@ -1060,7 +1116,8 @@ def _nivel0_abierto_ahora(repo, pregunta: str, ahora: datetime) -> Respuesta | N
     abiertos = abiertos[:MAX_COMERCIOS]
     lineas = [f"• {c.get('nombre')} — {hor.etiqueta(hor.abierto_ahora(c['horario'], ahora), ahora).lower()}" for c in abiertos]
     return Respuesta(texto=("Abiertos ahora" + (f" para «{resto}»" if resto else "") + ":\n" + "\n".join(lineas)),
-                     nivel=0, intent="abierto_ahora", fuentes=[_fuente(c) for c in abiertos])
+                     nivel=0, intent="abierto_ahora", fuentes=[_fuente(c) for c in abiertos],
+                     ver_url=_ver_url(q=resto))
 
 
 def _nivel0_lugares(repo, pregunta: str) -> Respuesta | None:
@@ -1234,10 +1291,10 @@ def _nivel0_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
     if re.fullmatch(r"(hola|buenas|buen dia|buenos dias|buenas tardes|buenas noches|hey|holis)( uruku)?", p):
         return Respuesta(texto=f"¡Hola! Soy la ayuda de URUKU. Preguntame dónde conseguir algo en {_C()}, "
                                "si un local está abierto, el dólar, o cómo publicar tu negocio.",
-                         nivel=0, intent="saludo", sugerencias=SUGERENCIAS_INICIALES)
+                         nivel=0, intent="saludo", sugerencias=_sugerencias())
     if re.fullmatch(r"(gracias|muchas gracias|ok gracias|genial|perfecto|dale)( uruku)?", p):
         return Respuesta(texto="¡De nada! Cualquier otra cosa, acá estoy.", nivel=0, intent="gracias",
-                         sugerencias=SUGERENCIAS_INICIALES)
+                         sugerencias=_sugerencias())
     for patron, texto, intent in FAQ:
         if re.search(patron, p):
             return Respuesta(texto=texto.replace("Bermejo", _C()), nivel=0, intent="faq_" + intent)
@@ -1595,6 +1652,7 @@ def _nivel1_sitio(repo, pregunta: str, ahora: datetime) -> Respuesta | None:
         return None
     return Respuesta(texto=str(j["respuesta"]).strip(), nivel=1, intent="modelo",
                      fuentes=[_fuente(c) for c in comercios[:3]] + ([{"tipo": "saber", "nombre": saber.get("pregunta"), "url": ""}] if saber else []),
+                     ver_url=_ver_url(q=q) if comercios else None,
                      sugerencias=[str(s) for s in (j.get("sugerencias") or [])][:3],
                      sin_respuesta=not bool(j.get("seguro", False)))
 
@@ -1664,7 +1722,7 @@ def _nivel3_sitio() -> Respuesta:
     return Respuesta(
         texto="Eso todavía no lo sé. Lo anoté para averiguarlo y sumarlo — la próxima vez lo contesto. "
               f"Mientras tanto, probá buscarlo en el mapa: {SITIO}/buscar",
-        nivel=3, intent="sin_respuesta", sin_respuesta=True, sugerencias=SUGERENCIAS_INICIALES)
+        nivel=3, intent="sin_respuesta", sin_respuesta=True, sugerencias=_sugerencias())
 
 
 def _derivacion(c: dict, pregunta: str) -> dict | None:
@@ -1706,11 +1764,13 @@ def responder(repo, pregunta: str, comercio: dict | None = None, ahora: datetime
     modelo (el asistente del sitio no depende de esto)."""
     token = _CIUDAD.set(ciudad)
     memo = _MEMO.set({})
+    token_ahora = _AHORA.set(ahora)
     try:
         if ciudad and ciudad.get("slug"):
             repo = _RepoEnCiudad(repo, ciudad["slug"])
         return _responder(repo, pregunta, comercio, ahora, con_ia)
     finally:
+        _AHORA.reset(token_ahora)
         _MEMO.reset(memo)
         _CIUDAD.reset(token)
 
@@ -1720,7 +1780,7 @@ def _responder(repo, pregunta: str, comercio: dict | None, ahora: datetime | Non
     ahora = ahora or datetime.now(TZ)
     pregunta = (pregunta or "").strip()
     if not pregunta:
-        return Respuesta(texto="¿Qué necesitás?", nivel=0, intent="vacia", sugerencias=SUGERENCIAS_INICIALES)
+        return Respuesta(texto="¿Qué necesitás?", nivel=0, intent="vacia", sugerencias=_sugerencias())
 
     if comercio:
         r = _nivel0_comercio(repo, comercio, pregunta, ahora)
