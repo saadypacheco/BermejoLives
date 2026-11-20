@@ -3,6 +3,7 @@
 Escrituras con service_role (backend). Requiere JWT de admin.
 """
 import re
+import threading
 import uuid
 from datetime import timedelta
 from typing import Literal
@@ -1711,32 +1712,61 @@ def promover_importado(
             valor = enlaces.sanear_red(redes.get(campo), enlaces.CAMPOS_RED[campo])
             if valor:
                 datos[campo] = valor
-    comercio = repo.crear_comercio(datos)
-    rid = repo.get_rubro_id(rubro_slug)
-    if rid:
-        repo.set_comercio_rubros(comercio["id"], [rid])
-    if no_comercial:
-        repo.marcar_rubro_revisado(comercio["id"], admin["email"])   # lo masivo no le cambia el rubro
-    calles_mapa.invalidar(imp.get("ciudad_id"))      # el mapa de calles cuenta este comercio
+    # LA RESERVA: una sola persona (o el lote) puede estar aprobando esta fila a la vez. Sin esto, dos aprobaciones
+    # simultáneas leían las dos `estado = 'nuevo'` y creaban dos comercios. La reserva es una actualización condicional
+    # (`estado = 'nuevo'` y sin reserva vigente): sólo una gana, las demás reciben 409.
+    if not repo.reclamar_importado(importado_id):
+        raise HTTPException(status_code=409, detail="Otra persona lo está aprobando ahora, o ya está en el mapa")
+    comercio = None
+    try:
+        comercio = repo.crear_comercio(datos)
+        rid = repo.get_rubro_id(rubro_slug)
+        if rid:
+            repo.set_comercio_rubros(comercio["id"], [rid])
+        if no_comercial:
+            repo.marcar_rubro_revisado(comercio["id"], admin["email"])   # lo masivo no le cambia el rubro
+        calles_mapa.invalidar(imp.get("ciudad_id"))      # el mapa de calles cuenta este comercio
 
-    repo.marcar_importado(importado_id, {
-        "estado": "promovido", "comercio_id": comercio["id"],
-        "revisado_por": admin["email"], "revisado_at": _ahora(),
-    })
+        repo.marcar_importado(importado_id, {
+            "estado": "promovido", "comercio_id": comercio["id"],
+            "revisado_por": admin["email"], "revisado_at": _ahora(), "aprobando_desde": None,
+        })
+    except Exception:
+        if comercio is None:
+            # No se creó nada: se suelta la reserva y la fila vuelve a estar disponible. Si el comercio ya existe, la
+            # reserva se deja vencer (10 minutos): soltarla dejaría crear un segundo comercio.
+            try:
+                repo.soltar_importado(importado_id)
+            except Exception:  # noqa: BLE001
+                logger.warning("importado.soltar_reserva_fallo", importado=importado_id, exc_info=True)
+        raise
     logger.info("importado.promovido", importado=importado_id,
                 comercio=comercio["id"], by=admin["email"])
     return {"ok": True, "comercio": comercio}
 
 
-TOPE_LOTE_APROBAR = 1000          # filas que mira una llamada de «Aprobar en bloque»
+TOPE_LOTE_APROBAR = 200            # filas que aprueba como máximo UNA llamada de «Aprobar en bloque»
+FUENTES_LOTE = ("turismo", "anh", "aduana")      # las oficiales: lo que viene de una fuente pública revisada
+#: Una sola aprobación en bloque a la vez en este proceso (un solo worker de uvicorn, regla 13 de AGENTS.md).
+_LOTE_APROBAR = threading.Lock()
 
 
 class AprobarLoteBody(BaseModel):
     """`aprobar-lote`: qué importados sin revisar se aprueban de una vez (docs/home-ciudades.md §14)."""
-    fuente: Literal["osm", "tarjeta", "turismo", "overture", "anh", "aduana"]
+    fuente: str
     ciudad_id: str = Field(min_length=1, max_length=64)
     solo_con_punto: bool = True
     simular: bool = False
+    #: Cuántos aprueba como máximo en esta llamada (lo que la persona confirmó). Sin él, el tope de la llamada.
+    max_aprobar: int | None = Field(default=None, ge=1, le=TOPE_LOTE_APROBAR)
+
+    @field_validator("fuente")
+    @classmethod
+    def _fuente_oficial(cls, v: str) -> str:
+        if v not in FUENTES_LOTE:
+            raise ValueError("La aprobación en bloque sólo vale para las fuentes oficiales (turismo, anh y aduana). "
+                             "Las tarjetas, OpenStreetMap y Overture se revisan de a una.")
+        return v
 
 
 @router.post("/admin/importados/aprobar-lote")
@@ -1745,50 +1775,65 @@ def aprobar_lote_importados(
     admin: dict = Depends(require_permiso("datos")),
     repo: Repo = Depends(get_repo),
 ) -> dict:
-    """Aprueba («promueve») de una vez los importados SIN REVISAR de una fuente y una ciudad. Mismo permiso que
-    aprobar de a uno (`datos`).
+    """Aprueba («promueve») de una vez los importados SIN REVISAR de una fuente oficial (`turismo`, `anh` o `aduana`;
+    otra es 422) y una ciudad. Mismo permiso que aprobar de a uno (`datos`).
 
     Cada fila se aprueba llamando a `promover_importado` con el cuerpo por defecto: el MISMO camino que aprobar de
-    a uno (mismo rubro, mismas validaciones, comercio sin verificar ni confiable, importado marcado promovido). Se
-    saltean, sin tocarlas, las marcadas como repetidas (`duplicado_de`), las que no tienen rubro y, con
-    `solo_con_punto`, las que no tienen coordenadas. Una fila que el aprobar de a uno rechazaría (sin nombre, o sin
-    punto con `solo_con_punto` apagado en una fuente que lo exige) o que falla al guardarse cuenta en `error`.
+    a uno (mismo rubro, mismas validaciones, comercio sin verificar ni confiable, importado marcado promovido, y la
+    misma reserva atómica de la fila: una fila nunca crea dos comercios aunque otra persona la apruebe a la vez).
 
-    Mira como mucho `TOPE_LOTE_APROBAR` (1000) filas por llamada, en el orden del panel (por nombre): si quedan más,
-    se vuelve a llamar. Con `simular` cuenta lo mismo pero no escribe nada.
+    Se miran TODOS los importados sin revisar de la fuente y la ciudad y se reparten: se saltean, sin tocarlos, los
+    marcados como repetidos (`duplicado_de`), los que no tienen rubro y, con `solo_con_punto`, los que no tienen
+    coordenadas; los que el aprobar de a uno rechazaría (sin nombre, o sin punto con `solo_con_punto` apagado en una
+    fuente que lo exige) cuentan en `error`. Esos conteos son de toda la selección. De los aprobables se aprueban los
+    primeros `min(max_aprobar, 200)`, en el orden del panel (por nombre): así repetir la llamada siempre avanza.
 
-    Devuelve `{aprobados, salteados: {repetidos, sin_rubro, sin_punto, error}}`; con `simular`, `aprobados` es
-    cuántos se aprobarían.
+    Una sola aprobación en bloque a la vez: si hay otra en curso, 409. Con `simular` cuenta lo mismo pero no escribe.
+
+    Devuelve `{aprobados, salteados: {repetidos, sin_rubro, sin_punto, error}, restantes}`. `restantes` son los
+    aprobables que quedan sin aprobar después de esta llamada (0 = terminó); una fila que falló al guardarse en esta
+    llamada cuenta en `error` y no en `restantes`. Con `simular`, `aprobados` es cuántos se aprobarían.
     """
-    filas = repo.list_importados("nuevo", body.ciudad_id, None, TOPE_LOTE_APROBAR, body.fuente, None)[:TOPE_LOTE_APROBAR]
-    salteados = {"repetidos": 0, "sin_rubro": 0, "sin_punto": 0, "error": 0}
-    aprobados = 0
-    for fila in filas:
-        if fila.get("duplicado_de") is not None:
-            salteados["repetidos"] += 1
-        elif not (fila.get("rubro_slug") or "").strip():
-            salteados["sin_rubro"] += 1
-        elif body.solo_con_punto and (fila.get("lat") is None or fila.get("lng") is None):
-            salteados["sin_punto"] += 1
-        elif body.simular:
-            if _problema_para_promover(fila, (fila.get("nombre") or "").strip(), not body.solo_con_punto):
+    if not _LOTE_APROBAR.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="Ya hay una aprobación en bloque en curso.")
+    try:
+        filas = repo.list_importados_nuevos(body.ciudad_id, body.fuente)
+        salteados = {"repetidos": 0, "sin_rubro": 0, "sin_punto": 0, "error": 0}
+        aprobables: list[dict] = []
+        for fila in filas:
+            if fila.get("duplicado_de") is not None:
+                salteados["repetidos"] += 1
+            elif not (fila.get("rubro_slug") or "").strip():
+                salteados["sin_rubro"] += 1
+            elif body.solo_con_punto and (fila.get("lat") is None or fila.get("lng") is None):
+                salteados["sin_punto"] += 1
+            elif _problema_para_promover(fila, (fila.get("nombre") or "").strip(), not body.solo_con_punto):
                 salteados["error"] += 1
             else:
-                aprobados += 1
+                aprobables.append(fila)
+        tanda = aprobables[:min(body.max_aprobar or TOPE_LOTE_APROBAR, TOPE_LOTE_APROBAR)]
+        aprobados = 0
+        if body.simular:
+            aprobados = len(tanda)
         else:
-            try:
-                promover_importado(fila["id"], PromoverBody(sin_ubicacion=not body.solo_con_punto), admin, repo)
-                aprobados += 1
-            except HTTPException as exc:
-                salteados["error"] += 1
-                logger.info("importado.aprobar_lote_fila_rechazada", importado=fila["id"], motivo=exc.detail)
-            except Exception:  # noqa: BLE001 — una fila que falla no frena a las demás
-                salteados["error"] += 1
-                logger.warning("importado.aprobar_lote_fila_fallo", importado=fila["id"], exc_info=True)
-    logger.info("importado.aprobar_lote", fuente=body.fuente, ciudad=body.ciudad_id, simular=body.simular,
-                solo_con_punto=body.solo_con_punto, revisados=len(filas), aprobados=aprobados,
-                **{f"salteados_{k}": v for k, v in salteados.items()}, by=admin["email"])
-    return {"aprobados": aprobados, "salteados": salteados}
+            for fila in tanda:
+                try:
+                    promover_importado(fila["id"], PromoverBody(sin_ubicacion=not body.solo_con_punto), admin, repo)
+                    aprobados += 1
+                except HTTPException as exc:
+                    salteados["error"] += 1
+                    logger.info("importado.aprobar_lote_fila_rechazada", importado=fila["id"], motivo=exc.detail)
+                except Exception:  # noqa: BLE001 — una fila que falla no frena a las demás
+                    salteados["error"] += 1
+                    logger.warning("importado.aprobar_lote_fila_fallo", importado=fila["id"], exc_info=True)
+        restantes = len(aprobables) - len(tanda)
+        logger.info("importado.aprobar_lote", fuente=body.fuente, ciudad=body.ciudad_id, simular=body.simular,
+                    solo_con_punto=body.solo_con_punto, max_aprobar=body.max_aprobar, revisados=len(filas),
+                    aprobados=aprobados, restantes=restantes,
+                    **{f"salteados_{k}": v for k, v in salteados.items()}, by=admin["email"])
+        return {"aprobados": aprobados, "salteados": salteados, "restantes": restantes}
+    finally:
+        _LOTE_APROBAR.release()
 
 
 @router.post("/admin/importados/{importado_id}/descartar")
@@ -2192,7 +2237,7 @@ async def admin_subir_portada(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not url:
         raise HTTPException(status_code=502, detail="No se pudo subir la foto, probá de nuevo")
-    actualizado = portada.poner_nueva(repo, comercio, url, thumb)
+    actualizado = await run_in_threadpool(portada.poner_nueva, repo, comercio, url, thumb)
     logger.info("admin.portada_nueva", comercio=comercio_id, by=mod["email"])
     return {"ok": True, "comercio": actualizado}
 

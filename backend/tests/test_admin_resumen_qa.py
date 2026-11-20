@@ -470,7 +470,8 @@ PESTANAS_DE_ANTES = {
 #: Banco y Contenido para redes piden `difusion` (como Difusión); Cuidar suscriptores pide `pagos`.
 SECCIONES_DE_REDES = {"banco": "difusion", "redes": "difusion", "suscriptores": "pagos"}
 #: Secciones que se sumaron después (docs/telefonos-en-fotos.md).
-SECCIONES_NUEVAS = {"telefonos-fotos": "moderar"}
+#: Platos típicos (docs/home-ciudades.md §15): el mismo permiso que el backend (`contenido`).
+SECCIONES_NUEVAS = {"telefonos-fotos": "moderar", "platos": "contenido"}
 
 
 def _secciones_ts():

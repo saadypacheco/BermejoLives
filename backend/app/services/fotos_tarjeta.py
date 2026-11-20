@@ -242,36 +242,45 @@ def soltar_huerfano(repo, comercio: dict, url: str | None) -> None:
 
 # ───────────────────────────────────────────────────────────── armar y guardar
 
+SIN_FOTO, PORTADA_CAMBIO = "sin_foto", "portada_cambio"
+
+
+def _armar(repo, comercio: dict) -> tuple[dict | None, str | None]:
+    """`(columnas escritas, None)` o `(None, motivo)`: `SIN_FOTO` (no hay portada o su archivo no está en el disco) o
+    `PORTADA_CAMBIO` (la portada o el encuadre cambiaron mientras se armaba: la tarjeta ya era de otra foto)."""
+    foto = portada_diseno.leer_portada(comercio)
+    if foto is None:
+        return None, SIN_FOTO
+    jpeg, calidad = generar_tarjeta(foto, comercio.get("portada_pos"))
+    url = guardar(comercio["slug"], jpeg)
+    if not url:
+        raise RuntimeError("No se pudo guardar la tarjeta en el disco")
+    try:
+        anterior = (repo.get_comercio(comercio["id"]) or comercio).get("portada_card_url") or comercio.get("portada_card_url")
+        # UPDATE condicional: sólo si la portada y el encuadre siguen siendo los de esta foto. Si otro pedido los
+        # cambió entre leer y escribir, no se pisa nada y esta tarjeta (de la foto vieja) se suelta.
+        escrita = repo.actualizar_portada_card(
+            comercio["id"], {"portada_card_url": url, "portada_calidad": calidad},
+            comercio.get("portada_url"), comercio.get("portada_pos"))
+    except Exception:
+        soltar_archivo(comercio, url)        # recién creada: que no quede huérfana
+        raise
+    if not escrita:
+        soltar_archivo(comercio, url)
+        return None, PORTADA_CAMBIO
+    if anterior and anterior != url:
+        soltar_huerfano(repo, comercio, anterior)
+    logger.info("fotos_tarjeta.armada", comercio=comercio["id"], calidad=calidad, bytes=len(jpeg))
+    return {"portada_card_url": url, "portada_calidad": calidad}, None
+
+
 def armar_para_comercio(repo, comercio: dict) -> dict | None:
     """Arma la tarjeta de la portada de `comercio`, la guarda y actualiza `portada_card_url` y `portada_calidad`.
     Devuelve `{portada_card_url, portada_calidad}` (lo escrito) o None si no había nada que hacer (sin portada, la
     foto no está en el disco, o la portada o el encuadre cambiaron mientras se armaba). Suelta la tarjeta anterior
     si nadie más la apunta. Puede lanzar (`PortadaInadecuada`, `ValueError`, errores de la base): quien no quiere
     que eso corte lo que hace usa `armar_seguro`."""
-    foto = portada_diseno.leer_portada(comercio)
-    if foto is None:
-        return None
-    jpeg, calidad = generar_tarjeta(foto, comercio.get("portada_pos"))
-    url = guardar(comercio["slug"], jpeg)
-    if not url:
-        raise RuntimeError("No se pudo guardar la tarjeta en el disco")
-    anterior = comercio.get("portada_card_url")
-    try:
-        # Si la portada o el encuadre cambiaron mientras se armaba, esta tarjeta ya es de otra foto.
-        fresca = repo.get_comercio(comercio["id"]) or comercio
-        if (fresca.get("portada_url"), fresca.get("portada_pos")) != (comercio.get("portada_url"),
-                                                                       comercio.get("portada_pos")):
-            soltar_archivo(comercio, url)
-            return None
-        anterior = fresca.get("portada_card_url") or anterior
-        repo.update_comercio(comercio["id"], {"portada_card_url": url, "portada_calidad": calidad}, None)
-    except Exception:
-        soltar_archivo(comercio, url)        # recién creada: que no quede huérfana
-        raise
-    if anterior and anterior != url:
-        soltar_huerfano(repo, comercio, anterior)
-    logger.info("fotos_tarjeta.armada", comercio=comercio["id"], calidad=calidad, bytes=len(jpeg))
-    return {"portada_card_url": url, "portada_calidad": calidad}
+    return _armar(repo, comercio)[0]
 
 
 def armar_seguro(repo, comercio: dict) -> dict | None:
@@ -294,7 +303,8 @@ def rellenar(repo, ciudad_id: str | None, *, rehacer: bool = False, pausa: float
              dormir=time.sleep, imprimir=print) -> dict:
     """Arma las tarjetas de los comercios que ya tienen portada. Devuelve el resumen. Lee del disco y nunca borra
     una foto original (sólo suelta la tarjeta anterior al rehacer)."""
-    r = {"revisados": 0, "armadas": 0, "ya_tenian": 0, "sin_foto_en_disco": 0, "inadecuadas": 0, "errores": 0}
+    r = {"revisados": 0, "armadas": 0, "ya_tenian": 0, "sin_foto_en_disco": 0, "portada_cambio": 0,
+         "inadecuadas": 0, "errores": 0}
     despues = None
     while True:
         lote = repo.list_comercios_con_portada(ciudad_id, despues, LOTE)
@@ -307,7 +317,7 @@ def rellenar(repo, ciudad_id: str | None, *, rehacer: bool = False, pausa: float
                 r["ya_tenian"] += 1
                 continue
             try:
-                hecho = armar_para_comercio(repo, c)
+                hecho, motivo = _armar(repo, c)
             except (portada_diseno.PortadaInadecuada, ValueError):
                 r["inadecuadas"] += 1
                 continue
@@ -316,7 +326,8 @@ def rellenar(repo, ciudad_id: str | None, *, rehacer: bool = False, pausa: float
                 logger.warning("fotos_tarjeta.fallo", comercio=c["id"], error=type(exc).__name__)
                 continue
             if hecho is None:
-                r["sin_foto_en_disco"] += 1
+                # La portada cambió mientras se armaba (otro pedido): no es un problema del disco; se arma sola la próxima.
+                r["portada_cambio" if motivo == PORTADA_CAMBIO else "sin_foto_en_disco"] += 1
             else:
                 r["armadas"] += 1
             if r["revisados"] % 25 == 0:
@@ -354,6 +365,7 @@ def main(argv: list[str] | None = None, repo=None, *, dormir=time.sleep) -> int:
     print(f"Tarjetas armadas:           {r['armadas']}")
     print(f"Ya tenían tarjeta:          {r['ya_tenian']}")
     print(f"Foto no está en el disco:   {r['sin_foto_en_disco']}")
+    print(f"Portada cambió al armarla:   {r['portada_cambio']}")
     print(f"Foto muy chica o inválida:  {r['inadecuadas']}")
     print(f"Con error:                  {r['errores']}")
     print("\nNo se borró ninguna portada original.")

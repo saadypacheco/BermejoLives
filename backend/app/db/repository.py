@@ -340,6 +340,11 @@ class Repo(Protocol):
                         q: str | None, limite: int, fuente: str | None = None,
                         rubro: str | None = None) -> list[dict]: ...
     def get_importado(self, importado_id: str) -> dict | None: ...
+    def list_importados_nuevos(self, ciudad_id: str, fuente: str) -> list[dict]: ...
+    def reclamar_importado(self, importado_id: str) -> bool: ...
+    def soltar_importado(self, importado_id: str) -> None: ...
+    def actualizar_portada_card(self, comercio_id: str, patch: dict, portada_url: str | None,
+                                portada_pos: int | None) -> bool: ...
     def get_importado_por_fuente(self, fuente: str, fuente_id: str) -> dict | None: ...
     def crear_importado(self, row: dict) -> dict | None: ...
     def list_telefonos_comercios(self) -> list[dict]: ...
@@ -755,6 +760,43 @@ class SupabaseRepo(IntegracionRepoMixin):
         res = (self._db.table("comercios_importados")
                .select("*").eq("id", importado_id).limit(1).execute())
         return res.data[0] if res.data else None
+
+    #: Cuánto dura la reserva de un importado que se está aprobando. Si el proceso se cae a la mitad, vence sola.
+    RESERVA_IMPORTADO_MIN = 10
+
+    def list_importados_nuevos(self, ciudad_id: str, fuente: str) -> list[dict]:
+        """TODOS los importados `nuevo` de una ciudad y una fuente (paginado), con lo mínimo para decidir si se
+        aprueban: lo usa «Aprobar en bloque». Por nombre y `id` (orden total)."""
+        return self._traer_todo(
+            "comercios_importados", "id, nombre, fuente, rubro_slug, lat, lng, duplicado_de", ["nombre", "id"],
+            filtrar=lambda q: q.eq("estado", "nuevo").eq("ciudad_id", ciudad_id).eq("fuente", fuente))
+
+    def reclamar_importado(self, importado_id: str) -> bool:
+        """Reserva ATÓMICA de un importado para aprobarlo: actualización condicional (`estado = 'nuevo'` y sin reserva
+        vigente). True si esta llamada la ganó; False si ya está promovido o lo está aprobando otra."""
+        from datetime import timedelta
+
+        ahora = datetime.now(timezone.utc)
+        vence = (ahora - timedelta(minutes=self.RESERVA_IMPORTADO_MIN)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        res = (self._db.table("comercios_importados")
+               .update({"aprobando_desde": ahora.strftime("%Y-%m-%dT%H:%M:%SZ")})
+               .eq("id", importado_id).eq("estado", "nuevo")
+               .or_(f"aprobando_desde.is.null,aprobando_desde.lt.{vence}").execute())
+        return bool(res.data)
+
+    def soltar_importado(self, importado_id: str) -> None:
+        """Suelta la reserva (la fila vuelve a estar disponible). Sólo si sigue `nuevo`."""
+        (self._db.table("comercios_importados").update({"aprobando_desde": None})
+         .eq("id", importado_id).eq("estado", "nuevo").execute())
+
+    def actualizar_portada_card(self, comercio_id: str, patch: dict, portada_url: str | None,
+                                portada_pos: int | None) -> bool:
+        """UPDATE condicional de la tarjeta de la portada: sólo si la portada y el encuadre siguen siendo los de la foto
+        con que se armó (`is null` cuando no hay encuadre). False si no tocó ninguna fila (cambiaron mientras tanto)."""
+        q = self._db.table("comercios").update(patch).eq("id", comercio_id)
+        q = q.eq("portada_url", portada_url) if portada_url is not None else q.is_("portada_url", "null")
+        q = q.eq("portada_pos", portada_pos) if portada_pos is not None else q.is_("portada_pos", "null")
+        return bool(q.execute().data)
 
     def marcar_importado(self, importado_id: str, patch: dict) -> dict | None:
         res = (self._db.table("comercios_importados")

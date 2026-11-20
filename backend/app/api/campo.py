@@ -880,7 +880,7 @@ async def actualizar_foto_mi_comercio(
     portada_url, portada_thumb = await run_in_threadpool(_subir_foto, comercio["slug"], foto, data)
     if not portada_url:
         raise HTTPException(status_code=502, detail="No se pudo subir la foto, probá de nuevo")
-    updated = portada.poner_nueva(repo, comercio, portada_url, portada_thumb, conservar_anterior=True)
+    updated = await run_in_threadpool(portada.poner_nueva, repo, comercio, portada_url, portada_thumb, conservar_anterior=True)
     logger.info("campo.foto_update", comercio=comercio_id, agente=agente["email"])
     return {"ok": True, "comercio": sin_codigo(updated)}
 

@@ -380,6 +380,37 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
     def get_importado(self, importado_id):
         return self.importados.get(importado_id)
 
+    def list_importados_nuevos(self, ciudad_id, fuente):
+        out = [dict(i) for i in self.importados.values()
+               if i["estado"] == "nuevo" and i.get("ciudad_id") == ciudad_id and i.get("fuente") == fuente]
+        out.sort(key=lambda i: (i.get("nombre") or "", i["id"]))
+        return out
+
+    def reclamar_importado(self, importado_id):
+        """Como el repo real: condicional (`nuevo` y sin reserva vigente); la reserva vence a los 10 minutos."""
+        from datetime import datetime, timedelta, timezone
+        fila = self.importados.get(importado_id)
+        if not fila or fila["estado"] != "nuevo":
+            return False
+        ahora = datetime.now(timezone.utc)
+        desde = fila.get("aprobando_desde")
+        if desde and datetime.fromisoformat(str(desde)) > ahora - timedelta(minutes=10):
+            return False
+        fila["aprobando_desde"] = ahora.isoformat()
+        return True
+
+    def soltar_importado(self, importado_id):
+        fila = self.importados.get(importado_id)
+        if fila and fila["estado"] == "nuevo":
+            fila["aprobando_desde"] = None
+
+    def actualizar_portada_card(self, comercio_id, patch, portada_url, portada_pos):
+        c = self.comercios.get(comercio_id)
+        if not c or c.get("portada_url") != portada_url or c.get("portada_pos") != portada_pos:
+            return False
+        c.update(patch)
+        return True
+
     def _importados_filtrados(self, ciudad_id, estado, fuente, rubro):
         return [i for i in self.importados.values()
                 if i.get("ciudad_id") == ciudad_id and i.get("estado") == estado

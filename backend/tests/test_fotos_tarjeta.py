@@ -302,10 +302,42 @@ def test_armar_si_falla_la_base_no_deja_el_archivo_huerfano(repo, monkeypatch):
     def falla(*a, **k):
         raise RuntimeError("base caída")
 
-    monkeypatch.setattr(repo, "update_comercio", falla)
+    monkeypatch.setattr(repo, "actualizar_portada_card", falla)
     with pytest.raises(RuntimeError):
         ft.armar_para_comercio(repo, c)
     assert not list((Path(settings.fotos_dir) / "local-t").glob("card-*.jpg"))
+
+
+def test_la_tarjeta_se_escribe_con_un_update_condicional_a_la_portada_y_al_encuadre(repo, monkeypatch):
+    c = _comercio(repo, portada_pos=40)
+    visto = []
+    original = repo.actualizar_portada_card
+
+    def espia(cid, patch, url, pos):
+        visto.append((cid, sorted(patch), url, pos))
+        return original(cid, patch, url, pos)
+
+    monkeypatch.setattr(repo, "actualizar_portada_card", espia)
+    assert ft.armar_para_comercio(repo, dict(c)) is not None
+    assert visto == [("com-t", ["portada_calidad", "portada_card_url"], f"{BASE}/local-t/orig.jpg", 40)]
+
+
+def test_si_el_update_condicional_no_toca_ninguna_fila_se_suelta_el_archivo_nuevo_y_no_se_pisa_nada(repo):
+    c = _comercio(repo)
+    previa = ft.armar_para_comercio(repo, dict(c))["portada_card_url"]
+    repo.comercios["com-t"]["portada_url"] = f"{BASE}/local-t/otra.jpg"     # otro pedido cambió la portada
+    antes = dict(repo.comercios["com-t"])
+    assert ft.armar_para_comercio(repo, {**antes, "portada_url": f"{BASE}/local-t/orig.jpg"}) is None
+    assert repo.comercios["com-t"] == antes and _en_disco(previa)
+    assert len(list((Path(settings.fotos_dir) / "local-t").glob("card-*.jpg"))) == 1      # la nueva no quedó huérfana
+
+
+def test_rellenar_distingue_portada_cambio_de_foto_que_no_esta_en_el_disco(repo, monkeypatch):
+    _comercio(repo)
+    repo.seed_comercio(id="com-c", slug="c", activo=True, ciudad_id="ciu-1", portada_url=f"{BASE}/c/no-esta.jpg")
+    monkeypatch.setattr(repo, "actualizar_portada_card", lambda *a, **k: False)
+    r = ft.rellenar(repo, None, dormir=lambda s: None, imprimir=lambda s: None)
+    assert r["portada_cambio"] == 1 and r["sin_foto_en_disco"] == 1 and r["armadas"] == 0
 
 
 def test_armar_seguro_nunca_lanza(repo, monkeypatch):
@@ -413,7 +445,8 @@ def test_rellenar_arma_las_que_faltan_y_no_borra_ninguna_original(repo):
     repo.comercios["com-t"]["portada_card_url"] = previas
 
     r = ft.rellenar(repo, None, dormir=lambda s: None, imprimir=lambda s: None)
-    assert r == {"revisados": 4, "armadas": 1, "ya_tenian": 1, "sin_foto_en_disco": 1, "inadecuadas": 1, "errores": 0}
+    assert r == {"revisados": 4, "armadas": 1, "ya_tenian": 1, "sin_foto_en_disco": 1, "portada_cambio": 0,
+                 "inadecuadas": 1, "errores": 0}
     assert repo.comercios["com-b"]["portada_card_url"] and not repo.comercios["com-c"].get("portada_card_url")
     assert repo.comercios["com-t"]["portada_card_url"] == previas and _en_disco(previas)
     for u in (f"{BASE}/local-t/orig.jpg", f"{BASE}/b/orig.jpg", f"{BASE}/d/orig.jpg"):
@@ -577,6 +610,61 @@ def test_la_0202_es_idempotente_y_recarga_postgrest():
     assert sql.rstrip().endswith("notify pgrst, 'reload schema';")
     assert "do $chk$" in sql and sql.index("do $chk$") < sql.index("commit;")
     assert not re.search(r"create table(?! if not exists)", sql)
-    assert not re.search(r"\b(delete from|truncate table|drop (?:table|column))\b", sql, re.I)
+    # sólo se borran palabras del diccionario de rubros (como la 0097); nunca filas de negocio
+    assert re.findall(r"delete from (\w+)", sql, re.I) == ["rubro_palabras", "rubro_palabras"]
+    assert not re.search(r"\b(truncate table|drop (?:table|column))\b", sql, re.I)
     assert not re.search(r"add column(?! if not exists)", sql)
     assert "on conflict (slug) do update" in sql and "on conflict (rubro_slug, patron) do nothing" in sql
+
+
+# ═══════════════════════════════════════════════ bodegas contra bebidas: la clasificación con el diccionario final
+
+def _clasificar(texto: str) -> list[str]:
+    """Lo que devuelve `rubros_sugeridos(texto)` con el diccionario tal como lo dejan TODAS las migraciones (el mismo
+    estado final que arma `test_diccionario_rubros`): `unaccent(lower(texto)) ~ patron`, con `\m` y `\M` de Postgres
+    traducidos a sus equivalentes de Python. Ordenado, como el `array_agg(distinct)`."""
+    import unicodedata
+    from tests.test_diccionario_rubros import _estado_final
+
+    limpio = "".join(c for c in unicodedata.normalize("NFD", texto.lower()) if unicodedata.category(c) != "Mn")
+    out = set()
+    for slug, patrones in _estado_final().items():
+        for p in patrones:
+            py = p.replace("\m", r"(?<!\w)(?=\w)").replace("\M", r"(?<=\w)(?!\w)")
+            if re.search(py, limpio):
+                out.add(slug)
+    return sorted(out)
+
+
+@pytest.mark.parametrize("texto", ["Vinoteca El Parral", "Singani artesanal Don Pedro", "Bodega La Concepción",
+                                   "Viñedos de Tarija"])
+def test_las_bodegas_se_clasifican_como_bodegas_y_no_como_bebidas(texto):
+    assert _clasificar(texto) == ["bodegas"], _clasificar(texto)
+
+
+def test_una_cata_de_vinos_suma_bodegas_y_no_le_quita_bebidas_porque_vinos_es_una_bebida():
+    assert _clasificar("Cata de vinos en la altura") == ["bebidas", "bodegas"]
+
+
+@pytest.mark.parametrize("texto", ["Licorería Singani", "Singani Casa Real", "Vinos y licores Don José",
+                                   "Distribuidora de bebidas"])
+def test_las_bebidas_siguen_siendo_bebidas(texto):
+    assert "bebidas" in _clasificar(texto) and "bodegas" not in _clasificar(texto), _clasificar(texto)
+
+
+def test_la_0202_cambia_los_dos_patrones_de_bebidas_sin_dejar_los_viejos():
+    from tests.test_diccionario_rubros import _estado_final
+    pats = _estado_final()["bebidas"]
+    assert r"\m(bebida|gaseosa|cerveza|vinos?\M|jugo|licor|whisky|refresco)" in pats
+    assert r"\m(fernet|ron\M|vodka|singani(?! artesanal)|whiskeria|champagne|espumante)" in pats
+    assert not any("cerveza|vino|jugo" in p or "vodka|singani|whiskeria" in p for p in pats)
+    sql = _sin_comentarios(_sql())
+    assert "delete from rubro_palabras where rubro_slug = 'bebidas' and patron like '%cerveza|vino|jugo%';" in sql
+    assert "delete from rubro_palabras where rubro_slug = 'bebidas' and patron like '%vodka|singani|whiskeria%';" in sql
+
+
+def test_la_0202_reserva_de_importados_es_privada_y_nullable():
+    sql = _sin_comentarios(_sql())
+    assert "alter table public.comercios_importados add column if not exists aprobando_desde timestamptz;" in sql
+    assert not re.search(r"grant[^;]*aprobando_desde", sql, re.I)
+    assert "puede leer comercios_importados.aprobando_desde" in sql
