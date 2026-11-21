@@ -56,6 +56,7 @@ import { EquipoPanel } from "@/components/equipo-panel";
 import { ContentBankPanel } from "@/components/content/content-bank-panel";
 import { ContentRedesPanel } from "@/components/content/content-redes-panel";
 import { VideoNegocioModal } from "@/components/content/video-negocio-modal";
+import { FotosEstiloModal } from "@/components/admin/fotos-estilo-modal";
 import { TelefonosFotosPanel } from "@/components/admin/telefonos-fotos-panel";
 import { SubscribersPanel } from "@/components/subscribers/subscribers-panel";
 import { PortadaDisenoBloque } from "@/components/admin/portada-diseno-bloque";
@@ -1879,6 +1880,8 @@ function TabComercios({
   // El botón «Video» (§17.3): mismo permiso que Contenido para redes. El servidor decide de verdad.
   const puedeVideo = puedo("difusion");
   const [videoDe, setVideoDe] = useState<{ id: string; nombre: string } | null>(null);
+  // «Fotos»: la portada y la galería de un negocio con el estilo URUKU (docs/fotos-estilo-uruku.md).
+  const [fotosDe, setFotosDe] = useState<{ id: string; nombre: string } | null>(null);
   // Dar de baja y reactivar piden `comercios.editar` (lo mismo que editar la ficha).
   const puedeEditar = puedo("comercios.editar");
   const [modo, setModo] = useState<"activos" | "baja">("activos");
@@ -1974,6 +1977,11 @@ function TabComercios({
         <Portal>
           <VideoNegocioModal comercio={videoDe} onCerrar={() => setVideoDe(null)}
                              onIrARevision={() => { setVideoDe(null); onIrRedes(); }} />
+        </Portal>
+      )}
+      {fotosDe && (
+        <Portal>
+          <FotosEstiloModal comercio={fotosDe} onCerrar={() => setFotosDe(null)} />
         </Portal>
       )}
       {fotoGrande && (
@@ -2214,6 +2222,14 @@ function TabComercios({
                       aria-label={`Generar el video de ${c.nombre || "este negocio"}`}
                       onClick={() => setVideoDe({ id: c.id, nombre: c.nombre || "este negocio" })}>
                 <Ic n="video" s={15} />
+              </button>
+            )}
+            {/* La portada y la galería de ESTE negocio con el estilo URUKU: se arma, se mira y recién ahí va a la ficha. */}
+            {puedeEditar && (
+              <button type="button" className="mbtn" title="Fotos con estilo URUKU (portada y galería)"
+                      aria-label={`Fotos de ${c.nombre || "este negocio"}`}
+                      onClick={() => setFotosDe({ id: c.id, nombre: c.nombre || "este negocio" })}>
+                <Ic n="foto" s={15} />
               </button>
             )}
             {!c.verificado && (

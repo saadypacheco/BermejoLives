@@ -109,7 +109,11 @@ export function fechaNovedad(iso: string): string {
   return `${Number(m[3])} ${meses[Number(m[2]) - 1] ?? ""} ${m[1]}`;
 }
 
-export type GaleriaFoto = { id: string; url: string; thumb_url: string | null };
+/** `diseno_url` y `diseno_thumb_url` (0203): la versión con estilo URUKU, ya aprobada. Sólo la ficha las usa. */
+export type GaleriaFoto = {
+  id: string; url: string; thumb_url: string | null;
+  diseno_url?: string | null; diseno_thumb_url?: string | null;
+};
 export type GaleriaVideo = { id: string; url: string; duracion_seg: number | null };
 
 export type FronteraEstado = {
