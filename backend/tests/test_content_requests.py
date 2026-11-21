@@ -349,13 +349,18 @@ def test_request_options_cuenta_lo_mismo_que_el_pedido(repo, crepo, client, ana)
 def test_request_check_dice_consent_fotos_ok_y_motivo(repo, crepo, client, ana):
     comercio(repo)
     url = "/admin/content/merchants/com-1/request-check"
-    assert client.get(url, headers=ana).json() == {
+    claves = ("consent", "usable_photos", "ok", "reason")
+
+    def check() -> dict:
+        return {k: v for k, v in client.get(url, headers=ana).json().items() if k in claves}
+
+    assert check() == {
         "consent": False, "usable_photos": 0, "ok": False, "reason": "El comercio no tiene autorización vigente para aparecer en las redes"}
     autorizar(crepo, "com-1"); banco(crepo, "com-1", 2)
-    assert client.get(url, headers=ana).json() == {
+    assert check() == {
         "consent": True, "usable_photos": 2, "ok": False, "reason": "Tiene 2 fotos que sirven: subí al menos 4 en Banco de contenido"}
     banco(crepo, "com-1", 5)
-    assert client.get(url, headers=ana).json() == {"consent": True, "usable_photos": 6, "ok": True, "reason": None}
+    assert check() == {"consent": True, "usable_photos": 6, "ok": True, "reason": None}
     assert client.get("/admin/content/merchants/no-existe/request-check", headers=ana).status_code == 404
     repo.comercios["com-1"]["activo"] = False
     assert client.get(url, headers=ana).json()["reason"] == "El comercio no está activo"
@@ -605,3 +610,23 @@ def test_el_motor_pillow_arma_los_tramos_de_un_video_de_rubro(tmp_path):
     assert len(tramos) == 6                                           # tapa + 4 fotos + cierre
     with pytest.raises(job.RenderError, match="Faltan fotos"):
         job.armar_tramos(facts, slides[:3])
+
+
+def test_request_check_trae_el_comercio_y_su_ultimo_video(repo, crepo, client, ana):
+    """El botón «Video» de Admin › Comercios: con `merchant` carga ahí mismo la autorización y las fotos, y con
+    `last_piece` dice si ya hay un video armándose o listo. Una pieza salteada no cuenta."""
+    comercio(repo)
+    url = "/admin/content/merchants/com-1/request-check"
+    r = client.get(url, headers=ana).json()
+    assert r["last_piece"] is None
+    assert r["merchant"]["id"] == "com-1" and r["merchant"]["social_consent"]["granted"] is None
+    autorizar(crepo, "com-1"); banco(crepo, "com-1", 5)
+    r = client.get(url, headers=ana).json()
+    assert r["merchant"]["social_consent"]["granted"] is True and r["merchant"]["bank_photos"] == 5
+    creada = client.post("/admin/content/pieces/request", json={"kind": "comercio", "comercio_id": "com-1"}, headers=ana)
+    assert creada.status_code == 201
+    pieza = creada.json()["id"]
+    assert client.get(url, headers=ana).json()["last_piece"] == {
+        "id": pieza, "status": "queued", "scheduled_for": creada.json()["scheduled_for"]}
+    crepo.update_piece(pieza, {"status": "skipped"})
+    assert client.get(url, headers=ana).json()["last_piece"] is None

@@ -666,13 +666,28 @@ def admin_request_options(ciudad_slug: str = Query(min_length=1, max_length=80, 
 def admin_request_check(comercio_id: str, claims: dict = Depends(_permiso_difusion),
                         crepo: ContentRepo = Depends(get_content_repo)) -> dict:
     """Antes de pedir el video de un negocio: ¿tiene autorización?, ¿cuántas fotos sirven hoy? y, si no se puede,
-    el motivo (el mismo texto que daría el 422)."""
+    el motivo (el mismo texto que daría el 422).
+
+    Para el botón «Video» de cada negocio (Admin › Comercios) trae además `merchant` (el mismo
+    `ContentMerchantResponse` del Banco de contenido, para cargar ahí mismo la autorización y las fotos) y
+    `last_piece`: su último video que no se salteó, para decir «se está armando» o «ya está, miralo»."""
     comercio = crepo.get_comercio_ficha(comercio_id)
     limite = _ciudad_limitada(claims)
     if not comercio or (limite and (comercio.get("ciudades") or {}).get("slug") != limite):
         raise HTTPException(status_code=404, detail="Comercio no encontrado")
-    d = content_requests.diagnostico_comercio(crepo, comercio, cargas.hoy_bolivia())
-    return {"consent": d["consent"], "usable_photos": d["usable_photos"], "ok": d["ok"], "reason": d["reason"]}
+    hoy = cargas.hoy_bolivia()
+    d = content_requests.diagnostico_comercio(crepo, comercio, hoy)
+    return {"consent": d["consent"], "usable_photos": d["usable_photos"], "ok": d["ok"], "reason": d["reason"],
+            "merchant": _merchants(crepo, [comercio], hoy)[0], "last_piece": _ultima_pieza(crepo, comercio_id)}
+
+
+def _ultima_pieza(crepo: ContentRepo, comercio_id: str) -> dict | None:
+    """La pieza más nueva de este comercio que sigue viva (no salteada): `{id, status, scheduled_for}` o None."""
+    vivas = [p for p in crepo.list_pieces(comercio_id=comercio_id) if p.get("status") != "skipped"]
+    if not vivas:
+        return None
+    p = max(vivas, key=lambda x: (str(x.get("created_at") or ""), str(x.get("scheduled_for") or "")))
+    return {"id": p["id"], "status": p["status"], "scheduled_for": p.get("scheduled_for")}
 
 
 # ── textos del video v2 (§16.9) ──

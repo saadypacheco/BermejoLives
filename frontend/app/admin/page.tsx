@@ -54,6 +54,7 @@ import { ContactosPanel } from "@/components/contactos-panel";
 import { EquipoPanel } from "@/components/equipo-panel";
 import { ContentBankPanel } from "@/components/content/content-bank-panel";
 import { ContentRedesPanel } from "@/components/content/content-redes-panel";
+import { VideoNegocioModal } from "@/components/content/video-negocio-modal";
 import { TelefonosFotosPanel } from "@/components/admin/telefonos-fotos-panel";
 import { SubscribersPanel } from "@/components/subscribers/subscribers-panel";
 import { PortadaDisenoBloque } from "@/components/admin/portada-diseno-bloque";
@@ -551,6 +552,7 @@ function AdminPanel() {
               onRechazar={(id) => actComercio(id, "rechazar")}
               onEdited={() => { void cargarComercios(true); }}
               onIrCalles={() => irA("calles")}
+              onIrRedes={() => irA("redes")}
             />
           </Carga>
         ) : <CargandoSeccion texto="Cargando la ciudad…" />
@@ -1858,7 +1860,7 @@ function ResumenPorCiudad({ todos, noComerciales, truncado }: {
 }
 
 function TabComercios({
-  todos, truncado, rubros, onVerificar, onRechazar, onEdited, onIrCalles,
+  todos, truncado, rubros, onVerificar, onRechazar, onEdited, onIrCalles, onIrRedes,
 }: {
   todos: ComercioPorVerificar[];
   truncado: boolean;
@@ -1868,8 +1870,13 @@ function TabComercios({
   onEdited: () => void;
   /** «Calles y horarios» es su propia sección del menú; el botón de acá lleva a ella. */
   onIrCalles: () => void;
+  /** «Contenido para redes»: ahí está Revisión, donde se aprueba y se descarga el video del negocio. */
+  onIrRedes: () => void;
 }) {
   const [filtro, setFiltro] = useState<FiltroComercio>("todos");
+  // El botón «Video» (§17.3): mismo permiso que Contenido para redes. El servidor decide de verdad.
+  const puedeVideo = puedo("difusion");
+  const [videoDe, setVideoDe] = useState<{ id: string; nombre: string } | null>(null);
   // Dar de baja y reactivar piden `comercios.editar` (lo mismo que editar la ficha).
   const puedeEditar = puedo("comercios.editar");
   const [modo, setModo] = useState<"activos" | "baja">("activos");
@@ -1961,6 +1968,12 @@ function TabComercios({
           el marco de referencia de `position: fixed`. Sin esto el overlay se
           centraría sobre la tarjeta de la lista, no sobre la pantalla — el
           mismo bug que ya nos escondió los modales. */}
+      {videoDe && (
+        <Portal>
+          <VideoNegocioModal comercio={videoDe} onCerrar={() => setVideoDe(null)}
+                             onIrARevision={() => { setVideoDe(null); onIrRedes(); }} />
+        </Portal>
+      )}
       {fotoGrande && (
         <Portal>
           <ImageLightbox src={fotoGrande.src} alt={fotoGrande.alt}
@@ -2193,6 +2206,14 @@ function TabComercios({
             <button className="mbtn edit" title="Editar" onClick={() => setEditandoId(c.id)}>
               <Edit style={{ width: 16, height: 16 }} />
             </button>
+            {/* El video para redes de ESTE negocio: con lo que falte (autorización, fotos) resuelto ahí mismo. */}
+            {puedeVideo && (
+              <button type="button" className="mbtn" title="Generar el video de este negocio"
+                      aria-label={`Generar el video de ${c.nombre || "este negocio"}`}
+                      onClick={() => setVideoDe({ id: c.id, nombre: c.nombre || "este negocio" })}>
+                <Ic n="video" s={15} />
+              </button>
+            )}
             {!c.verificado && (
               <button className="mbtn approve" title="Verificar" onClick={() => onVerificar(c.id)}>
                 <Verified style={{ width: 16, height: 16 }} />

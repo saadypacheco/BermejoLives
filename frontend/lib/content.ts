@@ -486,7 +486,8 @@ export const opcionesDePedido = async (ciudadSlug: string): Promise<RubroOpcion[
   return d.rubros ?? [];
 };
 
-export const chequeoDePedido = (comercioId: string): Promise<RequestCheck> =>
+/** `merchant` llega desde el 21/11 (botón «Video» de Admin › Comercios). */
+export const chequeoDePedido = (comercioId: string): Promise<RequestCheck & { merchant?: ContentMerchantResponse }> =>
   panelJson(`/admin/content/merchants/${encodeURIComponent(comercioId)}/request-check`, {}, "No se pudo revisar el comercio");
 
 /* ─── APIs inyectadas en los componentes (panel vs. campo) ───────────────── */
