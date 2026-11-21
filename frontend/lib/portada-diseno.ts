@@ -25,21 +25,37 @@ function texto(v: string | null | undefined): string | null {
   return t ? t : null;
 }
 
+/**
+ * La versión con estilo URUKU de una foto de galería (docs/fotos-estilo-uruku.md §3): si ya se aprobó
+ * (`diseno_url`), la grilla muestra su miniatura y la ampliada la grande. Sin miniatura de diseño la grilla
+ * usa la grande (nunca la miniatura de la foto real: sería otra imagen). Lo demás del sitio sigue con `url`.
+ */
+function conDiseno(f: GaleriaFoto): GaleriaFoto {
+  const d = texto(f.diseno_url);
+  if (!d) return f;
+  return { ...f, url: d, thumb_url: texto(f.diseno_thumb_url) };
+}
+
 export function fotosDeFicha(
   c: { portada_url?: string | null; portada_thumb_url?: string | null; portada_pos?: number | null; portada_diseno_url?: string | null },
   galeria: GaleriaFoto[],
 ): FotosDeFicha {
   const original = texto(c.portada_url);
   const diseno = texto(c.portada_diseno_url);
-  if (!diseno) return { portada: original, posicion: c.portada_pos ?? null, fotos: galeria };
-  if (!original) return { portada: diseno, posicion: null, fotos: galeria };
+  // Se busca la portada original por su `url` REAL, antes de cambiar `url` por la del diseño.
+  const existente = original ? galeria.find((f) => f.url === original) : undefined;
+  const hayDisenoEnGaleria = galeria.some((f) => texto(f.diseno_url));
+  const lista = hayDisenoEnGaleria ? galeria.map(conDiseno) : galeria;   // sin diseños: la misma lista, sin tocarla
 
-  const existente = galeria.find((f) => f.url === original);
+  if (!diseno) return { portada: original, posicion: c.portada_pos ?? null, fotos: lista };
+  if (!original) return { portada: diseno, posicion: null, fotos: lista };
+
   const primera: GaleriaFoto = existente
-    ?? { id: ID_PORTADA_ORIGINAL, url: original, thumb_url: texto(c.portada_thumb_url) };
+    ? lista[galeria.indexOf(existente)]
+    : { id: ID_PORTADA_ORIGINAL, url: original, thumb_url: texto(c.portada_thumb_url) };
   return {
     portada: diseno,
     posicion: null,
-    fotos: [primera, ...galeria.filter((f) => f !== existente)],
+    fotos: [primera, ...lista.filter((_, i) => galeria[i] !== existente)],
   };
 }

@@ -56,6 +56,8 @@ export const ICONOS = {
   si: "Check", listo: "CheckCircle", mas: "Plus", aviso: "Warning", ayuda: "Question",
   dato: "Info", reloj: "Clock", calendario: "CalendarBlank", usuario: "User", gente: "Users",
   foto: "Camera", video: "VideoCamera", descargar: "DownloadSimple", estrella: "Star",
+  // Fotos con IA (Admin › Comercios › «Fotos»): la varita que «mejora» la foto.
+  ia: "MagicWand",
   destacado: "Sparkle", mas_opciones: "DotsThree", dax: "ChatCircleDots", clima: "CloudSun",
   sol: "Sun", luna: "MoonStars", seguridad: "ShieldCheck", encargo: "Package", ruta: "Path", llama: "Flame",
   explorar: "Compass", telefono: "Phone", video_play: "PlayCircle", videos: "FilmSlate",
