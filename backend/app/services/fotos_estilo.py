@@ -23,6 +23,10 @@ EL REGISTRO (`photo_style_uses`, sólo insert)
 Toda llamada a Gemini se registra en un `finally` (ok, error o timeout); el tope diario se cuenta en la base y DENTRO del
 lock, así que sobrevive a un reinicio. `free` y `external` se registran sólo cuando salen bien, con costo 0.
 
+Si el insert del registro de Gemini FALLA, la IA queda «no disponible» por el resto del día (`_registro_roto`): sin registro no
+hay tope que se pueda contar, y una IA sin tope gasta sin límite. Es un flag EN MEMORIA del proceso (como `_TRANSFORMAR`):
+se limpia al reiniciar o al cambiar el día de Bolivia (AGENTS.md §7.13).
+
 Los errores que salen de acá son `EstiloError(status, detail)`: el endpoint los pasa a `HTTPException`.
 """
 from __future__ import annotations
@@ -30,9 +34,11 @@ from __future__ import annotations
 import contextlib
 import secrets
 import threading
+from datetime import date
 from io import BytesIO
 
 import structlog
+from fastapi import UploadFile
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 from app.core.config import settings
@@ -54,17 +60,22 @@ PIE_LOGO_ANCHO, PIE_LOGO_X = 260, 740
 MINIATURA = (480, 600)
 CALIDAD_MINIATURA = 74
 CALIDAD_JPEG = 85
-SUFIJO_MINIATURA = "-t"
 
 #: A Gemini va como mucho este lado mayor, en JPEG q85.
 GEMINI_LADO_MAX = 1536
 
-#: La imagen hecha afuera: hasta 15 MB, lado menor >= 512 px y proporción <= 4:1.
+#: La imagen hecha afuera: hasta 15 MB, lado menor >= 512 px, proporción <= 4:1 y hasta 16 megapíxeles (una de 40 MP pasaba
+#: los topes de siempre pero con el alfa componiéndose sobre blanco costaba cientos de MB en el único worker).
 EXTERNA_MAX_BYTES = 15 * 1024 * 1024
 EXTERNA_LADO_MENOR_MIN = 512
+EXTERNA_MAX_PIXELES = 16_000_000
 PROPORCION_MAX = 4
+#: Lo que se necesita de una imagen de afuera para armar la portada (1600 x 1000) o la tarjeta (920 x 1150), con holgura: se achica
+#: a esto ANTES de componer el alfa (`draft` en JPEG, `thumbnail` en el resto).
+LADO_MAX_ENTRADA = 3200
 #: Lo que vuelve de Gemini: lado menor mínimo para aceptarla.
 DEVUELTA_LADO_MENOR_MIN = 256
+DEVUELTA_MAX_PIXELES = 16_000_000
 
 METODOS = ("free", "gemini", "external")
 TARGETS = ("cover", "gallery")
@@ -110,13 +121,42 @@ def tope_diario() -> int:
     return max(0, int(settings.gemini_fotos_tope_diario or 0))
 
 
-def disponibilidad(crepo) -> tuple[bool, str | None]:
-    """`(disponible, motivo)`. Disponible = interruptor `gemini_fotos` prendido + clave + modelo + costo > 0.
-    El motivo está en español para mostrarlo y NUNCA lleva la clave."""
+#: Si el insert de `photo_style_uses` falló, el día de Bolivia en que pasó (None = anda). En memoria del proceso.
+_registro_roto: date | None = None
+
+
+def registro_roto_hoy() -> bool:
+    """¿Falló el registro de usos de Gemini HOY (día de Bolivia)? Cambia el día y se olvida."""
+    return _registro_roto is not None and _registro_roto == cargas.hoy_bolivia()
+
+
+def marcar_registro_roto() -> None:
+    global _registro_roto
+    _registro_roto = cargas.hoy_bolivia()
+
+
+def reiniciar_registro_roto() -> None:
+    """Lo vuelve a poner en «anda» (los tests, y quien arregle la base y no quiera esperar a mañana)."""
+    global _registro_roto
+    _registro_roto = None
+
+
+def disponibilidad(crepo, con_tope: bool = True) -> tuple[bool, str | None]:
+    """`(disponible, motivo)`. Disponible = interruptor `gemini_fotos` prendido + clave + modelo + costo > 0 + tope diario
+    mayor que 0 + el registro de usos andando. El motivo está en español para mostrarlo y NUNCA lleva la clave.
+
+    `con_tope=False` no mira el tope en 0: el POST lo contesta con el 429 «Se llegó al tope de 0 fotos» (el GET de estado sí
+    lo anticipa, para que el front no ofrezca un botón que va a fallar)."""
     if not cost_switches.esta_prendido(crepo, cost_switches.GEMINI_FOTOS):
         return False, "el interruptor «Fotos con IA (Gemini)» está apagado"
     motivo = ge.motivo_no_disponible()
-    return (False, motivo) if motivo else (True, None)
+    if motivo:
+        return False, motivo
+    if registro_roto_hoy():
+        return False, "no se pudo registrar el último uso de la IA: queda apagada por hoy"
+    if con_tope and tope_diario() <= 0:
+        return False, "el tope diario de fotos con IA está en 0"
+    return True, None
 
 
 def desde_hoy_iso() -> str:
@@ -129,67 +169,72 @@ def usados_hoy(repo) -> int:
 
 
 def _exigir_disponible(crepo) -> None:
-    ok, motivo = disponibilidad(crepo)
+    ok, motivo = disponibilidad(crepo, con_tope=False)
     if not ok:
         raise EstiloError(503, f"Fotos con IA no disponible: {motivo}")
 
 
 # ───────────────────────────────────────────────────────────── imágenes
 
-def _a_rgb(img: Image.Image) -> Image.Image:
+def _sobre_blanco(img: Image.Image) -> Image.Image:
     """RGB sin canal alfa: lo transparente se pinta sobre BLANCO (convertir a pelo daría negro)."""
-    if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
-        rgba = img.convert("RGBA")
-        fondo = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
-        return Image.alpha_composite(fondo, rgba).convert("RGB")
+    if img.mode == "RGBA":
+        fondo = Image.new("RGBA", img.size, (255, 255, 255, 255))
+        return Image.alpha_composite(fondo, img).convert("RGB")
     return img.convert("RGB")
 
 
-def _abrir_validada(datos: bytes, *, lado_menor_min: int) -> Image.Image:
-    """Abre una imagen que viene de afuera con los topes de `portada_diseno._abrir`: JPEG/PNG/WEBP, <= 40 MP
-    (se mira el encabezado, antes de decodificar), sin EXIF (se aplica la orientación y se recodifica) y alfa sobre blanco.
-    `ValueError` («no es una imagen válida»), `pd.PortadaInadecuada` (muy chica o muy angosta). Nunca el texto de Pillow."""
+def _abrir_validada(datos: bytes, *, lado_menor_min: int, max_pixeles: int) -> Image.Image:
+    """Abre una imagen que viene de afuera (la hecha en ChatGPT, o la que devuelve Gemini).
+
+    - Sólo JPEG/PNG/WEBP, hasta `max_pixeles` (se mira el ENCABEZADO, antes de decodificar nada; además del tope general
+      de 40 MP de `imagenes`), lado menor >= `lado_menor_min` y proporción <= 4:1.
+    - Se achica a `LADO_MAX_ENTRADA` ANTES de componer el alfa sobre blanco (JPEG con `draft`, el resto con `thumbnail`):
+      el compuesto no hace falta a 16 MP, y en el único worker cada copia extra pesa.
+    - Sin EXIF, sin comentario del JPEG ni ningún otro metadato (`img.info` vacío): se aplica la orientación y sale RGB.
+
+    `ValueError` («no es una imagen válida») o `pd.PortadaInadecuada` (muy chica, angosta o grande). Nunca el texto de Pillow."""
     try:
         imagenes._preparar_pillow()
         img = Image.open(BytesIO(datos), formats=pd.FORMATOS)
         imagenes._exigir_tamano_razonable(img)
+        if img.size[0] * img.size[1] > max_pixeles:
+            raise pd.PortadaInadecuada(f"La imagen es demasiado grande: hasta {max_pixeles // 1_000_000} megapíxeles")
         menor, mayor = sorted(img.size)
         if menor < lado_menor_min or mayor > PROPORCION_MAX * menor:
             raise pd.PortadaInadecuada("La imagen es muy chica o muy angosta")
+        if img.format == "JPEG":
+            img.draft("RGB", (LADO_MAX_ENTRADA // 2, LADO_MAX_ENTRADA // 2))
+        con_alfa = img.mode in ("RGBA", "LA", "PA") or (img.mode == "P" and "transparency" in img.info)
         img.load()
-        return _a_rgb(ImageOps.exif_transpose(img))
+        img = ImageOps.exif_transpose(img).convert("RGBA" if con_alfa else "RGB")
+        if max(img.size) > LADO_MAX_ENTRADA:
+            img.thumbnail((LADO_MAX_ENTRADA, LADO_MAX_ENTRADA), Image.LANCZOS)
+        img = _sobre_blanco(img)
+        img.info.clear()
+        return img
     except pd.PortadaInadecuada:
         raise
     except Exception as exc:  # noqa: BLE001
         raise ValueError("El archivo no es una imagen válida") from exc
 
 
-def recortar(img: Image.Image, aspecto: tuple[int, int], pos: int | None, lado_max: int) -> Image.Image:
-    """El mayor recorte de `img` con esa proporción (centrado a lo ancho; a lo alto, en `pos` % del tramo que sobra, como
-    el `object-position` de CSS), achicado a `lado_max` px de lado mayor SIN agrandar nunca. Recorta ANTES de escalar
-    (`resize(box=)`): jamás hay un intermedio enorme."""
-    aw, ah = aspecto
-    ancho, alto = img.size
-    pos = 50 if pos is None else max(0, min(100, int(pos)))
-    caja_w = min(float(ancho), alto * aw / ah)
-    caja_h = caja_w * ah / aw
-    x0 = (ancho - caja_w) / 2
-    y0 = max(0.0, min(alto - caja_h, pos / 100 * (alto - caja_h)))
-    escala = min(1.0, lado_max / max(caja_w, caja_h))
-    salida = (max(1, round(caja_w * escala)), max(1, round(caja_h * escala)))
-    return img.resize(salida, Image.LANCZOS, box=(x0, y0, x0 + caja_w, y0 + caja_h))
-
-
 def _jpeg(img: Image.Image, calidad: int = CALIDAD_JPEG) -> bytes:
     out = BytesIO()
-    img.convert("RGB").save(out, format="JPEG", quality=calidad, optimize=True)
+    limpia = img.convert("RGB")
+    limpia.info.clear()                       # ni el comentario del JPEG ni el EXIF viajan al archivo
+    limpia.save(out, format="JPEG", quality=calidad, optimize=True)
     return out.getvalue()
 
 
 def jpeg_para_gemini(img: Image.Image, target: str, pos: int | None) -> bytes:
-    """La foto recortada al formato (3:2 portada, 4:5 galería) y achicada a <= 1536 px, en JPEG q85."""
-    aspecto = (3, 2) if target == "cover" else (4, 5)
-    return _jpeg(recortar(img, aspecto, pos if target == "cover" else None, GEMINI_LADO_MAX))
+    """La foto recortada al formato (3:2 portada, 4:5 galería) y achicada a <= 1536 px, en JPEG q85. Recorta ANTES de
+    escalar y NUNCA agranda (una foto chica va como está)."""
+    aw, ah = (3, 2) if target == "cover" else (4, 5)
+    x0, y0, x1, y1 = pd.caja_cubrir(img.size, aw, ah, pos if target == "cover" else None)
+    escala = min(1.0, GEMINI_LADO_MAX / max(x1 - x0, y1 - y0))
+    salida = (max(1, round((x1 - x0) * escala)), max(1, round((y1 - y0) * escala)))
+    return _jpeg(img.resize(salida, Image.LANCZOS, box=(x0, y0, x1, y1)))
 
 
 # ───────────────────────────────────────────────────────────── las plantillas
@@ -256,13 +301,6 @@ def plantilla_galeria(foto: Image.Image) -> Image.Image:
     return base
 
 
-def caja_logo_galeria() -> tuple[int, int, int, int]:
-    """Dónde cae el logo en la galería: `(x0, y0, x1, y1)`."""
-    alto = pd.logo_color(PIE_LOGO_ANCHO).height
-    y0 = (PIE_Y0 + PIE_Y1) // 2 - alto // 2
-    return PIE_LOGO_X, y0, PIE_LOGO_X + PIE_LOGO_ANCHO, y0 + alto
-
-
 def miniatura(img: Image.Image) -> bytes:
     """La miniatura de la galería: 480 x 600, JPEG q74."""
     return _jpeg(img.resize(MINIATURA, Image.LANCZOS), CALIDAD_MINIATURA)
@@ -270,21 +308,17 @@ def miniatura(img: Image.Image) -> bytes:
 
 # ───────────────────────────────────────────────────────────── disco
 
-def miniatura_de(url: str | None) -> str | None:
-    """La URL de la miniatura derivada de la del diseño: `…/diseno-<token>.jpg` -> `…/diseno-<token>-t.jpg`."""
-    if not url or not url.endswith(".jpg"):
-        return None
-    return url[:-4] + SUFIJO_MINIATURA + ".jpg"
+miniatura_de = fotos_galeria.miniatura_de       # `…/diseno-<token>.jpg` -> `…/diseno-<token>-t.jpg`
 
 
 def guardar_galeria(slug: str, jpeg: bytes, thumb: bytes) -> tuple[str, str] | None:
     """Guarda `<slug>/diseno-<token>.jpg` y `<slug>/diseno-<token>-t.jpg`. `(url, url_miniatura)` o None si algo falló
     (y entonces no queda ninguno de los dos archivos)."""
-    token = secrets.token_hex(8)
+    token = secrets.token_hex(16)
     url = imagenes.guardar_foto_local(f"{slug}/{pd.PREFIJO_ARCHIVO}{token}.jpg", jpeg)
     if not url:
         return None
-    url_t = imagenes.guardar_foto_local(f"{slug}/{pd.PREFIJO_ARCHIVO}{token}{SUFIJO_MINIATURA}.jpg", thumb)
+    url_t = imagenes.guardar_foto_local(f"{slug}/{pd.PREFIJO_ARCHIVO}{token}{fotos_galeria.SUFIJO_MINIATURA}.jpg", thumb)
     if not url_t:
         fotos_galeria.soltar_disenos({"slug": slug}, [url])
         return None
@@ -294,9 +328,9 @@ def guardar_galeria(slug: str, jpeg: bytes, thumb: bytes) -> tuple[str, str] | N
 # ───────────────────────────────────────────────────────────── el registro de usos
 
 def registrar(repo, *, comercio_id: str, foto_id: str | None, target: str, method: str, result: str, actor: str,
-              costo: float = 0.0, error: str | None = None, result_url: str | None = None) -> None:
+              costo: float = 0.0, error: str | None = None, result_url: str | None = None) -> bool:
     """Deja una fila en `photo_style_uses` (sólo insert). Nunca lanza: si la base falla se avisa en el log y el pedido
-    sigue (una foto ya armada, y cobrada, no se tira por esto)."""
+    sigue (una foto ya armada, y cobrada, no se tira por esto). Devuelve si se pudo registrar."""
     fila = {
         "comercio_id": comercio_id, "foto_id": foto_id, "target": target, "method": method,
         "model": (settings.gemini_image_model or None) if method == "gemini" else None,
@@ -307,8 +341,10 @@ def registrar(repo, *, comercio_id: str, foto_id: str | None, target: str, metho
     }
     try:
         repo.registrar_uso_foto_estilo(fila)
+        return True
     except Exception:  # noqa: BLE001
         logger.error("fotos_estilo.registro_fallo", comercio=comercio_id, method=method, result=result, exc_info=True)
+        return False
 
 
 # ───────────────────────────────────────────────────────────── armar una foto (con el lock)
@@ -319,7 +355,8 @@ def _imagen_base(metodo: str, target: str, *, origen: bytes | None, externa: byt
     ancho, alto = (pd.ANCHO, pd.ALTO) if target == "cover" else (TARJETA_ANCHO, TARJETA_ALTO)
     pos = pos if target == "cover" else None
     if metodo == "external":
-        return pd.cubrir(_abrir_validada(externa or b"", lado_menor_min=EXTERNA_LADO_MENOR_MIN), ancho, alto, None)
+        return pd.cubrir(_abrir_validada(externa or b"", lado_menor_min=EXTERNA_LADO_MENOR_MIN,
+                                         max_pixeles=EXTERNA_MAX_PIXELES), ancho, alto, None)
 
     foto = pd._abrir(origen or b"")                                  # la foto de origen: mismos topes de siempre
     if metodo == "free":
@@ -330,7 +367,7 @@ def _imagen_base(metodo: str, target: str, *, origen: bytes | None, externa: byt
     devuelta = ge.reestilizar(jpeg_para_gemini(foto, target, pos), target)
     estado["cobrada"] = True                                         # hubo imagen: se cobra aunque no sirva
     try:
-        img = _abrir_validada(devuelta, lado_menor_min=DEVUELTA_LADO_MENOR_MIN)
+        img = _abrir_validada(devuelta, lado_menor_min=DEVUELTA_LADO_MENOR_MIN, max_pixeles=DEVUELTA_MAX_PIXELES)
     except (ValueError, pd.PortadaInadecuada) as exc:
         raise ge.GeminiFallo("La imagen que devolvió Gemini no se pudo usar", cobrada=True) from exc
     return pd.cubrir(img, ancho, alto, None)                          # la IA no tiñe ni la mejora Pillow se aplica
@@ -350,6 +387,7 @@ def producir(repo, crepo, *, comercio: dict, target: str, metodo: str, origen: b
     estado = {"llamo": False, "cobrada": False, "resultado": "error", "error": None, "url": None}
     with transformando():
         if metodo == "gemini":
+            _exigir_disponible(crepo)             # otra vez, ya con el lock: el pedido anterior pudo romper el registro
             tope = tope_diario()
             if usados_hoy(repo) >= tope:
                 raise EstiloError(429, f"Se llegó al tope de {tope} fotos con IA por hoy")
@@ -399,9 +437,13 @@ def _cerrar_registro(repo, estado: dict, *, comercio: dict, target: str, metodo:
     if metodo == "gemini":
         if not estado["llamo"]:
             return                           # nunca se llamó (foto inválida, sin disponibilidad): no cuenta ni cuesta
-        registrar(repo, comercio_id=comercio["id"], foto_id=foto_id, target=target, method="gemini",
-                  result=estado["resultado"], actor=actor, costo=costo_por_imagen() if estado["cobrada"] else 0.0,
-                  error=estado["error"], result_url=estado["url"])
+        anotado = registrar(repo, comercio_id=comercio["id"], foto_id=foto_id, target=target, method="gemini",
+                            result=estado["resultado"], actor=actor, costo=costo_por_imagen() if estado["cobrada"] else 0.0,
+                            error=estado["error"], result_url=estado["url"])
+        if not anotado:
+            # Sin registro no hay tope que contar: hasta que el día cambie (o se reinicie) la IA queda no disponible.
+            marcar_registro_roto()
+            logger.error("fotos_estilo.ia_apagada_por_registro", comercio=comercio["id"])
     elif estado["resultado"] == "ok":
         registrar(repo, comercio_id=comercio["id"], foto_id=foto_id, target=target, method=metodo, result="ok",
                   actor=actor, result_url=estado["url"])
@@ -445,10 +487,9 @@ def item_galeria(fila: dict, metodos: dict[str, str]) -> dict:
 def estado(repo, crepo, comercio: dict) -> dict:
     """`PhotoStyleState`: la portada, la galería, si la IA se puede usar y cuánto se gastó, y las instrucciones para ChatGPT."""
     cid = comercio["id"]
-    usos = repo.usos_foto_estilo(cid)
-    metodos = metodos_por_url(usos)
+    metodos = metodos_por_url(repo.usos_foto_estilo(cid))
     disponible, motivo = disponibilidad(crepo)
-    gemini_usos = [u for u in usos if u.get("method") == "gemini"]
+    gastos = repo.gastos_gemini_comercio(cid)           # lo cobrado por Gemini: el mismo criterio que `/usos` (cost_usd > 0)
     propuesta = comercio.get("portada_diseno_propuesta_url") or None
     return {
         "comercio": {"id": cid, "nombre": comercio.get("nombre"), "slug": comercio.get("slug")},
@@ -460,8 +501,8 @@ def estado(repo, crepo, comercio: dict) -> dict:
         "gemini": {"available": disponible, "reason": (motivo[:1].upper() + motivo[1:]) if motivo else None,
                    "cost_usd": costo_por_imagen(),
                    "used_today": usados_hoy(repo), "daily_cap": tope_diario(),
-                   "merchant_uses": len(gemini_usos),
-                   "merchant_cost_usd": round(sum(float(u.get("cost_usd") or 0) for u in gemini_usos), 4)},
+                   "merchant_uses": len(gastos),
+                   "merchant_cost_usd": round(sum(float(g.get("cost_usd") or 0) for g in gastos), 4)},
         "instructions": prompts.instrucciones(),
     }
 
@@ -514,7 +555,7 @@ def proponer_portada(repo, crepo, comercio: dict, *, metodo: str, externa: bytes
         _exigir_disponible(crepo)
     origen = None
     if metodo != "external":
-        origen = pd.leer_portada(comercio)
+        origen = pd.leer_portada(comercio, remoto=True)      # QA: si no está en el disco, por HTTPS (fotos_origen)
         if origen is None:
             raise EstiloError(400, "No se pudo leer la foto de portada desde el servidor")
     rubro = (repo.get_rubro_por_id(comercio.get("rubro_id")) or {}).get("nombre")
@@ -549,7 +590,7 @@ def proponer_portada(repo, crepo, comercio: dict, *, metodo: str, externa: bytes
 # ───────────────────────────────────────────────────────────── la galería: proponer, usar, descartar, volver
 
 def _foto_o_404(repo, comercio_id: str, foto_id: str) -> dict:
-    fila = next((f for f in repo.list_fotos_comercio(comercio_id) if str(f.get("id")) == str(foto_id)), None)
+    fila = repo.get_foto_comercio(foto_id, comercio_id)
     if fila is None:
         raise EstiloError(404, "Foto no encontrada")
     return fila
@@ -566,7 +607,7 @@ def soltar_huerfanos_de_foto(repo, comercio: dict, foto_id: str, urls: list[str 
     """Borra del disco los archivos de diseño `urls` que la fila YA NO apunta. Relee la fila DESPUÉS de escribir: si otro
     pedido volvió a apuntar uno, no se borra. Si no se puede releer, no se borra nada (un archivo de más es barato)."""
     try:
-        fresca = next((f for f in repo.list_fotos_comercio(comercio["id"]) if str(f.get("id")) == str(foto_id)), None)
+        fresca = repo.get_foto_comercio(foto_id, comercio["id"])
     except Exception:  # noqa: BLE001
         logger.warning("fotos_estilo.releer_fallo", comercio=comercio.get("id"), foto=foto_id, exc_info=True)
         return
@@ -594,7 +635,7 @@ def proponer_galeria(repo, crepo, comercio: dict, foto_id: str, *, metodo: str, 
                       pos=None, foto_id=str(fila["id"]), actor=actor)
     url, thumb = salida["url"], salida["thumb_url"]
 
-    fresca = next((f for f in repo.list_fotos_comercio(cid) if str(f.get("id")) == str(foto_id)), None)
+    fresca = repo.get_foto_comercio(foto_id, cid)
     if fresca is None or fresca.get("url") != fila.get("url"):
         fotos_galeria.soltar_disenos(comercio, [url, thumb])
         raise EstiloError(409, MSG_CAMBIO_FOTO)
@@ -618,28 +659,41 @@ def _item(repo, comercio_id: str, foto_id: str) -> dict:
     return item_galeria(fila, metodos)
 
 
+MSG_PROPUESTA_CAMBIO = "La propuesta cambió, revisá de nuevo"
+
+
 def usar_diseno(repo, comercio: dict, foto_id: str, *, actor: str) -> dict:
-    """La propuesta pasa a la ficha pública (`diseno_url` + su miniatura) y la propuesta queda vacía."""
+    """La propuesta pasa a la ficha pública (`diseno_url` + su miniatura) y la propuesta queda vacía.
+
+    UPDATE condicional: sólo si la fila TODAVÍA tiene la propuesta que se leyó. Si en el medio otro pedido la reemplazó
+    (`proponer_galeria` suelta el archivo viejo), aprobarla publicaría un archivo que ya no existe: 409."""
     cid = comercio["id"]
     fila = _foto_o_404(repo, cid, foto_id)
     propuesta = fila.get("diseno_propuesta_url")
     if not propuesta:
         raise EstiloError(400, "No hay una propuesta de diseño para usar")
     viejos = [fila.get("diseno_url"), fila.get("diseno_thumb_url")]
-    repo.update_foto_comercio(fila["id"], cid, {"diseno_url": propuesta, "diseno_thumb_url": miniatura_de(propuesta),
-                                                "diseno_propuesta_url": None})
+    cambio = repo.update_foto_comercio(fila["id"], cid, {"diseno_url": propuesta, "diseno_thumb_url": miniatura_de(propuesta),
+                                                         "diseno_propuesta_url": None},
+                                       si={"diseno_propuesta_url": propuesta})
+    if cambio is None:
+        raise EstiloError(409, MSG_PROPUESTA_CAMBIO)
     soltar_huerfanos_de_foto(repo, comercio, foto_id, viejos)       # el diseño anterior ya no lo apunta nada
     logger.info("admin.foto_diseno_usado", comercio=cid, foto=foto_id, by=actor)
     return _item(repo, cid, foto_id)
 
 
 def descartar_propuesta(repo, comercio: dict, foto_id: str, *, actor: str) -> dict:
-    """Descarta la propuesta (no toca el diseño vigente). Sin propuesta no hay nada que hacer y no es un error."""
+    """Descarta la propuesta (no toca el diseño vigente). Sin propuesta no hay nada que hacer y no es un error.
+    Condicional como `usar_diseno`: si la propuesta ya es otra, 409 (no se descarta la nueva sin haberla visto)."""
     cid = comercio["id"]
     fila = _foto_o_404(repo, cid, foto_id)
     propuesta = fila.get("diseno_propuesta_url")
     if propuesta:
-        repo.update_foto_comercio(fila["id"], cid, {"diseno_propuesta_url": None})
+        cambio = repo.update_foto_comercio(fila["id"], cid, {"diseno_propuesta_url": None},
+                                           si={"diseno_propuesta_url": propuesta})
+        if cambio is None:
+            raise EstiloError(409, MSG_PROPUESTA_CAMBIO)
         soltar_huerfanos_de_foto(repo, comercio, foto_id, [propuesta, miniatura_de(propuesta)])
         logger.info("admin.foto_diseno_descartado", comercio=cid, foto=foto_id, by=actor)
     return _item(repo, cid, foto_id)
@@ -651,7 +705,30 @@ def volver_a_la_original(repo, comercio: dict, foto_id: str, *, actor: str) -> d
     fila = _foto_o_404(repo, cid, foto_id)
     viejos = [fila.get("diseno_url"), fila.get("diseno_thumb_url")]
     if any(viejos):
-        repo.update_foto_comercio(fila["id"], cid, {"diseno_url": None, "diseno_thumb_url": None})
+        cambio = repo.update_foto_comercio(fila["id"], cid, {"diseno_url": None, "diseno_thumb_url": None},
+                                           si={"diseno_url": fila.get("diseno_url")})
+        if cambio is None:
+            raise EstiloError(409, MSG_PROPUESTA_CAMBIO)
         soltar_huerfanos_de_foto(repo, comercio, foto_id, viejos)
         logger.info("admin.foto_diseno_quitado", comercio=cid, foto=foto_id, by=actor)
     return _item(repo, cid, foto_id)
+
+
+# ───────────────────────────────────────────────────────────── la imagen subida (/externa)
+
+async def leer_subida(foto: UploadFile) -> bytes:
+    """Los bytes de la imagen subida. 400 si está vacía, 413 si pasa de 15 MB (se lee de a trozos: no se baja de más).
+    `EstiloError`: el endpoint lo pasa a `HTTPException`."""
+    trozos: list[bytes] = []
+    total = 0
+    while True:
+        trozo = await foto.read(1024 * 1024)
+        if not trozo:
+            break
+        total += len(trozo)
+        if total > EXTERNA_MAX_BYTES:
+            raise EstiloError(413, "La imagen pesa más de 15 MB")
+        trozos.append(trozo)
+    if not total:
+        raise EstiloError(400, "Falta la imagen")
+    return b"".join(trozos)

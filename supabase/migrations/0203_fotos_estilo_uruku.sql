@@ -97,6 +97,12 @@ begin
         raise exception '0203: % puede leer comercio_fotos.% y tiene que ser privada', v_rol, v_col;
       end if;
     end loop;
+    -- comercio_fotos: anon y authenticated sólo LEEN (nada de insert, update ni delete, ni de tabla ni de columna)
+    if has_any_column_privilege(v_rol, 'public.comercio_fotos', 'insert')
+       or has_any_column_privilege(v_rol, 'public.comercio_fotos', 'update')
+       or has_table_privilege(v_rol, 'public.comercio_fotos', 'delete') then
+      raise exception '0203: % puede escribir en comercio_fotos y sólo tiene que leer', v_rol;
+    end if;
     -- photo_style_uses: nada de nada
     if has_table_privilege(v_rol, 'public.photo_style_uses', 'select')
        or has_table_privilege(v_rol, 'public.photo_style_uses', 'insert')

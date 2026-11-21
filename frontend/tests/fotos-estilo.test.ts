@@ -65,7 +65,9 @@ test("puedeIA: con el tope del día alcanzado no se puede y el motivo dice el to
   assert.match(r.motivo ?? "", /tope de 20/);
   assert.equal(puedeIA(ia({ used_today: 25, daily_cap: 20 })).puede, false);
   assert.equal(puedeIA(ia({ used_today: 19, daily_cap: 20 })).puede, true);
-  assert.equal(puedeIA(ia({ used_today: 99, daily_cap: 0 })).puede, true, "sin tope informado no se inventa uno");
+  assert.equal(puedeIA(ia({ used_today: 99, daily_cap: null })).puede, true, "sin tope informado no se inventa uno");
+  assert.equal(puedeIA(ia({ used_today: 0, daily_cap: 0 })).puede, false, "un 0 explícito SÍ bloquea la IA");
+  assert.match(puedeIA(ia({ daily_cap: 0 })).motivo ?? "", /tope diario.*en 0/);
 });
 
 test("resumenIA: costo por foto, uso de hoy y gasto de este negocio", () => {

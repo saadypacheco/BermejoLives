@@ -30,30 +30,9 @@ from app.services import fotos_estilo
 router = APIRouter()
 logger = structlog.get_logger()
 
-#: La imagen hecha afuera pesa hasta 15 MB (el middleware de cuerpo también lo corta antes de leerla).
-MAX_BYTES_SUBIDA = fotos_estilo.EXTERNA_MAX_BYTES
-
-
 class DisenoBody(BaseModel):
     """Cuerpo de `POST .../diseno`: por qué camino se arma."""
     method: Literal["free", "gemini"] = "free"
-
-
-async def leer_subida(foto: UploadFile) -> bytes:
-    """Los bytes de la imagen subida. 400 si está vacía, 413 si pasa de 15 MB (se lee de a trozos: no se baja de más)."""
-    trozos: list[bytes] = []
-    total = 0
-    while True:
-        trozo = await foto.read(1024 * 1024)
-        if not trozo:
-            break
-        total += len(trozo)
-        if total > MAX_BYTES_SUBIDA:
-            raise HTTPException(status_code=413, detail="La imagen pesa más de 15 MB")
-        trozos.append(trozo)
-    if not total:
-        raise HTTPException(status_code=400, detail="Falta la imagen")
-    return b"".join(trozos)
 
 
 def _comercio_o_404(repo: Repo, comercio_id: str) -> dict:
@@ -107,8 +86,8 @@ async def admin_armar_diseno_foto_externa(
 ) -> dict:
     """El diseño de una foto de la galería a partir de una imagen hecha afuera (ChatGPT)."""
     comercio = _comercio_o_404(repo, comercio_id)
-    data = await leer_subida(foto)
     try:
+        data = await fotos_estilo.leer_subida(foto)
         return await run_in_threadpool(fotos_estilo.proponer_galeria, repo, crepo, comercio, foto_id,
                                        metodo="external", externa=data, actor=mod["email"])
     except fotos_estilo.EstiloError as exc:

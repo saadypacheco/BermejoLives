@@ -225,6 +225,8 @@ test("leerEstado: los strings en blanco son null y los números raros son 0", ()
   assert.equal(e.cover.design_url, null);
   assert.equal(e.gemini.cost_usd, 0);
   assert.equal(e.gemini.used_today, 0);
+  assert.equal(e.gemini.daily_cap, null, "un tope que no viene no es un 0");
+  assert.equal(leerEstado({ gemini: { daily_cap: 0 } }).gemini.daily_cap, 0, "y un 0 explícito se conserva");
 });
 
 test("leerCoverDesign / leerGalleryItem: tolerantes y sin inventar propuesta", () => {

@@ -286,6 +286,12 @@ FOTOS_LECTURA_REMOTA_BASES=https://api.uruku.bo/fotos
 - Después de cambiarla hay que recrear el backend (`up -d --build backend`). Al arrancar el log avisa
   (`fotos.lectura_remota_activa`) y, si alguna base no es `https://`, la ignora y lo dice (`fotos.lectura_remota_base_ignorada`).
 
+**Orden de deploy de «Fotos»: primero la migración, después el front.** La migración `0203_fotos_estilo_uruku.sql` va
+**ANTES** del front (y del backend): la ficha pública pide las columnas `diseno_url` y `diseno_thumb_url` de `comercio_fotos`.
+Si el front sale antes, esa consulta falla (42703, la columna no existe); el front lo tolera (reintenta con `id, url, thumb_url`
+y deja el error en el log), pero entonces ninguna foto muestra su diseño hasta que corra la 0203. Y recordá reiniciar PostgREST
+después de la migración (sección 2).
+
 **Fotos con IA (opcional, cuesta plata).** La migración `0203_fotos_estilo_uruku.sql` se aplica a mano como cualquier otra
 (sección 2) y **dos veces tiene que dar el mismo resultado**. El botón «Con IA» sigue apagado hasta que se cumpla todo:
 interruptor `gemini_fotos` prendido en Admin, `GEMINI_API_KEY` con facturación y, en el `.env` de QA,

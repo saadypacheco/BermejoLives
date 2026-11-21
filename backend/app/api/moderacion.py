@@ -16,7 +16,6 @@ from app.core.auth import MIN_LARGO_CLAVE_PANEL, _verificar_cuenta, _vigente_tie
 from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS, tiene as tiene_permiso
 from app.core.config import _numeros_propios, settings
 from app.api.agent_credentials import catalogo_de_permisos, es_agente
-from app.api import fotos_estilo as fotos_estilo_api
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp, whatsapp_para_guardar
 from app.services import archivos_privados, site_metrics, turnos_farmacia
@@ -2159,7 +2158,7 @@ def admin_listar_fotos(
     comercio = _comercio_o_404(repo, comercio_id)
     # `limite` = el tope de fotos de hoy (plan + extras, nunca menos de las 10 del local
     # para el equipo): la galería muestra «23/50».
-    return fotos_galeria.listado(repo, comercio, equipo=True)
+    return fotos_galeria.listado(repo, comercio, equipo=True, admin=True)
 
 
 @router.post("/admin/comercio/{comercio_id}/fotos")
@@ -2216,7 +2215,7 @@ def admin_usar_como_portada(
     comercio = _comercio_o_404(repo, comercio_id)
     actualizado = portada.usar_de_galeria(repo, comercio, body.foto_id)
     logger.info("admin.portada_de_galeria", comercio=comercio_id, by=mod["email"])
-    return portada.respuesta(repo, actualizado)
+    return portada.respuesta(repo, actualizado, admin=True)
 
 
 @router.post("/admin/comercio/{comercio_id}/foto")
@@ -2289,8 +2288,8 @@ async def admin_armar_portada_diseno_externa(
     """La portada a partir de una imagen hecha afuera (ChatGPT): se valida, se normaliza (sin EXIF, alfa sobre blanco),
     se recorta y se le pone la plantilla. Queda como PROPUESTA, con el aviso de revisión en el panel."""
     comercio = _comercio_o_404(repo, comercio_id)
-    data = await fotos_estilo_api.leer_subida(foto)
     try:
+        data = await fotos_estilo.leer_subida(foto)
         return await run_in_threadpool(fotos_estilo.proponer_portada, repo, crepo, comercio,
                                        metodo="external", externa=data, actor=mod["email"])
     except fotos_estilo.EstiloError as exc:
@@ -2309,8 +2308,13 @@ def admin_usar_portada_diseno(
     if not propuesta:
         raise HTTPException(status_code=400, detail="No hay una propuesta de portada de diseño para usar")
     vigente = comercio.get("portada_diseno_url")
-    actualizado = repo.update_comercio(
-        comercio_id, {"portada_diseno_url": propuesta, "portada_diseno_propuesta_url": None}, None)
+    # UPDATE condicional: sólo si la fila TODAVÍA tiene esa propuesta. Si otro pedido la reemplazó (y soltó su archivo),
+    # aprobarla publicaría una imagen que ya no existe.
+    actualizado = repo.actualizar_comercio_si(
+        comercio_id, {"portada_diseno_url": propuesta, "portada_diseno_propuesta_url": None},
+        {"portada_diseno_propuesta_url": propuesta})
+    if actualizado is None:
+        raise HTTPException(status_code=409, detail=fotos_estilo.MSG_PROPUESTA_CAMBIO)
     portada_diseno.soltar_huerfanos(repo, comercio, [vigente])    # el diseño anterior ya no lo apunta nada
     logger.info("admin.portada_diseno_usada", comercio=comercio_id, by=mod["email"])
     return _respuesta_portada(
@@ -2328,7 +2332,10 @@ def admin_descartar_propuesta_portada_diseno(
     propuesta = comercio.get("portada_diseno_propuesta_url")
     if not propuesta:
         return _respuesta_portada(repo, comercio)
-    actualizado = repo.update_comercio(comercio_id, {"portada_diseno_propuesta_url": None}, None)
+    actualizado = repo.actualizar_comercio_si(comercio_id, {"portada_diseno_propuesta_url": None},
+                                              {"portada_diseno_propuesta_url": propuesta})
+    if actualizado is None:
+        raise HTTPException(status_code=409, detail=fotos_estilo.MSG_PROPUESTA_CAMBIO)
     portada_diseno.soltar_huerfanos(repo, comercio, [propuesta])
     logger.info("admin.portada_diseno_descartada", comercio=comercio_id, by=mod["email"])
     return _respuesta_portada(repo, actualizado or {**comercio, "portada_diseno_propuesta_url": None})
@@ -2345,7 +2352,9 @@ def admin_quitar_portada_diseno(
     vigente = comercio.get("portada_diseno_url")
     if not vigente:
         return _respuesta_portada(repo, comercio)
-    actualizado = repo.update_comercio(comercio_id, {"portada_diseno_url": None}, None)
+    actualizado = repo.actualizar_comercio_si(comercio_id, {"portada_diseno_url": None}, {"portada_diseno_url": vigente})
+    if actualizado is None:
+        raise HTTPException(status_code=409, detail=fotos_estilo.MSG_PROPUESTA_CAMBIO)
     portada_diseno.soltar_huerfanos(repo, comercio, [vigente])
     logger.info("admin.portada_diseno_quitada", comercio=comercio_id, by=mod["email"])
     return _respuesta_portada(repo, actualizado or {**comercio, "portada_diseno_url": None})

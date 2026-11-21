@@ -12,6 +12,7 @@ from PIL import Image, ImageStat
 from app.core.config import settings
 from app.services import fotos_estilo as fe, fotos_origen, portada, portada_diseno as pd
 from app.services.imagenes import guardar_foto_local
+from tests.fotos_helpers import armar_portada
 
 BASE = "https://api.test/fotos"
 RAIZ = Path(__file__).resolve().parents[2]
@@ -71,14 +72,14 @@ URL = "/admin/comercio/com-d/portada-diseno"
 
 @pytest.mark.parametrize("w,h", [(600, 1800), (2400, 800), (300, 220), (200, 200), (1600, 1000)])
 def test_plantilla_devuelve_jpeg_1600x1000_con_foto_vertical_apaisada_chica(w, h):
-    out = pd.armar_plantilla(_jpeg(w, h), "Ferretería El Tornillo", "Ferretería", "Bermejo", None)
+    out = armar_portada(_jpeg(w, h), "Ferretería El Tornillo", "Ferretería", "Bermejo", None)
     img = _abrir(out)
     assert img.format == "JPEG" and img.size == (1600, 1000)
 
 
 def test_nombre_larguisimo_no_rompe_y_no_se_sale_del_cuadro():
     nombre = "Distribuidora Mayorista de Productos Importados y Nacionales del Sur Boliviano " * 4
-    out = pd.armar_plantilla(_jpeg(), nombre, "Almacén", "Bermejo", 20)
+    out = armar_portada(_jpeg(), nombre, "Almacén", "Bermejo", 20)
     assert _abrir(out).size == (1600, 1000)
     px, lineas = pd.ajustar_nombre(pd.limpiar_texto(nombre), 1440)
     assert len(lineas) <= 2 and lineas[-1].endswith("…") and not lineas[-1].endswith(" …") and px == 52
@@ -98,17 +99,17 @@ def test_nombre_corto_usa_letra_grande_en_un_renglon():
 def test_emoji_en_el_nombre_no_rompe_y_se_filtra():
     assert pd.limpiar_texto("Café 😀 Ñandú ★ 🍕") == "Café Ñandú"
     assert pd.limpiar_texto("​Mi\x00 Local ") == "Mi Local"
-    out = pd.armar_plantilla(_jpeg(), "😀🍕 Pizzería 🍕", "Comidas 🍴", "Bermejo ★", None)
+    out = armar_portada(_jpeg(), "😀🍕 Pizzería 🍕", "Comidas 🍴", "Bermejo ★", None)
     assert _abrir(out).size == (1600, 1000)
 
 
 def test_nombre_vacio_o_solo_emojis_no_rompe():
-    assert _abrir(pd.armar_plantilla(_jpeg(), "😀😀", None, None, None)).size == (1600, 1000)
-    assert _abrir(pd.armar_plantilla(_jpeg(), "", "", "", 50)).size == (1600, 1000)
+    assert _abrir(armar_portada(_jpeg(), "😀😀", None, None, None)).size == (1600, 1000)
+    assert _abrir(armar_portada(_jpeg(), "", "", "", 50)).size == (1600, 1000)
 
 
 def test_la_franja_de_abajo_es_mas_oscura_que_la_foto():
-    out = _abrir(pd.armar_plantilla(_jpeg(1600, 1000, "white"), "Local", "Rubro", "Ciudad", None, mejorar=False))
+    out = _abrir(armar_portada(_jpeg(1600, 1000, "white"), "Local", "Rubro", "Ciudad", None, mejorar=False))
     abajo = _media(out.crop((700, 940, 900, 990)))
     arriba = _media(out.crop((700, 300, 900, 350)))
     assert arriba > 240 and abajo < 120
@@ -117,7 +118,7 @@ def test_la_franja_de_abajo_es_mas_oscura_que_la_foto():
 def test_el_logo_se_dibuja_abajo_a_la_derecha_y_no_arriba():
     """Estilo URUKU (docs/fotos-estilo-uruku.md §1): el logo «color» va abajo a la derecha, en x 1236..1536 e y 839..936, y
     arriba ya no hay logo ni velo: sobre una foto blanca la esquina de arriba queda blanca."""
-    out = _abrir(pd.armar_plantilla(_jpeg(1600, 1000, "white"), "Local", None, None, None, mejorar=False))
+    out = _abrir(armar_portada(_jpeg(1600, 1000, "white"), "Local", None, None, None, mejorar=False))
     arriba = out.crop((1250, 44, 1520, 120))
     assert _media(arriba) >= 250                     # sin velo ni logo arriba
     x0, y0, x1, y1 = pd.disponer_portada("Local", None, None)["logo"]
@@ -136,7 +137,7 @@ def _bandas(alto=3000, corte=900):
 
 
 def _color_en(png, pos, y=400):
-    out = _abrir(pd.armar_plantilla(png, "X", None, None, pos, mejorar=False))
+    out = _abrir(armar_portada(png, "X", None, None, pos, mejorar=False))
     return out.getpixel((800, y))
 
 
@@ -158,13 +159,13 @@ def test_pos_en_los_extremos_y_sin_pos():
     assert _color_en(png, 100)[0] > 150                    # termina abajo
     assert _color_en(png, None)[2] > 150                   # 50: arranca en 1187 -> fila 400 cae en 1437 (azul)
     assert _color_en(png, 50) == _color_en(png, None)
-    assert _abrir(pd.armar_plantilla(png, "X", None, None, 999)).size == (1600, 1000)   # fuera de rango: se acota
-    assert _abrir(pd.armar_plantilla(png, "X", None, None, -5)).size == (1600, 1000)
+    assert _abrir(armar_portada(png, "X", None, None, 999)).size == (1600, 1000)   # fuera de rango: se acota
+    assert _abrir(armar_portada(png, "X", None, None, -5)).size == (1600, 1000)
 
 
 def test_foto_corrupta_es_value_error():
     with pytest.raises(ValueError):
-        pd.armar_plantilla(b"no soy una imagen", "X", None, None, None)
+        armar_portada(b"no soy una imagen", "X", None, None, None)
 
 
 # ══════════════════════════════════════════ la mejora automática gratis
@@ -192,9 +193,9 @@ def test_la_plantilla_aplica_la_mejora_solo_sin_ia(monkeypatch):
     llamadas = []
     original = pd.mejorar_gratis
     monkeypatch.setattr(pd, "mejorar_gratis", lambda img: llamadas.append(1) or original(img))
-    pd.armar_plantilla(_jpeg(), "X", None, None, None)
+    armar_portada(_jpeg(), "X", None, None, None)
     assert llamadas == [1]
-    pd.armar_plantilla(_jpeg(), "X", None, None, None, mejorar=False)
+    armar_portada(_jpeg(), "X", None, None, None, mejorar=False)
     assert llamadas == [1]
 
 
@@ -429,7 +430,7 @@ def test_fotos_muy_chicas_o_muy_angostas_se_rechazan_sin_agrandarlas(w, h, monke
     original = Image.Image.resize
     monkeypatch.setattr(Image.Image, "resize", lambda self, *a, **kw: resizes.append(self.size) or original(self, *a, **kw))
     with pytest.raises(pd.PortadaInadecuada) as e:
-        pd.armar_plantilla(_jpeg(w, h), "X", None, None, None)
+        armar_portada(_jpeg(w, h), "X", None, None, None)
     assert str(e.value) == "La foto de portada es muy chica o muy angosta para armar el diseño"
     assert resizes == []
 
@@ -441,7 +442,7 @@ def test_los_limites_aceptados_dan_siempre_1600x1000(w, h, monkeypatch):
     original = Image.Image.resize
     monkeypatch.setattr(Image.Image, "resize",
                         lambda self, size, *a, **kw: tamanos.append(tuple(size)) or original(self, size, *a, **kw))
-    out = pd.armar_plantilla(_jpeg(w, h), "X", None, None, 40)
+    out = armar_portada(_jpeg(w, h), "X", None, None, 40)
     assert _abrir(out).size == (1600, 1000)
     assert max(t[0] * t[1] for t in tamanos) <= 1600 * 1000
 
@@ -466,7 +467,7 @@ def test_foto_ilegible_o_de_otro_formato_dice_no_es_una_imagen_valida_sin_el_tex
     Image.new("RGB", (400, 300)).save(buf, format="GIF")
     for malo in (b"basura", buf.getvalue()):
         with pytest.raises(ValueError) as e:
-            pd.armar_plantilla(malo, "X", None, None, None)
+            armar_portada(malo, "X", None, None, None)
         assert not isinstance(e.value, pd.PortadaInadecuada)
         assert str(e.value) == "El archivo no es una imagen válida"
 
@@ -475,14 +476,14 @@ def test_demasiados_pixeles_dice_no_es_una_imagen_valida(monkeypatch):
     from app.services import imagenes
     monkeypatch.setattr(imagenes, "MAX_PIXELES", 1000)
     with pytest.raises(ValueError) as e:
-        pd.armar_plantilla(_jpeg(400, 300), "X", None, None, None)
+        armar_portada(_jpeg(400, 300), "X", None, None, None)
     assert str(e.value) == "El archivo no es una imagen válida" and "demasiado" not in str(e.value)
 
 
 def test_nombre_de_5000_caracteres_sin_espacios_arma_en_menos_de_2_segundos():
     import time
     t0 = time.perf_counter()
-    out = pd.armar_plantilla(_jpeg(), "W" * 5000, "R" * 3000, "C" * 3000, None)
+    out = armar_portada(_jpeg(), "W" * 5000, "R" * 3000, "C" * 3000, None)
     assert time.perf_counter() - t0 < 2.0
     assert _abrir(out).size == (1600, 1000)
 
@@ -490,7 +491,7 @@ def test_nombre_de_5000_caracteres_sin_espacios_arma_en_menos_de_2_segundos():
 def test_nombre_de_5000_caracteres_con_palabras_tambien():
     import time
     t0 = time.perf_counter()
-    assert _abrir(pd.armar_plantilla(_jpeg(), "Distribuidora " * 400, "Rubro", "Ciudad", None)).size == (1600, 1000)
+    assert _abrir(armar_portada(_jpeg(), "Distribuidora " * 400, "Rubro", "Ciudad", None)).size == (1600, 1000)
     assert time.perf_counter() - t0 < 2.0
 
 

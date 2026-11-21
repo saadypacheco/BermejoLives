@@ -13,10 +13,10 @@ Qué se prueba:
 """
 import re
 
+from app.services.fotos_galeria import PRIVADAS      # la MISMA tupla que usa el backend para sacarlas de las respuestas
 from tests.test_comercios_columnas_publicas import (FRONT, RAIZ, _archivos_anon, _args_de_select, _primer_argumento,
                                                     _sin_comentarios_sql)
 
-PRIVADAS = ("diseno_propuesta_url",)
 
 
 def _publicas_de_la_0203() -> list[str]:
@@ -88,8 +88,8 @@ def test_el_frontend_no_nombra_la_columna_privada_de_la_propuesta():
     """El panel no lee la propuesta de la base: la pide al backend (`GalleryItem.proposal_url`, service_role)."""
     for ext in ("*.ts", "*.tsx"):
         for f in FRONT.rglob(ext):
-            if set(f.relative_to(FRONT).parts) & {"node_modules", ".next", "out"}:
-                continue
+            if set(f.relative_to(FRONT).parts) & {"node_modules", ".next", "out", "tests"}:
+                continue                                  # (los tests del front arman filas de prueba con esa columna a propósito)
             texto = f.read_text(encoding="utf-8", errors="ignore")
             for privada in PRIVADAS:
                 assert not re.search(rf"\b{privada}\b", texto), f"{f.relative_to(RAIZ)} nombra la columna privada {privada}"
@@ -101,3 +101,22 @@ def test_el_frontend_anon_no_filtra_ni_ordena_por_la_privada():
         texto = f.read_text(encoding="utf-8")
         filtro = re.search(rf"""\.(eq|neq|gt|gte|lt|lte|is|in|not|order|ilike|like|filter)\(\s*["']({privadas})["']""", texto)
         assert not filtro, f"{f.relative_to(RAIZ)}: filtra u ordena por una columna privada: {filtro.group(0)}"
+
+
+def test_la_galeria_de_la_ficha_reintenta_sin_las_columnas_de_diseno_si_la_0203_todavia_no_corrio():
+    """Orden de deploy (docs/deploy-qa.md): si el front sale antes que la 0203, las columnas `diseno_*` no existen y la consulta da
+    42703; sin el reintento todas las fichas quedarían sin galería. El reintento pide lo de siempre y deja el error en el log."""
+    texto = (FRONT / "lib/data.ts").read_text(encoding="utf-8")
+    m = re.search(r"export async function getGaleriaComercio\(.*?\n}\n", texto, re.S)
+    assert m, "no encontré getGaleriaComercio"
+    fn = m.group(0)
+    con = fn.index('select("id, url, thumb_url, diseno_url, diseno_thumb_url")')
+    sin = fn.index('select("id, url, thumb_url")')
+    assert con < fn.index("if (fotos.error)") < sin
+    assert "logSupaError" in fn[con:sin]
+    assert "ANTES que la migración 0203" in fn or "ANTES que la migración" in fn
+
+
+def test_deploy_qa_dice_que_la_0203_va_antes_del_front():
+    doc = (RAIZ / "docs/deploy-qa.md").read_text(encoding="utf-8")
+    assert "primero la migración, después el front" in doc and "0203" in doc

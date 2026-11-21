@@ -127,6 +127,11 @@ def test_la_comprobacion_final_cubre_los_privilegios_de_comercio_fotos():
     assert "set local role anon" in chk and "select count(id) into v_visible from public.comercio_fotos" in chk
     assert "join public.comercios c on c.id = f.comercio_id and c.activo" in chk
     assert "has_table_privilege('service_role', 'public.comercio_fotos', 'update')" in chk
+    # anon y authenticated sólo LEEN comercio_fotos: nada de insert, update (ni de tabla ni de columna) ni delete
+    assert "has_any_column_privilege(v_rol, 'public.comercio_fotos', 'insert')" in chk
+    assert "has_any_column_privilege(v_rol, 'public.comercio_fotos', 'update')" in chk
+    assert "has_table_privilege(v_rol, 'public.comercio_fotos', 'delete')" in chk
+    assert "puede escribir en comercio_fotos" in chk
 
 
 # ══════════════════════════════════════════ photo_style_uses

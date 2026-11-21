@@ -16,7 +16,9 @@ LO REMOTO SÓLO LEE
 - Sin seguir redirecciones (un 3xx da None), timeout corto (3 s de conexión, 10 s en total), sólo se acepta 200, y se
   corta al pasar `MAX_BYTES_FOTO`. El resultado son `bytes`: Pillow los valida después igual que una foto local.
 - Nunca se escribe ni se borra nada remoto. Lo que se arma se guarda en el disco local.
-- Con el setting vacío (producción) jamás hay red.
+- Con el setting vacío (producción) jamás hay red. Y aunque alguien lo ponga en producción (`APP_ENV=prod`), se IGNORA y se
+  avisa en el log al arrancar (no tira el arranque): producción lee sólo su disco.
+- La usan la portada de diseño y los caminos de `fotos_estilo`; la tarjeta de la portada (`fotos_tarjeta`) pasa `remoto=False`.
 """
 from __future__ import annotations
 
@@ -57,7 +59,7 @@ def ruta_relativa_canonica(url: str | None, base: str, slug: str | None = None) 
     if any(c in relativa for c in "?#%\\\x00"):
         return None
     partes = relativa.split("/")
-    if len(partes) != 2 or any(p in ("", ".", "..") for p in partes):
+    if len(partes) != 2 or any(p in ("", ".", "..") or not p.isprintable() for p in partes):
         return None
     if slug is not None and partes[0] != slug:
         return None
@@ -66,14 +68,25 @@ def ruta_relativa_canonica(url: str | None, base: str, slug: str | None = None) 
     return relativa
 
 
+def es_produccion() -> bool:
+    """¿Es el ambiente de producción? `APP_ENV=prod` (el mismo valor que ya distingue a IndexNow y al footer de versión)."""
+    return (settings.app_env or "").strip().lower() == "prod"
+
+
 def bases_remotas() -> list[str]:
-    """Las bases `https://` de `FOTOS_LECTURA_REMOTA_BASES` (vacía en producción)."""
+    """Las bases `https://` de `FOTOS_LECTURA_REMOTA_BASES`. Vacía en producción aunque el setting tenga algo."""
+    if es_produccion():
+        return []
     return settings.fotos_lectura_remota_bases_list()
 
 
 def registrar_arranque() -> None:
     """Al arrancar: avisa en el log qué bases del setting se ignoran (no son `https://` o vienen mal armadas) y cuáles rigen."""
     crudas = [b.strip() for b in (settings.fotos_lectura_remota_bases or "").split(",") if b.strip()]
+    if crudas and es_produccion():
+        logger.warning("fotos.lectura_remota_ignorada_en_prod",
+                       detalle="FOTOS_LECTURA_REMOTA_BASES tiene valor pero APP_ENV=prod: producción lee sólo su disco, se ignora")
+        return
     validas = {b.rstrip("/") + "/" for b in bases_remotas()}
     for cruda in crudas:
         if cruda.rstrip("/") + "/" not in validas:
@@ -101,7 +114,8 @@ def _descargar(url: str) -> bytes | None:
     """Baja `url` (ya validada) con los límites de arriba. None ante cualquier cosa que no sea un 200 chico."""
     inicio = time.monotonic()
     try:
-        with _cliente() as cliente, cliente.stream("GET", url) as r:
+        # `identity`: sin compresión, para que el tope de bytes cuente lo que de verdad se baja (no una bomba comprimida).
+        with _cliente() as cliente, cliente.stream("GET", url, headers={"Accept-Encoding": "identity"}) as r:
             if r.status_code != 200:
                 _log(url, f"http_{r.status_code}")
                 return None
@@ -139,13 +153,15 @@ def _leer_local(url: str, slug: str | None) -> bytes | None:
     return ruta.read_bytes()
 
 
-def leer_foto_origen(url: str | None, slug: str | None = None) -> bytes | None:
+def leer_foto_origen(url: str | None, slug: str | None = None, remoto: bool = True) -> bytes | None:
     """Los bytes de la foto de origen, o None si no hay URL, no es una foto nuestra, no se puede leer o pesa de más.
 
     Disco local primero (con `slug`, la carpeta tiene que ser ese slug; `leer_portada` llama sin él, porque un comercio
     renombrado deja sus fotos en la carpeta del slug viejo). Si no está, y sólo si hay bases remotas listadas, se
     descarga por HTTPS. Sincrónica (bloquea): quien la llama desde un endpoint async la corre en el threadpool y
-    FUERA del lock de `fotos_estilo`. Nunca lanza."""
+    FUERA del lock de `fotos_estilo`. Nunca lanza.
+
+    `remoto=False`: sólo el disco local (la tarjeta de la portada)."""
     if not url:
         return None
     try:
@@ -153,6 +169,8 @@ def leer_foto_origen(url: str | None, slug: str | None = None) -> bytes | None:
         if datos is not None:
             return datos
     except Exception:  # noqa: BLE001
+        return None
+    if not remoto:
         return None
     for base in bases_remotas():
         if ruta_relativa_canonica(url, base, slug) is not None:

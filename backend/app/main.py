@@ -581,6 +581,13 @@ async def timing_middleware(request: Request, call_next):
             if response.status_code in (200, 206, 304):
                 response.headers["Content-Disposition"] = 'inline; filename="catalogo.pdf"'
                 response.headers["Cache-Control"] = "public, max-age=3600"
+        elif ruta.rsplit("/", 1)[-1].startswith("diseno-"):
+            # Los diseños (portada y galería con estilo URUKU, docs/fotos-estilo-uruku.md) son PROPUESTAS hasta que alguien
+            # las aprueba, y una propuesta descartada se borra: nada de cache de un año `immutable`, y sin indexar (una
+            # propuesta sin aprobar no tiene que aparecer en un buscador de imágenes).
+            response.headers["X-Robots-Tag"] = "noindex"
+            if response.status_code == 200:
+                response.headers["Cache-Control"] = "public, max-age=3600"
         elif response.status_code == 200:
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response

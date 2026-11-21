@@ -12,8 +12,8 @@ plantilla.
 
 SIN IA, GRATIS
 ==============
-    armar_plantilla(...)   la foto + una mejora automática suave de luz, color y nitidez (`mejorar_gratis`,
-                           Pillow) + el diseño. Costo 0.
+    cubrir(...) + mejorar_gratis(...) + dibujar_portada(...)    el recorte, una mejora automática suave de luz, color y
+                                                                nitidez (Pillow) y el diseño. Costo 0.
 
 Con IA (Gemini) o con una imagen hecha afuera, la foto de entrada es otra pero la plantilla es esta misma
 (`dibujar_portada`): lo orquesta `fotos_estilo`, que también tiene el lock.
@@ -40,7 +40,7 @@ import structlog
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps, ImageStat
 
 from app.services import fotos_galeria, fotos_origen, imagenes
-from app.services.content_render_job import ASSETS, RenderError, fuente, sin_emojis
+from app.services.content_render_job import ASSETS, fuente, sin_emojis
 
 logger = structlog.get_logger()
 
@@ -224,32 +224,34 @@ def _abrir(foto: bytes) -> Image.Image:
         if menor < LADO_MENOR_MIN or mayor > PROPORCION_MAX * menor:
             raise PortadaInadecuada("La foto de portada es muy chica o muy angosta para armar el diseño")
         img.load()
-        return ImageOps.exif_transpose(img).convert("RGB")
+        limpia = ImageOps.exif_transpose(img).convert("RGB")
+        limpia.info.clear()                   # el comentario (COM) del JPEG y el EXIF no pasan: viajarían a la portada
+        return limpia
     except PortadaInadecuada:
         raise
     except Exception as exc:  # noqa: BLE001
         raise ValueError("El archivo no es una imagen válida") from exc
 
 
-def cubrir(img: Image.Image, ancho_final: int, alto_final: int, pos: int | None = None) -> Image.Image:
-    """La foto recortada para llenar `ancho_final` x `alto_final`, SIN agrandarla entera antes: se calcula la caja que
-    se ve sobre la foto original y se escala sólo eso (`resize(..., box=)`).
+def caja_cubrir(tamano: tuple[int, int], aspecto_w: float, aspecto_h: float, pos: int | None = None) -> tuple[float, float, float, float]:
+    """La caja `(x0, y0, x1, y1)` MÁS GRANDE de una imagen de `tamano` con la proporción `aspecto_w : aspecto_h`.
 
     `pos` (0..100) es lo mismo que el CSS `object-position: center <pos>%` que usan el panel y la ficha: el recorte
-    arranca en `pos %` del tramo que sobra (arriba = pos/100 * (alto escalado - alto final)), NO centrado en `pos`.
-    Sin `pos`, 50 (el centro). Horizontalmente siempre va centrado."""
+    arranca en `pos %` del tramo que sobra (arriba = pos/100 * (alto - alto de la caja)), NO centrado en `pos`.
+    Sin `pos`, 50 (el centro). Horizontalmente siempre va centrado. La comparten `cubrir` y el recorte que va a Gemini."""
     pos = 50 if pos is None else max(0, min(100, int(pos)))
-    ancho, alto = img.size
-    escala = max(ancho_final / ancho, alto_final / alto)
-    caja_w, caja_h = min(ancho, ancho_final / escala), min(alto, alto_final / escala)
+    ancho, alto = tamano
+    escala = max(aspecto_w / ancho, aspecto_h / alto)
+    caja_w, caja_h = min(ancho, aspecto_w / escala), min(alto, aspecto_h / escala)
     x0 = max(0.0, min(ancho - caja_w, (ancho - caja_w) / 2))
     y0 = max(0.0, min(alto - caja_h, pos / 100 * (alto - caja_h)))
-    return img.resize((ancho_final, alto_final), Image.LANCZOS, box=(x0, y0, x0 + caja_w, y0 + caja_h))
+    return x0, y0, x0 + caja_w, y0 + caja_h
 
 
-def _cubrir(img: Image.Image, pos: int | None) -> Image.Image:
-    """La foto para llenar la portada (1600 x 1000)."""
-    return cubrir(img, ANCHO, ALTO, pos)
+def cubrir(img: Image.Image, ancho_final: int, alto_final: int, pos: int | None = None) -> Image.Image:
+    """La foto recortada para llenar `ancho_final` x `alto_final`, SIN agrandarla entera antes: se calcula la caja que
+    se ve sobre la foto original (`caja_cubrir`) y se escala sólo eso (`resize(..., box=)`)."""
+    return img.resize((ancho_final, alto_final), Image.LANCZOS, box=caja_cubrir(img.size, ancho_final, alto_final, pos))
 
 
 def _franja(base: Image.Image, desde_y: int = 420, alfa_max: int = 235) -> None:
@@ -350,33 +352,12 @@ def dibujar_portada(base: Image.Image, nombre: str, rubro: str | None, ciudad: s
     return base
 
 
-def _diseno(base: Image.Image, nombre: str, rubro: str | None, ciudad: str | None) -> Image.Image:
-    """El diseño sobre la foto ya encuadrada (nombre histórico; ver `dibujar_portada`)."""
-    return dibujar_portada(base, nombre, rubro, ciudad)
-
-
 def _jpeg(img: Image.Image) -> bytes:
     out = BytesIO()
-    img.convert("RGB").save(out, format="JPEG", quality=CALIDAD_JPEG, optimize=True)
+    limpia = img.convert("RGB")
+    limpia.info.clear()                       # ni el comentario del JPEG de la foto ni su EXIF viajan al archivo
+    limpia.save(out, format="JPEG", quality=CALIDAD_JPEG, optimize=True)
     return out.getvalue()
-
-
-def armar_plantilla(foto: bytes, nombre: str, rubro: str | None, ciudad: str | None, pos: int | None,
-                    *, mejorar: bool = True) -> bytes:
-    """La portada de diseño en JPEG 1600 x 1000, camino GRATIS. `mejorar=False` salta la mejora automática (sólo
-    para pruebas que miran los colores de la foto tal cual).
-
-    - `PortadaInadecuada` (400): la foto es muy chica o muy angosta.
-    - `ValueError` (400): `foto` no es una imagen válida.
-
-    Sin lock: quien arma (`fotos_estilo.armar_portada`) toma `fotos_estilo._TRANSFORMAR` antes de llamar."""
-    img = _cubrir(_abrir(foto), pos)
-    if mejorar:
-        img = mejorar_gratis(img)
-    try:
-        return _jpeg(_diseno(img, nombre, rubro, ciudad))
-    except RenderError as exc:      # falta una fuente del paquete: error del servidor, no de la foto
-        raise RuntimeError(str(exc)) from exc
 
 
 # ───────────────────────────────────────────────────────────── disco
@@ -384,7 +365,7 @@ def armar_plantilla(foto: bytes, nombre: str, rubro: str | None, ciudad: str | N
 def guardar(slug: str, jpeg: bytes) -> str | None:
     """Guarda el JPEG en el disco de fotos como `<slug>/diseno-<token>.jpg` y devuelve su URL pública
     (None si falló). Nombre único cada vez: la URL cambia al regenerar y ningún caché sirve la imagen vieja."""
-    return imagenes.guardar_foto_local(f"{slug}/{PREFIJO_ARCHIVO}{secrets.token_hex(8)}.jpg", jpeg)
+    return imagenes.guardar_foto_local(f"{slug}/{PREFIJO_ARCHIVO}{secrets.token_hex(16)}.jpg", jpeg)
 
 
 def soltar_archivo(comercio: dict, url: str | None) -> None:
@@ -420,13 +401,16 @@ def soltar_huerfanos(repo, comercio: dict, urls: list[str | None]) -> None:
             soltar_archivo(comercio, url)
 
 
-def leer_portada(comercio: dict) -> bytes | None:
+def leer_portada(comercio: dict, remoto: bool = True) -> bytes | None:
     """Los bytes de la foto de portada: del disco del backend con la validación ESTRICTA de rutas (nuestra URL,
     `<carpeta>/<archivo>.jpg`, sin `..` ni enlaces que salgan del volumen) o, sólo si `FOTOS_LECTURA_REMOTA_BASES` lo
     permite (QA), por HTTPS (`fotos_origen.leer_foto_origen`). None si no hay portada, no es una foto nuestra, no se
-    puede leer o pesa de más. Se llama SIN `slug`: un comercio renombrado deja sus fotos en la carpeta del slug viejo."""
+    puede leer o pesa de más. Se llama SIN `slug`: un comercio renombrado deja sus fotos en la carpeta del slug viejo.
+
+    `remoto=False` (la tarjeta de la portada, `fotos_tarjeta`): sólo el disco local. La lectura por HTTPS es de la portada de
+    diseño y de los caminos de `fotos_estilo`, nada más."""
     try:
-        return fotos_origen.leer_foto_origen(comercio.get("portada_url"))
+        return fotos_origen.leer_foto_origen(comercio.get("portada_url"), remoto=remoto)
     except Exception:  # noqa: BLE001
         return None
 

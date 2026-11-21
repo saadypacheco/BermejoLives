@@ -662,7 +662,10 @@ def test_logo_galeria_abajo_a_la_derecha_en_el_pie(monkeypatch):
     assert y0 >= 1206 and y1 <= 1350                      # dentro del pie
     assert x0 >= 540 and x1 <= 1080 - 40                  # derecha
     assert x1 - x0 == 260 or 250 <= x1 - x0 <= 262
-    assert (x0, y0, x1, y1) == pytest.approx(fe.caja_logo_galeria(), abs=3)
+    # la caja esperada sale de las constantes del pie (el logo va centrado en la franja 1206..1350)
+    alto_logo = pd.logo_color(fe.PIE_LOGO_ANCHO).height
+    y_esperado = (fe.PIE_Y0 + fe.PIE_Y1) // 2 - alto_logo // 2
+    assert (x0, y0, x1, y1) == pytest.approx((fe.PIE_LOGO_X, y_esperado, fe.PIE_LOGO_X + fe.PIE_LOGO_ANCHO, y_esperado + alto_logo), abs=3)
 
 
 def test_logo_el_archivo_guardado_por_el_endpoint_tiene_el_logo_en_la_esquina(client, repo, mundo, admin_token):

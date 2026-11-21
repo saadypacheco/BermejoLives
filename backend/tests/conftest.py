@@ -144,6 +144,16 @@ def _sin_limite_de_subidas_de_catalogo():
     ficha_catalogo.reiniciar_limites()
 
 
+@pytest.fixture(autouse=True)
+def _fotos_estilo_sin_estado_en_memoria():
+    """El flag «el registro de usos de Gemini falló hoy» (`fotos_estilo`) vive en memoria del proceso: sin esto, un
+    test que rompe el registro dejaría la IA apagada para los siguientes."""
+    from app.services import fotos_estilo
+    fotos_estilo.reiniciar_registro_roto()
+    yield
+    fotos_estilo.reiniciar_registro_roto()
+
+
 from tests.fake_integracion import FakeIntegracionMixin  # noqa: E402
 from tests.site_metrics_fakes import FakeSiteMetricsMixin  # noqa: E402
 
@@ -1668,14 +1678,26 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         self.comercio_fotos = [f for f in self.comercio_fotos if not (f["id"] == foto_id and f["comercio_id"] == comercio_id)]
         return len(self.comercio_fotos) < antes
 
-    def update_foto_comercio(self, foto_id, comercio_id, patch):
+    def get_foto_comercio(self, foto_id, comercio_id):
+        return next((f for f in self.comercio_fotos if f["id"] == foto_id and f["comercio_id"] == comercio_id), None)
+
+    def update_foto_comercio(self, foto_id, comercio_id, patch, si=None):
         from app.db.repository import diseno_foto_vencido as _vencido
         for f in self.comercio_fotos:
             if f["id"] == foto_id and f["comercio_id"] == comercio_id:
+                if any(f.get(c) != v for c, v in (si or {}).items()):
+                    return None                       # UPDATE condicional: la fila ya no es la que se leyó
                 # Espeja al repo real: si cambia el `url`, el diseño de la foto (3 columnas) vence.
                 f.update({**_vencido(f, patch), **patch})
                 return f
         return None
+
+    def actualizar_comercio_si(self, comercio_id, patch, si):
+        c = self.comercios.get(comercio_id)
+        if not c or any(c.get(col) != v for col, v in si.items()):
+            return None
+        c.update(patch)
+        return c
 
     def count_fotos_comercio(self, comercio_id):
         return len(self.list_fotos_comercio(comercio_id))
@@ -1696,15 +1718,21 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
                    if u["method"] == "gemini" and cargas.parse_ts(u["created_at"]) >= desde)
 
     def usos_foto_estilo(self, comercio_id):
-        return sorted((dict(u) for u in self.photo_style_uses if u["comercio_id"] == comercio_id),
+        return sorted((dict(u) for u in self.photo_style_uses
+                       if u["comercio_id"] == comercio_id and u.get("result") == "ok" and u.get("result_url")),
                       key=lambda u: u["created_at"], reverse=True)
+
+    def gastos_gemini_comercio(self, comercio_id):
+        return [{"cost_usd": u["cost_usd"]} for u in self.photo_style_uses
+                if u["comercio_id"] == comercio_id and u["method"] == "gemini" and float(u.get("cost_usd") or 0) > 0]
 
     def resumen_usos_foto_estilo(self, desde_iso, hasta_iso):
         from app.services import cargas
         desde, hasta = cargas.parse_ts(desde_iso), cargas.parse_ts(hasta_iso)
         return [{"comercio_id": u["comercio_id"], "cost_usd": u["cost_usd"], "result": u["result"]}
                 for u in self.photo_style_uses
-                if u["method"] == "gemini" and desde <= cargas.parse_ts(u["created_at"]) < hasta]
+                if u["method"] == "gemini" and float(u.get("cost_usd") or 0) > 0
+                and desde <= cargas.parse_ts(u["created_at"]) < hasta]
 
     def list_videos_comercio(self, comercio_id):
         return sorted([v for v in self.comercio_videos if v["comercio_id"] == comercio_id], key=lambda x: x.get("orden", 0))

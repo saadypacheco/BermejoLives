@@ -425,13 +425,16 @@ class Repo(Protocol):
     def list_fotos_comercio(self, comercio_id: str) -> list[dict]: ...
     def add_foto_comercio(self, row: dict) -> dict: ...
     def delete_foto_comercio(self, foto_id: str, comercio_id: str) -> bool: ...
-    def update_foto_comercio(self, foto_id: str, comercio_id: str, patch: dict) -> dict | None: ...
+    def update_foto_comercio(self, foto_id: str, comercio_id: str, patch: dict, si: dict | None = None) -> dict | None: ...
     def count_fotos_comercio(self, comercio_id: str) -> int: ...
     # fotos con estilo URUKU (0203, docs/fotos-estilo-uruku.md): registro de usos, sólo insert
     def registrar_uso_foto_estilo(self, fila: dict) -> dict: ...
     def contar_usos_gemini_desde(self, desde_iso: str) -> int: ...
     def usos_foto_estilo(self, comercio_id: str) -> list[dict]: ...
+    def gastos_gemini_comercio(self, comercio_id: str) -> list[dict]: ...
     def resumen_usos_foto_estilo(self, desde_iso: str, hasta_iso: str) -> list[dict]: ...
+    def get_foto_comercio(self, foto_id: str, comercio_id: str) -> dict | None: ...
+    def actualizar_comercio_si(self, comercio_id: str, patch: dict, si: dict) -> dict | None: ...
     def list_videos_comercio(self, comercio_id: str) -> list[dict]: ...
     def add_video_comercio(self, row: dict) -> dict: ...
     def delete_video_comercio(self, video_id: str, comercio_id: str) -> bool: ...
@@ -3875,16 +3878,38 @@ class SupabaseRepo(IntegracionRepoMixin):
         res = self._db.table("comercio_fotos").delete().eq("id", foto_id).eq("comercio_id", comercio_id).execute()
         return bool(res.data)
 
-    def update_foto_comercio(self, foto_id: str, comercio_id: str, patch: dict) -> dict | None:
+    def get_foto_comercio(self, foto_id: str, comercio_id: str) -> dict | None:
+        """UNA foto de la galería (sólo si es de ese comercio), sin traer toda la galería."""
+        res = (self._db.table("comercio_fotos").select("*")
+               .eq("id", foto_id).eq("comercio_id", comercio_id).limit(1).execute())
+        return res.data[0] if res.data else None
+
+    def update_foto_comercio(self, foto_id: str, comercio_id: str, patch: dict, si: dict | None = None) -> dict | None:
         """Cambia campos de UNA foto de la galería (sólo si es de ese comercio). Si cambia el `url`, el diseño de la
-        foto (las tres columnas `diseno_*`) vence y se vacía en la misma escritura (`diseno_foto_vencido`)."""
+        foto (las tres columnas `diseno_*`) vence y se vacía en la misma escritura (`diseno_foto_vencido`).
+
+        `si`: UPDATE CONDICIONAL: `{columna: valor}` que la fila tiene que seguir teniendo (`None` = `is null`). Si ya no
+        las tiene (otro pedido la cambió), no toca nada y devuelve None. Es lo que evita aprobar una propuesta que otro
+        pedido acaba de reemplazar."""
         patch = dict(patch)
         if "url" in patch:
             previa = (self._db.table("comercio_fotos").select("id, url, " + ", ".join(COLUMNAS_DISENO_FOTO))
                       .eq("id", foto_id).eq("comercio_id", comercio_id).limit(1).execute())
             patch = {**diseno_foto_vencido(previa.data[0] if previa.data else None, patch), **patch}
-        res = (self._db.table("comercio_fotos").update(patch)
-               .eq("id", foto_id).eq("comercio_id", comercio_id).execute())
+        q = self._db.table("comercio_fotos").update(patch).eq("id", foto_id).eq("comercio_id", comercio_id)
+        for col, valor in (si or {}).items():
+            q = q.is_(col, "null") if valor is None else q.eq(col, valor)
+        res = q.execute()
+        return res.data[0] if res.data else None
+
+    def actualizar_comercio_si(self, comercio_id: str, patch: dict, si: dict) -> dict | None:
+        """UPDATE CONDICIONAL de un comercio: sólo si cada `{columna: valor}` de `si` sigue valiendo (`None` = `is null`).
+        None si no tocó ninguna fila. Sin la lógica de `update_comercio` (rubros, slug, vencimiento del diseño): sólo
+        para columnas sueltas como las de la portada de diseño."""
+        q = self._db.table("comercios").update(patch).eq("id", comercio_id)
+        for col, valor in si.items():
+            q = q.is_(col, "null") if valor is None else q.eq(col, valor)
+        res = q.execute()
         return res.data[0] if res.data else None
 
     def count_fotos_comercio(self, comercio_id: str) -> int:
@@ -3902,19 +3927,35 @@ class SupabaseRepo(IntegracionRepoMixin):
         return int(res.count or 0)
 
     def usos_foto_estilo(self, comercio_id: str) -> list[dict]:
-        """Los registros de uso de ESTE comercio, del más nuevo al más viejo (hasta 1000)."""
+        """De ESTE comercio, del más nuevo al más viejo (hasta 1000), los usos que dejaron un archivo (`result = ok` y
+        `result_url`): con eso se sabe qué método armó cada propuesta. No mezcla errores ni lo que no dejó archivo."""
         res = (self._db.table("photo_style_uses")
                .select("foto_id, target, method, cost_usd, result, result_url, created_at")
-               .eq("comercio_id", comercio_id).order("created_at", desc=True).limit(1000).execute())
+               .eq("comercio_id", comercio_id).eq("result", "ok").not_.is_("result_url", "null")
+               .order("created_at", desc=True).limit(1000).execute())
         return res.data or []
 
+    def gastos_gemini_comercio(self, comercio_id: str) -> list[dict]:
+        """Las imágenes COBRADAS por Gemini en ESTE comercio (`method = gemini` y `cost_usd > 0`): sólo `cost_usd`. El
+        filtro va en la consulta (no se corta en 1000 filas mezclando gratis y de afuera) y es el mismo de `/usos`."""
+        out: list[dict] = []
+        pagina = 1000
+        while True:
+            res = (self._db.table("photo_style_uses").select("cost_usd")
+                   .eq("comercio_id", comercio_id).eq("method", "gemini").gt("cost_usd", 0)
+                   .order("created_at").range(len(out), len(out) + pagina - 1).execute())
+            out.extend(res.data or [])
+            if len(res.data or []) < pagina:
+                return out
+
     def resumen_usos_foto_estilo(self, desde_iso: str, hasta_iso: str) -> list[dict]:
-        """Los registros de Gemini en `[desde, hasta)` con lo mínimo para sumar: `comercio_id`, `cost_usd`, `result`."""
+        """Las imágenes cobradas por Gemini (`cost_usd > 0`) en `[desde, hasta)` con lo mínimo para sumar: `comercio_id`,
+        `cost_usd`, `result`. El filtro va en la consulta: mismo criterio que `gastos_gemini_comercio`."""
         out: list[dict] = []
         pagina = 1000
         while True:
             res = (self._db.table("photo_style_uses").select("comercio_id, cost_usd, result")
-                   .eq("method", "gemini").gte("created_at", desde_iso).lt("created_at", hasta_iso)
+                   .eq("method", "gemini").gt("cost_usd", 0).gte("created_at", desde_iso).lt("created_at", hasta_iso)
                    .order("created_at").range(len(out), len(out) + pagina - 1).execute())
             out.extend(res.data or [])
             if len(res.data or []) < pagina:

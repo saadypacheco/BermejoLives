@@ -213,9 +213,10 @@ def _soltar_archivos_viejos(repo, comercio: dict, vieja_url: str | None,
         fotos_galeria.borrar_archivos(comercio, foto, repo)
 
 
-def respuesta(repo, comercio: dict) -> dict:
-    """Lo que devuelve `PUT <base>/portada`: la portada nueva y la galería al día."""
-    galeria = fotos_galeria.listado(repo, comercio)
+def respuesta(repo, comercio: dict, admin: bool = False) -> dict:
+    """Lo que devuelve `PUT <base>/portada`: la portada nueva y la galería al día. Sin `admin`, sin las columnas
+    privadas de la galería (la propuesta de diseño sin aprobar)."""
+    galeria = fotos_galeria.listado(repo, comercio, admin=admin)
     return {
         "ok": True,
         "portada_url": comercio.get("portada_url"),

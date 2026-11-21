@@ -753,12 +753,19 @@ export async function getFotosDeComercios(ids: string[], porComercio = 2): Promi
 
 export async function getGaleriaComercio(comercioId: string): Promise<{ fotos: GaleriaFoto[]; videos: GaleriaVideo[] }> {
   if (!hasSupabase) return { fotos: [], videos: [] };
-  const [{ data: fotos }, { data: videos }] = await Promise.all([
-    // Columnas explícitas: `comercio_fotos` se da por columnas (0203) y la propuesta de diseño es privada.
-    supabase.from("comercio_fotos").select("id, url, thumb_url, diseno_url, diseno_thumb_url").eq("comercio_id", comercioId).order("orden"),
-    supabase.from("comercio_videos").select("id, url, duracion_seg").eq("comercio_id", comercioId).order("orden"),
-  ]);
-  return { fotos: (fotos as GaleriaFoto[]) ?? [], videos: (videos as GaleriaVideo[]) ?? [] };
+  const consultaVideos = supabase.from("comercio_videos").select("id, url, duracion_seg").eq("comercio_id", comercioId).order("orden");
+  // Columnas explícitas: `comercio_fotos` se da por columnas (0203) y la propuesta de diseño es privada.
+  let fotos: { data: unknown[] | null; error: unknown } =
+    await supabase.from("comercio_fotos").select("id, url, thumb_url, diseno_url, diseno_thumb_url").eq("comercio_id", comercioId).order("orden");
+  if (fotos.error) {
+    // ORDEN DE DEPLOY: si el front sale ANTES que la migración 0203, las columnas `diseno_*` no existen (42703) y esta consulta
+    // falla; sin este reintento todas las fichas quedarían sin galería. Se loguea el error y se pide lo de siempre.
+    logSupaError("getGaleriaComercio(diseno)", fotos.error);
+    fotos = await supabase.from("comercio_fotos").select("id, url, thumb_url").eq("comercio_id", comercioId).order("orden");
+    if (fotos.error) logSupaError("getGaleriaComercio", fotos.error);
+  }
+  const { data: videos } = await consultaVideos;
+  return { fotos: (fotos.data as GaleriaFoto[]) ?? [], videos: (videos as GaleriaVideo[]) ?? [] };
 }
 
 // Productos reales del comercio: viven en Reservalo. Acá leemos la referencia

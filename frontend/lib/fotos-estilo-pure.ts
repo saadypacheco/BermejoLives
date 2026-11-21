@@ -29,7 +29,8 @@ export type GeminiState = {
   /** Estimado por imagen. */
   cost_usd: number;
   used_today: number;
-  daily_cap: number;
+  /** El tope diario de llamadas a la IA. `null` = el servidor no lo informó (no es un 0: un 0 SÍ bloquea la IA). */
+  daily_cap: number | null;
   merchant_uses: number;
   merchant_cost_usd: number;
 };
@@ -116,7 +117,7 @@ export function leerEstado(raw: unknown): PhotoStyleState {
       reason: txt(g.reason),
       cost_usd: num(g.cost_usd),
       used_today: num(g.used_today),
-      daily_cap: num(g.daily_cap),
+      daily_cap: typeof g.daily_cap === "number" && Number.isFinite(g.daily_cap) ? g.daily_cap : null,
       merchant_uses: num(g.merchant_uses),
       merchant_cost_usd: num(g.merchant_cost_usd),
     },
@@ -195,7 +196,12 @@ export function avisoPropuesta(method: Method | null | undefined): string | null
  */
 export function puedeIA(g: GeminiState): { puede: boolean; motivo: string | null } {
   if (!g.available) return { puede: false, motivo: g.reason ?? "Fotos con IA no está disponible por ahora." };
-  if (g.daily_cap > 0 && g.used_today >= g.daily_cap) {
+  // Un tope en 0 es una decisión (el backend lo trae como «no disponible», pero igual no se ofrece el botón); un dato que
+  // FALTA (undefined/null/no numérico) no es un 0: ahí no se sabe el tope y se deja al servidor contestar.
+  if (g.daily_cap === 0) {
+    return { puede: false, motivo: "El tope diario de fotos con IA está en 0. Mientras tanto andan Gratis y ChatGPT." };
+  }
+  if (g.daily_cap !== null && g.daily_cap > 0 && g.used_today >= g.daily_cap) {
     return { puede: false, motivo: `Se llegó al tope de ${g.daily_cap} fotos con IA por hoy. Mañana se renueva; mientras tanto andan Gratis y ChatGPT.` };
   }
   return { puede: true, motivo: null };
@@ -205,7 +211,7 @@ export function puedeIA(g: GeminiState): { puede: boolean; motivo: string | null
 export function resumenIA(g: GeminiState): string {
   const partes: string[] = [];
   if (g.cost_usd > 0) partes.push(`${textoCosto(g.cost_usd)} por foto`);
-  if (g.daily_cap > 0) partes.push(`hoy ${g.used_today} de ${g.daily_cap}`);
+  if (g.daily_cap !== null && g.daily_cap > 0) partes.push(`hoy ${g.used_today} de ${g.daily_cap}`);
   partes.push(`este negocio: ${g.merchant_uses}${g.merchant_uses > 0 ? ` (${textoCosto(g.merchant_cost_usd)})` : ""}`);
   return partes.join(" · ");
 }
