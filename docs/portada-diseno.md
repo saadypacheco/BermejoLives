@@ -1,5 +1,7 @@
 # Portada de diseño para la ficha pública
 
+> Ampliado el 21/11/2026 en `docs/fotos-estilo-uruku.md`: hay un solo estilo URUKU, el logo pasa abajo a la derecha, se suman la galería, Gemini (pago), ChatGPT a mano y la lectura remota de la foto en QA. Si este doc y ése no coinciden, vale ése.
+
 Pedido del dueño (19/11/2026): algunos comercios (no todos) tienen que mostrar en su ficha pública una portada
 con diseño de publicidad, armada a partir de la foto del local. Se hace desde el panel, cuando se analiza el
 comercio.
