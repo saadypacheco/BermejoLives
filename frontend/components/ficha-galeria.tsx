@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import type { GaleriaFoto } from "@/lib/data-pure";
 import { Ic } from "@/components/ic";
+import { proporcionFicha } from "@/lib/ficha-foto-pure";
 
 /**
  * La foto de arriba de la ficha: el FRENTE del local, grande.
@@ -27,7 +28,7 @@ export function FichaGaleria({ portada, fotos, nombre, posicion }: {
   const [prop, setProp] = useState(4 / 3);
   const medir = useCallback((img: HTMLImageElement) => {
     if (!img.naturalWidth || !img.naturalHeight) return;
-    const r = Math.min(2, Math.max(1, img.naturalWidth / img.naturalHeight));
+    const r = proporcionFicha(img.naturalWidth, img.naturalHeight);
     setProp((p) => (Math.abs(p - r) < 0.01 ? p : r));
   }, []);
   const principal = portada ?? fotos[0]?.url ?? null;
@@ -39,8 +40,9 @@ export function FichaGaleria({ portada, fotos, nombre, posicion }: {
         <button type="button" onClick={() => setZoom(principal)} aria-label="Ampliar foto">
           {/* El recuadro toma la forma de la foto: una horizontal se ve entera y
               llena el cuadro, sin el fondo difuminado que se veía raro. Una
-              vertical va en un cuadrado y se recorta arriba/abajo según el
-              encuadre del panel (`posicion`). Topes: 1 (cuadrado) a 2 (apaisada). */}
+              vertical va en 4:3, recortada arriba/abajo según el encuadre del
+              panel (`posicion`): el mismo recorte que la tarjeta de los
+              resultados. Topes: 4:3 a 2 (apaisada). lib/ficha-foto-pure.ts */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={principal} alt={nombre}
                ref={(img) => { if (img?.complete) medir(img); }}
