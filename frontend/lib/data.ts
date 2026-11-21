@@ -754,7 +754,7 @@ export async function getFotosDeComercios(ids: string[], porComercio = 2): Promi
 export async function getGaleriaComercio(comercioId: string): Promise<{ fotos: GaleriaFoto[]; videos: GaleriaVideo[] }> {
   if (!hasSupabase) return { fotos: [], videos: [] };
   const [{ data: fotos }, { data: videos }] = await Promise.all([
-    // Columnas explícitas: `comercio_fotos` se da por columnas (0203) y `diseno_propuesta_url` es privada.
+    // Columnas explícitas: `comercio_fotos` se da por columnas (0203) y la propuesta de diseño es privada.
     supabase.from("comercio_fotos").select("id, url, thumb_url, diseno_url, diseno_thumb_url").eq("comercio_id", comercioId).order("orden"),
     supabase.from("comercio_videos").select("id, url, duracion_seg").eq("comercio_id", comercioId).order("orden"),
   ]);
