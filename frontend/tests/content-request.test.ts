@@ -4,7 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   armarPedidoDeVideo, avisoOtraPropuesta, bodyDeInterruptor, geminiContentPrendido, insigniaSinGemini, chipsEditables, detalleDePieza, esPiezaPedida, estadoDeInterruptor,
-  etiquetaDePilar, normalizarBusquedaComercio, opcionDeRubro, resumenRequestCheck, tienePermiso, tituloDePieza,
+  etiquetaDePilar, faseVideoNegocio, normalizarBusquedaComercio, opcionDeRubro, resumenRequestCheck, tienePermiso, tituloDePieza,
   validateVideoTexts, type VideoTextsEditable,
 } from "../lib/content-pure";
 
@@ -125,4 +125,43 @@ test("insigniaSinGemini: falta la key, interruptor apagado, o nada", () => {
   assert.equal(insigniaSinGemini(true, false), "Gemini apagado · costo cero");
   assert.equal(insigniaSinGemini(true, true), null);
   assert.equal(insigniaSinGemini(true, null), null);
+});
+
+// ── botón «Video» de Admin › Comercios (faseVideoNegocio) ──
+
+test("faseVideoNegocio: un video armándose o listo manda sobre pedir otro", () => {
+  const base = { consent: true, usable_photos: 6, ok: true, reason: null };
+  const pieza = (status: "queued" | "rendering" | "ready_for_review" | "approved" | "published" | "failed") =>
+    ({ ...base, last_piece: { id: "p1", status, scheduled_for: "2026-11-21" } });
+  assert.equal(faseVideoNegocio(pieza("queued")).fase, "armando");
+  assert.equal(faseVideoNegocio(pieza("rendering")).fase, "armando");
+  assert.equal(faseVideoNegocio(pieza("ready_for_review")).fase, "listo");
+  assert.equal(faseVideoNegocio(pieza("approved")).fase, "listo");
+  assert.equal(faseVideoNegocio(pieza("published")).fase, "listo");
+  // Un fallado con todo en regla deja pedir de nuevo.
+  assert.equal(faseVideoNegocio(pieza("failed")).fase, "puede");
+});
+
+test("faseVideoNegocio: un video viejo no tapa lo que falta hoy", () => {
+  const publicado = { id: "p1", status: "published" as const, scheduled_for: "2026-05-01" };
+  const sinAut = faseVideoNegocio({ consent: false, usable_photos: 6, ok: false, reason: "El comercio no tiene autorización vigente para aparecer en las redes", last_piece: publicado });
+  assert.equal(sinAut.fase, "falta_autorizacion");
+  assert.match(sinAut.texto, /^Ya tiene un video publicado\. Para armar otro, falta la autorización/);
+  const fallado = { id: "p2", status: "failed" as const, scheduled_for: "2026-11-01" };
+  assert.equal(faseVideoNegocio({ consent: true, usable_photos: 2, ok: false, reason: "Tiene 2 fotos que sirven: subí al menos 4 en Banco de contenido", last_piece: fallado }).fase, "faltan_fotos");
+  assert.equal(faseVideoNegocio({ consent: true, usable_photos: 6, ok: false, reason: "El comercio no está activo", last_piece: fallado }).texto,
+    "El último video no se pudo armar. Para armar otro, el comercio no está activo");
+});
+
+test("faseVideoNegocio: sin video previo dice si se puede o qué falta", () => {
+  assert.equal(faseVideoNegocio({ consent: true, usable_photos: 5, ok: true, reason: null, last_piece: null }).fase, "puede");
+  const sinAut = faseVideoNegocio({ consent: false, usable_photos: 6, ok: false, reason: "El comercio no tiene autorización vigente para aparecer en las redes" });
+  assert.equal(sinAut.fase, "falta_autorizacion");
+  assert.match(sinAut.texto, /^Falta la autorización/);
+  const fotos = faseVideoNegocio({ consent: true, usable_photos: 1, ok: false, reason: "Tiene 1 fotos que sirven: subí al menos 4 en Banco de contenido" });
+  assert.equal(fotos.fase, "faltan_fotos");
+  assert.match(fotos.texto, /^Tiene 1 foto que sirve, faltan 3\./);
+  assert.match(faseVideoNegocio({ consent: true, usable_photos: 3, ok: false, reason: "x fotos" }).texto, /falta 1\b/);
+  const baja = faseVideoNegocio({ consent: true, usable_photos: 6, ok: false, reason: "El comercio no está activo" });
+  assert.deepEqual(baja, { fase: "no_se_puede", texto: "El comercio no está activo" });
 });

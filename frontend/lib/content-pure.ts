@@ -637,7 +637,61 @@ export function normalizarBusquedaComercio(q: string): string {
 }
 
 /** La respuesta de `GET …/merchants/{id}/request-check`. */
-export type RequestCheck = { consent: boolean; usable_photos: number; ok: boolean; reason: string | null };
+/** El último video vivo (no salteado) del comercio, que manda `request-check`. */
+export type UltimaPieza = { id: string; status: ContentPieceStatus; scheduled_for: string | null };
+export type RequestCheck = {
+  consent: boolean; usable_photos: number; ok: boolean; reason: string | null;
+  /** Lo agrega el backend desde el botón «Video» de Admin › Comercios; los tests viejos no lo traen. */
+  last_piece?: UltimaPieza | null;
+};
+
+/** Las fotos que pide un video de negocio (`content_selector.MIN_FOTOS`). */
+export const VIDEO_MIN_FOTOS = 4;
+
+export type FaseVideoNegocio =
+  | "armando" | "listo" | "puede" | "falta_autorizacion" | "faltan_fotos" | "no_se_puede";
+
+const VIDEO_PREVIO: Partial<Record<ContentPieceStatus, string>> = {
+  approved: "Ya tiene un video aprobado.",
+  published: "Ya tiene un video publicado.",
+  failed: "El último video no se pudo armar.",
+};
+
+/**
+ * En qué está el video de UN negocio, para el botón «Video» de Admin › Comercios. Un video armándose
+ * o esperando revisión manda (pedir otro sería repetirlo). Después, si HOY falta algo (autorización,
+ * fotos, está de baja) se dice qué, aunque tenga un video viejo: si no, un video de hace meses taparía
+ * que la autorización venció. Recién con todo en regla, «ya tiene uno» o «se puede armar».
+ */
+export function faseVideoNegocio(c: RequestCheck): { fase: FaseVideoNegocio; texto: string } {
+  const p = c.last_piece ?? null;
+  if (p && (p.status === "queued" || p.status === "rendering")) {
+    return { fase: "armando", texto: "El video se está armando. Aparece en Revisión en unos minutos." };
+  }
+  if (p && p.status === "ready_for_review") return { fase: "listo", texto: "Ya tiene un video listo para revisar." };
+  const previo = p ? VIDEO_PREVIO[p.status] ?? "" : "";
+  const fotos = `${c.usable_photos} ${c.usable_photos === 1 ? "foto que sirve" : "fotos que sirven"}`;
+  if (!c.ok) {
+    const antes = previo ? `${previo} Para armar otro, ` : "";
+    // Sin video previo, la frase arranca en mayúscula; con él, sigue a «Para armar otro,».
+    const frase = (t: string) => (antes ? `${antes}${t.charAt(0).toLowerCase()}${t.slice(1)}` : `${t.charAt(0).toUpperCase()}${t.slice(1)}`);
+    const motivo = (c.reason ?? "").trim();
+    if (motivo && !/autorizaci[oó]n|fotos?/i.test(motivo)) return { fase: "no_se_puede", texto: frase(motivo) };
+    if (!c.consent) {
+      return { fase: "falta_autorizacion",
+               texto: frase("falta la autorización del negocio para aparecer en las redes de URUKU. Registrala abajo.") };
+    }
+    const faltan = Math.max(1, VIDEO_MIN_FOTOS - c.usable_photos);
+    return {
+      fase: "faltan_fotos",
+      texto: frase(`tiene ${fotos}, ${faltan === 1 ? "falta 1" : `faltan ${faltan}`}. `
+        + "Subilas abajo (de 720 px o más por el lado chico)."),
+    };
+  }
+  if (p && (p.status === "approved" || p.status === "published")) return { fase: "listo", texto: previo };
+  if (previo) return { fase: "puede", texto: `${previo} Tiene autorización y ${fotos}: se puede armar de nuevo.` };
+  return { fase: "puede", texto: `Tiene autorización y ${fotos}: se puede armar el video.` };
+}
 
 /** Lo que se le muestra a quien va a pedir el video de un negocio. */
 export function resumenRequestCheck(c: RequestCheck): { tono: "ok" | "error"; texto: string } {
