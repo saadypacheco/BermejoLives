@@ -58,7 +58,8 @@ def usar_de_galeria(repo, comercio: dict, foto_id: str, *, conservar_archivos: b
     - Si la portada anterior ya figura en otra fila de la galería, no se la
       vuelve a meter (quedaría repetida): sólo sale la elegida.
     - Nunca borra FOTOS: todo lo que se veía antes se sigue viendo. Lo único que se suelta del disco es el
-      archivo de la portada de diseño que quedó vencida (el diseño era de la portada anterior), y no con
+      archivo de la portada de diseño que quedó vencida (el diseño era de la portada anterior) y los de diseño
+      de la fila de galería intercambiada (0203: la foto de esa fila cambió), y no con
       `conservar_archivos=True` (el agente no borra nada: sólo se vacían las columnas).
     """
     cid = comercio["id"]
@@ -70,6 +71,7 @@ def usar_de_galeria(repo, comercio: dict, foto_id: str, *, conservar_archivos: b
         raise HTTPException(status_code=404, detail="Foto no encontrada")
 
     original = {"url": foto.get("url"), "thumb_url": foto.get("thumb_url")}   # por si hay que deshacer
+    diseno_de_la_foto = fotos_galeria.urls_de_diseno(foto)      # el diseño de la fila que sale de la galería (0203)
     nueva_url = _url(foto.get("url"))
     if not nueva_url:
         raise HTTPException(status_code=404, detail="Foto no encontrada")
@@ -97,7 +99,8 @@ def usar_de_galeria(repo, comercio: dict, foto_id: str, *, conservar_archivos: b
         try:
             actualizado = repo.update_comercio(cid, patch, None)
         except Exception:
-            repo.update_foto_comercio(foto["id"], cid, original)
+            # Al deshacer también vuelve su diseño (cambiar el `url` lo había vaciado): no queda ningún archivo huérfano.
+            repo.update_foto_comercio(foto["id"], cid, {**original, **dict(zip(fotos_galeria.COLUMNAS_DISENO, diseno_de_la_foto))})
             raise
     else:
         # Sin portada anterior (o ya repetida en la galería): la elegida sale de
@@ -113,6 +116,9 @@ def usar_de_galeria(repo, comercio: dict, foto_id: str, *, conservar_archivos: b
 
     if not conservar_archivos:
         portada_diseno.soltar_huerfanos(repo, comercio, diseno_viejo)    # el diseño era de la portada anterior
+        # La foto elegida ya no es la de esa fila (o la fila ya no existe): su diseño quedó vencido. La foto original
+        # nunca se borra por un diseño. El agente (`conservar_archivos`) sólo vacía las columnas.
+        fotos_galeria.soltar_disenos(comercio, diseno_de_la_foto)
     logger.info("comercio.portada_de_galeria", comercio=cid, foto=foto["id"],
                 intercambio=bool(vieja_url and not vieja_ya_esta))
     return _rehacer_tarjeta(repo, actualizado or {**comercio, **patch}, tarjeta_vieja)
@@ -207,9 +213,10 @@ def _soltar_archivos_viejos(repo, comercio: dict, vieja_url: str | None,
         fotos_galeria.borrar_archivos(comercio, foto, repo)
 
 
-def respuesta(repo, comercio: dict) -> dict:
-    """Lo que devuelve `PUT <base>/portada`: la portada nueva y la galería al día."""
-    galeria = fotos_galeria.listado(repo, comercio)
+def respuesta(repo, comercio: dict, admin: bool = False) -> dict:
+    """Lo que devuelve `PUT <base>/portada`: la portada nueva y la galería al día. Sin `admin`, sin las columnas
+    privadas de la galería (la propuesta de diseño sin aprobar)."""
+    galeria = fotos_galeria.listado(repo, comercio, admin=admin)
     return {
         "ok": True,
         "portada_url": comercio.get("portada_url"),

@@ -125,9 +125,11 @@ Moderador → /admin › Publicaciones → aprobar/rechazar/cambios → estado '
     ni `verificado`. Las URLs de la Graph API salen de `settings.graph_base()` (`GRAPH_API_VERSION`).
 
 13. **Un solo worker de uvicorn.** La medición del sitio (`services/site_metrics.py`: límites de pedidos,
-    deduplicación, techos por IP y buffer de volcado) y los loops del `lifespan` viven en la memoria del proceso.
+    deduplicación, techos por IP y buffer de volcado), los loops del `lifespan` y las fotos con estilo URUKU
+    (`services/fotos_estilo.py`: el lock `_TRANSFORMAR` de «una transformación a la vez» y el flag `_registro_roto`, que apaga la
+    IA por el día si falla el insert del registro de usos) viven en la memoria del proceso.
     Con más de un worker cada uno contaría por su cuenta y los límites valdrían N veces: antes de subir
-    `--workers`, mover la deduplicación a Postgres. El navegador **no escribe** en `visitas`, `leads` ni
+    `--workers`, mover la deduplicación a Postgres (y el lock de fotos a uno de Postgres, p. ej. `pg_advisory_lock`). El navegador **no escribe** en `visitas`, `leads` ni
     `site_events` (sólo el backend con `service_role`; `docs/estadisticas-v2.md`).
 
 ## 8. Correr local

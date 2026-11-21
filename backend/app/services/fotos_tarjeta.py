@@ -248,7 +248,7 @@ SIN_FOTO, PORTADA_CAMBIO = "sin_foto", "portada_cambio"
 def _armar(repo, comercio: dict) -> tuple[dict | None, str | None]:
     """`(columnas escritas, None)` o `(None, motivo)`: `SIN_FOTO` (no hay portada o su archivo no está en el disco) o
     `PORTADA_CAMBIO` (la portada o el encuadre cambiaron mientras se armaba: la tarjeta ya era de otra foto)."""
-    foto = portada_diseno.leer_portada(comercio)
+    foto = portada_diseno.leer_portada(comercio, remoto=False)       # la tarjeta lee sólo del disco local
     if foto is None:
         return None, SIN_FOTO
     jpeg, calidad = generar_tarjeta(foto, comercio.get("portada_pos"))

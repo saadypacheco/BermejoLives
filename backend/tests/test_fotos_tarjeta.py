@@ -598,7 +598,8 @@ def test_la_0202_interruptor_gemini_gastronomia_apagado_y_check_ampliado():
     from app.services.cost_switches import CATALOGO
     sql = " ".join(_sin_comentarios(_sql()).split())
     m = re.search(r"add constraint cost_switches_key_check check \(key in \(([^)]*)\)\)", sql)
-    assert m and sorted(re.findall(r"'([a-z_]+)'", m.group(1))) == sorted(CATALOGO)
+    # La 0202 es histórica: el catálogo de hoy suma `gemini_fotos` (la 0203 volvió a ampliar el check).
+    assert m and sorted(re.findall(r"'([a-z_]+)'", m.group(1))) == sorted(set(CATALOGO) - {"gemini_fotos"})
     assert "insert into public.cost_switches (key, enabled, updated_by) values ('gemini_gastronomia', false," in sql
     assert "on conflict (key) do nothing" in sql
     assert sql.index("drop constraint if exists cost_switches_key_check") < sql.index("add constraint cost_switches_key_check")

@@ -1,19 +1,22 @@
-"""Portada de diseño para la ficha pública (docs/portada-diseno.md).
+"""Portada de diseño para la ficha pública (docs/portada-diseno.md; el estilo, docs/fotos-estilo-uruku.md §1).
 
-Arma una imagen apaisada de 1600 x 1000 (JPEG) con la foto de portada del comercio, una franja oscura
-degradada abajo con el NOMBRE, el RUBRO y la CIUDAD, y el logo blanco de URUKU en una esquina.
+Arma una imagen apaisada de 1600 x 1000 (JPEG) con la foto de portada del comercio, una franja `#08110C` degradada
+abajo (alfa 0 en y=420 a 235 en y=1000), un brillo verde detrás del texto, el RUBRO en una píldora verde (kick), el
+NOMBRE y la CIUDAD, y el logo de URUKU «color · modo oscuro» SIEMPRE abajo a la derecha. Sin velo arriba y sin marco.
 
 NINGÚN TEXTO LO ESCRIBE UN MODELO DE IA
 =======================================
 Todo lo que se dibuja sale de la base (`comercios`, `rubros`, `ciudades`) y se pone con Pillow. Sin emojis:
-Poppins no los tiene y el manual de identidad los prohíbe.
+Poppins no los tiene y el manual de identidad los prohíbe. Ni la mejora ni la IA tiñen la foto: el verde lo pone la
+plantilla.
 
 SIN IA, GRATIS
 ==============
-    armar_plantilla(...)   la foto + una mejora automática suave de luz, color y nitidez (`mejorar_gratis`,
-                           Pillow) + el diseño. Costo 0.
+    cubrir(...) + mejorar_gratis(...) + dibujar_portada(...)    el recorte, una mejora automática suave de luz, color y
+                                                                nitidez (Pillow) y el diseño. Costo 0.
 
-«Mejorar con IA» (Gemini) quedó afuera el 19/11/2026 por costo (docs/portada-diseno.md).
+Con IA (Gemini) o con una imagen hecha afuera, la foto de entrada es otra pero la plantilla es esta misma
+(`dibujar_portada`): lo orquesta `fotos_estilo`, que también tiene el lock.
 
 Guardar en el disco de fotos es `guardar` (un archivo `<slug>/diseno-<token>.jpg`).
 
@@ -22,21 +25,22 @@ DEFENSAS (el backend corre con UN solo worker: un pedido pesado frena a todos)
 - La foto se RECORTA antes de escalar (`resize(..., box=)`): la salida es siempre 1600 x 1000 y nunca hay un
   intermedio enorme. Una portada de 1 x 1280 px pediría gigapíxeles si se agrandara entera antes de recortar.
 - Se rechazan las fotos con el lado menor < 200 px o de proporción mayor a 4:1 (`PortadaInadecuada`).
-- Los textos se cortan (120 caracteres el nombre) ANTES de medirlos, y el ajuste de renglones usa búsqueda binaria.
-- Se arma de a UNA portada por vez (`_RENDER`): si hay otra en curso, `PortadaOcupada` (el endpoint dice 409).
+- Los textos se cortan (120 caracteres el nombre, 28 el kick) ANTES de medirlos, y el ajuste de renglones usa búsqueda binaria.
+- Este módulo NO tiene lock: «una transformación a la vez» es `fotos_estilo._TRANSFORMAR` (cubre portada, galería y
+  los tres caminos).
 """
 from __future__ import annotations
 
 import secrets
-import threading
 import unicodedata
+from functools import lru_cache
 from io import BytesIO
 
 import structlog
-from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps, ImageStat
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps, ImageStat
 
-from app.services import fotos_galeria, imagenes
-from app.services.content_render_job import ASSETS, RenderError, fuente, sin_emojis
+from app.services import fotos_galeria, fotos_origen, imagenes
+from app.services.content_render_job import ASSETS, fuente, sin_emojis
 
 logger = structlog.get_logger()
 
@@ -44,10 +48,13 @@ ANCHO, ALTO = 1600, 1000
 CALIDAD_JPEG = 85
 MARGEN = 80
 BLANCO = (255, 255, 255)
-GRIS_CLARO = (226, 232, 228)
+GRIS_CLARO = (210, 226, 216)          # #D2E2D8: texto secundario del kit
+FRANJA = (8, 17, 12)                  # #08110C: nunca negro puro
+ACENTO = (52, 210, 127)               # #34D27F: kick y ciudad
+BRILLO = (38, 185, 105)               # rgba(38,185,105): el resplandor verde detrás del texto
 #: Los archivos de diseño llevan este prefijo: `soltar_archivo` NO borra nada que no lo tenga, así que
 #: jamás toca una foto de galería ni una portada.
-PREFIJO_ARCHIVO = "diseno-"
+PREFIJO_ARCHIVO = fotos_galeria.PREFIJO_DISENO
 
 #: Las dos columnas de `comercios` que se vacían juntas cuando la foto de portada cambia, se vuelve atrás o el
 #: diseño queda vencido (cambió el nombre, el rubro o la ciudad).
@@ -56,23 +63,28 @@ COLUMNAS_VACIAS = {"portada_diseno_url": None, "portada_diseno_propuesta_url": N
 #: Largo máximo de lo que se dibuja (igual que `tarjetas.MAX_NOMBRE`; no se importa ese módulo por su peso).
 MAX_NOMBRE = 120
 MAX_SUBTITULO = 80
+MAX_KICK = 28
 #: Lo que se acepta como foto de entrada y lo que se lee del disco.
 FORMATOS = ("JPEG", "PNG", "WEBP")
-MAX_BYTES_FOTO = 8 * 1024 * 1024
+MAX_BYTES_FOTO = fotos_origen.MAX_BYTES_FOTO
 LADO_MENOR_MIN = 200
 PROPORCION_MAX = 4
 
-#: Una sola portada a la vez, y cuánto se espera si hay otra en curso.
-_RENDER = threading.Lock()
-ESPERA_RENDER = 5.0
+# Geometría del diseño (docs/fotos-estilo-uruku.md §1). El texto vive en x 80..1188 (1108 px = 1600 - 80 - 300 - 64 - 48)
+# y el logo en x 1236..1536: ningún texto pasa de x 1188, así que el logo nunca lo pisa.
+ZONA_X0, ZONA_X1 = MARGEN, 1188
+ANCHO_TEXTO = ZONA_X1 - ZONA_X0
+ANCLA_Y = 936                          # el bloque de texto se ancla abajo en y = 936
+LOGO_ANCHO = 300
+LOGO_X0 = 1236
+NOMBRE_MAX_PX, NOMBRE_MIN_PX = 104, 56
+KICK_PX, CIUDAD_PX = 30, 46
+KICK_ALTO, KICK_PAD, KICK_SEPARACION = 54, 26, 22
+CIUDAD_ALTO = 56
 
 
 class PortadaInadecuada(ValueError):
     """La foto de portada es muy chica o muy angosta para armar el diseño. El endpoint responde 400 con este texto."""
-
-
-class PortadaOcupada(RuntimeError):
-    """Ya se está armando otra portada. El endpoint responde 409."""
 
 
 # ───────────────────────────────────────────────────────────── texto
@@ -212,102 +224,140 @@ def _abrir(foto: bytes) -> Image.Image:
         if menor < LADO_MENOR_MIN or mayor > PROPORCION_MAX * menor:
             raise PortadaInadecuada("La foto de portada es muy chica o muy angosta para armar el diseño")
         img.load()
-        return ImageOps.exif_transpose(img).convert("RGB")
+        limpia = ImageOps.exif_transpose(img).convert("RGB")
+        limpia.info.clear()                   # el comentario (COM) del JPEG y el EXIF no pasan: viajarían a la portada
+        return limpia
     except PortadaInadecuada:
         raise
     except Exception as exc:  # noqa: BLE001
         raise ValueError("El archivo no es una imagen válida") from exc
 
 
-def _cubrir(img: Image.Image, pos: int | None) -> Image.Image:
-    """La foto recortada para llenar 1600 x 1000, SIN agrandarla entera antes: se calcula la caja que se ve
-    sobre la foto original y se escala sólo eso (`resize(..., box=)`).
+def caja_cubrir(tamano: tuple[int, int], aspecto_w: float, aspecto_h: float, pos: int | None = None) -> tuple[float, float, float, float]:
+    """La caja `(x0, y0, x1, y1)` MÁS GRANDE de una imagen de `tamano` con la proporción `aspecto_w : aspecto_h`.
 
     `pos` (0..100) es lo mismo que el CSS `object-position: center <pos>%` que usan el panel y la ficha: el recorte
-    arranca en `pos %` del tramo que sobra (arriba = pos/100 * (alto escalado - 1000)), NO centrado en `pos`.
-    Sin `pos`, 50 (el centro). Horizontalmente siempre va centrado."""
+    arranca en `pos %` del tramo que sobra (arriba = pos/100 * (alto - alto de la caja)), NO centrado en `pos`.
+    Sin `pos`, 50 (el centro). Horizontalmente siempre va centrado. La comparten `cubrir` y el recorte que va a Gemini."""
     pos = 50 if pos is None else max(0, min(100, int(pos)))
-    ancho, alto = img.size
-    escala = max(ANCHO / ancho, ALTO / alto)
-    caja_w, caja_h = min(ancho, ANCHO / escala), min(alto, ALTO / escala)
+    ancho, alto = tamano
+    escala = max(aspecto_w / ancho, aspecto_h / alto)
+    caja_w, caja_h = min(ancho, aspecto_w / escala), min(alto, aspecto_h / escala)
     x0 = max(0.0, min(ancho - caja_w, (ancho - caja_w) / 2))
     y0 = max(0.0, min(alto - caja_h, pos / 100 * (alto - caja_h)))
-    return img.resize((ANCHO, ALTO), Image.LANCZOS, box=(x0, y0, x0 + caja_w, y0 + caja_h))
+    return x0, y0, x0 + caja_w, y0 + caja_h
 
 
-def _degradado(base: Image.Image, desde_y: int, alfa_max: int, hacia_abajo: bool = True) -> None:
-    """Oscurece `base` con un degradado negro: de `desde_y` al borde de abajo (hacia_abajo) o del borde de
-    arriba a `desde_y`. La opacidad va de 0 a `alfa_max` / 255, más fuerte en el borde."""
-    alto = ALTO - desde_y if hacia_abajo else desde_y
+def cubrir(img: Image.Image, ancho_final: int, alto_final: int, pos: int | None = None) -> Image.Image:
+    """La foto recortada para llenar `ancho_final` x `alto_final`, SIN agrandarla entera antes: se calcula la caja que
+    se ve sobre la foto original (`caja_cubrir`) y se escala sólo eso (`resize(..., box=)`)."""
+    return img.resize((ancho_final, alto_final), Image.LANCZOS, box=caja_cubrir(img.size, ancho_final, alto_final, pos))
+
+
+def _franja(base: Image.Image, desde_y: int = 420, alfa_max: int = 235) -> None:
+    """La franja `#08110C` de abajo: opacidad 0 en `desde_y` y `alfa_max` / 255 en el borde de abajo (nunca negro puro)."""
+    alto = ALTO - desde_y
     if alto <= 0:
         return
     capa = Image.new("L", (1, alto))
     for y in range(alto):
         t = y / max(alto - 1, 1)
-        capa.putpixel((0, y), round(alfa_max * ((t if hacia_abajo else 1 - t) ** 1.4)))
-    capa = capa.resize((ANCHO, alto))
-    base.paste(Image.new("RGB", (ANCHO, alto), (0, 0, 0)), (0, desde_y if hacia_abajo else 0), capa)
+        capa.putpixel((0, y), round(alfa_max * (t ** 1.4)))
+    base.paste(Image.new("RGB", (ANCHO, alto), FRANJA), (0, desde_y), capa.resize((ANCHO, alto)))
 
 
-def _diseno(base: Image.Image, nombre: str, rubro: str | None, ciudad: str | None) -> Image.Image:
-    """Pone la franja, los textos y el logo sobre la foto ya encuadrada."""
-    ancho_texto = ANCHO - 2 * MARGEN
+def _brillo(base: Image.Image, centro: tuple[int, int], radio: int, desenfoque: int, alfa: float) -> None:
+    """Un resplandor verde (`rgba(38,185,105,alfa)`) desenfocado, detrás del texto."""
+    mascara = Image.new("L", base.size, 0)
+    cx, cy = centro
+    ImageDraw.Draw(mascara).ellipse((cx - radio, cy - radio, cx + radio, cy + radio), fill=round(255 * alfa))
+    mascara = mascara.filter(ImageFilter.GaussianBlur(desenfoque))
+    base.paste(Image.new("RGB", base.size, BRILLO), (0, 0), mascara)
+
+
+@lru_cache(maxsize=8)
+def _logo_color(ancho: int) -> Image.Image:
+    """El logo «color · modo oscuro» (1738 x 563) a `ancho` px. Sin sombras ni efectos. Se arma una vez por ancho."""
+    logo = Image.open(ASSETS / "uruku-horizontal-color.png").convert("RGBA")
+    return logo.resize((ancho, round(logo.height * ancho / logo.width)), Image.LANCZOS)
+
+
+def logo_color(ancho: int) -> Image.Image:
+    """Una copia del logo a `ancho` px (la de caché no se entrega: nadie la puede ensuciar)."""
+    return _logo_color(ancho).copy()
+
+
+def disponer_portada(nombre: str, rubro: str | None, ciudad: str | None) -> dict:
+    """Dónde va cada cosa en la portada (docs/fotos-estilo-uruku.md §1), sin dibujar nada. Lo usa `dibujar_portada`
+    y lo mira el test de que el logo y el texto no se cruzan nunca.
+
+    Devuelve `{nombre_px, lineas, kick, ciudad, cajas, logo}`; `cajas` y `logo` son `(x0, y0, x1, y1)`. El bloque se
+    ancla abajo en `ANCLA_Y`: ciudad, nombre (hasta 2 renglones, 104 → 56 px) y kick (la píldora), de abajo hacia arriba."""
     # Se corta ANTES de limpiar y medir: lo que llega de afuera (el registro anónimo) puede ser larguísimo.
     nombre = limpiar_texto((nombre or "")[:MAX_NOMBRE]) or "Comercio"
-    px, lineas = ajustar_nombre(nombre, ancho_texto)
-    partes = [p for p in (limpiar_texto((rubro or "")[:MAX_SUBTITULO]),
-                          limpiar_texto((ciudad or "")[:MAX_SUBTITULO])) if p]
-    sub = _cortar(" · ".join(partes), "medium", 44, ancho_texto) if partes else ""
+    px, lineas = ajustar_nombre(nombre, ANCHO_TEXTO, NOMBRE_MAX_PX, NOMBRE_MIN_PX)
 
-    paso = round(px * 1.18)
-    bloque = paso * len(lineas) + (44 + 24 if sub else 0)
-    arriba_bloque = ALTO - 64 - bloque
-    _degradado(base, max(0, arriba_bloque - 200), 225)          # la franja de abajo
-    _degradado(base, 230, 110, hacia_abajo=False)                # un velo arriba: el logo blanco se lee sobre cualquier foto
+    kick = limpiar_texto((rubro or "")[:MAX_SUBTITULO])
+    if len(kick) > MAX_KICK:
+        kick = kick[:MAX_KICK - 1].rstrip() + "…"
+    kick = kick.upper()
+    ciudad_txt = _cortar(limpiar_texto((ciudad or "")[:MAX_SUBTITULO]), "semibold", CIUDAD_PX, ANCHO_TEXTO)
+
+    cajas: dict = {"kick": None, "nombre": [], "ciudad": None}
+    cursor = ANCLA_Y
+    if ciudad_txt:
+        w = round(_largo(ciudad_txt, "semibold", CIUDAD_PX))
+        cajas["ciudad"] = (ZONA_X0, cursor - CIUDAD_ALTO, ZONA_X0 + w, cursor)
+        cursor -= CIUDAD_ALTO + 6
+    paso = round(px * 1.14)
+    for i in range(len(lineas) - 1, -1, -1):
+        w = round(_largo(lineas[i], "bold", px))
+        cajas["nombre"].insert(0, (ZONA_X0, cursor - paso, ZONA_X0 + w, cursor))
+        cursor -= paso
+    if kick:
+        w = round(_largo(kick, "bold", KICK_PX)) + 2 * KICK_PAD
+        cursor -= KICK_SEPARACION
+        cajas["kick"] = (ZONA_X0, cursor - KICK_ALTO, ZONA_X0 + min(w, ANCHO_TEXTO), cursor)
+
+    logo_w = LOGO_ANCHO
+    logo_h = round(_logo_color(logo_w).height)
+    return {"nombre_px": px, "lineas": lineas, "kick": kick, "ciudad": ciudad_txt, "paso": paso, "cajas": cajas,
+            "logo": (LOGO_X0, ANCLA_Y - logo_h, LOGO_X0 + logo_w, ANCLA_Y)}
+
+
+def dibujar_portada(base: Image.Image, nombre: str, rubro: str | None, ciudad: str | None) -> Image.Image:
+    """Pone la franja, el brillo, el kick, el nombre, la ciudad y el logo sobre la foto ya encuadrada (1600 x 1000)."""
+    d = disponer_portada(nombre, rubro, ciudad)
+    _franja(base)
+    _brillo(base, (380, 900), 420, 80, 0.30)
 
     draw = ImageDraw.Draw(base)
-    y = arriba_bloque
+    cajas, px = d["cajas"], d["nombre_px"]
+    if cajas["kick"]:
+        x0, y0, x1, y1 = cajas["kick"]
+        draw.rounded_rectangle((x0, y0, x1, y1), radius=(y1 - y0) // 2, fill=ACENTO)
+        draw.text(((x0 + x1) / 2, (y0 + y1) / 2 + round(KICK_PX * 0.35)), d["kick"], font=fuente("bold", KICK_PX),
+                  fill=FRANJA, anchor="ms")
     f = fuente("bold", px)
-    for linea in lineas:
-        draw.text((MARGEN, y), linea, font=f, fill=BLANCO)
-        y += paso
-    if sub:
-        draw.text((MARGEN, y + 12), sub, font=fuente("medium", 44), fill=GRIS_CLARO)
+    for linea, (x0, y0, x1, y1) in zip(d["lineas"], cajas["nombre"]):
+        draw.text((x0, y1 - round(px * 0.26)), linea, font=f, fill=BLANCO, anchor="ls")
+    if cajas["ciudad"]:
+        x0, y0, x1, y1 = cajas["ciudad"]
+        draw.text((x0, y1 - round(CIUDAD_PX * 0.26)), d["ciudad"], font=fuente("semibold", CIUDAD_PX), fill=ACENTO,
+                  anchor="ls")
 
-    logo = Image.open(ASSETS / "uruku-horizontal-blanco.png").convert("RGBA")
-    w = 270
-    logo = logo.resize((w, round(logo.height * w / logo.width)), Image.LANCZOS)
-    base.paste(logo, (ANCHO - MARGEN // 2 - w, 44), logo)
+    lx0, ly0, _, _ = d["logo"]
+    logo = logo_color(LOGO_ANCHO)
+    base.paste(logo, (lx0, ly0), logo)
     return base
 
 
 def _jpeg(img: Image.Image) -> bytes:
     out = BytesIO()
-    img.convert("RGB").save(out, format="JPEG", quality=CALIDAD_JPEG, optimize=True)
+    limpia = img.convert("RGB")
+    limpia.info.clear()                       # ni el comentario del JPEG de la foto ni su EXIF viajan al archivo
+    limpia.save(out, format="JPEG", quality=CALIDAD_JPEG, optimize=True)
     return out.getvalue()
-
-
-def armar_plantilla(foto: bytes, nombre: str, rubro: str | None, ciudad: str | None, pos: int | None,
-                    *, mejorar: bool = True) -> bytes:
-    """La portada de diseño en JPEG 1600 x 1000. `mejorar=False` salta la mejora automática (sólo para pruebas
-    que miran los colores de la foto tal cual).
-
-    - `PortadaInadecuada` (400): la foto es muy chica o muy angosta.
-    - `ValueError` (400): `foto` no es una imagen válida.
-    - `PortadaOcupada` (409): ya se está armando otra; se espera `ESPERA_RENDER` segundos antes de rendirse.
-    """
-    if not _RENDER.acquire(timeout=ESPERA_RENDER):
-        raise PortadaOcupada("Ya se está armando otra portada, probá en unos segundos")
-    try:
-        img = _cubrir(_abrir(foto), pos)
-        if mejorar:
-            img = mejorar_gratis(img)
-        try:
-            return _jpeg(_diseno(img, nombre, rubro, ciudad))
-        except RenderError as exc:      # falta una fuente del paquete: error del servidor, no de la foto
-            raise RuntimeError(str(exc)) from exc
-    finally:
-        _RENDER.release()
 
 
 # ───────────────────────────────────────────────────────────── disco
@@ -315,7 +365,7 @@ def armar_plantilla(foto: bytes, nombre: str, rubro: str | None, ciudad: str | N
 def guardar(slug: str, jpeg: bytes) -> str | None:
     """Guarda el JPEG en el disco de fotos como `<slug>/diseno-<token>.jpg` y devuelve su URL pública
     (None si falló). Nombre único cada vez: la URL cambia al regenerar y ningún caché sirve la imagen vieja."""
-    return imagenes.guardar_foto_local(f"{slug}/{PREFIJO_ARCHIVO}{secrets.token_hex(8)}.jpg", jpeg)
+    return imagenes.guardar_foto_local(f"{slug}/{PREFIJO_ARCHIVO}{secrets.token_hex(16)}.jpg", jpeg)
 
 
 def soltar_archivo(comercio: dict, url: str | None) -> None:
@@ -351,20 +401,24 @@ def soltar_huerfanos(repo, comercio: dict, urls: list[str | None]) -> None:
             soltar_archivo(comercio, url)
 
 
-def leer_portada(comercio: dict) -> bytes | None:
-    """Los bytes de la foto de portada, leídos del disco del backend con la validación ESTRICTA de rutas
-    (`fotos_galeria._ruta_en_disco`: nuestra URL, `<carpeta>/<archivo>.jpg`, sin `..` ni enlaces que salgan del
-    volumen). None si no hay portada, no es una foto nuestra, no está en el disco o pesa de más."""
+def leer_portada(comercio: dict, remoto: bool = True) -> bytes | None:
+    """Los bytes de la foto de portada: del disco del backend con la validación ESTRICTA de rutas (nuestra URL,
+    `<carpeta>/<archivo>.jpg`, sin `..` ni enlaces que salgan del volumen) o, sólo si `FOTOS_LECTURA_REMOTA_BASES` lo
+    permite (QA), por HTTPS (`fotos_origen.leer_foto_origen`). None si no hay portada, no es una foto nuestra, no se
+    puede leer o pesa de más. Se llama SIN `slug`: un comercio renombrado deja sus fotos en la carpeta del slug viejo.
+
+    `remoto=False` (la tarjeta de la portada, `fotos_tarjeta`): sólo el disco local. La lectura por HTTPS es de la portada de
+    diseño y de los caminos de `fotos_estilo`, nada más."""
     try:
-        ruta = fotos_galeria._ruta_en_disco(comercio.get("portada_url"))
-        if ruta is None or not ruta.is_file() or ruta.stat().st_size > MAX_BYTES_FOTO:
-            return None
-        return ruta.read_bytes()
+        return fotos_origen.leer_foto_origen(comercio.get("portada_url"), remoto=remoto)
     except Exception:  # noqa: BLE001
         return None
 
 
-def respuesta(comercio: dict) -> dict:
-    """Lo que devuelven los cuatro endpoints."""
+def respuesta(comercio: dict, proposal_method: str | None = None) -> dict:
+    """Lo que devuelven los endpoints de la portada de diseño (`CoverDesign`, docs/fotos-estilo-uruku.md §6).
+    `proposal_method` (`free` | `gemini` | `external`) sale del último registro de uso que dejó esa propuesta."""
+    propuesta = comercio.get("portada_diseno_propuesta_url") or None
     return {"portada_diseno_url": comercio.get("portada_diseno_url") or None,
-            "portada_diseno_propuesta_url": comercio.get("portada_diseno_propuesta_url") or None}
+            "portada_diseno_propuesta_url": propuesta,
+            "proposal_method": proposal_method if propuesta else None}

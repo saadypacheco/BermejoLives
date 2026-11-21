@@ -34,7 +34,8 @@ import structlog
 from fastapi import HTTPException
 
 from app.core.config import settings
-from app.services import cargas, planes
+from app.db.repository import COLUMNAS_DISENO_FOTO
+from app.services import cargas, fotos_origen, planes
 
 logger = structlog.get_logger()
 
@@ -50,6 +51,15 @@ FOTOS_DEL_LOCAL = 10
 
 #: Un uuid que no existe: `imagen_en_uso` pide un id a excluir y acá no hay ninguno.
 _NINGUN_ID = "00000000-0000-0000-0000-000000000000"
+
+#: Los archivos de diseño (portada o galería) llevan este prefijo: `soltar_disenos` NO borra nada que no lo tenga, así
+#: que nunca toca una foto original. Las columnas son las de diseño de una fila de `comercio_fotos` (0203).
+PREFIJO_DISENO = "diseno-"
+COLUMNAS_DISENO = COLUMNAS_DISENO_FOTO          # una sola lista: la del repositorio (la usa también el vencimiento)
+#: Lo que de una fila de `comercio_fotos` sólo ve el ADMIN (como `_SOLO_ADMIN` de `core/codigo.py` para `comercios`): la
+#: propuesta de diseño que todavía no se aprobó (0203, privada para anon/authenticated). Ni el comerciante ni el agente la reciben.
+PRIVADAS = ("diseno_propuesta_url",)
+SUFIJO_MINIATURA = "-t"
 
 MSG_SOLO_COMERCIO = "Sólo el comercio puede pagar una foto extra."
 MSG_AGENTE_NO_BORRA = "Las fotos las borra URUKU. Avisale al admin."
@@ -140,9 +150,20 @@ def detalle_tope(repo, comercio: dict, fotos: list[dict], limite: int) -> dict:
     }
 
 
-def listado(repo, comercio: dict, equipo: bool = False) -> dict:
-    """Lo que devuelven los GET de la galería: las fotos y su tope actual (el del equipo si `equipo`)."""
-    return {"items": repo.list_fotos_comercio(comercio["id"]),
+def sin_privadas(fila: dict | None) -> dict | None:
+    """La fila de galería SIN las columnas que sólo ve el admin (`PRIVADAS`). Devuelve una copia."""
+    if fila is None:
+        return None
+    return {k: v for k, v in fila.items() if k not in PRIVADAS}
+
+
+def listado(repo, comercio: dict, equipo: bool = False, admin: bool = False) -> dict:
+    """Lo que devuelven los GET de la galería: las fotos y su tope actual (el del equipo si `equipo`).
+
+    Sin `admin` (el comerciante, el agente de campo) las filas salen SIN las columnas privadas: la propuesta de diseño
+    sin aprobar no es de ellos. Los endpoints del panel pasan `admin=True`."""
+    fotos = repo.list_fotos_comercio(comercio["id"])
+    return {"items": fotos if admin else [sin_privadas(f) for f in fotos],
             "limite": tope_fotos(repo, comercio, equipo=equipo)}
 
 
@@ -250,20 +271,8 @@ def _ruta_en_disco(url: str | None, slug: str | None = None) -> Path | None:
     (`<base>/otro-comercio/foto.jpg`) hacía borrar el archivo de otro comercio.
     Un comercio renombrado deja sus fotos viejas en la carpeta del slug anterior:
     esas NO se borran (queda un archivo de más, nunca uno de menos)."""
-    if not url:
-        return None
-    base = settings.fotos_public_base_url.rstrip("/") + "/"
-    if not url.startswith(base):
-        return None
-    relativa = url[len(base):]
-    if any(c in relativa for c in "?#%\\\x00"):
-        return None
-    partes = relativa.split("/")
-    if len(partes) != 2 or any(p in ("", ".", "..") for p in partes):
-        return None
-    if slug is not None and partes[0] != slug:
-        return None
-    if not partes[1].endswith(".jpg"):
+    relativa = fotos_origen.ruta_relativa_canonica(url, settings.fotos_public_base_url, slug)
+    if relativa is None:
         return None
     try:
         raiz = Path(settings.fotos_dir).resolve()
@@ -275,8 +284,37 @@ def _ruta_en_disco(url: str | None, slug: str | None = None) -> Path | None:
     return ruta
 
 
+def miniatura_de(url: str | None) -> str | None:
+    """La URL de la miniatura derivada de la de un diseño: `…/diseno-<token>.jpg` -> `…/diseno-<token>-t.jpg`.
+    Sólo la propuesta la necesita (el vigente guarda la suya en `diseno_thumb_url`)."""
+    if not url or not url.endswith(".jpg"):
+        return None
+    return url[:-4] + SUFIJO_MINIATURA + ".jpg"
+
+
+def urls_de_diseno(foto: dict | None) -> list[str | None]:
+    """Todos los archivos de diseño de una fila de galería, para anotarlos ANTES de cambiarla (el repositorio puede
+    devolver la misma fila mutada, con las columnas ya vacías): las tres columnas Y la miniatura de la propuesta, que
+    no tiene columna propia (se deriva de su URL)."""
+    foto = foto or {}
+    return [*(foto.get(c) for c in COLUMNAS_DISENO), miniatura_de(foto.get("diseno_propuesta_url"))]
+
+
+def soltar_disenos(comercio: dict, urls) -> None:
+    """Borra del disco los archivos de diseño `<slug>/diseno-*.jpg` de ESTE comercio. Nunca lanza y nunca toca otra
+    cosa: ni una foto original ni una portada (sólo se borra lo que lleva el prefijo `diseno-`). Quien llama decide si
+    corresponde (el agente no borra archivos). Se le pasa lo que anotó `urls_de_diseno`."""
+    for url in dict.fromkeys(u for u in (urls or []) if u):
+        try:
+            ruta = _ruta_en_disco(url, comercio.get("slug"))
+            if ruta is not None and ruta.name.startswith(PREFIJO_DISENO):
+                ruta.unlink(missing_ok=True)
+        except Exception:  # noqa: BLE001
+            logger.warning("comercio.foto_diseno_borrar_fallo", url=url, exc_info=True)
+
+
 def borrar_archivos(comercio: dict, foto: dict, repo=None) -> None:
-    """Borra del disco la foto grande y su miniatura. Nunca lanza.
+    """Borra del disco la foto grande y su miniatura, y los archivos de diseño de la fila (`diseno-*`). Nunca lanza.
 
     Sólo borra archivos de la carpeta del propio comercio (`<slug>/`) y no toca uno
     que otro lugar siga mostrando, mirando TODO lo que pueda apuntarlo:
@@ -310,6 +348,8 @@ def borrar_archivos(comercio: dict, foto: dict, repo=None) -> None:
             ruta.unlink(missing_ok=True)
         except Exception:  # noqa: BLE001
             logger.warning("comercio.foto_archivo_borrar_fallo", url=url, exc_info=True)
+    # El diseño era de esta foto: sin la fila no lo apunta nadie. La original nunca se borra por un diseño.
+    soltar_disenos(comercio, urls_de_diseno(foto))
 
 
 def borrar_foto(repo, comercio: dict, foto: dict) -> bool:
@@ -328,7 +368,7 @@ def borrar_foto_por_id(repo, comercio_id: str, foto_id: str) -> bool:
     comercio = repo.get_comercio(comercio_id)
     if not comercio:
         return False
-    foto = next((f for f in repo.list_fotos_comercio(comercio_id) if str(f.get("id")) == str(foto_id)), None)
+    foto = repo.get_foto_comercio(foto_id, comercio_id)
     if foto is None:
         return False
     return borrar_foto(repo, comercio, foto)

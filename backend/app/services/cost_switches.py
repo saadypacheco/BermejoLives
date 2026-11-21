@@ -28,6 +28,7 @@ GEMINI_CONTENT = "gemini_content"
 GEMINI_PHONE_SCAN = "gemini_phone_scan"
 GEMINI_TARJETAS = "gemini_tarjetas"
 GEMINI_GASTRONOMIA = "gemini_gastronomia"
+GEMINI_FOTOS = "gemini_fotos"
 
 #: Lo que se puede prender o apagar. Fijo en el código: lo devuelve la API para que el panel lo muestre.
 CATALOGO: dict[str, dict] = {
@@ -57,6 +58,13 @@ CATALOGO: dict[str, dict] = {
         "what": "Escribe con Gemini un texto original de 2 a 3 frases por cada plato típico de una ciudad (Sabores)",
         "cost": "Unos 50 textos cortos por ciudad: menos de US$ 0,05 con el modelo actual (0 si la clave es del nivel gratis)",
         "off_means": "El comando de platos típicos no llama a Gemini ni carga nada: sólo muestra lo que haría",
+    },
+    # docs/fotos-estilo-uruku.md: transformar las fotos de portada y galería con un modelo de imagen.
+    GEMINI_FOTOS: {
+        "label": "Fotos con IA (Gemini)",
+        "what": "Mejora con un modelo de imagen de Gemini la foto de portada o de galería antes de ponerle el estilo URUKU",
+        "cost": "aprox. US$ 0,03-0,04 por imagen, tope 20 por día, sin nivel gratis",
+        "off_means": "quedan la plantilla gratis y ChatGPT a mano",
     },
 }
 

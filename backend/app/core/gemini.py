@@ -16,6 +16,16 @@ def url_generar() -> str:
             f"{settings.gemini_model}:generateContent")
 
 
+def url_generar_imagen() -> str:
+    """URL de `generateContent` del modelo de IMAGEN (`GEMINI_IMAGE_MODEL`). No lleva la clave. Con el setting vacío
+    devuelve "" (quien llama ya comprobó la disponibilidad: sin modelo la IA no se ofrece)."""
+    modelo = (settings.gemini_image_model or "").strip()
+    if not modelo:
+        return ""
+    return (f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{modelo}:generateContent")
+
+
 def cabeceras() -> dict[str, str]:
     """Cabeceras de autenticación para Gemini."""
     return {"x-goog-api-key": settings.gemini_api_key}
