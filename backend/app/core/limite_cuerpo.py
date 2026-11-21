@@ -84,6 +84,9 @@ TABLA_DE_TOPES: tuple[tuple[re.Pattern, int], ...] = tuple(
         (r"^/campo/lugares/[^/]+/portada$", 15),
         (r"^/campo/mis-comercios/[^/]+/fotos?$", 15),
         (r"^/admin/comercio/[^/]+/fotos?$", 15),
+        # Fotos con estilo URUKU (docs/fotos-estilo-uruku.md): la imagen hecha afuera (ChatGPT), de hasta 15 MB
+        (r"^/admin/comercio/[^/]+/portada-diseno/externa$", 15),
+        (r"^/admin/comercio/[^/]+/fotos/[^/]+/diseno/externa$", 15),
         # Banco de fotos para redes: 15 MB (api/content.py), desde el panel y desde la app de campo
         (r"^/admin/content/merchants/[^/]+/assets$", 15),
         (r"^/campo/mis-comercios/[^/]+/content-assets$", 15),

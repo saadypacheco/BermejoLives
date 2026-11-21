@@ -16,19 +16,21 @@ from app.core.auth import MIN_LARGO_CLAVE_PANEL, _verificar_cuenta, _vigente_tie
 from app.core.permisos import CATALOGO, TODO as TODO_PERMISO, TODOS, tiene as tiene_permiso
 from app.core.config import _numeros_propios, settings
 from app.api.agent_credentials import catalogo_de_permisos, es_agente
+from app.api import fotos_estilo as fotos_estilo_api
 from starlette.concurrency import run_in_threadpool
 from app.core.telefono import normalizar_whatsapp, validar_whatsapp, whatsapp_para_guardar
 from app.services import archivos_privados, site_metrics, turnos_farmacia
 from app.services import completar_importado as completar_svc
 from app.services.subcategorias_turismo import subcategoria_de_importado
 from app.services.tarjetas import importado_salida
-from app.services import calles_mapa, enlaces, ficha_catalogo as catalogo_svc, fotos_galeria, fotos_tarjeta, portada, portada_diseno, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
+from app.services import calles_mapa, enlaces, ficha_catalogo as catalogo_svc, fotos_estilo, fotos_galeria, fotos_tarjeta, portada, portada_diseno, cargas, clasificador, contactos, demanda, difusion, planes, resumen_admin, revision_ia, wa_grupos, wa_sesion
 from app.services.imagenes import subir_foto_galeria
 from app.services.vision import VisionNoConfigurada, analizar_fotos
 from app.services.normalizar import es_nombre_generico, normalizar_subcategoria
 from app.services.sinonimos import desde_propuesta, sinonimos_para
 from app.services.cuentas import nueva_clave_comercio
 from app.services.rubros import SLUG_DESCARTE, aplicar_rubros, resolver_rubros
+from app.db.content_repository import ContentRepo, get_content_repo
 from app.db.repository import LIMITE_COMERCIOS_TODOS, Repo, get_repo
 from app.db.telefonos_repository import TelefonosRepo, get_telefonos_repo
 from app.services import telefonos_foto as telefonos_foto_svc
@@ -2243,61 +2245,56 @@ async def admin_subir_portada(
 
 
 # ---- Portada de diseño de la ficha pública (docs/portada-diseno.md) ----
+class PortadaDisenoBody(BaseModel):
+    """Cuerpo de `POST .../portada-diseno`: por qué camino se arma. Sin cuerpo = `free` (como siempre)."""
+    method: Literal["free", "gemini"] = "free"
+
+
+def _respuesta_portada(repo: Repo, comercio: dict) -> dict:
+    """`CoverDesign`: las dos claves de siempre y `proposal_method` (el método que armó la propuesta, del registro de usos)."""
+    return portada_diseno.respuesta(
+        comercio, fotos_estilo.metodo_de(repo, comercio["id"], comercio.get("portada_diseno_propuesta_url")))
+
+
 @router.post("/admin/comercio/{comercio_id}/portada-diseno")
 async def admin_armar_portada_diseno(
     comercio_id: str,
+    body: PortadaDisenoBody | None = None,
     mod: dict = Depends(require_permiso("comercios.editar")),
     repo: Repo = Depends(get_repo),
+    crepo: ContentRepo = Depends(get_content_repo),
 ) -> dict:
     """Arma la portada de diseño y la deja como PROPUESTA (nada se publica solo; el panel la muestra para decidir).
 
-    La foto es la portada del comercio, leída del disco del backend; se le hace una mejora automática suave
-    (Pillow, gratis, sin IA) y se le pone el diseño. Nombre, rubro y ciudad salen de la base: ningún texto de
-    la imagen lo escribe un modelo de IA. Se arma de a una por vez (409 si hay otra en curso).
+    `method`: `free` (por defecto; mejora automática suave con Pillow, sin IA) o `gemini` (una foto mejorada con IA: cuesta
+    plata, tiene interruptor y tope diario). Nombre, rubro y ciudad salen de la base y los pone la plantilla: ningún texto
+    lo escribe un modelo. Se arma de a una por vez (409 si hay otra en curso). docs/fotos-estilo-uruku.md.
     """
     comercio = _comercio_o_404(repo, comercio_id)
-    if not comercio.get("portada_url"):
-        raise HTTPException(status_code=400, detail="El comercio no tiene foto de portada")
-    foto = await run_in_threadpool(portada_diseno.leer_portada, comercio)
-    if foto is None:
-        raise HTTPException(status_code=400, detail="No se pudo leer la foto de portada desde el servidor")
-
-    rubro = (repo.get_rubro_por_id(comercio.get("rubro_id")) or {}).get("nombre")
-    ciudad = (repo.get_ciudad_por_id(comercio.get("ciudad_id")) or {}).get("nombre")
-
     try:
-        jpeg = await run_in_threadpool(
-            portada_diseno.armar_plantilla, foto, comercio.get("nombre") or "", rubro, ciudad,
-            comercio.get("portada_pos"))
-    except portada_diseno.PortadaOcupada as exc:
-        raise HTTPException(status_code=409, detail="Ya se está armando otra portada, probá en unos segundos") from exc
-    except portada_diseno.PortadaInadecuada as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="La foto de portada no es una imagen válida") from exc
-    url = await run_in_threadpool(portada_diseno.guardar, comercio["slug"], jpeg)
-    if not url:
-        raise HTTPException(status_code=502, detail="No se pudo guardar la portada de diseño, probá de nuevo")
+        return await run_in_threadpool(fotos_estilo.proponer_portada, repo, crepo, comercio,
+                                       metodo=body.method if body else "free", externa=None, actor=mod["email"])
+    except fotos_estilo.EstiloError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.detail) from exc
 
-    # Armar tarda unos segundos: si en el medio cambió la foto (o los datos que se dibujan), la propuesta sería
-    # de otra foto. Se relee la fila y, si cambió, se suelta el archivo recién creado.
-    fresca = repo.get_comercio(comercio_id) or {}
-    if fresca.get("portada_url") != comercio.get("portada_url"):
-        portada_diseno.soltar_archivo(comercio, url)
-        raise HTTPException(status_code=409, detail="La foto de portada cambió mientras se armaba: armala de nuevo")
-    if any(fresca.get(c) != comercio.get(c) for c in ("nombre", "rubro_id", "ciudad_id", "portada_pos")):
-        portada_diseno.soltar_archivo(comercio, url)
-        raise HTTPException(status_code=409, detail="Los datos del comercio cambiaron mientras se armaba la portada: armala de nuevo")
 
-    anterior = fresca.get("portada_diseno_propuesta_url")
+@router.post("/admin/comercio/{comercio_id}/portada-diseno/externa")
+async def admin_armar_portada_diseno_externa(
+    comercio_id: str,
+    foto: UploadFile = File(...),
+    mod: dict = Depends(require_permiso("comercios.editar")),
+    repo: Repo = Depends(get_repo),
+    crepo: ContentRepo = Depends(get_content_repo),
+) -> dict:
+    """La portada a partir de una imagen hecha afuera (ChatGPT): se valida, se normaliza (sin EXIF, alfa sobre blanco),
+    se recorta y se le pone la plantilla. Queda como PROPUESTA, con el aviso de revisión en el panel."""
+    comercio = _comercio_o_404(repo, comercio_id)
+    data = await fotos_estilo_api.leer_subida(foto)
     try:
-        actualizado = repo.update_comercio(comercio_id, {"portada_diseno_propuesta_url": url}, None)
-    except Exception:
-        portada_diseno.soltar_archivo(comercio, url)        # recién creado: que no quede huérfano
-        raise
-    portada_diseno.soltar_huerfanos(repo, comercio, [anterior])    # la propuesta anterior ya no la apunta nada
-    logger.info("admin.portada_diseno_propuesta", comercio=comercio_id, by=mod["email"])
-    return portada_diseno.respuesta(actualizado or {**comercio, "portada_diseno_propuesta_url": url})
+        return await run_in_threadpool(fotos_estilo.proponer_portada, repo, crepo, comercio,
+                                       metodo="external", externa=data, actor=mod["email"])
+    except fotos_estilo.EstiloError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.detail) from exc
 
 
 @router.put("/admin/comercio/{comercio_id}/portada-diseno")
@@ -2316,8 +2313,8 @@ def admin_usar_portada_diseno(
         comercio_id, {"portada_diseno_url": propuesta, "portada_diseno_propuesta_url": None}, None)
     portada_diseno.soltar_huerfanos(repo, comercio, [vigente])    # el diseño anterior ya no lo apunta nada
     logger.info("admin.portada_diseno_usada", comercio=comercio_id, by=mod["email"])
-    return portada_diseno.respuesta(
-        actualizado or {**comercio, "portada_diseno_url": propuesta, "portada_diseno_propuesta_url": None})
+    return _respuesta_portada(
+        repo, actualizado or {**comercio, "portada_diseno_url": propuesta, "portada_diseno_propuesta_url": None})
 
 
 @router.delete("/admin/comercio/{comercio_id}/portada-diseno/propuesta")
@@ -2330,11 +2327,11 @@ def admin_descartar_propuesta_portada_diseno(
     comercio = _comercio_o_404(repo, comercio_id)
     propuesta = comercio.get("portada_diseno_propuesta_url")
     if not propuesta:
-        return portada_diseno.respuesta(comercio)
+        return _respuesta_portada(repo, comercio)
     actualizado = repo.update_comercio(comercio_id, {"portada_diseno_propuesta_url": None}, None)
     portada_diseno.soltar_huerfanos(repo, comercio, [propuesta])
     logger.info("admin.portada_diseno_descartada", comercio=comercio_id, by=mod["email"])
-    return portada_diseno.respuesta(actualizado or {**comercio, "portada_diseno_propuesta_url": None})
+    return _respuesta_portada(repo, actualizado or {**comercio, "portada_diseno_propuesta_url": None})
 
 
 @router.delete("/admin/comercio/{comercio_id}/portada-diseno")
@@ -2347,11 +2344,11 @@ def admin_quitar_portada_diseno(
     comercio = _comercio_o_404(repo, comercio_id)
     vigente = comercio.get("portada_diseno_url")
     if not vigente:
-        return portada_diseno.respuesta(comercio)
+        return _respuesta_portada(repo, comercio)
     actualizado = repo.update_comercio(comercio_id, {"portada_diseno_url": None}, None)
     portada_diseno.soltar_huerfanos(repo, comercio, [vigente])
     logger.info("admin.portada_diseno_quitada", comercio=comercio_id, by=mod["email"])
-    return portada_diseno.respuesta(actualizado or {**comercio, "portada_diseno_url": None})
+    return _respuesta_portada(repo, actualizado or {**comercio, "portada_diseno_url": None})
 
 
 # ---- Clasificar un comercio desde sus fotos ----

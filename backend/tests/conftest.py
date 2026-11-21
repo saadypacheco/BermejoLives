@@ -227,6 +227,7 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         self.pagos: dict[str, dict] = {}             # id -> row
         self.mensajes: dict[str, dict] = {}          # id -> row
         self.comercio_fotos: list[dict] = []          # galería
+        self.photo_style_uses: list[dict] = []        # registro de fotos con estilo URUKU (0203), sólo insert
         self.comercio_numeros: list[dict] = []        # números autorizados a publicar
         self.wa_grupos: dict[str, dict] = {}          # grupo_jid -> {comercio_id, ...}
         self.importados: dict[str, dict] = {}         # id -> fila de comercios_importados
@@ -1668,14 +1669,42 @@ class FakeRepo(FakeIntegracionMixin, FakeSiteMetricsMixin):
         return len(self.comercio_fotos) < antes
 
     def update_foto_comercio(self, foto_id, comercio_id, patch):
+        from app.db.repository import diseno_foto_vencido as _vencido
         for f in self.comercio_fotos:
             if f["id"] == foto_id and f["comercio_id"] == comercio_id:
-                f.update(patch)
+                # Espeja al repo real: si cambia el `url`, el diseño de la foto (3 columnas) vence.
+                f.update({**_vencido(f, patch), **patch})
                 return f
         return None
 
     def count_fotos_comercio(self, comercio_id):
         return len(self.list_fotos_comercio(comercio_id))
+
+    # fotos con estilo URUKU (0203): registro de usos, sólo insert
+    def registrar_uso_foto_estilo(self, fila):
+        from datetime import datetime, timezone
+        if getattr(self, "falla_registro_uso", False):
+            raise RuntimeError("base caída")
+        full = {"id": self._id("uso"), "cost_usd": 0, "created_at": datetime.now(timezone.utc).isoformat(), **fila}
+        self.photo_style_uses.append(full)
+        return dict(full)
+
+    def contar_usos_gemini_desde(self, desde_iso):
+        from app.services import cargas
+        desde = cargas.parse_ts(desde_iso)
+        return sum(1 for u in self.photo_style_uses
+                   if u["method"] == "gemini" and cargas.parse_ts(u["created_at"]) >= desde)
+
+    def usos_foto_estilo(self, comercio_id):
+        return sorted((dict(u) for u in self.photo_style_uses if u["comercio_id"] == comercio_id),
+                      key=lambda u: u["created_at"], reverse=True)
+
+    def resumen_usos_foto_estilo(self, desde_iso, hasta_iso):
+        from app.services import cargas
+        desde, hasta = cargas.parse_ts(desde_iso), cargas.parse_ts(hasta_iso)
+        return [{"comercio_id": u["comercio_id"], "cost_usd": u["cost_usd"], "result": u["result"]}
+                for u in self.photo_style_uses
+                if u["method"] == "gemini" and desde <= cargas.parse_ts(u["created_at"]) < hasta]
 
     def list_videos_comercio(self, comercio_id):
         return sorted([v for v in self.comercio_videos if v["comercio_id"] == comercio_id], key=lambda x: x.get("orden", 0))

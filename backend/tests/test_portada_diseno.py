@@ -10,7 +10,7 @@ import pytest
 from PIL import Image, ImageStat
 
 from app.core.config import settings
-from app.services import portada, portada_diseno as pd
+from app.services import fotos_estilo as fe, fotos_origen, portada, portada_diseno as pd
 from app.services.imagenes import guardar_foto_local
 
 BASE = "https://api.test/fotos"
@@ -114,12 +114,16 @@ def test_la_franja_de_abajo_es_mas_oscura_que_la_foto():
     assert arriba > 240 and abajo < 120
 
 
-def test_el_logo_se_dibuja_arriba_a_la_derecha():
+def test_el_logo_se_dibuja_abajo_a_la_derecha_y_no_arriba():
+    """Estilo URUKU (docs/fotos-estilo-uruku.md §1): el logo «color» va abajo a la derecha, en x 1236..1536 e y 839..936, y
+    arriba ya no hay logo ni velo: sobre una foto blanca la esquina de arriba queda blanca."""
     out = _abrir(pd.armar_plantilla(_jpeg(1600, 1000, "white"), "Local", None, None, None, mejorar=False))
-    # sobre la foto blanca el velo de arriba oscurece; el logo blanco es lo más claro de esa esquina
-    esquina = out.crop((1250, 44, 1520, 120))
-    assert max(ImageStat.Stat(esquina.convert("L")).extrema[0]) >= 240
-    assert _media(esquina) < 250
+    arriba = out.crop((1250, 44, 1520, 120))
+    assert _media(arriba) >= 250                     # sin velo ni logo arriba
+    x0, y0, x1, y1 = pd.disponer_portada("Local", None, None)["logo"]
+    assert (x0, x1, y1) == (1236, 1536, 936) and 90 <= y1 - y0 <= 100
+    caja = out.crop((x0, y0, x1, y1))
+    assert _media(caja) < 200                        # el logo y la franja oscura están ahí
 
 
 def _bandas(alto=3000, corte=900):
@@ -201,7 +205,8 @@ def test_post_feliz_deja_la_propuesta_y_no_publica(client, repo, admin_token):
     r = client.post(URL, headers=_h(admin_token))
     assert r.status_code == 200, r.text
     cuerpo = r.json()
-    assert set(cuerpo) == {"portada_diseno_url", "portada_diseno_propuesta_url"}
+    assert set(cuerpo) == {"portada_diseno_url", "portada_diseno_propuesta_url", "proposal_method"}
+    assert cuerpo["proposal_method"] == "free"
     assert cuerpo["portada_diseno_url"] is None
     url = cuerpo["portada_diseno_propuesta_url"]
     assert url.startswith(f"{BASE}/local-d/diseno-") and url.endswith(".jpg") and _en_disco(url)
@@ -231,13 +236,18 @@ def test_post_comercio_inexistente_es_404(client, repo, admin_token):
 def test_post_usa_rubro_y_ciudad_de_la_base(client, repo, admin_token, monkeypatch):
     _comercio(repo, portada_pos=70)
     visto = {}
-    original = pd.armar_plantilla
+    dibujar, cubrir = pd.dibujar_portada, pd.cubrir
 
-    def espia(foto, nombre, rubro, ciudad, pos, **kw):
-        visto.update(nombre=nombre, rubro=rubro, ciudad=ciudad, pos=pos)
-        return original(foto, nombre, rubro, ciudad, pos, **kw)
+    def espia_texto(base, nombre, rubro, ciudad):
+        visto.update(nombre=nombre, rubro=rubro, ciudad=ciudad)
+        return dibujar(base, nombre, rubro, ciudad)
 
-    monkeypatch.setattr(pd, "armar_plantilla", espia)
+    def espia_recorte(img, ancho, alto, pos=None):
+        visto["pos"] = pos
+        return cubrir(img, ancho, alto, pos)
+
+    monkeypatch.setattr(pd, "dibujar_portada", espia_texto)
+    monkeypatch.setattr(pd, "cubrir", espia_recorte)
     assert client.post(URL, headers=_h(admin_token)).status_code == 200
     assert visto == {"nombre": "Ferretería El Tornillo", "rubro": "Ferreteria", "ciudad": "Bermejo",
                      "pos": 70}
@@ -248,7 +258,7 @@ def test_put_usa_la_propuesta_y_la_vacia(client, repo, admin_token):
     propuesta = client.post(URL, headers=_h(admin_token)).json()["portada_diseno_propuesta_url"]
     r = client.put(URL, headers=_h(admin_token))
     assert r.status_code == 200, r.text
-    assert r.json() == {"portada_diseno_url": propuesta, "portada_diseno_propuesta_url": None}
+    assert r.json() == {"portada_diseno_url": propuesta, "portada_diseno_propuesta_url": None, "proposal_method": None}
     assert repo.comercios[c["id"]]["portada_diseno_url"] == propuesta and _en_disco(propuesta)
 
 
@@ -274,7 +284,7 @@ def test_delete_propuesta_la_descarta_y_no_toca_la_vigente(client, repo, admin_t
     propuesta = client.post(URL, headers=_h(admin_token)).json()["portada_diseno_propuesta_url"]
     r = client.delete(f"{URL}/propuesta", headers=_h(admin_token))
     assert r.status_code == 200
-    assert r.json() == {"portada_diseno_url": vigente, "portada_diseno_propuesta_url": None}
+    assert r.json() == {"portada_diseno_url": vigente, "portada_diseno_propuesta_url": None, "proposal_method": None}
     assert _en_disco(vigente) and not _en_disco(propuesta)
     # sin propuesta no hay nada que hacer, y no es un error
     assert client.delete(f"{URL}/propuesta", headers=_h(admin_token)).status_code == 200
@@ -285,7 +295,8 @@ def test_delete_diseno_vuelve_a_la_foto_original(client, repo, admin_token):
     client.post(URL, headers=_h(admin_token))
     vigente = client.put(URL, headers=_h(admin_token)).json()["portada_diseno_url"]
     r = client.delete(URL, headers=_h(admin_token))
-    assert r.status_code == 200 and r.json() == {"portada_diseno_url": None, "portada_diseno_propuesta_url": None}
+    assert r.status_code == 200 and r.json() == {"portada_diseno_url": None, "portada_diseno_propuesta_url": None,
+                                                 "proposal_method": None}
     assert not _en_disco(vigente)
     assert _en_disco(c["portada_url"])          # la foto original NUNCA se toca
     assert client.delete(URL, headers=_h(admin_token)).status_code == 200
@@ -508,30 +519,34 @@ def test_registro_anonimo_rechaza_nombre_de_mas_de_200(client):
     assert r.status_code == 422
 
 
-def test_un_render_a_la_vez_si_esta_ocupado_es_409(client, repo, admin_token, monkeypatch):
+def test_una_transformacion_a_la_vez_si_esta_ocupado_es_409(client, repo, admin_token, monkeypatch):
+    """El lock es de `fotos_estilo` (portada, galería y los tres caminos): ya no existe `portada_diseno._RENDER`."""
     c = _comercio(repo)
-    monkeypatch.setattr(pd, "ESPERA_RENDER", 0.05)
-    assert pd._RENDER.acquire(timeout=1)
+    assert not hasattr(pd, "_RENDER") and not hasattr(pd, "PortadaOcupada")
+    monkeypatch.setattr(fe, "ESPERA_TRANSFORMAR", 0.05)
+    assert fe._TRANSFORMAR.acquire(timeout=1)
     try:
         r = client.post(URL, headers=_h(admin_token))
     finally:
-        pd._RENDER.release()
-    assert r.status_code == 409 and r.json()["detail"] == "Ya se está armando otra portada, probá en unos segundos"
+        fe._TRANSFORMAR.release()
+    assert r.status_code == 409 and r.json()["detail"] == "Ya se está armando otra foto, probá en unos segundos"
     assert not repo.comercios[c["id"]].get("portada_diseno_propuesta_url")
     assert client.post(URL, headers=_h(admin_token)).status_code == 200      # y se libera
 
 
-def test_el_candado_se_libera_aunque_falle_el_armado():
-    with pytest.raises(ValueError):
-        pd.armar_plantilla(b"roto", "X", None, None, None)
-    assert pd._RENDER.acquire(timeout=0.1)
-    pd._RENDER.release()
+def test_el_candado_se_libera_aunque_falle_el_armado(client, repo, admin_token):
+    _comercio(repo)
+    guardar_foto_local("local-d/orig.jpg", b"no soy una imagen")
+    assert client.post(URL, headers=_h(admin_token)).status_code == 400
+    assert fe._TRANSFORMAR.acquire(timeout=0.1)
+    fe._TRANSFORMAR.release()
 
 
-def test_dos_armados_a_la_vez_se_serializan():
+def test_dos_armados_a_la_vez_se_serializan(repo):
     import threading, time
+    c = _comercio(repo)
     activos, maximo, lock = [0], [0], threading.Lock()
-    original = pd._diseno
+    original = pd.dibujar_portada
 
     def lento(*a, **kw):
         with lock:
@@ -544,13 +559,17 @@ def test_dos_armados_a_la_vez_se_serializan():
             with lock:
                 activos[0] -= 1
 
-    pd._diseno = lento
+    def armar():
+        fe.producir(repo, None, comercio=c, target="cover", metodo="free", origen=_jpeg(), externa=None, pos=None,
+                    foto_id=None, actor="t@t", nombre="X")
+
+    pd.dibujar_portada = lento
     try:
-        hilos = [threading.Thread(target=pd.armar_plantilla, args=(_jpeg(), "X", None, None, None)) for _ in range(3)]
+        hilos = [threading.Thread(target=armar) for _ in range(3)]
         [h.start() for h in hilos]
         [h.join() for h in hilos]
     finally:
-        pd._diseno = original
+        pd.dibujar_portada = original
     assert maximo[0] == 1
 
 
@@ -567,7 +586,7 @@ def test_leer_portada_valida_la_ruta(repo):
 
 def test_leer_portada_no_lee_un_archivo_enorme(monkeypatch):
     guardar_foto_local("local-d/grande.jpg", b"x" * 100)
-    monkeypatch.setattr(pd, "MAX_BYTES_FOTO", 50)
+    monkeypatch.setattr(fotos_origen, "MAX_BYTES_FOTO", 50)
     assert pd.leer_portada({"portada_url": f"{BASE}/local-d/grande.jpg"}) is None
 
 

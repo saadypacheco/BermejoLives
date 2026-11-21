@@ -20,7 +20,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
 from app.api import (agent_credentials, asistente, auth, calles, campo, collect, comercio, contenido, content,
-                     cost_switches, health, importados_tarjetas, integracion, integracion_admin, moderacion, observabilidad, pago,
+                     cost_switches, fotos_estilo, health, importados_tarjetas, integracion, integracion_admin, moderacion, observabilidad, pago,
                      platos, reception, subscribers, telefonos_foto, usuario, webhook)
 from app.core.config import exigir_config_produccion, settings
 from app.core.errores_integracion import IntegracionError
@@ -344,6 +344,8 @@ async def lifespan(app: FastAPI):
                        detalle="CLAVE_PEPPER no está configurado: las claves de comercio se guardan sin pepper")
     from app.services import pago_qr
     pago_qr.registrar_arranque()  # huella de referencia del QR de cobro
+    from app.services import fotos_origen
+    fotos_origen.registrar_arranque()   # avisa qué bases de FOTOS_LECTURA_REMOTA_BASES se ignoran (sólo https://)
     tareas = []
     if settings.clima_worker:
         tareas.append(asyncio.create_task(_clima_loop()))
@@ -642,6 +644,7 @@ app.include_router(content.router, tags=["contenido-redes"])
 app.include_router(cost_switches.router, tags=["interruptores-de-costo"])
 app.include_router(subscribers.router, tags=["suscriptores"])
 app.include_router(telefonos_foto.router, tags=["telefonos-en-fotos"])
+app.include_router(fotos_estilo.router, tags=["fotos-estilo"])
 app.include_router(integracion.router)
 app.include_router(integracion_admin.router)
 

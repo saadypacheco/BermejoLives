@@ -81,6 +81,28 @@ PROPUESTA → «Usar en la ficha» (PUT, pasa a pública) | «Descartar» ;  en 
   implementar se verifican en ai.google.dev:** el ID del modelo, el precio por imagen, si se cobra la imagen de entrada y los
   nombres de esos campos. Según el doc del 19/10/2026 (`investigacion-costos-automatizacion.md`), el candidato es Gemini 3.1
   Flash Lite Image a ~US$ 0,0336 por imagen 1K. **No tiene nivel gratis**: la clave tiene que tener facturación activa.
+- **Verificado en la doc oficial (21/11/2026)**, antes de escribir la llamada. Fuentes: `ai.google.dev/gemini-api/docs/models`,
+  `/docs/image-generation`, `/docs/pricing` y `/docs/models/gemini-3.1-flash-lite-image` (Google las redirige a
+  `aistudio.google.com/docs/...`).
+  - **Modelo**: `gemini-3.1-flash-lite-image` (Nano Banana 2 Lite), estado «Stable»; la página del modelo dice «última
+    actualización: junio de 2026». Los demás: `gemini-3.1-flash-image` (US$ 0,067 por imagen 1K), `gemini-nano-banana-2.1`
+    («New»; US$ 0,0336 1K pero entrada a US$ 1,50 por millón de tokens) y `gemini-3-pro-image` (US$ 0,134). **`gemini-2.5-flash-image`
+    está deprecado y se apaga el 15/3/2027**: no usarlo. El setting `GEMINI_IMAGE_MODEL` queda vacío; para activar la IA en QA:
+    `GEMINI_IMAGE_MODEL=gemini-3.1-flash-lite-image` y `GEMINI_IMAGE_COST_USD=0.034`.
+  - **Precio** (pricing, tarifa Standard): **US$ 0,0336 por imagen de salida 1K** (el 1K es el único tamaño útil: el modelo sólo
+    admite 512 y 1K) **más** la entrada a US$ 0,25 por millón de tokens (texto, imagen o video). La foto de entrada se cobra como
+    tokens de entrada (estimado: unos pocos miles de tokens, menos de US$ 0,001): despreciable frente a la imagen, por eso el costo registrado es el de
+    la imagen sola. **Ningún modelo de imagen tiene nivel gratis** (la clave necesita facturación). Batch cuesta la mitad, pero no
+    sirve para un botón que espera la respuesta.
+  - **Campos**: `generateContent` (`v1beta`) sigue documentado y no está marcado como retirado. `generationConfig.responseModalities`
+    y `generationConfig.imageConfig.aspectRatio` (+ `imageSize`, con «K» mayúscula) se llaman así. Las proporciones del modelo
+    incluyen **`3:2` y `4:5`**. La foto de entrada va en `contents[].parts[].inline_data` (`mime_type`, `data` en base64); la salida
+    vuelve en `candidates[].content.parts[]` como `inlineData` (REST/JS) o `inline_data` (Python): el código lee las dos.
+  - **Dudas que sólo el primer pedido real resuelve**: (1) la doc de ejemplo usa `responseModalities: ["IMAGE"]` solo, pero la
+    página del modelo no lo afirma y una página de Vertex pide `["TEXT","IMAGE"]`; si Gemini contesta 400, se cambia en
+    `fotos_estilo_gemini.armar_pedido` (el código ignora las partes de texto). (2) Google documenta ahora una API nueva
+    (`/v1beta/interactions`, con `response_format.aspect_ratio`) como la principal; `generateContent` sigue vigente, y toda la
+    llamada está en `fotos_estilo_gemini.py` para migrarla sin tocar nada más.
 - **ChatGPT**: no se automatiza. No hay API gratis y no se automatiza una cuenta personal. La instrucción es el mismo prompt.
   Toda propuesta `gemini` o `external` muestra el aviso «Revisá que la imagen no traiga texto, precios ni cambios en los productos o
   el letrero antes de usarla».

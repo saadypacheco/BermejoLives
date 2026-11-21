@@ -427,6 +427,11 @@ class Repo(Protocol):
     def delete_foto_comercio(self, foto_id: str, comercio_id: str) -> bool: ...
     def update_foto_comercio(self, foto_id: str, comercio_id: str, patch: dict) -> dict | None: ...
     def count_fotos_comercio(self, comercio_id: str) -> int: ...
+    # fotos con estilo URUKU (0203, docs/fotos-estilo-uruku.md): registro de usos, sólo insert
+    def registrar_uso_foto_estilo(self, fila: dict) -> dict: ...
+    def contar_usos_gemini_desde(self, desde_iso: str) -> int: ...
+    def usos_foto_estilo(self, comercio_id: str) -> list[dict]: ...
+    def resumen_usos_foto_estilo(self, desde_iso: str, hasta_iso: str) -> list[dict]: ...
     def list_videos_comercio(self, comercio_id: str) -> list[dict]: ...
     def add_video_comercio(self, row: dict) -> dict: ...
     def delete_video_comercio(self, video_id: str, comercio_id: str) -> bool: ...
@@ -548,6 +553,21 @@ def diseno_vencido(actual: dict | None, cambios: dict) -> dict:
     for campo in CAMPOS_DEL_DISENO:
         if campo in cambios and _comparable(cambios[campo]) != _comparable(actual.get(campo)):
             return {"portada_diseno_url": None, "portada_diseno_propuesta_url": None}
+    return {}
+
+
+#: Las tres columnas de diseño de una fila de `comercio_fotos` (0203): el diseño vigente, su miniatura y la propuesta.
+COLUMNAS_DISENO_FOTO = ("diseno_url", "diseno_thumb_url", "diseno_propuesta_url")
+
+
+def diseno_foto_vencido(actual: dict | None, cambios: dict) -> dict:
+    """Las tres columnas de diseño en None si `cambios` trae un `url` DISTINTO al de la fila y la fila tiene algún
+    diseño (vigente o propuesto); `{}` si no. El diseño de una foto de galería no lleva textos de la base: vence
+    sólo si cambia la foto (docs/fotos-estilo-uruku.md §3). No toca archivos: quien llama los suelta (el agente no borra)."""
+    if not actual or not any(actual.get(c) for c in COLUMNAS_DISENO_FOTO):
+        return {}
+    if "url" in cambios and _comparable(cambios["url"]) != _comparable(actual.get("url")):
+        return {c: None for c in COLUMNAS_DISENO_FOTO}
     return {}
 
 
@@ -3856,13 +3876,49 @@ class SupabaseRepo(IntegracionRepoMixin):
         return bool(res.data)
 
     def update_foto_comercio(self, foto_id: str, comercio_id: str, patch: dict) -> dict | None:
-        """Cambia campos de UNA foto de la galería (sólo si es de ese comercio)."""
+        """Cambia campos de UNA foto de la galería (sólo si es de ese comercio). Si cambia el `url`, el diseño de la
+        foto (las tres columnas `diseno_*`) vence y se vacía en la misma escritura (`diseno_foto_vencido`)."""
+        patch = dict(patch)
+        if "url" in patch:
+            previa = (self._db.table("comercio_fotos").select("id, url, " + ", ".join(COLUMNAS_DISENO_FOTO))
+                      .eq("id", foto_id).eq("comercio_id", comercio_id).limit(1).execute())
+            patch = {**diseno_foto_vencido(previa.data[0] if previa.data else None, patch), **patch}
         res = (self._db.table("comercio_fotos").update(patch)
                .eq("id", foto_id).eq("comercio_id", comercio_id).execute())
         return res.data[0] if res.data else None
 
     def count_fotos_comercio(self, comercio_id: str) -> int:
         return len(self.list_fotos_comercio(comercio_id))
+
+    # ---- fotos con estilo URUKU (0203): el registro es historia de costos, sólo insert ----
+    def registrar_uso_foto_estilo(self, fila: dict) -> dict:
+        res = self._db.table("photo_style_uses").insert(fila).execute()
+        return res.data[0] if res.data else {}
+
+    def contar_usos_gemini_desde(self, desde_iso: str) -> int:
+        """Llamadas a Gemini (también las que fallaron) registradas desde `desde_iso` (ISO con zona)."""
+        res = (self._db.table("photo_style_uses").select("id", count="exact")
+               .eq("method", "gemini").gte("created_at", desde_iso).limit(1).execute())
+        return int(res.count or 0)
+
+    def usos_foto_estilo(self, comercio_id: str) -> list[dict]:
+        """Los registros de uso de ESTE comercio, del más nuevo al más viejo (hasta 1000)."""
+        res = (self._db.table("photo_style_uses")
+               .select("foto_id, target, method, cost_usd, result, result_url, created_at")
+               .eq("comercio_id", comercio_id).order("created_at", desc=True).limit(1000).execute())
+        return res.data or []
+
+    def resumen_usos_foto_estilo(self, desde_iso: str, hasta_iso: str) -> list[dict]:
+        """Los registros de Gemini en `[desde, hasta)` con lo mínimo para sumar: `comercio_id`, `cost_usd`, `result`."""
+        out: list[dict] = []
+        pagina = 1000
+        while True:
+            res = (self._db.table("photo_style_uses").select("comercio_id, cost_usd, result")
+                   .eq("method", "gemini").gte("created_at", desde_iso).lt("created_at", hasta_iso)
+                   .order("created_at").range(len(out), len(out) + pagina - 1).execute())
+            out.extend(res.data or [])
+            if len(res.data or []) < pagina:
+                return out
 
     def list_videos_comercio(self, comercio_id: str) -> list[dict]:
         res = self._db.table("comercio_videos").select("*").eq("comercio_id", comercio_id).order("orden").execute()

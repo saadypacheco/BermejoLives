@@ -405,6 +405,15 @@ class Settings(BaseSettings):
     # Para fijar una versión concreta, setear GEMINI_MODEL en el .env.
     gemini_model: str = "gemini-flash-latest"
 
+    # Fotos con estilo URUKU con IA (docs/fotos-estilo-uruku.md). Costo cero por defecto: sin MODELO y sin COSTO la IA
+    # no se ofrece (los ID de los modelos de imagen cambian y el precio no se inventa), y además hace falta el
+    # interruptor `gemini_fotos` prendido en Admin y GEMINI_API_KEY (con facturación: los modelos de imagen no tienen
+    # nivel gratis). Ver «Verificado en ai.google.dev» en la spec.
+    gemini_image_model: str = ""                # p. ej. el ID vigente de «Flash Lite Image»; vacío = no se ofrece
+    gemini_image_cost_usd: float = 0.0          # estimado por imagen (US$); 0 = no se ofrece
+    gemini_fotos_tope_diario: int = 20          # llamadas a Gemini por día (hora de Bolivia), cuentan también las que fallan
+    gemini_image_timeout_seg: int = 60          # cuánto se espera a Gemini antes de dar 504
+
     # Frontend (CORS)
     frontend_url: str = "http://localhost:3000"
 
@@ -417,8 +426,29 @@ class Settings(BaseSettings):
     fotos_dir: str = "/data/fotos"
     fotos_public_base_url: str = "http://localhost:8000/fotos"  # cómo lo alcanza el navegador
 
+    # Lectura REMOTA de la foto de origen (docs/fotos-estilo-uruku.md §8.1). Vacío por defecto: producción lee sólo
+    # su disco y no hace ninguna llamada de red. En QA (base copiada de producción, archivos en otro disco) va
+    # `https://api.uruku.bo/fotos`. Bases separadas por comas; sólo `https://`. Sólo sirve para LEER.
+    fotos_lectura_remota_bases: str = ""
+
     def public_photo_url(self, path: str) -> str:
         return f"{self.fotos_public_base_url.rstrip('/')}/{path}"
+
+    def fotos_lectura_remota_bases_list(self) -> list[str]:
+        """Las bases de `FOTOS_LECTURA_REMOTA_BASES` ya normalizadas (con `/` al final). Se ignoran las vacías, las
+        que no son `https://` y las que traen `?`, `#`, espacios o usuario/clave. Sin duplicados."""
+        out: list[str] = []
+        for crudo in (self.fotos_lectura_remota_bases or "").split(","):
+            base = crudo.strip()
+            if not base:
+                continue
+            if (not base.lower().startswith("https://") or len(base) <= len("https://")
+                    or any(c.isspace() or c in "?#@%" or ord(c) == 92 for c in base)):
+                continue
+            base = base.rstrip("/") + "/"
+            if base not in out:
+                out.append(base)
+        return out
 
     # ── Contenido para redes y cuidado de suscriptores (docs/contenido-redes-tecnico.md) ──
     # El banco de fotos y los videos armados viven en un disco PRIVADO: nunca bajo

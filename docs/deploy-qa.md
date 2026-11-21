@@ -268,3 +268,26 @@ docker run --rm -v buscadonde_comercio_fotos:/d -v /tmp:/b alpine \
 ```
 
 (El nombre real del volumen sale de `docker volume ls | grep fotos`.)
+
+### 6. Fotos de producción en QA sin copiarlas (`FOTOS_LECTURA_REMOTA_BASES`)
+
+La base clonada apunta las portadas a `https://api.uruku.bo/fotos/...`, pero QA sirve las suyas desde
+`https://api.encontralo.store/fotos` y no tiene los archivos de producción. Para que **«Fotos» en Admin › Comercios** (la
+portada y la galería con el estilo URUKU, `docs/fotos-estilo-uruku.md` §8.1) pueda leer esas fotos sin copiar el volumen,
+poné **en el `.env` del backend de QA** (nunca en producción: allá se deja vacía):
+
+```bash
+FOTOS_LECTURA_REMOTA_BASES=https://api.uruku.bo/fotos
+```
+
+- Sólo **lee** la foto de origen, por HTTPS, sin seguir redirecciones y con tope de 8 MB. Lo que se arma se guarda en el
+  disco de QA (`api.encontralo.store/fotos`); jamás se escribe ni se borra nada en producción.
+- Sin la variable, la portada de diseño falla en QA con «No se pudo leer la foto de portada desde el servidor».
+- Después de cambiarla hay que recrear el backend (`up -d --build backend`). Al arrancar el log avisa
+  (`fotos.lectura_remota_activa`) y, si alguna base no es `https://`, la ignora y lo dice (`fotos.lectura_remota_base_ignorada`).
+
+**Fotos con IA (opcional, cuesta plata).** La migración `0203_fotos_estilo_uruku.sql` se aplica a mano como cualquier otra
+(sección 2) y **dos veces tiene que dar el mismo resultado**. El botón «Con IA» sigue apagado hasta que se cumpla todo:
+interruptor `gemini_fotos` prendido en Admin, `GEMINI_API_KEY` con facturación y, en el `.env` de QA,
+`GEMINI_IMAGE_MODEL=gemini-3.1-flash-lite-image` y `GEMINI_IMAGE_COST_USD=0.034` (verificado en la doc de Google el 21/11/2026).
+Tope de 20 por día (`GEMINI_FOTOS_TOPE_DIARIO`).
